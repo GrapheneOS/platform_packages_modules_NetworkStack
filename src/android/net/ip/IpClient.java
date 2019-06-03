@@ -78,7 +78,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-
 /**
  * IpClient
  *
@@ -394,6 +393,14 @@ public class IpClient extends StateMachine {
         public INetd getNetd(Context context) {
             return INetd.Stub.asInterface((IBinder) context.getSystemService(Context.NETD_SERVICE));
         }
+
+        /**
+         * Get a IpMemoryStore instance.
+         */
+        public NetworkStackIpMemoryStore getIpMemoryStore(Context context,
+                NetworkStackServiceManager nssManager) {
+            return new NetworkStackIpMemoryStore(context, nssManager.getIpMemoryStoreService());
+        }
     }
 
     public IpClient(Context context, String ifName, IIpClientCallbacks callback,
@@ -418,8 +425,7 @@ public class IpClient extends StateMachine {
         mShutdownLatch = new CountDownLatch(1);
         mCm = mContext.getSystemService(ConnectivityManager.class);
         mObserverRegistry = observerRegistry;
-        mIpMemoryStore =
-                new NetworkStackIpMemoryStore(context, nssManager.getIpMemoryStoreService());
+        mIpMemoryStore = deps.getIpMemoryStore(context, nssManager);
 
         sSmLogs.putIfAbsent(mInterfaceName, new SharedLog(MAX_LOG_RECORDS, mTag));
         mLog = sSmLogs.get(mInterfaceName);
@@ -1124,6 +1130,7 @@ public class IpClient extends StateMachine {
         }
         mCallback.onNewDhcpResults(dhcpResults);
         maybeSaveNetworkToIpMemoryStore();
+
         dispatchCallback(delta, newLp);
     }
 
@@ -1182,9 +1189,10 @@ public class IpClient extends StateMachine {
             }
         } else {
             // Start DHCPv4.
-            mDhcpClient = DhcpClient.makeDhcpClient(mContext, IpClient.this, mInterfaceParams);
+            mDhcpClient = DhcpClient.makeDhcpClient(mContext, IpClient.this, mInterfaceParams,
+                    mIpMemoryStore);
             mDhcpClient.registerForPreDhcpNotification();
-            mDhcpClient.sendMessage(DhcpClient.CMD_START_DHCP);
+            mDhcpClient.sendMessage(DhcpClient.CMD_START_DHCP, mL2Key);
         }
 
         return true;
@@ -1369,7 +1377,6 @@ public class IpClient extends StateMachine {
         @Override
         public void enter() {
             mStartTimeMillis = SystemClock.elapsedRealtime();
-
             if (mConfiguration.mProvisioningTimeoutMs > 0) {
                 final long alarmTime = SystemClock.elapsedRealtime()
                         + mConfiguration.mProvisioningTimeoutMs;
@@ -1426,7 +1433,6 @@ public class IpClient extends StateMachine {
                 case EVENT_PROVISIONING_TIMEOUT:
                     handleProvisioningFailure();
                     break;
-
                 default:
                     // It's safe to process messages out of order because the
                     // only message that can both
