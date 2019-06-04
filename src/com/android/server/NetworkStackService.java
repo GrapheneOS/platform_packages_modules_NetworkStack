@@ -189,6 +189,7 @@ public class NetworkStackService extends Service {
         @Override
         public void makeNetworkMonitor(Network network, String name, INetworkMonitorCallbacks cb)
                 throws RemoteException {
+            checkNetworkStackCallingPermission();
             updateSystemAidlVersion(cb.getInterfaceVersion());
             final SharedLog log = addValidationLogs(network, name);
             final NetworkMonitor nm = new NetworkMonitor(mContext, cb, network, log);
@@ -197,6 +198,7 @@ public class NetworkStackService extends Service {
 
         @Override
         public void makeIpClient(String ifName, IIpClientCallbacks cb) throws RemoteException {
+            checkNetworkStackCallingPermission();
             updateSystemAidlVersion(cb.getInterfaceVersion());
             final IpClient ipClient = new IpClient(mContext, ifName, cb, mObserverRegistry, this);
 
@@ -222,6 +224,7 @@ public class NetworkStackService extends Service {
         @Override
         public void fetchIpMemoryStore(@NonNull final IIpMemoryStoreCallbacks cb)
                 throws RemoteException {
+            checkNetworkStackCallingPermission();
             updateSystemAidlVersion(cb.getInterfaceVersion());
             cb.onIpMemoryStoreFetched(mIpMemoryStoreService);
         }
