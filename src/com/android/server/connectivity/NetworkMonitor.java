@@ -1034,7 +1034,7 @@ public class NetworkMonitor extends StateMachine {
                 mPrivateDnsConfig = null;
                 validationLog("Strict mode hostname resolution failed: " + uhe.getMessage());
             }
-            mEvaluationState.reportProbeResult(NETWORK_VALIDATION_PROBE_PRIVDNS,
+            mEvaluationState.noteProbeResult(NETWORK_VALIDATION_PROBE_PRIVDNS,
                     (mPrivateDnsConfig != null) /* succeeded */);
         }
 
@@ -1086,7 +1086,7 @@ public class NetworkMonitor extends StateMachine {
                         String.format("%dms - Error: %s", time, uhe.getMessage()));
             }
             logValidationProbe(time, PROBE_PRIVDNS, success ? DNS_SUCCESS : DNS_FAILURE);
-            mEvaluationState.reportProbeResult(NETWORK_VALIDATION_PROBE_PRIVDNS, success);
+            mEvaluationState.noteProbeResult(NETWORK_VALIDATION_PROBE_PRIVDNS, success);
             return success;
         }
     }
@@ -2067,11 +2067,21 @@ public class NetworkMonitor extends StateMachine {
     }
 
     // Class to keep state of evaluation results and probe results.
-    // The main purpose is to ensure NetworkMonitor can notify ConnectivityService of probe results
+    //
+    // The main purpose was to ensure NetworkMonitor can notify ConnectivityService of probe results
     // as soon as they happen, without triggering any other changes. This requires keeping state on
-    // the most recent evaluation result. Calling reportProbeResult will ensure that the results
+    // the most recent evaluation result. Calling noteProbeResult will ensure that the results
     // reported to ConnectivityService contain the previous evaluation result, and thus won't
     // trigger a validation or partial connectivity state change.
+    //
+    // Note that this class is not currently being used for this purpose. The reason is that some
+    // of the system behaviour triggered by reporting network validation - notably, NetworkAgent
+    // behaviour - depends not only on the value passed by notifyNetworkTested, but also on the
+    // fact that notifyNetworkTested was called. For example, telephony triggers network recovery
+    // any time it is told that validation failed, i.e., if the result does not contain
+    // NETWORK_VALIDATION_RESULT_VALID. But with this scheme, the first two or three validation
+    // reports are all failures, because they are "HTTP succeeded but validation not yet passed",
+    // "HTTP and HTTPS succeeded but validation not yet passed", etc.
     @VisibleForTesting
     protected class EvaluationState {
         // The latest validation result for this network. This is a bitmask of
@@ -2088,13 +2098,12 @@ public class NetworkMonitor extends StateMachine {
         }
 
         // Probe result for http probe should be updated from reportHttpProbeResult().
-        protected void reportProbeResult(int probeResult, boolean succeeded) {
+        protected void noteProbeResult(int probeResult, boolean succeeded) {
             if (succeeded) {
                 mProbeResults |= probeResult;
             } else {
                 mProbeResults &= ~probeResult;
             }
-            notifyNetworkTested(getNetworkTestResult(), mRedirectUrl);
         }
 
         protected void reportEvaluationResult(int result, @Nullable String redirectUrl) {
@@ -2138,6 +2147,6 @@ public class NetworkMonitor extends StateMachine {
         if (succeeded) {
             probeResult |= NETWORK_VALIDATION_PROBE_DNS;
         }
-        mEvaluationState.reportProbeResult(probeResult, succeeded);
+        mEvaluationState.noteProbeResult(probeResult, succeeded);
     }
 }
