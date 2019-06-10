@@ -108,22 +108,22 @@ public abstract class DhcpPacket {
     /**
      * The client DHCP port.
      */
-    static final short DHCP_CLIENT = (short) 68;
+    public static final short DHCP_CLIENT = (short) 68;
 
     /**
      * The server DHCP port.
      */
-    static final short DHCP_SERVER = (short) 67;
+    public static final short DHCP_SERVER = (short) 67;
 
     /**
      * The message op code indicating a request from a client.
      */
-    protected static final byte DHCP_BOOTREQUEST = (byte) 1;
+    public static final byte DHCP_BOOTREQUEST = (byte) 1;
 
     /**
      * The message op code indicating a response from the server.
      */
-    protected static final byte DHCP_BOOTREPLY = (byte) 2;
+    public static final byte DHCP_BOOTREPLY = (byte) 2;
 
     /**
      * The code type used to identify an Ethernet MAC address in the
@@ -139,7 +139,7 @@ public abstract class DhcpPacket {
     /**
      * The magic cookie that identifies this as a DHCP packet instead of BOOTP.
      */
-    private static final int DHCP_MAGIC_COOKIE = 0x63825363;
+    public static final int DHCP_MAGIC_COOKIE = 0x63825363;
 
     /**
      * DHCP Optional Type: DHCP Subnet Mask
@@ -221,16 +221,16 @@ public abstract class DhcpPacket {
     /**
      * DHCP Optional Type: DHCP Message Type
      */
-    protected static final byte DHCP_MESSAGE_TYPE = 53;
+    public static final byte DHCP_MESSAGE_TYPE = 53;
     // the actual type values
-    protected static final byte DHCP_MESSAGE_TYPE_DISCOVER = 1;
-    protected static final byte DHCP_MESSAGE_TYPE_OFFER = 2;
-    protected static final byte DHCP_MESSAGE_TYPE_REQUEST = 3;
-    protected static final byte DHCP_MESSAGE_TYPE_DECLINE = 4;
-    protected static final byte DHCP_MESSAGE_TYPE_ACK = 5;
-    protected static final byte DHCP_MESSAGE_TYPE_NAK = 6;
-    protected static final byte DHCP_MESSAGE_TYPE_RELEASE = 7;
-    protected static final byte DHCP_MESSAGE_TYPE_INFORM = 8;
+    public static final byte DHCP_MESSAGE_TYPE_DISCOVER = 1;
+    public static final byte DHCP_MESSAGE_TYPE_OFFER = 2;
+    public static final byte DHCP_MESSAGE_TYPE_REQUEST = 3;
+    public static final byte DHCP_MESSAGE_TYPE_DECLINE = 4;
+    public static final byte DHCP_MESSAGE_TYPE_ACK = 5;
+    public static final byte DHCP_MESSAGE_TYPE_NAK = 6;
+    public static final byte DHCP_MESSAGE_TYPE_RELEASE = 7;
+    public static final byte DHCP_MESSAGE_TYPE_INFORM = 8;
 
     /**
      * DHCP Optional Type: DHCP Server Identifier
