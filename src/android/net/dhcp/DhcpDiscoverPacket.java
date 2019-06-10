@@ -22,7 +22,7 @@ import java.nio.ByteBuffer;
 /**
  * This class implements the DHCP-DISCOVER packet.
  */
-class DhcpDiscoverPacket extends DhcpPacket {
+public class DhcpDiscoverPacket extends DhcpPacket {
     /**
      * The IP address of the client which sent this packet.
      */

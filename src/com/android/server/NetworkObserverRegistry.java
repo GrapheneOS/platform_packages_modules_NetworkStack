@@ -42,19 +42,13 @@ public class NetworkObserverRegistry extends INetdUnsolicitedEventListener.Stub 
     private static final String TAG = NetworkObserverRegistry.class.getSimpleName();
 
     /**
-     * Constructs a new NetworkObserverRegistry.
-     *
-     * <p>Only one registry should be used per process since netd will silently ignore multiple
-     * registrations from the same process.
-     */
-    NetworkObserverRegistry() {}
-
-    /**
      * Start listening for Netd events.
      *
      * <p>This should be called before allowing any observer to be registered.
+     * Note there is no unregister method. The only way to unregister is when the process
+     * terminates.
      */
-    void register(@NonNull INetd netd) throws RemoteException {
+    public void register(@NonNull INetd netd) throws RemoteException {
         netd.registerUnsolicitedEventListener(this);
     }
 
