@@ -32,11 +32,22 @@ android_test {
         "android.test.base",
         "android.test.mock",
     ],
+    defaults: ["libnetworkstackutilsjni_deps"],
     jni_libs: [
         // For mockito extended
         "libdexmakerjvmtiagent",
         "libstaticjvmtiagent",
-        // For ApfTest
+        "libnetworkstackutilsjni",
+    ],
+}
+
+// Additional dependencies of libnetworkstackutilsjni that are not provided by the system when
+// running as a test application.
+// Using java_defaults as jni_libs does not support filegroups.
+java_defaults {
+    name: "libnetworkstackutilsjni_deps",
+    jni_libs: [
+        "libartbase",
         "libbacktrace",
         "libbase",
         "libbinder",
@@ -57,7 +68,6 @@ android_test {
         "libnativehelper",
         "libnativehelper_compat_libc++",
         "libnetworkstacktestsjni",
-        "libnetworkstackutilsjni",
         "libpackagelistparser",
         "libpcre2",
         "libprocessgroup",
@@ -75,6 +85,7 @@ android_test {
     ],
 }
 
+// JNI code for ApfTest
 cc_library_shared {
     name: "libnetworkstacktestsjni",
     srcs: [
