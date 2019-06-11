@@ -224,7 +224,7 @@ public class IpMemoryStoreServiceTest {
         };
     }
 
-    /** Helper method to make an IOnSameNetworkResponseListener */
+    /** Helper method to make an IOnSameL3NetworkResponseListener */
     private interface OnSameL3NetworkResponseListener {
         void onSameL3NetworkResponse(Status status, SameL3NetworkResponse answer);
     }
