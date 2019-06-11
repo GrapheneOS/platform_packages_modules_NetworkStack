@@ -55,6 +55,7 @@ import com.android.internal.R;
 import com.android.server.NetworkObserver;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService;
+import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -68,6 +69,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
 
 /**
  * Tests for IpClient.
@@ -98,6 +100,8 @@ public class IpClientTest {
     @Mock private ContentResolver mContentResolver;
     @Mock private NetworkStackService.NetworkStackServiceManager mNetworkStackServiceManager;
     @Mock private NetworkStackIpMemoryStore mIpMemoryStore;
+    @Mock private IpMemoryStoreService mIpMemoryStoreService;
+    @Mock private InterfaceParams mInterfaceParams;
 
     private NetworkObserver mObserver;
     private InterfaceParams mIfParams;
@@ -113,6 +117,11 @@ public class IpClientTest {
         when(mResources.getInteger(R.integer.config_networkAvoidBadWifi))
                 .thenReturn(DEFAULT_AVOIDBADWIFI_CONFIG_VALUE);
         when(mContext.getContentResolver()).thenReturn(mContentResolver);
+        when(mNetworkStackServiceManager.getIpMemoryStoreService())
+                .thenReturn(mIpMemoryStoreService);
+        when(mDependencies.getInterfaceParams(any())).thenReturn(mInterfaceParams);
+        when(mDependencies.getIpMemoryStore(mContext, mNetworkStackServiceManager))
+                .thenReturn(mIpMemoryStore);
 
         mIfParams = null;
     }
