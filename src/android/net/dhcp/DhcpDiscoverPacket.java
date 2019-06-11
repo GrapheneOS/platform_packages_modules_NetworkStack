@@ -62,6 +62,9 @@ public class DhcpDiscoverPacket extends DhcpPacket {
         addTlv(buffer, DHCP_CLIENT_IDENTIFIER, getClientId());
         addCommonClientTlvs(buffer);
         addTlv(buffer, DHCP_PARAMETER_LIST, mRequestedParams);
+        if (mRapidCommit) {
+            addTlv(buffer, DHCP_RAPID_COMMIT);
+        }
         addTlvEnd(buffer);
     }
 }
