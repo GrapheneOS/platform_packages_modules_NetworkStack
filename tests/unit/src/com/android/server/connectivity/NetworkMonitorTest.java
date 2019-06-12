@@ -286,7 +286,7 @@ public class NetworkMonitorTest {
     private FakeDns mFakeDns;
 
     @Before
-    public void setUp() throws IOException {
+    public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         when(mDependencies.getPrivateDnsBypassNetwork(any())).thenReturn(mCleartextDnsNetwork);
         when(mDependencies.getDnsResolver()).thenReturn(mDnsResolver);
@@ -354,6 +354,8 @@ public class NetworkMonitorTest {
             return null;
         }).when(mContext).unregisterReceiver(any());
 
+        resetCallbacks();
+
         setMinDataStallEvaluateInterval(500);
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_DNS);
         setValidDataStallDnsTimeThreshold(500);
@@ -379,6 +381,17 @@ public class NetworkMonitorTest {
                 0, mCreatedNetworkMonitors.size());
         assertEquals("BroadcastReceiver still registered after disconnect",
                 0, mRegisteredReceivers.size());
+    }
+
+    private void resetCallbacks() {
+        reset(mCallbacks);
+        // TODO: make this a parameterized test.
+        try {
+            when(mCallbacks.getInterfaceVersion()).thenReturn(3);
+        } catch (RemoteException e) {
+            // Can't happen as mCallbacks is a mock
+            fail("Error mocking getInterfaceVersion" + e);
+        }
     }
 
     private class WrappedNetworkMonitor extends NetworkMonitor {
@@ -727,7 +740,7 @@ public class NetworkMonitorTest {
         setStatus(mHttpsConnection, 204);
         setStatus(mHttpConnection, 204);
 
-        reset(mCallbacks);
+        resetCallbacks();
         nm.notifyCaptivePortalAppFinished(APP_RETURN_DISMISSED);
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).atLeastOnce())
                 .notifyNetworkTested(eq(NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTP
@@ -765,7 +778,7 @@ public class NetworkMonitorTest {
                         eq(null));
 
         // Fix DNS and retry, expect validation to succeed.
-        reset(mCallbacks);
+        resetCallbacks();
         mFakeDns.setAnswer("dns.google", new String[]{"2001:db8::1"});
 
         wnm.forceReevaluation(Process.myUid());
@@ -774,7 +787,7 @@ public class NetworkMonitorTest {
                         eq(null));
 
         // Change configuration to an invalid DNS name, expect validation to fail.
-        reset(mCallbacks);
+        resetCallbacks();
         mFakeDns.setAnswer("dns.bad", new String[0]);
         wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig("dns.bad", new InetAddress[0]));
         // Strict mode hostname resolve fail. Expect only notification for evaluation fail. No probe
@@ -785,7 +798,7 @@ public class NetworkMonitorTest {
 
         // Change configuration back to working again, but make private DNS not work.
         // Expect validation to fail.
-        reset(mCallbacks);
+        resetCallbacks();
         mFakeDns.setNonBypassPrivateDnsWorking(false);
         wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig("dns.google",
                 new InetAddress[0]));
@@ -795,7 +808,7 @@ public class NetworkMonitorTest {
                         eq(null));
 
         // Make private DNS work again. Expect validation to succeed.
-        reset(mCallbacks);
+        resetCallbacks();
         mFakeDns.setNonBypassPrivateDnsWorking(true);
         wnm.forceReevaluation(Process.myUid());
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).atLeastOnce())
@@ -863,7 +876,7 @@ public class NetworkMonitorTest {
         // Expect to send HTTP, HTTPS, FALLBACK probe and evaluation result notifications to CS.
         final NetworkMonitor nm = runNetworkTest(VALIDATION_RESULT_PARTIAL);
 
-        reset(mCallbacks);
+        resetCallbacks();
         nm.setAcceptPartialConnectivity();
         // Expect to update evaluation result notifications to CS.
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1)).notifyNetworkTested(
@@ -877,7 +890,7 @@ public class NetworkMonitorTest {
         setStatus(mFallbackConnection, 500);
         runPartialConnectivityNetworkTest(VALIDATION_RESULT_PARTIAL);
 
-        reset(mCallbacks);
+        resetCallbacks();
         setStatus(mHttpsConnection, 500);
         setStatus(mHttpConnection, 500);
         setStatus(mFallbackConnection, 204);
@@ -930,7 +943,7 @@ public class NetworkMonitorTest {
         final NetworkMonitor nm = runValidatedNetworkTest();
         // Verify forceReevalution will not reset the validation result but only probe result until
         // getting the validation result.
-        reset(mCallbacks);
+        resetCallbacks();
         setSslException(mHttpsConnection);
         setStatus(mHttpConnection, 500);
         setStatus(mFallbackConnection, 204);
@@ -955,7 +968,7 @@ public class NetworkMonitorTest {
     public void testEvaluationState_reportProbeResult() throws Exception {
         final NetworkMonitor nm = runValidatedNetworkTest();
 
-        reset(mCallbacks);
+        resetCallbacks();
 
         nm.reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP, CaptivePortalProbeResult.SUCCESS);
         // Verify result should be appended and notifyNetworkTested callback is triggered once.

@@ -24,6 +24,9 @@ import static android.net.ConnectivityManager.EXTRA_CAPTIVE_PORTAL_URL;
 import static android.net.ConnectivityManager.TYPE_MOBILE;
 import static android.net.ConnectivityManager.TYPE_WIFI;
 import static android.net.DnsResolver.FLAG_EMPTY;
+import static android.net.INetworkMonitor.NETWORK_TEST_RESULT_INVALID;
+import static android.net.INetworkMonitor.NETWORK_TEST_RESULT_PARTIAL_CONNECTIVITY;
+import static android.net.INetworkMonitor.NETWORK_TEST_RESULT_VALID;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_PROBE_DNS;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_PROBE_FALLBACK;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_PROBE_HTTP;
@@ -93,6 +96,7 @@ import android.net.util.SharedLog;
 import android.net.util.Stopwatch;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Message;
 import android.os.RemoteException;
@@ -286,6 +290,7 @@ public class NetworkMonitor extends StateMachine {
 
     private final Context mContext;
     private final INetworkMonitorCallbacks mCallback;
+    private final int mCallbackVersion;
     private final Network mCleartextDnsNetwork;
     private final Network mNetwork;
     private final TelephonyManager mTelephonyManager;
@@ -355,6 +360,17 @@ public class NetworkMonitor extends StateMachine {
     private boolean mAcceptPartialConnectivity = false;
     private final EvaluationState mEvaluationState = new EvaluationState();
 
+    private int getCallbackVersion(INetworkMonitorCallbacks cb) {
+        int version;
+        try {
+            version = cb.getInterfaceVersion();
+        } catch (RemoteException e) {
+            version = 0;
+        }
+        if (version == Build.VERSION_CODES.CUR_DEVELOPMENT) version = 0;
+        return version;
+    }
+
     public NetworkMonitor(Context context, INetworkMonitorCallbacks cb, Network network,
             SharedLog validationLog) {
         this(context, cb, network, new IpConnectivityLog(), validationLog,
@@ -376,6 +392,7 @@ public class NetworkMonitor extends StateMachine {
         mMetricsLog = logger;
         mValidationLogs = validationLogs;
         mCallback = cb;
+        mCallbackVersion = getCallbackVersion(cb);
         mDependencies = deps;
         mDetectionStatsUtils = detectionStatsUtils;
         mNetwork = network;
@@ -2113,6 +2130,15 @@ public class NetworkMonitor extends StateMachine {
         }
 
         protected int getNetworkTestResult() {
+            if (mCallbackVersion < 3) {
+                if ((mEvaluationResult & NETWORK_VALIDATION_RESULT_VALID) != 0) {
+                    return NETWORK_TEST_RESULT_VALID;
+                }
+                if ((mEvaluationResult & NETWORK_VALIDATION_RESULT_PARTIAL) != 0) {
+                    return NETWORK_TEST_RESULT_PARTIAL_CONNECTIVITY;
+                }
+                return NETWORK_TEST_RESULT_INVALID;
+            }
             return mEvaluationResult | mProbeResults;
         }
     }
