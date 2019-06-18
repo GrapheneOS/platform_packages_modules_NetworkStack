@@ -332,9 +332,9 @@ public class DhcpClient extends StateMachine {
      *
      */
     public boolean isDhcpLeaseCacheEnabled() {
-        // TODO: call DeviceConfig.getProperty(DeviceConfig.NAMESPACE_CONNECTIVITY,
-        //                    DeviceConfig.PROPERTY);
-        // to fetch the dynamic experiment flag value. Return false by default.
+        mDhcpLeaseCacheEnabled = Boolean.parseBoolean(NetworkStackUtils.getDeviceConfigProperty(
+                NetworkStackUtils.NAMESPACE_CONNECTIVITY,
+                NetworkStackUtils.DHCP_INIT_REBOOT_ENABLED, "false"));
         return mDhcpLeaseCacheEnabled;
     }
 
