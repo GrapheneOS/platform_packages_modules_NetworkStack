@@ -41,7 +41,8 @@ public final class PermissionUtil {
             return;
         }
 
-        if (UserHandle.getAppId(caller) != Process.BLUETOOTH_UID) {
+        if (caller != Process.myUid() && // apps with NETWORK_STACK_UID
+                UserHandle.getAppId(caller) != Process.BLUETOOTH_UID) {
             throw new SecurityException("Invalid caller: " + caller);
         }
     }
