@@ -84,30 +84,3 @@ java_defaults {
         "netd_aidl_interface-V2-cpp",
     ],
 }
-
-// JNI code for ApfTest
-cc_library_shared {
-    name: "libnetworkstacktestsjni",
-    srcs: [
-        "jni/**/*.cpp"
-    ],
-    cflags: [
-        "-Wall",
-        "-Wextra",
-        "-Werror",
-    ],
-    include_dirs: [
-        "hardware/google/apf",
-    ],
-    shared_libs: [
-        "libbinder",
-        "liblog",
-        "libcutils",
-        "libnativehelper",
-        "netd_aidl_interface-V2-cpp",
-    ],
-    static_libs: [
-        "libapf",
-        "libpcap",
-    ],
-}
