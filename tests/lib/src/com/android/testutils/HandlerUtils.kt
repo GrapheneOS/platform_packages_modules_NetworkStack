@@ -20,19 +20,18 @@ import android.os.ConditionVariable
 import android.os.Handler
 import android.os.HandlerThread
 import java.util.concurrent.Executor
+import kotlin.system.measureTimeMillis
 import kotlin.test.fail
 
 /**
  * Block until the specified Handler or HandlerThread becomes idle, or until timeoutMs has passed.
  */
-fun Handler.waitForIdle(timeoutMs: Long) = waitForIdleHandler(this, timeoutMs)
-fun HandlerThread.waitForIdle(timeoutMs: Long) = waitForIdleHandler(this.threadHandler, timeoutMs)
-fun waitForIdleHandler(handler: HandlerThread, timeoutMs: Long) {
-    waitForIdleHandler(handler.threadHandler, timeoutMs)
-}
-fun waitForIdleHandler(handler: Handler, timeoutMs: Long) {
+fun HandlerThread.waitForIdle(timeoutMs: Int) = threadHandler.waitForIdle(timeoutMs.toLong())
+fun HandlerThread.waitForIdle(timeoutMs: Long) = threadHandler.waitForIdle(timeoutMs)
+fun Handler.waitForIdle(timeoutMs: Int) = waitForIdle(timeoutMs.toLong())
+fun Handler.waitForIdle(timeoutMs: Long) {
     val cv = ConditionVariable(false)
-    handler.post(cv::open)
+    post(cv::open)
     if (!cv.block(timeoutMs)) {
         fail("Handler did not become idle after ${timeoutMs}ms")
     }
