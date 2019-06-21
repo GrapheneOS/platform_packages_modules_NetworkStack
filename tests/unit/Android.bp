@@ -17,7 +17,7 @@
 android_test {
     name: "NetworkStackTests",
     certificate: "platform",
-    srcs: ["src/**/*.java"],
+    srcs: ["src/**/*.java", "src/**/*.kt"],
     test_suites: ["device-tests"],
     resource_dirs: ["res"],
     static_libs: [
