@@ -42,9 +42,10 @@ class HandlerUtilsTest {
         // inline runnable that's instantiated at each loop run and a runnable that's instantiated
         // once for all.
         val tempRunnable = object : Runnable {
-            // StringBuilder is NOT thread-safe, and that's the point ; here it's part of the point
-            // that both runnables run on the same thread so if anything is wrong in that space
-            // it's better to use a class where things go wrong
+            // Use StringBuilder preferentially to StringBuffer because StringBuilder is NOT
+            // thread-safe. It's part of the point that both runnables run on the same thread
+            // so if anything is wrong in that space it's better to opportunistically use a class
+            // where things might go wrong, even if there is no guarantee of failure.
             var memory = StringBuilder()
             override fun run() {
                 memory.append("b")
