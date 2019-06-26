@@ -104,7 +104,7 @@ public class ConnectivityPacketTracker {
             try {
                 s = Os.socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, 0);
                 NetworkStackUtils.attachControlPacketFilter(s, ARPHRD_ETHER);
-                Os.bind(s, makePacketSocketAddress((short) ETH_P_ALL, mInterface.index));
+                Os.bind(s, makePacketSocketAddress(ETH_P_ALL, mInterface.index));
             } catch (ErrnoException | IOException e) {
                 logError("Failed to create packet tracking socket: ", e);
                 closeFd(s);

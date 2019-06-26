@@ -476,8 +476,7 @@ public class ApfFilter {
                 installNewProgramLocked();
             }
             socket = Os.socket(AF_PACKET, SOCK_RAW, ETH_P_IPV6);
-            SocketAddress addr = makePacketSocketAddress(
-                    (short) ETH_P_IPV6, mInterfaceParams.index);
+            SocketAddress addr = makePacketSocketAddress(ETH_P_IPV6, mInterfaceParams.index);
             Os.bind(socket, addr);
             NetworkStackUtils.attachRaFilter(socket, mApfCapabilities.apfPacketFormat);
         } catch(SocketException|ErrnoException e) {
