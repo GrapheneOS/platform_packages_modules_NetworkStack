@@ -27,16 +27,16 @@ import kotlin.test.assertTrue
 private const val TAG = "Connectivity unit test"
 
 fun <T> assertEmpty(ts: Array<T>) = ts.size.let { len ->
-    assertEquals(0, len, "Expected empty array, but length was $len")
+    assertEquals(0, len, "Expected empty array, but length was ${len}")
 }
 
 fun <T> assertLength(expected: Int, got: Array<T>) = got.size.let { len ->
-    assertEquals(expected, len, "Expected array of length $expected, but was $len for $got")
+    assertEquals(expected, len, "Expected array of length ${expected}, but was ${len} for ${got}")
 }
 
 // Bridge method to help write this in Java. If you're writing Kotlin, consider using native
 // kotlin.test.assertFailsWith instead, as that method is reified and inlined.
-fun <T : Exception> assertThrows(expected: Class<T>, block: ExceptionUtils.ThrowingRunnable): T {
+fun <T: Exception> assertThrows(expected: Class<T>, block: Runnable): T {
     return assertFailsWith(expected.kotlin) { block.run() }
 }
 
@@ -51,13 +51,13 @@ fun <T> assertNotEqualEitherWay(o1: T, o2: T) {
 }
 
 fun assertStringContains(got: String, want: String) {
-    assertTrue(got.contains(want), "$got did not contain \"${want}\"")
+    assertTrue(got.contains(want), "${got} did not contain \"${want}\"")
 }
 
 fun assertContainsExactly(actual: IntArray, vararg expected: Int) {
     // IntArray#sorted() returns a list, so it's fine to test with equals()
     assertEquals(actual.sorted(), expected.sorted(),
-            "$actual does not contain exactly $expected")
+            "${actual} does not contain exactly ${expected}")
 }
 
 fun <T> assertContainsAll(list: Collection<T>, vararg elems: T) {
@@ -65,7 +65,7 @@ fun <T> assertContainsAll(list: Collection<T>, vararg elems: T) {
 }
 
 fun <T> assertContainsAll(list: Collection<T>, elems: Collection<T>) {
-    elems.forEach { assertTrue(list.contains(it), "$it not in list") }
+    elems.forEach { assertTrue(list.contains(it), "${it} not in list") }
 }
 
 fun assertRunsInAtMost(descr: String, timeLimit: Long, fn: Runnable) {
