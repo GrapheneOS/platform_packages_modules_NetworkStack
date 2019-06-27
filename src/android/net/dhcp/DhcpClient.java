@@ -371,7 +371,7 @@ public class DhcpClient extends StateMachine {
     private boolean initPacketSocket() {
         try {
             mPacketSock = Os.socket(AF_PACKET, SOCK_RAW, ETH_P_IP);
-            SocketAddress addr = makePacketSocketAddress((short) ETH_P_IP, mIface.index);
+            SocketAddress addr = makePacketSocketAddress(ETH_P_IP, mIface.index);
             Os.bind(mPacketSock, addr);
             NetworkStackUtils.attachDhcpFilter(mPacketSock);
         } catch(SocketException|ErrnoException e) {
