@@ -49,6 +49,7 @@ android_library {
         "captiveportal-lib",
     ],
     manifest: "AndroidManifestBase.xml",
+    plugins: ["java_api_finder"],
 }
 
 cc_library_shared {
