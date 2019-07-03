@@ -21,11 +21,15 @@ import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED
-import com.android.testutils.RecorderCallback.CallbackRecord.Available
-import com.android.testutils.RecorderCallback.CallbackRecord.BlockedStatus
-import com.android.testutils.RecorderCallback.CallbackRecord.CapabilitiesChanged
-import com.android.testutils.RecorderCallback.CallbackRecord.LinkPropertiesChanged
-import com.android.testutils.RecorderCallback.CallbackRecord.Lost
+import com.android.testutils.RecorderCallback.CallbackEntry.Available
+import com.android.testutils.RecorderCallback.CallbackEntry.BlockedStatus
+import com.android.testutils.RecorderCallback.CallbackEntry.CapabilitiesChanged
+import com.android.testutils.RecorderCallback.CallbackEntry.LinkPropertiesChanged
+import com.android.testutils.RecorderCallback.CallbackEntry.Losing
+import com.android.testutils.RecorderCallback.CallbackEntry.Lost
+import com.android.testutils.RecorderCallback.CallbackEntry.Resumed
+import com.android.testutils.RecorderCallback.CallbackEntry.Suspended
+import com.android.testutils.RecorderCallback.CallbackEntry.Unavailable
 import kotlin.reflect.KClass
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -35,38 +39,43 @@ object NULL_NETWORK : Network(-1)
 
 private val Int.capabilityName get() = NetworkCapabilities.capabilityNameOf(this)
 
-open class RecorderCallback : NetworkCallback() {
-    sealed class CallbackRecord {
+open class RecorderCallback private constructor(
+    private val backingRecord: ArrayTrackRecord<CallbackEntry>
+) : NetworkCallback() {
+    public constructor() : this(ArrayTrackRecord())
+    protected constructor(src: RecorderCallback?): this(src?.backingRecord ?: ArrayTrackRecord())
+
+    sealed class CallbackEntry {
         // To get equals(), hashcode(), componentN() etc for free, the child classes of
         // this class are data classes. But while data classes can inherit from other classes,
         // they may only have visible members in the constructors, so they couldn't declare
-        // a constructor with a non-val arg to pass to CallbackRecord. Instead, force all
+        // a constructor with a non-val arg to pass to CallbackEntry. Instead, force all
         // subclasses to implement a `network' property, which can be done in a data class
         // constructor by specifying override.
         abstract val network: Network
 
-        data class Available(override val network: Network) : CallbackRecord()
+        data class Available(override val network: Network) : CallbackEntry()
         data class CapabilitiesChanged(
             override val network: Network,
             val caps: NetworkCapabilities
-        ) : CallbackRecord()
+        ) : CallbackEntry()
         data class LinkPropertiesChanged(
             override val network: Network,
             val lp: LinkProperties
-        ) : CallbackRecord()
-        data class Suspended(override val network: Network) : CallbackRecord()
-        data class Resumed(override val network: Network) : CallbackRecord()
-        data class Losing(override val network: Network, val maxMsToLive: Int) : CallbackRecord()
-        data class Lost(override val network: Network) : CallbackRecord()
+        ) : CallbackEntry()
+        data class Suspended(override val network: Network) : CallbackEntry()
+        data class Resumed(override val network: Network) : CallbackEntry()
+        data class Losing(override val network: Network, val maxMsToLive: Int) : CallbackEntry()
+        data class Lost(override val network: Network) : CallbackEntry()
         data class Unavailable private constructor(
             override val network: Network
-        ) : CallbackRecord() {
+        ) : CallbackEntry() {
             constructor() : this(NULL_NETWORK)
         }
         data class BlockedStatus(
             override val network: Network,
             val blocked: Boolean
-        ) : CallbackRecord()
+        ) : CallbackEntry()
 
         // Convenience constants for expecting a type
         companion object {
@@ -91,11 +100,14 @@ open class RecorderCallback : NetworkCallback() {
         }
     }
 
-    protected val history = ArrayTrackRecord<CallbackRecord>().newReadHead()
+    protected val history = backingRecord.newReadHead()
 
     override fun onAvailable(network: Network) {
         history.add(Available(network))
     }
+
+    // PreCheck is not used in the tests today. For backward compatibility with existing tests that
+    // expect the callbacks not to record this, do not listen to PreCheck here.
 
     override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
         history.add(CapabilitiesChanged(network, caps))
@@ -110,39 +122,46 @@ open class RecorderCallback : NetworkCallback() {
     }
 
     override fun onNetworkSuspended(network: Network) {
-        history.add(CallbackRecord.Suspended(network))
+        history.add(Suspended(network))
     }
 
     override fun onNetworkResumed(network: Network) {
-        history.add(CallbackRecord.Resumed(network))
+        history.add(Resumed(network))
     }
 
     override fun onLosing(network: Network, maxMsToLive: Int) {
-        history.add(CallbackRecord.Losing(network, maxMsToLive))
+        history.add(Losing(network, maxMsToLive))
     }
 
     override fun onLost(network: Network) {
-        history.add(CallbackRecord.Lost(network))
+        history.add(Lost(network))
     }
 
     override fun onUnavailable() {
-        history.add(CallbackRecord.Unavailable())
+        history.add(Unavailable())
     }
 }
 
-typealias CallbackType = KClass<out RecorderCallback.CallbackRecord>
-const val DEFAULT_TIMEOUT = 200L // ms
+private const val DEFAULT_TIMEOUT = 200L // ms
 
-open class TestableNetworkCallback(val defaultTimeoutMs: Long = DEFAULT_TIMEOUT)
-        : RecorderCallback() {
-    // The last available network. Null if the last available network was lost since.
+open class TestableNetworkCallback private constructor(
+    src: TestableNetworkCallback?,
+    val defaultTimeoutMs: Long = DEFAULT_TIMEOUT
+) : RecorderCallback(src) {
+    @JvmOverloads
+    constructor(timeoutMs: Long = DEFAULT_TIMEOUT): this(null, timeoutMs)
+
+    fun createLinkedCopy() = TestableNetworkCallback(this, defaultTimeoutMs)
+
+    // The last available network, or null if any network was lost since the last call to
+    // onAvailable. TODO : fix this by fixing the tests that rely on this behavior
     val lastAvailableNetwork: Network?
         get() = when (val it = history.lastOrNull { it is Available || it is Lost }) {
             is Available -> it.network
             else -> null
         }
 
-    fun pollForNextCallback(timeoutMs: Long = defaultTimeoutMs): CallbackRecord {
+    fun pollForNextCallback(timeoutMs: Long = defaultTimeoutMs): CallbackEntry {
         return history.poll(timeoutMs) ?: fail("Did not receive callback after ${timeoutMs}ms")
     }
 
@@ -153,7 +172,7 @@ open class TestableNetworkCallback(val defaultTimeoutMs: Long = DEFAULT_TIMEOUT)
         if (null != cb) fail("Expected no callback but got $cb")
     }
 
-    inline fun <reified T : CallbackRecord> expectCallback(
+    inline fun <reified T : CallbackEntry> expectCallback(
         network: Network,
         timeoutMs: Long = defaultTimeoutMs
     ): T = pollForNextCallback(timeoutMs).let {
@@ -166,7 +185,7 @@ open class TestableNetworkCallback(val defaultTimeoutMs: Long = DEFAULT_TIMEOUT)
 
     fun expectCallbackThat(
         timeoutMs: Long = defaultTimeoutMs,
-        valid: (CallbackRecord) -> Boolean
+        valid: (CallbackEntry) -> Boolean
     ) = pollForNextCallback(timeoutMs).also { assertTrue(valid(it), "Unexpected callback : $it") }
 
     fun expectCapabilitiesThat(
@@ -209,7 +228,7 @@ open class TestableNetworkCallback(val defaultTimeoutMs: Long = DEFAULT_TIMEOUT)
     ) {
         expectCallback<Available>(net, tmt)
         if (suspended) {
-            expectCallback<CallbackRecord.Suspended>(net, tmt)
+            expectCallback<CallbackEntry.Suspended>(net, tmt)
         }
         expectCapabilitiesThat(net, tmt) { validated == it.hasCapability(NET_CAPABILITY_VALIDATED) }
         expectCallback<LinkPropertiesChanged>(net, tmt)
@@ -257,7 +276,7 @@ open class TestableNetworkCallback(val defaultTimeoutMs: Long = DEFAULT_TIMEOUT)
     }
 
     @JvmOverloads
-    open fun <T : CallbackRecord> expectCallback(
+    open fun <T : CallbackEntry> expectCallback(
         type: KClass<T>,
         n: HasNetwork?,
         timeoutMs: Long = defaultTimeoutMs
