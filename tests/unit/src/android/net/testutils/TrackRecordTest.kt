@@ -19,6 +19,8 @@ package android.net.testutils
 import android.os.SystemClock
 import com.android.testutils.ArrayTrackRecord
 import com.android.testutils.TrackRecord
+import com.android.testutils.__FILE__
+import com.android.testutils.__LINE__
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -205,6 +207,27 @@ class TrackRecordTest {
         // Polling for an element that doesn't match what is already there
         delay = measureTimeMillis { assertNull(record.poll(SHORT_TIMEOUT, 0) { it < 10 }) }
         assertTrue(delay > SHORT_TIMEOUT)
+    }
+
+    // Just make sure the interpreter actually throws an exception when the spec
+    // does not conform to the behavior. The interpreter is just a tool to test a
+    // tool used for a tool for test, let's not have hundreds of tests for it ;
+    // if it's broken one of the tests using it will break.
+    @Test
+    fun testInterpreter() {
+        val interpretLine = __LINE__ + 2
+        try {
+            interpretTestSpec(useReadHeads = true, spec = """
+                add(4) | poll(1, 0) = 5
+            """)
+            fail("This spec should have thrown")
+        } catch (e: InterpretException) {
+            assertTrue(e.cause is AssertionError)
+            assertEquals(interpretLine + 1, e.stackTrace[0].lineNumber)
+            assertTrue(e.stackTrace[0].fileName.contains(__FILE__))
+            assertTrue(e.stackTrace[0].methodName.contains("testInterpreter"))
+            assertTrue(e.stackTrace[0].methodName.contains("thread1"))
+        }
     }
 
     @Test
