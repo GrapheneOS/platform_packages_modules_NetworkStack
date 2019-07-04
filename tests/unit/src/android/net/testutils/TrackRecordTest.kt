@@ -231,6 +231,30 @@ class TrackRecordTest {
     }
 
     @Test
+    fun testMultipleAdds() {
+        interpretTestSpec(useReadHeads = false, spec = """
+            add(2)         |                |                |
+                           | add(4)         |                |
+                           |                | add(6)         |
+                           |                |                | add(8)
+            poll(0, 0) = 2 time 0..1 | poll(0, 0) = 2 | poll(0, 0) = 2 | poll(0, 0) = 2
+            poll(0, 1) = 4 time 0..1 | poll(0, 1) = 4 | poll(0, 1) = 4 | poll(0, 1) = 4
+            poll(0, 2) = 6 time 0..1 | poll(0, 2) = 6 | poll(0, 2) = 6 | poll(0, 2) = 6
+            poll(0, 3) = 8 time 0..1 | poll(0, 3) = 8 | poll(0, 3) = 8 | poll(0, 3) = 8
+        """)
+    }
+
+    @Test
+    fun testConcurrentAdds() {
+        interpretTestSpec(useReadHeads = false, spec = """
+            add(2)             | add(4)             | add(6)             | add(8)
+            add(1)             | add(3)             | add(5)             | add(7)
+            poll(0, 1) is even | poll(0, 0) is even | poll(0, 3) is even | poll(0, 2) is even
+            poll(0, 5) is odd  | poll(0, 4) is odd  | poll(0, 7) is odd  | poll(0, 6) is odd
+        """)
+    }
+
+    @Test
     fun testMultiplePoll() {
         interpretTestSpec(useReadHeads = false, spec = """
             add(4)         | poll(1, 0) = 4
@@ -265,6 +289,62 @@ class TrackRecordTest {
         """)
     }
 
+    @Test
+    fun testReadHeadPollWithPredicate() {
+        interpretTestSpec(useReadHeads = true, spec = """
+            add(5)  | poll() { < 0 } = null
+                    | poll() { > 5 } = null
+            add(10) |
+                    | poll() { = 5 } = null   // The "5" was skipped in the previous line
+            add(15) | poll() { > 8 } = 15     // The "10" was skipped in the previous line
+                    | poll(1, 0) { > 8 } = 10 // 10 is the first element after pos 0 matching > 8
+        """)
+    }
+
+    @Test
+    fun testPollImmediatelyAdvancesReadhead() {
+        interpretTestSpec(useReadHeads = true, spec = """
+            add(1)                  | add(2)              | add(3)   | add(4)
+            mark = 0                | poll(0) { > 3 } = 4 |          |
+            poll(0) { > 10 } = null |                     |          |
+            mark = 4                |                     |          |
+            poll() = null           |                     |          |
+        """)
+    }
+
+    @Test
+    fun testParallelReadHeads() {
+        interpretTestSpec(useReadHeads = true, spec = """
+            mark = 0   | mark = 0   | mark = 0   | mark = 0
+            add(2)     |            |            |
+                       | add(4)     |            |
+                       |            | add(6)     |
+                       |            |            | add(8)
+            poll() = 2 | poll() = 2 | poll() = 2 | poll() = 2
+            poll() = 4 | poll() = 4 | poll() = 4 | poll() = 4
+            poll() = 6 | poll() = 6 | poll() = 6 | mark = 2
+            poll() = 8 | poll() = 8 | mark = 3   | poll() = 6
+            mark = 4   | mark = 4   | poll() = 8 | poll() = 8
+        """)
+    }
+
+    @Test
+    fun testPeek() {
+        interpretTestSpec(useReadHeads = true, spec = """
+            add(2)     |            |               |
+                       | add(4)     |               |
+                       |            | add(6)        |
+                       |            |               | add(8)
+            peek() = 2 | poll() = 2 | poll() = 2    | peek() = 2
+            peek() = 2 | peek() = 4 | poll() = 4    | peek() = 2
+            peek() = 2 | peek() = 4 | peek() = 6    | poll() = 2
+            peek() = 2 | mark = 1   | mark = 2      | poll() = 4
+            mark = 0   | peek() = 4 | peek() = 6    | peek() = 6
+            poll() = 2 | poll() = 4 | poll() = 6    | poll() = 6
+            poll() = 4 | mark = 2   | poll() = 8    | peek() = 8
+            peek() = 6 | peek() = 6 | peek() = null | mark = 3
+        """)
+    }
     /**
      * // TODO : don't submit without this.
      * Test poll()
@@ -347,9 +427,8 @@ typealias InterpretMatcher = Pair<Regex, (TrackRecord<Int>, MatchResult) -> Any?
 
 val interpretTable = listOf<InterpretMatcher>(
     // Interpret an empty line as doing nothing.
-    Regex("") to { _, _ ->
-        null
-    },
+    Regex("") to { _, _ -> null },
+    Regex("(.*)//.*") to { t, r -> interpret(r.strArg(1), t) },
     // Interpret "XXX time x..y" : run XXX and check it took at least x and not more than y
     Regex("""(.*)\s*time\s*(\d+)\.\.(\d+)""") to { t, r ->
         assertTrue(measureTimeMillis { interpret(r.strArg(1), t) } in r.timeArg(2)..r.timeArg(3))
@@ -358,6 +437,12 @@ val interpretTable = listOf<InterpretMatcher>(
     Regex("""(.*)\s*=\s*(null|\d+)""") to { t, r ->
         interpret(r.strArg(1), t).also {
             if ("null" == r.strArg(2)) assertNull(it) else assertEquals(r.intArg(2), it)
+        }
+    },
+    // Interpret "XXX is odd" : run XXX and assert its return value is odd ("even" works too)
+    Regex("(.*)\\s+is\\s+(even|odd)") to { t, r ->
+        interpret(r.strArg(1), t).also {
+            assertEquals((it as Int) % 2, if ("even" == r.strArg(2)) 0 else 1)
         }
     },
     // Interpret sleep. Optional argument for the count, in INTERPRET_TIME_UNIT units.
@@ -377,9 +462,15 @@ val interpretTable = listOf<InterpretMatcher>(
     // in a test that takes a TrackRecord that is not a ReadHead. It's technically possible to get
     // the test code to not compile instead of throw, but it's vastly more complex and this will
     // fail 100% at runtime any test that would not have compiled.
-    Regex("""poll\(\)""") to { t, _ ->
-        (t as ArrayTrackRecord<Int>.ReadHead).poll(INTERPRET_TIME_UNIT)
-    }
+    Regex("""poll\((\d+)?\)\s*(\{.*\})?""") to { t, r ->
+        (if (r.strArg(1).isEmpty()) INTERPRET_TIME_UNIT else r.timeArg(1)).let { time ->
+            (t as ArrayTrackRecord<Int>.ReadHead).poll(time, makePredicate(r.strArg(2)))
+        }
+    },
+    // ReadHead#mark. The same remarks apply as with ReadHead#poll.
+    Regex("mark") to { t, _ -> (t as ArrayTrackRecord<Int>.ReadHead).mark },
+    // ReadHead#peek. The same remarks apply as with ReadHead#poll.
+    Regex("peek\\(\\)") to { t, _ -> (t as ArrayTrackRecord<Int>.ReadHead).peek() }
 )
 
 // Split the line into multiple statements separated by ";" and execute them. Return whatever
