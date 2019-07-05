@@ -103,7 +103,8 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
-import org.mockito.verification.VerificationWithTimeout;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -252,35 +253,32 @@ public class NetworkMonitorTest {
 
             // Queries on mCleartextDnsNetwork using DnsResolver#query.
             doAnswer(invocation -> {
-                String hostname = (String) invocation.getArgument(1);
-                Executor executor = (Executor) invocation.getArgument(3);
-                DnsResolver.Callback<List<InetAddress>> callback = invocation.getArgument(5);
-
-                List<InetAddress> answer = getAnswer(invocation.getMock(), hostname);
-                if (answer != null && answer.size() > 0) {
-                    new Handler(Looper.getMainLooper()).post(() -> {
-                        executor.execute(() -> callback.onAnswer(answer, 0));
-                    });
-                }
-                // If no answers, do nothing. sendDnsProbeWithTimeout will time out and throw UHE.
-                return null;
+                return mockQuery(invocation, 1 /* posHostname */, 3 /* posExecutor */,
+                        5 /* posCallback */);
             }).when(mDnsResolver).query(any(), any(), anyInt(), any(), any(), any());
 
-            // Queries on mCleartextDnsNetwork using using DnsResolver#query with QueryType.
+            // Queries on mCleartextDnsNetwork using DnsResolver#query with QueryType.
             doAnswer(invocation -> {
-                String hostname = (String) invocation.getArgument(1);
-                Executor executor = (Executor) invocation.getArgument(4);
-                DnsResolver.Callback<List<InetAddress>> callback = invocation.getArgument(6);
-
-                List<InetAddress> answer = getAnswer(invocation.getMock(), hostname);
-                if (answer != null && answer.size() > 0) {
-                    new Handler(Looper.getMainLooper()).post(() -> {
-                        executor.execute(() -> callback.onAnswer(answer, 0));
-                    });
-                }
-                // If no answers, do nothing. sendDnsProbeWithTimeout will time out and throw UHE.
-                return null;
+                return mockQuery(invocation, 1 /* posHostname */, 4 /* posExecutor */,
+                        6 /* posCallback */);
             }).when(mDnsResolver).query(any(), any(), anyInt(), anyInt(), any(), any(), any());
+        }
+
+        // Mocking queries on DnsResolver#query.
+        private Answer mockQuery(InvocationOnMock invocation, int posHostname, int posExecutor,
+                int posCallback) {
+            String hostname = (String) invocation.getArgument(posHostname);
+            Executor executor = (Executor) invocation.getArgument(posExecutor);
+            DnsResolver.Callback<List<InetAddress>> callback = invocation.getArgument(posCallback);
+
+            List<InetAddress> answer = getAnswer(invocation.getMock(), hostname);
+            if (answer != null && answer.size() > 0) {
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    executor.execute(() -> callback.onAnswer(answer, 0));
+                });
+            }
+            // If no answers, do nothing. sendDnsProbeWithTimeout will time out and throw UHE.
+            return null;
         }
     }
 
