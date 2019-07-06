@@ -401,6 +401,14 @@ public class IpClient extends StateMachine {
                 NetworkStackServiceManager nssManager) {
             return new NetworkStackIpMemoryStore(context, nssManager.getIpMemoryStoreService());
         }
+
+        /**
+         * Get a DhcpClient Dependencies instance.
+         */
+        public DhcpClient.Dependencies getDhcpClientDependencies(
+                NetworkStackIpMemoryStore ipMemoryStore) {
+            return new DhcpClient.Dependencies(ipMemoryStore);
+        }
     }
 
     public IpClient(Context context, String ifName, IIpClientCallbacks callback,
@@ -1190,7 +1198,7 @@ public class IpClient extends StateMachine {
         } else {
             // Start DHCPv4.
             mDhcpClient = DhcpClient.makeDhcpClient(mContext, IpClient.this, mInterfaceParams,
-                    mIpMemoryStore);
+                    mDependencies.getDhcpClientDependencies(mIpMemoryStore));
             mDhcpClient.registerForPreDhcpNotification();
             mDhcpClient.sendMessage(DhcpClient.CMD_START_DHCP, mL2Key);
         }

@@ -108,6 +108,16 @@ public class NetworkStackUtils {
      */
     public static final int CAPTIVE_PORTAL_MODE_AVOID = 2;
 
+    /**
+     * Experiment flag to enable DHCP INIT-REBOOT state, default value is false.
+     */
+    public static final String DHCP_INIT_REBOOT_ENABLED = "dhcp_init_reboot_enabled";
+
+    /**
+     * Experiment flag to enable DHCP Rapid Commit option, default value is false.
+     */
+    public static final String DHCP_RAPID_COMMIT_ENABLED = "dhcp_rapid_commit_enabled";
+
     static {
         System.loadLibrary("networkstackutilsjni");
     }
@@ -182,8 +192,7 @@ public class NetworkStackUtils {
      * Look up the value of a property for a particular namespace from {@link DeviceConfig}.
      * @param namespace The namespace containing the property to look up.
      * @param name The name of the property to look up.
-     * @param defaultValue The value to return if the property does not exist or has no non-null
-     *                     value.
+     * @param defaultValue The value to return if the property does not exist or its value is null.
      * @return the corresponding value, or defaultValue if none exists.
      */
     public static int getDeviceConfigPropertyInt(@NonNull String namespace, @NonNull String name,
@@ -194,6 +203,19 @@ public class NetworkStackUtils {
         } catch (NumberFormatException e) {
             return defaultValue;
         }
+    }
+
+    /**
+     * Look up the value of a property for a particular namespace from {@link DeviceConfig}.
+     * @param namespace The namespace containing the property to look up.
+     * @param name The name of the property to look up.
+     * @param defaultValue The value to return if the property does not exist or its value is null.
+     * @return the corresponding value, or defaultValue if none exists.
+     */
+    public static boolean getDeviceConfigPropertyBoolean(@NonNull String namespace,
+            @NonNull String name, boolean defaultValue) {
+        String value = getDeviceConfigProperty(namespace, name, null /* defaultValue */);
+        return (value != null) ? Boolean.parseBoolean(value) : defaultValue;
     }
 
     /**
