@@ -47,6 +47,9 @@ import java.util.concurrent.TimeoutException;
 public class DnsUtils {
     // Decide what queries to make depending on what IP addresses are on the system.
     public static final int TYPE_ADDRCONFIG = -1;
+    // A one time host name suffix of private dns probe.
+    // q.v. system/netd/server/dns/DnsTlsTransport.cpp
+    public static final String PRIVATE_DNS_PROBE_HOST_SUFFIX = "-dnsotls-ds.metric.gstatic.com";
     private static final String TAG = DnsUtils.class.getSimpleName();
     private static final boolean DBG = Log.isLoggable(TAG, Log.DEBUG);
 
