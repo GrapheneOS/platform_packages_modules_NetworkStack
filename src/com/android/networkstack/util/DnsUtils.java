@@ -80,7 +80,7 @@ public class DnsUtils {
 
         if (result.size() == 0) {
             logger.log("FAIL: " + errorMsg.toString());
-            throw new UnknownHostException(errorMsg.toString());
+            throw new UnknownHostException(host);
         }
         logger.log("OK: " + host + " " + result.toString());
         return result.toArray(new InetAddress[0]);
@@ -134,20 +134,19 @@ public class DnsUtils {
 
         TrafficStats.setThreadStatsTag(oldTag);
 
+        String errorMsg = null;
         List<InetAddress> result = null;
-        Exception exception = null;
         try {
             result = resultRef.get(timeoutMs, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
-            exception = e;
+            errorMsg = e.getMessage();
         } catch (TimeoutException | InterruptedException e) {
-            exception = new UnknownHostException("Timeout");
+            errorMsg = "Timeout";
         } finally {
-            logDnsResult(result, watch.stop() /* latency */, logger, type,
-                    exception != null ? exception.getMessage() : "" /* errorMsg */);
+            logDnsResult(result, watch.stop() /* latency */, logger, type, errorMsg);
         }
 
-        if (null != exception) throw (UnknownHostException) exception;
+        if (null != errorMsg) throw new UnknownHostException(host);
 
         return result.toArray(new InetAddress[0]);
     }
