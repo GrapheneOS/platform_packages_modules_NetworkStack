@@ -65,6 +65,7 @@ import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USE_HTTPS;
 import static android.net.util.NetworkStackUtils.NAMESPACE_CONNECTIVITY;
 import static android.net.util.NetworkStackUtils.isEmpty;
 
+import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
 import static com.android.networkstack.util.DnsUtils.TYPE_ADDRCONFIG;
 
 import android.annotation.NonNull;
@@ -1083,10 +1084,8 @@ public class NetworkMonitor extends StateMachine {
         }
 
         private boolean sendPrivateDnsProbe() {
-            // q.v. system/netd/server/dns/DnsTlsTransport.cpp
-            final String oneTimeHostnameSuffix = "-dnsotls-ds.metric.gstatic.com";
             final String host = UUID.randomUUID().toString().substring(0, 8)
-                    + oneTimeHostnameSuffix;
+                    + PRIVATE_DNS_PROBE_HOST_SUFFIX;
             final Stopwatch watch = new Stopwatch().start();
             boolean success = false;
             long time;
