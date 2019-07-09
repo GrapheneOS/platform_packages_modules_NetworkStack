@@ -45,8 +45,8 @@ import static org.junit.Assert.fail;
 
 import android.annotation.Nullable;
 import android.net.DhcpResults;
+import android.net.InetAddresses;
 import android.net.LinkAddress;
-import android.net.NetworkUtils;
 import android.net.metrics.DhcpErrorEvent;
 
 import androidx.test.filters.SmallTest;
@@ -86,7 +86,7 @@ public class DhcpPacketTest {
     private static final byte[] CLIENT_MAC = new byte[] { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05 };
 
     private static final Inet4Address v4Address(String addrString) throws IllegalArgumentException {
-        return (Inet4Address) NetworkUtils.numericToInetAddress(addrString);
+        return (Inet4Address) InetAddresses.parseNumericAddress(addrString);
     }
 
     @Before
