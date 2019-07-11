@@ -17,6 +17,7 @@
 package com.android.testutils
 
 import android.util.Log
+import com.android.testutils.ExceptionUtils.ThrowingRunnable
 import java.lang.reflect.Modifier
 import kotlin.system.measureTimeMillis
 import kotlin.test.assertEquals
@@ -36,8 +37,12 @@ fun <T> assertLength(expected: Int, got: Array<T>) = got.size.let { len ->
 
 // Bridge method to help write this in Java. If you're writing Kotlin, consider using native
 // kotlin.test.assertFailsWith instead, as that method is reified and inlined.
-fun <T : Exception> assertThrows(expected: Class<T>, block: ExceptionUtils.ThrowingRunnable): T {
+fun <T : Exception> assertThrows(expected: Class<T>, block: ThrowingRunnable): T {
     return assertFailsWith(expected.kotlin) { block.run() }
+}
+
+fun <T : Exception> assertThrows(msg: String, expected: Class<T>, block: ThrowingRunnable): T {
+    return assertFailsWith(expected.kotlin, msg) { block.run() }
 }
 
 fun <T> assertEqualBothWays(o1: T, o2: T) {
