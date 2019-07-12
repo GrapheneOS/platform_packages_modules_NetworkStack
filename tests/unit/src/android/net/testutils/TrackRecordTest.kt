@@ -181,7 +181,7 @@ class TrackRecordTest {
         var delay = measureTimeMillis { assertNull(record.poll(SHORT_TIMEOUT, 0)) }
         assertTrue(delay >= SHORT_TIMEOUT, "Delay $delay < $SHORT_TIMEOUT")
         delay = measureTimeMillis { assertNull(record.poll(SHORT_TIMEOUT, 0) { it < 10 }) }
-        assertTrue(delay > SHORT_TIMEOUT)
+        assertTrue(delay >= SHORT_TIMEOUT)
     }
 
     @Test
@@ -209,7 +209,7 @@ class TrackRecordTest {
         assertTrue(delay >= SHORT_TIMEOUT, "Delay $delay < $SHORT_TIMEOUT")
         // Polling for an element that doesn't match what is already there
         delay = measureTimeMillis { assertNull(record.poll(SHORT_TIMEOUT, 0) { it < 10 }) }
-        assertTrue(delay > SHORT_TIMEOUT)
+        assertTrue(delay >= SHORT_TIMEOUT)
     }
 
     // Just make sure the interpreter actually throws an exception when the spec
