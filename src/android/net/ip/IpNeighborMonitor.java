@@ -185,12 +185,6 @@ public class IpNeighborMonitor extends PacketReader {
                 break;
             }
 
-            final int srcPortId = nlMsg.getHeader().nlmsg_pid;
-            if (srcPortId !=  0) {
-                mLog.e("non-kernel source portId: " + Integer.toUnsignedLong(srcPortId));
-                break;
-            }
-
             if (nlMsg instanceof NetlinkErrorMessage) {
                 mLog.e("netlink error: " + nlMsg);
                 continue;
