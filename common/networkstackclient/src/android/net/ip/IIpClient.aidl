@@ -35,4 +35,5 @@ oneway interface IIpClient {
     void removeKeepalivePacketFilter(int slot);
     void setL2KeyAndGroupHint(in String l2Key, in String groupHint);
     void addNattKeepalivePacketFilter(int slot, in NattKeepalivePacketDataParcelable pkt);
+    void notifyPreconnectionComplete(boolean success);
 }
