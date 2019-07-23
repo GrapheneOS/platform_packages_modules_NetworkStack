@@ -133,3 +133,21 @@ genrule {
          " --javaPackage com.android.networkstack.metrics --javaClass NetworkStackStatsLog",
     out: ["com/android/networkstack/metrics/NetworkStackStatsLog.java"],
 }
+
+genrule {
+    name: "NetworkStackTestAndroidManifest",
+    srcs: ["AndroidManifest.xml"],
+    out: ["TestAndroidManifest.xml"],
+    cmd: "sed 's/versionCode=\".*\"/versionCode=\"300000000\"/' $(in) > $(out)",
+}
+
+android_app {
+    name: "TestNetworkStack",
+    defaults: ["NetworkStackAppCommon"],
+    certificate: "networkstack",
+    manifest: ":NetworkStackTestAndroidManifest",
+    use_embedded_native_libs: true,
+    // The permission configuration *must* be included to ensure security of the device
+    required: ["NetworkPermissionConfig"],
+}
+
