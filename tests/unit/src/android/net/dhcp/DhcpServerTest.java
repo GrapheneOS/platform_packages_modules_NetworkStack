@@ -23,6 +23,7 @@ import static android.net.dhcp.DhcpPacket.ENCAP_BOOTP;
 import static android.net.dhcp.DhcpPacket.INADDR_ANY;
 import static android.net.dhcp.DhcpPacket.INADDR_BROADCAST;
 import static android.net.dhcp.IDhcpServer.STATUS_SUCCESS;
+import static android.net.util.NetworkStackUtils.DHCP_RAPID_COMMIT_VERSION;
 
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
@@ -42,6 +43,7 @@ import static org.mockito.Mockito.when;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.content.Context;
 import android.net.INetworkStackStatusCallback;
 import android.net.LinkAddress;
 import android.net.MacAddress;
@@ -104,6 +106,8 @@ public class DhcpServerTest {
             TEST_CLIENT_ADDR, TEST_LEASE_EXPTIME_SECS * 1000L + TEST_CLOCK_TIME, TEST_HOSTNAME);
 
     @NonNull @Mock
+    private Context mContext;
+    @NonNull @Mock
     private Dependencies mDeps;
     @NonNull @Mock
     private DhcpLeaseRepository mRepository;
@@ -147,6 +151,7 @@ public class DhcpServerTest {
         when(mDeps.makeLeaseRepository(any(), any(), any())).thenReturn(mRepository);
         when(mDeps.makeClock()).thenReturn(mClock);
         when(mDeps.makePacketListener()).thenReturn(mPacketListener);
+        when(mDeps.isFeatureEnabled(eq(mContext), eq(DHCP_RAPID_COMMIT_VERSION))).thenReturn(true);
         doNothing().when(mDeps)
                 .sendPacket(any(), mSentPacketCaptor.capture(), mResponseDstAddrCaptor.capture());
         when(mClock.elapsedRealtime()).thenReturn(TEST_CLOCK_TIME);
@@ -163,7 +168,7 @@ public class DhcpServerTest {
         mLooper = TestableLooper.get(this);
         mHandlerThread = spy(new HandlerThread("TestDhcpServer"));
         when(mHandlerThread.getLooper()).thenReturn(mLooper.getLooper());
-        mServer = new DhcpServer(mHandlerThread, TEST_IFACE, servingParams,
+        mServer = new DhcpServer(mContext, mHandlerThread, TEST_IFACE, servingParams,
                 new SharedLog(DhcpServerTest.class.getSimpleName()), mDeps);
 
         mServer.start(mAssertSuccessCallback);
@@ -192,11 +197,27 @@ public class DhcpServerTest {
 
         final DhcpDiscoverPacket discover = new DhcpDiscoverPacket(TEST_TRANSACTION_ID,
                 (short) 0 /* secs */, INADDR_ANY /* relayIp */, TEST_CLIENT_MAC_BYTES,
-                false /* broadcast */, INADDR_ANY /* srcIp */);
+                false /* broadcast */, INADDR_ANY /* srcIp */, false /* rapidCommit */);
         mServer.processPacket(discover, DHCP_CLIENT);
 
         assertResponseSentTo(TEST_CLIENT_ADDR);
         final DhcpOfferPacket packet = assertOffer(getPacket());
+        assertMatchesTestLease(packet);
+    }
+
+    @Test
+    public void testDiscover_RapidCommit() throws Exception {
+        when(mDeps.isFeatureEnabled(eq(mContext), eq(DHCP_RAPID_COMMIT_VERSION))).thenReturn(true);
+        when(mRepository.getCommittedLease(isNull() /* clientId */, eq(TEST_CLIENT_MAC),
+                eq(INADDR_ANY) /* relayAddr */, isNull() /* hostname */)).thenReturn(TEST_LEASE);
+
+        final DhcpDiscoverPacket discover = new DhcpDiscoverPacket(TEST_TRANSACTION_ID,
+                (short) 0 /* secs */, INADDR_ANY /* relayIp */, TEST_CLIENT_MAC_BYTES,
+                false /* broadcast */, INADDR_ANY /* srcIp */, true /* rapidCommit */);
+        mServer.processPacket(discover, DHCP_CLIENT);
+
+        assertResponseSentTo(TEST_CLIENT_ADDR);
+        final DhcpAckPacket packet = assertAck(getPacket());
         assertMatchesTestLease(packet);
     }
 
@@ -208,7 +229,7 @@ public class DhcpServerTest {
 
         final DhcpDiscoverPacket discover = new DhcpDiscoverPacket(TEST_TRANSACTION_ID,
                 (short) 0 /* secs */, INADDR_ANY /* relayIp */, TEST_CLIENT_MAC_BYTES,
-                false /* broadcast */, INADDR_ANY /* srcIp */);
+                false /* broadcast */, INADDR_ANY /* srcIp */, false /* rapidCommit */);
         mServer.processPacket(discover, DHCP_CLIENT);
 
         assertResponseSentTo(INADDR_BROADCAST);

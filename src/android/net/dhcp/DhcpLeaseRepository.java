@@ -190,6 +190,25 @@ class DhcpLeaseRepository {
         return newLease;
     }
 
+    /**
+     * Get a rapid committed DHCP Lease, to reply to a DHCPDISCOVER w/ Rapid Commit option.
+     *
+     * @param clientId Client identifier option if specified, or {@link #CLIENTID_UNSPEC}
+     * @param relayAddr Internet address of the relay (giaddr), can be {@link Inet4Address#ANY}
+     * @param hostname Client-provided hostname, or {@link DhcpLease#HOSTNAME_NONE}
+     * @throws OutOfAddressesException The server does not have any available address
+     * @throws InvalidSubnetException The lease was requested from an unsupported subnet
+     */
+    @NonNull
+    public DhcpLease getCommittedLease(@Nullable byte[] clientId, @NonNull MacAddress hwAddr,
+            @NonNull Inet4Address relayAddr, @Nullable String hostname)
+            throws OutOfAddressesException, InvalidSubnetException {
+        final DhcpLease newLease = getOffer(clientId, hwAddr, relayAddr, null /* reqAddr */,
+                hostname);
+        commitLease(newLease);
+        return newLease;
+    }
+
     private void checkValidRelayAddr(@Nullable Inet4Address relayAddr)
             throws InvalidSubnetException {
         // As per #4.3.1, addresses are assigned based on the relay address if present. This
