@@ -3,5 +3,13 @@
     {
       "name": "NetworkStackTests"
     }
+  ],
+  "postsubmit": [
+    {
+      "name": "NetworkStackHostTests"
+    },
+    {
+      "name": "NetworkStackIntegrationTests"
+    }
   ]
 }
