@@ -25,5 +25,6 @@ java_test_host {
         "kotlin-test",
         "module_test_util",
     ],
+    test_suites: ["device-tests"],
     data: [":NetworkStack"],
 }
