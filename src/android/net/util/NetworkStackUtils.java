@@ -108,6 +108,11 @@ public class NetworkStackUtils {
      */
     public static final int CAPTIVE_PORTAL_MODE_AVOID = 2;
 
+    /**
+     * Experiment flag to enable DHCP INIT-REBOOT state, default value is false.
+     */
+    public static final String DHCP_INIT_REBOOT_ENABLED = "dhcp_init_reboot_enabled";
+
     static {
         System.loadLibrary("networkstackutilsjni");
     }
