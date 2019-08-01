@@ -77,6 +77,7 @@ import androidx.test.runner.AndroidJUnit4;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
 import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
+import com.android.testutils.HandlerUtilsKt;
 
 import org.junit.After;
 import org.junit.Before;
@@ -158,7 +159,8 @@ public class IpClientIntegrationTest {
     private static final Inet4Address BROADCAST_ADDR = getBroadcastAddress(
             SERVER_ADDR, PREFIX_LENGTH);
     private static final String HOSTNAME = "testhostname";
-    private static final short MTU = 1500;
+    private static final int TEST_DEFAULT_MTU = 1500;
+    private static final int TEST_MIN_MTU = 1280;
 
     private static class TapPacketReader extends PacketReader {
         private final ParcelFileDescriptor mTapFd;
@@ -203,6 +205,7 @@ public class IpClientIntegrationTest {
     private class Dependencies extends IpClient.Dependencies {
         private boolean mIsDhcpLeaseCacheEnabled;
         private boolean mIsDhcpRapidCommitEnabled;
+        private int mMtu = TEST_DEFAULT_MTU;
 
         public void setDhcpLeaseCacheEnabled(final boolean enable) {
             mIsDhcpLeaseCacheEnabled = enable;
@@ -210,6 +213,10 @@ public class IpClientIntegrationTest {
 
         public void setDhcpRapidCommitEnabled(final boolean enable) {
             mIsDhcpRapidCommitEnabled = enable;
+        }
+
+        public void setMtu(final int mtu) {
+            mMtu = mtu;
         }
 
         @Override
@@ -241,6 +248,11 @@ public class IpClientIntegrationTest {
                     }
                 }
             };
+        }
+
+        @Override
+        public int getInterfaceMtu(String ifName) {
+            return mMtu;
         }
     }
 
@@ -345,7 +357,7 @@ public class IpClientIntegrationTest {
     }
 
     private static ByteBuffer buildDhcpOfferPacket(final DhcpPacket packet,
-            final Integer leaseTimeSec) {
+            final Integer leaseTimeSec, final short mtu) {
         return DhcpPacket.buildOfferPacket(DhcpPacket.ENCAP_L2, packet.getTransactionId(),
                 false /* broadcast */, SERVER_ADDR, INADDR_ANY /* relayIp */,
                 CLIENT_ADDR /* yourIp */, packet.getClientMac(), leaseTimeSec,
@@ -353,11 +365,11 @@ public class IpClientIntegrationTest {
                 Collections.singletonList(SERVER_ADDR) /* gateways */,
                 Collections.singletonList(SERVER_ADDR) /* dnsServers */,
                 SERVER_ADDR /* dhcpServerIdentifier */, null /* domainName */, HOSTNAME,
-                false /* metered */, MTU);
+                false /* metered */, mtu);
     }
 
     private static ByteBuffer buildDhcpAckPacket(final DhcpPacket packet,
-            final Integer leaseTimeSec) {
+            final Integer leaseTimeSec, final short mtu) {
         return DhcpPacket.buildAckPacket(DhcpPacket.ENCAP_L2, packet.getTransactionId(),
                 false /* broadcast */, SERVER_ADDR, INADDR_ANY /* relayIp */,
                 CLIENT_ADDR /* yourIp */, CLIENT_ADDR /* requestIp */, packet.getClientMac(),
@@ -365,7 +377,7 @@ public class IpClientIntegrationTest {
                 Collections.singletonList(SERVER_ADDR) /* gateways */,
                 Collections.singletonList(SERVER_ADDR) /* dnsServers */,
                 SERVER_ADDR /* dhcpServerIdentifier */, null /* domainName */, HOSTNAME,
-                false /* metered */, MTU);
+                false /* metered */, mtu);
     }
 
     private static ByteBuffer buildDhcpNakPacket(final DhcpPacket packet) {
@@ -397,7 +409,7 @@ public class IpClientIntegrationTest {
     }
 
     private void assertIpMemoryStoreNetworkAttributes(final Integer leaseTimeSec,
-            final long startTime) {
+            final long startTime, final int mtu) {
         final ArgumentCaptor<NetworkAttributes> networkAttributes =
                 ArgumentCaptor.forClass(NetworkAttributes.class);
 
@@ -416,7 +428,7 @@ public class IpClientIntegrationTest {
             assertTrue(lowerBound < expiry);
         }
         assertEquals(Collections.singletonList(SERVER_ADDR), naValueCaptured.dnsAddresses);
-        assertEquals(new Integer((int) MTU), naValueCaptured.mtu);
+        assertEquals(new Integer(mtu), naValueCaptured.mtu);
     }
 
     private void assertIpMemoryNeverStoreNetworkAttributes() {
@@ -433,13 +445,16 @@ public class IpClientIntegrationTest {
         while ((packet = getNextDhcpPacket()) != null) {
             if (packet instanceof DhcpDiscoverPacket) {
                 if (isDhcpRapidCommitEnabled) {
-                    sendResponse(buildDhcpAckPacket(packet, leaseTimeSec));
+                    sendResponse(buildDhcpAckPacket(packet, leaseTimeSec,
+                            (short) mDependencies.getInterfaceMtu(mIfaceName)));
                 } else {
-                    sendResponse(buildDhcpOfferPacket(packet, leaseTimeSec));
+                    sendResponse(buildDhcpOfferPacket(packet, leaseTimeSec,
+                            (short) mDependencies.getInterfaceMtu(mIfaceName)));
                 }
             } else if (packet instanceof DhcpRequestPacket) {
                 final ByteBuffer byteBuffer = isSuccessLease
-                        ? buildDhcpAckPacket(packet, leaseTimeSec)
+                        ? buildDhcpAckPacket(packet, leaseTimeSec,
+                                (short) mDependencies.getInterfaceMtu(mIfaceName))
                         : buildDhcpNakPacket(packet);
                 sendResponse(byteBuffer);
             } else {
@@ -487,7 +502,7 @@ public class IpClientIntegrationTest {
         final long currentTime = System.currentTimeMillis();
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* isDhcpLeaseCacheEnabled */, false /* isDhcpRapidCommitEnabled */);
-        assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime);
+        assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
     }
 
     @Test
@@ -502,7 +517,7 @@ public class IpClientIntegrationTest {
         final long currentTime = System.currentTimeMillis();
         performDhcpHandshake(true /* isSuccessLease */, INFINITE_LEASE,
                 true /* isDhcpLeaseCacheEnabled */, false /* isDhcpRapidCommitEnabled */);
-        assertIpMemoryStoreNetworkAttributes(INFINITE_LEASE, currentTime);
+        assertIpMemoryStoreNetworkAttributes(INFINITE_LEASE, currentTime, TEST_DEFAULT_MTU);
     }
 
     @Test
@@ -510,7 +525,7 @@ public class IpClientIntegrationTest {
         final long currentTime = System.currentTimeMillis();
         performDhcpHandshake(true /* isSuccessLease */, null /* no lease time */,
                 true /* isDhcpLeaseCacheEnabled */, false /* isDhcpRapidCommitEnabled */);
-        assertIpMemoryStoreNetworkAttributes(null, currentTime);
+        assertIpMemoryStoreNetworkAttributes(null, currentTime, TEST_DEFAULT_MTU);
     }
 
     @Test
@@ -527,7 +542,7 @@ public class IpClientIntegrationTest {
         final long currentTime = System.currentTimeMillis();
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* isDhcpLeaseCacheEnabled */, true /* isDhcpRapidCommitEnabled */);
-        assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime);
+        assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
     }
 
     @Test
@@ -536,7 +551,7 @@ public class IpClientIntegrationTest {
                 new NetworkAttributes.Builder()
                     .setAssignedV4Address(CLIENT_ADDR)
                     .setAssignedV4AddressExpiry(Long.MAX_VALUE) // lease is always valid
-                    .setMtu(new Integer(MTU))
+                    .setMtu(new Integer(TEST_DEFAULT_MTU))
                     .setGroupHint(TEST_GROUPHINT)
                     .setDnsAddresses(Collections.singletonList(SERVER_ADDR))
                     .build(), false /* timeout */);
@@ -549,7 +564,7 @@ public class IpClientIntegrationTest {
                  new NetworkAttributes.Builder()
                     .setAssignedV4Address(CLIENT_ADDR)
                     .setAssignedV4AddressExpiry(EXPIRED_LEASE)
-                    .setMtu(new Integer(MTU))
+                    .setMtu(new Integer(TEST_DEFAULT_MTU))
                     .setGroupHint(TEST_GROUPHINT)
                     .setDnsAddresses(Collections.singletonList(SERVER_ADDR))
                     .build(), false /* timeout */);
@@ -568,7 +583,7 @@ public class IpClientIntegrationTest {
                 new NetworkAttributes.Builder()
                     .setAssignedV4Address(CLIENT_ADDR)
                     .setAssignedV4AddressExpiry(System.currentTimeMillis() + 3_600_000)
-                    .setMtu(new Integer(MTU))
+                    .setMtu(new Integer(TEST_DEFAULT_MTU))
                     .setGroupHint(TEST_GROUPHINT)
                     .setDnsAddresses(Collections.singletonList(SERVER_ADDR))
                     .build(), true /* timeout */);
@@ -579,7 +594,7 @@ public class IpClientIntegrationTest {
     public void testDhcpClientStartWithCachedLeaseWithoutIPAddress() throws Exception {
         final DhcpPacket packet = getReplyFromDhcpLease(
                 new NetworkAttributes.Builder()
-                    .setMtu(new Integer(MTU))
+                    .setMtu(new Integer(TEST_DEFAULT_MTU))
                     .setGroupHint(TEST_GROUPHINT)
                     .setDnsAddresses(Collections.singletonList(SERVER_ADDR))
                     .build(), false /* timeout */);
@@ -592,5 +607,24 @@ public class IpClientIntegrationTest {
                 true /* isDhcpRapidCommitEnabled */);
         final DhcpPacket packet = getNextDhcpPacket();
         assertTrue(DhcpDiscoverPacket.class.isInstance(packet));
+    }
+
+    @Test
+    public void testRestoreInitialInterfaceMtu() throws Exception {
+        final long currentTime = System.currentTimeMillis();
+
+        // check the initial interface MTU
+        assertTrue(mDependencies.getInterfaceMtu(mIfaceName) == TEST_DEFAULT_MTU);
+
+        // change the MTU and pass the new MTU into DHCPOFFER and DHCPACK packet
+        mDependencies.setMtu(TEST_MIN_MTU);
+        performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
+                true /* isDhcpLeaseCacheEnabled */, false /* isDhcpRapidCommitEnabled */);
+        assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_MIN_MTU);
+
+        mIpc.shutdown();
+        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+        // verify that mtu indeed has been restored
+        verify(mNetd, times(1)).interfaceSetMtu(mIfaceName, TEST_DEFAULT_MTU);
     }
 }
