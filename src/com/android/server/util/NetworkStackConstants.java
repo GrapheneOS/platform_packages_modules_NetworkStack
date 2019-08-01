@@ -54,6 +54,7 @@ public final class NetworkStackConstants {
     public static final int ETHER_TYPE_IPV4 = 0x0800;
     public static final int ETHER_TYPE_IPV6 = 0x86dd;
     public static final int ETHER_HEADER_LEN = 14;
+    public static final int ETHER_MTU = 1500;
 
     /**
      * ARP constants.
@@ -97,6 +98,7 @@ public final class NetworkStackConstants {
     public static final int IPV6_PROTOCOL_OFFSET = 6;
     public static final int IPV6_SRC_ADDR_OFFSET = 8;
     public static final int IPV6_DST_ADDR_OFFSET = 24;
+    public static final int IPV6_MIN_MTU = 1280;
 
     /**
      * ICMPv6 constants.

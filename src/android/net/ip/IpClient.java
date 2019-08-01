@@ -19,6 +19,7 @@ package android.net.ip;
 import static android.net.RouteInfo.RTN_UNICAST;
 import static android.net.shared.IpConfigurationParcelableUtil.toStableParcelable;
 
+import static com.android.server.util.NetworkStackConstants.ETHER_MTU;
 import static com.android.server.util.PermissionUtil.checkNetworkStackCallingPermission;
 
 import android.annotation.NonNull;
@@ -48,6 +49,7 @@ import android.os.ConditionVariable;
 import android.os.IBinder;
 import android.os.Message;
 import android.os.RemoteException;
+import android.os.ServiceSpecificException;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.LocalLog;
@@ -69,6 +71,8 @@ import com.android.server.NetworkStackService.NetworkStackServiceManager;
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
@@ -380,11 +384,25 @@ public class IpClient extends StateMachine {
     private final ConditionVariable mApfDataSnapshotComplete = new ConditionVariable();
 
     public static class Dependencies {
+        private static final String TAG = "IpClient.Dependencies";
+
         /**
          * Get interface parameters for the specified interface.
          */
         public InterfaceParams getInterfaceParams(String ifname) {
             return InterfaceParams.getByName(ifname);
+        }
+
+        /**
+         * Get the current MTU for the specified interface.
+         */
+        public int getInterfaceMtu(String ifname) {
+            try {
+                return NetworkInterface.getByName(ifname).getMTU();
+            } catch (SocketException e) {
+                Log.e(TAG, "unexpected failure to get the interface MTU");
+                return ETHER_MTU;
+            }
         }
 
         /**
@@ -850,10 +868,14 @@ public class IpClient extends StateMachine {
         return shouldLog;
     }
 
-    private void logError(String fmt, Object... args) {
+    private void logError(String fmt, Throwable e, Object... args) {
         final String msg = "ERROR " + String.format(fmt, args);
-        Log.e(mTag, msg);
-        mLog.log(msg);
+        Log.e(mTag, msg, e);
+        mLog.e(msg, e);
+    }
+
+    private void logError(String fmt, Object... args) {
+        logError(fmt, null, args);
     }
 
     // This needs to be called with care to ensure that our LinkProperties
@@ -1350,6 +1372,17 @@ public class IpClient extends StateMachine {
             if (mDhcpClient == null) {
                 // There's no DHCPv4 for which to wait; proceed to stopped.
                 deferMessage(obtainMessage(CMD_JUMP_STOPPING_TO_STOPPED));
+            }
+
+            // Restore the interface MTU to initial value if it has changed.
+            final int mtu = mDependencies.getInterfaceMtu(mInterfaceName);
+            try {
+                if (mtu != mInterfaceParams.defaultMtu) {
+                    mNetd.interfaceSetMtu(mInterfaceName, mInterfaceParams.defaultMtu);
+                }
+            } catch (RemoteException | ServiceSpecificException e) {
+                logError("Couldn't reset MTU from "
+                        + mtu + " to " + mInterfaceParams.defaultMtu + ": " + e);
             }
         }
 
