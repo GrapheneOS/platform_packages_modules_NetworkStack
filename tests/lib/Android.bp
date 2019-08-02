@@ -20,7 +20,19 @@ java_library {
         "src/**/*.java",
         "src/**/*.kt",
     ],
+    defaults: ["lib_mockito_extended"],
     static_libs: [
         "kotlin-test",
+    ],
+}
+
+java_defaults {
+    name: "lib_mockito_extended",
+    static_libs: [
+        "mockito-target-extended-minus-junit4"
+    ],
+    jni_libs: [
+         "libdexmakerjvmtiagent",
+         "libstaticjvmtiagent",
     ],
 }
