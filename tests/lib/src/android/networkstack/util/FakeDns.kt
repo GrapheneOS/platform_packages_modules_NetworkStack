@@ -21,7 +21,6 @@ import android.net.InetAddresses
 import android.os.Looper
 import android.os.Handler
 import com.android.internal.annotations.GuardedBy
-import com.android.networkstack.util.DnsUtils.TYPE_ADDRCONFIG
 import java.net.InetAddress
 import java.util.concurrent.Executor
 import org.mockito.invocation.InvocationOnMock
@@ -29,6 +28,7 @@ import org.mockito.Mockito.any
 import org.mockito.Mockito.anyInt
 import org.mockito.Mockito.doAnswer
 
+const val TYPE_UNSPECIFIED = -1
 // TODO: Integrate with NetworkMonitorTest.
 class FakeDns(val mockResolver: DnsResolver) {
     class DnsEntry(val hostname: String, val type: Int, val addresses: List<InetAddress>) {
@@ -78,7 +78,7 @@ class FakeDns(val mockResolver: DnsResolver) {
         val hostname = it.arguments[posHos] as String
         val executor = it.arguments[posExecutor] as Executor
         val callback = it.arguments[posCallback] as DnsResolver.Callback<List<InetAddress>>
-        var type = if (posType != -1) it.arguments[posType] as Int else TYPE_ADDRCONFIG
+        var type = if (posType != -1) it.arguments[posType] as Int else TYPE_UNSPECIFIED
         val answer = getAnswer(hostname, type)
 
         if (!answer?.addresses.isNullOrEmpty()) {
