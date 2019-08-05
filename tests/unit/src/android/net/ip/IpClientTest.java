@@ -83,7 +83,6 @@ public class IpClientTest {
     private static final String INVALID = "INVALID";
     private static final String TEST_IFNAME = "test_wlan0";
     private static final int TEST_IFINDEX = 1001;
-    private static final int TEST_MTU = 1500;
     // See RFC 7042#section-2.1.2 for EUI-48 documentation values.
     private static final MacAddress TEST_MAC = MacAddress.fromString("00:00:5E:00:53:01");
     private static final int TEST_TIMEOUT_MS = 400;
@@ -123,7 +122,6 @@ public class IpClientTest {
         when(mDependencies.getInterfaceParams(any())).thenReturn(mInterfaceParams);
         when(mDependencies.getIpMemoryStore(mContext, mNetworkStackServiceManager))
                 .thenReturn(mIpMemoryStore);
-        when(mDependencies.getInterfaceMtu(TEST_IFNAME)).thenReturn(TEST_MTU);
 
         mIfParams = null;
     }
