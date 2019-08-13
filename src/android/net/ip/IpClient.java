@@ -948,7 +948,7 @@ public class IpClient extends StateMachine {
         // accompanying code in IpReachabilityMonitor) is unreachable.
         final boolean ignoreIPv6ProvisioningLoss =
                 mConfiguration != null && mConfiguration.mUsingMultinetworkPolicyTracker
-                && mCm.shouldAvoidBadWifi();
+                && !mCm.shouldAvoidBadWifi();
 
         // Additionally:
         //
