@@ -40,7 +40,8 @@
     <application
         android:extractNativeLibs="false"
         android:persistent="true">
-        <service android:name="com.android.server.NetworkStackService">
+        <service android:name="com.android.server.NetworkStackService"
+                 android:permission="android.permission.MAINLINE_NETWORK_STACK">
             <intent-filter>
                 <action android:name="android.net.INetworkStackConnector"/>
             </intent-filter>
