@@ -59,4 +59,12 @@
     <integer name="config_nud_steadystate_solicit_interval">750</integer>
     <integer name="config_nud_postroaming_solicit_num">5</integer>
     <integer name="config_nud_postroaming_solicit_interval">750</integer>
+
+    <!-- Whether to force considering DNS probes returning private IP addresses as failed
+         when attempting to detect captive portals.
+         The impact of this feature will be evaluated separately through experiments.
+         Force-enabling the feature regardless of the experiment results is not advised, as it
+         could result in valid captive portals being incorrectly classified as having no
+         connectivity.-->
+    <bool name="config_force_dns_probe_private_ip_no_internet">false</bool>
 </resources>
