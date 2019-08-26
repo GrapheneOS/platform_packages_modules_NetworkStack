@@ -54,6 +54,7 @@ import static junit.framework.Assert.fail;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.argThat;
@@ -212,6 +213,8 @@ public class IpClientIntegrationTest {
     private static final int TEST_DEFAULT_MTU = 1500;
     private static final int TEST_MIN_MTU = 1280;
     private static final byte[] SERVER_MAC = new byte[] { 0x00, 0x1A, 0x11, 0x22, 0x33, 0x44 };
+    private static final String TEST_HOST_NAME = "AOSP on Crosshatch";
+    private static final String TEST_HOST_NAME_TRANSLITERATION = "AOSP-on-Crosshatch";
 
     private static class TapPacketReader extends PacketReader {
         private final ParcelFileDescriptor mTapFd;
@@ -260,6 +263,8 @@ public class IpClientIntegrationTest {
         // Can't use SparseIntArray, it doesn't have an easy way to know if a key is not present.
         private HashMap<String, Integer> mIntConfigProperties = new HashMap<>();
         private DhcpClient mDhcpClient;
+        private boolean mIsHostnameConfigurationEnabled;
+        private String mHostname;
 
         public void setDhcpLeaseCacheEnabled(final boolean enable) {
             mIsDhcpLeaseCacheEnabled = enable;
@@ -271,6 +276,11 @@ public class IpClientIntegrationTest {
 
         public void setDhcpIpConflictDetectEnabled(final boolean enable) {
             mIsDhcpIpConflictDetectEnabled = enable;
+        }
+
+        public void setHostnameConfiguration(final boolean enable, final String hostname) {
+            mIsHostnameConfigurationEnabled = enable;
+            mHostname = hostname;
         }
 
         @Override
@@ -318,6 +328,16 @@ public class IpClientIntegrationTest {
                 @Override
                 public PowerManager.WakeLock getWakeLock(final PowerManager powerManager) {
                     return mTimeoutWakeLock;
+                }
+
+                @Override
+                public boolean getSendHostnameOption(final Context context) {
+                    return mIsHostnameConfigurationEnabled;
+                }
+
+                @Override
+                public String getDeviceName(final Context context) {
+                    return mIsHostnameConfigurationEnabled ? mHostname : null;
                 }
             };
         }
@@ -515,7 +535,9 @@ public class IpClientIntegrationTest {
 
     private void startIpClientProvisioning(final boolean isDhcpLeaseCacheEnabled,
             final boolean shouldReplyRapidCommitAck, final boolean isPreconnectionEnabled,
-            final boolean isDhcpIpConflictDetectEnabled) throws RemoteException {
+            final boolean isDhcpIpConflictDetectEnabled,
+            final boolean isHostnameConfigurationEnabled, final String hostname)
+            throws RemoteException {
         ProvisioningConfiguration.Builder builder = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
                 .withoutIPv6();
@@ -524,6 +546,7 @@ public class IpClientIntegrationTest {
         mDependencies.setDhcpLeaseCacheEnabled(isDhcpLeaseCacheEnabled);
         mDependencies.setDhcpRapidCommitEnabled(shouldReplyRapidCommitAck);
         mDependencies.setDhcpIpConflictDetectEnabled(isDhcpIpConflictDetectEnabled);
+        mDependencies.setHostnameConfiguration(isHostnameConfigurationEnabled, hostname);
         mIpc.setL2KeyAndGroupHint(TEST_L2KEY, TEST_GROUPHINT);
         mIpc.startProvisioning(builder.build());
         verify(mCb).setNeighborDiscoveryOffload(true);
@@ -531,6 +554,15 @@ public class IpClientIntegrationTest {
             verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
         }
         verify(mCb, never()).onProvisioningFailure(any());
+    }
+
+    private void startIpClientProvisioning(final boolean isDhcpLeaseCacheEnabled,
+            final boolean isDhcpRapidCommitEnabled, final boolean isPreconnectionEnabled,
+            final boolean isDhcpIpConflictDetectEnabled)
+            throws RemoteException {
+        startIpClientProvisioning(isDhcpLeaseCacheEnabled, isDhcpRapidCommitEnabled,
+                isPreconnectionEnabled, isDhcpIpConflictDetectEnabled,
+                false /* isHostnameConfigurationEnabled */, null /* hostname */);
     }
 
     private void assertIpMemoryStoreNetworkAttributes(final Integer leaseTimeSec,
@@ -560,16 +592,33 @@ public class IpClientIntegrationTest {
         verify(mIpMemoryStore, never()).storeNetworkAttributes(any(), any(), any());
     }
 
+    private void assertHostname(final boolean isHostnameConfigurationEnabled,
+            final String hostname, final String hostnameAfterTransliteration,
+            final List<DhcpPacket> packetList) throws Exception {
+        for (DhcpPacket packet : packetList) {
+            if (!isHostnameConfigurationEnabled || hostname == null) {
+                assertNull(packet.getHostname());
+            } else {
+                assertEquals(packet.getHostname(), hostnameAfterTransliteration);
+            }
+        }
+    }
+
     // Helper method to complete DHCP 2-way or 4-way handshake
-    private void performDhcpHandshake(final boolean isSuccessLease,
+    private List<DhcpPacket> performDhcpHandshake(final boolean isSuccessLease,
             final Integer leaseTimeSec, final boolean isDhcpLeaseCacheEnabled,
             final boolean shouldReplyRapidCommitAck, final int mtu,
-            final boolean isDhcpIpConflictDetectEnabled) throws Exception {
+            final boolean isDhcpIpConflictDetectEnabled,
+            final boolean isHostnameConfigurationEnabled, final String hostname)
+            throws Exception {
+        final List<DhcpPacket> packetList = new ArrayList<DhcpPacket>();
         startIpClientProvisioning(isDhcpLeaseCacheEnabled, shouldReplyRapidCommitAck,
-                false /* isPreconnectionEnabled */, isDhcpIpConflictDetectEnabled);
+                false /* isPreconnectionEnabled */, isDhcpIpConflictDetectEnabled,
+                isHostnameConfigurationEnabled, hostname);
 
         DhcpPacket packet;
         while ((packet = getNextDhcpPacket()) != null) {
+            packetList.add(packet);
             if (packet instanceof DhcpDiscoverPacket) {
                 if (shouldReplyRapidCommitAck) {
                     sendResponse(buildDhcpAckPacket(packet, leaseTimeSec, (short) mtu,
@@ -587,9 +636,21 @@ public class IpClientIntegrationTest {
                 fail("invalid DHCP packet");
             }
             // wait for reply to DHCPOFFER packet if disabling rapid commit option
-            if (shouldReplyRapidCommitAck || !(packet instanceof DhcpDiscoverPacket)) return;
+            if (shouldReplyRapidCommitAck || !(packet instanceof DhcpDiscoverPacket)) {
+                return packetList;
+            }
         }
         fail("No DHCPREQUEST received on interface");
+        return packetList;
+    }
+
+    private List<DhcpPacket> performDhcpHandshake(final boolean isSuccessLease,
+            final Integer leaseTimeSec, final boolean isDhcpLeaseCacheEnabled,
+            final boolean isDhcpRapidCommitEnabled, final int mtu,
+            final boolean isDhcpIpConflictDetectEnabled) throws Exception {
+        return performDhcpHandshake(isSuccessLease, leaseTimeSec, isDhcpLeaseCacheEnabled,
+                isDhcpRapidCommitEnabled, mtu, isDhcpIpConflictDetectEnabled,
+                false /* isHostnameConfigurationEnabled */, null /* hostname */);
     }
 
     private DhcpPacket getNextDhcpPacket() throws ParseException {
@@ -1344,5 +1405,45 @@ public class IpClientIntegrationTest {
         doIpAddressConflictDetectionTest(false /* causeIpAddressConflict */,
                 true /* shouldReplyRapidCommitAck */, true /* isDhcpIpConflictDetectEnabled */,
                 false /* shouldResponseArpReply */);
+    }
+
+    @Test
+    public void testHostname_enableConfig() throws Exception {
+        final long currentTime = System.currentTimeMillis();
+        final List<DhcpPacket> sentPackets = performDhcpHandshake(true /* isSuccessLease */,
+                TEST_LEASE_DURATION_S, true /* isDhcpLeaseCacheEnabled */,
+                false /* isDhcpRapidCommitEnabled */, TEST_DEFAULT_MTU,
+                false /* isDhcpIpConflictDetectEnabled */,
+                true /* isHostnameConfigurationEnabled */, TEST_HOST_NAME /* hostname */);
+        assertEquals(2, sentPackets.size());
+        assertHostname(true, TEST_HOST_NAME, TEST_HOST_NAME_TRANSLITERATION, sentPackets);
+        assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
+    }
+
+    @Test
+    public void testHostname_disableConfig() throws Exception {
+        final long currentTime = System.currentTimeMillis();
+        final List<DhcpPacket> sentPackets = performDhcpHandshake(true /* isSuccessLease */,
+                TEST_LEASE_DURATION_S, true /* isDhcpLeaseCacheEnabled */,
+                false /* isDhcpRapidCommitEnabled */, TEST_DEFAULT_MTU,
+                false /* isDhcpIpConflictDetectEnabled */,
+                false /* isHostnameConfigurationEnabled */, TEST_HOST_NAME);
+        assertEquals(2, sentPackets.size());
+        assertHostname(false, TEST_HOST_NAME, TEST_HOST_NAME_TRANSLITERATION, sentPackets);
+        assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
+    }
+
+    @Test
+    public void testHostname_enableConfigWithNullHostname() throws Exception {
+        final long currentTime = System.currentTimeMillis();
+        final List<DhcpPacket> sentPackets = performDhcpHandshake(true /* isSuccessLease */,
+                TEST_LEASE_DURATION_S, true /* isDhcpLeaseCacheEnabled */,
+                false /* isDhcpRapidCommitEnabled */, TEST_DEFAULT_MTU,
+                false /* isDhcpIpConflictDetectEnabled */,
+                true /* isHostnameConfigurationEnabled */, null /* hostname */);
+        assertEquals(2, sentPackets.size());
+        assertHostname(true, null /* hostname */, null /* hostnameAfterTransliteration */,
+                sentPackets);
+        assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
     }
 }

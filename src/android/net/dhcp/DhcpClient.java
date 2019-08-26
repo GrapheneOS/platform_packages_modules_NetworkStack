@@ -68,6 +68,7 @@ import android.net.ipmemorystore.OnStatusListener;
 import android.net.metrics.DhcpClientEvent;
 import android.net.metrics.DhcpErrorEvent;
 import android.net.metrics.IpConnectivityLog;
+import android.net.util.HostnameTransliterator;
 import android.net.util.InterfaceParams;
 import android.net.util.NetworkStackUtils;
 import android.net.util.PacketReader;
@@ -76,6 +77,7 @@ import android.os.Handler;
 import android.os.Message;
 import android.os.PowerManager;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.util.EventLog;
@@ -306,6 +308,8 @@ public class DhcpClient extends StateMachine {
     private final NetworkStackIpMemoryStore mIpMemoryStore;
     @Nullable
     private DhcpPacketHandler mDhcpPacketHandler;
+    @Nullable
+    private final String mHostname;
 
     // Milliseconds SystemClock timestamps used to record transition times to DhcpBoundState.
     private long mLastInitEnterTime;
@@ -347,6 +351,22 @@ public class DhcpClient extends StateMachine {
 
         public Dependencies(NetworkStackIpMemoryStore store) {
             mNetworkStackIpMemoryStore = store;
+        }
+
+        /**
+         * Get the configuration from RRO to check whether or not to send hostname option in
+         * DHCPDISCOVER/DHCPREQUEST message.
+         */
+        public boolean getSendHostnameOption(final Context context) {
+            return context.getResources().getBoolean(R.bool.config_dhcp_client_hostname);
+        }
+
+        /**
+         * Get the device name from system settings.
+         */
+        public String getDeviceName(final Context context) {
+            return Settings.Global.getString(context.getContentResolver(),
+                    Settings.Global.DEVICE_NAME);
         }
 
         /**
@@ -450,6 +470,11 @@ public class DhcpClient extends StateMachine {
         mRenewAlarm = makeWakeupMessage("RENEW", CMD_RENEW_DHCP);
         mRebindAlarm = makeWakeupMessage("REBIND", CMD_REBIND_DHCP);
         mExpiryAlarm = makeWakeupMessage("EXPIRY", CMD_EXPIRE_DHCP);
+
+        // Transliterate hostname read from system settings if RRO option is enabled.
+        final boolean sendHostname = deps.getSendHostnameOption(context);
+        mHostname = sendHostname ? new HostnameTransliterator().transliterate(
+                deps.getDeviceName(mContext)) : null;
     }
 
     public void registerForPreDhcpNotification() {
@@ -641,7 +666,7 @@ public class DhcpClient extends StateMachine {
     private boolean sendDiscoverPacket() {
         final ByteBuffer packet = DhcpPacket.buildDiscoverPacket(
                 DhcpPacket.ENCAP_L2, mTransactionId, getSecs(), mHwAddr,
-                DO_UNICAST, REQUESTED_PARAMS, isDhcpRapidCommitEnabled());
+                DO_UNICAST, REQUESTED_PARAMS, isDhcpRapidCommitEnabled(), mHostname);
         return transmitPacket(packet, "DHCPDISCOVER", DhcpPacket.ENCAP_L2, INADDR_BROADCAST);
     }
 
@@ -655,7 +680,7 @@ public class DhcpClient extends StateMachine {
         final ByteBuffer packet = DhcpPacket.buildRequestPacket(
                 encap, mTransactionId, getSecs(), clientAddress,
                 DO_UNICAST, mHwAddr, requestedAddress,
-                serverAddress, REQUESTED_PARAMS, null);
+                serverAddress, REQUESTED_PARAMS, mHostname);
         String serverStr = (serverAddress != null) ? serverAddress.getHostAddress() : null;
         String description = "DHCPREQUEST ciaddr=" + clientAddress.getHostAddress() +
                              " request=" + requestedAddress.getHostAddress() +
@@ -744,7 +769,7 @@ public class DhcpClient extends StateMachine {
         mDhcpLease = results;
         if (mDhcpLease.dnsServers.isEmpty()) {
             // supplement customized dns servers
-            String[] dnsServersList =
+            final String[] dnsServersList =
                     mContext.getResources().getStringArray(R.array.config_default_dns_servers);
             for (final String dnsServer : dnsServersList) {
                 try {
@@ -1259,7 +1284,7 @@ public class DhcpClient extends StateMachine {
             final Layer2PacketParcelable l2Packet = new Layer2PacketParcelable();
             final ByteBuffer packet = DhcpPacket.buildDiscoverPacket(
                     DhcpPacket.ENCAP_L2, mTransactionId, getSecs(), mHwAddr,
-                    DO_UNICAST, REQUESTED_PARAMS, true /* rapid commit */);
+                    DO_UNICAST, REQUESTED_PARAMS, true /* rapid commit */, mHostname);
 
             l2Packet.dstMacAddress = MacAddress.fromBytes(DhcpPacket.ETHER_BROADCAST);
             l2Packet.payload = packet.array();

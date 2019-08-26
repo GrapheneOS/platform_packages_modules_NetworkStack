@@ -92,7 +92,6 @@ public class DhcpPacketTest {
     @Before
     public void setUp() {
         DhcpPacket.testOverrideVendorId = "android-dhcp-???";
-        DhcpPacket.testOverrideHostname = "android-01234567890abcde";
     }
 
     class TestDhcpPacket extends DhcpPacket {
@@ -923,17 +922,19 @@ public class DhcpPacketTest {
 
     @Test
     public void testDiscoverPacket() throws Exception {
-        short secs = 7;
-        int transactionId = 0xdeadbeef;
-        byte[] hwaddr = {
+        final short secs = 7;
+        final int transactionId = 0xdeadbeef;
+        final byte[] hwaddr = {
                 (byte) 0xda, (byte) 0x01, (byte) 0x19, (byte) 0x5b, (byte) 0xb1, (byte) 0x7a
         };
+        final String testHostname = "android-01234567890abcde";
 
         ByteBuffer packet = DhcpPacket.buildDiscoverPacket(
                 DhcpPacket.ENCAP_L2, transactionId, secs, hwaddr,
-                false /* do unicast */, DhcpClient.REQUESTED_PARAMS, false /* rapid commit */);
+                false /* do unicast */, DhcpClient.REQUESTED_PARAMS, false /* rapid commit */,
+                testHostname);
 
-        byte[] headers = new byte[] {
+        final byte[] headers = new byte[] {
             // Ethernet header.
             (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
             (byte) 0xda, (byte) 0x01, (byte) 0x19, (byte) 0x5b, (byte) 0xb1, (byte) 0x7a,
@@ -958,7 +959,7 @@ public class DhcpPacketTest {
             (byte) 0xda, (byte) 0x01, (byte) 0x19, (byte) 0x5b,
             (byte) 0xb1, (byte) 0x7a
         };
-        byte[] options = new byte[] {
+        final byte[] options = new byte[] {
             // Magic cookie 0x63825363.
             (byte) 0x63, (byte) 0x82, (byte) 0x53, (byte) 0x63,
             // Message type DISCOVER.
@@ -993,16 +994,17 @@ public class DhcpPacketTest {
             // Our packets are always of even length. TODO: find out why and possibly fix it.
             (byte) 0x00
         };
-        byte[] expected = new byte[DhcpPacket.MIN_PACKET_LENGTH_L2 + options.length];
+        final byte[] expected = new byte[DhcpPacket.MIN_PACKET_LENGTH_L2 + options.length];
         assertTrue((expected.length & 1) == 0);
+        assertEquals(DhcpPacket.MIN_PACKET_LENGTH_L2,
+                headers.length + 10 /* client hw addr padding */ + 64 /* sname */ + 128 /* file */);
         System.arraycopy(headers, 0, expected, 0, headers.length);
         System.arraycopy(options, 0, expected, DhcpPacket.MIN_PACKET_LENGTH_L2, options.length);
 
-        byte[] actual = new byte[packet.limit()];
+        final byte[] actual = new byte[packet.limit()];
         packet.get(actual);
-        String msg =
-                "Expected:\n  " + Arrays.toString(expected) +
-                "\nActual:\n  " + Arrays.toString(actual);
+        String msg = "Expected:\n  " + Arrays.toString(expected) + "\nActual:\n  "
+                + Arrays.toString(actual);
         assertTrue(msg, Arrays.equals(expected, actual));
     }
 
