@@ -48,6 +48,7 @@ import android.os.ConditionVariable;
 import android.os.IBinder;
 import android.os.Message;
 import android.os.RemoteException;
+import android.os.ServiceSpecificException;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.LocalLog;
@@ -850,10 +851,12 @@ public class IpClient extends StateMachine {
         return shouldLog;
     }
 
+    private void logError(String fmt, Throwable e, Object... args) {
+        mLog.e(String.format(fmt, args), e);
+    }
+
     private void logError(String fmt, Object... args) {
-        final String msg = "ERROR " + String.format(fmt, args);
-        Log.e(mTag, msg);
-        mLog.log(msg);
+        logError(fmt, null, args);
     }
 
     // This needs to be called with care to ensure that our LinkProperties
@@ -1274,6 +1277,28 @@ public class IpClient extends StateMachine {
         // TODO : implement this
     }
 
+    private void maybeRestoreInterfaceMtu() {
+        InterfaceParams params = mDependencies.getInterfaceParams(mInterfaceName);
+        if (params == null) {
+            Log.w(mTag, "interface: " + mInterfaceName + " is gone");
+            return;
+        }
+
+        if (params.index != mInterfaceParams.index) {
+            Log.w(mTag, "interface: " + mInterfaceName + " has a different index: " + params.index);
+            return;
+        }
+
+        if (params.defaultMtu != mInterfaceParams.defaultMtu) {
+            try {
+                mNetd.interfaceSetMtu(mInterfaceName, mInterfaceParams.defaultMtu);
+            } catch (RemoteException | ServiceSpecificException e) {
+                logError("Couldn't reset MTU on " + mInterfaceName + " from "
+                        + params.defaultMtu + " to " + mInterfaceParams.defaultMtu, e);
+            }
+        }
+    }
+
     class StoppedState extends State {
         @Override
         public void enter() {
@@ -1351,6 +1376,9 @@ public class IpClient extends StateMachine {
                 // There's no DHCPv4 for which to wait; proceed to stopped.
                 deferMessage(obtainMessage(CMD_JUMP_STOPPING_TO_STOPPED));
             }
+
+            // Restore the interface MTU to initial value if it has changed.
+            maybeRestoreInterfaceMtu();
         }
 
         @Override
