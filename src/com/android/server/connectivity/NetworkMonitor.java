@@ -379,7 +379,7 @@ public class NetworkMonitor extends StateMachine {
     }
 
     @VisibleForTesting
-    protected NetworkMonitor(Context context, INetworkMonitorCallbacks cb, Network network,
+    public NetworkMonitor(Context context, INetworkMonitorCallbacks cb, Network network,
             IpConnectivityLog logger, SharedLog validationLogs,
             Dependencies deps, DataStallStatsUtils detectionStatsUtils) {
         // Add suffix indicating which NetworkMonitor we're talking about.
@@ -1843,8 +1843,7 @@ public class NetworkMonitor extends StateMachine {
             latencyBroadcast.putExtra(NetworkMonitorUtils.EXTRA_RESPONSE_TIMESTAMP_MS,
                     responseTimestampMs);
         }
-        mContext.sendBroadcastAsUser(latencyBroadcast, UserHandle.CURRENT,
-                NetworkMonitorUtils.PERMISSION_ACCESS_NETWORK_CONDITIONS);
+        mDependencies.sendNetworkConditionsBroadcast(mContext, latencyBroadcast);
     }
 
     private void logNetworkEvent(int evtype) {
@@ -1889,7 +1888,7 @@ public class NetworkMonitor extends StateMachine {
     }
 
     @VisibleForTesting
-    static class Dependencies {
+    public static class Dependencies {
         public Network getPrivateDnsBypassNetwork(Network network) {
             return new OneAddressPerFamilyNetwork(network);
         }
@@ -1946,6 +1945,15 @@ public class NetworkMonitor extends StateMachine {
         public int getDeviceConfigPropertyInt(@NonNull String namespace, @NonNull String name,
                 int defaultValue) {
             return NetworkStackUtils.getDeviceConfigPropertyInt(namespace, name, defaultValue);
+        }
+
+        /**
+         * Send a broadcast indicating network conditions.
+         */
+        public void sendNetworkConditionsBroadcast(@NonNull Context context,
+                @NonNull Intent broadcast) {
+            context.sendBroadcastAsUser(broadcast, UserHandle.CURRENT,
+                    NetworkMonitorUtils.PERMISSION_ACCESS_NETWORK_CONDITIONS);
         }
 
         public static final Dependencies DEFAULT = new Dependencies();
