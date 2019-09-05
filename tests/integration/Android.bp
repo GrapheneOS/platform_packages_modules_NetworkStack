@@ -24,7 +24,7 @@ android_test {
         "androidx.test.rules",
         "mockito-target-extended-minus-junit4",
         "net-tests-utils",
-        "NetworkStackBase",
+        "NetworkStackApiCurrentLib",
         "testables",
     ],
     libs: [
