@@ -34,7 +34,7 @@ public final class PermissionUtil {
      * Check that the caller is allowed to communicate with the network stack.
      * @throws SecurityException The caller is not allowed to communicate with the network stack.
      */
-    public static void checkNetworkStackCallingPermission() {
+    public static void enforceNetworkStackCallingPermission() {
         final int caller = getCallingUid();
         if (caller == Process.SYSTEM_UID) {
             checkConsistentSystemPid();

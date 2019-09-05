@@ -125,6 +125,12 @@ android_app {
     required: ["NetworkPermissionConfig"],
 }
 
+android_library {
+    name: "TestNetworkStackLib",
+    defaults: ["NetworkStackAppCommon"],
+    manifest: "AndroidManifest.xml",
+}
+
 genrule {
     name: "statslog-networkstack-java-gen",
     tools: ["stats-log-api-gen"],
