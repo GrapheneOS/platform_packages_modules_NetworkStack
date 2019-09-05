@@ -34,15 +34,6 @@
 //           NetworkStackApiStable          NetworkStack, InProcessNetworkStack, <-- output APKs
 //                                                    TestNetworkStack
 
-java_library {
-    name: "captiveportal-lib",
-    srcs: ["common/**/*.java"],
-    libs: [
-        "androidx.annotation_annotation",
-    ],
-    sdk_version: "system_current",
-}
-
 // Common defaults to define SDK level
 java_defaults {
     name: "NetworkStackApiCurrentLevel",
