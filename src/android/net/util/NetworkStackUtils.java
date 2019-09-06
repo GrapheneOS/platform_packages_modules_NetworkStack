@@ -34,9 +34,6 @@ import java.util.function.Predicate;
  * Collection of utilities for the network stack.
  */
 public class NetworkStackUtils {
-    // TODO: Refer to DeviceConfig definition.
-    public static final String NAMESPACE_CONNECTIVITY = "connectivity";
-
     /**
      * A list of captive portal detection specifications used in addition to the fallback URLs.
      * Each spec has the format url@@/@@statusCodeRegex@@/@@contentRegex. Specs are separated
