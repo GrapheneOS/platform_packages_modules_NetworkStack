@@ -17,6 +17,7 @@
 package com.android.networkstack.apishim;
 
 import android.net.util.SocketUtils;
+import android.os.Build;
 
 import androidx.annotation.NonNull;
 
@@ -25,7 +26,20 @@ import java.net.SocketAddress;
 /**
  * Implementation of {@link SocketUtilsShim} for API 30.
  */
-public class SocketUtilsShimImpl implements SocketUtilsShim {
+public class SocketUtilsShimImpl
+        extends com.android.networkstack.apishim.api29.SocketUtilsShimImpl {
+    protected SocketUtilsShimImpl() {}
+
+    /**
+     * Get a new instance of {@link SocketUtilsShim}.
+     */
+    public static SocketUtilsShim newInstance() {
+        if (!ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
+            return com.android.networkstack.apishim.api29.SocketUtilsShimImpl.newInstance();
+        }
+        return new SocketUtilsShimImpl();
+    }
+
     @NonNull
     @Override
     public SocketAddress makePacketSocketAddress(
