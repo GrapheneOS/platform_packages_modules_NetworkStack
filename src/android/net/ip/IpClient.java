@@ -21,7 +21,6 @@ import static android.net.shared.IpConfigurationParcelableUtil.toStableParcelabl
 
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
-import android.annotation.NonNull;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.DhcpResults;
@@ -55,6 +54,8 @@ import android.util.LocalLog;
 import android.util.Log;
 import android.util.Pair;
 import android.util.SparseArray;
+
+import androidx.annotation.NonNull;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.IState;

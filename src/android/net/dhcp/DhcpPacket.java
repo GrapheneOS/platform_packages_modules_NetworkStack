@@ -3,7 +3,6 @@ package android.net.dhcp;
 import static com.android.server.util.NetworkStackConstants.IPV4_ADDR_ALL;
 import static com.android.server.util.NetworkStackConstants.IPV4_ADDR_ANY;
 
-import android.annotation.Nullable;
 import android.net.DhcpResults;
 import android.net.LinkAddress;
 import android.net.metrics.DhcpErrorEvent;
@@ -13,7 +12,8 @@ import android.os.SystemProperties;
 import android.system.OsConstants;
 import android.text.TextUtils;
 
-import com.android.internal.annotations.VisibleForTesting;
+import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 
 import java.io.UnsupportedEncodingException;
 import java.net.Inet4Address;

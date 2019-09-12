@@ -16,13 +16,14 @@
 
 package android.net.util;
 
-import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.content.Context;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.provider.DeviceConfig;
 import android.util.Log;
 import android.util.SparseArray;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import java.io.FileDescriptor;
 import java.io.IOException;

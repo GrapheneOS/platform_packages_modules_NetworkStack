@@ -46,8 +46,6 @@ import static android.system.OsConstants.SO_REUSEADDR;
 
 import static com.android.server.util.NetworkStackConstants.IPV4_ADDR_ANY;
 
-import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.content.Context;
 import android.net.DhcpResults;
 import android.net.InetAddresses;
@@ -72,6 +70,9 @@ import android.system.Os;
 import android.util.EventLog;
 import android.util.Log;
 import android.util.SparseArray;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.HexDump;
