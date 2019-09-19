@@ -31,6 +31,7 @@ import static android.net.dhcp.DhcpPacket.INADDR_BROADCAST;
 import static android.net.dhcp.DhcpPacket.INFINITE_LEASE;
 import static android.net.util.NetworkStackUtils.closeSocketQuietly;
 import static android.net.util.SocketUtils.makePacketSocketAddress;
+import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_PACKET;
 import static android.system.OsConstants.ETH_P_IP;
@@ -361,7 +362,7 @@ public class DhcpClient extends StateMachine {
      *
      */
     public boolean isDhcpLeaseCacheEnabled() {
-        return mDependencies.getBooleanDeviceConfig(NetworkStackUtils.NAMESPACE_CONNECTIVITY,
+        return mDependencies.getBooleanDeviceConfig(NAMESPACE_CONNECTIVITY,
                 NetworkStackUtils.DHCP_INIT_REBOOT_ENABLED);
     }
 
@@ -369,7 +370,7 @@ public class DhcpClient extends StateMachine {
      * check whether or not to support DHCP Rapid Commit option.
      */
     public boolean isDhcpRapidCommitEnabled() {
-        return mDependencies.getBooleanDeviceConfig(NetworkStackUtils.NAMESPACE_CONNECTIVITY,
+        return mDependencies.getBooleanDeviceConfig(NAMESPACE_CONNECTIVITY,
                 NetworkStackUtils.DHCP_RAPID_COMMIT_ENABLED);
     }
 
