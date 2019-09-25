@@ -74,9 +74,8 @@ java_defaults {
     ],
     static_libs: [
         "androidx.annotation_annotation",
-        "ipmemorystore-client",
         "netd_aidl_interface-V2-java",
-        "networkstack-aidl-interfaces-V3-java",
+        "networkstack-client",
         "datastallprotosnano",
         "networkstackprotosnano",
         "captiveportal-lib",
