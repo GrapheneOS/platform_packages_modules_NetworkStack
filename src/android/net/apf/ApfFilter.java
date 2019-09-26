@@ -1589,7 +1589,11 @@ public class ApfFilter {
             for (Ra ra : mRas) {
                 ra.generateFilterLocked(gen);
                 // Stop if we get too big.
-                if (gen.programLengthOverEstimate() > maximumApfProgramSize) break;
+                if (gen.programLengthOverEstimate() > maximumApfProgramSize) {
+                    if (VDBG) Log.d(TAG, "Past maximum program size, skipping RAs");
+                    break;
+                }
+
                 rasToFilter.add(ra);
             }
 

@@ -28,6 +28,7 @@ import static android.system.OsConstants.SOCK_STREAM;
 
 import static com.android.internal.util.BitUtils.bytesToBEInt;
 import static com.android.server.util.NetworkStackConstants.ICMPV6_ECHO_REQUEST_TYPE;
+import static com.android.server.util.NetworkStackConstants.IPV6_ADDR_LEN;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -121,7 +122,7 @@ public class ApfTest {
     private static final int MIN_PKT_SIZE = 15;
 
     private static final ApfCapabilities MOCK_APF_CAPABILITIES =
-      new ApfCapabilities(2, 1700, ARPHRD_ETHER);
+            new ApfCapabilities(2, 4096, ARPHRD_ETHER);
 
     private static final boolean DROP_MULTICAST = true;
     private static final boolean ALLOW_MULTICAST = false;
@@ -2042,38 +2043,27 @@ public class ApfTest {
                 new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_PREFIX_OPTION_LEN]);
         basePacket.clear();
         prefixOptionPacket.put(basePacket);
-        prefixOptionPacket.put((byte)ICMP6_PREFIX_OPTION_TYPE);
-        prefixOptionPacket.put((byte)(ICMP6_PREFIX_OPTION_LEN / 8));
-        prefixOptionPacket.putInt(
-                ICMP6_RA_OPTION_OFFSET + ICMP6_PREFIX_OPTION_PREFERRED_LIFETIME_OFFSET,
-                PREFIX_PREFERRED_LIFETIME);
-        prefixOptionPacket.putInt(
-                ICMP6_RA_OPTION_OFFSET + ICMP6_PREFIX_OPTION_VALID_LIFETIME_OFFSET,
-                PREFIX_VALID_LIFETIME);
+        addPioOption(prefixOptionPacket, PREFIX_VALID_LIFETIME, PREFIX_PREFERRED_LIFETIME,
+                "2001:db8::/64");
         verifyRaLifetime(
                 apfFilter, ipClientCallback, prefixOptionPacket, PREFIX_PREFERRED_LIFETIME);
         verifyRaEvent(new RaEvent(
                 ROUTER_LIFETIME, PREFIX_VALID_LIFETIME, PREFIX_PREFERRED_LIFETIME, -1, -1, -1));
 
         ByteBuffer rdnssOptionPacket = ByteBuffer.wrap(
-                new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_OPTION_LEN]);
+                new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_OPTION_LEN + 2 * IPV6_ADDR_LEN]);
         basePacket.clear();
         rdnssOptionPacket.put(basePacket);
-        rdnssOptionPacket.put((byte)ICMP6_RDNSS_OPTION_TYPE);
-        rdnssOptionPacket.put((byte)(ICMP6_4_BYTE_OPTION_LEN / 8));
-        rdnssOptionPacket.putInt(
-                ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_LIFETIME_OFFSET, RDNSS_LIFETIME);
+        addRdnssOption(rdnssOptionPacket, RDNSS_LIFETIME,
+                "2001:4860:4860::8888", "2001:4860:4860::8844");
         verifyRaLifetime(apfFilter, ipClientCallback, rdnssOptionPacket, RDNSS_LIFETIME);
         verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, -1, RDNSS_LIFETIME, -1));
 
         ByteBuffer routeInfoOptionPacket = ByteBuffer.wrap(
-                new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_OPTION_LEN]);
+                new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_OPTION_LEN + IPV6_ADDR_LEN]);
         basePacket.clear();
         routeInfoOptionPacket.put(basePacket);
-        routeInfoOptionPacket.put((byte)ICMP6_ROUTE_INFO_OPTION_TYPE);
-        routeInfoOptionPacket.put((byte)(ICMP6_4_BYTE_OPTION_LEN / 8));
-        routeInfoOptionPacket.putInt(
-                ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_LIFETIME_OFFSET, ROUTE_LIFETIME);
+        addRioOption(routeInfoOptionPacket, ROUTE_LIFETIME, "64:ff9b::/96");
         verifyRaLifetime(apfFilter, ipClientCallback, routeInfoOptionPacket, ROUTE_LIFETIME);
         verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, ROUTE_LIFETIME, -1, -1));
 
