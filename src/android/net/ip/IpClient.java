@@ -1289,13 +1289,13 @@ public class IpClient extends StateMachine {
             return;
         }
 
-        if (params.defaultMtu != mInterfaceParams.defaultMtu) {
-            try {
-                mNetd.interfaceSetMtu(mInterfaceName, mInterfaceParams.defaultMtu);
-            } catch (RemoteException | ServiceSpecificException e) {
-                logError("Couldn't reset MTU on " + mInterfaceName + " from "
-                        + params.defaultMtu + " to " + mInterfaceParams.defaultMtu, e);
-            }
+        if (params.defaultMtu == mInterfaceParams.defaultMtu) return;
+
+        try {
+            mNetd.interfaceSetMtu(mInterfaceName, mInterfaceParams.defaultMtu);
+        } catch (RemoteException | ServiceSpecificException e) {
+            logError("Couldn't reset MTU on " + mInterfaceName + " from "
+                    + params.defaultMtu + " to " + mInterfaceParams.defaultMtu, e);
         }
     }
 
