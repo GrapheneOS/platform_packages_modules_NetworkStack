@@ -91,7 +91,7 @@ open class ConcurrentIntepreter<T>(
                         // testing. Instead, catch the exception, cancel other threads, and report
                         // nicely. Catch throwable because fail() is AssertionError, which inherits
                         // from Error.
-                        crash = InterpretException(threadIndex, callSite.lineNumber + lineNum,
+                        crash = InterpretException(threadIndex, it, callSite.lineNumber + lineNum,
                                 callSite.className, callSite.methodName, callSite.fileName, e)
                     }
                     barrier.await()
@@ -103,18 +103,29 @@ open class ConcurrentIntepreter<T>(
     }
 
     // Helper to get the stack trace for a calling method
-    protected fun getCallingMethod(depth: Int): StackTraceElement {
+    private fun getCallingStackTrace(): Array<StackTraceElement> {
         try {
             throw RuntimeException()
         } catch (e: RuntimeException) {
-            return e.stackTrace[depth]
+            return e.stackTrace
         }
     }
 
-    // Override this if you don't call interpretTestSpec directly to get the correct file
-    // and line for failure in the error message.
-    // 0 is this method here, 1 is getCallingMethod(int), 2 is interpretTestSpec, 3 the lambda
-    open fun getCallingMethod() = getCallingMethod(4)
+    // Find the calling method. This is the first method in the stack trace that is annotated
+    // with @Test.
+    fun getCallingMethod(): StackTraceElement {
+        val stackTrace = getCallingStackTrace()
+        return stackTrace.find { element ->
+            val clazz = Class.forName(element.className)
+            // Because the stack trace doesn't list the formal arguments, find all methods with
+            // this name and return this name if any of them is annotated with @Test.
+            clazz.declaredMethods
+                    .filter { method -> method.name == element.methodName }
+                    .any { method -> method.getAnnotation(org.junit.Test::class.java) != null }
+        } ?: stackTrace[3]
+        // If no method is annotated return the 4th one, because that's what it usually is :
+        // 0 is getCallingStackTrace, 1 is this method, 2 is ConcurrentInterpreter#interpretTestSpec
+    }
 }
 
 private fun <T> getDefaultInstructions() = listOf<InterpretMatcher<T>>(
@@ -124,7 +135,8 @@ private fun <T> getDefaultInstructions() = listOf<InterpretMatcher<T>>(
     Regex("(.*)//.*") to { i, t, r -> i.interpret(r.strArg(1), t) },
     // Interpret "XXX time x..y" : run XXX and check it took at least x and not more than y
     Regex("""(.*)\s*time\s*(\d+)\.\.(\d+)""") to { i, t, r ->
-        assertTrue(measureTimeMillis { i.interpret(r.strArg(1), t) } in r.timeArg(2)..r.timeArg(3))
+        val time = measureTimeMillis { i.interpret(r.strArg(1), t) }
+        assertTrue(time in r.timeArg(2)..r.timeArg(3), "$time not in ${r.timeArg(2)..r.timeArg(3)}")
     },
     // Interpret "XXX = YYY" : run XXX and assert its return value is equal to YYY. "null" supported
     Regex("""(.*)\s*=\s*(null|\d+)""") to { i, t, r ->
@@ -141,12 +153,13 @@ private fun <T> getDefaultInstructions() = listOf<InterpretMatcher<T>>(
 class SyntaxException(msg: String, cause: Throwable? = null) : RuntimeException(msg, cause)
 class InterpretException(
     threadIndex: Int,
+    instr: String,
     lineNum: Int,
     className: String,
     methodName: String,
     fileName: String,
     cause: Throwable
-) : RuntimeException(cause) {
+) : RuntimeException("Failure: $instr", cause) {
     init {
         stackTrace = arrayOf(StackTraceElement(
                 className,
