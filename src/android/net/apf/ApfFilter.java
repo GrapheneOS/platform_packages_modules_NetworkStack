@@ -31,6 +31,7 @@ import static com.android.server.util.NetworkStackConstants.ICMPV6_ECHO_REQUEST_
 import static com.android.server.util.NetworkStackConstants.ICMPV6_NEIGHBOR_ADVERTISEMENT;
 import static com.android.server.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
 import static com.android.server.util.NetworkStackConstants.ICMPV6_ROUTER_SOLICITATION;
+import static com.android.server.util.NetworkStackConstants.IPV6_ADDR_LEN;
 
 import android.annotation.Nullable;
 import android.content.BroadcastReceiver;
@@ -548,6 +549,9 @@ public class ApfFilter {
         // For debugging only. Offsets into the packet where RDNSS options are.
         private final ArrayList<Integer> mRdnssOptionOffsets = new ArrayList<>();
 
+        // For debugging only. Offsets into the packet where RIO options are.
+        private final ArrayList<Integer> mRioOptionOffsets = new ArrayList<>();
+
         // For debugging only. How many times this RA was seen.
         int seenCount = 0;
 
@@ -598,6 +602,28 @@ public class ApfFilter {
             for (int server = 0; server < numServers; server++) {
                 sb.append(" ").append(IPv6AddresstoString(offset + 8 + 16 * server));
             }
+            sb.append(" ");
+        }
+
+        private void rioOptionToString(StringBuffer sb, int offset) {
+            int optLen = getUint8(mPacket, offset + 1) * 8;
+            if (optLen < 8 || optLen > 24) return;  // Malformed or empty.
+            int prefixLen = getUint8(mPacket, offset + 2);
+            long lifetime = getUint32(mPacket, offset + 4);
+
+            // This read is variable length because the prefix can be 0, 8 or 16 bytes long.
+            // We can't use any of the ByteBuffer#get methods here because they all start reading
+            // from the buffer's current position.
+            byte[] prefix = new byte[IPV6_ADDR_LEN];
+            System.arraycopy(mPacket.array(), offset + 8, prefix, 0, optLen - 8);
+            sb.append("RIO ").append(lifetime).append("s ");
+            try {
+                InetAddress address = (Inet6Address) InetAddress.getByAddress(prefix);
+                sb.append(address.getHostAddress());
+            } catch (UnknownHostException impossible) {
+                sb.append("???");
+            }
+            sb.append("/").append(prefixLen).append(" ");
         }
 
         public String toString() {
@@ -612,6 +638,9 @@ public class ApfFilter {
                 }
                 for (int i: mRdnssOptionOffsets) {
                     rdnssOptionToString(sb, i);
+                }
+                for (int i: mRioOptionOffsets) {
+                    rioOptionToString(sb, i);
                 }
                 return sb.toString();
             } catch (BufferUnderflowException|IndexOutOfBoundsException e) {
@@ -649,7 +678,7 @@ public class ApfFilter {
         // specifications.
         Ra(byte[] packet, int length) throws InvalidRaException {
             if (length < ICMP6_RA_OPTION_OFFSET) {
-                throw new InvalidRaException("Not an ICMP6 router advertisement");
+                throw new InvalidRaException("Not an ICMP6 router advertisement: too short");
             }
 
             mPacket = ByteBuffer.wrap(Arrays.copyOf(packet, length));
@@ -716,6 +745,7 @@ public class ApfFilter {
                         builder.updateRdnssLifetime(lifetime);
                         break;
                     case ICMP6_ROUTE_INFO_OPTION_TYPE:
+                        mRioOptionOffsets.add(position);
                         lastNonLifetimeStart = addNonLifetimeU32(lastNonLifetimeStart);
                         lifetime = getUint32(mPacket, position + ICMP6_4_BYTE_LIFETIME_OFFSET);
                         builder.updateRouteInfoLifetime(lifetime);
@@ -1559,7 +1589,11 @@ public class ApfFilter {
             for (Ra ra : mRas) {
                 ra.generateFilterLocked(gen);
                 // Stop if we get too big.
-                if (gen.programLengthOverEstimate() > maximumApfProgramSize) break;
+                if (gen.programLengthOverEstimate() > maximumApfProgramSize) {
+                    if (VDBG) Log.d(TAG, "Past maximum program size, skipping RAs");
+                    break;
+                }
+
                 rasToFilter.add(ra);
             }
 
