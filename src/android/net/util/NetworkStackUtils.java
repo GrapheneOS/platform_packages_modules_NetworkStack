@@ -18,7 +18,10 @@ package android.net.util;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.content.Context;
+import android.content.pm.PackageManager.NameNotFoundException;
 import android.provider.DeviceConfig;
+import android.util.Log;
 import android.util.SparseArray;
 
 import java.io.FileDescriptor;
@@ -34,6 +37,8 @@ import java.util.function.Predicate;
  * Collection of utilities for the network stack.
  */
 public class NetworkStackUtils {
+    private static final String TAG = "NetworkStackUtils";
+
     /**
      * A list of captive portal detection specifications used in addition to the fallback URLs.
      * Each spec has the format url@@/@@statusCodeRegex@@/@@contentRegex. Specs are separated
@@ -213,6 +218,30 @@ public class NetworkStackUtils {
             @NonNull String name, boolean defaultValue) {
         String value = getDeviceConfigProperty(namespace, name, null /* defaultValue */);
         return (value != null) ? Boolean.parseBoolean(value) : defaultValue;
+    }
+
+    /**
+     * Check whether or not one specific experimental feature for a particular namespace from
+     * {@link DeviceConfig} is enabled by comparing NetworkStack module version {@link NetworkStack}
+     * with current version of property. If this property version is valid, the corresponding
+     * experimental feature would be enabled, otherwise disabled.
+     * @param context The global context information about an app environment.
+     * @param namespace The namespace containing the property to look up.
+     * @param name The name of the property to look up.
+     * @return true if this feature is enabled, or false if disabled.
+     */
+    public static boolean isFeatureEnabled(@NonNull Context context, @NonNull String namespace,
+            @NonNull String name) {
+        try {
+            final int propertyVersion = getDeviceConfigPropertyInt(namespace, name,
+                    0 /* default value */);
+            final long packageVersion = context.getPackageManager().getPackageInfo(
+                    context.getPackageName(), 0).getLongVersionCode();
+            return (propertyVersion != 0 && packageVersion >= (long) propertyVersion);
+        } catch (NameNotFoundException e) {
+            Log.e(TAG, "Could not find the package name", e);
+            return false;
+        }
     }
 
     /**
