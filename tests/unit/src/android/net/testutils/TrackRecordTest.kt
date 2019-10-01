@@ -356,8 +356,6 @@ private object TRTInterpreter : ConcurrentIntepreter<TrackRecord<Int>>(interpret
     } else {
         interpretTestSpec(spec, ArrayTrackRecord())
     }
-
-    override fun getCallingMethod() = getCallingMethod(4)
 }
 
 /*
