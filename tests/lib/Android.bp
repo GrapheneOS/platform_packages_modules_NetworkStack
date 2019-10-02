@@ -23,6 +23,7 @@ java_library {
     defaults: ["lib_mockito_extended"],
     static_libs: [
         "kotlin-test",
+        "junit",
     ],
 }
 
