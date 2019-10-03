@@ -43,7 +43,8 @@
     <uses-permission android:name="android.permission.MAINLINE_NETWORK_STACK" />
     <application
         android:extractNativeLibs="false"
-        android:persistent="true">
+        android:persistent="true"
+        android:process="com.android.networkstack.process">
         <service android:name="com.android.server.NetworkStackService"
                  android:permission="android.permission.MAINLINE_NETWORK_STACK">
             <intent-filter>
