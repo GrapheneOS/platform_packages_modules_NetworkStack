@@ -22,6 +22,7 @@ android_test {
     resource_dirs: ["res"],
     static_libs: [
         "androidx.test.rules",
+        "kotlin-reflect",
         "mockito-target-extended-minus-junit4",
         "net-tests-utils",
         "NetworkStackApiCurrentLib",

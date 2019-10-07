@@ -352,7 +352,8 @@ class TrackRecordTest {
 
 private object TRTInterpreter : ConcurrentIntepreter<TrackRecord<Int>>(interpretTable) {
     fun interpretTestSpec(spec: String, useReadHeads: Boolean) = if (useReadHeads) {
-        interpretTestSpec(spec, ArrayTrackRecord(), { (it as ArrayTrackRecord).newReadHead() })
+        interpretTestSpec(spec, initial = ArrayTrackRecord(),
+                threadTransform = { (it as ArrayTrackRecord).newReadHead() })
     } else {
         interpretTestSpec(spec, ArrayTrackRecord())
     }
