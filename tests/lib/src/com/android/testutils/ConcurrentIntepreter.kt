@@ -4,6 +4,7 @@ import android.os.SystemClock
 import java.util.concurrent.CyclicBarrier
 import kotlin.system.measureTimeMillis
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -64,7 +65,15 @@ open class ConcurrentIntepreter<T>(
 
     // Spins as many threads as needed by the test spec and interpret each program concurrently,
     // having all threads waiting on a CyclicBarrier after each line.
-    fun interpretTestSpec(spec: String, initial: T, threadTransform: (T) -> T = { it }) {
+    // |lineShift| says how many lines after the call the spec starts. This is used for error
+    // reporting. Unfortunately AFAICT there is no way to get the line of an argument rather
+    // than the line at which the expression starts.
+    fun interpretTestSpec(
+        spec: String,
+        initial: T,
+        lineShift: Int = 0,
+        threadTransform: (T) -> T = { it }
+    ) {
         // For nice stack traces
         val callSite = getCallingMethod()
         val lines = spec.trim().trim('\n').split("\n").map { it.split("|") }
@@ -91,7 +100,8 @@ open class ConcurrentIntepreter<T>(
                         // testing. Instead, catch the exception, cancel other threads, and report
                         // nicely. Catch throwable because fail() is AssertionError, which inherits
                         // from Error.
-                        crash = InterpretException(threadIndex, it, callSite.lineNumber + lineNum,
+                        crash = InterpretException(threadIndex, it,
+                                callSite.lineNumber + lineNum + lineShift,
                                 callSite.className, callSite.methodName, callSite.fileName, e)
                     }
                     barrier.await()
@@ -147,6 +157,9 @@ private fun <T> getDefaultInstructions() = listOf<InterpretMatcher<T>>(
     // Interpret sleep. Optional argument for the count, in INTERPRET_TIME_UNIT units.
     Regex("""sleep(\((\d+)\))?""") to { i, t, r ->
         SystemClock.sleep(if (r.strArg(2).isEmpty()) i.interpretTimeUnit else r.timeArg(2))
+    },
+    Regex("""(.*)\s*fails""") to { i, t, r ->
+        assertFails { i.interpret(r.strArg(1), t) }
     }
 )
 
