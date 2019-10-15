@@ -1008,15 +1008,16 @@ public class ApfTest {
     private static final byte[] ETH_BROADCAST_MAC_ADDRESS =
             {(byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff };
 
+    private static final int IP_HEADER_OFFSET = ETH_HEADER_LEN;
+
     private static final int IPV4_HEADER_LEN          = 20;
-    private static final int IPV4_VERSION_IHL_OFFSET  = ETH_HEADER_LEN + 0;
-    private static final int IPV4_TOTAL_LENGTH_OFFSET = ETH_HEADER_LEN + 2;
-    private static final int IPV4_PROTOCOL_OFFSET     = ETH_HEADER_LEN + 9;
-    private static final int IPV4_SRC_ADDR_OFFSET     = ETH_HEADER_LEN + 12;
-    private static final int IPV4_DEST_ADDR_OFFSET    = ETH_HEADER_LEN + 16;
+    private static final int IPV4_TOTAL_LENGTH_OFFSET = IP_HEADER_OFFSET + 2;
+    private static final int IPV4_PROTOCOL_OFFSET     = IP_HEADER_OFFSET + 9;
+    private static final int IPV4_SRC_ADDR_OFFSET     = IP_HEADER_OFFSET + 12;
+    private static final int IPV4_DEST_ADDR_OFFSET    = IP_HEADER_OFFSET + 16;
 
     private static final int IPV4_TCP_HEADER_LEN           = 20;
-    private static final int IPV4_TCP_HEADER_OFFSET        = ETH_HEADER_LEN + IPV4_HEADER_LEN;
+    private static final int IPV4_TCP_HEADER_OFFSET        = IP_HEADER_OFFSET + IPV4_HEADER_LEN;
     private static final int IPV4_TCP_SRC_PORT_OFFSET      = IPV4_TCP_HEADER_OFFSET + 0;
     private static final int IPV4_TCP_DEST_PORT_OFFSET     = IPV4_TCP_HEADER_OFFSET + 2;
     private static final int IPV4_TCP_SEQ_NUM_OFFSET       = IPV4_TCP_HEADER_OFFSET + 4;
@@ -1024,7 +1025,7 @@ public class ApfTest {
     private static final int IPV4_TCP_HEADER_LENGTH_OFFSET = IPV4_TCP_HEADER_OFFSET + 12;
     private static final int IPV4_TCP_HEADER_FLAG_OFFSET   = IPV4_TCP_HEADER_OFFSET + 13;
 
-    private static final int IPV4_UDP_HEADER_OFFSET    = ETH_HEADER_LEN + IPV4_HEADER_LEN;;
+    private static final int IPV4_UDP_HEADER_OFFSET    = IP_HEADER_OFFSET + IPV4_HEADER_LEN;
     private static final int IPV4_UDP_SRC_PORT_OFFSET  = IPV4_UDP_HEADER_OFFSET + 0;
     private static final int IPV4_UDP_DEST_PORT_OFFSET = IPV4_UDP_HEADER_OFFSET + 2;
     private static final int IPV4_UDP_LENGTH_OFFSET    = IPV4_UDP_HEADER_OFFSET + 4;
@@ -1033,11 +1034,11 @@ public class ApfTest {
             {(byte) 255, (byte) 255, (byte) 255, (byte) 255};
 
     private static final int IPV6_HEADER_LEN             = 40;
-    private static final int IPV6_PAYLOAD_LENGTH_OFFSET  = ETH_HEADER_LEN + 4;
-    private static final int IPV6_NEXT_HEADER_OFFSET     = ETH_HEADER_LEN + 6;
-    private static final int IPV6_SRC_ADDR_OFFSET        = ETH_HEADER_LEN + 8;
-    private static final int IPV6_DEST_ADDR_OFFSET       = ETH_HEADER_LEN + 24;
-    private static final int IPV6_TCP_HEADER_OFFSET      = ETH_HEADER_LEN + IPV6_HEADER_LEN;
+    private static final int IPV6_PAYLOAD_LENGTH_OFFSET  = IP_HEADER_OFFSET + 4;
+    private static final int IPV6_NEXT_HEADER_OFFSET     = IP_HEADER_OFFSET + 6;
+    private static final int IPV6_SRC_ADDR_OFFSET        = IP_HEADER_OFFSET + 8;
+    private static final int IPV6_DEST_ADDR_OFFSET       = IP_HEADER_OFFSET + 24;
+    private static final int IPV6_TCP_HEADER_OFFSET      = IP_HEADER_OFFSET + IPV6_HEADER_LEN;
     private static final int IPV6_TCP_SRC_PORT_OFFSET    = IPV6_TCP_HEADER_OFFSET + 0;
     private static final int IPV6_TCP_DEST_PORT_OFFSET   = IPV6_TCP_HEADER_OFFSET + 2;
     private static final int IPV6_TCP_SEQ_NUM_OFFSET     = IPV6_TCP_HEADER_OFFSET + 4;
@@ -1048,7 +1049,7 @@ public class ApfTest {
     private static final byte[] IPV6_ALL_ROUTERS_ADDRESS =
             { (byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 };
 
-    private static final int ICMP6_TYPE_OFFSET           = ETH_HEADER_LEN + IPV6_HEADER_LEN;
+    private static final int ICMP6_TYPE_OFFSET           = IP_HEADER_OFFSET + IPV6_HEADER_LEN;
     private static final int ICMP6_ROUTER_SOLICITATION   = 133;
     private static final int ICMP6_ROUTER_ADVERTISEMENT  = 134;
     private static final int ICMP6_NEIGHBOR_SOLICITATION = 135;
@@ -1056,11 +1057,11 @@ public class ApfTest {
 
     private static final int ICMP6_RA_HEADER_LEN = 16;
     private static final int ICMP6_RA_ROUTER_LIFETIME_OFFSET =
-            ETH_HEADER_LEN + IPV6_HEADER_LEN + 6;
+            IP_HEADER_OFFSET + IPV6_HEADER_LEN + 6;
     private static final int ICMP6_RA_CHECKSUM_OFFSET =
-            ETH_HEADER_LEN + IPV6_HEADER_LEN + 2;
+            IP_HEADER_OFFSET + IPV6_HEADER_LEN + 2;
     private static final int ICMP6_RA_OPTION_OFFSET =
-            ETH_HEADER_LEN + IPV6_HEADER_LEN + ICMP6_RA_HEADER_LEN;
+            IP_HEADER_OFFSET + IPV6_HEADER_LEN + ICMP6_RA_HEADER_LEN;
 
     private static final int ICMP6_PREFIX_OPTION_TYPE                      = 3;
     private static final int ICMP6_PREFIX_OPTION_LEN                       = 32;
@@ -1124,6 +1125,30 @@ public class ApfTest {
         return apfFilter;
     }
 
+    private static void setIpv4VersionFields(ByteBuffer packet) {
+        packet.putShort(ETH_ETHERTYPE_OFFSET, (short) ETH_P_IP);
+        packet.put(IP_HEADER_OFFSET, (byte) 0x45);
+    }
+
+    private static void setIpv6VersionFields(ByteBuffer packet) {
+        packet.putShort(ETH_ETHERTYPE_OFFSET, (short) ETH_P_IPV6);
+        packet.put(IP_HEADER_OFFSET, (byte) 0x60);
+    }
+
+    private static ByteBuffer makeIpv4Packet(int proto) {
+        ByteBuffer packet = ByteBuffer.wrap(new byte[100]);
+        setIpv4VersionFields(packet);
+        packet.put(IPV4_PROTOCOL_OFFSET, (byte) proto);
+        return packet;
+    }
+
+    private static ByteBuffer makeIpv6Packet(int nextHeader) {
+        ByteBuffer packet = ByteBuffer.wrap(new byte[100]);
+        setIpv6VersionFields(packet);
+        packet.put(IPV6_NEXT_HEADER_OFFSET, (byte) nextHeader);
+        return packet;
+    }
+
     @Test
     public void testApfFilterIPv4() throws Exception {
         MockIpClientCallback ipClientCallback = new MockIpClientCallback();
@@ -1157,7 +1182,7 @@ public class ApfTest {
         // Verify multicast/broadcast IPv4, not DHCP to us, is dropped
         put(packet, ETH_DEST_ADDR_OFFSET, ETH_BROADCAST_MAC_ADDRESS);
         assertDrop(program, packet.array());
-        packet.put(IPV4_VERSION_IHL_OFFSET, (byte)0x45);
+        packet.put(IP_HEADER_OFFSET, (byte) 0x45);
         assertDrop(program, packet.array());
         packet.put(IPV4_PROTOCOL_OFFSET, (byte)IPPROTO_UDP);
         assertDrop(program, packet.array());
@@ -1189,8 +1214,7 @@ public class ApfTest {
         byte[] program = ipClientCallback.getApfProgram();
 
         // Verify empty IPv6 packet is passed
-        ByteBuffer packet = ByteBuffer.wrap(new byte[100]);
-        packet.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IPV6);
+        ByteBuffer packet = makeIpv6Packet(IPPROTO_UDP);
         assertPass(program, packet.array());
 
         // Verify empty ICMPv6 packet is passed
@@ -1234,28 +1258,25 @@ public class ApfTest {
         byte[] program = ipClientCallback.getApfProgram();
 
         // Construct IPv4 and IPv6 multicast packets.
-        ByteBuffer mcastv4packet = ByteBuffer.wrap(new byte[100]);
-        mcastv4packet.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IP);
+        ByteBuffer mcastv4packet = makeIpv4Packet(IPPROTO_UDP);
         put(mcastv4packet, IPV4_DEST_ADDR_OFFSET, multicastIpv4Addr);
 
-        ByteBuffer mcastv6packet = ByteBuffer.wrap(new byte[100]);
-        mcastv6packet.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IPV6);
-        mcastv6packet.put(IPV6_NEXT_HEADER_OFFSET, (byte)IPPROTO_UDP);
+        ByteBuffer mcastv6packet = makeIpv6Packet(IPPROTO_UDP);
         put(mcastv6packet, IPV6_DEST_ADDR_OFFSET, multicastIpv6Addr);
 
         // Construct IPv4 broadcast packet.
-        ByteBuffer bcastv4packet1 = ByteBuffer.wrap(new byte[100]);
+        ByteBuffer bcastv4packet1 = makeIpv4Packet(IPPROTO_UDP);
         bcastv4packet1.put(ETH_BROADCAST_MAC_ADDRESS);
         bcastv4packet1.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IP);
         put(bcastv4packet1, IPV4_DEST_ADDR_OFFSET, multicastIpv4Addr);
 
-        ByteBuffer bcastv4packet2 = ByteBuffer.wrap(new byte[100]);
+        ByteBuffer bcastv4packet2 = makeIpv4Packet(IPPROTO_UDP);
         bcastv4packet2.put(ETH_BROADCAST_MAC_ADDRESS);
         bcastv4packet2.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IP);
         put(bcastv4packet2, IPV4_DEST_ADDR_OFFSET, IPV4_BROADCAST_ADDRESS);
 
         // Construct IPv4 broadcast with L2 unicast address packet (b/30231088).
-        ByteBuffer bcastv4unicastl2packet = ByteBuffer.wrap(new byte[100]);
+        ByteBuffer bcastv4unicastl2packet = makeIpv4Packet(IPPROTO_UDP);
         bcastv4unicastl2packet.put(TestApfFilter.MOCK_MAC_ADDR);
         bcastv4unicastl2packet.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IP);
         put(bcastv4unicastl2packet, IPV4_DEST_ADDR_OFFSET, broadcastIpv4Addr);
@@ -1314,9 +1335,7 @@ public class ApfTest {
 
         // Construct a multicast ICMPv6 ECHO request.
         final byte[] multicastIpv6Addr = {(byte)0xff,2,0,0,0,0,0,0,0,0,0,0,0,0,0,(byte)0xfb};
-        ByteBuffer packet = ByteBuffer.wrap(new byte[100]);
-        packet.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IPV6);
-        packet.put(IPV6_NEXT_HEADER_OFFSET, (byte)IPPROTO_ICMPV6);
+        ByteBuffer packet = makeIpv6Packet(IPPROTO_ICMPV6);
         packet.put(ICMP6_TYPE_OFFSET, (byte)ICMPV6_ECHO_REQUEST_TYPE);
         put(packet, IPV6_DEST_ADDR_OFFSET, multicastIpv6Addr);
 
@@ -1333,6 +1352,8 @@ public class ApfTest {
 
         // However, we should still let through all other ICMPv6 types.
         ByteBuffer raPacket = ByteBuffer.wrap(packet.array().clone());
+        setIpv6VersionFields(packet);
+        packet.put(IPV6_NEXT_HEADER_OFFSET, (byte) IPPROTO_ICMPV6);
         raPacket.put(ICMP6_TYPE_OFFSET, (byte) NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT);
         assertPass(ipClientCallback.getApfProgram(), raPacket.array());
 
@@ -1357,11 +1378,11 @@ public class ApfTest {
         assertPass(program, packet.array());
 
         // Verify empty packet with IPv4 is passed
-        packet.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IP);
+        setIpv4VersionFields(packet);
         assertPass(program, packet.array());
 
         // Verify empty IPv6 packet is passed
-        packet.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IPV6);
+        setIpv6VersionFields(packet);
         assertPass(program, packet.array());
 
         // Now turn on the filter
@@ -1377,11 +1398,11 @@ public class ApfTest {
         assertDrop(program, packet.array());
 
         // Verify that IPv4 (as example of Ethernet II) frame will pass
-        packet.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IP);
+        setIpv4VersionFields(packet);
         assertPass(program, packet.array());
 
         // Verify that IPv6 (as example of Ethernet II) frame will pass
-        packet.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IPV6);
+        setIpv6VersionFields(packet);
         assertPass(program, packet.array());
 
         apfFilter.shutdown();
@@ -1404,11 +1425,11 @@ public class ApfTest {
         assertPass(program, packet.array());
 
         // Verify empty packet with IPv4 is passed
-        packet.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IP);
+        setIpv4VersionFields(packet);
         assertPass(program, packet.array());
 
         // Verify empty IPv6 packet is passed
-        packet.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IPV6);
+        setIpv6VersionFields(packet);
         assertPass(program, packet.array());
 
         // Now add IPv4 to the black list
@@ -1419,11 +1440,11 @@ public class ApfTest {
         program = ipClientCallback.getApfProgram();
 
         // Verify that IPv4 frame will be dropped
-        packet.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IP);
+        setIpv4VersionFields(packet);
         assertDrop(program, packet.array());
 
         // Verify that IPv6 frame will pass
-        packet.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IPV6);
+        setIpv6VersionFields(packet);
         assertPass(program, packet.array());
 
         // Now let us have both IPv4 and IPv6 in the black list
@@ -1434,11 +1455,11 @@ public class ApfTest {
         program = ipClientCallback.getApfProgram();
 
         // Verify that IPv4 frame will be dropped
-        packet.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IP);
+        setIpv4VersionFields(packet);
         assertDrop(program, packet.array());
 
         // Verify that IPv6 frame will be dropped
-        packet.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IPV6);
+        setIpv6VersionFields(packet);
         assertDrop(program, packet.array());
 
         apfFilter.shutdown();
@@ -1572,18 +1593,18 @@ public class ApfTest {
         // src: 10.0.0.6, port: 54321
         // dst: 10.0.0.5, port: 12345
         assertDrop(program,
-                ipv4Packet(IPV4_KEEPALIVE_DST_ADDR, IPV4_KEEPALIVE_SRC_ADDR,
+                ipv4TcpPacket(IPV4_KEEPALIVE_DST_ADDR, IPV4_KEEPALIVE_SRC_ADDR,
                         dstPort, srcPort, ackNum, seqNum + 1, 0 /* dataLength */));
         // Verify IPv4 non-keepalive ack packet from the same source address is passed
         assertPass(program,
-                ipv4Packet(IPV4_KEEPALIVE_DST_ADDR, IPV4_KEEPALIVE_SRC_ADDR,
+                ipv4TcpPacket(IPV4_KEEPALIVE_DST_ADDR, IPV4_KEEPALIVE_SRC_ADDR,
                         dstPort, srcPort, ackNum + 100, seqNum, 0 /* dataLength */));
         assertPass(program,
-                ipv4Packet(IPV4_KEEPALIVE_DST_ADDR, IPV4_KEEPALIVE_SRC_ADDR,
+                ipv4TcpPacket(IPV4_KEEPALIVE_DST_ADDR, IPV4_KEEPALIVE_SRC_ADDR,
                         dstPort, srcPort, ackNum, seqNum + 1, 10 /* dataLength */));
         // Verify IPv4 packet from another address is passed
         assertPass(program,
-                ipv4Packet(IPV4_ANOTHER_ADDR, IPV4_KEEPALIVE_SRC_ADDR, anotherSrcPort,
+                ipv4TcpPacket(IPV4_ANOTHER_ADDR, IPV4_KEEPALIVE_SRC_ADDR, anotherSrcPort,
                         anotherDstPort, anotherSeqNum, anotherAckNum, 0 /* dataLength */));
 
         // Remove IPv4 keepalive filter
@@ -1611,15 +1632,15 @@ public class ApfTest {
             // src: 2404:0:0:0:0:0:faf2, port: 54321
             // dst: 2404:0:0:0:0:0:faf1, port: 12345
             assertDrop(program,
-                    ipv6Packet(IPV6_KEEPALIVE_DST_ADDR, IPV6_KEEPALIVE_SRC_ADDR,
+                    ipv6TcpPacket(IPV6_KEEPALIVE_DST_ADDR, IPV6_KEEPALIVE_SRC_ADDR,
                             dstPort, srcPort, ackNum, seqNum + 1));
             // Verify IPv6 non-keepalive ack packet from the same source address is passed
             assertPass(program,
-                    ipv6Packet(IPV6_KEEPALIVE_DST_ADDR, IPV6_KEEPALIVE_SRC_ADDR,
+                    ipv6TcpPacket(IPV6_KEEPALIVE_DST_ADDR, IPV6_KEEPALIVE_SRC_ADDR,
                             dstPort, srcPort, ackNum + 100, seqNum));
             // Verify IPv6 packet from another address is passed
             assertPass(program,
-                    ipv6Packet(IPV6_ANOTHER_ADDR, IPV6_KEEPALIVE_SRC_ADDR, anotherSrcPort,
+                    ipv6TcpPacket(IPV6_ANOTHER_ADDR, IPV6_KEEPALIVE_SRC_ADDR, anotherSrcPort,
                             anotherDstPort, anotherSeqNum, anotherAckNum));
 
             // Remove IPv6 keepalive filter
@@ -1634,30 +1655,30 @@ public class ApfTest {
             // src: 10.0.0.6, port: 54321
             // dst: 10.0.0.5, port: 12345
             assertDrop(program,
-                    ipv4Packet(IPV4_KEEPALIVE_DST_ADDR, IPV4_KEEPALIVE_SRC_ADDR,
+                    ipv4TcpPacket(IPV4_KEEPALIVE_DST_ADDR, IPV4_KEEPALIVE_SRC_ADDR,
                             dstPort, srcPort, ackNum, seqNum + 1, 0 /* dataLength */));
             // Verify IPv4 non-keepalive ack packet from the same source address is passed
             assertPass(program,
-                    ipv4Packet(IPV4_KEEPALIVE_DST_ADDR, IPV4_KEEPALIVE_SRC_ADDR,
+                    ipv4TcpPacket(IPV4_KEEPALIVE_DST_ADDR, IPV4_KEEPALIVE_SRC_ADDR,
                             dstPort, srcPort, ackNum + 100, seqNum, 0 /* dataLength */));
             // Verify IPv4 packet from another address is passed
             assertPass(program,
-                    ipv4Packet(IPV4_ANOTHER_ADDR, IPV4_KEEPALIVE_SRC_ADDR, anotherSrcPort,
+                    ipv4TcpPacket(IPV4_ANOTHER_ADDR, IPV4_KEEPALIVE_SRC_ADDR, anotherSrcPort,
                             anotherDstPort, anotherSeqNum, anotherAckNum, 0 /* dataLength */));
 
             // Verify IPv6 keepalive ack packet is dropped
             // src: 2404:0:0:0:0:0:faf2, port: 54321
             // dst: 2404:0:0:0:0:0:faf1, port: 12345
             assertDrop(program,
-                    ipv6Packet(IPV6_KEEPALIVE_DST_ADDR, IPV6_KEEPALIVE_SRC_ADDR,
+                    ipv6TcpPacket(IPV6_KEEPALIVE_DST_ADDR, IPV6_KEEPALIVE_SRC_ADDR,
                             dstPort, srcPort, ackNum, seqNum + 1));
             // Verify IPv6 non-keepalive ack packet from the same source address is passed
             assertPass(program,
-                    ipv6Packet(IPV6_KEEPALIVE_DST_ADDR, IPV6_KEEPALIVE_SRC_ADDR,
+                    ipv6TcpPacket(IPV6_KEEPALIVE_DST_ADDR, IPV6_KEEPALIVE_SRC_ADDR,
                             dstPort, srcPort, ackNum + 100, seqNum));
             // Verify IPv6 packet from another address is passed
             assertPass(program,
-                    ipv6Packet(IPV6_ANOTHER_ADDR, IPV6_KEEPALIVE_SRC_ADDR, anotherSrcPort,
+                    ipv6TcpPacket(IPV6_ANOTHER_ADDR, IPV6_KEEPALIVE_SRC_ADDR, anotherSrcPort,
                             anotherDstPort, anotherSeqNum, anotherAckNum));
 
             // Remove keepalive filters
@@ -1671,32 +1692,29 @@ public class ApfTest {
 
         // Verify IPv4, IPv6 packets are passed
         assertPass(program,
-                ipv4Packet(IPV4_KEEPALIVE_DST_ADDR, IPV4_KEEPALIVE_SRC_ADDR,
+                ipv4TcpPacket(IPV4_KEEPALIVE_DST_ADDR, IPV4_KEEPALIVE_SRC_ADDR,
                         dstPort, srcPort, ackNum, seqNum + 1, 0 /* dataLength */));
         assertPass(program,
-                ipv6Packet(IPV6_KEEPALIVE_DST_ADDR, IPV6_KEEPALIVE_SRC_ADDR,
+                ipv6TcpPacket(IPV6_KEEPALIVE_DST_ADDR, IPV6_KEEPALIVE_SRC_ADDR,
                         dstPort, srcPort, ackNum, seqNum + 1));
         assertPass(program,
-                ipv4Packet(IPV4_ANOTHER_ADDR, IPV4_KEEPALIVE_SRC_ADDR, srcPort,
+                ipv4TcpPacket(IPV4_ANOTHER_ADDR, IPV4_KEEPALIVE_SRC_ADDR, srcPort,
                         dstPort, anotherSeqNum, anotherAckNum, 0 /* dataLength */));
         assertPass(program,
-                ipv6Packet(IPV6_ANOTHER_ADDR, IPV6_KEEPALIVE_SRC_ADDR, srcPort,
+                ipv6TcpPacket(IPV6_ANOTHER_ADDR, IPV6_KEEPALIVE_SRC_ADDR, srcPort,
                         dstPort, anotherSeqNum, anotherAckNum));
 
         apfFilter.shutdown();
     }
 
-    private static byte[] ipv4Packet(byte[] sip, byte[] dip, int sport,
+    private static byte[] ipv4TcpPacket(byte[] sip, byte[] dip, int sport,
             int dport, int seq, int ack, int dataLength) {
         final int totalLength = dataLength + IPV4_HEADER_LEN + IPV4_TCP_HEADER_LEN;
 
         ByteBuffer packet = ByteBuffer.wrap(new byte[totalLength + ETH_HEADER_LEN]);
 
-        // ether type
-        packet.putShort(ETH_ETHERTYPE_OFFSET, (short) ETH_P_IP);
-
-        // IPv4 header
-        packet.put(IPV4_VERSION_IHL_OFFSET, (byte) 0x45);
+        // Ethertype and IPv4 header
+        setIpv4VersionFields(packet);
         packet.putShort(IPV4_TOTAL_LENGTH_OFFSET, (short) totalLength);
         packet.put(IPV4_PROTOCOL_OFFSET, (byte) IPPROTO_TCP);
         put(packet, IPV4_SRC_ADDR_OFFSET, sip);
@@ -1713,10 +1731,11 @@ public class ApfTest {
         return packet.array();
     }
 
-    private static byte[] ipv6Packet(byte[] sip, byte[] tip, int sport,
+    private static byte[] ipv6TcpPacket(byte[] sip, byte[] tip, int sport,
             int dport, int seq, int ack) {
         ByteBuffer packet = ByteBuffer.wrap(new byte[100]);
-        packet.putShort(ETH_ETHERTYPE_OFFSET, (short) ETH_P_IPV6);
+        setIpv6VersionFields(packet);
+        packet.put(IPV6_NEXT_HEADER_OFFSET, (byte) IPPROTO_TCP);
         put(packet, IPV6_SRC_ADDR_OFFSET, sip);
         put(packet, IPV6_DEST_ADDR_OFFSET, tip);
         packet.putShort(IPV6_TCP_SRC_PORT_OFFSET, (short) sport);
@@ -1787,11 +1806,8 @@ public class ApfTest {
         final int udpLength = UDP_HEADER_LEN + dataLength;
         ByteBuffer packet = ByteBuffer.wrap(new byte[totalLength + ETH_HEADER_LEN]);
 
-        // ether type
-        packet.putShort(ETH_ETHERTYPE_OFFSET, (short) ETH_P_IP);
-
-        // IPv4 header
-        packet.put(IPV4_VERSION_IHL_OFFSET, (byte) 0x45);
+        // Ethertype and IPv4 header
+        setIpv4VersionFields(packet);
         packet.putShort(IPV4_TOTAL_LENGTH_OFFSET, (short) totalLength);
         packet.put(IPV4_PROTOCOL_OFFSET, (byte) IPPROTO_UDP);
         put(packet, IPV4_SRC_ADDR_OFFSET, sip);
@@ -1927,13 +1943,13 @@ public class ApfTest {
         assertDrop(program, packet.array());
         packet.putShort(ICMP6_RA_CHECKSUM_OFFSET, originalChecksum);
 
-        // Verify other changes to RA make it not match filter
-        final byte originalFirstByte = packet.get(0);
-        packet.put(0, (byte)-1);
+        // Verify other changes to RA (e.g., a change in the source address) make it not match.
+        final int offset = IPV6_SRC_ADDR_OFFSET + 5;
+        final byte originalByte = packet.get(offset);
+        packet.put(offset, (byte) (~originalByte));
         assertPass(program, packet.array());
-        packet.put(0, (byte)0);
+        packet.put(offset, originalByte);
         assertDrop(program, packet.array());
-        packet.put(0, originalFirstByte);
     }
 
     // Test that when ApfFilter is shown the given packet, it generates a program to filter it
