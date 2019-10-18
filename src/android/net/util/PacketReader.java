@@ -28,8 +28,6 @@ import java.io.FileDescriptor;
  *
  * TODO: rename this class to something more correctly descriptive (something
  * like [or less horrible than] FdReadEventsHandler?).
- *
- * @hide
  */
 public abstract class PacketReader extends FdEventsReader<byte[]> {
 
