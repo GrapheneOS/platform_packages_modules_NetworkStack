@@ -130,6 +130,7 @@ public class IpClientIntegrationTest {
     private String mIfaceName;
     private INetd mNetd;
     private HandlerThread mPacketReaderThread;
+    private Handler mHandler;
     private TapPacketReader mPacketReader;
     private IpClient mIpc;
     private Dependencies mDependencies;
@@ -271,7 +272,7 @@ public class IpClientIntegrationTest {
     @After
     public void tearDown() throws Exception {
         if (mPacketReader != null) {
-            mPacketReader.stop(); // Also closes the socket
+            mHandler.post(() -> mPacketReader.stop()); // Also closes the socket
         }
         if (mPacketReaderThread != null) {
             mPacketReaderThread.quitSafely();
@@ -297,10 +298,11 @@ public class IpClientIntegrationTest {
         mIfaceName = iface.getInterfaceName();
         mPacketReaderThread = new HandlerThread(IpClientIntegrationTest.class.getSimpleName());
         mPacketReaderThread.start();
+        mHandler = mPacketReaderThread.getThreadHandler();
 
         final ParcelFileDescriptor tapFd = iface.getFileDescriptor();
-        mPacketReader = new TapPacketReader(mPacketReaderThread.getThreadHandler(), tapFd);
-        mPacketReader.start();
+        mPacketReader = new TapPacketReader(mHandler, tapFd);
+        mHandler.post(() -> mPacketReader.start());
     }
 
     private void setUpIpClient() throws Exception {
