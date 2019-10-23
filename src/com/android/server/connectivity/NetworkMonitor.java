@@ -681,6 +681,8 @@ public class NetworkMonitor extends StateMachine {
                     //         no resolved IP addresses, IPs unreachable,
                     //         port 853 unreachable, port 853 is not running a
                     //         DNS-over-TLS server, et cetera).
+                    // Cancel any outstanding CMD_EVALUATE_PRIVATE_DNS.
+                    removeMessages(CMD_EVALUATE_PRIVATE_DNS);
                     sendMessage(CMD_EVALUATE_PRIVATE_DNS);
                     break;
                 }
@@ -1042,6 +1044,11 @@ public class NetworkMonitor extends StateMachine {
                     // All good!
                     transitionTo(mValidatedState);
                     break;
+                case CMD_PRIVATE_DNS_SETTINGS_CHANGED:
+                    // When settings change the reevaluation timer must be reset.
+                    mPrivateDnsReevalDelayMs = INITIAL_REEVALUATE_DELAY_MS;
+                    // Let the message bubble up and be handled by parent states as usual.
+                    return NOT_HANDLED;
                 default:
                     return NOT_HANDLED;
             }
@@ -1094,10 +1101,6 @@ public class NetworkMonitor extends StateMachine {
             // transitioning back to EvaluatingState, to perhaps give ourselves
             // the opportunity to (re)detect a captive portal or something.
             //
-            // TODO: distinguish between CMD_EVALUATE_PRIVATE_DNS messages that are caused by server
-            // lookup failures (which should continue to do exponential backoff) and
-            // CMD_EVALUATE_PRIVATE_DNS messages that are caused by user reconfiguration (which
-            // should be processed immediately.
             sendMessageDelayed(CMD_EVALUATE_PRIVATE_DNS, mPrivateDnsReevalDelayMs);
             mPrivateDnsReevalDelayMs *= 2;
             if (mPrivateDnsReevalDelayMs > MAX_REEVALUATE_DELAY_MS) {
