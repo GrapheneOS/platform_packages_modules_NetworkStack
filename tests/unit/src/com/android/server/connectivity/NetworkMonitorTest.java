@@ -173,6 +173,8 @@ public class NetworkMonitorTest {
     private static final int VALIDATION_RESULT_VALID = NETWORK_VALIDATION_PROBE_DNS
             | NETWORK_VALIDATION_PROBE_HTTPS
             | NETWORK_VALIDATION_RESULT_VALID;
+    private static final int VALIDATION_RESULT_PRIVDNS_VALID = NETWORK_VALIDATION_PROBE_DNS
+            | NETWORK_VALIDATION_PROBE_HTTPS | NETWORK_VALIDATION_PROBE_PRIVDNS;
 
     private static final int RETURN_CODE_DNS_SUCCESS = 0;
     private static final int RETURN_CODE_DNS_TIMEOUT = 255;
@@ -800,6 +802,8 @@ public class NetworkMonitorTest {
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1))
                 .notifyNetworkTested(eq(VALIDATION_RESULT_VALID | NETWORK_VALIDATION_PROBE_PRIVDNS),
                         eq(null));
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1)).notifyProbeStatusChanged(
+                eq(VALIDATION_RESULT_PRIVDNS_VALID), eq(VALIDATION_RESULT_PRIVDNS_VALID));
 
         // Verify dns query only get v4 address.
         resetCallbacks();
@@ -809,6 +813,10 @@ public class NetworkMonitorTest {
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1))
                 .notifyNetworkTested(eq(VALIDATION_RESULT_VALID | NETWORK_VALIDATION_PROBE_PRIVDNS),
                         eq(null));
+        // NetworkMonitor will check if the probes has changed or not, if the probes has not
+        // changed, the callback won't be fired.
+        verify(mCallbacks, never()).notifyProbeStatusChanged(
+                eq(VALIDATION_RESULT_PRIVDNS_VALID), eq(VALIDATION_RESULT_PRIVDNS_VALID));
 
         // Verify dns query get both v4 and v6 address.
         resetCallbacks();
@@ -818,6 +826,37 @@ public class NetworkMonitorTest {
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1))
                 .notifyNetworkTested(eq(VALIDATION_RESULT_VALID | NETWORK_VALIDATION_PROBE_PRIVDNS),
                         eq(null));
+        verify(mCallbacks, never()).notifyProbeStatusChanged(
+                eq(VALIDATION_RESULT_PRIVDNS_VALID), eq(VALIDATION_RESULT_PRIVDNS_VALID));
+    }
+
+    @Test
+    public void testProbeStatusChanged() throws Exception {
+        // Set no record in FakeDns and expect validation to fail.
+        setStatus(mHttpsConnection, 204);
+        setStatus(mHttpConnection, 204);
+
+        WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig("dns.google", new InetAddress[0]));
+        wnm.notifyNetworkConnected(TEST_LINK_PROPERTIES, NOT_METERED_CAPABILITIES);
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1)).notifyNetworkTested(
+                eq(NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS), eq(null));
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1)).notifyProbeStatusChanged(
+                eq(VALIDATION_RESULT_PRIVDNS_VALID), eq(NETWORK_VALIDATION_PROBE_DNS
+                | NETWORK_VALIDATION_PROBE_HTTPS));
+        // Fix DNS and retry, expect validation to succeed.
+        resetCallbacks();
+        mFakeDns.setAnswer("dns.google", new String[]{"2001:db8::1"}, TYPE_AAAA);
+
+        wnm.forceReevaluation(Process.myUid());
+        // ProbeCompleted should be reset to 0
+        HandlerUtilsKt.waitForIdle(wnm.getHandler(), HANDLER_TIMEOUT_MS);
+        assertEquals(wnm.getEvaluationState().getProbeCompletedResult(), 0);
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1))
+                .notifyNetworkTested(eq(VALIDATION_RESULT_VALID | NETWORK_VALIDATION_PROBE_PRIVDNS),
+                        eq(null));
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1)).notifyProbeStatusChanged(
+                eq(VALIDATION_RESULT_PRIVDNS_VALID), eq(VALIDATION_RESULT_PRIVDNS_VALID));
     }
 
     @Test
@@ -833,6 +872,9 @@ public class NetworkMonitorTest {
                 .notifyNetworkTested(
                         eq(NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS),
                         eq(null));
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1)).notifyProbeStatusChanged(
+                eq(VALIDATION_RESULT_PRIVDNS_VALID), eq(NETWORK_VALIDATION_PROBE_DNS
+                | NETWORK_VALIDATION_PROBE_HTTPS));
 
         // Fix DNS and retry, expect validation to succeed.
         resetCallbacks();
@@ -842,6 +884,8 @@ public class NetworkMonitorTest {
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).atLeastOnce())
                 .notifyNetworkTested(eq(VALIDATION_RESULT_VALID | NETWORK_VALIDATION_PROBE_PRIVDNS),
                         eq(null));
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1)).notifyProbeStatusChanged(
+                eq(VALIDATION_RESULT_PRIVDNS_VALID), eq(VALIDATION_RESULT_PRIVDNS_VALID));
 
         // Change configuration to an invalid DNS name, expect validation to fail.
         resetCallbacks();
@@ -853,6 +897,9 @@ public class NetworkMonitorTest {
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS))
                 .notifyNetworkTested(eq(NETWORK_VALIDATION_PROBE_DNS
                         | NETWORK_VALIDATION_PROBE_HTTPS), eq(null));
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1)).notifyProbeStatusChanged(
+                eq(VALIDATION_RESULT_PRIVDNS_VALID), eq(NETWORK_VALIDATION_PROBE_DNS
+                | NETWORK_VALIDATION_PROBE_HTTPS));
 
         // Change configuration back to working again, but make private DNS not work.
         // Expect validation to fail.
@@ -864,6 +911,11 @@ public class NetworkMonitorTest {
                 .notifyNetworkTested(
                         eq(NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS),
                         eq(null));
+        // NetworkMonitor will check if the probes has changed or not, if the probes has not
+        // changed, the callback won't be fired.
+        verify(mCallbacks, never()).notifyProbeStatusChanged(
+                eq(VALIDATION_RESULT_PRIVDNS_VALID), eq(NETWORK_VALIDATION_PROBE_DNS
+                | NETWORK_VALIDATION_PROBE_HTTPS));
 
         // Make private DNS work again. Expect validation to succeed.
         resetCallbacks();
@@ -872,6 +924,8 @@ public class NetworkMonitorTest {
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).atLeastOnce())
                 .notifyNetworkTested(
                         eq(VALIDATION_RESULT_VALID | NETWORK_VALIDATION_PROBE_PRIVDNS), eq(null));
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1)).notifyProbeStatusChanged(
+                eq(VALIDATION_RESULT_PRIVDNS_VALID), eq(VALIDATION_RESULT_PRIVDNS_VALID));
     }
 
     @Test
