@@ -87,6 +87,6 @@ java_library {
     ],
     static_libs: [
         "ipmemorystore-aidl-interfaces-V3-java",
-        "networkstack-aidl-interfaces-java",
+        "networkstack-aidl-interfaces-unstable-java",
     ],
 }
