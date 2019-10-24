@@ -48,6 +48,10 @@ import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.server.networkstack.tests.R;
+
+import libcore.io.Streams;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -56,6 +60,9 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.reflect.Modifier;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
@@ -73,12 +80,15 @@ import java.util.function.Consumer;
 public class IpMemoryStoreServiceTest {
     private static final String TEST_CLIENT_ID = "testClientId";
     private static final String TEST_DATA_NAME = "testData";
+    private static final String TEST_DATABASE_NAME = "test.db";
 
     private static final int TEST_DATABASE_SIZE_THRESHOLD = 100 * 1024; //100KB
     private static final int DEFAULT_TIMEOUT_MS = 5000;
     private static final int LONG_TIMEOUT_MS = 30000;
     private static final int FAKE_KEY_COUNT = 20;
     private static final long LEASE_EXPIRY_NULL = -1L;
+    private static final long UNIX_TIME_MS_2000_01_01 = 946652400000L;
+    private static final long UNIX_TIME_MS_2100_01_01 = 4102412400000L;
     private static final int MTU_NULL = -1;
     private static final String[] FAKE_KEYS;
     private static final byte[] TEST_BLOB_DATA = new byte[] { -3, 6, 8, -9, 12,
@@ -103,7 +113,7 @@ public class IpMemoryStoreServiceTest {
         MockitoAnnotations.initMocks(this);
         final Context context = InstrumentationRegistry.getContext();
         final File dir = context.getFilesDir();
-        mDbFile = new File(dir, "test.db");
+        mDbFile = new File(dir, TEST_DATABASE_NAME);
         doReturn(mDbFile).when(mMockContext).getDatabasePath(anyString());
         doReturn(mMockJobScheduler).when(mMockContext)
                 .getSystemService(Context.JOB_SCHEDULER_SERVICE);
@@ -127,6 +137,16 @@ public class IpMemoryStoreServiceTest {
     public void tearDown() {
         mService.shutdown();
         mDbFile.delete();
+    }
+
+    private void copyTestData(final File file) throws Exception {
+        try (
+                InputStream in = InstrumentationRegistry.getContext()
+                        .getResources().openRawResource(R.raw.test);
+                OutputStream out = new FileOutputStream(file)
+        ) {
+            Streams.copy(in, out);
+        }
     }
 
     /** Helper method to build test network attributes */
@@ -321,20 +341,32 @@ public class IpMemoryStoreServiceTest {
                 })));
     }
 
-    /** Insert large data that db size will be over threshold for maintenance test usage. */
-    private void insertFakeDataAndOverThreshold() {
+    /**
+     * This method is used to generate test.db file.
+     *
+     * Here are the steps to update the test.db file if you need to change value in DB.
+     * 1. Create a new test like "testGenerateDB" and have only one line code "generateFakeData()".
+     * 2. Comment out "mDbFile.delete()" in tearDown() method.
+     * 3. Run "atest IpMemoryStoreServiceTest#testGenerateDB".
+     * 4. Run "adb root; adb pull /data/data/com.android.server.networkstack.tests/files/test.db
+     *    $YOUR_CODE_BASE/package/module/NetworkStack/tests/unit/res/raw/test.db".
+     *
+     */
+    private void generateFakeData() {
+        final int fakeDataCount = 1000;
+        final int expiredRecordsCount = 100;
         try {
             final NetworkAttributes.Builder na = buildTestNetworkAttributes(
                     (Inet4Address) Inet4Address.getByName("1.2.3.4"), LEASE_EXPIRY_NULL,
                     "hint1", Arrays.asList(Inet6Address.getByName("0A1C:2E40:480A::1CA6")),
                     219);
             final long time = System.currentTimeMillis() - 1;
-            for (int i = 0; i < 1000; i++) {
+            for (int i = 0; i < fakeDataCount; i++) {
                 int errorCode = IpMemoryStoreDatabase.storeNetworkAttributes(
                         mService.mDb,
                         "fakeKey" + i,
-                        // Let first 100 records get expiry.
-                        i < 100 ? time : time + TimeUnit.HOURS.toMillis(i),
+                        i < expiredRecordsCount
+                                ? UNIX_TIME_MS_2000_01_01 : UNIX_TIME_MS_2100_01_01 + i,
                         na.build());
                 assertEquals(errorCode, Status.SUCCESS);
 
@@ -344,7 +376,7 @@ public class IpMemoryStoreServiceTest {
                 assertEquals(errorCode, Status.SUCCESS);
             }
 
-            // After added 5000 records, db size is larger than fake threshold(100KB).
+            // After inserted fake data, db size should be larger than threshold.
             assertTrue(mService.isDbSizeOverThreshold());
         } catch (final UnknownHostException e) {
             fail("Insert fake data fail");
@@ -634,8 +666,10 @@ public class IpMemoryStoreServiceTest {
     }
 
     @Test
-    public void testFullMaintenance() {
-        insertFakeDataAndOverThreshold();
+    public void testFullMaintenance() throws Exception {
+        copyTestData(mDbFile);
+        // After inserted test data, db size should be larger than threshold.
+        assertTrue(mService.isDbSizeOverThreshold());
 
         final InterruptMaintenance im = new InterruptMaintenance(0/* Fake JobId */);
         // Do full maintenance and then db size should go down and meet the threshold.
@@ -651,8 +685,10 @@ public class IpMemoryStoreServiceTest {
     }
 
     @Test
-    public void testInterruptMaintenance() {
-        insertFakeDataAndOverThreshold();
+    public void testInterruptMaintenance() throws Exception {
+        copyTestData(mDbFile);
+        // After inserted test data, db size should be larger than threshold.
+        assertTrue(mService.isDbSizeOverThreshold());
 
         final InterruptMaintenance im = new InterruptMaintenance(0/* Fake JobId */);
 
