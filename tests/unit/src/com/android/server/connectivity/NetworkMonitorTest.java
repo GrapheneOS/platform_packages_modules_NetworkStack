@@ -868,10 +868,8 @@ public class NetworkMonitorTest {
         WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
         wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig("dns.google", new InetAddress[0]));
         wnm.notifyNetworkConnected(TEST_LINK_PROPERTIES, NOT_METERED_CAPABILITIES);
-        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).atLeastOnce())
-                .notifyNetworkTested(
-                        eq(NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS),
-                        eq(null));
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS)).notifyNetworkTested(
+                eq(NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS), eq(null));
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1)).notifyProbeStatusChanged(
                 eq(VALIDATION_RESULT_PRIVDNS_VALID), eq(NETWORK_VALIDATION_PROBE_DNS
                 | NETWORK_VALIDATION_PROBE_HTTPS));
@@ -907,10 +905,8 @@ public class NetworkMonitorTest {
         mFakeDns.setNonBypassPrivateDnsWorking(false);
         wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig("dns.google",
                 new InetAddress[0]));
-        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).atLeastOnce())
-                .notifyNetworkTested(
-                        eq(NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS),
-                        eq(null));
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS)).notifyNetworkTested(
+                eq(NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS), eq(null));
         // NetworkMonitor will check if the probes has changed or not, if the probes has not
         // changed, the callback won't be fired.
         verify(mCallbacks, never()).notifyProbeStatusChanged(
