@@ -81,6 +81,7 @@ java_defaults {
         "captiveportal-lib",
     ],
     manifest: "AndroidManifestBase.xml",
+    plugins: ["java_api_finder"],
 }
 
 // The versions of the android library containing network stack code compiled for each SDK variant
