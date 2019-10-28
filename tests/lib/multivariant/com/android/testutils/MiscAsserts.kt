@@ -16,7 +16,6 @@
 
 package com.android.testutils
 
-import android.util.Log
 import com.android.testutils.ExceptionUtils.ThrowingRunnable
 import java.lang.reflect.Modifier
 import kotlin.system.measureTimeMillis
@@ -80,7 +79,6 @@ fun assertRunsInAtMost(descr: String, timeLimit: Long, fn: Runnable) {
 fun assertRunsInAtMost(descr: String, timeLimit: Long, fn: () -> Unit) {
     val timeTaken = measureTimeMillis(fn)
     val msg = String.format("%s: took %dms, limit was %dms", descr, timeTaken, timeLimit)
-    Log.d(TAG, msg)
     assertTrue(timeTaken <= timeLimit, msg)
 }
 
