@@ -529,7 +529,9 @@ public class DhcpServer extends IDhcpServer.Stub {
                 broadcastAddr, new ArrayList<>(mServingParams.defaultRouters),
                 new ArrayList<>(mServingParams.dnsServers),
                 mServingParams.getServerInet4Addr(), null /* domainName */, hostname,
-                mServingParams.metered, (short) mServingParams.linkMtu);
+                mServingParams.metered, (short) mServingParams.linkMtu,
+                // TODO (b/144402437): advertise the URL if known
+                null /* captivePortalApiUrl */);
 
         return transmitOfferOrAckPacket(offerPacket, request, lease, clientMac, broadcastFlag);
     }
@@ -549,7 +551,8 @@ public class DhcpServer extends IDhcpServer.Stub {
                 new ArrayList<>(mServingParams.dnsServers),
                 mServingParams.getServerInet4Addr(), null /* domainName */, hostname,
                 mServingParams.metered, (short) mServingParams.linkMtu,
-                packet.mRapidCommit && mDhcpRapidCommitEnabled);
+                // TODO (b/144402437): advertise the URL if known
+                packet.mRapidCommit && mDhcpRapidCommitEnabled, null /* captivePortalApiUrl */);
 
         return transmitOfferOrAckPacket(ackPacket, packet, lease, clientMac, broadcastFlag);
     }

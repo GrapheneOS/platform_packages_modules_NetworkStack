@@ -56,6 +56,8 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeFalse;
+import static org.junit.Assume.assumeTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.doAnswer;
@@ -86,6 +88,7 @@ import android.net.MacAddress;
 import android.net.NetworkStackIpMemoryStore;
 import android.net.TestNetworkInterface;
 import android.net.TestNetworkManager;
+import android.net.Uri;
 import android.net.dhcp.DhcpClient;
 import android.net.dhcp.DhcpDeclinePacket;
 import android.net.dhcp.DhcpDiscoverPacket;
@@ -117,6 +120,7 @@ import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.internal.util.StateMachine;
+import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.apishim.ShimUtils;
 import com.android.networkstack.arp.ArpPacket;
 import com.android.server.NetworkObserverRegistry;
@@ -146,6 +150,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -219,6 +224,7 @@ public class IpClientIntegrationTest {
     private static final byte[] SERVER_MAC = new byte[] { 0x00, 0x1A, 0x11, 0x22, 0x33, 0x44 };
     private static final String TEST_HOST_NAME = "AOSP on Crosshatch";
     private static final String TEST_HOST_NAME_TRANSLITERATION = "AOSP-on-Crosshatch";
+    private static final String TEST_CAPTIVE_PORTAL_URL = "https://example.com/capportapi";
 
     private static class TapPacketReader extends PacketReader {
         private final ParcelFileDescriptor mTapFd;
@@ -484,7 +490,7 @@ public class IpClientIntegrationTest {
     }
 
     private static ByteBuffer buildDhcpOfferPacket(final DhcpPacket packet,
-            final Integer leaseTimeSec, final short mtu) {
+            final Integer leaseTimeSec, final short mtu, final String captivePortalUrl) {
         return DhcpPacket.buildOfferPacket(DhcpPacket.ENCAP_L2, packet.getTransactionId(),
                 false /* broadcast */, SERVER_ADDR, INADDR_ANY /* relayIp */,
                 CLIENT_ADDR /* yourIp */, packet.getClientMac(), leaseTimeSec,
@@ -492,11 +498,12 @@ public class IpClientIntegrationTest {
                 Collections.singletonList(SERVER_ADDR) /* gateways */,
                 Collections.singletonList(SERVER_ADDR) /* dnsServers */,
                 SERVER_ADDR /* dhcpServerIdentifier */, null /* domainName */, HOSTNAME,
-                false /* metered */, mtu);
+                false /* metered */, mtu, captivePortalUrl);
     }
 
     private static ByteBuffer buildDhcpAckPacket(final DhcpPacket packet,
-            final Integer leaseTimeSec, final short mtu, final boolean rapidCommit) {
+            final Integer leaseTimeSec, final short mtu, final boolean rapidCommit,
+            final String captivePortalApiUrl) {
         return DhcpPacket.buildAckPacket(DhcpPacket.ENCAP_L2, packet.getTransactionId(),
                 false /* broadcast */, SERVER_ADDR, INADDR_ANY /* relayIp */,
                 CLIENT_ADDR /* yourIp */, CLIENT_ADDR /* requestIp */, packet.getClientMac(),
@@ -504,7 +511,7 @@ public class IpClientIntegrationTest {
                 Collections.singletonList(SERVER_ADDR) /* gateways */,
                 Collections.singletonList(SERVER_ADDR) /* dnsServers */,
                 SERVER_ADDR /* dhcpServerIdentifier */, null /* domainName */, HOSTNAME,
-                false /* metered */, mtu, rapidCommit);
+                false /* metered */, mtu, rapidCommit, captivePortalApiUrl);
     }
 
     private static ByteBuffer buildDhcpNakPacket(final DhcpPacket packet) {
@@ -624,27 +631,35 @@ public class IpClientIntegrationTest {
             final Integer leaseTimeSec, final boolean isDhcpLeaseCacheEnabled,
             final boolean shouldReplyRapidCommitAck, final int mtu,
             final boolean isDhcpIpConflictDetectEnabled,
-            final boolean isHostnameConfigurationEnabled, final String hostname)
-            throws Exception {
-        final List<DhcpPacket> packetList = new ArrayList<DhcpPacket>();
+            final boolean isHostnameConfigurationEnabled, final String hostname,
+            final String captivePortalApiUrl) throws Exception {
         startIpClientProvisioning(isDhcpLeaseCacheEnabled, shouldReplyRapidCommitAck,
                 false /* isPreconnectionEnabled */, isDhcpIpConflictDetectEnabled,
                 isHostnameConfigurationEnabled, hostname);
+        return handleDhcpPackets(isSuccessLease, leaseTimeSec, shouldReplyRapidCommitAck, mtu,
+                isDhcpIpConflictDetectEnabled, captivePortalApiUrl);
+    }
 
+    private List<DhcpPacket> handleDhcpPackets(final boolean isSuccessLease,
+            final Integer leaseTimeSec, final boolean shouldReplyRapidCommitAck, final int mtu,
+            final boolean isDhcpIpConflictDetectEnabled, final String captivePortalApiUrl)
+            throws Exception {
+        final List<DhcpPacket> packetList = new ArrayList<>();
         DhcpPacket packet;
         while ((packet = getNextDhcpPacket()) != null) {
             packetList.add(packet);
             if (packet instanceof DhcpDiscoverPacket) {
                 if (shouldReplyRapidCommitAck) {
                     sendResponse(buildDhcpAckPacket(packet, leaseTimeSec, (short) mtu,
-                              true /* rapidCommit */));
+                              true /* rapidCommit */, captivePortalApiUrl));
                 } else {
-                    sendResponse(buildDhcpOfferPacket(packet, leaseTimeSec, (short) mtu));
+                    sendResponse(buildDhcpOfferPacket(packet, leaseTimeSec, (short) mtu,
+                            captivePortalApiUrl));
                 }
             } else if (packet instanceof DhcpRequestPacket) {
                 final ByteBuffer byteBuffer = isSuccessLease
                         ? buildDhcpAckPacket(packet, leaseTimeSec, (short) mtu,
-                                false /* rapidCommit */)
+                                false /* rapidCommit */, captivePortalApiUrl)
                         : buildDhcpNakPacket(packet);
                 sendResponse(byteBuffer);
             } else {
@@ -676,7 +691,8 @@ public class IpClientIntegrationTest {
             final boolean isDhcpIpConflictDetectEnabled) throws Exception {
         return performDhcpHandshake(isSuccessLease, leaseTimeSec, isDhcpLeaseCacheEnabled,
                 isDhcpRapidCommitEnabled, mtu, isDhcpIpConflictDetectEnabled,
-                false /* isHostnameConfigurationEnabled */, null /* hostname */);
+                false /* isHostnameConfigurationEnabled */, null /* hostname */,
+                null /* captivePortalApiUrl */);
     }
 
     private DhcpPacket getNextDhcpPacket() throws ParseException {
@@ -812,12 +828,13 @@ public class IpClientIntegrationTest {
 
         final short mtu = (short) TEST_DEFAULT_MTU;
         if (!shouldReplyRapidCommitAck) {
-            sendResponse(buildDhcpOfferPacket(packet, TEST_LEASE_DURATION_S, mtu));
+            sendResponse(buildDhcpOfferPacket(packet, TEST_LEASE_DURATION_S, mtu,
+                    null /* captivePortalUrl */));
             packet = getNextDhcpPacket();
             assertTrue(packet instanceof DhcpRequestPacket);
         }
         sendResponse(buildDhcpAckPacket(packet, TEST_LEASE_DURATION_S, mtu,
-                shouldReplyRapidCommitAck));
+                shouldReplyRapidCommitAck, null /* captivePortalUrl */));
 
         if (!shouldAbortPreconnection) {
             mIpc.notifyPreconnectionComplete(true /* success */);
@@ -1447,7 +1464,8 @@ public class IpClientIntegrationTest {
                 TEST_LEASE_DURATION_S, true /* isDhcpLeaseCacheEnabled */,
                 false /* isDhcpRapidCommitEnabled */, TEST_DEFAULT_MTU,
                 false /* isDhcpIpConflictDetectEnabled */,
-                true /* isHostnameConfigurationEnabled */, TEST_HOST_NAME /* hostname */);
+                true /* isHostnameConfigurationEnabled */, TEST_HOST_NAME /* hostname */,
+                null /* captivePortalApiUrl */);
         assertEquals(2, sentPackets.size());
         assertHostname(true, TEST_HOST_NAME, TEST_HOST_NAME_TRANSLITERATION, sentPackets);
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
@@ -1460,7 +1478,8 @@ public class IpClientIntegrationTest {
                 TEST_LEASE_DURATION_S, true /* isDhcpLeaseCacheEnabled */,
                 false /* isDhcpRapidCommitEnabled */, TEST_DEFAULT_MTU,
                 false /* isDhcpIpConflictDetectEnabled */,
-                false /* isHostnameConfigurationEnabled */, TEST_HOST_NAME);
+                false /* isHostnameConfigurationEnabled */, TEST_HOST_NAME,
+                null /* captivePortalApiUrl */);
         assertEquals(2, sentPackets.size());
         assertHostname(false, TEST_HOST_NAME, TEST_HOST_NAME_TRANSLITERATION, sentPackets);
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
@@ -1473,10 +1492,59 @@ public class IpClientIntegrationTest {
                 TEST_LEASE_DURATION_S, true /* isDhcpLeaseCacheEnabled */,
                 false /* isDhcpRapidCommitEnabled */, TEST_DEFAULT_MTU,
                 false /* isDhcpIpConflictDetectEnabled */,
-                true /* isHostnameConfigurationEnabled */, null /* hostname */);
+                true /* isHostnameConfigurationEnabled */, null /* hostname */,
+                null /* captivePortalApiUrl */);
         assertEquals(2, sentPackets.size());
         assertHostname(true, null /* hostname */, null /* hostnameAfterTransliteration */,
                 sentPackets);
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
+    }
+
+    private void runDhcpClientCaptivePortalApiTest(boolean featureEnabled,
+            boolean serverSendsOption) throws Exception {
+        startIpClientProvisioning(false /* isDhcpLeaseCacheEnabled */,
+                false /* shouldReplyRapidCommitAck */, false /* isPreConnectionEnabled */,
+                false /* isDhcpIpConflictDetectEnabled */);
+        final DhcpPacket discover = getNextDhcpPacket();
+        assertTrue(discover instanceof DhcpDiscoverPacket);
+        assertEquals(featureEnabled, discover.hasRequestedParam(DhcpPacket.DHCP_CAPTIVE_PORTAL));
+
+        // Send Offer and handle Request -> Ack
+        final String serverSentUrl = serverSendsOption ? TEST_CAPTIVE_PORTAL_URL : null;
+        sendResponse(buildDhcpOfferPacket(discover, TEST_LEASE_DURATION_S, (short) TEST_DEFAULT_MTU,
+                serverSentUrl));
+        final int testMtu = 1345;
+        handleDhcpPackets(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
+                false /* isDhcpRapidCommitEnabled */, testMtu,
+                false /* isDhcpIpConflictDetectEnabled */, serverSentUrl);
+
+        final Uri expectedUrl = featureEnabled && serverSendsOption
+                ? Uri.parse(TEST_CAPTIVE_PORTAL_URL) : null;
+        // Wait for LinkProperties containing DHCP-obtained info, such as MTU, and ensure that the
+        // URL is set as expected
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(argThat(lp ->
+                lp.getMtu() == testMtu
+                        && Objects.equals(expectedUrl, lp.getCaptivePortalApiUrl())));
+    }
+
+    @Test
+    public void testDhcpClientCaptivePortalApiEnabled() throws Exception {
+        // Only run the test on platforms / builds where the API is enabled
+        assumeTrue(CaptivePortalDataShimImpl.isSupported());
+        runDhcpClientCaptivePortalApiTest(true /* featureEnabled */, true /* serverSendsOption */);
+    }
+
+    @Test
+    public void testDhcpClientCaptivePortalApiEnabled_NoUrl() throws Exception {
+        // Only run the test on platforms / builds where the API is enabled
+        assumeTrue(CaptivePortalDataShimImpl.isSupported());
+        runDhcpClientCaptivePortalApiTest(true /* featureEnabled */, false /* serverSendsOption */);
+    }
+
+    @Test
+    public void testDhcpClientCaptivePortalApiDisabled() throws Exception {
+        // Only run the test on platforms / builds where the API is disabled
+        assumeFalse(CaptivePortalDataShimImpl.isSupported());
+        runDhcpClientCaptivePortalApiTest(false /* featureEnabled */, true /* serverSendsOption */);
     }
 }
