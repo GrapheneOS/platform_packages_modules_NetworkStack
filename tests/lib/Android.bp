@@ -15,6 +15,19 @@
 //
 
 java_library {
+    name: "net-tests-utils-multivariant",
+    srcs: [
+        "multivariant/**/*.java",
+        "multivariant/**/*.kt",
+    ],
+    host_supported: true,
+    static_libs: [
+        "kotlin-test",
+        "junit",
+    ],
+}
+
+java_library {
     name: "net-tests-utils",
     srcs: [
         "src/**/*.java",
@@ -22,8 +35,7 @@ java_library {
     ],
     defaults: ["lib_mockito_extended"],
     static_libs: [
-        "kotlin-test",
-        "junit",
+        "net-tests-utils-multivariant",
     ],
 }
 
