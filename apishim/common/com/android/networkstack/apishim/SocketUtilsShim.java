@@ -16,21 +16,22 @@
 
 package com.android.networkstack.apishim;
 
-import android.net.util.SocketUtils;
-
 import androidx.annotation.NonNull;
 
 import java.net.SocketAddress;
 
 /**
- * Implementation of SocketUtilsShim for API 29.
+ * Interface used to access API methods in {@link android.net.util.SocketUtils}, with appropriate
+ * fallbacks if the methods are not yet part of the released API.
+ *
+ * <p>This interface makes it easier for callers to use SocketUtilsShimImpl, as it's more obvious
+ * what methods must be implemented on each API level, and it abstracts from callers the need to
+ * reference classes that have different implementations (which also does not work well with IDEs).
  */
-public class SocketUtilsShimImpl implements SocketUtilsShim {
+public interface SocketUtilsShim {
+    /**
+     * @see android.net.util.SocketUtils#makePacketSocketAddress(int, int, byte[])
+     */
     @NonNull
-    @Override
-    public SocketAddress makePacketSocketAddress(
-            int protocol, int ifIndex, @NonNull byte[] hwAddr) {
-        // Not available for API <= 29: fallback to older behavior.
-        return SocketUtils.makePacketSocketAddress(ifIndex, hwAddr);
-    }
+    SocketAddress makePacketSocketAddress(int protocol, int ifIndex, @NonNull byte[] hwAddr);
 }
