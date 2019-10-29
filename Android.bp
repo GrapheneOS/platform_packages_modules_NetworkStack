@@ -19,20 +19,26 @@
 // (InProcessNetworkStack). The following structure is used to create the build rules:
 //
 //                          NetworkStackAndroidLibraryDefaults <-- common defaults for android libs
-//                                     /           \
-//    +NetworkStackApiStableShims --> /             \ <-- +NetworkStackApiCurrentShims
-//    +NetworkStackApiStableLevel    /               \    +NetworkStackApiCurrentLevel
-//                                  /                 \
-//           NetworkStackApiStableLib         NetworkStackApiCurrentLib <-- android libs w/ all code
-//                     |                                     |             (also used in unit tests)
-//                     | <--   +NetworkStackAppDefaults  --> |
-//                     |          (APK build params)         |
-//                     |                                     |
-//                     | <-- +NetworkStackApiStableLevel     | <-- +NetworkStackApiCurrentLevel
-//                     |                                     |
-//                     |                                     |
-//           NetworkStackApiStable          NetworkStack, InProcessNetworkStack, <-- output APKs
-//                                                    TestNetworkStack
+//                                            /    \
+//           +NetworkStackApiStableShims --> /      \ <-- +NetworkStackApiCurrentShims
+//           +NetworkStackApiStableLevel    /        \    +NetworkStackApiCurrentLevel
+//           +jarjar apistub.api[latest].* /          \   +module src/
+//            to apistub.*                /            \
+//                                       /              \
+//         NetworkStackApiStableDependencies             \
+//                                     /                  \               android libs w/ all code
+//                   +module src/ --> /                    \              (also used in unit tests)
+//                                   /                      \                        |
+//               NetworkStackApiStableLib               NetworkStackApiCurrentLib <--*
+//                          |                                     |
+//                          | <--   +NetworkStackAppDefaults  --> |
+//                          |          (APK build params)         |
+//                          |                                     |
+//                          | <-- +NetworkStackApiStableLevel     | <-- +NetworkStackApiCurrentLevel
+//                          |                                     |
+//                          |                                     |
+//                NetworkStackApiStable          NetworkStack, InProcessNetworkStack, <-- APKs
+//                                                         TestNetworkStack
 
 // Common defaults to define SDK level
 java_defaults {
@@ -43,22 +49,29 @@ java_defaults {
 
 java_defaults {
     name: "NetworkStackApiStableLevel",
-    sdk_version: "system_current", // TODO: change to system_29
+    sdk_version: "system_29",
     min_sdk_version: "28",
 }
 
-// Java libraries for the API shims
+// Filegroups for the API shims
 filegroup {
     name: "NetworkStackApiCurrentShims",
     srcs: [
-        "apishim/current/**/*.java"
+        "apishim/common/**/*.java",
+        "apishim/29/**/*.java",
+        "apishim/current/**/*.java",
+        ":net-module-utils-srcs",
     ],
 }
 
+// API stable shims only include the compat package, but it is jarjared to replace the non-compat
+// package
 filegroup {
     name: "NetworkStackApiStableShims",
     srcs: [
-        "apishim/29/**/*.java"
+        "apishim/common/**/*.java",
+        "apishim/29/**/*.java",
+        ":net-module-utils-srcs",
     ],
 }
 
@@ -67,7 +80,6 @@ filegroup {
 java_defaults {
     name: "NetworkStackAndroidLibraryDefaults",
     srcs: [
-        "src/**/*.java",
         ":framework-networkstack-shared-srcs",
         ":services-networkstack-shared-srcs",
         ":statslog-networkstack-java-gen",
@@ -80,25 +92,38 @@ java_defaults {
         "networkstackprotosnano",
         "captiveportal-lib",
     ],
-    manifest: "AndroidManifestBase.xml",
     plugins: ["java_api_finder"],
 }
 
 // The versions of the android library containing network stack code compiled for each SDK variant
+// API current uses the sources of the API current shims directly.
+// This allows API current code to be treated identically to code in src/ (it will be moved
+// there eventually), and to use the compat shim as fallback on older devices.
 android_library {
     name: "NetworkStackApiCurrentLib",
     defaults: ["NetworkStackApiCurrentLevel", "NetworkStackAndroidLibraryDefaults"],
-    srcs: [
-        ":NetworkStackApiCurrentShims",
-    ],
+    srcs: [":NetworkStackApiCurrentShims", "src/**/*.java"],
+    manifest: "AndroidManifestBase.xml",
+}
+
+// For API stable, first build the dependencies using jarjar compat rules, then build the sources
+// linking with the dependencies.
+java_library {
+    name: "NetworkStackApiStableDependencies",
+    defaults: ["NetworkStackApiStableLevel", "NetworkStackAndroidLibraryDefaults"],
+    srcs: [":NetworkStackApiStableShims"],
+    jarjar_rules: "apishim/jarjar-rules-compat.txt",
 }
 
 android_library {
     name: "NetworkStackApiStableLib",
-    defaults: ["NetworkStackApiStableLevel", "NetworkStackAndroidLibraryDefaults"],
-    srcs: [
-        ":NetworkStackApiStableShims",
+    defaults: ["NetworkStackApiStableLevel"],
+    srcs: [":framework-annotations", "src/**/*.java"],
+    // API stable uses a jarjared version of the shims
+    static_libs: [
+        "NetworkStackApiStableDependencies",
     ],
+    manifest: "AndroidManifestBase.xml",
 }
 
 // Common defaults for compiling the actual APK, based on the NetworkStackApiXBase android libraries
