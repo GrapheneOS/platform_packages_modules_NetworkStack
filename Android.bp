@@ -185,7 +185,7 @@ android_library {
     name: "TestNetworkStackLib",
     defaults: ["NetworkStackAppDefaults", "NetworkStackApiCurrentLevel"],
     static_libs: ["NetworkStackApiCurrentLib"],
-    manifest: "AndroidManifest.xml",
+    manifest: "AndroidManifestBase.xml",
 }
 
 cc_library_shared {
