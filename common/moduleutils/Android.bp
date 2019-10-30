@@ -14,28 +14,8 @@
 // limitations under the License.
 //
 
-cc_library_shared {
-    name: "libnetworkstacktestsjni",
-    srcs: [
-        "**/*.cpp"
-    ],
-    cflags: [
-        "-Wall",
-        "-Wextra",
-        "-Werror",
-    ],
-    include_dirs: [
-        "hardware/google/apf",
-    ],
-    shared_libs: [
-        "libbinder",
-        "liblog",
-        "libcutils",
-        "libnativehelper",
-        "netd_aidl_interface-cpp",
-    ],
-    static_libs: [
-        "libapf",
-        "libpcap",
-    ],
+// Shared utility sources to be used by multiple network modules
+filegroup {
+    name: "net-module-utils-srcs",
+    srcs: ["src/**/*.java"],
 }
