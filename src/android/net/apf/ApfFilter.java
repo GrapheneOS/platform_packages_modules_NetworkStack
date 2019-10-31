@@ -33,7 +33,6 @@ import static com.android.server.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERT
 import static com.android.server.util.NetworkStackConstants.ICMPV6_ROUTER_SOLICITATION;
 import static com.android.server.util.NetworkStackConstants.IPV6_ADDR_LEN;
 
-import android.annotation.Nullable;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -58,6 +57,8 @@ import android.system.Os;
 import android.text.format.DateUtils;
 import android.util.Log;
 import android.util.SparseArray;
+
+import androidx.annotation.Nullable;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;

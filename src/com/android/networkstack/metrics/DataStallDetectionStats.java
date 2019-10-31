@@ -16,10 +16,11 @@
 
 package com.android.networkstack.metrics;
 
-import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.net.util.NetworkStackUtils;
 import android.net.wifi.WifiInfo;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.android.internal.util.HexDump;
 import com.android.server.connectivity.nano.CellularData;

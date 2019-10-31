@@ -22,8 +22,6 @@ import static android.net.dhcp.IDhcpServer.STATUS_UNKNOWN_ERROR;
 
 import static com.android.server.util.PermissionUtil.checkDumpPermission;
 
-import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
@@ -49,6 +47,8 @@ import android.os.IBinder;
 import android.os.RemoteException;
 import android.util.ArraySet;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
 import com.android.internal.annotations.GuardedBy;

@@ -38,8 +38,6 @@ import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingP
 
 import static java.lang.Integer.toUnsignedLong;
 
-import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.net.INetworkStackStatusCallback;
 import android.net.MacAddress;
 import android.net.TrafficStats;
@@ -57,7 +55,10 @@ import android.system.Os;
 import android.text.TextUtils;
 import android.util.Pair;
 
-import com.android.internal.annotations.VisibleForTesting;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
+
 import com.android.internal.util.HexDump;
 
 import java.io.FileDescriptor;

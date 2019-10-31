@@ -118,7 +118,7 @@ java_library {
 android_library {
     name: "NetworkStackApiStableLib",
     defaults: ["NetworkStackApiStableLevel"],
-    srcs: [":framework-annotations", "src/**/*.java"],
+    srcs: ["src/**/*.java"],
     // API stable uses a jarjared version of the shims
     static_libs: [
         "NetworkStackApiStableDependencies",
