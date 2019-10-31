@@ -17,7 +17,6 @@ package com.android.server;
 
 import static android.net.RouteInfo.RTN_UNICAST;
 
-import android.annotation.NonNull;
 import android.net.INetd;
 import android.net.INetdUnsolicitedEventListener;
 import android.net.InetAddresses;
@@ -27,6 +26,8 @@ import android.net.RouteInfo;
 import android.os.Handler;
 import android.os.RemoteException;
 import android.util.Log;
+
+import androidx.annotation.NonNull;
 
 import java.util.Map;
 import java.util.Optional;
