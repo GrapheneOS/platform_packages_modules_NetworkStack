@@ -829,41 +829,19 @@ public class DhcpClient extends StateMachine {
                 (leaseTimeMillis > 0) ? SystemClock.elapsedRealtime() + leaseTimeMillis : 0;
     }
 
-    /**
-     * Retransmits packets using jittered exponential backoff with an optional timeout. Packet
-     * transmission is triggered by CMD_KICK, which is sent by an AlarmManager alarm. If a subclass
-     * sets mTimeout to a positive value, then timeout() is called by an AlarmManager alarm mTimeout
-     * milliseconds after entering the state. Kicks and timeouts are cancelled when leaving the
-     * state.
-     *
-     * Concrete subclasses must implement sendPacket, which is called when the alarm fires and a
-     * packet needs to be transmitted, and receivePacket, which is triggered by CMD_RECEIVED_PACKET
-     * sent by the receive thread. They may also set mTimeout and implement timeout.
-     */
-    abstract class PacketRetransmittingState extends LoggingState {
-
-        private int mTimer;
+    abstract class TimeoutState extends LoggingState {
         protected int mTimeout = 0;
 
         @Override
         public void enter() {
             super.enter();
-            initTimer();
             maybeInitTimeout();
-            sendMessage(CMD_KICK);
         }
 
         @Override
         public boolean processMessage(Message message) {
             super.processMessage(message);
             switch (message.what) {
-                case CMD_KICK:
-                    sendPacket();
-                    scheduleKick();
-                    return HANDLED;
-                case CMD_RECEIVED_PACKET:
-                    receivePacket((DhcpPacket) message.obj);
-                    return HANDLED;
                 case CMD_TIMEOUT:
                     timeout();
                     return HANDLED;
@@ -875,12 +853,66 @@ public class DhcpClient extends StateMachine {
         @Override
         public void exit() {
             super.exit();
-            mKickAlarm.cancel();
             mTimeoutAlarm.cancel();
         }
 
-        abstract protected boolean sendPacket();
-        abstract protected void receivePacket(DhcpPacket packet);
+        protected abstract void timeout();
+        private void maybeInitTimeout() {
+            if (mTimeout > 0) {
+                long alarmTime = SystemClock.elapsedRealtime() + mTimeout;
+                mTimeoutAlarm.schedule(alarmTime);
+            }
+        }
+    }
+
+    /**
+     * Retransmits packets using jittered exponential backoff with an optional timeout. Packet
+     * transmission is triggered by CMD_KICK, which is sent by an AlarmManager alarm. If a subclass
+     * sets mTimeout to a positive value, then timeout() is called by an AlarmManager alarm mTimeout
+     * milliseconds after entering the state. Kicks and timeouts are cancelled when leaving the
+     * state.
+     *
+     * Concrete subclasses must implement sendPacket, which is called when the alarm fires and a
+     * packet needs to be transmitted, and receivePacket, which is triggered by CMD_RECEIVED_PACKET
+     * sent by the receive thread. They may also set mTimeout and implement timeout.
+     */
+    abstract class PacketRetransmittingState extends TimeoutState {
+        private int mTimer;
+
+        @Override
+        public void enter() {
+            super.enter();
+            initTimer();
+            sendMessage(CMD_KICK);
+        }
+
+        @Override
+        public boolean processMessage(Message message) {
+            if (super.processMessage(message) == HANDLED) {
+                return HANDLED;
+            }
+
+            switch (message.what) {
+                case CMD_KICK:
+                    sendPacket();
+                    scheduleKick();
+                    return HANDLED;
+                case CMD_RECEIVED_PACKET:
+                    receivePacket((DhcpPacket) message.obj);
+                    return HANDLED;
+                default:
+                    return NOT_HANDLED;
+            }
+        }
+
+        @Override
+        public void exit() {
+            super.exit();
+            mKickAlarm.cancel();
+        }
+
+        protected abstract boolean sendPacket();
+        protected abstract void receivePacket(DhcpPacket packet);
         protected void timeout() {}
 
         protected void initTimer() {
@@ -901,13 +933,6 @@ public class DhcpClient extends StateMachine {
             mTimer *= 2;
             if (mTimer > MAX_TIMEOUT_MS) {
                 mTimer = MAX_TIMEOUT_MS;
-            }
-        }
-
-        protected void maybeInitTimeout() {
-            if (mTimeout > 0) {
-                long alarmTime = SystemClock.elapsedRealtime() + mTimeout;
-                mTimeoutAlarm.schedule(alarmTime);
             }
         }
     }
@@ -1167,7 +1192,7 @@ public class DhcpClient extends StateMachine {
             startNewTransaction();
         }
 
-        abstract protected Inet4Address packetDestination();
+        protected abstract Inet4Address packetDestination();
 
         protected boolean sendPacket() {
             return sendRequestPacket(
