@@ -19,13 +19,14 @@ package android.net.util;
 import static android.os.MessageQueue.OnFileDescriptorEventListener.EVENT_ERROR;
 import static android.os.MessageQueue.OnFileDescriptorEventListener.EVENT_INPUT;
 
-import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.MessageQueue;
 import android.system.ErrnoException;
 import android.system.OsConstants;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import java.io.FileDescriptor;
 import java.io.IOException;

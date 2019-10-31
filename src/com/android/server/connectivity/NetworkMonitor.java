@@ -68,8 +68,6 @@ import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
 import static com.android.networkstack.util.DnsUtils.TYPE_ADDRCONFIG;
 
-import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -115,6 +113,8 @@ import android.util.Log;
 import android.util.Pair;
 
 import androidx.annotation.ArrayRes;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 
 import com.android.internal.annotations.VisibleForTesting;

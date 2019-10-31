@@ -25,12 +25,13 @@ import static com.android.server.util.NetworkStackConstants.IPV4_MIN_MTU;
 
 import static java.lang.Integer.toUnsignedLong;
 
-import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.net.IpPrefix;
 import android.net.LinkAddress;
 import android.net.shared.Inet4AddressUtils;
 import android.util.ArraySet;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import java.net.Inet4Address;
 import java.util.Arrays;

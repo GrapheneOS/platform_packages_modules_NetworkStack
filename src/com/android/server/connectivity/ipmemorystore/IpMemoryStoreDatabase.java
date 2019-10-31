@@ -19,8 +19,6 @@ package com.android.server.connectivity.ipmemorystore;
 import static android.net.shared.Inet4AddressUtils.inet4AddressToIntHTH;
 import static android.net.shared.Inet4AddressUtils.intToInet4AddressHTH;
 
-import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
@@ -33,6 +31,9 @@ import android.database.sqlite.SQLiteQuery;
 import android.net.ipmemorystore.NetworkAttributes;
 import android.net.ipmemorystore.Status;
 import android.util.Log;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
