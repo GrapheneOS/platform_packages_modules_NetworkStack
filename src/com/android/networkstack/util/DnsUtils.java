@@ -20,13 +20,14 @@ import static android.net.DnsResolver.FLAG_NO_CACHE_LOOKUP;
 import static android.net.DnsResolver.TYPE_A;
 import static android.net.DnsResolver.TYPE_AAAA;
 
-import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.net.DnsResolver;
 import android.net.Network;
 import android.net.TrafficStats;
 import android.net.util.Stopwatch;
 import android.util.Log;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.android.internal.util.TrafficStatsConstants;
 import com.android.server.connectivity.NetworkMonitor.DnsLogFunc;

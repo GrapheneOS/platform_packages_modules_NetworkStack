@@ -14,18 +14,16 @@
 // limitations under the License.
 //
 
-android_test {
-    name: "NetworkStackTests",
+java_defaults {
+    name: "NetworkStackTestsDefaults",
     certificate: "platform",
     srcs: ["src/**/*.java", "src/**/*.kt"],
-    test_suites: ["device-tests"],
     resource_dirs: ["res"],
     static_libs: [
         "androidx.test.rules",
         "kotlin-reflect",
         "mockito-target-extended-minus-junit4",
         "net-tests-utils",
-        "NetworkStackApiCurrentLib",
         "testables",
     ],
     libs: [
@@ -40,6 +38,21 @@ android_test {
         "libstaticjvmtiagent",
         "libnetworkstackutilsjni",
     ],
+}
+
+android_test {
+    name: "NetworkStackNextTests",
+    srcs: [], // TODO: tests that only apply to the current, non-stable API can be added here
+    test_suites: ["device-tests"],
+    defaults: ["NetworkStackTestsDefaults"],
+    static_libs: ["NetworkStackApiCurrentLib"],
+}
+
+android_test {
+    name: "NetworkStackTests",
+    test_suites: ["device-tests"],
+    defaults: ["NetworkStackTestsDefaults"],
+    static_libs: ["NetworkStackApiStableLib"],
 }
 
 // Additional dependencies of libnetworkstackutilsjni that are not provided by the system when

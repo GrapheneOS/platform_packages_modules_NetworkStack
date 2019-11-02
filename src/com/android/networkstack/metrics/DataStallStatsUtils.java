@@ -16,11 +16,11 @@
 
 package com.android.networkstack.metrics;
 
-import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.net.captiveportal.CaptivePortalProbeResult;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
 import com.android.internal.util.HexDump;
