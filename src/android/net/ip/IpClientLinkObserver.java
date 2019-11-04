@@ -326,7 +326,7 @@ public class IpClientLinkObserver implements NetworkObserver {
 
             // Prune excess or expired entries.
             for (int i = mAllServers.size() - 1; i >= 0; i--) {
-                if (i >= NUM_SERVERS || mAllServers.get(i).expiry < now) {
+                if (i >= NUM_SERVERS || mAllServers.get(i).expiry <= now) {
                     DnsServerEntry removed = mAllServers.remove(i);
                     mIndex.remove(removed.address);
                     changed |= mCurrentServers.remove(removed.address);
