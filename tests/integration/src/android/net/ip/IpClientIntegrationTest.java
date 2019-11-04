@@ -779,12 +779,7 @@ public class IpClientIntegrationTest {
 
     private static short checksumAdjust(short checksum, short oldWord, short newWord) {
         checksum = (short) ~checksum;
-        int tempSum = checksumFold(uint16(checksum) + newWord);
-        if (tempSum > oldWord) {
-            tempSum -= oldWord;
-        } else {
-            tempSum += 0xffff - oldWord;
-        }
+        int tempSum = checksumFold(uint16(checksum) + uint16(newWord) + 0xffff - uint16(oldWord));
         return (short) ~tempSum;
     }
 
