@@ -26,6 +26,24 @@ import static android.net.dhcp.DhcpPacket.INFINITE_LEASE;
 import static android.net.ipmemorystore.Status.SUCCESS;
 import static android.net.shared.Inet4AddressUtils.getBroadcastAddress;
 import static android.net.shared.Inet4AddressUtils.getPrefixMaskAsInet4Address;
+import static android.system.OsConstants.ETH_P_IPV6;
+import static android.system.OsConstants.IPPROTO_ICMPV6;
+import static android.system.OsConstants.IPPROTO_TCP;
+
+import static com.android.internal.util.BitUtils.uint16;
+import static com.android.server.util.NetworkStackConstants.ETHER_HEADER_LEN;
+import static com.android.server.util.NetworkStackConstants.ETHER_TYPE_IPV6;
+import static com.android.server.util.NetworkStackConstants.ETHER_TYPE_OFFSET;
+import static com.android.server.util.NetworkStackConstants.ICMPV6_CHECKSUM_OFFSET;
+import static com.android.server.util.NetworkStackConstants.ICMPV6_ND_OPTION_LENGTH_SCALING_FACTOR;
+import static com.android.server.util.NetworkStackConstants.ICMPV6_ND_OPTION_PIO;
+import static com.android.server.util.NetworkStackConstants.ICMPV6_ND_OPTION_RDNSS;
+import static com.android.server.util.NetworkStackConstants.ICMPV6_RA_HEADER_LEN;
+import static com.android.server.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
+import static com.android.server.util.NetworkStackConstants.ICMPV6_ROUTER_SOLICITATION;
+import static com.android.server.util.NetworkStackConstants.IPV6_HEADER_LEN;
+import static com.android.server.util.NetworkStackConstants.IPV6_LEN_OFFSET;
+import static com.android.server.util.NetworkStackConstants.IPV6_PROTOCOL_OFFSET;
 
 import static junit.framework.Assert.fail;
 
@@ -37,6 +55,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -50,7 +69,9 @@ import android.content.res.Resources;
 import android.net.ConnectivityManager;
 import android.net.INetd;
 import android.net.InetAddresses;
+import android.net.IpPrefix;
 import android.net.LinkProperties;
+import android.net.MacAddress;
 import android.net.NetworkStackIpMemoryStore;
 import android.net.TestNetworkInterface;
 import android.net.TestNetworkManager;
@@ -63,6 +84,7 @@ import android.net.ipmemorystore.NetworkAttributes;
 import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener;
 import android.net.ipmemorystore.Status;
 import android.net.shared.ProvisioningConfiguration;
+import android.net.util.IpUtils;
 import android.net.util.NetworkStackUtils;
 import android.net.util.PacketReader;
 import android.os.Handler;
@@ -96,6 +118,7 @@ import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -385,7 +408,9 @@ public class IpClientIntegrationTest {
 
     private void sendResponse(final ByteBuffer packet) throws IOException {
         try (FileOutputStream out = new FileOutputStream(mPacketReader.createFd())) {
-            out.write(packet.array());
+            byte[] packetBytes = new byte[packet.limit()];
+            packet.get(packetBytes);
+            out.write(packetBytes);
         }
     }
 
@@ -693,4 +718,169 @@ public class IpClientIntegrationTest {
         verify(mCb).onProvisioningFailure(any());
         verify(mCb, never()).setNeighborDiscoveryOffload(true);
     }
-}
+
+    private boolean isRouterSolicitation(final byte[] packetBytes) {
+        ByteBuffer packet = ByteBuffer.wrap(packetBytes);
+        return packet.getShort(ETHER_TYPE_OFFSET) == (short) ETH_P_IPV6
+                && packet.get(ETHER_HEADER_LEN + IPV6_PROTOCOL_OFFSET) == (byte) IPPROTO_ICMPV6
+                && packet.get(ETHER_HEADER_LEN + IPV6_HEADER_LEN)
+                        == (byte) ICMPV6_ROUTER_SOLICITATION;
+    }
+
+    private void waitForRouterSolicitation() throws ParseException {
+        byte[] packet;
+        while ((packet = mPacketReader.popPacket(PACKET_TIMEOUT_MS)) != null) {
+            if (isRouterSolicitation(packet)) return;
+        }
+        fail("No router solicitation received on interface within timeout");
+    }
+
+    // TODO: move this and the following method to a common location and use them in ApfTest.
+    private static ByteBuffer buildPioOption(int valid, int preferred, String prefixString)
+            throws Exception {
+        final int optLen = 4;
+        IpPrefix prefix = new IpPrefix(prefixString);
+        ByteBuffer option = ByteBuffer.allocate(optLen * ICMPV6_ND_OPTION_LENGTH_SCALING_FACTOR);
+        option.put((byte) ICMPV6_ND_OPTION_PIO);      // Type
+        option.put((byte) optLen);                    // Length in 8-byte units
+        option.put((byte) prefix.getPrefixLength());  // Prefix length
+        option.put((byte) 0b11000000);                // L = 1, A = 1
+        option.putInt(valid);
+        option.putInt(preferred);
+        option.putInt(0);                             // Reserved
+        option.put(prefix.getRawAddress());
+        option.flip();
+        return option;
+    }
+
+    private static ByteBuffer buildRdnssOption(int lifetime, String... servers) throws Exception {
+        final int optLen = 1 + 2 * servers.length;
+        ByteBuffer option = ByteBuffer.allocate(optLen * ICMPV6_ND_OPTION_LENGTH_SCALING_FACTOR);
+        option.put((byte) ICMPV6_ND_OPTION_RDNSS);  // Type
+        option.put((byte) optLen);                  // Length in 8-byte units
+        option.putShort((short) 0);                 // Reserved
+        option.putInt(lifetime);                    // Lifetime
+        for (String server : servers) {
+            option.put(InetAddress.getByName(server).getAddress());
+        }
+        option.flip();
+        return option;
+    }
+
+    // HACK: these functions are here because IpUtils#transportChecksum is private. Even if we made
+    // that public, it won't be available on Q devices, and this test needs to run on Q devices.
+    // TODO: move the IpUtils code to frameworks/lib/net and link it statically.
+    private static int checksumFold(int sum) {
+        while (sum > 0xffff) {
+            sum = (sum >> 16) + (sum & 0xffff);
+        }
+        return sum;
+    }
+
+    private static short checksumAdjust(short checksum, short oldWord, short newWord) {
+        checksum = (short) ~checksum;
+        int tempSum = checksumFold(uint16(checksum) + uint16(newWord) + 0xffff - uint16(oldWord));
+        return (short) ~tempSum;
+    }
+
+    private static short icmpv6Checksum(ByteBuffer buf, int ipOffset, int transportOffset,
+            int transportLen) {
+        // The ICMPv6 checksum is the same as the TCP checksum, except the pseudo-header uses
+        // 58 (ICMPv6) instead of 6 (TCP). Calculate the TCP checksum, and then do an incremental
+        // checksum adjustment  for the change in the next header byte.
+        short checksum = IpUtils.tcpChecksum(buf, ipOffset, transportOffset, transportLen);
+        return checksumAdjust(checksum, (short) IPPROTO_TCP, (short) IPPROTO_ICMPV6);
+    }
+
+    private static ByteBuffer buildRaPacket(ByteBuffer... options) throws Exception {
+        final MacAddress srcMac = MacAddress.fromString("33:33:00:00:00:01");
+        final MacAddress dstMac = MacAddress.fromString("01:02:03:04:05:06");
+        final byte[] routerLinkLocal = InetAddresses.parseNumericAddress("fe80::1").getAddress();
+        final byte[] allNodes = InetAddresses.parseNumericAddress("ff02::1").getAddress();
+
+        final ByteBuffer packet = ByteBuffer.allocate(TEST_DEFAULT_MTU);
+        int icmpLen = ICMPV6_RA_HEADER_LEN;
+
+        // Ethernet header.
+        packet.put(srcMac.toByteArray());
+        packet.put(dstMac.toByteArray());
+        packet.putShort((short) ETHER_TYPE_IPV6);
+
+        // IPv6 header.
+        packet.putInt(0x600abcde);                       // Version, traffic class, flowlabel
+        packet.putShort((short) 0);                      // Length, TBD
+        packet.put((byte) IPPROTO_ICMPV6);               // Next header
+        packet.put((byte) 0xff);                         // Hop limit
+        packet.put(routerLinkLocal);                     // Source address
+        packet.put(allNodes);                            // Destination address
+
+        // Router advertisement.
+        packet.put((byte) ICMPV6_ROUTER_ADVERTISEMENT);  // ICMP type
+        packet.put((byte) 0);                            // ICMP code
+        packet.putShort((short) 0);                      // Checksum, TBD
+        packet.put((byte) 0);                            // Hop limit, unspecified
+        packet.put((byte) 0);                            // M=0, O=0
+        packet.putShort((short) 1800);                   // Router lifetime
+        packet.putInt(0);                                // Reachable time, unspecified
+        packet.putInt(100);                              // Retrans time 100ms.
+
+        for (ByteBuffer option : options) {
+            packet.put(option);
+            option.clear();  // So we can reuse it in a future packet.
+            icmpLen += option.capacity();
+        }
+
+        // Populate length and checksum fields.
+        final int transportOffset = ETHER_HEADER_LEN + IPV6_HEADER_LEN;
+        final short checksum = icmpv6Checksum(packet, ETHER_HEADER_LEN, transportOffset, icmpLen);
+        packet.putShort(ETHER_HEADER_LEN + IPV6_LEN_OFFSET, (short) icmpLen);
+        packet.putShort(transportOffset + ICMPV6_CHECKSUM_OFFSET, checksum);
+
+        packet.flip();
+        return packet;
+    }
+
+    @Test
+    public void testRaRdnss() throws Exception {
+        // Speed up the test by removing router_solicitation_delay.
+        // We don't need to restore the default value because the interface is removed in tearDown.
+        // TODO: speed up further by not waiting for RA but keying off first IPv6 packet.
+        mNetd.setProcSysNet(INetd.IPV6, INetd.CONF, mIfaceName, "router_solicitation_delay", "0");
+
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIpReachabilityMonitor()
+                .withoutIPv4()
+                .build();
+        mIpc.startProvisioning(config);
+
+        final String dnsServer = "2001:4860:4860::64";
+        final String lowlifeDnsServer = "2001:4860:4860::6464";
+
+        final ByteBuffer pio = buildPioOption(600, 300, "2001:db8:1::/64");
+        ByteBuffer rdnss1 = buildRdnssOption(60, lowlifeDnsServer);
+        ByteBuffer rdnss2 = buildRdnssOption(600, dnsServer);
+        ByteBuffer ra = buildRaPacket(pio, rdnss1, rdnss2);
+
+        waitForRouterSolicitation();
+        sendResponse(ra);
+
+        ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        LinkProperties lp = captor.getValue();
+
+        assertNotNull(lp);
+        assertEquals(2, lp.getDnsServers().size());
+        assertTrue(lp.getDnsServers().contains(InetAddress.getByName(dnsServer)));
+        assertTrue(lp.getDnsServers().contains(InetAddress.getByName(lowlifeDnsServer)));
+
+        reset(mCb);
+
+        // Expect that setting RDNSS lifetime of 0 causes loss of provisioning.
+        rdnss1 = buildRdnssOption(0, dnsServer);
+        rdnss2 = buildRdnssOption(0, lowlifeDnsServer);
+        ra = buildRaPacket(pio, rdnss1, rdnss2);
+        sendResponse(ra);
+
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(captor.capture());
+        lp = captor.getValue();
+    }}
