@@ -1056,10 +1056,14 @@ public class ApfTest {
     private static final int ICMP6_NEIGHBOR_ANNOUNCEMENT = 136;
 
     private static final int ICMP6_RA_HEADER_LEN = 16;
-    private static final int ICMP6_RA_ROUTER_LIFETIME_OFFSET =
-            IP_HEADER_OFFSET + IPV6_HEADER_LEN + 6;
     private static final int ICMP6_RA_CHECKSUM_OFFSET =
             IP_HEADER_OFFSET + IPV6_HEADER_LEN + 2;
+    private static final int ICMP6_RA_ROUTER_LIFETIME_OFFSET =
+            IP_HEADER_OFFSET + IPV6_HEADER_LEN + 6;
+    private static final int ICMP6_RA_REACHABLE_TIME_OFFSET =
+            IP_HEADER_OFFSET + IPV6_HEADER_LEN + 8;
+    private static final int ICMP6_RA_RETRANSMISSION_TIMER_OFFSET =
+            IP_HEADER_OFFSET + IPV6_HEADER_LEN + 12;
     private static final int ICMP6_RA_OPTION_OFFSET =
             IP_HEADER_OFFSET + IPV6_HEADER_LEN + ICMP6_RA_HEADER_LEN;
 
@@ -2000,6 +2004,25 @@ public class ApfTest {
         ipClientCallback.assertNoProgramUpdate();
     }
 
+    private ByteBuffer makeBaseRaPacket() {
+        ByteBuffer basePacket = ByteBuffer.wrap(new byte[ICMP6_RA_OPTION_OFFSET]);
+        final int ROUTER_LIFETIME = 1000;
+        final int VERSION_TRAFFIC_CLASS_FLOW_LABEL_OFFSET = ETH_HEADER_LEN;
+        // IPv6, traffic class = 0, flow label = 0x12345
+        final int VERSION_TRAFFIC_CLASS_FLOW_LABEL = 0x60012345;
+
+        basePacket.putShort(ETH_ETHERTYPE_OFFSET, (short) ETH_P_IPV6);
+        basePacket.putInt(VERSION_TRAFFIC_CLASS_FLOW_LABEL_OFFSET,
+                VERSION_TRAFFIC_CLASS_FLOW_LABEL);
+        basePacket.put(IPV6_NEXT_HEADER_OFFSET, (byte) IPPROTO_ICMPV6);
+        basePacket.put(ICMP6_TYPE_OFFSET, (byte) ICMP6_ROUTER_ADVERTISEMENT);
+        basePacket.putShort(ICMP6_RA_ROUTER_LIFETIME_OFFSET, (short) ROUTER_LIFETIME);
+        basePacket.position(IPV6_DEST_ADDR_OFFSET);
+        basePacket.put(IPV6_ALL_NODES_ADDRESS);
+
+        return basePacket;
+    }
+
     @Test
     public void testApfFilterRa() throws Exception {
         MockIpClientCallback ipClientCallback = new MockIpClientCallback();
@@ -2021,15 +2044,7 @@ public class ApfTest {
         final int VERSION_TRAFFIC_CLASS_FLOW_LABEL = 0x60012345;
 
         // Verify RA is passed the first time
-        ByteBuffer basePacket = ByteBuffer.wrap(new byte[ICMP6_RA_OPTION_OFFSET]);
-        basePacket.putShort(ETH_ETHERTYPE_OFFSET, (short)ETH_P_IPV6);
-        basePacket.putInt(VERSION_TRAFFIC_CLASS_FLOW_LABEL_OFFSET,
-                VERSION_TRAFFIC_CLASS_FLOW_LABEL);
-        basePacket.put(IPV6_NEXT_HEADER_OFFSET, (byte)IPPROTO_ICMPV6);
-        basePacket.put(ICMP6_TYPE_OFFSET, (byte)ICMP6_ROUTER_ADVERTISEMENT);
-        basePacket.putShort(ICMP6_RA_ROUTER_LIFETIME_OFFSET, (short)ROUTER_LIFETIME);
-        basePacket.position(IPV6_DEST_ADDR_OFFSET);
-        basePacket.put(IPV6_ALL_NODES_ADDRESS);
+        ByteBuffer basePacket = makeBaseRaPacket();
         assertPass(program, basePacket.array());
 
         verifyRaLifetime(apfFilter, ipClientCallback, basePacket, ROUTER_LIFETIME);
@@ -2083,6 +2098,16 @@ public class ApfTest {
         verifyRaLifetime(apfFilter, ipClientCallback, routeInfoOptionPacket, ROUTE_LIFETIME);
         verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, ROUTE_LIFETIME, -1, -1));
 
+        // Check that RIOs differing only in the first 4 bytes are different.
+        ByteBuffer similarRouteInfoOptionPacket = ByteBuffer.wrap(
+                new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_OPTION_LEN + IPV6_ADDR_LEN]);
+        basePacket.clear();
+        similarRouteInfoOptionPacket.put(basePacket);
+        addRioOption(similarRouteInfoOptionPacket, ROUTE_LIFETIME, "64:ff9b::/64");
+        // Packet should be passed because it is different.
+        program = ipClientCallback.getApfProgram();
+        assertPass(program, similarRouteInfoOptionPacket.array());
+
         ByteBuffer dnsslOptionPacket = ByteBuffer.wrap(
                 new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_OPTION_LEN]);
         basePacket.clear();
@@ -2109,6 +2134,46 @@ public class ApfTest {
         verifyRaLifetime(program, largeRaPacket, 300);
 
         apfFilter.shutdown();
+    }
+
+    @Test
+    public void testRaWithDifferentReachableTimeAndRetransTimer() throws Exception {
+        final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
+        final ApfConfiguration config = getDefaultConfig();
+        config.multicastFilter = DROP_MULTICAST;
+        config.ieee802_3Filter = DROP_802_3_FRAMES;
+        final TestApfFilter apfFilter = new TestApfFilter(mContext, config, ipClientCallback, mLog);
+        byte[] program = ipClientCallback.getApfProgram();
+        final int RA_REACHABLE_TIME = 1800;
+        final int RA_RETRANSMISSION_TIMER = 1234;
+
+        // Create an Ra packet without options
+        // Reachable time = 1800, retransmission timer = 1234
+        ByteBuffer raPacket = makeBaseRaPacket();
+        raPacket.position(ICMP6_RA_REACHABLE_TIME_OFFSET);
+        raPacket.putInt(RA_REACHABLE_TIME);
+        raPacket.putInt(RA_RETRANSMISSION_TIMER);
+        // First RA passes filter
+        assertPass(program, raPacket.array());
+
+        // Assume apf is shown the given RA, it generates program to filter it.
+        ipClientCallback.resetApfProgramWait();
+        apfFilter.pretendPacketReceived(raPacket.array());
+        program = ipClientCallback.getApfProgram();
+        assertDrop(program, raPacket.array());
+
+        // A packet with different reachable time should be passed.
+        // Reachable time = 2300, retransmission timer = 1234
+        raPacket.clear();
+        raPacket.putInt(ICMP6_RA_REACHABLE_TIME_OFFSET, RA_REACHABLE_TIME + 500);
+        assertPass(program, raPacket.array());
+
+        // A packet with different retransmission timer should be passed.
+        // Reachable time = 1800, retransmission timer = 2234
+        raPacket.clear();
+        raPacket.putInt(ICMP6_RA_REACHABLE_TIME_OFFSET, RA_REACHABLE_TIME);
+        raPacket.putInt(ICMP6_RA_RETRANSMISSION_TIMER_OFFSET, RA_RETRANSMISSION_TIMER + 1000);
+        assertPass(program, raPacket.array());
     }
 
     /**
