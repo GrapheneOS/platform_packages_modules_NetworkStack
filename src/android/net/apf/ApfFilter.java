@@ -514,9 +514,9 @@ public class ApfFilter {
         public final Type type;
         /** Offset into the packet at which this section begins. */
         public final int start;
-        /** Length of this section. */
+        /** Length of this section in bytes. */
         public final int length;
-        /** If this is a lifetime, the ICMP option that the defined it. 0 for router lifetime. */
+        /** If this is a lifetime, the ICMP option that defined it. 0 for router lifetime. */
         public final int option;
         /** If this is a lifetime, the lifetime value. */
         public final long lifetime;
@@ -785,8 +785,9 @@ public class ApfFilter {
             addLifetimeSection(ICMP6_RA_ROUTER_LIFETIME_LEN, 0, routerLifetime);
             builder.updateRouterLifetime(routerLifetime);
 
-            // Ensures that the RA is not truncated.
-            mPacket.position(ICMP6_RA_OPTION_OFFSET);
+            // Add remaining fields (reachable time and retransmission timer) to match section.
+            addMatchUntil(ICMP6_RA_OPTION_OFFSET);
+
             while (mPacket.hasRemaining()) {
                 final int position = mPacket.position();
                 final int optionType = getUint8(mPacket, position);
@@ -797,7 +798,7 @@ public class ApfFilter {
                         mPrefixOptionOffsets.add(position);
 
                         // Parse valid lifetime
-                        addMatchSection(ICMP6_PREFIX_OPTION_VALID_LIFETIME_LEN);
+                        addMatchSection(ICMP6_PREFIX_OPTION_VALID_LIFETIME_OFFSET);
                         lifetime = getUint32(mPacket, mPacket.position());
                         addLifetimeSection(ICMP6_PREFIX_OPTION_VALID_LIFETIME_LEN,
                                 ICMP6_PREFIX_OPTION_TYPE, lifetime);
