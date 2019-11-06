@@ -44,7 +44,6 @@ public class SocketUtilsShimImpl
     @Override
     public SocketAddress makePacketSocketAddress(
             int protocol, int ifIndex, @NonNull byte[] hwAddr) {
-        // TODO: use new API (which takes protocol, ifIndex, hwAddr) once implemented
-        return SocketUtils.makePacketSocketAddress(ifIndex, hwAddr);
+        return SocketUtils.makePacketSocketAddress(protocol, ifIndex, hwAddr);
     }
 }
