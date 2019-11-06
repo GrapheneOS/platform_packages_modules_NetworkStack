@@ -123,6 +123,7 @@ import java.net.NetworkInterface;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -235,6 +236,8 @@ public class IpClientIntegrationTest {
     private class Dependencies extends IpClient.Dependencies {
         private boolean mIsDhcpLeaseCacheEnabled;
         private boolean mIsDhcpRapidCommitEnabled;
+        // Can't use SparseIntArray, it doesn't have an easy way to know if a key is not present.
+        private HashMap<String, Integer> mIntConfigProperties = new HashMap<>();
 
         public void setDhcpLeaseCacheEnabled(final boolean enable) {
             mIsDhcpLeaseCacheEnabled = enable;
@@ -274,6 +277,19 @@ public class IpClientIntegrationTest {
                 }
             };
         }
+
+        @Override
+        public int getDeviceConfigPropertyInt(String name, int defaultValue) {
+            Integer value = mIntConfigProperties.get(name);
+            if (value == null) {
+                throw new IllegalStateException("Non-mocked device config property " + name);
+            }
+            return value;
+        }
+
+        public void setDeviceConfigProperty(String name, int value) {
+            mIntConfigProperties.put(name, value);
+        }
     }
 
     @Before
@@ -287,6 +303,8 @@ public class IpClientIntegrationTest {
         when(mContext.getContentResolver()).thenReturn(mContentResolver);
         when(mNetworkStackServiceManager.getIpMemoryStoreService())
                 .thenReturn(mIpMemoryStoreService);
+
+        mDependencies.setDeviceConfigProperty(IpClient.CONFIG_MIN_RDNSS_LIFETIME, 67);
 
         setUpTapInterface();
         setUpIpClient();
@@ -410,6 +428,7 @@ public class IpClientIntegrationTest {
         try (FileOutputStream out = new FileOutputStream(mPacketReader.createFd())) {
             byte[] packetBytes = new byte[packet.limit()];
             packet.get(packetBytes);
+            packet.flip();  // So we can reuse it in the future.
             out.write(packetBytes);
         }
     }
@@ -868,11 +887,22 @@ public class IpClientIntegrationTest {
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
         LinkProperties lp = captor.getValue();
 
+        // Expect that DNS servers with lifetimes below CONFIG_MIN_RDNSS_LIFETIME are not accepted.
+        assertNotNull(lp);
+        assertEquals(1, lp.getDnsServers().size());
+        assertTrue(lp.getDnsServers().contains(InetAddress.getByName(dnsServer)));
+        reset(mCb);
+
+        // If the RDNSS lifetime is above the minimum, the DNS server is accepted.
+        rdnss1 = buildRdnssOption(68, lowlifeDnsServer);
+        ra = buildRaPacket(pio, rdnss1, rdnss2);
+        sendResponse(ra);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(captor.capture());
+        lp = captor.getValue();
         assertNotNull(lp);
         assertEquals(2, lp.getDnsServers().size());
         assertTrue(lp.getDnsServers().contains(InetAddress.getByName(dnsServer)));
         assertTrue(lp.getDnsServers().contains(InetAddress.getByName(lowlifeDnsServer)));
-
         reset(mCb);
 
         // Expect that setting RDNSS lifetime of 0 causes loss of provisioning.

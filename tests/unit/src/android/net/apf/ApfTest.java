@@ -130,6 +130,8 @@ public class ApfTest {
     private static final boolean DROP_802_3_FRAMES = true;
     private static final boolean ALLOW_802_3_FRAMES = false;
 
+    private static final int MIN_RDNSS_LIFETIME_SEC = 0;
+
     // Constants for opcode encoding
     private static final byte LI_OP   = (byte)(13 << 3);
     private static final byte LDDW_OP = (byte)(22 << 3);
@@ -146,6 +148,8 @@ public class ApfTest {
         config.multicastFilter = ALLOW_MULTICAST;
         config.ieee802_3Filter = ALLOW_802_3_FRAMES;
         config.ethTypeBlackList = new int[0];
+        config.minRdnssLifetimeSec = MIN_RDNSS_LIFETIME_SEC;
+        config.minRdnssLifetimeSec = 67;
         return config;
     }
 
@@ -2090,6 +2094,16 @@ public class ApfTest {
         verifyRaLifetime(apfFilter, ipClientCallback, rdnssOptionPacket, RDNSS_LIFETIME);
         verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, -1, RDNSS_LIFETIME, -1));
 
+        final int lowLifetime = 60;
+        ByteBuffer lowLifetimeRdnssOptionPacket = ByteBuffer.wrap(
+                new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_OPTION_LEN + IPV6_ADDR_LEN]);
+        basePacket.clear();
+        lowLifetimeRdnssOptionPacket.put(basePacket);
+        addRdnssOption(lowLifetimeRdnssOptionPacket, lowLifetime, "2620:fe::9");
+        verifyRaLifetime(apfFilter, ipClientCallback, lowLifetimeRdnssOptionPacket,
+                ROUTER_LIFETIME);
+        verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, -1, lowLifetime, -1));
+
         ByteBuffer routeInfoOptionPacket = ByteBuffer.wrap(
                 new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_OPTION_LEN + IPV6_ADDR_LEN]);
         basePacket.clear();
@@ -2123,12 +2137,13 @@ public class ApfTest {
         verifyRaLifetime(apfFilter, ipClientCallback, largeRaPacket, 300);
         verifyRaEvent(new RaEvent(1800, 600, 300, 1200, 7200, -1));
 
-        // Verify that current program filters all the RAs:
+        // Verify that current program filters all the RAs (note: ApfFilter.MAX_RAS == 10).
         program = ipClientCallback.getApfProgram();
         verifyRaLifetime(program, basePacket, ROUTER_LIFETIME);
         verifyRaLifetime(program, newFlowLabelPacket, ROUTER_LIFETIME);
         verifyRaLifetime(program, prefixOptionPacket, PREFIX_PREFERRED_LIFETIME);
         verifyRaLifetime(program, rdnssOptionPacket, RDNSS_LIFETIME);
+        verifyRaLifetime(program, lowLifetimeRdnssOptionPacket, ROUTER_LIFETIME);
         verifyRaLifetime(program, routeInfoOptionPacket, ROUTE_LIFETIME);
         verifyRaLifetime(program, dnsslOptionPacket, ROUTER_LIFETIME);
         verifyRaLifetime(program, largeRaPacket, 300);

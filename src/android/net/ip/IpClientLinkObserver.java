@@ -71,20 +71,31 @@ public class IpClientLinkObserver implements NetworkObserver {
         void update();
     }
 
+    /** Configuration parameters for IpClientLinkObserver. */
+    public static class Configuration {
+        public final int minRdnssLifetime;
+
+        public Configuration(int minRdnssLifetime) {
+            this.minRdnssLifetime = minRdnssLifetime;
+        }
+    }
+
     private final String mInterfaceName;
     private final Callback mCallback;
     private final LinkProperties mLinkProperties;
     private DnsServerRepository mDnsServerRepository;
+    private final Configuration mConfig;
 
     private static final boolean DBG = false;
 
-    public IpClientLinkObserver(String iface, Callback callback) {
+    public IpClientLinkObserver(String iface, Callback callback, Configuration config) {
         mTag = "NetlinkTracker/" + iface;
         mInterfaceName = iface;
         mCallback = callback;
         mLinkProperties = new LinkProperties();
         mLinkProperties.setInterfaceName(mInterfaceName);
-        mDnsServerRepository = new DnsServerRepository();
+        mConfig = config;
+        mDnsServerRepository = new DnsServerRepository(config.minRdnssLifetime);
     }
 
     private void maybeLog(String operation, String iface, LinkAddress address) {
@@ -197,7 +208,7 @@ public class IpClientLinkObserver implements NetworkObserver {
         // Clear the repository before clearing mLinkProperties. That way, if a clear() happens
         // while interfaceDnsServerInfo() is being called, we'll end up with no DNS servers in
         // mLinkProperties, as desired.
-        mDnsServerRepository = new DnsServerRepository();
+        mDnsServerRepository = new DnsServerRepository(mConfig.minRdnssLifetime);
         mLinkProperties.clear();
         mLinkProperties.setInterfaceName(mInterfaceName);
     }
@@ -260,10 +271,16 @@ public class IpClientLinkObserver implements NetworkObserver {
          */
         private HashMap<InetAddress, DnsServerEntry> mIndex;
 
-        DnsServerRepository() {
+        /**
+         * Minimum (non-zero) RDNSS lifetime to accept.
+         */
+        private final int mMinLifetime;
+
+        DnsServerRepository(int minLifetime) {
             mCurrentServers = new HashSet<>();
             mAllServers = new ArrayList<>(NUM_SERVERS);
             mIndex = new HashMap<>(NUM_SERVERS);
+            mMinLifetime = minLifetime;
         }
 
         /** Sets the DNS servers of the provided LinkProperties object to the current servers. */
@@ -277,6 +294,9 @@ public class IpClientLinkObserver implements NetworkObserver {
          * @param addresses the string representations of the IP addresses of DNS servers to use.
          */
         public synchronized boolean addServers(long lifetime, String[] addresses) {
+            // If the servers are below the minimum lifetime, don't change anything.
+            if (lifetime != 0 && lifetime < mMinLifetime) return false;
+
             // The lifetime is actually an unsigned 32-bit number, but Java doesn't have unsigned.
             // Technically 0xffffffff (the maximum) is special and means "forever", but 2^32 seconds
             // (136 years) is close enough.
