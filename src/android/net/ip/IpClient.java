@@ -18,6 +18,7 @@ package android.net.ip;
 
 import static android.net.RouteInfo.RTN_UNICAST;
 import static android.net.shared.IpConfigurationParcelableUtil.toStableParcelable;
+import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
@@ -42,7 +43,9 @@ import android.net.metrics.IpManagerEvent;
 import android.net.shared.InitialConfiguration;
 import android.net.shared.ProvisioningConfiguration;
 import android.net.util.InterfaceParams;
+import android.net.util.NetworkStackUtils;
 import android.net.util.SharedLog;
+import android.os.Build;
 import android.os.ConditionVariable;
 import android.os.IBinder;
 import android.os.Message;
@@ -65,6 +68,7 @@ import com.android.internal.util.Preconditions;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.internal.util.WakeupMessage;
+import com.android.networkstack.apishim.ShimUtils;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
 
@@ -313,8 +317,14 @@ public class IpClient extends StateMachine {
     // IpClient shares a handler with DhcpClient: commands must not overlap
     public static final int DHCPCLIENT_CMD_BASE = 1000;
 
+    // Settings and default values.
     private static final int MAX_LOG_RECORDS = 500;
     private static final int MAX_PACKET_RECORDS = 100;
+
+    @VisibleForTesting
+    static final String CONFIG_MIN_RDNSS_LIFETIME = "ipclient_min_rdnss_lifetime";
+    private static final int DEFAULT_MIN_RDNSS_LIFETIME =
+            ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q) ? 120 : 0;
 
     private static final boolean NO_CALLBACKS = false;
     private static final boolean SEND_CALLBACKS = true;
@@ -354,6 +364,9 @@ public class IpClient extends StateMachine {
     private final MessageHandlingLogger mMsgStateLogger;
     private final IpConnectivityLog mMetricsLog = new IpConnectivityLog();
     private final InterfaceController mInterfaceCtrl;
+
+    // Ignore nonzero RDNSS option lifetimes below this value. 0 = disabled.
+    private final int mMinRdnssLifetimeSec;
 
     private InterfaceParams mInterfaceParams;
 
@@ -411,6 +424,14 @@ public class IpClient extends StateMachine {
                 NetworkStackIpMemoryStore ipMemoryStore) {
             return new DhcpClient.Dependencies(ipMemoryStore);
         }
+
+        /**
+         * Read an integer DeviceConfig property.
+         */
+        public int getDeviceConfigPropertyInt(String name, int defaultValue) {
+            return NetworkStackUtils.getDeviceConfigPropertyInt(NAMESPACE_CONNECTIVITY, name,
+                    defaultValue);
+        }
     }
 
     public IpClient(Context context, String ifName, IIpClientCallbacks callback,
@@ -449,9 +470,15 @@ public class IpClient extends StateMachine {
         mNetd = deps.getNetd(mContext);
         mInterfaceCtrl = new InterfaceController(mInterfaceName, mNetd, mLog);
 
+        mMinRdnssLifetimeSec = mDependencies.getDeviceConfigPropertyInt(
+                CONFIG_MIN_RDNSS_LIFETIME, DEFAULT_MIN_RDNSS_LIFETIME);
+
+        IpClientLinkObserver.Configuration config = new IpClientLinkObserver.Configuration(
+                mMinRdnssLifetimeSec);
+
         mLinkObserver = new IpClientLinkObserver(
                 mInterfaceName,
-                () -> sendMessage(EVENT_NETLINK_LINKPROPERTIES_CHANGED)) {
+                () -> sendMessage(EVENT_NETLINK_LINKPROPERTIES_CHANGED), config) {
             @Override
             public void onInterfaceAdded(String iface) {
                 super.onInterfaceAdded(iface);
@@ -1500,6 +1527,7 @@ public class IpClient extends StateMachine {
             // Get the Configuration for ApfFilter from Context
             apfConfig.ieee802_3Filter = ApfCapabilities.getApfDrop8023Frames();
             apfConfig.ethTypeBlackList = ApfCapabilities.getApfEtherTypeBlackList();
+            apfConfig.minRdnssLifetimeSec = mMinRdnssLifetimeSec;
             mApfFilter = ApfFilter.maybeCreate(mContext, apfConfig, mInterfaceParams, mCallback);
             // TODO: investigate the effects of any multicast filtering racing/interfering with the
             // rest of this IP configuration startup.

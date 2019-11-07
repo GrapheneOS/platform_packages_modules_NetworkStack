@@ -105,6 +105,7 @@ public class ApfFilter {
         public boolean multicastFilter;
         public boolean ieee802_3Filter;
         public int[] ethTypeBlackList;
+        public int minRdnssLifetimeSec;
     }
 
     // Enums describing the outcome of receiving an RA packet.
@@ -358,6 +359,9 @@ public class ApfFilter {
     private final boolean mDrop802_3Frames;
     private final int[] mEthTypeBlackList;
 
+    // Ignore non-zero RDNSS lifetimes below this value.
+    private final int mMinRdnssLifetimeSec;
+
     // Detects doze mode state transitions.
     private final BroadcastReceiver mDeviceIdleReceiver = new BroadcastReceiver() {
         @Override
@@ -388,6 +392,7 @@ public class ApfFilter {
         mInterfaceParams = ifParams;
         mMulticastFilter = config.multicastFilter;
         mDrop802_3Frames = config.ieee802_3Filter;
+        mMinRdnssLifetimeSec = config.minRdnssLifetimeSec;
         mContext = context;
 
         if (mApfCapabilities.hasDataAccess()) {
@@ -748,6 +753,19 @@ public class ApfFilter {
             return lifetime;
         }
 
+        // http://b/66928272 http://b/65056012
+        // DnsServerRepository ignores RDNSS servers with lifetimes that are too low. Ignore these
+        // lifetimes for the purpose of filter lifetime calculations.
+        private boolean shouldIgnoreLifetime(int optionType, long lifetime) {
+            return optionType == ICMP6_RDNSS_OPTION_TYPE
+                    && lifetime != 0 && lifetime < mMinRdnssLifetimeSec;
+        }
+
+        private boolean isRelevantLifetime(PacketSection section) {
+            return section.type == PacketSection.Type.LIFETIME
+                    && !shouldIgnoreLifetime(section.option, section.lifetime);
+        }
+
         // Note that this parses RA and may throw InvalidRaException (from
         // Buffer.position(int) or due to an invalid-length option) or IndexOutOfBoundsException
         // (from ByteBuffer.get(int) ) if parsing encounters something non-compliant with
@@ -862,7 +880,7 @@ public class ApfFilter {
         long minLifetime() {
             long minLifetime = Long.MAX_VALUE;
             for (PacketSection section : mPacketSections) {
-                if (section.type == PacketSection.Type.LIFETIME) {
+                if (isRelevantLifetime(section)) {
                     minLifetime = Math.min(minLifetime, section.lifetime);
                 }
             }
@@ -902,9 +920,10 @@ public class ApfFilter {
                                     section.start + section.length),
                             nextFilterLabel);
                 }
+
                 // Generate code to test the lifetimes haven't gone down too far.
-                // The packet is accepted if any of its lifetimes are lower than filterLifetime.
-                if (section.type == PacketSection.Type.LIFETIME) {
+                // The packet is accepted if any non-ignored lifetime is lower than filterLifetime.
+                if (isRelevantLifetime(section)) {
                     switch (section.length) {
                         case 4: gen.addLoad32(Register.R0, section.start); break;
                         case 2: gen.addLoad16(Register.R0, section.start); break;
@@ -1913,6 +1932,7 @@ public class ApfFilter {
         pw.println("Capabilities: " + mApfCapabilities);
         pw.println("Receive thread: " + (mReceiveThread != null ? "RUNNING" : "STOPPED"));
         pw.println("Multicast: " + (mMulticastFilter ? "DROP" : "ALLOW"));
+        pw.println("Minimum RDNSS lifetime: " + mMinRdnssLifetimeSec);
         try {
             pw.println("IPv4 address: " + InetAddress.getByAddress(mIPv4Address).getHostAddress());
         } catch (UnknownHostException|NullPointerException e) {}
