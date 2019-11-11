@@ -151,7 +151,7 @@ android_app {
     certificate: "platform",
     manifest: "AndroidManifest_InProcess.xml",
     // InProcessNetworkStack is a replacement for NetworkStack
-    overrides: ["NetworkStack"],
+    overrides: ["NetworkStack", "NetworkStackNext"],
     // The permission configuration *must* be included to ensure security of the device
     // The InProcessNetworkStack goes together with the PlatformCaptivePortalLogin, which replaces
     // the default CaptivePortalLogin.
@@ -160,7 +160,7 @@ android_app {
 
 // Updatable network stack packaged as an application
 android_app {
-    name: "NetworkStack",
+    name: "NetworkStackNext",
     defaults: ["NetworkStackAppDefaults", "NetworkStackApiCurrentLevel"],
     static_libs: ["NetworkStackApiCurrentLib"],
     certificate: "networkstack",
@@ -171,7 +171,7 @@ android_app {
 
 // Updatable network stack for finalized API
 android_app {
-    name: "NetworkStackApiStable",
+    name: "NetworkStack",
     defaults: ["NetworkStackAppDefaults", "NetworkStackApiStableLevel"],
     static_libs: ["NetworkStackApiStableLib"],
     certificate: "networkstack",
