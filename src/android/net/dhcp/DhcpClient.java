@@ -82,6 +82,7 @@ import com.android.internal.util.StateMachine;
 import com.android.internal.util.TrafficStatsConstants;
 import com.android.internal.util.WakeupMessage;
 import com.android.networkstack.R;
+import com.android.networkstack.apishim.SocketUtilsShimImpl;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -389,7 +390,8 @@ public class DhcpClient extends StateMachine {
         }
 
         mHwAddr = mIface.macAddr.toByteArray();
-        mInterfaceBroadcastAddr = makePacketSocketAddress(mIface.index, DhcpPacket.ETHER_BROADCAST);
+        mInterfaceBroadcastAddr = SocketUtilsShimImpl.newInstance().makePacketSocketAddress(
+                ETH_P_IP, mIface.index, DhcpPacket.ETHER_BROADCAST);
         return true;
     }
 
