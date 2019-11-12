@@ -59,7 +59,7 @@ filegroup {
     srcs: [
         "apishim/common/**/*.java",
         "apishim/29/**/*.java",
-        "apishim/current/**/*.java",
+        "apishim/30/**/*.java",
         ":net-module-utils-srcs",
     ],
 }
