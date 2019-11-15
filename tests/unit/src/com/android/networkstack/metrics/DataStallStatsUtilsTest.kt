@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-package android.networkstack.metrics
+package com.android.networkstack.metrics
 
 import android.net.captiveportal.CaptivePortalProbeResult
 import androidx.test.filters.SmallTest
 import androidx.test.runner.AndroidJUnit4
-import com.android.networkstack.metrics.DataStallStatsUtils
 import com.android.server.connectivity.nano.DataStallEventProto
 import org.junit.Assert.assertEquals
 import org.junit.Test
