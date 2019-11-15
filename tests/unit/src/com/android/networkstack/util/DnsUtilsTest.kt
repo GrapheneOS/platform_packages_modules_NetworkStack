@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-package android.networkstack.util
+package com.android.networkstack.netlink.util
 
 import android.net.DnsResolver
 import android.net.DnsResolver.FLAG_EMPTY
 import android.net.DnsResolver.TYPE_A
 import android.net.DnsResolver.TYPE_AAAA
 import android.net.Network
+import com.android.testutils.FakeDns
 import androidx.test.filters.SmallTest
 import androidx.test.runner.AndroidJUnit4
 import com.android.networkstack.util.DnsUtils

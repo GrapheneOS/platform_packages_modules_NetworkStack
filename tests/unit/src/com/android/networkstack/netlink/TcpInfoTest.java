@@ -14,14 +14,12 @@
  * limitations under the License.
  */
 
-package android.networkstack.netlink;
+package com.android.networkstack.netlink;
 
 import static org.junit.Assert.assertEquals;
 
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
-
-import com.android.networkstack.netlink.TcpInfo;
 
 import libcore.util.HexEncoding;
 
