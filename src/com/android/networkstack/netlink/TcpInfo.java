@@ -114,7 +114,7 @@ public class TcpInfo {
     }
 
     @VisibleForTesting
-    public TcpInfo(@NonNull HashMap<Field, Number> info) {
+    TcpInfo(@NonNull HashMap<Field, Number> info) {
         for (final Field field : Field.values()) {
             mFieldsValues.put(field, info.get(field));
         }
@@ -177,7 +177,7 @@ public class TcpInfo {
      *  Map to enum in bionic/libc/include/netinet/tcp.h
      */
     @VisibleForTesting
-    public static String getTcpStateName(int state) {
+    static String getTcpStateName(int state) {
         switch (state) {
             case 1: return "TCP_ESTABLISHED";
             case 2: return "TCP_SYN_SENT";

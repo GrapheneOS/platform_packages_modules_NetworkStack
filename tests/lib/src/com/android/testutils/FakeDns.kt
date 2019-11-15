@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package android.networkstack.util
+package com.android.testutils
 
 import android.net.DnsResolver
 import android.net.InetAddresses
