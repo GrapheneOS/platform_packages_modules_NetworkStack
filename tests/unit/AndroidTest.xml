@@ -16,6 +16,7 @@
 <configuration description="Runs Tests for NetworkStack">
     <target_preparer class="com.android.tradefed.targetprep.TestAppInstallSetup">
         <option name="test-file-name" value="NetworkStackTests.apk" />
+        <option name="cleanup-apks" value="true" />
     </target_preparer>
 
     <option name="test-suite-tag" value="apct" />
