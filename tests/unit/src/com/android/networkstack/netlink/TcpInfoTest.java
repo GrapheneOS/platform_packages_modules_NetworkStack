@@ -27,7 +27,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @RunWith(AndroidJUnit4.class)
 @SmallTest
@@ -92,7 +93,7 @@ public class TcpInfoTest {
     @Test
     public void testParseTcpInfo() {
         final ByteBuffer buffer = ByteBuffer.wrap(TCP_INFO_BYTES);
-        final HashMap<TcpInfo.Field, Number> expected = makeTestTcpInfoHash();
+        final Map<TcpInfo.Field, Number> expected = makeTestTcpInfoHash();
         final TcpInfo parsedInfo = TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1);
 
         assertEquals(parsedInfo, new TcpInfo(expected));
@@ -102,7 +103,7 @@ public class TcpInfoTest {
     public void testValidOffset() {
         final ByteBuffer buffer = ByteBuffer.wrap(TCP_INFO_BYTES);
 
-        final HashMap<TcpInfo.Field, Number> expected = makeShortTestTcpInfoHash();
+        final Map<TcpInfo.Field, Number> expected = makeShortTestTcpInfoHash();
         final TcpInfo parsedInfo = TcpInfo.parse(buffer, SHORT_TEST_TCP_INFO);
 
         assertEquals(parsedInfo, new TcpInfo(expected));
@@ -131,7 +132,7 @@ public class TcpInfoTest {
     @Test
     public void testMalformedTcpInfo() {
         final ByteBuffer buffer = ByteBuffer.wrap(MALFORMED_TCP_INFO_BYTES);
-        final HashMap<TcpInfo.Field, Number> expected = makeShortTestTcpInfoHash();
+        final Map<TcpInfo.Field, Number> expected = makeShortTestTcpInfoHash();
 
         TcpInfo parsedInfo = TcpInfo.parse(buffer, SHORT_TEST_TCP_INFO);
         assertEquals(parsedInfo, new TcpInfo(expected));
@@ -144,7 +145,7 @@ public class TcpInfoTest {
     public void testGetValue() {
         ByteBuffer buffer = ByteBuffer.wrap(TCP_INFO_BYTES);
 
-        final HashMap<TcpInfo.Field, Number> expected = makeShortTestTcpInfoHash();
+        final Map<TcpInfo.Field, Number> expected = makeShortTestTcpInfoHash();
         expected.put(TcpInfo.Field.MAX_PACING_RATE, 10_000L);
         expected.put(TcpInfo.Field.FACKETS, 10);
 
@@ -165,8 +166,8 @@ public class TcpInfoTest {
     }
 
     // Make a TcpInfo contains only first 8 bytes.
-    private HashMap<TcpInfo.Field, Number> makeShortTestTcpInfoHash() {
-        final HashMap<TcpInfo.Field, Number> info = new HashMap<TcpInfo.Field, Number>();
+    private Map<TcpInfo.Field, Number> makeShortTestTcpInfoHash() {
+        final Map<TcpInfo.Field, Number> info = new LinkedHashMap<>();
         info.put(TcpInfo.Field.STATE, (byte) 0x01);
         info.put(TcpInfo.Field.CASTATE, (byte) 0x00);
         info.put(TcpInfo.Field.RETRANSMITS, (byte) 0x00);
@@ -179,8 +180,8 @@ public class TcpInfoTest {
         return info;
     }
 
-    private HashMap<TcpInfo.Field, Number> makeTestTcpInfoHash() {
-        final HashMap<TcpInfo.Field, Number> info = makeShortTestTcpInfoHash();
+    private Map<TcpInfo.Field, Number> makeTestTcpInfoHash() {
+        final Map<TcpInfo.Field, Number> info = makeShortTestTcpInfoHash();
         info.put(TcpInfo.Field.RTO, 1806666);
         info.put(TcpInfo.Field.ATO, 0);
         info.put(TcpInfo.Field.SND_MSS, 1326);
