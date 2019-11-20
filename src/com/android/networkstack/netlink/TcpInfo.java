@@ -16,7 +16,6 @@
 package com.android.networkstack.netlink;
 
 import android.util.Log;
-import android.util.Range;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -25,8 +24,9 @@ import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -91,42 +91,44 @@ public class TcpInfo {
     }
 
     private static final String TAG = "TcpInfo";
-    private final LinkedHashMap<Field, Number> mFieldsValues = new LinkedHashMap<Field, Number>();
+    private final Map<Field, Number> mFieldsValues;
 
     private TcpInfo(@NonNull ByteBuffer bytes, int infolen) {
         final int start = bytes.position();
+        final LinkedHashMap<Field, Number> fields = new LinkedHashMap<>();
         for (final Field field : Field.values()) {
             switch (field.size) {
                 case Byte.BYTES:
-                    mFieldsValues.put(field, getByte(bytes, start, infolen));
+                    fields.put(field, getByte(bytes, start, infolen));
                     break;
                 case Integer.BYTES:
-                    mFieldsValues.put(field, getInt(bytes, start, infolen));
+                    fields.put(field, getInt(bytes, start, infolen));
                     break;
                 case Long.BYTES:
-                    mFieldsValues.put(field, getLong(bytes, start, infolen));
+                    fields.put(field, getLong(bytes, start, infolen));
                     break;
                 default:
                     Log.e(TAG, "Unexpected size:" + field.size);
             }
         }
-
+        mFieldsValues = Collections.unmodifiableMap(fields);
     }
 
     @VisibleForTesting
-    TcpInfo(@NonNull HashMap<Field, Number> info) {
+    TcpInfo(@NonNull Map<Field, Number> info) {
+        final LinkedHashMap<Field, Number> fields = new LinkedHashMap<>();
         for (final Field field : Field.values()) {
-            mFieldsValues.put(field, info.get(field));
+            fields.put(field, info.get(field));
         }
+        mFieldsValues = Collections.unmodifiableMap(fields);
     }
 
     /** Parse a TcpInfo from a giving ByteBuffer with a specific length. */
     @Nullable
     public static TcpInfo parse(@NonNull ByteBuffer bytes, int infolen) {
         try {
-            TcpInfo info = new TcpInfo(bytes, infolen);
-            return info;
-        } catch (BufferUnderflowException e) {
+            return new TcpInfo(bytes, infolen);
+        } catch (BufferUnderflowException | IllegalArgumentException e) {
             Log.e(TAG, "parsing error.", e);
             return null;
         }
@@ -135,10 +137,15 @@ public class TcpInfo {
     /**
      * Helper function for handling different struct tcp_info versions in the kernel.
      */
-    private static boolean isValidOffset(int start, int len, int pos, int targetBytes) {
-        final Range a = new Range(start, start + len);
-        final Range b = new Range(pos, pos + targetBytes);
-        return a.contains(b);
+    private static boolean isValidTargetPosition(int start, int len, int pos, int targetBytes)
+            throws IllegalArgumentException {
+        // Equivalent to new Range(start, start + len).contains(new Range(pos, pos + targetBytes))
+        if (len < 0 || targetBytes < 0) throw new IllegalArgumentException();
+        // Check that start < pos < start + len
+        if (pos < start || pos > start + len) return false;
+        // Pos is inside the range and targetBytes is positive. Offset is valid if end of 2nd range
+        // is below end of 1st range.
+        return pos + targetBytes <= start + len;
     }
 
     /** Get value for specific key. */
@@ -149,21 +156,21 @@ public class TcpInfo {
 
     @Nullable
     private static Byte getByte(@NonNull ByteBuffer buffer, int start, int len) {
-        if (!isValidOffset(start, len, buffer.position(), Byte.BYTES)) return null;
+        if (!isValidTargetPosition(start, len, buffer.position(), Byte.BYTES)) return null;
 
         return buffer.get();
     }
 
     @Nullable
     private static Integer getInt(@NonNull ByteBuffer buffer, int start, int len) {
-        if (!isValidOffset(start, len, buffer.position(), Integer.BYTES)) return null;
+        if (!isValidTargetPosition(start, len, buffer.position(), Integer.BYTES)) return null;
 
         return buffer.getInt();
     }
 
     @Nullable
     private static Long getLong(@NonNull ByteBuffer buffer, int start, int len) {
-        if (!isValidOffset(start, len, buffer.position(), Long.BYTES)) return null;
+        if (!isValidTargetPosition(start, len, buffer.position(), Long.BYTES)) return null;
 
         return buffer.getLong();
     }
