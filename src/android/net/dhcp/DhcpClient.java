@@ -638,7 +638,6 @@ public class DhcpClient extends StateMachine {
         }
         mOffer = null;
         Log.d(TAG, msg + " lease: " + mDhcpLease);
-        notifySuccess();
     }
 
     private void clearDhcpState() {
@@ -1150,6 +1149,7 @@ public class DhcpClient extends StateMachine {
                 transitionTo(mStoppedState);
             }
 
+            notifySuccess();
             scheduleLeaseTimers();
             logTimeToBoundState();
         }
