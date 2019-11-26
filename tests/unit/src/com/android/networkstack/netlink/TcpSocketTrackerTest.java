@@ -16,12 +16,11 @@
 
 package com.android.networkstack.netlink;
 
-import static android.net.util.DataStallUtils.CONFIG_TCP_PACKETS_FAIL_RATE;
+import static android.net.netlink.NetlinkConstants.SOCKDIAG_MSG_HEADER_SIZE;
+import static android.net.util.DataStallUtils.CONFIG_TCP_PACKETS_FAIL_PERCENTAGE;
 import static android.net.util.DataStallUtils.DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_INET;
-
-import static com.android.networkstack.netlink.TcpSocketTracker.SOCKDIAG_MSG_HEADER_SIZE;
 
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
@@ -111,7 +110,7 @@ public class TcpSocketTrackerTest {
             "00000000" +        // data
             "0008" +            // len = 8
             "000F" +            // type = 15(INET_DIAG_MARK)
-            "000C0064" +        // data, socket mark=786532
+            "000C1A85" +        // data, socket mark=793221
             "00AC" +            // len = 172
             "0002" +            // type = 2(INET_DIAG_INFO)
             // tcp_info
@@ -129,7 +128,7 @@ public class TcpSocketTrackerTest {
             "00000218" +        // rcvMss = 536
             "00000000" +        // unsacked = 0
             "00000000" +        // acked = 0
-            "00000005" +        // lost = 5
+            "00000000" +        // lost = 0
             "00000000" +        // retrans = 0
             "00000000" +        // fackets = 0
             "000000BB" +        // lastDataSent = 187
@@ -185,7 +184,7 @@ public class TcpSocketTrackerTest {
         when(mDependencies.connectToKernel()).thenReturn(mMockFd);
         when(mDependencies.getDeviceConfigPropertyInt(
                 eq(NAMESPACE_CONNECTIVITY),
-                eq(CONFIG_TCP_PACKETS_FAIL_RATE),
+                eq(CONFIG_TCP_PACKETS_FAIL_PERCENTAGE),
                 anyInt())).thenReturn(DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE);
     }
 
@@ -211,7 +210,7 @@ public class TcpSocketTrackerTest {
         expected.put(TcpInfo.Field.RCV_MSS, 536);
         expected.put(TcpInfo.Field.UNACKED, 0);
         expected.put(TcpInfo.Field.SACKED, 0);
-        expected.put(TcpInfo.Field.LOST, 5);
+        expected.put(TcpInfo.Field.LOST, 0);
         expected.put(TcpInfo.Field.RETRANS, 0);
         expected.put(TcpInfo.Field.FACKETS, 0);
         expected.put(TcpInfo.Field.LAST_DATA_SENT, 187);
@@ -242,7 +241,7 @@ public class TcpSocketTrackerTest {
         expected.put(TcpInfo.Field.DELIVERY_RATE, 0L);
 
         assertEquals(parsed.tcpInfo, new TcpInfo(expected));
-        assertEquals(parsed.fwmark, 786532);
+        assertEquals(parsed.fwmark, 793221);
         assertEquals(parsed.updateTime, 100);
         assertEquals(parsed.ipFamily, AF_INET);
     }
@@ -262,18 +261,6 @@ public class TcpSocketTrackerTest {
     }
 
     @Test
-    public void testIsDataStallSuspected() {
-        when(mDependencies.isTcpInfoParsingSupported()).thenReturn(false);
-        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies);
-        assertFalse(tst.isDataStallSuspected());
-        when(mDependencies.isTcpInfoParsingSupported()).thenReturn(true);
-        assertFalse(tst.isDataStallSuspected());
-        when(mDependencies.getDeviceConfigPropertyInt(any(), eq(CONFIG_TCP_PACKETS_FAIL_RATE),
-                anyInt())).thenReturn(0);
-        assertTrue(tst.isDataStallSuspected());
-    }
-
-    @Test
     public void testPollSocketsInfo() throws Exception {
         when(mDependencies.isTcpInfoParsingSupported()).thenReturn(false);
         final TcpSocketTracker tst = new TcpSocketTracker(mDependencies);
@@ -284,20 +271,30 @@ public class TcpSocketTrackerTest {
         final ByteBuffer invalidBuffer = ByteBuffer.allocate(1);
         when(mDependencies.recvMesssage(any())).thenReturn(invalidBuffer);
         assertTrue(tst.pollSocketsInfo());
-        assertEquals(0, tst.getLatestPacketFailRate());
+        assertEquals(-1, tst.getLatestPacketFailPercentage());
         assertEquals(0, tst.getSentSinceLastRecv());
 
         // Header only.
         final ByteBuffer headerBuffer = ByteBuffer.wrap(SOCK_DIAG_MSG_BYTES);
         when(mDependencies.recvMesssage(any())).thenReturn(headerBuffer);
         assertTrue(tst.pollSocketsInfo());
+        assertEquals(-1, tst.getLatestPacketFailPercentage());
         assertEquals(0, tst.getSentSinceLastRecv());
-        assertEquals(0, tst.getLatestPacketFailRate());
 
         final ByteBuffer tcpBuffer = ByteBuffer.wrap(TEST_RESPONSE_BYTES);
         when(mDependencies.recvMesssage(any())).thenReturn(tcpBuffer);
         assertTrue(tst.pollSocketsInfo());
+
         assertEquals(10, tst.getSentSinceLastRecv());
-        assertEquals(100, tst.getLatestPacketFailRate());
+        assertEquals(50, tst.getLatestPacketFailPercentage());
+        assertFalse(tst.isDataStallSuspected());
+        // Lower the threshold.
+        when(mDependencies.getDeviceConfigPropertyInt(any(), eq(CONFIG_TCP_PACKETS_FAIL_PERCENTAGE),
+                anyInt())).thenReturn(40);
+        // No device config change. Using cache value.
+        assertFalse(tst.isDataStallSuspected());
+        // Trigger a config update
+        tst.mConfigListener.onPropertiesChanged(null /* properties */);
+        assertTrue(tst.isDataStallSuspected());
     }
 }

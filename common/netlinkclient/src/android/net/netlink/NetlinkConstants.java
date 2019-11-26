@@ -35,6 +35,14 @@ public class NetlinkConstants {
     private NetlinkConstants() {}
 
     public static final int NLA_ALIGNTO = 4;
+    /**
+     * Flag for dumping struct tcp_info.
+     * Corresponding to enum definition in external/strace/linux/inet_diag.h.
+     */
+    public static final int INET_DIAG_MEMINFO = 1;
+
+    public static final int SOCKDIAG_MSG_HEADER_SIZE =
+            StructNlMsgHdr.STRUCT_SIZE + StructInetDiagMsg.STRUCT_SIZE;
 
     public static final int alignedLengthOf(short length) {
         final int intLength = (int) length & 0xffff;
