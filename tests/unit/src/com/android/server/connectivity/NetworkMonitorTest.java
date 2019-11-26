@@ -154,7 +154,7 @@ public class NetworkMonitorTest {
     private @Mock WifiInfo mWifiInfo;
     private @Captor ArgumentCaptor<String> mNetworkTestedRedirectUrlCaptor;
     private @Mock TcpSocketTracker.Dependencies mTstDependencies;
-
+    private @Mock TcpSocketTracker mTst;
     private HashSet<WrappedNetworkMonitor> mCreatedNetworkMonitors;
     private HashSet<BroadcastReceiver> mRegisteredReceivers;
 
@@ -449,11 +449,10 @@ public class NetworkMonitorTest {
     private class WrappedNetworkMonitor extends NetworkMonitor {
         private long mProbeTime = 0;
         private final ConditionVariable mQuitCv = new ConditionVariable(false);
-        private final TcpSocketTracker mTst = new TcpSocketTracker(mTstDependencies);
 
         WrappedNetworkMonitor() {
             super(mContext, mCallbacks, mNetwork, mLogger, mValidationLogger,
-                    mDependencies, mDataStallStatsUtils);
+                    mDependencies, mDataStallStatsUtils, mTst);
         }
 
         @Override
@@ -494,6 +493,7 @@ public class NetworkMonitorTest {
         HandlerUtilsKt.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
         mCreatedNetworkMonitors.add(nm);
         when(mTstDependencies.isTcpInfoParsingSupported()).thenReturn(false);
+
         return nm;
     }
 
@@ -753,8 +753,16 @@ public class NetworkMonitorTest {
         wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
         makeDnsTimeoutEvent(wrappedMonitor, DEFAULT_DNS_TIMEOUT_THRESHOLD);
         assertFalse(wrappedMonitor.isDataStall());
-
-        when(wrappedMonitor.getTcpSocketTracker().isDataStallSuspected()).thenReturn(true);
+        // Packet received.
+        when(mTstDependencies.isTcpInfoParsingSupported()).thenReturn(true);
+        when(mTst.getLatestReceivedCount()).thenReturn(5);
+        // Trigger a tcp event immediately.
+        setTcpPollingInterval(0);
+        wrappedMonitor.sendTcpPollingEvent();
+        HandlerUtilsKt.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
+        assertFalse(wrappedMonitor.isDataStall());
+        when(mTst.getLatestReceivedCount()).thenReturn(0);
+        when(mTst.isDataStallSuspected()).thenReturn(true);
         // Trigger a tcp event immediately.
         setTcpPollingInterval(0);
         wrappedMonitor.sendTcpPollingEvent();
