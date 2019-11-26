@@ -17,7 +17,6 @@
 package android.net.netlink;
 
 import android.system.OsConstants;
-import com.android.internal.util.HexDump;
 
 import java.nio.ByteBuffer;
 
@@ -62,12 +61,12 @@ public class NetlinkConstants {
 
     public static String hexify(byte[] bytes) {
         if (bytes == null) { return "(null)"; }
-        return HexDump.toHexString(bytes);
+        return toHexString(bytes, 0, bytes.length);
     }
 
     public static String hexify(ByteBuffer buffer) {
         if (buffer == null) { return "(null)"; }
-        return HexDump.toHexString(
+        return toHexString(
                 buffer.array(), buffer.position(), buffer.remaining());
     }
 
@@ -125,5 +124,23 @@ public class NetlinkConstants {
             default:
                 return "unknown RTM type: " + String.valueOf(nlm_type);
         }
+    }
+
+    private static final char[] HEX_DIGITS = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+            'A', 'B', 'C', 'D', 'E', 'F' };
+    /**
+     * Convert a byte array to a hexadecimal string.
+     */
+    public static String toHexString(byte[] array, int offset, int length) {
+        char[] buf = new char[length * 2];
+
+        int bufIndex = 0;
+        for (int i = offset; i < offset + length; i++) {
+            byte b = array[i];
+            buf[bufIndex++] = HEX_DIGITS[(b >>> 4) & 0x0F];
+            buf[bufIndex++] = HEX_DIGITS[b & 0x0F];
+        }
+
+        return new String(buf);
     }
 }
