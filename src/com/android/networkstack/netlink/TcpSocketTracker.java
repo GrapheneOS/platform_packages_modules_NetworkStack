@@ -470,7 +470,9 @@ public class TcpSocketTracker {
 
         public Dependencies(final Context context, final boolean tcpSupport) {
             mContext = context;
-            mIsTcpInfoParsingSupported = tcpSupport;
+            // TCP data stall detection is currently crashing because of buffer underflows.
+            // Disable it.
+            mIsTcpInfoParsingSupported = false;
         }
 
         /**
