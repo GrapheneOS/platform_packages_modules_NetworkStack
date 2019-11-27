@@ -56,7 +56,7 @@ public class TcpSocketTrackerTest {
     private static final String DIAG_MSG_HEX =
             // struct nlmsghdr.
             "00000058" +      // length = 88
-            "0020" +         // type = SOCK_DIAG_BY_FAMILY
+            "0014" +         // type = SOCK_DIAG_BY_FAMILY
             "0103" +         // flags = NLM_F_REQUEST | NLM_F_DUMP
             "00000000" +     // seqno
             "00000000" +     // pid (0 == kernel)
@@ -83,7 +83,7 @@ public class TcpSocketTrackerTest {
     private static final String SOCK_DIAG_TCP_INET_HEX =
             // struct nlmsghdr.
             "00000114" +        // length = 276
-            "0020" +            // type = SOCK_DIAG_BY_FAMILY
+            "0014" +            // type = SOCK_DIAG_BY_FAMILY
             "0103" +            // flags = NLM_F_REQUEST | NLM_F_DUMP
             "00000000" +        // seqno
             "00000000" +        // pid (0 == kernel)
