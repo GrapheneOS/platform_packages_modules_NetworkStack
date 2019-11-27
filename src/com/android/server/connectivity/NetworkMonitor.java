@@ -126,6 +126,7 @@ import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.internal.util.TrafficStatsConstants;
 import com.android.networkstack.R;
+import com.android.networkstack.apishim.ShimUtils;
 import com.android.networkstack.metrics.DataStallDetectionStats;
 import com.android.networkstack.metrics.DataStallStatsUtils;
 import com.android.networkstack.netlink.TcpSocketTracker;
@@ -389,13 +390,15 @@ public class NetworkMonitor extends StateMachine {
     public NetworkMonitor(Context context, INetworkMonitorCallbacks cb, Network network,
             SharedLog validationLog) {
         this(context, cb, network, new IpConnectivityLog(), validationLog,
-                Dependencies.DEFAULT, new DataStallStatsUtils());
+                Dependencies.DEFAULT, new DataStallStatsUtils(), new TcpSocketTracker(
+                        new TcpSocketTracker.Dependencies(context,
+                        ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q))));
     }
 
     @VisibleForTesting
     public NetworkMonitor(Context context, INetworkMonitorCallbacks cb, Network network,
             IpConnectivityLog logger, SharedLog validationLogs,
-            Dependencies deps, DataStallStatsUtils detectionStatsUtils) {
+            Dependencies deps, DataStallStatsUtils detectionStatsUtils, TcpSocketTracker tst) {
         // Add suffix indicating which NetworkMonitor we're talking about.
         super(TAG + "/" + network.toString());
 
@@ -442,7 +445,7 @@ public class NetworkMonitor extends StateMachine {
         mDataStallMinEvaluateTime = getDataStallMinEvaluateTime();
         mDataStallValidDnsTimeThreshold = getDataStallValidDnsTimeThreshold();
         mDataStallEvaluationType = getDataStallEvaluationType();
-        mTcpTracker = new TcpSocketTracker(new TcpSocketTracker.Dependencies());
+        mTcpTracker = tst;
 
         // Provide empty LinkProperties and NetworkCapabilities to make sure they are never null,
         // even before notifyNetworkConnected.
@@ -2139,7 +2142,7 @@ public class NetworkMonitor extends StateMachine {
         // 2. Accumulate enough packets count.
         // TODO: Need to filter per target network.
         if (dataStallEvaluateTypeEnabled(DATA_STALL_EVALUATION_TYPE_TCP)) {
-            if (getTcpSocketTracker().getSentSinceLastRecv() > 0) {
+            if (getTcpSocketTracker().getLatestReceivedCount() > 0) {
                 result = false;
             } else if (getTcpSocketTracker().isDataStallSuspected()) {
                 result = true;
@@ -2160,8 +2163,8 @@ public class NetworkMonitor extends StateMachine {
         if (VDBG_STALL) {
             log("isDataStall: result=" + result + ", consecutive dns timeout count="
                     + mDnsStallDetector.getConsecutiveTimeoutCount()
-                    + ", tcp packets received=" + getTcpSocketTracker().getSentSinceLastRecv()
-                    + ", tcp fail rate=" + getTcpSocketTracker().getLatestPacketFailRate());
+                    + ", tcp packets received=" + getTcpSocketTracker().getLatestReceivedCount()
+                    + ", tcp fail rate=" + getTcpSocketTracker().getLatestPacketFailPercentage());
         }
 
         return (result == null) ? false : result;

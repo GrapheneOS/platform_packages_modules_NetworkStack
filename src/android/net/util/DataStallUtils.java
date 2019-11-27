@@ -98,7 +98,7 @@ public class DataStallUtils {
      * Type: int
      * Valid values: 0 to 100.
      */
-    public static final String CONFIG_TCP_PACKETS_FAIL_RATE = "tcp_packets_fail_rate";
+    public static final String CONFIG_TCP_PACKETS_FAIL_PERCENTAGE = "tcp_packets_fail_percentage";
 
     /** Corresponds to enum from bionic/libc/include/netinet/tcp.h. */
     public static final int TCP_ESTABLISHED = 1;

@@ -16,11 +16,14 @@
 package com.android.networkstack.netlink;
 
 import static android.net.netlink.InetDiagMessage.InetDiagReqV2;
+import static android.net.netlink.NetlinkConstants.INET_DIAG_MEMINFO;
+import static android.net.netlink.NetlinkConstants.NLA_ALIGNTO;
 import static android.net.netlink.NetlinkConstants.NLMSG_DONE;
+import static android.net.netlink.NetlinkConstants.SOCKDIAG_MSG_HEADER_SIZE;
 import static android.net.netlink.StructNlMsgHdr.NLM_F_DUMP;
 import static android.net.netlink.StructNlMsgHdr.NLM_F_REQUEST;
 import static android.net.util.DataStallUtils.CONFIG_MIN_PACKETS_THRESHOLD;
-import static android.net.util.DataStallUtils.CONFIG_TCP_PACKETS_FAIL_RATE;
+import static android.net.util.DataStallUtils.CONFIG_TCP_PACKETS_FAIL_PERCENTAGE;
 import static android.net.util.DataStallUtils.DEFAULT_DATA_STALL_MIN_PACKETS_THRESHOLD;
 import static android.net.util.DataStallUtils.DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE;
 import static android.net.util.DataStallUtils.TCP_MONITOR_STATE_FILTER;
@@ -35,13 +38,15 @@ import static android.system.OsConstants.SOCK_DGRAM;
 import static android.system.OsConstants.SOL_SOCKET;
 import static android.system.OsConstants.SO_SNDTIMEO;
 
+import android.content.Context;
 import android.net.netlink.NetlinkSocket;
 import android.net.netlink.StructInetDiagMsg;
 import android.net.netlink.StructNlMsgHdr;
 import android.net.util.NetworkStackUtils;
 import android.net.util.SocketUtils;
-import android.os.Build;
+import android.os.AsyncTask;
 import android.os.SystemClock;
+import android.provider.DeviceConfig;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.StructTimeval;
@@ -53,7 +58,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.android.internal.annotations.VisibleForTesting;
-import com.android.networkstack.apishim.ShimUtils;
 
 import java.io.FileDescriptor;
 import java.io.InterruptedIOException;
@@ -65,7 +69,7 @@ import java.util.List;
 /**
  * Class for NetworkStack to send a SockDiag request and parse the returned tcp info.
  *
- * This should be only access from the NetworkMonitor statemahcine thread.
+ * This is not thread-safe. This should be only accessed from one thread.
  */
 public class TcpSocketTracker {
     private static final String TAG = "TcpSocketTracker";
@@ -75,16 +79,6 @@ public class TcpSocketTracker {
     private static final int DEFAULT_RECV_BUFSIZE = 60_000;
     // Default I/O timeout time in ms of the socket request.
     private static final long IO_TIMEOUT = 3_000L;
-    // Map to definition in bionic/libc/kernel/uapi/linux/netlink.h.
-    private static final int NLMSG_ALIGNTO = 4;
-    /**
-     * Flag for dumping struct tcp_info.
-     * Corresponding to enum definition in external/strace/linux/inet_diag.h.
-     */
-    private static final int INET_DIAG_MEMINFO = 1;
-    @VisibleForTesting
-    public static final int SOCKDIAG_MSG_HEADER_SIZE =
-            StructNlMsgHdr.STRUCT_SIZE + StructInetDiagMsg.STRUCT_SIZE;
     /** Cookie offset of an InetMagMessage header. */
     private static final int IDIAG_COOKIE_OFFSET = 44;
     /**
@@ -98,7 +92,9 @@ public class TcpSocketTracker {
     // Number of packets sent since the last received packet
     private int mSentSinceLastRecv;
     // The latest fail rate calculated by the latest tcp info.
-    private int mLatestPacketFailRate;
+    private int mLatestPacketFailPercentage;
+    // Number of packets received in the latest polling cycle.
+    private int mLatestReceivedCount;
     /**
      * Request to send to kernel to request tcp info.
      *
@@ -106,15 +102,30 @@ public class TcpSocketTracker {
      * Value: Bytes array represent the {@Code InetDiagReqV2}.
      */
     private final SparseArray<byte[]> mSockDiagMsg = new SparseArray<>();
+    private final Dependencies mDependencies;
+    private int mMinPacketsThreshold = DEFAULT_DATA_STALL_MIN_PACKETS_THRESHOLD;
+    private int mTcpPacketsFailRateThreshold = DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE;
     @VisibleForTesting
-    public final Dependencies mDependencies;
+    protected final DeviceConfig.OnPropertiesChangedListener mConfigListener =
+            new DeviceConfig.OnPropertiesChangedListener() {
+                @Override
+                public void onPropertiesChanged(DeviceConfig.Properties properties) {
+                    mMinPacketsThreshold = mDependencies.getDeviceConfigPropertyInt(
+                            NAMESPACE_CONNECTIVITY,
+                            CONFIG_MIN_PACKETS_THRESHOLD,
+                            DEFAULT_DATA_STALL_MIN_PACKETS_THRESHOLD);
+                    mTcpPacketsFailRateThreshold = mDependencies.getDeviceConfigPropertyInt(
+                            NAMESPACE_CONNECTIVITY,
+                            CONFIG_TCP_PACKETS_FAIL_PERCENTAGE,
+                            DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE);
+                }
+            };
 
-    public TcpSocketTracker(Dependencies dps) {
+    public TcpSocketTracker(@NonNull final Dependencies dps) {
+        mDependencies = dps;
         // Request tcp info from NetworkStack directly needs extra SELinux permission added after Q
         // release.
-        mDependencies = dps;
         if (!mDependencies.isTcpInfoParsingSupported()) return;
-
         // Build SocketDiag messages.
         for (final int family : ADDRESS_FAMILIES) {
             mSockDiagMsg.put(
@@ -128,14 +139,14 @@ public class TcpSocketTracker {
                             1 << INET_DIAG_MEMINFO /* idiagExt */,
                             TCP_MONITOR_STATE_FILTER));
         }
+        mDependencies.addDeviceConfigChangedListener(mConfigListener);
     }
 
     /**
      * Request to send a SockDiag Netlink request. Receive and parse the returned message. This
-     * function should only be called from statemachine thread of NetworkMonitor.
+     * function is not thread-safe and should only be called from only one thread.
      *
      * @Return if this polling request executes successfully or not.
-     *
      * TODO: Need to filter socket info based on the target network.
      */
     public boolean pollSocketsInfo() {
@@ -143,7 +154,7 @@ public class TcpSocketTracker {
         FileDescriptor fd = null;
         try {
             final long time = SystemClock.elapsedRealtime();
-            fd =  mDependencies.connectToKernel();
+            fd = mDependencies.connectToKernel();
 
             final TcpStat stat = new TcpStat();
             for (final int family : ADDRESS_FAMILIES) {
@@ -163,6 +174,10 @@ public class TcpSocketTracker {
 
                 while (enoughBytesRemainForValidNlMsg(bytes)) {
                     final StructNlMsgHdr nlmsghdr = StructNlMsgHdr.parse(bytes);
+                    if (nlmsghdr == null) {
+                        Log.e(TAG, "Badly formatted data.");
+                        break;
+                    }
                     final int nlmsgLen = nlmsghdr.nlmsg_len;
                     log("pollSocketsInfo: nlmsghdr=" + nlmsghdr);
                     if (nlmsghdr.nlmsg_type == NLMSG_DONE) break;
@@ -175,19 +190,20 @@ public class TcpSocketTracker {
                         // It's stored in native with 2 int. Parse it as long for convenience.
                         final long cookie = bytes.getLong();
                         // Skip the rest part of StructInetDiagMsg.
-                        bytes.position(bytes.position() + 5 * Integer.BYTES);
-                        final SocketInfo info =
-                                parseSockInfo(bytes, family, nlmsgLen, time);
+                        bytes.position(bytes.position()
+                                + StructInetDiagMsg.STRUCT_SIZE - IDIAG_COOKIE_OFFSET - Long.BYTES);
+                        final SocketInfo info = parseSockInfo(bytes, family, nlmsgLen, time);
                         // Update TcpStats based on previous and current socket info.
                         stat.accumulate(calculateLatestPacketsStat(info, mSocketInfos.get(cookie)));
                         mSocketInfos.put(cookie, info);
                     }
                 }
             }
-            // Calculate mSentSinceLastRecv and mLatestPacketFailRate.
+            // Calculate mLatestReceiveCount, mSentSinceLastRecv and mLatestPacketFailPercentage.
             mSentSinceLastRecv = (stat.receivedCount == 0)
                     ? (mSentSinceLastRecv + stat.sentCount) : 0;
-            mLatestPacketFailRate = ((stat.sentCount != 0)
+            mLatestReceivedCount = stat.receivedCount;
+            mLatestPacketFailPercentage = ((stat.sentCount != 0)
                     ? ((stat.retransmitCount + stat.lostCount) * 100 / stat.sentCount) : 0);
 
             // Remove out-of-date socket info.
@@ -252,20 +268,25 @@ public class TcpSocketTracker {
      */
     public boolean isDataStallSuspected() {
         if (!mDependencies.isTcpInfoParsingSupported()) return false;
-        return (getLatestPacketFailRate() >= getTcpPacketsFailRateThreshold());
+        return (getLatestPacketFailPercentage() >= getTcpPacketsFailRateThreshold());
     }
 
     /** Calculate the change between the {@param current} and {@param previous}. */
+    @Nullable
     private TcpStat calculateLatestPacketsStat(@NonNull final SocketInfo current,
             @Nullable final SocketInfo previous) {
         final TcpStat stat = new TcpStat();
 
-        if (current.tcpInfo != null) {
-            stat.sentCount = current.tcpInfo.getValue(TcpInfo.Field.SEGS_OUT).intValue();
-            stat.receivedCount = current.tcpInfo.getValue(TcpInfo.Field.SEGS_IN).intValue();
-            stat.lostCount = current.tcpInfo.getValue(TcpInfo.Field.LOST).intValue();
-            stat.retransmitCount = current.tcpInfo.getValue(TcpInfo.Field.RETRANSMITS).intValue();
+        if (current.tcpInfo == null) {
+            log("Current tcpInfo is null.");
+            return null;
         }
+
+        stat.sentCount = current.tcpInfo.getValue(TcpInfo.Field.SEGS_OUT).intValue();
+        stat.receivedCount = current.tcpInfo.getValue(TcpInfo.Field.SEGS_IN).intValue();
+        stat.lostCount = current.tcpInfo.getValue(TcpInfo.Field.LOST).intValue();
+        stat.retransmitCount = current.tcpInfo.getValue(TcpInfo.Field.RETRANSMITS).intValue();
+
         if (previous != null && previous.tcpInfo != null) {
             stat.sentCount -= previous.tcpInfo.getValue(TcpInfo.Field.SEGS_OUT).intValue();
             stat.receivedCount -= previous.tcpInfo.getValue(TcpInfo.Field.SEGS_IN).intValue();
@@ -278,12 +299,14 @@ public class TcpSocketTracker {
 
     /**
      * Get tcp connection fail rate based on packet lost and retransmission count.
+     *
+     * @return the latest packet fail percentage. -1 denotes that there is no available data.
      */
-    public int getLatestPacketFailRate() {
-        if (!mDependencies.isTcpInfoParsingSupported()) return 0;
+    public int getLatestPacketFailPercentage() {
+        if (!mDependencies.isTcpInfoParsingSupported()) return -1;
         // Only return fail rate if device sent enough packets.
-        if (getSentSinceLastRecv() < getMinPacketsThreshold()) return 0;
-        return mLatestPacketFailRate;
+        if (getSentSinceLastRecv() < getMinPacketsThreshold()) return -1;
+        return mLatestPacketFailPercentage;
     }
 
     /**
@@ -291,18 +314,14 @@ public class TcpSocketTracker {
      * between each polling period, not an accurate number.
      */
     public int getSentSinceLastRecv() {
-        if (!mDependencies.isTcpInfoParsingSupported()) return 0;
+        if (!mDependencies.isTcpInfoParsingSupported()) return -1;
         return mSentSinceLastRecv;
     }
 
-    private int getMinPacketsThreshold() {
-        return mDependencies.getDeviceConfigPropertyInt(NAMESPACE_CONNECTIVITY,
-                CONFIG_MIN_PACKETS_THRESHOLD, DEFAULT_DATA_STALL_MIN_PACKETS_THRESHOLD);
-    }
-
-    private int getTcpPacketsFailRateThreshold() {
-        return mDependencies.getDeviceConfigPropertyInt(NAMESPACE_CONNECTIVITY,
-                CONFIG_TCP_PACKETS_FAIL_RATE, DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE);
+    /** Return the number of the packets received in the latest polling cycle. */
+    public int getLatestReceivedCount() {
+        if (!mDependencies.isTcpInfoParsingSupported()) return -1;
+        return mLatestReceivedCount;
     }
 
     /** Check if the length and position of the given ByteBuffer is valid for a nlmsghdr message. */
@@ -315,6 +334,14 @@ public class TcpSocketTracker {
         return nlMsgLen >= SOCKDIAG_MSG_HEADER_SIZE;
     }
 
+    private int getMinPacketsThreshold() {
+        return mMinPacketsThreshold;
+    }
+
+    private int getTcpPacketsFailRateThreshold() {
+        return mTcpPacketsFailRateThreshold;
+    }
+
     /**
      * Method to skip the remaining attributes bytes.
      * Corresponds to NLMSG_NEXT in bionic/libc/kernel/uapi/linux/netlink.h.
@@ -324,12 +351,12 @@ public class TcpSocketTracker {
      */
     private void skipRemainingAttributesBytesAligned(@NonNull final ByteBuffer buffer,
             final int len) {
-        // Data in {@Code RoutingAttribute} is followed after header with size {@Code NLMSG_ALIGNTO}
+        // Data in {@Code RoutingAttribute} is followed after header with size {@Code NLA_ALIGNTO}
         // bytes long for each block. Next attribute will start after the padding bytes if any.
         // If all remaining bytes after header are valid in a data block, next attr will just start
         // after valid bytes.
         //
-        // E.g. With NLMSG_ALIGNTO(4), an attr struct with length 5 means 1 byte valid data remains
+        // E.g. With NLA_ALIGNTO(4), an attr struct with length 5 means 1 byte valid data remains
         // after header and 3(4-1) padding bytes. Next attr with length 8 will start after the
         // padding bytes and contain 4(8-4) valid bytes of data. The next attr start after the
         // valid bytes, like:
@@ -337,7 +364,7 @@ public class TcpSocketTracker {
         // [HEADER(L=5)][   4-Bytes DATA      ][ HEADER(L=8) ][4 bytes DATA][Next attr]
         // [ 5 valid bytes ][3 padding bytes  ][      8 valid bytes        ]   ...
         final int cur = buffer.position();
-        buffer.position(cur + ((len + NLMSG_ALIGNTO - 1) & ~(NLMSG_ALIGNTO - 1)));
+        buffer.position(cur + ((len + NLA_ALIGNTO - 1) & ~(NLA_ALIGNTO - 1)));
     }
 
     private void log(final String str) {
@@ -423,7 +450,9 @@ public class TcpSocketTracker {
         public int retransmitCount;
         public int receivedCount;
 
-        void accumulate(final TcpStat stat) {
+        void accumulate(@Nullable final TcpStat stat) {
+            if (stat == null) return;
+
             sentCount += stat.sentCount;
             lostCount += stat.lostCount;
             receivedCount += stat.receivedCount;
@@ -431,12 +460,19 @@ public class TcpSocketTracker {
         }
     }
 
-
     /**
      * Dependencies class for testing.
      */
     @VisibleForTesting
     public static class Dependencies {
+        private final Context mContext;
+        private final boolean mIsTcpInfoParsingSupported;
+
+        public Dependencies(final Context context, final boolean tcpSupport) {
+            mContext = context;
+            mIsTcpInfoParsingSupported = tcpSupport;
+        }
+
         /**
          * Connect to kernel via netlink socket.
          *
@@ -451,6 +487,7 @@ public class TcpSocketTracker {
 
             return fd;
         }
+
         /**
          * Send composed message request to kernel.
          * @param fd see {@Code FileDescriptor}
@@ -484,7 +521,7 @@ public class TcpSocketTracker {
         public boolean isTcpInfoParsingSupported() {
             // Request tcp info from NetworkStack directly needs extra SELinux permission added
             // after Q release.
-            return ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q);
+            return mIsTcpInfoParsingSupported;
         }
 
         /**
@@ -493,6 +530,17 @@ public class TcpSocketTracker {
         public ByteBuffer recvMesssage(@NonNull final FileDescriptor fd)
                 throws ErrnoException, InterruptedIOException {
             return NetlinkSocket.recvMessage(fd, DEFAULT_RECV_BUFSIZE, IO_TIMEOUT);
+        }
+
+        public Context getContext() {
+            return mContext;
+        }
+
+        /** Add device config change listener */
+        public void addDeviceConfigChangedListener(
+                @NonNull final DeviceConfig.OnPropertiesChangedListener listener) {
+            DeviceConfig.addOnPropertiesChangedListener(NAMESPACE_CONNECTIVITY,
+                    AsyncTask.THREAD_POOL_EXECUTOR, listener);
         }
     }
 }

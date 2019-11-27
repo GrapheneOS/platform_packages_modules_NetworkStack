@@ -81,12 +81,12 @@ java_defaults {
     name: "NetworkStackAndroidLibraryDefaults",
     srcs: [
         ":framework-networkstack-shared-srcs",
-        ":services-networkstack-shared-srcs",
         ":statslog-networkstack-java-gen",
     ],
     static_libs: [
         "androidx.annotation_annotation",
         "netd_aidl_interface-V2-java",
+        "netlink-client",
         "networkstack-client",
         "datastallprotosnano",
         "networkstackprotosnano",
