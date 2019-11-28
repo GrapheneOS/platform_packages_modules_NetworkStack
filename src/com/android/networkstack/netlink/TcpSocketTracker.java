@@ -20,6 +20,7 @@ import static android.net.netlink.NetlinkConstants.INET_DIAG_MEMINFO;
 import static android.net.netlink.NetlinkConstants.NLA_ALIGNTO;
 import static android.net.netlink.NetlinkConstants.NLMSG_DONE;
 import static android.net.netlink.NetlinkConstants.SOCKDIAG_MSG_HEADER_SIZE;
+import static android.net.netlink.NetlinkConstants.SOCK_DIAG_BY_FAMILY;
 import static android.net.netlink.StructNlMsgHdr.NLM_F_DUMP;
 import static android.net.netlink.StructNlMsgHdr.NLM_F_REQUEST;
 import static android.net.util.DataStallUtils.CONFIG_MIN_PACKETS_THRESHOLD;
@@ -180,7 +181,14 @@ public class TcpSocketTracker {
                     }
                     final int nlmsgLen = nlmsghdr.nlmsg_len;
                     log("pollSocketsInfo: nlmsghdr=" + nlmsghdr);
+                    // End of the message. Stop parsing.
                     if (nlmsghdr.nlmsg_type == NLMSG_DONE) break;
+
+                    if (nlmsghdr.nlmsg_type != SOCK_DIAG_BY_FAMILY) {
+                        Log.e(TAG, "Expect to get family " + family
+                                + " SOCK_DIAG_BY_FAMILY message but get " + nlmsghdr.nlmsg_type);
+                        break;
+                    }
 
                     if (isValidInetDiagMsgSize(nlmsgLen)) {
                         // Get the socket cookie value. Composed by two Integers value.
