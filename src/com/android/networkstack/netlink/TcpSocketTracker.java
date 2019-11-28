@@ -17,7 +17,6 @@ package com.android.networkstack.netlink;
 
 import static android.net.netlink.InetDiagMessage.InetDiagReqV2;
 import static android.net.netlink.NetlinkConstants.INET_DIAG_MEMINFO;
-import static android.net.netlink.NetlinkConstants.NLA_ALIGNTO;
 import static android.net.netlink.NetlinkConstants.NLMSG_DONE;
 import static android.net.netlink.NetlinkConstants.SOCKDIAG_MSG_HEADER_SIZE;
 import static android.net.netlink.NetlinkConstants.SOCK_DIAG_BY_FAMILY;
@@ -40,6 +39,7 @@ import static android.system.OsConstants.SOL_SOCKET;
 import static android.system.OsConstants.SO_SNDTIMEO;
 
 import android.content.Context;
+import android.net.netlink.NetlinkConstants;
 import android.net.netlink.NetlinkSocket;
 import android.net.netlink.StructInetDiagMsg;
 import android.net.netlink.StructNlMsgHdr;
@@ -252,7 +252,7 @@ public class TcpSocketTracker {
         while (bytes.position() < remainingDataSize) {
             final RoutingAttribute rtattr =
                     new RoutingAttribute(bytes.getShort(), bytes.getShort());
-            final int dataLen = rtattr.getDataLength();
+            final short dataLen = rtattr.getDataLength();
             if (rtattr.rtaType == RoutingAttribute.INET_DIAG_INFO) {
                 tcpInfo = TcpInfo.parse(bytes, dataLen);
             } else if (rtattr.rtaType == RoutingAttribute.INET_DIAG_MARK) {
@@ -358,7 +358,7 @@ public class TcpSocketTracker {
      * @param len the remaining length to skip.
      */
     private void skipRemainingAttributesBytesAligned(@NonNull final ByteBuffer buffer,
-            final int len) {
+            final short len) {
         // Data in {@Code RoutingAttribute} is followed after header with size {@Code NLA_ALIGNTO}
         // bytes long for each block. Next attribute will start after the padding bytes if any.
         // If all remaining bytes after header are valid in a data block, next attr will just start
@@ -372,7 +372,7 @@ public class TcpSocketTracker {
         // [HEADER(L=5)][   4-Bytes DATA      ][ HEADER(L=8) ][4 bytes DATA][Next attr]
         // [ 5 valid bytes ][3 padding bytes  ][      8 valid bytes        ]   ...
         final int cur = buffer.position();
-        buffer.position(cur + ((len + NLA_ALIGNTO - 1) & ~(NLA_ALIGNTO - 1)));
+        buffer.position(cur + NetlinkConstants.alignedLengthOf(len));
     }
 
     private void log(final String str) {
@@ -401,8 +401,8 @@ public class TcpSocketTracker {
             rtaLen = len;
             rtaType = type;
         }
-        public int getDataLength() {
-            return rtaLen - HEADER_LENGTH;
+        public short getDataLength() {
+            return (short) (rtaLen - HEADER_LENGTH);
         }
     }
 
