@@ -56,6 +56,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -103,7 +104,6 @@ import androidx.test.runner.AndroidJUnit4;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
 import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
-import com.android.testutils.HandlerUtilsKt;
 
 import org.junit.After;
 import org.junit.Before;
@@ -113,6 +113,7 @@ import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.Spy;
 
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
@@ -142,7 +143,6 @@ public class IpClientIntegrationTest {
 
     @Mock private Context mContext;
     @Mock private ConnectivityManager mCm;
-    @Mock private INetd mMockNetd;
     @Mock private Resources mResources;
     @Mock private IIpClientCallbacks mCb;
     @Mock private AlarmManager mAlarm;
@@ -151,8 +151,9 @@ public class IpClientIntegrationTest {
     @Mock private NetworkStackIpMemoryStore mIpMemoryStore;
     @Mock private IpMemoryStoreService mIpMemoryStoreService;
 
+    @Spy private INetd mNetd;
+
     private String mIfaceName;
-    private INetd mNetd;
     private HandlerThread mPacketReaderThread;
     private Handler mHandler;
     private TapPacketReader mPacketReader;
@@ -249,7 +250,7 @@ public class IpClientIntegrationTest {
 
         @Override
         public INetd getNetd(Context context) {
-            return mMockNetd;
+            return mNetd;
         }
 
         @Override
@@ -310,6 +311,10 @@ public class IpClientIntegrationTest {
         setUpIpClient();
     }
 
+    private void awaitIpClientShutdown() throws Exception {
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onQuit();
+    }
+
     @After
     public void tearDown() throws Exception {
         if (mPacketReader != null) {
@@ -319,6 +324,7 @@ public class IpClientIntegrationTest {
             mPacketReaderThread.quitSafely();
         }
         mIpc.shutdown();
+        awaitIpClientShutdown();
     }
 
     private void setUpTapInterface() {
@@ -350,7 +356,7 @@ public class IpClientIntegrationTest {
         final Instrumentation inst = InstrumentationRegistry.getInstrumentation();
         final IBinder netdIBinder =
                 (IBinder) inst.getContext().getSystemService(Context.NETD_SERVICE);
-        mNetd = INetd.Stub.asInterface(netdIBinder);
+        mNetd = spy(INetd.Stub.asInterface(netdIBinder));
         when(mContext.getSystemService(eq(Context.NETD_SERVICE))).thenReturn(netdIBinder);
         assertNotNull(mNetd);
 
@@ -560,12 +566,12 @@ public class IpClientIntegrationTest {
         if (shouldRemoveTapInterface) removeTapInterface(mPacketReader.createFd());
         try {
             mIpc.shutdown();
-            HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+            awaitIpClientShutdown();
             if (shouldRemoveTapInterface) {
-                verify(mMockNetd, never()).interfaceSetMtu(mIfaceName, TEST_DEFAULT_MTU);
+                verify(mNetd, never()).interfaceSetMtu(mIfaceName, TEST_DEFAULT_MTU);
             } else {
                 // Verify that MTU indeed has been restored or not.
-                verify(mMockNetd, times(shouldChangeMtu ? 1 : 0))
+                verify(mNetd, times(shouldChangeMtu ? 1 : 0))
                         .interfaceSetMtu(mIfaceName, TEST_DEFAULT_MTU);
             }
             verifyAfterIpClientShutdown();
@@ -712,7 +718,7 @@ public class IpClientIntegrationTest {
 
     @Test
     public void testRestoreInitialInterfaceMtu_WithException() throws Exception {
-        doThrow(new RemoteException("NetdNativeService::interfaceSetMtu")).when(mMockNetd)
+        doThrow(new RemoteException("NetdNativeService::interfaceSetMtu")).when(mNetd)
                 .interfaceSetMtu(mIfaceName, TEST_DEFAULT_MTU);
 
         doRestoreInitialMtuTest(true /* shouldChangeMtu */, false /* shouldRemoveTapInterface */);
