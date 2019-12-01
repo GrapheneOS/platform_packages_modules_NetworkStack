@@ -17,9 +17,9 @@ package com.android.networkstack.netlink;
 
 import static android.net.netlink.InetDiagMessage.InetDiagReqV2;
 import static android.net.netlink.NetlinkConstants.INET_DIAG_MEMINFO;
-import static android.net.netlink.NetlinkConstants.NLA_ALIGNTO;
 import static android.net.netlink.NetlinkConstants.NLMSG_DONE;
 import static android.net.netlink.NetlinkConstants.SOCKDIAG_MSG_HEADER_SIZE;
+import static android.net.netlink.NetlinkConstants.SOCK_DIAG_BY_FAMILY;
 import static android.net.netlink.StructNlMsgHdr.NLM_F_DUMP;
 import static android.net.netlink.StructNlMsgHdr.NLM_F_REQUEST;
 import static android.net.util.DataStallUtils.CONFIG_MIN_PACKETS_THRESHOLD;
@@ -39,6 +39,7 @@ import static android.system.OsConstants.SOL_SOCKET;
 import static android.system.OsConstants.SO_SNDTIMEO;
 
 import android.content.Context;
+import android.net.netlink.NetlinkConstants;
 import android.net.netlink.NetlinkSocket;
 import android.net.netlink.StructInetDiagMsg;
 import android.net.netlink.StructNlMsgHdr;
@@ -62,8 +63,10 @@ import com.android.internal.annotations.VisibleForTesting;
 import java.io.FileDescriptor;
 import java.io.InterruptedIOException;
 import java.net.SocketException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 /**
@@ -171,32 +174,47 @@ public class TcpSocketTracker {
                 // | struct nlmsghdr  | struct rtmsg  | struct rtattr|  data  |
                 // +------------------+---------------+--------------+--------+
                 final ByteBuffer bytes = mDependencies.recvMesssage(fd);
+                try {
+                    while (enoughBytesRemainForValidNlMsg(bytes)) {
+                        final StructNlMsgHdr nlmsghdr = StructNlMsgHdr.parse(bytes);
+                        if (nlmsghdr == null) {
+                            Log.e(TAG, "Badly formatted data.");
+                            break;
+                        }
+                        final int nlmsgLen = nlmsghdr.nlmsg_len;
+                        log("pollSocketsInfo: nlmsghdr=" + nlmsghdr + ", limit=" + bytes.limit());
+                        // End of the message. Stop parsing.
+                        if (nlmsghdr.nlmsg_type == NLMSG_DONE) break;
 
-                while (enoughBytesRemainForValidNlMsg(bytes)) {
-                    final StructNlMsgHdr nlmsghdr = StructNlMsgHdr.parse(bytes);
-                    if (nlmsghdr == null) {
-                        Log.e(TAG, "Badly formatted data.");
-                        break;
-                    }
-                    final int nlmsgLen = nlmsghdr.nlmsg_len;
-                    log("pollSocketsInfo: nlmsghdr=" + nlmsghdr);
-                    if (nlmsghdr.nlmsg_type == NLMSG_DONE) break;
+                        if (nlmsghdr.nlmsg_type != SOCK_DIAG_BY_FAMILY) {
+                            Log.e(TAG, "Expect to get family " + family
+                                    + " SOCK_DIAG_BY_FAMILY message but get "
+                                    + nlmsghdr.nlmsg_type);
+                            break;
+                        }
 
-                    if (isValidInetDiagMsgSize(nlmsgLen)) {
-                        // Get the socket cookie value. Composed by two Integers value.
-                        // Corresponds to inet_diag_sockid in
-                        // &lt;linux_src&gt;/include/uapi/linux/inet_diag.h
-                        bytes.position(bytes.position() + IDIAG_COOKIE_OFFSET);
-                        // It's stored in native with 2 int. Parse it as long for convenience.
-                        final long cookie = bytes.getLong();
-                        // Skip the rest part of StructInetDiagMsg.
-                        bytes.position(bytes.position()
-                                + StructInetDiagMsg.STRUCT_SIZE - IDIAG_COOKIE_OFFSET - Long.BYTES);
-                        final SocketInfo info = parseSockInfo(bytes, family, nlmsgLen, time);
-                        // Update TcpStats based on previous and current socket info.
-                        stat.accumulate(calculateLatestPacketsStat(info, mSocketInfos.get(cookie)));
-                        mSocketInfos.put(cookie, info);
+                        if (isValidInetDiagMsgSize(nlmsgLen)) {
+                            // Get the socket cookie value. Composed by two Integers value.
+                            // Corresponds to inet_diag_sockid in
+                            // &lt;linux_src&gt;/include/uapi/linux/inet_diag.h
+                            bytes.position(bytes.position() + IDIAG_COOKIE_OFFSET);
+                            // It's stored in native with 2 int. Parse it as long for convenience.
+                            final long cookie = bytes.getLong();
+                            // Skip the rest part of StructInetDiagMsg.
+                            bytes.position(bytes.position()
+                                    + StructInetDiagMsg.STRUCT_SIZE - IDIAG_COOKIE_OFFSET
+                                    - Long.BYTES);
+                            final SocketInfo info = parseSockInfo(bytes, family, nlmsgLen, time);
+                            // Update TcpStats based on previous and current socket info.
+                            stat.accumulate(
+                                    calculateLatestPacketsStat(info, mSocketInfos.get(cookie)));
+                            mSocketInfos.put(cookie, info);
+                        }
                     }
+                } catch (IllegalArgumentException | BufferUnderflowException e) {
+                    Log.wtf(TAG, "Unexpected socket info parsing, " + e + ", family " + family
+                            + " buffer:" + bytes + " "
+                            + Base64.getEncoder().encodeToString(bytes.array()));
                 }
             }
             // Calculate mLatestReceiveCount, mSentSinceLastRecv and mLatestPacketFailPercentage.
@@ -244,7 +262,7 @@ public class TcpSocketTracker {
         while (bytes.position() < remainingDataSize) {
             final RoutingAttribute rtattr =
                     new RoutingAttribute(bytes.getShort(), bytes.getShort());
-            final int dataLen = rtattr.getDataLength();
+            final short dataLen = rtattr.getDataLength();
             if (rtattr.rtaType == RoutingAttribute.INET_DIAG_INFO) {
                 tcpInfo = TcpInfo.parse(bytes, dataLen);
             } else if (rtattr.rtaType == RoutingAttribute.INET_DIAG_MARK) {
@@ -350,7 +368,7 @@ public class TcpSocketTracker {
      * @param len the remaining length to skip.
      */
     private void skipRemainingAttributesBytesAligned(@NonNull final ByteBuffer buffer,
-            final int len) {
+            final short len) {
         // Data in {@Code RoutingAttribute} is followed after header with size {@Code NLA_ALIGNTO}
         // bytes long for each block. Next attribute will start after the padding bytes if any.
         // If all remaining bytes after header are valid in a data block, next attr will just start
@@ -364,7 +382,7 @@ public class TcpSocketTracker {
         // [HEADER(L=5)][   4-Bytes DATA      ][ HEADER(L=8) ][4 bytes DATA][Next attr]
         // [ 5 valid bytes ][3 padding bytes  ][      8 valid bytes        ]   ...
         final int cur = buffer.position();
-        buffer.position(cur + ((len + NLA_ALIGNTO - 1) & ~(NLA_ALIGNTO - 1)));
+        buffer.position(cur + NetlinkConstants.alignedLengthOf(len));
     }
 
     private void log(final String str) {
@@ -393,8 +411,8 @@ public class TcpSocketTracker {
             rtaLen = len;
             rtaType = type;
         }
-        public int getDataLength() {
-            return rtaLen - HEADER_LENGTH;
+        public short getDataLength() {
+            return (short) (rtaLen - HEADER_LENGTH);
         }
     }
 
