@@ -51,6 +51,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
@@ -919,4 +920,49 @@ public class IpClientIntegrationTest {
 
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(captor.capture());
         lp = captor.getValue();
-    }}
+        assertNotNull(lp);
+        assertEquals(0, lp.getDnsServers().size());
+        reset(mCb);
+    }
+
+    @Test
+    public void testIpClientClearingIpAddressState() throws Exception {
+        final long currentTime = System.currentTimeMillis();
+        performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
+                true /* isDhcpLeaseCacheEnabled */, false /* isDhcpRapidCommitEnabled */,
+                TEST_DEFAULT_MTU);
+        assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
+
+        ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        LinkProperties lp = captor.getValue();
+        assertNotNull(lp);
+        assertEquals(1, lp.getAddresses().size());
+        assertTrue(lp.getAddresses().contains(InetAddress.getByName(CLIENT_ADDR.getHostAddress())));
+
+        // Stop IpClient and expect a final LinkProperties callback with an empty LP.
+        mIpc.stop();
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(argThat(
+                x -> x.getAddresses().size() == 0
+                        && x.getRoutes().size() == 0
+                        && x.getDnsServers().size() == 0));
+        reset(mCb);
+
+        // Pretend that something else (e.g., Tethering) used the interface and left an IP address
+        // configured on it. When IpClient starts, it must clear this address before proceeding.
+        // TODO: test IPv6 instead, since the DHCP client will remove this address by replacing it
+        // with the new address.
+        mNetd.interfaceAddAddress(mIfaceName, "192.0.2.99", 26);
+
+        // start IpClient again and should enter Clearing State and wait for the message from kernel
+        performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
+                true /* isDhcpLeaseCacheEnabled */, false /* isDhcpRapidCommitEnabled */,
+                TEST_DEFAULT_MTU);
+
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        lp = captor.getValue();
+        assertNotNull(lp);
+        assertEquals(1, lp.getAddresses().size());
+        assertTrue(lp.getAddresses().contains(InetAddress.getByName(CLIENT_ADDR.getHostAddress())));
+    }
+}
