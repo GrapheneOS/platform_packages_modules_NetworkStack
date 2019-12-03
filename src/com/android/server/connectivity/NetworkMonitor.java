@@ -144,6 +144,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Random;
+import java.util.StringJoiner;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -390,15 +391,15 @@ public class NetworkMonitor extends StateMachine {
     public NetworkMonitor(Context context, INetworkMonitorCallbacks cb, Network network,
             SharedLog validationLog) {
         this(context, cb, network, new IpConnectivityLog(), validationLog,
-                Dependencies.DEFAULT, new DataStallStatsUtils(), new TcpSocketTracker(
-                        new TcpSocketTracker.Dependencies(context,
-                        ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q))));
+                Dependencies.DEFAULT, new DataStallStatsUtils(),
+                getTcpSocketTrackerOrNull(context));
     }
 
     @VisibleForTesting
     public NetworkMonitor(Context context, INetworkMonitorCallbacks cb, Network network,
             IpConnectivityLog logger, SharedLog validationLogs,
-            Dependencies deps, DataStallStatsUtils detectionStatsUtils, TcpSocketTracker tst) {
+            Dependencies deps, DataStallStatsUtils detectionStatsUtils,
+            @Nullable TcpSocketTracker tst) {
         // Add suffix indicating which NetworkMonitor we're talking about.
         super(TAG + "/" + network.toString());
 
@@ -758,8 +759,10 @@ public class NetworkMonitor extends StateMachine {
                     }
                     break;
                 case EVENT_POLL_TCPINFO:
+                    final TcpSocketTracker tst = getTcpSocketTracker();
+                    if (tst == null) break;
                     // Transit if retrieve socket info is succeeded and suspected as a stall.
-                    if (getTcpSocketTracker().pollSocketsInfo() && evaluateDataStall()) {
+                    if (tst.pollSocketsInfo() && evaluateDataStall()) {
                         transitionTo(mEvaluatingState);
                     } else {
                         sendTcpPollingEvent();
@@ -2114,6 +2117,7 @@ public class NetworkMonitor extends StateMachine {
     }
 
     @VisibleForTesting
+    @Nullable
     protected TcpSocketTracker getTcpSocketTracker() {
         return mTcpTracker;
     }
@@ -2130,6 +2134,7 @@ public class NetworkMonitor extends StateMachine {
     @VisibleForTesting
     protected boolean isDataStall() {
         Boolean result = null;
+        final StringJoiner msg = VDBG_STALL ? new StringJoiner(", ") : null;
         // Reevaluation will generate traffic. Thus, set a minimal reevaluation timer to limit the
         // possible traffic cost in metered network.
         if (!mNetworkCapabilities.hasCapability(NET_CAPABILITY_NOT_METERED)
@@ -2141,11 +2146,16 @@ public class NetworkMonitor extends StateMachine {
         // 1. TCP connection fail rate(lost+retrans) is higher than threshold.
         // 2. Accumulate enough packets count.
         // TODO: Need to filter per target network.
-        if (dataStallEvaluateTypeEnabled(DATA_STALL_EVALUATION_TYPE_TCP)) {
-            if (getTcpSocketTracker().getLatestReceivedCount() > 0) {
+        final TcpSocketTracker tst = getTcpSocketTracker();
+        if (dataStallEvaluateTypeEnabled(DATA_STALL_EVALUATION_TYPE_TCP) && tst != null) {
+            if (tst.getLatestReceivedCount() > 0) {
                 result = false;
-            } else if (getTcpSocketTracker().isDataStallSuspected()) {
+            } else if (tst.isDataStallSuspected()) {
                 result = true;
+            }
+            if (VDBG_STALL) {
+                msg.add("tcp packets received=" + tst.getLatestReceivedCount())
+                     .add("tcp fail rate=" + tst.getLatestPacketFailPercentage());
             }
         }
 
@@ -2158,13 +2168,14 @@ public class NetworkMonitor extends StateMachine {
                 result = true;
                 logNetworkEvent(NetworkEvent.NETWORK_CONSECUTIVE_DNS_TIMEOUT_FOUND);
             }
+            if (VDBG_STALL) {
+                msg.add("consecutive dns timeout count="
+                        + mDnsStallDetector.getConsecutiveTimeoutCount());
+            }
         }
 
         if (VDBG_STALL) {
-            log("isDataStall: result=" + result + ", consecutive dns timeout count="
-                    + mDnsStallDetector.getConsecutiveTimeoutCount()
-                    + ", tcp packets received=" + getTcpSocketTracker().getLatestReceivedCount()
-                    + ", tcp fail rate=" + getTcpSocketTracker().getLatestPacketFailPercentage());
+            log("isDataStall: result=" + result + ", " + msg);
         }
 
         return (result == null) ? false : result;
@@ -2297,5 +2308,17 @@ public class NetworkMonitor extends StateMachine {
          * Log function.
          */
         void log(String s);
+    }
+
+    @Nullable
+    private static TcpSocketTracker getTcpSocketTrackerOrNull(Context context) {
+        return ((Dependencies.DEFAULT.getDeviceConfigPropertyInt(
+                NAMESPACE_CONNECTIVITY,
+                CONFIG_DATA_STALL_EVALUATION_TYPE,
+                DEFAULT_DATA_STALL_EVALUATION_TYPES)
+                & DATA_STALL_EVALUATION_TYPE_TCP) != 0)
+                    ? new TcpSocketTracker(new TcpSocketTracker.Dependencies(context,
+                        ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)))
+                    : null;
     }
 }
