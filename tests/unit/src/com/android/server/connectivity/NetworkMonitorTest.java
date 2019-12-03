@@ -761,6 +761,7 @@ public class NetworkMonitorTest {
         wrappedMonitor.sendTcpPollingEvent();
         HandlerUtilsKt.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
         assertFalse(wrappedMonitor.isDataStall());
+
         when(mTst.getLatestReceivedCount()).thenReturn(0);
         when(mTst.isDataStallSuspected()).thenReturn(true);
         // Trigger a tcp event immediately.
@@ -768,6 +769,19 @@ public class NetworkMonitorTest {
         wrappedMonitor.sendTcpPollingEvent();
         HandlerUtilsKt.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
         assertTrue(wrappedMonitor.isDataStall());
+    }
+
+    @Test
+    public void testIsDataStall_DisableTcp() {
+        // Disable tcp detection with only DNS detect. keep the tcp signal but set to no DNS signal.
+        setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_DNS);
+        WrappedNetworkMonitor wrappedMonitor = makeMonitor(METERED_CAPABILITIES);
+        makeDnsSuccessEvent(wrappedMonitor, 1);
+        wrappedMonitor.sendTcpPollingEvent();
+        HandlerUtilsKt.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
+        assertFalse(wrappedMonitor.isDataStall());
+        verify(mTst, never()).isDataStallSuspected();
+        verify(mTst, never()).pollSocketsInfo();
     }
 
     @Test
