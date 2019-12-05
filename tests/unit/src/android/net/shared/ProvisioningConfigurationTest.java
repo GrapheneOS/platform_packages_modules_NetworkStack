@@ -66,8 +66,9 @@ public class ProvisioningConfigurationTest {
         mConfig.mIPv6AddrGenMode = 123;
         mConfig.mNetwork = new Network(321);
         mConfig.mDisplayName = "test_config";
+        mConfig.mEnablePreconnection = false;
         // Any added field must be included in equals() to be tested properly
-        assertFieldCountEquals(12, ProvisioningConfiguration.class);
+        assertFieldCountEquals(13, ProvisioningConfiguration.class);
     }
 
     @Test
@@ -96,6 +97,12 @@ public class ProvisioningConfigurationTest {
     @Test
     public void testParcelUnparcel_NullNetwork() {
         mConfig.mNetwork = null;
+        doParcelUnparcelTest();
+    }
+
+    @Test
+    public void testParcelUnparcel_WithPreDhcpConnection() {
+        mConfig.mEnablePreconnection = true;
         doParcelUnparcelTest();
     }
 
@@ -128,7 +135,8 @@ public class ProvisioningConfigurationTest {
         assertNotEqualsAfterChange(c -> c.mNetwork = null);
         assertNotEqualsAfterChange(c -> c.mDisplayName = "other_test");
         assertNotEqualsAfterChange(c -> c.mDisplayName = null);
-        assertFieldCountEquals(12, ProvisioningConfiguration.class);
+        assertNotEqualsAfterChange(c -> c.mEnablePreconnection = true);
+        assertFieldCountEquals(13, ProvisioningConfiguration.class);
     }
 
     private void assertNotEqualsAfterChange(Consumer<ProvisioningConfiguration> mutator) {

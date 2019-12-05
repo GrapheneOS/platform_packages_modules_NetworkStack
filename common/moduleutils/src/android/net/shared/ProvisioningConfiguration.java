@@ -121,6 +121,14 @@ public class ProvisioningConfiguration {
         }
 
         /**
+         * Specify that preconnection feature would be enabled. It's not used by default.
+         */
+        public Builder withPreconnection() {
+            mConfig.mEnablePreconnection = true;
+            return this;
+        }
+
+        /**
          * Specify the initial provisioning configuration.
          */
         public Builder withInitialConfiguration(InitialConfiguration initialConfig) {
@@ -194,6 +202,7 @@ public class ProvisioningConfiguration {
 
     public boolean mEnableIPv4 = true;
     public boolean mEnableIPv6 = true;
+    public boolean mEnablePreconnection = false;
     public boolean mUsingMultinetworkPolicyTracker = true;
     public boolean mUsingIpReachabilityMonitor = true;
     public int mRequestedPreDhcpActionMs;
@@ -210,6 +219,7 @@ public class ProvisioningConfiguration {
     public ProvisioningConfiguration(ProvisioningConfiguration other) {
         mEnableIPv4 = other.mEnableIPv4;
         mEnableIPv6 = other.mEnableIPv6;
+        mEnablePreconnection = other.mEnablePreconnection;
         mUsingMultinetworkPolicyTracker = other.mUsingMultinetworkPolicyTracker;
         mUsingIpReachabilityMonitor = other.mUsingIpReachabilityMonitor;
         mRequestedPreDhcpActionMs = other.mRequestedPreDhcpActionMs;
@@ -231,6 +241,7 @@ public class ProvisioningConfiguration {
         final ProvisioningConfigurationParcelable p = new ProvisioningConfigurationParcelable();
         p.enableIPv4 = mEnableIPv4;
         p.enableIPv6 = mEnableIPv6;
+        p.enablePreconnection = mEnablePreconnection;
         p.usingMultinetworkPolicyTracker = mUsingMultinetworkPolicyTracker;
         p.usingIpReachabilityMonitor = mUsingIpReachabilityMonitor;
         p.requestedPreDhcpActionMs = mRequestedPreDhcpActionMs;
@@ -255,6 +266,7 @@ public class ProvisioningConfiguration {
         final ProvisioningConfiguration config = new ProvisioningConfiguration();
         config.mEnableIPv4 = p.enableIPv4;
         config.mEnableIPv6 = p.enableIPv6;
+        config.mEnablePreconnection = p.enablePreconnection;
         config.mUsingMultinetworkPolicyTracker = p.usingMultinetworkPolicyTracker;
         config.mUsingIpReachabilityMonitor = p.usingIpReachabilityMonitor;
         config.mRequestedPreDhcpActionMs = p.requestedPreDhcpActionMs;
@@ -275,6 +287,7 @@ public class ProvisioningConfiguration {
         return new StringJoiner(", ", getClass().getSimpleName() + "{", "}")
                 .add("mEnableIPv4: " + mEnableIPv4)
                 .add("mEnableIPv6: " + mEnableIPv6)
+                .add("mEnablePreconnection: " + mEnablePreconnection)
                 .add("mUsingMultinetworkPolicyTracker: " + mUsingMultinetworkPolicyTracker)
                 .add("mUsingIpReachabilityMonitor: " + mUsingIpReachabilityMonitor)
                 .add("mRequestedPreDhcpActionMs: " + mRequestedPreDhcpActionMs)
@@ -294,6 +307,7 @@ public class ProvisioningConfiguration {
         final ProvisioningConfiguration other = (ProvisioningConfiguration) obj;
         return mEnableIPv4 == other.mEnableIPv4
                 && mEnableIPv6 == other.mEnableIPv6
+                && mEnablePreconnection == other.mEnablePreconnection
                 && mUsingMultinetworkPolicyTracker == other.mUsingMultinetworkPolicyTracker
                 && mUsingIpReachabilityMonitor == other.mUsingIpReachabilityMonitor
                 && mRequestedPreDhcpActionMs == other.mRequestedPreDhcpActionMs
