@@ -49,6 +49,8 @@ import static com.android.server.util.NetworkStackConstants.IPV4_ADDR_ANY;
 import android.content.Context;
 import android.net.DhcpResults;
 import android.net.InetAddresses;
+import android.net.Layer2PacketParcelable;
+import android.net.MacAddress;
 import android.net.NetworkStackIpMemoryStore;
 import android.net.TrafficStats;
 import android.net.ip.IpClient;
@@ -169,6 +171,10 @@ public class DhcpClient extends StateMachine {
     public static final int CMD_CONFIGURE_LINKADDRESS       = PUBLIC_BASE + 8;
     public static final int EVENT_LINKADDRESS_CONFIGURED    = PUBLIC_BASE + 9;
 
+    // Command to IpClient starting/aborting preconnection process.
+    public static final int CMD_START_PRECONNECTION         = PUBLIC_BASE + 10;
+    public static final int CMD_ABORT_PRECONNECTION         = PUBLIC_BASE + 11;
+
     /* Message.arg1 arguments to CMD_POST_DHCP_ACTION notification */
     public static final int DHCP_SUCCESS = 1;
     public static final int DHCP_FAILURE = 2;
@@ -239,7 +245,7 @@ public class DhcpClient extends StateMachine {
     private DhcpResults mDhcpLease;
     private long mDhcpLeaseExpiry;
     private DhcpResults mOffer;
-    private String mL2Key;
+    private Configuration mConfiguration;
     private Inet4Address mLastAssignedIpv4Address;
     private long mLastAssignedIpv4AddressExpiry;
     private Dependencies mDependencies;
@@ -256,6 +262,7 @@ public class DhcpClient extends StateMachine {
     private State mStoppedState = new StoppedState();
     private State mDhcpState = new DhcpState();
     private State mDhcpInitState = new DhcpInitState();
+    private State mDhcpPreconnectingState = new DhcpPreconnectingState();
     private State mDhcpSelectingState = new DhcpSelectingState();
     private State mDhcpRequestingState = new DhcpRequestingState();
     private State mDhcpHaveLeaseState = new DhcpHaveLeaseState();
@@ -320,6 +327,7 @@ public class DhcpClient extends StateMachine {
             addState(mDhcpInitState, mDhcpState);
             addState(mWaitBeforeStartState, mDhcpState);
             addState(mWaitBeforeObtainingConfigurationState, mDhcpState);
+            addState(mDhcpPreconnectingState, mDhcpState);
             addState(mObtainingConfigurationState, mDhcpState);
             addState(mDhcpSelectingState, mDhcpState);
             addState(mDhcpRequestingState, mDhcpState);
@@ -578,7 +586,7 @@ public class DhcpClient extends StateMachine {
     }
 
     private void setLeaseExpiredToIpMemoryStore() {
-        final String l2Key = mL2Key;
+        final String l2Key = mConfiguration.l2Key;
         if (l2Key == null) return;
         final NetworkAttributes.Builder na = new NetworkAttributes.Builder();
         // TODO: clear out the address and lease instead of storing an expired lease
@@ -591,7 +599,7 @@ public class DhcpClient extends StateMachine {
     }
 
     private void maybeSaveLeaseToIpMemoryStore() {
-        final String l2Key = mL2Key;
+        final String l2Key = mConfiguration.l2Key;
         if (l2Key == null || mDhcpLease == null || mDhcpLease.ipAddress == null) return;
         final NetworkAttributes.Builder na = new NetworkAttributes.Builder();
         na.setAssignedV4Address((Inet4Address) mDhcpLease.ipAddress.getAddress());
@@ -711,7 +719,11 @@ public class DhcpClient extends StateMachine {
     // Sends CMD_PRE_DHCP_ACTION to the controller, waits for the controller to respond with
     // CMD_PRE_DHCP_ACTION_COMPLETE, and then transitions to mOtherState.
     abstract class WaitBeforeOtherState extends LoggingState {
-        protected State mOtherState;
+        private final State mOtherState;
+
+        WaitBeforeOtherState(State otherState) {
+            mOtherState = otherState;
+        }
 
         @Override
         public void enter() {
@@ -732,18 +744,46 @@ public class DhcpClient extends StateMachine {
         }
     }
 
+    /**
+     * Helper method to transition to the appropriate state according to whether the pre dhcp
+     * action (e.g. turn off power optimization while doing DHCP) is required to execute.
+     * waitStateForPreDhcpAction is used to wait the pre dhcp action completed before moving to
+     * other state. If the pre dhcp action is unnecessary, transition to the target state directly.
+     */
+    private void preDhcpTransitionTo(final State waitStateForPreDhcpAction,
+            final State targetState) {
+        transitionTo(mRegisteredForPreDhcpNotification ? waitStateForPreDhcpAction : targetState);
+    }
+
+    /**
+     * This class is used to convey initial configuration to DhcpClient when starting DHCP.
+     */
+    public static class Configuration {
+        // This is part of the initial configuration because it is passed in on startup and
+        // never updated.
+        // TODO: decide what to do about L2 key changes while the client is connected.
+        public final String l2Key;
+        public final boolean isPreconnectionEnabled;
+
+        public Configuration(String l2Key, boolean isPreconnectionEnabled) {
+            this.l2Key = l2Key;
+            this.isPreconnectionEnabled = isPreconnectionEnabled;
+        }
+    }
+
     class StoppedState extends State {
         @Override
         public boolean processMessage(Message message) {
             switch (message.what) {
                 case CMD_START_DHCP:
-                    mL2Key = (String) message.obj;
-                    if (mRegisteredForPreDhcpNotification) {
-                        transitionTo(isDhcpLeaseCacheEnabled()
-                                ? mWaitBeforeObtainingConfigurationState : mWaitBeforeStartState);
+                    mConfiguration = (Configuration) message.obj;
+                    if (mConfiguration.isPreconnectionEnabled) {
+                        transitionTo(mDhcpPreconnectingState);
+                    } else if (isDhcpLeaseCacheEnabled()) {
+                        preDhcpTransitionTo(mWaitBeforeObtainingConfigurationState,
+                                mObtainingConfigurationState);
                     } else {
-                        transitionTo(isDhcpLeaseCacheEnabled()
-                                ? mObtainingConfigurationState : mDhcpInitState);
+                        preDhcpTransitionTo(mWaitBeforeStartState, mDhcpInitState);
                     }
                     return HANDLED;
                 default:
@@ -754,22 +794,19 @@ public class DhcpClient extends StateMachine {
 
     class WaitBeforeStartState extends WaitBeforeOtherState {
         WaitBeforeStartState(State otherState) {
-            super();
-            mOtherState = otherState;
+            super(otherState);
         }
     }
 
     class WaitBeforeRenewalState extends WaitBeforeOtherState {
         WaitBeforeRenewalState(State otherState) {
-            super();
-            mOtherState = otherState;
+            super(otherState);
         }
     }
 
     class WaitBeforeObtainingConfigurationState extends WaitBeforeOtherState {
         WaitBeforeObtainingConfigurationState(State otherState) {
-            super();
-            mOtherState = otherState;
+            super(otherState);
         }
     }
 
@@ -957,7 +994,7 @@ public class DhcpClient extends StateMachine {
                 }
                 sendMessage(EVENT_CONFIGURATION_OBTAINED, attributes);
             };
-            mIpMemoryStore.retrieveNetworkAttributes(mL2Key, listener);
+            mIpMemoryStore.retrieveNetworkAttributes(mConfiguration.l2Key, listener);
         }
 
         @Override
@@ -973,7 +1010,7 @@ public class DhcpClient extends StateMachine {
                     final long currentTime = System.currentTimeMillis();
                     NetworkAttributes attributes = (NetworkAttributes) message.obj;
                     if (DBG) {
-                        Log.d(TAG, "l2key: " + mL2Key
+                        Log.d(TAG, "l2key: "         + mConfiguration.l2Key
                                 + " lease address: " + attributes.assignedV4Address
                                 + " lease expiry: "  + attributes.assignedV4AddressExpiry
                                 + " current time: "  + currentTime);
@@ -1002,6 +1039,32 @@ public class DhcpClient extends StateMachine {
         }
     }
 
+    private void receiveOfferOrAckPacket(final DhcpPacket packet, final boolean acceptRapidCommit) {
+        if (!isValidPacket(packet)) return;
+
+        // 1. received the DHCPOFFER packet, process it by following RFC2131.
+        // 2. received the DHCPACK packet from DHCP Servers that support Rapid
+        //    Commit option, process it by following RFC4039.
+        if (packet instanceof DhcpOfferPacket) {
+            mOffer = packet.toDhcpResults();
+            if (mOffer != null) {
+                Log.d(TAG, "Got pending lease: " + mOffer);
+                transitionTo(mDhcpRequestingState);
+            }
+        } else if (packet instanceof DhcpAckPacket) {
+            // If rapid commit is not enabled in DhcpInitState, or enablePreconnection is
+            // not enabled in DhcpPreconnectingState, ignore DHCPACK packet. Only DHCPACK
+            // with the rapid commit option are valid.
+            if (!acceptRapidCommit || !packet.mRapidCommit) return;
+
+            final DhcpResults results = packet.toDhcpResults();
+            if (results != null) {
+                confirmDhcpLease(packet, results);
+                transitionTo(mConfiguringInterfaceState);
+            }
+        }
+    }
+
     class DhcpInitState extends PacketRetransmittingState {
         public DhcpInitState() {
             super();
@@ -1019,27 +1082,86 @@ public class DhcpClient extends StateMachine {
         }
 
         protected void receivePacket(DhcpPacket packet) {
-            if (!isValidPacket(packet)) return;
+            receiveOfferOrAckPacket(packet, isDhcpRapidCommitEnabled());
+        }
+    }
 
-            // 1. received the DHCPOFFER packet, process it by following RFC2131.
-            // 2. received the DHCPACK packet from DHCP Servers who support Rapid
-            //    Commit option, process it by following RFC4039.
-            if (packet instanceof DhcpOfferPacket) {
-                mOffer = packet.toDhcpResults();
-                if (mOffer != null) {
-                    Log.d(TAG, "Got pending lease: " + mOffer);
-                    transitionTo(mDhcpRequestingState);
-                }
-            } else if (packet instanceof DhcpAckPacket) {
-                // If received DHCPACK packet w/o Rapid Commit option in this state,
-                // just drop it and wait for the next DHCPOFFER packet or DHCPACK w/
-                // Rapid Commit option.
-                if (!isDhcpRapidCommitEnabled() || !packet.mRapidCommit) return;
-                final DhcpResults results = packet.toDhcpResults();
-                if (results != null) {
-                    confirmDhcpLease(packet, results);
-                    transitionTo(mConfiguringInterfaceState);
-                }
+    private void startInitRebootOrInit() {
+        if (isDhcpLeaseCacheEnabled()) {
+            preDhcpTransitionTo(mWaitBeforeObtainingConfigurationState,
+                    mObtainingConfigurationState);
+        } else {
+            preDhcpTransitionTo(mWaitBeforeStartState, mDhcpInitState);
+        }
+    }
+
+    class DhcpPreconnectingState extends TimeoutState {
+        // This state is used to support Fast Initial Link Setup (FILS) IP Address Setup
+        // procedure defined in the IEEE802.11ai (2016) currently. However, this state could
+        // be extended to support other intended useage as well in the future, e.g. pre-actions
+        // should be completed in advance before the normal DHCP solicit process starts.
+        DhcpPreconnectingState() {
+            mTimeout = FIRST_TIMEOUT_MS;
+        }
+
+        @Override
+        public void enter() {
+            super.enter();
+            startNewTransaction();
+            mLastInitEnterTime = SystemClock.elapsedRealtime();
+            sendPreconnectionPacket();
+        }
+
+        @Override
+        public boolean processMessage(Message message) {
+            if (super.processMessage(message) == HANDLED) {
+                return HANDLED;
+            }
+
+            switch (message.what) {
+                case CMD_RECEIVED_PACKET:
+                    receiveOfferOrAckPacket((DhcpPacket) message.obj,
+                            mConfiguration.isPreconnectionEnabled);
+                    return HANDLED;
+                case CMD_ABORT_PRECONNECTION:
+                    startInitRebootOrInit();
+                    return HANDLED;
+                default:
+                    return NOT_HANDLED;
+            }
+        }
+
+        // This timeout is necessary and cannot just be replaced with a notification that
+        // preconnection is complete. This is because:
+        // - The preconnection complete notification could arrive before the ACK with rapid
+        //   commit arrives. In this case we would go back to init state, pick a new transaction
+        //   ID, and when the ACK with rapid commit arrives, we would ignore it because the
+        //   transaction ID doesn't match.
+        // - We cannot just wait in this state until the ACK with rapid commit arrives, because
+        //   if that ACK never arrives (e.g., dropped by the network), we'll never go back to init
+        //   and send a DISCOVER.
+        @Override
+        public void timeout() {
+            startInitRebootOrInit();
+        }
+
+        private void sendPreconnectionPacket() {
+            final Layer2PacketParcelable l2Packet = new Layer2PacketParcelable();
+            final ByteBuffer packet = DhcpPacket.buildDiscoverPacket(
+                    DhcpPacket.ENCAP_L2, mTransactionId, getSecs(), mHwAddr,
+                    DO_UNICAST, REQUESTED_PARAMS, true /* rapid commit */);
+
+            l2Packet.dstMacAddress = MacAddress.fromBytes(DhcpPacket.ETHER_BROADCAST);
+            l2Packet.payload = packet.array();
+            mController.sendMessage(CMD_START_PRECONNECTION, l2Packet);
+        }
+
+        private void startInitRebootOrInit() {
+            if (isDhcpLeaseCacheEnabled()) {
+                preDhcpTransitionTo(mWaitBeforeObtainingConfigurationState,
+                        mObtainingConfigurationState);
+            } else {
+                preDhcpTransitionTo(mWaitBeforeStartState, mDhcpInitState);
             }
         }
     }
@@ -1165,11 +1287,7 @@ public class DhcpClient extends StateMachine {
             super.processMessage(message);
             switch (message.what) {
                 case CMD_RENEW_DHCP:
-                    if (mRegisteredForPreDhcpNotification) {
-                        transitionTo(mWaitBeforeRenewalState);
-                    } else {
-                        transitionTo(mDhcpRenewingState);
-                    }
+                    preDhcpTransitionTo(mWaitBeforeRenewalState, mDhcpRenewingState);
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
