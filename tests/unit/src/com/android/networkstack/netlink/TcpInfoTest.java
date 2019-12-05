@@ -90,6 +90,13 @@ public class TcpInfoTest {
     private static final byte[] TCP_INFO_BYTES =
             HexEncoding.decode(TCP_INFO_HEX.toCharArray(), false);
 
+    private static final String EXPANDED_TCP_INFO_HEX = TCP_INFO_HEX
+            + "00000000"         // tcpi_delivered
+            + "00000000";        // tcpi_delivered_ce
+    private static final byte[] EXPANDED_TCP_INFO_BYTES =
+            HexEncoding.decode(EXPANDED_TCP_INFO_HEX.toCharArray(), false);
+    private static final int EXPANDED_TCP_INFO_LENGTH =
+            EXPANDED_TCP_INFO_BYTES.length - TCP_INFO_BYTES.length;
     @Test
     public void testParseTcpInfo() {
         final ByteBuffer buffer = ByteBuffer.wrap(TCP_INFO_BYTES);
@@ -97,6 +104,23 @@ public class TcpInfoTest {
         final TcpInfo parsedInfo = TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1);
 
         assertEquals(parsedInfo, new TcpInfo(expected));
+    }
+
+    @Test
+    public void testParseTcpInfoExpanded() {
+        final ByteBuffer buffer = ByteBuffer.wrap(EXPANDED_TCP_INFO_BYTES);
+        final Map<TcpInfo.Field, Number> expected = makeTestTcpInfoHash();
+        final TcpInfo parsedInfo =
+                TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1 + EXPANDED_TCP_INFO_LENGTH);
+
+        assertEquals(parsedInfo, new TcpInfo(expected));
+        assertEquals(buffer.limit(), buffer.position());
+
+        // reset the index.
+        buffer.position(0);
+        final TcpInfo parsedInfoShorterLen = TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1);
+        assertEquals(parsedInfoShorterLen, new TcpInfo(expected));
+        assertEquals(TCP_INFO_LENGTH_V1, buffer.position());
     }
 
     @Test
