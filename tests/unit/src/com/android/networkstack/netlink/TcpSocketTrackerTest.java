@@ -46,6 +46,7 @@ import org.mockito.MockitoAnnotations;
 
 import java.io.FileDescriptor;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.HashMap;
 
 // TODO: Add more tests for missing coverage.
@@ -55,9 +56,9 @@ public class TcpSocketTrackerTest {
     private static final int TEST_BUFFER_SIZE = 1024;
     private static final String DIAG_MSG_HEX =
             // struct nlmsghdr.
-            "00000058" +      // length = 88
-            "0014" +         // type = SOCK_DIAG_BY_FAMILY
-            "0103" +         // flags = NLM_F_REQUEST | NLM_F_DUMP
+            "58000000" +      // length = 88
+            "1400" +         // type = SOCK_DIAG_BY_FAMILY
+            "0301" +         // flags = NLM_F_REQUEST | NLM_F_DUMP
             "00000000" +     // seqno
             "00000000" +     // pid (0 == kernel)
             // struct inet_diag_req_v2
@@ -66,12 +67,12 @@ public class TcpSocketTrackerTest {
             "00" +           // timer
             "00" +           // retrans
             // inet_diag_sockid
-            "A5DE" +         // idiag_sport = 42462
-            "B971" +         // idiag_dport = 47473
+            "DEA5" +         // idiag_sport = 42462
+            "71B9" +         // idiag_dport = 47473
             "0a006402000000000000000000000000" + // idiag_src = 10.0.100.2
             "08080808000000000000000000000000" + // idiag_dst = 8.8.8.8
             "00000000" +    // idiag_if
-            "000027760000ED34" + // idiag_cookie = 43387759684916
+            "34ED000076270000" + // idiag_cookie = 43387759684916
             "00000000" +    // idiag_expires
             "00000000" +    // idiag_rqueue
             "00000000" +    // idiag_wqueue
@@ -82,9 +83,9 @@ public class TcpSocketTrackerTest {
     // Hexadecimal representation of a SOCK_DIAG response with tcp info.
     private static final String SOCK_DIAG_TCP_INET_HEX =
             // struct nlmsghdr.
-            "00000114" +        // length = 276
-            "0014" +            // type = SOCK_DIAG_BY_FAMILY
-            "0103" +            // flags = NLM_F_REQUEST | NLM_F_DUMP
+            "14010000" +        // length = 276
+            "1400" +            // type = SOCK_DIAG_BY_FAMILY
+            "0301" +            // flags = NLM_F_REQUEST | NLM_F_DUMP
             "00000000" +        // seqno
             "00000000" +        // pid (0 == kernel)
             // struct inet_diag_req_v2
@@ -93,26 +94,26 @@ public class TcpSocketTrackerTest {
             "00" +              // timer
             "00" +              // retrans
             // inet_diag_sockid
-            "A5DE" +            // idiag_sport = 42462
-            "B971" +            // idiag_dport = 47473
+            "DEA5" +            // idiag_sport = 42462
+            "71B9" +            // idiag_dport = 47473
             "0a006402000000000000000000000000" + // idiag_src = 10.0.100.2
             "08080808000000000000000000000000" + // idiag_dst = 8.8.8.8
             "00000000" +            // idiag_if
-            "000027760000ED34" +    // idiag_cookie = 43387759684916
+            "34ED000076270000" +    // idiag_cookie = 43387759684916
             "00000000" +            // idiag_expires
             "00000000" +            // idiag_rqueue
             "00000000" +            // idiag_wqueue
             "00000000" +            // idiag_uid
             "00000000" +            // idiag_inode
             // rtattr
-            "0005" +            // len = 5
-            "0008" +            // type = 8
+            "0500" +            // len = 5
+            "0800" +            // type = 8
             "00000000" +        // data
-            "0008" +            // len = 8
-            "000F" +            // type = 15(INET_DIAG_MARK)
-            "000C1A85" +        // data, socket mark=793221
-            "00AC" +            // len = 172
-            "0002" +            // type = 2(INET_DIAG_INFO)
+            "0800" +            // len = 8
+            "0F00" +            // type = 15(INET_DIAG_MARK)
+            "851A0C00" +        // data, socket mark=793221
+            "AC00" +            // len = 172
+            "0200" +            // type = 2(INET_DIAG_INFO)
             // tcp_info
             "01" +              // state = TCP_ESTABLISHED
             "00" +              // ca_state = TCP_CA_OPEN
@@ -122,38 +123,38 @@ public class TcpSocketTrackerTest {
             "07" +              // option = TCPI_OPT_WSCALE|TCPI_OPT_SACK|TCPI_OPT_TIMESTAMPS
             "88" +              // wscale = 8
             "00" +              // delivery_rate_app_limited = 0
-            "001B914A" +        // rto = 1806666
+            "4A911B00" +        // rto = 1806666
             "00000000" +        // ato = 0
-            "0000052E" +        // sndMss = 1326
-            "00000218" +        // rcvMss = 536
+            "2E050000" +        // sndMss = 1326
+            "18020000" +        // rcvMss = 536
             "00000000" +        // unsacked = 0
             "00000000" +        // acked = 0
             "00000000" +        // lost = 0
             "00000000" +        // retrans = 0
             "00000000" +        // fackets = 0
-            "000000BB" +        // lastDataSent = 187
+            "BB000000" +        // lastDataSent = 187
             "00000000" +        // lastAckSent = 0
-            "000000BB" +        // lastDataRecv = 187
-            "000000BB" +        // lastDataAckRecv = 187
-            "000005DC" +        // pmtu = 1500
-            "00015630" +        // rcvSsthresh = 87600
-            "00092C3E" +        // rttt = 601150
-            "0004961F" +        // rttvar = 300575
-            "00000578" +        // sndSsthresh = 1400
-            "0000000A" +        // sndCwnd = 10
-            "000005A8" +        // advmss = 1448
-            "00000003" +        // reordering = 3
+            "BB000000" +        // lastDataRecv = 187
+            "BB000000" +        // lastDataAckRecv = 187
+            "DC050000" +        // pmtu = 1500
+            "30560100" +        // rcvSsthresh = 87600
+            "3E2C0900" +        // rttt = 601150
+            "1F960400" +        // rttvar = 300575
+            "78050000" +        // sndSsthresh = 1400
+            "0A000000" +        // sndCwnd = 10
+            "A8050000" +        // advmss = 1448
+            "03000000" +        // reordering = 3
             "00000000" +        // rcvrtt = 0
-            "00015630" +        // rcvspace = 87600
+            "30560100" +        // rcvspace = 87600
             "00000000" +        // totalRetrans = 0
-            "000000000000AC53" +    // pacingRate = 44115
+            "53AC000000000000" +    // pacingRate = 44115
             "FFFFFFFFFFFFFFFF" +    // maxPacingRate = 18446744073709551615
-            "0000000000000001" +    // bytesAcked = 1
+            "0100000000000000" +    // bytesAcked = 1
             "0000000000000000" +    // bytesReceived = 0
-            "0000000A" +        // SegsOut = 10
+            "0A000000" +        // SegsOut = 10
             "00000000" +        // SegsIn = 0
             "00000000" +        // NotSentBytes = 0
-            "00092C3E" +        // minRtt = 601150
+            "3E2C0900" +        // minRtt = 601150
             "00000000" +        // DataSegsIn = 0
             "00000000" +        // DataSegsOut = 0
             "0000000000000000"; // deliverRate = 0
@@ -162,9 +163,9 @@ public class TcpSocketTrackerTest {
 
     private static final String TEST_RESPONSE_HEX = SOCK_DIAG_TCP_INET_HEX
             // struct nlmsghdr
-            + "00000014"     // length = 20
-            + "0003"         // type = NLMSG_DONE
-            + "0103"         // flags = NLM_F_REQUEST | NLM_F_DUMP
+            + "14000000"     // length = 20
+            + "0300"         // type = NLMSG_DONE
+            + "0301"         // flags = NLM_F_REQUEST | NLM_F_DUMP
             + "00000000"     // seqno
             + "00000000"     // pid (0 == kernel)
             // struct inet_diag_req_v2
@@ -188,9 +189,15 @@ public class TcpSocketTrackerTest {
                 anyInt())).thenReturn(DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE);
     }
 
+    private ByteBuffer getByteBuffer(final byte[] bytes) {
+        final ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        buffer.order(ByteOrder.LITTLE_ENDIAN);
+        return buffer;
+    }
+
     @Test
     public void testParseSockInfo() {
-        final ByteBuffer buffer = ByteBuffer.wrap(SOCK_DIAG_TCP_INET_BYTES);
+        final ByteBuffer buffer = getByteBuffer(SOCK_DIAG_TCP_INET_BYTES);
         final TcpSocketTracker tst = new TcpSocketTracker(mDependencies);
         buffer.position(SOCKDIAG_MSG_HEADER_SIZE);
         final TcpSocketTracker.SocketInfo parsed =
@@ -269,20 +276,21 @@ public class TcpSocketTrackerTest {
         when(mDependencies.isTcpInfoParsingSupported()).thenReturn(true);
         // No enough bytes remain for a valid NlMsg.
         final ByteBuffer invalidBuffer = ByteBuffer.allocate(1);
-        when(mDependencies.recvMesssage(any())).thenReturn(invalidBuffer);
+        invalidBuffer.order(ByteOrder.LITTLE_ENDIAN);
+        when(mDependencies.recvMessage(any())).thenReturn(invalidBuffer);
         assertTrue(tst.pollSocketsInfo());
         assertEquals(-1, tst.getLatestPacketFailPercentage());
         assertEquals(0, tst.getSentSinceLastRecv());
 
         // Header only.
-        final ByteBuffer headerBuffer = ByteBuffer.wrap(SOCK_DIAG_MSG_BYTES);
-        when(mDependencies.recvMesssage(any())).thenReturn(headerBuffer);
+        final ByteBuffer headerBuffer = getByteBuffer(SOCK_DIAG_MSG_BYTES);
+        when(mDependencies.recvMessage(any())).thenReturn(headerBuffer);
         assertTrue(tst.pollSocketsInfo());
         assertEquals(-1, tst.getLatestPacketFailPercentage());
         assertEquals(0, tst.getSentSinceLastRecv());
 
-        final ByteBuffer tcpBuffer = ByteBuffer.wrap(TEST_RESPONSE_BYTES);
-        when(mDependencies.recvMesssage(any())).thenReturn(tcpBuffer);
+        final ByteBuffer tcpBuffer = getByteBuffer(TEST_RESPONSE_BYTES);
+        when(mDependencies.recvMessage(any())).thenReturn(tcpBuffer);
         assertTrue(tst.pollSocketsInfo());
 
         assertEquals(10, tst.getSentSinceLastRecv());
@@ -296,5 +304,51 @@ public class TcpSocketTrackerTest {
         // Trigger a config update
         tst.mConfigListener.onPropertiesChanged(null /* properties */);
         assertTrue(tst.isDataStallSuspected());
+    }
+
+    private static final String BAD_DIAG_MSG_HEX =
+        // struct nlmsghdr.
+            "00000058" +      // length = 1476395008
+            "1400" +         // type = SOCK_DIAG_BY_FAMILY
+            "0301" +         // flags = NLM_F_REQUEST | NLM_F_DUMP
+            "00000000" +     // seqno
+            "00000000" +     // pid (0 == kernel)
+            // struct inet_diag_req_v2
+            "02" +           // family = AF_INET
+            "06" +           // state
+            "00" +           // timer
+            "00" +           // retrans
+            // inet_diag_sockid
+            "DEA5" +         // idiag_sport = 42462
+            "71B9" +         // idiag_dport = 47473
+            "0a006402000000000000000000000000" + // idiag_src = 10.0.100.2
+            "08080808000000000000000000000000" + // idiag_dst = 8.8.8.8
+            "00000000" +    // idiag_if
+            "34ED000076270000" + // idiag_cookie = 43387759684916
+            "00000000" +    // idiag_expires
+            "00000000" +    // idiag_rqueue
+            "00000000" +    // idiag_wqueue
+            "00000000" +    // idiag_uid
+            "00000000";    // idiag_inode
+    private static final byte[] BAD_SOCK_DIAG_MSG_BYTES =
+        HexEncoding.decode(BAD_DIAG_MSG_HEX.toCharArray(), false);
+
+    @Test
+    public void testPollSocketsInfo_BadFormat() throws Exception {
+        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies);
+        ByteBuffer tcpBuffer = getByteBuffer(TEST_RESPONSE_BYTES);
+
+        when(mDependencies.recvMessage(any())).thenReturn(tcpBuffer);
+        assertTrue(tst.pollSocketsInfo());
+        assertEquals(10, tst.getSentSinceLastRecv());
+        assertEquals(50, tst.getLatestPacketFailPercentage());
+
+        tcpBuffer = getByteBuffer(BAD_SOCK_DIAG_MSG_BYTES);
+        when(mDependencies.recvMessage(any())).thenReturn(tcpBuffer);
+        assertTrue(tst.pollSocketsInfo());
+        // Expect no additional packets, so still 10.
+        assertEquals(10, tst.getSentSinceLastRecv());
+        // Expect to reset to 0.
+        assertEquals(0, tst.getLatestPacketFailPercentage());
     }
 }
