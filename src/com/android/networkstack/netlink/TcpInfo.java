@@ -112,6 +112,10 @@ public class TcpInfo {
             }
         }
         mFieldsValues = Collections.unmodifiableMap(fields);
+        // tcp_info structure grows over time as new fields are added. Jump to the end of the
+        // structure, as unknown fields might remain at the end of the structure if the tcp_info
+        // struct was expanded.
+        bytes.position(Math.min(infolen + start, bytes.limit()));
     }
 
     @VisibleForTesting
