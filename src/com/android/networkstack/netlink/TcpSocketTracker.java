@@ -173,7 +173,7 @@ public class TcpSocketTracker {
                 // | Netlink Header   | Family Header | Attributes   | rtattr |
                 // | struct nlmsghdr  | struct rtmsg  | struct rtattr|  data  |
                 // +------------------+---------------+--------------+--------+
-                final ByteBuffer bytes = mDependencies.recvMesssage(fd);
+                final ByteBuffer bytes = mDependencies.recvMessage(fd);
                 try {
                     while (enoughBytesRemainForValidNlMsg(bytes)) {
                         final StructNlMsgHdr nlmsghdr = StructNlMsgHdr.parse(bytes);
@@ -212,9 +212,9 @@ public class TcpSocketTracker {
                         }
                     }
                 } catch (IllegalArgumentException | BufferUnderflowException e) {
-                    Log.wtf(TAG, "Unexpected socket info parsing, " + e + ", family " + family
+                    Log.wtf(TAG, "Unexpected socket info parsing, family " + family
                             + " buffer:" + bytes + " "
-                            + Base64.getEncoder().encodeToString(bytes.array()));
+                            + Base64.getEncoder().encodeToString(bytes.array()), e);
                 }
             }
             // Calculate mLatestReceiveCount, mSentSinceLastRecv and mLatestPacketFailPercentage.
@@ -547,7 +547,7 @@ public class TcpSocketTracker {
         /**
          * Receive the request message from kernel via given fd.
          */
-        public ByteBuffer recvMesssage(@NonNull final FileDescriptor fd)
+        public ByteBuffer recvMessage(@NonNull final FileDescriptor fd)
                 throws ErrnoException, InterruptedIOException {
             return NetlinkSocket.recvMessage(fd, DEFAULT_RECV_BUFSIZE, IO_TIMEOUT);
         }
