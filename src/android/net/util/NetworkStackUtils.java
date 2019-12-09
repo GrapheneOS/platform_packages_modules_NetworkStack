@@ -121,6 +121,21 @@ public class NetworkStackUtils {
      */
     public static final String DHCP_RAPID_COMMIT_ENABLED = "dhcp_rapid_commit_enabled";
 
+    /**
+     * Minimum module version at which to enable the DHCP INIT-REBOOT state.
+     */
+    public static final String DHCP_INIT_REBOOT_VERSION = "dhcp_init_reboot_version";
+
+    /**
+     * Minimum module version at which to enable the DHCP Rapid Commit option.
+     */
+    public static final String DHCP_RAPID_COMMIT_VERSION = "dhcp_rapid_commit_version";
+
+    /**
+     * Minimum module version at which to enable the IP address conflict detection feature.
+     */
+    public static final String DHCP_IP_CONFLICT_DETECT_VERSION = "dhcp_ip_conflict_detect_version";
+
     static {
         System.loadLibrary("networkstackutilsjni");
     }
