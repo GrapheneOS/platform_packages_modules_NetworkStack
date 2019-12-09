@@ -26,16 +26,6 @@ import java.net.Inet4Address;
 public final class NetworkStackConstants {
 
     /**
-     * IPv4 constants.
-     *
-     * See also:
-     *     - https://tools.ietf.org/html/rfc791
-     */
-    public static final int IPV4_ADDR_BITS = 32;
-    public static final int IPV4_MIN_MTU = 68;
-    public static final int IPV4_MAX_MTU = 65_535;
-
-    /**
      * Ethernet constants.
      *
      * See also:
@@ -64,6 +54,7 @@ public final class NetworkStackConstants {
      *     - http://www.iana.org/assignments/arp-parameters/arp-parameters.xhtml
      */
     public static final int ARP_PAYLOAD_LEN = 28;  // For Ethernet+IPv4.
+    public static final int ARP_ETHER_IPV4_LEN = ARP_PAYLOAD_LEN + ETHER_HEADER_LEN;
     public static final int ARP_REQUEST = 1;
     public static final int ARP_REPLY   = 2;
     public static final int ARP_HWTYPE_RESERVED_LO = 0;
@@ -71,11 +62,23 @@ public final class NetworkStackConstants {
     public static final int ARP_HWTYPE_RESERVED_HI = 0xffff;
 
     /**
+     * IPv4 Address Conflict Detection constants.
+     *
+     * See also:
+     *     - https://tools.ietf.org/html/rfc5227
+     */
+    public static final int IPV4_CONFLICT_PROBE_NUM = 3;
+    public static final int IPV4_CONFLICT_ANNOUNCE_NUM = 2;
+
+    /**
      * IPv4 constants.
      *
      * See also:
      *     - https://tools.ietf.org/html/rfc791
      */
+    public static final int IPV4_ADDR_BITS = 32;
+    public static final int IPV4_MIN_MTU = 68;
+    public static final int IPV4_MAX_MTU = 65_535;
     public static final int IPV4_HEADER_MIN_LEN = 20;
     public static final int IPV4_IHL_MASK = 0xf;
     public static final int IPV4_FLAGS_OFFSET = 6;
