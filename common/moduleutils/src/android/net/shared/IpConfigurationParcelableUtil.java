@@ -42,6 +42,7 @@ public final class IpConfigurationParcelableUtil {
         p.serverAddress = parcelAddress(results.serverAddress);
         p.vendorInfo = results.vendorInfo;
         p.serverHostName = results.serverHostName;
+        p.captivePortalApiUrl = results.captivePortalApiUrl;
         return p;
     }
 
@@ -56,6 +57,7 @@ public final class IpConfigurationParcelableUtil {
         results.serverAddress = (Inet4Address) unparcelAddress(p.serverAddress);
         results.vendorInfo = p.vendorInfo;
         results.serverHostName = p.serverHostName;
+        results.captivePortalApiUrl = p.captivePortalApiUrl;
         return results;
     }
 

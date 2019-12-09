@@ -17,6 +17,7 @@
 package com.android.networkstack.apishim.api29;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.VisibleForTesting;
 
 import com.android.networkstack.apishim.CaptivePortalDataShim;
 import com.android.networkstack.apishim.UnsupportedApiLevelException;
@@ -45,5 +46,10 @@ public abstract class CaptivePortalDataShimImpl implements CaptivePortalDataShim
             UnsupportedApiLevelException {
         // Data class not supported in API 29
         throw new UnsupportedApiLevelException("CaptivePortalData not supported on API 29");
+    }
+
+    @VisibleForTesting
+    public static boolean isSupported() {
+        return false;
     }
 }
