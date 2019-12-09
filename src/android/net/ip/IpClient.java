@@ -39,7 +39,6 @@ import android.net.TcpKeepalivePacketDataParcelable;
 import android.net.apf.ApfCapabilities;
 import android.net.apf.ApfFilter;
 import android.net.dhcp.DhcpClient;
-import android.net.dhcp.DhcpClient.Configuration;
 import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.IpManagerEvent;
 import android.net.shared.InitialConfiguration;
@@ -475,6 +474,14 @@ public class IpClient extends StateMachine {
         public NetworkStackIpMemoryStore getIpMemoryStore(Context context,
                 NetworkStackServiceManager nssManager) {
             return new NetworkStackIpMemoryStore(context, nssManager.getIpMemoryStoreService());
+        }
+
+        /**
+         * Get a DhcpClient instance.
+         */
+        public DhcpClient makeDhcpClient(Context context, StateMachine controller,
+                InterfaceParams ifParams, DhcpClient.Dependencies deps) {
+            return DhcpClient.makeDhcpClient(context, controller, ifParams, deps);
         }
 
         /**
@@ -1518,7 +1525,7 @@ public class IpClient extends StateMachine {
 
     private void startDhcpClient() {
         // Start DHCPv4.
-        mDhcpClient = DhcpClient.makeDhcpClient(mContext, IpClient.this, mInterfaceParams,
+        mDhcpClient = mDependencies.makeDhcpClient(mContext, IpClient.this, mInterfaceParams,
                 mDependencies.getDhcpClientDependencies(mIpMemoryStore));
 
         // If preconnection is enabled, there is no need to ask Wi-Fi to disable powersaving
@@ -1527,7 +1534,7 @@ public class IpClient extends StateMachine {
         // registerForPreDhcpNotification is called later when processing the CMD_*_PRECONNECTION
         // messages.
         if (!isUsingPreconnection()) mDhcpClient.registerForPreDhcpNotification();
-        mDhcpClient.sendMessage(DhcpClient.CMD_START_DHCP, new Configuration(mL2Key,
+        mDhcpClient.sendMessage(DhcpClient.CMD_START_DHCP, new DhcpClient.Configuration(mL2Key,
                 isUsingPreconnection()));
     }
 
