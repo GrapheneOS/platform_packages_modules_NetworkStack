@@ -1171,7 +1171,8 @@ public class DhcpClient extends StateMachine {
             final DhcpResults results = packet.toDhcpResults();
             if (results != null) {
                 confirmDhcpLease(packet, results);
-                transitionTo(mConfiguringInterfaceState);
+                transitionTo(isDhcpIpConflictDetectEnabled()
+                        ? mIpAddressConflictDetectingState : mConfiguringInterfaceState);
             }
         }
     }

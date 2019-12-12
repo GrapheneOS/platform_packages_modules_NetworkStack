@@ -32,9 +32,10 @@ public class DhcpDiscoverPacket extends DhcpPacket {
      * Generates a DISCOVER packet with the specified parameters.
      */
     DhcpDiscoverPacket(int transId, short secs, Inet4Address relayIp, byte[] clientMac,
-            boolean broadcast, Inet4Address srcIp) {
+            boolean broadcast, Inet4Address srcIp, boolean rapidCommit) {
         super(transId, secs, INADDR_ANY, INADDR_ANY, INADDR_ANY, relayIp, clientMac, broadcast);
         mSrcIp = srcIp;
+        mRapidCommit = rapidCommit;
     }
 
     public String toString() {

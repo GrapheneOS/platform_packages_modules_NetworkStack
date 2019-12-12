@@ -118,7 +118,6 @@ import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
@@ -459,7 +458,7 @@ public class IpClientIntegrationTest {
     }
 
     private static ByteBuffer buildDhcpAckPacket(final DhcpPacket packet,
-            final Integer leaseTimeSec, final short mtu) {
+            final Integer leaseTimeSec, final short mtu, final boolean rapidCommit) {
         return DhcpPacket.buildAckPacket(DhcpPacket.ENCAP_L2, packet.getTransactionId(),
                 false /* broadcast */, SERVER_ADDR, INADDR_ANY /* relayIp */,
                 CLIENT_ADDR /* yourIp */, CLIENT_ADDR /* requestIp */, packet.getClientMac(),
@@ -467,7 +466,7 @@ public class IpClientIntegrationTest {
                 Collections.singletonList(SERVER_ADDR) /* gateways */,
                 Collections.singletonList(SERVER_ADDR) /* dnsServers */,
                 SERVER_ADDR /* dhcpServerIdentifier */, null /* domainName */, HOSTNAME,
-                false /* metered */, mtu);
+                false /* metered */, mtu, rapidCommit);
     }
 
     private static ByteBuffer buildDhcpNakPacket(final DhcpPacket packet) {
@@ -560,13 +559,15 @@ public class IpClientIntegrationTest {
         while ((packet = getNextDhcpPacket()) != null) {
             if (packet instanceof DhcpDiscoverPacket) {
                 if (isDhcpRapidCommitEnabled) {
-                    sendResponse(buildDhcpAckPacket(packet, leaseTimeSec, (short) mtu));
+                    sendResponse(buildDhcpAckPacket(packet, leaseTimeSec, (short) mtu,
+                              true /* rapidCommit */));
                 } else {
                     sendResponse(buildDhcpOfferPacket(packet, leaseTimeSec, (short) mtu));
                 }
             } else if (packet instanceof DhcpRequestPacket) {
                 final ByteBuffer byteBuffer = isSuccessLease
-                        ? buildDhcpAckPacket(packet, leaseTimeSec, (short) mtu)
+                        ? buildDhcpAckPacket(packet, leaseTimeSec, (short) mtu,
+                                false /* rapidCommit */)
                         : buildDhcpNakPacket(packet);
                 sendResponse(byteBuffer);
             } else {
@@ -679,11 +680,9 @@ public class IpClientIntegrationTest {
             packet = getNextDhcpPacket();
             assertTrue(packet instanceof DhcpRequestPacket);
         }
-        // TODO: currently the DHCPACK packet doesn't include the Rapid Commit option.
-        // This does not matter because the client will accept the ACK even if the Rapid Commit
-        // option is not present. Fix the test code, and then change the client to ensure
-        // it will only accept the ACK if the Rapid Commit option is present.
-        sendResponse(buildDhcpAckPacket(packet, TEST_LEASE_DURATION_S, mtu));
+
+        sendResponse(buildDhcpAckPacket(packet, TEST_LEASE_DURATION_S, mtu,
+                isDhcpRapidCommitEnabled));
         if (!shouldAbortPreconnection) {
             mIpc.sendMessage(IpClient.CMD_COMPLETE_PRECONNECTION, 1 /* success */);
         }
@@ -823,10 +822,8 @@ public class IpClientIntegrationTest {
         assertIpMemoryNeverStoreNetworkAttributes();
     }
 
-    @Ignore
     @Test
     public void testHandleRapidCommitOption() throws Exception {
-        // TODO: remove @Ignore after supporting rapid commit option in DHCP server
         final long currentTime = System.currentTimeMillis();
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* isDhcpLeaseCacheEnabled */, true /* isDhcpRapidCommitEnabled */,
@@ -1170,18 +1167,12 @@ public class IpClientIntegrationTest {
                 false /* shouldAbortPreconnection */);
     }
 
-    // So far DHCPACK doesn't include Rapid Commit option(aosp/1092270 is adding the option), when
-    // receiving the DHCPACK packet in DhcpPreconnectionState or DhcpInitState, dropping the DHCPACK
-    // packet directly, which would cause test cases with enabled "isDhcpRapidCommitEnabled" flag
-    // fail.
-    @Ignore
     @Test
     public void testDhcpClientPreconnectionEnabled() throws Exception {
         doIpClientProvisioningWithPreconnectionTest(true /* isDhcpRapidCommitEnabled */,
                 false /* shouldAbortPreconnection */);
     }
 
-    @Ignore
     @Test
     public void testDhcpClientPreconnectionEnabled_WithRapidCommit() throws Exception {
         doIpClientProvisioningWithPreconnectionTest(true /* isDhcpRapidCommitEnabled */,
@@ -1215,11 +1206,6 @@ public class IpClientIntegrationTest {
                 false /* shouldResponseArpReply */);
     }
 
-    // So far Rapid Commit option has not been built within DHCPACK packet (implemention at
-    // aosp/1092270), hence, client can't deal with DHCPACK in INIT state correctly and drop
-    // the received DHCPACK, which causes the following verify checks fails. After checking in
-    // aosp/1092270, remove all below @Ignore annotations.
-    @Ignore
     @Test
     public void testDhcpDecline_WithRapidCommitWithoutIpConflict() throws Exception {
         doIpAddressConflictDetectionTest(false /* causeIpAddressConflict */,
@@ -1227,7 +1213,6 @@ public class IpClientIntegrationTest {
                 false /* shouldResponseArpReply */);
     }
 
-    @Ignore
     @Test
     public void testDhcpDecline_WithRapidCommitConflictByArpReply() throws Exception {
         doIpAddressConflictDetectionTest(true /* causeIpAddressConflict */,
@@ -1235,7 +1220,6 @@ public class IpClientIntegrationTest {
                 true /* shouldResponseArpReply */);
     }
 
-    @Ignore
     @Test
     public void testDhcpDecline_WithRapidCommitConflictByArpProbe() throws Exception {
         doIpAddressConflictDetectionTest(true /* causeIpAddressConflict */,
@@ -1243,7 +1227,6 @@ public class IpClientIntegrationTest {
                 false /* shouldResponseArpReply */);
     }
 
-    @Ignore
     @Test
     public void testDhcpDecline_EnableFlagWithRapidCommitWithoutIpConflict() throws Exception {
         doIpAddressConflictDetectionTest(false /* causeIpAddressConflict */,

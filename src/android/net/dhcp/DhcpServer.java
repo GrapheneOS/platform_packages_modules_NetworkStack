@@ -22,6 +22,8 @@ import static android.net.dhcp.DhcpPacket.DHCP_SERVER;
 import static android.net.dhcp.DhcpPacket.ENCAP_BOOTP;
 import static android.net.shared.Inet4AddressUtils.getBroadcastAddress;
 import static android.net.shared.Inet4AddressUtils.getPrefixMaskAsInet4Address;
+import static android.net.util.NetworkStackUtils.DHCP_RAPID_COMMIT_VERSION;
+import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.IPPROTO_UDP;
 import static android.system.OsConstants.SOCK_DGRAM;
@@ -38,6 +40,7 @@ import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingP
 
 import static java.lang.Integer.toUnsignedLong;
 
+import android.content.Context;
 import android.net.INetworkStackStatusCallback;
 import android.net.MacAddress;
 import android.net.TrafficStats;
@@ -92,6 +95,8 @@ public class DhcpServer extends IDhcpServer.Stub {
     private static final int CMD_UPDATE_PARAMS = 3;
 
     @NonNull
+    private final Context mContext;
+    @NonNull
     private final HandlerThread mHandlerThread;
     @NonNull
     private final String mIfName;
@@ -106,6 +111,8 @@ public class DhcpServer extends IDhcpServer.Stub {
 
     @Nullable
     private volatile ServerHandler mHandler;
+
+    private final boolean mDhcpRapidCommitEnabled;
 
     // Accessed only on the handler thread
     @Nullable
@@ -176,6 +183,14 @@ public class DhcpServer extends IDhcpServer.Stub {
          * @throws SecurityException The caller is not allowed to call public methods on DhcpServer.
          */
         void checkCaller() throws SecurityException;
+
+        /**
+         * Check whether or not one specific experimental feature for connectivity namespace is
+         * enabled.
+         * @param context The global context information about an app environment.
+         * @param name Specific experimental flag name.
+         */
+        boolean isFeatureEnabled(@NonNull Context context, @NonNull String name);
     }
 
     private class DependenciesImpl implements Dependencies {
@@ -214,6 +229,11 @@ public class DhcpServer extends IDhcpServer.Stub {
         public void checkCaller() {
             enforceNetworkStackCallingPermission();
         }
+
+        @Override
+        public boolean isFeatureEnabled(@NonNull Context context, @NonNull String name) {
+            return NetworkStackUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name);
+        }
     }
 
     private static class MalformedPacketException extends Exception {
@@ -222,19 +242,20 @@ public class DhcpServer extends IDhcpServer.Stub {
         }
     }
 
-    public DhcpServer(@NonNull String ifName,
+    public DhcpServer(@NonNull Context context, @NonNull String ifName,
             @NonNull DhcpServingParams params, @NonNull SharedLog log) {
-        this(new HandlerThread(DhcpServer.class.getSimpleName() + "." + ifName),
+        this(context, new HandlerThread(DhcpServer.class.getSimpleName() + "." + ifName),
                 ifName, params, log, null);
     }
 
     @VisibleForTesting
-    DhcpServer(@NonNull HandlerThread handlerThread, @NonNull String ifName,
-            @NonNull DhcpServingParams params, @NonNull SharedLog log,
+    DhcpServer(@NonNull Context context, @NonNull HandlerThread handlerThread,
+            @NonNull String ifName, @NonNull DhcpServingParams params, @NonNull SharedLog log,
             @Nullable Dependencies deps) {
         if (deps == null) {
             deps = new DependenciesImpl();
         }
+        mContext = context;
         mHandlerThread = handlerThread;
         mIfName = ifName;
         mServingParams = params;
@@ -242,6 +263,7 @@ public class DhcpServer extends IDhcpServer.Stub {
         mDeps = deps;
         mClock = deps.makeClock();
         mLeaseRepo = deps.makeLeaseRepository(mServingParams, mLog, mClock);
+        mDhcpRapidCommitEnabled = deps.isFeatureEnabled(context, DHCP_RAPID_COMMIT_VERSION);
     }
 
     /**
@@ -388,17 +410,20 @@ public class DhcpServer extends IDhcpServer.Stub {
         final DhcpLease lease;
         final MacAddress clientMac = getMacAddr(packet);
         try {
-            lease = mLeaseRepo.getOffer(packet.getExplicitClientIdOrNull(), clientMac,
-                    packet.mRelayIp, packet.mRequestedIp, packet.mHostName);
+            if (mDhcpRapidCommitEnabled && packet.mRapidCommit) {
+                lease = mLeaseRepo.getCommittedLease(packet.getExplicitClientIdOrNull(), clientMac,
+                        packet.mRelayIp, packet.mHostName);
+                transmitAck(packet, lease, clientMac);
+            } else {
+                lease = mLeaseRepo.getOffer(packet.getExplicitClientIdOrNull(), clientMac,
+                        packet.mRelayIp, packet.mRequestedIp, packet.mHostName);
+                transmitOffer(packet, lease, clientMac);
+            }
         } catch (DhcpLeaseRepository.OutOfAddressesException e) {
             transmitNak(packet, "Out of addresses to offer");
-            return;
         } catch (DhcpLeaseRepository.InvalidSubnetException e) {
             logIgnoredPacketInvalidSubnet(e);
-            return;
         }
-
-        transmitOffer(packet, lease, clientMac);
     }
 
     private void processRequest(@NonNull DhcpRequestPacket packet) throws MalformedPacketException {
@@ -492,23 +517,24 @@ public class DhcpServer extends IDhcpServer.Stub {
         return transmitOfferOrAckPacket(offerPacket, request, lease, clientMac, broadcastFlag);
     }
 
-    private boolean transmitAck(@NonNull DhcpPacket request, @NonNull DhcpLease lease,
+    private boolean transmitAck(@NonNull DhcpPacket packet, @NonNull DhcpLease lease,
             @NonNull MacAddress clientMac) {
         // TODO: replace DhcpPacket's build methods with real builders and use common code with
         // transmitOffer above
-        final boolean broadcastFlag = getBroadcastFlag(request, lease);
+        final boolean broadcastFlag = getBroadcastFlag(packet, lease);
         final int timeout = getLeaseTimeout(lease);
-        final String hostname = getHostnameIfRequested(request, lease);
-        final ByteBuffer ackPacket = DhcpPacket.buildAckPacket(ENCAP_BOOTP, request.mTransId,
-                broadcastFlag, mServingParams.getServerInet4Addr(), request.mRelayIp,
-                lease.getNetAddr(), request.mClientIp, request.mClientMac, timeout,
+        final String hostname = getHostnameIfRequested(packet, lease);
+        final ByteBuffer ackPacket = DhcpPacket.buildAckPacket(ENCAP_BOOTP, packet.mTransId,
+                broadcastFlag, mServingParams.getServerInet4Addr(), packet.mRelayIp,
+                lease.getNetAddr(), packet.mClientIp, packet.mClientMac, timeout,
                 mServingParams.getPrefixMaskAsAddress(), mServingParams.getBroadcastAddress(),
                 new ArrayList<>(mServingParams.defaultRouters),
                 new ArrayList<>(mServingParams.dnsServers),
                 mServingParams.getServerInet4Addr(), null /* domainName */, hostname,
-                mServingParams.metered, (short) mServingParams.linkMtu);
+                mServingParams.metered, (short) mServingParams.linkMtu,
+                packet.mRapidCommit && mDhcpRapidCommitEnabled);
 
-        return transmitOfferOrAckPacket(ackPacket, request, lease, clientMac, broadcastFlag);
+        return transmitOfferOrAckPacket(ackPacket, packet, lease, clientMac, broadcastFlag);
     }
 
     private boolean transmitNak(DhcpPacket request, String message) {
