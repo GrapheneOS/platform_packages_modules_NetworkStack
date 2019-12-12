@@ -198,6 +198,7 @@ public class NetworkStackService extends Service {
             final DhcpServer server;
             try {
                 server = new DhcpServer(
+                        mContext,
                         ifName,
                         DhcpServingParams.fromParcelableObject(params),
                         mLog.forSubComponent(ifName + ".DHCP"));
