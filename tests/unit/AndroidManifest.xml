@@ -15,6 +15,7 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
           package="com.android.server.networkstack.tests">
+    <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="29" />
 
     <uses-permission android:name="android.permission.READ_LOGS" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
