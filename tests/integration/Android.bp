@@ -17,6 +17,7 @@
 android_test {
     name: "NetworkStackIntegrationTests",
     certificate: "networkstack",
+    min_sdk_version: "29",
     srcs: ["src/**/*.java"],
     test_suites: ["device-tests"],
     static_libs: [
