@@ -112,13 +112,18 @@ public class NetworkStackUtils {
     public static final int CAPTIVE_PORTAL_MODE_AVOID = 2;
 
     /**
-     * Experiment flag to enable DHCP INIT-REBOOT state, default value is false.
+     * @deprecated Considering boolean experiment flag is likely to cause misconfiguration
+     *             particularly when NetworkStack module rolls back to previous version. It's
+     *             much safer to determine whether or not to enable one specific experimental
+     *             feature by comparing flag version with module version.
      */
+    @Deprecated
     public static final String DHCP_INIT_REBOOT_ENABLED = "dhcp_init_reboot_enabled";
 
     /**
-     * Experiment flag to enable DHCP Rapid Commit option, default value is false.
+     * @deprecated See above explanation.
      */
+    @Deprecated
     public static final String DHCP_RAPID_COMMIT_ENABLED = "dhcp_rapid_commit_enabled";
 
     /**
