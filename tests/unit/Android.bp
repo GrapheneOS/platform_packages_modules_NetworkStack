@@ -50,6 +50,7 @@ android_test {
 
 android_test {
     name: "NetworkStackTests",
+    min_sdk_version: "29",
     test_suites: ["device-tests"],
     defaults: ["NetworkStackTestsDefaults"],
     static_libs: ["NetworkStackApiStableLib"],
