@@ -28,7 +28,7 @@ public interface NetworkShim {
     /**
      * @see android.net.Network.netId.
      *
-     * Throw UnsupportedApiLevelException if API is not available in the API level.
+     * @throws UnsupportedApiLevelException if API is not available in the API level.
      */
     int getNetId() throws UnsupportedApiLevelException;
 }

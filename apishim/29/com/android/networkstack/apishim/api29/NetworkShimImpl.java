@@ -45,7 +45,7 @@ public class NetworkShimImpl implements NetworkShim {
 
     /**
      * Get the netId of the network.
-     * Throw UnsupportedApiLevelException if API is not available in this API level.
+     * @throws UnsupportedApiLevelException if API is not available in this API level.
      */
     @Override
     public int getNetId() throws UnsupportedApiLevelException {
