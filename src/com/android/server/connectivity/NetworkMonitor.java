@@ -76,6 +76,8 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.net.ConnectivityManager;
 import android.net.DnsResolver;
@@ -101,11 +103,19 @@ import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Message;
+import android.os.Process;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
 import android.provider.Settings;
 import android.telephony.AccessNetworkConstants;
+import android.telephony.CellIdentityNr;
+import android.telephony.CellInfo;
+import android.telephony.CellInfoGsm;
+import android.telephony.CellInfoLte;
+import android.telephony.CellInfoNr;
+import android.telephony.CellInfoTdscdma;
+import android.telephony.CellInfoWcdma;
 import android.telephony.CellSignalStrength;
 import android.telephony.NetworkRegistrationInfo;
 import android.telephony.ServiceState;
@@ -116,6 +126,7 @@ import android.util.Log;
 import android.util.Pair;
 
 import androidx.annotation.ArrayRes;
+import androidx.annotation.BoolRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
@@ -141,8 +152,10 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.StringJoiner;
 import java.util.UUID;
@@ -1318,8 +1331,78 @@ public class NetworkMonitor extends StateMachine {
                 CAPTIVE_PORTAL_USE_HTTPS, 1) == 1;
     }
 
+    @Nullable
+    private String getMccFromCellInfo(final CellInfo cell) {
+        if (cell instanceof CellInfoGsm) {
+            return ((CellInfoGsm) cell).getCellIdentity().getMccString();
+        } else if (cell instanceof CellInfoLte) {
+            return ((CellInfoLte) cell).getCellIdentity().getMccString();
+        } else if (cell instanceof CellInfoWcdma) {
+            return ((CellInfoWcdma) cell).getCellIdentity().getMccString();
+        } else if (cell instanceof CellInfoTdscdma) {
+            return ((CellInfoTdscdma) cell).getCellIdentity().getMccString();
+        } else if (cell instanceof CellInfoNr) {
+            return ((CellIdentityNr) ((CellInfoNr) cell).getCellIdentity()).getMccString();
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Return location mcc.
+     */
+    @VisibleForTesting
+    @Nullable
+    protected String getLocationMcc() {
+        // Adding this check is because the new permission won't be granted by mainline update,
+        // the new permission only be granted by OTA for current design. Tracking: b/145774617.
+        if (mContext.checkPermission(android.Manifest.permission.ACCESS_FINE_LOCATION,
+                Process.myPid(), Process.myUid())
+                == PackageManager.PERMISSION_DENIED) {
+            log("getLocationMcc : NetworkStack does not hold ACCESS_FINE_LOCATION");
+            return null;
+        }
+        try {
+            final List<CellInfo> cells = mTelephonyManager.getAllCellInfo();
+            final Map<String, Integer> countryCodeMap = new HashMap<>();
+            int maxCount = 0;
+            for (final CellInfo cell : cells) {
+                final String mcc = getMccFromCellInfo(cell);
+                if (mcc != null) {
+                    final int count = countryCodeMap.getOrDefault(mcc, 0) + 1;
+                    countryCodeMap.put(mcc, count);
+                }
+            }
+            // Return the MCC which occurs most.
+            if (countryCodeMap.size() <= 0) return null;
+            return Collections.max(countryCodeMap.entrySet(),
+                    (e1, e2) -> e1.getValue().compareTo(e2.getValue())).getKey();
+        } catch (SecurityException e) {
+            log("Permission is not granted:" + e);
+            return null;
+        }
+    }
+
+    @VisibleForTesting
+    protected Context getContextByMccIfNoSimCardOrDefault() {
+        final boolean useNeighborResource =
+                getResBooleanConfig(mContext, R.bool.config_no_sim_card_uses_neighbor_mcc);
+        if (!useNeighborResource
+                || TelephonyManager.SIM_STATE_READY == mTelephonyManager.getSimState()) {
+            return mContext;
+        }
+        final String mcc = getLocationMcc();
+        if (TextUtils.isEmpty(mcc)) {
+            return mContext;
+        }
+        final Configuration config = mContext.getResources().getConfiguration();
+        config.mcc = Integer.parseInt(mcc);
+        return mContext.createConfigurationContext(config);
+    }
+
     private String getCaptivePortalServerHttpsUrl() {
-        return getSettingFromResource(mContext, R.string.config_captive_portal_https_url,
+        final Context targetContext = getContextByMccIfNoSimCardOrDefault();
+        return getSettingFromResource(targetContext, R.string.config_captive_portal_https_url,
                 R.string.default_captive_portal_https_url, CAPTIVE_PORTAL_HTTPS_URL);
     }
 
@@ -1350,6 +1433,17 @@ public class NetworkMonitor extends StateMachine {
         }
     }
 
+    @VisibleForTesting
+    protected boolean getResBooleanConfig(@NonNull final Context context,
+            @BoolRes int configResource) {
+        final Resources res = context.getResources();
+        try {
+            return res.getBoolean(configResource);
+        } catch (Resources.NotFoundException e) {
+            return false;
+        }
+    }
+
     /**
      * Get the captive portal server HTTP URL that is configured on the device.
      *
@@ -1358,7 +1452,8 @@ public class NetworkMonitor extends StateMachine {
      * on one URL that can be used, while NetworkMonitor may implement more complex logic.
      */
     public String getCaptivePortalServerHttpUrl() {
-        return getSettingFromResource(mContext, R.string.config_captive_portal_http_url,
+        final Context targetContext = getContextByMccIfNoSimCardOrDefault();
+        return getSettingFromResource(targetContext, R.string.config_captive_portal_http_url,
                 R.string.default_captive_portal_http_url, CAPTIVE_PORTAL_HTTP_URL);
     }
 

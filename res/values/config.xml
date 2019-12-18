@@ -43,4 +43,7 @@
     <!-- Customized default DNS Servers address. -->
     <string-array name="config_default_dns_servers" translatable="false">
     </string-array>
+    <!-- Set to true if NetworkMonitor needs to load the resource by neighbor mcc when device
+         doesn't have a SIM card inserted. -->
+    <bool name="config_no_sim_card_uses_neighbor_mcc">false</bool>
 </resources>
