@@ -405,7 +405,7 @@ public class NetworkMonitor extends StateMachine {
             SharedLog validationLog) {
         this(context, cb, network, new IpConnectivityLog(), validationLog,
                 Dependencies.DEFAULT, new DataStallStatsUtils(),
-                getTcpSocketTrackerOrNull(context));
+                getTcpSocketTrackerOrNull(context, network));
     }
 
     @VisibleForTesting
@@ -2240,7 +2240,6 @@ public class NetworkMonitor extends StateMachine {
         // Check TCP signal. Suspect it may be a data stall if :
         // 1. TCP connection fail rate(lost+retrans) is higher than threshold.
         // 2. Accumulate enough packets count.
-        // TODO: Need to filter per target network.
         final TcpSocketTracker tst = getTcpSocketTracker();
         if (dataStallEvaluateTypeEnabled(DATA_STALL_EVALUATION_TYPE_TCP) && tst != null) {
             if (tst.getLatestReceivedCount() > 0) {
@@ -2406,14 +2405,14 @@ public class NetworkMonitor extends StateMachine {
     }
 
     @Nullable
-    private static TcpSocketTracker getTcpSocketTrackerOrNull(Context context) {
+    private static TcpSocketTracker getTcpSocketTrackerOrNull(Context context, Network network) {
         return ((Dependencies.DEFAULT.getDeviceConfigPropertyInt(
                 NAMESPACE_CONNECTIVITY,
                 CONFIG_DATA_STALL_EVALUATION_TYPE,
                 DEFAULT_DATA_STALL_EVALUATION_TYPES)
                 & DATA_STALL_EVALUATION_TYPE_TCP) != 0)
                     ? new TcpSocketTracker(new TcpSocketTracker.Dependencies(context,
-                        ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)))
+                        ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)), network)
                     : null;
     }
 }

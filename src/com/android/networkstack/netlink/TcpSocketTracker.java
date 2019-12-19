@@ -39,6 +39,9 @@ import static android.system.OsConstants.SOL_SOCKET;
 import static android.system.OsConstants.SO_SNDTIMEO;
 
 import android.content.Context;
+import android.net.INetd;
+import android.net.MarkMaskParcel;
+import android.net.Network;
 import android.net.netlink.NetlinkConstants;
 import android.net.netlink.NetlinkSocket;
 import android.net.netlink.StructInetDiagMsg;
@@ -46,6 +49,8 @@ import android.net.netlink.StructNlMsgHdr;
 import android.net.util.NetworkStackUtils;
 import android.net.util.SocketUtils;
 import android.os.AsyncTask;
+import android.os.IBinder;
+import android.os.RemoteException;
 import android.os.SystemClock;
 import android.provider.DeviceConfig;
 import android.system.ErrnoException;
@@ -59,6 +64,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.networkstack.apishim.NetworkShimImpl;
+import com.android.networkstack.apishim.UnsupportedApiLevelException;
 
 import java.io.FileDescriptor;
 import java.io.InterruptedIOException;
@@ -84,6 +91,8 @@ public class TcpSocketTracker {
     private static final long IO_TIMEOUT = 3_000L;
     /** Cookie offset of an InetMagMessage header. */
     private static final int IDIAG_COOKIE_OFFSET = 44;
+    private static final int UNKNOWN_MARK = 0xffffffff;
+    private static final int NULL_MASK = 0;
     /**
      *  Gather the socket info.
      *
@@ -106,6 +115,12 @@ public class TcpSocketTracker {
      */
     private final SparseArray<byte[]> mSockDiagMsg = new SparseArray<>();
     private final Dependencies mDependencies;
+    private final INetd mNetd;
+    private final Network mNetwork;
+    // The fwmark value of {@code mNetwork}.
+    private final int mNetworkMark;
+    // The network id mask of fwmark.
+    private final int mNetworkMask;
     private int mMinPacketsThreshold = DEFAULT_DATA_STALL_MIN_PACKETS_THRESHOLD;
     private int mTcpPacketsFailRateThreshold = DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE;
     @VisibleForTesting
@@ -124,8 +139,17 @@ public class TcpSocketTracker {
                 }
             };
 
-    public TcpSocketTracker(@NonNull final Dependencies dps) {
+    public TcpSocketTracker(@NonNull final Dependencies dps, @NonNull final Network network) {
         mDependencies = dps;
+        mNetwork = network;
+        mNetd = mDependencies.getNetd();
+
+        // If the parcel is null, nothing should be matched which is achieved by the combination of
+        // {@code NULL_MASK} and {@code UNKNOWN_MARK}.
+        final MarkMaskParcel parcel = getNetworkMarkMask();
+        mNetworkMark = (parcel != null) ? parcel.mark : UNKNOWN_MARK;
+        mNetworkMask = (parcel != null) ? parcel.mask : NULL_MASK;
+
         // Request tcp info from NetworkStack directly needs extra SELinux permission added after Q
         // release.
         if (!mDependencies.isTcpInfoParsingSupported()) return;
@@ -145,12 +169,24 @@ public class TcpSocketTracker {
         mDependencies.addDeviceConfigChangedListener(mConfigListener);
     }
 
+    @Nullable
+    private MarkMaskParcel getNetworkMarkMask() {
+        try {
+            final int netId = NetworkShimImpl.newInstance(mNetwork).getNetId();
+            return mNetd.getFwmarkForNetwork(netId);
+        } catch (UnsupportedApiLevelException e) {
+            log("Get netId is not available in this API level.");
+        } catch (RemoteException e) {
+            Log.e(TAG, "Error getting fwmark for network, ", e);
+        }
+        return null;
+    }
+
     /**
      * Request to send a SockDiag Netlink request. Receive and parse the returned message. This
      * function is not thread-safe and should only be called from only one thread.
      *
      * @Return if this polling request executes successfully or not.
-     * TODO: Need to filter socket info based on the target network.
      */
     public boolean pollSocketsInfo() {
         if (!mDependencies.isTcpInfoParsingSupported()) return false;
@@ -294,6 +330,10 @@ public class TcpSocketTracker {
     private TcpStat calculateLatestPacketsStat(@NonNull final SocketInfo current,
             @Nullable final SocketInfo previous) {
         final TcpStat stat = new TcpStat();
+        // Ignore non-target network sockets.
+        if ((current.fwmark & mNetworkMask) != mNetworkMark) {
+            return null;
+        }
 
         if (current.tcpInfo == null) {
             log("Current tcpInfo is null.");
@@ -428,7 +468,6 @@ public class TcpSocketTracker {
         // One of {@code AF_INET6, AF_INET}.
         public final int ipFamily;
         // "fwmark" value of the socket queried from native.
-        // TODO: Used to do bit-wise '&' operation to get netId information.
         public final int fwmark;
         // Socket information updated elapsed real time.
         public final long updateTime;
@@ -552,6 +591,14 @@ public class TcpSocketTracker {
 
         public Context getContext() {
             return mContext;
+        }
+
+        /**
+         * Get an INetd connector.
+         */
+        public INetd getNetd() {
+            return INetd.Stub.asInterface(
+                    (IBinder) mContext.getSystemService(Context.NETD_SERVICE));
         }
 
         /** Add device config change listener */
