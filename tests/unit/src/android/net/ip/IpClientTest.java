@@ -349,6 +349,7 @@ public class IpClientTest {
         doDefaultDualStackProvisioningConfigurationTest(false /* avoidBadWifi */);
     }
 
+    @Test
     public void testProvisioningWithInitialConfiguration() throws Exception {
         final String iface = TEST_IFNAME;
         final IpClient ipc = makeIpClient(iface);
