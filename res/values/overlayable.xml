@@ -21,6 +21,7 @@
             <item type="string" name="config_captive_portal_http_url"/>
             <item type="string" name="config_captive_portal_https_url"/>
             <item type="array" name="config_captive_portal_fallback_urls"/>
+            <item type="bool" name="config_no_sim_card_uses_neighbor_mcc"/>
             <!-- Configuration value for DhcpResults -->
             <item type="array" name="config_default_dns_servers"/>
         </policy>
