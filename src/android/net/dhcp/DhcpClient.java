@@ -231,7 +231,8 @@ public class DhcpClient extends StateMachine {
     private static final int PRIVATE_BASE         = IpClient.DHCPCLIENT_CMD_BASE + 100;
     private static final int CMD_KICK             = PRIVATE_BASE + 1;
     private static final int CMD_RECEIVED_PACKET  = PRIVATE_BASE + 2;
-    private static final int CMD_TIMEOUT          = PRIVATE_BASE + 3;
+    @VisibleForTesting
+    public static final int CMD_TIMEOUT           = PRIVATE_BASE + 3;
     private static final int CMD_RENEW_DHCP       = PRIVATE_BASE + 4;
     private static final int CMD_REBIND_DHCP      = PRIVATE_BASE + 5;
     private static final int CMD_EXPIRE_DHCP      = PRIVATE_BASE + 6;
@@ -888,11 +889,8 @@ public class DhcpClient extends StateMachine {
                     mConfiguration = (Configuration) message.obj;
                     if (mConfiguration.isPreconnectionEnabled) {
                         transitionTo(mDhcpPreconnectingState);
-                    } else if (isDhcpLeaseCacheEnabled()) {
-                        preDhcpTransitionTo(mWaitBeforeObtainingConfigurationState,
-                                mObtainingConfigurationState);
                     } else {
-                        preDhcpTransitionTo(mWaitBeforeStartState, mDhcpInitState);
+                        startInitRebootOrInit();
                     }
                     return HANDLED;
                 default:
@@ -1266,15 +1264,6 @@ public class DhcpClient extends StateMachine {
             l2Packet.dstMacAddress = MacAddress.fromBytes(DhcpPacket.ETHER_BROADCAST);
             l2Packet.payload = packet.array();
             mController.sendMessage(CMD_START_PRECONNECTION, l2Packet);
-        }
-
-        private void startInitRebootOrInit() {
-            if (isDhcpLeaseCacheEnabled()) {
-                preDhcpTransitionTo(mWaitBeforeObtainingConfigurationState,
-                        mObtainingConfigurationState);
-            } else {
-                preDhcpTransitionTo(mWaitBeforeStartState, mDhcpInitState);
-            }
         }
     }
 
