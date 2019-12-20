@@ -1179,6 +1179,7 @@ public class IpClientIntegrationTest {
                 true /* shouldAbortPreconnection */);
     }
 
+    @Test
     public void testDhcpDecline_conflictByArpReply() throws Exception {
         doIpAddressConflictDetectionTest(true /* causeIpAddressConflict */,
                 false /* isDhcpRapidCommitEnabled */, true /* isDhcpIpConflictDetectEnabled */,
