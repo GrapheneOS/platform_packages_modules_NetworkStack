@@ -22,6 +22,9 @@ import static android.net.util.DataStallUtils.DEFAULT_TCP_PACKETS_FAIL_PERCENTAG
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_INET;
 
+import static com.android.dx.mockito.inline.extended.ExtendedMockito.doReturn;
+import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
+
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
 import static junit.framework.Assert.assertTrue;
@@ -31,18 +34,27 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.when;
 
+import android.net.INetd;
+import android.net.MarkMaskParcel;
+import android.net.Network;
 import android.net.netlink.StructNlMsgHdr;
 
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.networkstack.apishim.NetworkShim;
+import com.android.networkstack.apishim.NetworkShimImpl;
+
 import libcore.util.HexEncoding;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.MockitoSession;
+import org.mockito.quality.Strictness;
 
 import java.io.FileDescriptor;
 import java.nio.ByteBuffer;
@@ -111,7 +123,7 @@ public class TcpSocketTrackerTest {
             "00000000" +        // data
             "0800" +            // len = 8
             "0F00" +            // type = 15(INET_DIAG_MARK)
-            "851A0C00" +        // data, socket mark=793221
+            "850A0C00" +        // data, socket mark=789125
             "AC00" +            // len = 172
             "0200" +            // type = 2(INET_DIAG_INFO)
             // tcp_info
@@ -175,18 +187,48 @@ public class TcpSocketTrackerTest {
             + "00";          // retrans
     private static final byte[] TEST_RESPONSE_BYTES =
             HexEncoding.decode(TEST_RESPONSE_HEX.toCharArray(), false);
+    private static final int TEST_NETID1 = 0xA85;
+    private static final int TEST_NETID2 = 0x1A85;
+    private static final int TEST_NETID1_FWMARK = 0x0A85;
+    private static final int TEST_NETID2_FWMARK = 0x1A85;
+    private static final int NETID_MASK = 0xffff;
     @Mock private TcpSocketTracker.Dependencies mDependencies;
     @Mock private FileDescriptor mMockFd;
-
+    @Mock private Network mNetwork = new Network(TEST_NETID1);
+    @Mock private INetd mNetd;
+    private MockitoSession mSession;
+    @Mock NetworkShim mNetworkShim;
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
+        when(mDependencies.getNetd()).thenReturn(mNetd);
         when(mDependencies.isTcpInfoParsingSupported()).thenReturn(true);
         when(mDependencies.connectToKernel()).thenReturn(mMockFd);
         when(mDependencies.getDeviceConfigPropertyInt(
                 eq(NAMESPACE_CONNECTIVITY),
                 eq(CONFIG_TCP_PACKETS_FAIL_PERCENTAGE),
                 anyInt())).thenReturn(DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE);
+        mSession = mockitoSession()
+                .spyStatic(NetworkShimImpl.class)
+                .strictness(Strictness.WARN)
+                .startMocking();
+
+        doReturn(mNetworkShim).when(() -> NetworkShimImpl.newInstance(mNetwork));
+        when(mNetworkShim.getNetId()).thenReturn(TEST_NETID1);
+        when(mNetd.getFwmarkForNetwork(eq(TEST_NETID1)))
+                .thenReturn(makeMarkMaskParcel(NETID_MASK, TEST_NETID1_FWMARK));
+    }
+
+    @After
+    public void tearDown() {
+        mSession.finishMocking();
+    }
+
+    private MarkMaskParcel makeMarkMaskParcel(final int mask, final int mark) {
+        final MarkMaskParcel parcel = new MarkMaskParcel();
+        parcel.mask = mask;
+        parcel.mark = mark;
+        return parcel;
     }
 
     private ByteBuffer getByteBuffer(final byte[] bytes) {
@@ -198,7 +240,7 @@ public class TcpSocketTrackerTest {
     @Test
     public void testParseSockInfo() {
         final ByteBuffer buffer = getByteBuffer(SOCK_DIAG_TCP_INET_BYTES);
-        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies);
+        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
         buffer.position(SOCKDIAG_MSG_HEADER_SIZE);
         final TcpSocketTracker.SocketInfo parsed =
                 tst.parseSockInfo(buffer, AF_INET, 276, 100L);
@@ -248,7 +290,7 @@ public class TcpSocketTrackerTest {
         expected.put(TcpInfo.Field.DELIVERY_RATE, 0L);
 
         assertEquals(parsed.tcpInfo, new TcpInfo(expected));
-        assertEquals(parsed.fwmark, 793221);
+        assertEquals(parsed.fwmark, 789125);
         assertEquals(parsed.updateTime, 100);
         assertEquals(parsed.ipFamily, AF_INET);
     }
@@ -270,7 +312,7 @@ public class TcpSocketTrackerTest {
     @Test
     public void testPollSocketsInfo() throws Exception {
         when(mDependencies.isTcpInfoParsingSupported()).thenReturn(false);
-        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies);
+        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
         assertFalse(tst.pollSocketsInfo());
 
         when(mDependencies.isTcpInfoParsingSupported()).thenReturn(true);
@@ -335,7 +377,7 @@ public class TcpSocketTrackerTest {
 
     @Test
     public void testPollSocketsInfo_BadFormat() throws Exception {
-        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies);
+        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
         ByteBuffer tcpBuffer = getByteBuffer(TEST_RESPONSE_BYTES);
 
         when(mDependencies.recvMessage(any())).thenReturn(tcpBuffer);
@@ -350,5 +392,20 @@ public class TcpSocketTrackerTest {
         assertEquals(10, tst.getSentSinceLastRecv());
         // Expect to reset to 0.
         assertEquals(0, tst.getLatestPacketFailPercentage());
+    }
+
+    @Test
+    public void testUnMatchNetwork() throws Exception {
+        when(mNetworkShim.getNetId()).thenReturn(TEST_NETID2);
+        when(mNetd.getFwmarkForNetwork(eq(TEST_NETID2)))
+                .thenReturn(makeMarkMaskParcel(NETID_MASK, TEST_NETID2_FWMARK));
+        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
+        final ByteBuffer tcpBuffer = getByteBuffer(TEST_RESPONSE_BYTES);
+        when(mDependencies.recvMessage(any())).thenReturn(tcpBuffer);
+        assertTrue(tst.pollSocketsInfo());
+
+        assertEquals(0, tst.getSentSinceLastRecv());
+        assertEquals(-1, tst.getLatestPacketFailPercentage());
+        assertFalse(tst.isDataStallSuspected());
     }
 }

@@ -71,6 +71,7 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.net.ConnectivityManager;
 import android.net.DnsResolver;
+import android.net.INetd;
 import android.net.INetworkMonitorCallbacks;
 import android.net.LinkProperties;
 import android.net.Network;
@@ -163,6 +164,7 @@ public class NetworkMonitorTest {
     private @Mock WifiInfo mWifiInfo;
     private @Captor ArgumentCaptor<String> mNetworkTestedRedirectUrlCaptor;
     private @Mock TcpSocketTracker.Dependencies mTstDependencies;
+    private @Mock INetd mNetd;
     private @Mock TcpSocketTracker mTst;
     private HashSet<WrappedNetworkMonitor> mCreatedNetworkMonitors;
     private HashSet<BroadcastReceiver> mRegisteredReceivers;
@@ -371,6 +373,7 @@ public class NetworkMonitorTest {
         setFallbackSpecs(null); // Test with no fallback spec by default
         when(mRandom.nextInt()).thenReturn(0);
 
+        when(mTstDependencies.getNetd()).thenReturn(mNetd);
         // DNS probe timeout should not be defined more than half of HANDLER_TIMEOUT_MS. Otherwise,
         // it will fail the test because of timeout expired for querying AAAA and A sequentially.
         when(mResources.getInteger(eq(R.integer.config_captive_portal_dns_probe_timeout)))
