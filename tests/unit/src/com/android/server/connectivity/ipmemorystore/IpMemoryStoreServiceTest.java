@@ -54,6 +54,7 @@ import libcore.io.Streams;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -769,6 +770,8 @@ public class IpMemoryStoreServiceTest {
                         })));
     }
 
+    @Test
+    @Ignore
     public void testTasksAreSerial() {
         final long sleepTimeMs = 1000;
         final long startTime = System.currentTimeMillis();

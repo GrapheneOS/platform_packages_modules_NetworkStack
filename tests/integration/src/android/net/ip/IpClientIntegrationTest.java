@@ -22,6 +22,7 @@ import static android.net.dhcp.DhcpPacket.DHCP_CLIENT;
 import static android.net.dhcp.DhcpPacket.DHCP_MAGIC_COOKIE;
 import static android.net.dhcp.DhcpPacket.DHCP_SERVER;
 import static android.net.dhcp.DhcpPacket.ENCAP_L2;
+import static android.net.dhcp.DhcpPacket.INADDR_BROADCAST;
 import static android.net.dhcp.DhcpPacket.INFINITE_LEASE;
 import static android.net.ipmemorystore.Status.SUCCESS;
 import static android.net.networkstack.shared.Inet4AddressUtils.getBroadcastAddress;
@@ -50,6 +51,7 @@ import static com.android.server.util.NetworkStackConstants.IPV6_PROTOCOL_OFFSET
 
 import static junit.framework.Assert.fail;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -92,6 +94,7 @@ import android.net.dhcp.DhcpRequestPacket;
 import android.net.ipmemorystore.NetworkAttributes;
 import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener;
 import android.net.ipmemorystore.Status;
+import android.net.networkstack.util.StateMachine;
 import android.net.shared.ProvisioningConfiguration;
 import android.net.util.InterfaceParams;
 import android.net.util.IpUtils;
@@ -115,6 +118,7 @@ import com.android.networkstack.arp.ArpPacket;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
 import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
+import com.android.testutils.HandlerUtilsKt;
 
 import org.junit.After;
 import org.junit.Before;
@@ -180,6 +184,7 @@ public class IpClientIntegrationTest {
     // IP header
     private static final int IPV4_HEADER_LEN = 20;
     private static final int IPV4_SRC_ADDR_OFFSET = ETH_HEADER_LEN + 12;
+    private static final int IPV4_DST_ADDR_OFFSET = IPV4_SRC_ADDR_OFFSET + 4;
 
     // UDP header
     private static final int UDP_HEADER_LEN = 8;
@@ -254,6 +259,7 @@ public class IpClientIntegrationTest {
         private boolean mIsDhcpIpConflictDetectEnabled;
         // Can't use SparseIntArray, it doesn't have an easy way to know if a key is not present.
         private HashMap<String, Integer> mIntConfigProperties = new HashMap<>();
+        private DhcpClient mDhcpClient;
 
         public void setDhcpLeaseCacheEnabled(final boolean enable) {
             mIsDhcpLeaseCacheEnabled = enable;
@@ -276,6 +282,13 @@ public class IpClientIntegrationTest {
         public NetworkStackIpMemoryStore getIpMemoryStore(Context context,
                 NetworkStackServiceManager nssManager) {
             return mIpMemoryStore;
+        }
+
+        @Override
+        public DhcpClient makeDhcpClient(Context context, StateMachine controller,
+                InterfaceParams ifParams, DhcpClient.Dependencies deps) {
+            mDhcpClient = DhcpClient.makeDhcpClient(context, controller, ifParams, deps);
+            return mDhcpClient;
         }
 
         @Override
@@ -501,7 +514,7 @@ public class IpClientIntegrationTest {
     }
 
     private void startIpClientProvisioning(final boolean isDhcpLeaseCacheEnabled,
-            final boolean isDhcpRapidCommitEnabled, final boolean isPreconnectionEnabled,
+            final boolean shouldReplyRapidCommitAck, final boolean isPreconnectionEnabled,
             final boolean isDhcpIpConflictDetectEnabled) throws RemoteException {
         ProvisioningConfiguration.Builder builder = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
@@ -509,7 +522,7 @@ public class IpClientIntegrationTest {
         if (isPreconnectionEnabled) builder.withPreconnection();
 
         mDependencies.setDhcpLeaseCacheEnabled(isDhcpLeaseCacheEnabled);
-        mDependencies.setDhcpRapidCommitEnabled(isDhcpRapidCommitEnabled);
+        mDependencies.setDhcpRapidCommitEnabled(shouldReplyRapidCommitAck);
         mDependencies.setDhcpIpConflictDetectEnabled(isDhcpIpConflictDetectEnabled);
         mIpc.setL2KeyAndGroupHint(TEST_L2KEY, TEST_GROUPHINT);
         mIpc.startProvisioning(builder.build());
@@ -550,15 +563,15 @@ public class IpClientIntegrationTest {
     // Helper method to complete DHCP 2-way or 4-way handshake
     private void performDhcpHandshake(final boolean isSuccessLease,
             final Integer leaseTimeSec, final boolean isDhcpLeaseCacheEnabled,
-            final boolean isDhcpRapidCommitEnabled, final int mtu,
+            final boolean shouldReplyRapidCommitAck, final int mtu,
             final boolean isDhcpIpConflictDetectEnabled) throws Exception {
-        startIpClientProvisioning(isDhcpLeaseCacheEnabled, isDhcpRapidCommitEnabled,
+        startIpClientProvisioning(isDhcpLeaseCacheEnabled, shouldReplyRapidCommitAck,
                 false /* isPreconnectionEnabled */, isDhcpIpConflictDetectEnabled);
 
         DhcpPacket packet;
         while ((packet = getNextDhcpPacket()) != null) {
             if (packet instanceof DhcpDiscoverPacket) {
-                if (isDhcpRapidCommitEnabled) {
+                if (shouldReplyRapidCommitAck) {
                     sendResponse(buildDhcpAckPacket(packet, leaseTimeSec, (short) mtu,
                               true /* rapidCommit */));
                 } else {
@@ -574,7 +587,7 @@ public class IpClientIntegrationTest {
                 fail("invalid DHCP packet");
             }
             // wait for reply to DHCPOFFER packet if disabling rapid commit option
-            if (isDhcpRapidCommitEnabled || !(packet instanceof DhcpDiscoverPacket)) return;
+            if (shouldReplyRapidCommitAck || !(packet instanceof DhcpDiscoverPacket)) return;
         }
         fail("No DHCPREQUEST received on interface");
     }
@@ -598,7 +611,7 @@ public class IpClientIntegrationTest {
             return null;
         }).when(mIpMemoryStore).retrieveNetworkAttributes(eq(TEST_L2KEY), any());
         startIpClientProvisioning(true /* isDhcpLeaseCacheEnabled */,
-                false /* isDhcpRapidCommitEnabled */, false /* isPreconnectionEnabled */,
+                false /* shouldReplyRapidCommitAck */, false /* isPreconnectionEnabled */,
                 false /* isDhcpIpConflictDetectEnabled */);
         return getNextDhcpPacket();
     }
@@ -624,7 +637,7 @@ public class IpClientIntegrationTest {
 
         if (shouldChangeMtu) mtu = TEST_MIN_MTU;
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
-                true /* isDhcpLeaseCacheEnabled */, false /* isDhcpRapidCommitEnabled */,
+                true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 mtu, false /* isDhcpIpConflictDetectEnabled */);
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, mtu);
 
@@ -651,8 +664,10 @@ public class IpClientIntegrationTest {
         }
     }
 
-    private void doIpClientProvisioningWithPreconnectionTest(final boolean isDhcpRapidCommitEnabled,
-            final boolean shouldAbortPreconnection) throws Exception {
+    private void doIpClientProvisioningWithPreconnectionTest(
+            final boolean shouldReplyRapidCommitAck, final boolean shouldAbortPreconnection,
+            final boolean shouldFirePreconnectionTimeout,
+            final boolean timeoutBeforePreconnectionComplete) throws Exception {
         final long currentTime = System.currentTimeMillis();
         final ArgumentCaptor<List<Layer2PacketParcelable>> l2PacketList =
                 ArgumentCaptor.forClass(List.class);
@@ -660,31 +675,64 @@ public class IpClientIntegrationTest {
                 ArgumentCaptor.forClass(InterfaceConfigurationParcel.class);
 
         startIpClientProvisioning(true /* isDhcpLeaseCacheEnabled */,
-                isDhcpRapidCommitEnabled, true /* isDhcpPreConnectionEnabled */,
+                shouldReplyRapidCommitAck, true /* isDhcpPreConnectionEnabled */,
                 false /* isDhcpIpConflictDetectEnabled */);
         verify(mCb, timeout(TEST_TIMEOUT_MS).times(1))
                 .onPreconnectionStart(l2PacketList.capture());
         final byte[] payload = l2PacketList.getValue().get(0).payload;
         DhcpPacket packet = DhcpPacket.decodeFullPacket(payload, payload.length, ENCAP_L2);
+        final int preconnDiscoverTransId = packet.getTransactionId();
         assertTrue(packet instanceof DhcpDiscoverPacket);
+        assertArrayEquals(INADDR_BROADCAST.getAddress(),
+                Arrays.copyOfRange(payload, IPV4_DST_ADDR_OFFSET, IPV4_DST_ADDR_OFFSET + 4));
 
         if (shouldAbortPreconnection) {
-            mIpc.sendMessage(IpClient.CMD_COMPLETE_PRECONNECTION, 0 /* abort */);
+            if (shouldFirePreconnectionTimeout && timeoutBeforePreconnectionComplete) {
+                mDependencies.mDhcpClient.sendMessage(DhcpClient.CMD_TIMEOUT);
+            }
+
+            mIpc.notifyPreconnectionComplete(false /* abort */);
+            HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+
+            if (shouldFirePreconnectionTimeout && !timeoutBeforePreconnectionComplete) {
+                mDependencies.mDhcpClient.sendMessage(DhcpClient.CMD_TIMEOUT);
+            }
+
+            // Either way should get DhcpClient go back to INIT state, and broadcast
+            // DISCOVER with new transaction ID.
             packet = getNextDhcpPacket();
             assertTrue(packet instanceof DhcpDiscoverPacket);
+            assertTrue(packet.getTransactionId() != preconnDiscoverTransId);
+        } else if (shouldFirePreconnectionTimeout && timeoutBeforePreconnectionComplete) {
+            // If timeout fires before success preconnection, DhcpClient will go back to INIT state,
+            // and broadcast DISCOVER with new transaction ID.
+            mDependencies.mDhcpClient.sendMessage(DhcpClient.CMD_TIMEOUT);
+            packet = getNextDhcpPacket();
+            assertTrue(packet instanceof DhcpDiscoverPacket);
+            assertTrue(packet.getTransactionId() != preconnDiscoverTransId);
+            // any old response would be ignored due to mismatched transaction ID.
         }
 
         final short mtu = (short) TEST_DEFAULT_MTU;
-        if (!isDhcpRapidCommitEnabled) {
+        if (!shouldReplyRapidCommitAck) {
             sendResponse(buildDhcpOfferPacket(packet, TEST_LEASE_DURATION_S, mtu));
             packet = getNextDhcpPacket();
             assertTrue(packet instanceof DhcpRequestPacket);
         }
-
         sendResponse(buildDhcpAckPacket(packet, TEST_LEASE_DURATION_S, mtu,
-                isDhcpRapidCommitEnabled));
+                shouldReplyRapidCommitAck));
+
         if (!shouldAbortPreconnection) {
-            mIpc.sendMessage(IpClient.CMD_COMPLETE_PRECONNECTION, 1 /* success */);
+            mIpc.notifyPreconnectionComplete(true /* success */);
+            HandlerUtilsKt.waitForIdle(mDependencies.mDhcpClient.getHandler(), TEST_TIMEOUT_MS);
+
+            // If timeout fires after successful preconnection, right now DhcpClient will have
+            // already entered BOUND state, the delayed CMD_TIMEOUT command would be ignored. So
+            // this case should be very rare, because the timeout alarm is cancelled when state
+            // machine exits from Preconnecting state.
+            if (shouldFirePreconnectionTimeout && !timeoutBeforePreconnectionComplete) {
+                mDependencies.mDhcpClient.sendMessage(DhcpClient.CMD_TIMEOUT);
+            }
         }
         verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
 
@@ -728,12 +776,12 @@ public class IpClientIntegrationTest {
     }
 
     private void doIpAddressConflictDetectionTest(final boolean causeIpAddressConflict,
-            final boolean isDhcpRapidCommitEnabled, final boolean isDhcpIpConflictDetectEnabled,
+            final boolean shouldReplyRapidCommitAck, final boolean isDhcpIpConflictDetectEnabled,
             final boolean shouldResponseArpReply) throws Exception {
         final long currentTime = System.currentTimeMillis();
 
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
-                true /* isDhcpLeaseCacheEnabled */, isDhcpRapidCommitEnabled,
+                true /* isDhcpLeaseCacheEnabled */, shouldReplyRapidCommitAck,
                 TEST_DEFAULT_MTU, isDhcpIpConflictDetectEnabled);
 
         // If we receive an ARP packet here, it's guaranteed to be from IP conflict detection,
@@ -773,7 +821,7 @@ public class IpClientIntegrationTest {
     @Test
     public void testDhcpInit() throws Exception {
         startIpClientProvisioning(false /* isDhcpLeaseCacheEnabled */,
-                false /* isDhcpRapidCommitEnabled */, false /* isPreconnectionEnabled */,
+                false /* shouldReplyRapidCommitAck */, false /* isPreconnectionEnabled */,
                 false /* isDhcpIpConflictDetectEnabled */);
         final DhcpPacket packet = getNextDhcpPacket();
         assertTrue(packet instanceof DhcpDiscoverPacket);
@@ -783,7 +831,7 @@ public class IpClientIntegrationTest {
     public void testHandleSuccessDhcpLease() throws Exception {
         final long currentTime = System.currentTimeMillis();
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
-                true /* isDhcpLeaseCacheEnabled */, false /* isDhcpRapidCommitEnabled */,
+                true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
     }
@@ -791,7 +839,7 @@ public class IpClientIntegrationTest {
     @Test
     public void testHandleFailureDhcpLease() throws Exception {
         performDhcpHandshake(false /* isSuccessLease */, TEST_LEASE_DURATION_S,
-                true /* isDhcpLeaseCacheEnabled */, false /* isDhcpRapidCommitEnabled */,
+                true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
         assertIpMemoryNeverStoreNetworkAttributes();
     }
@@ -800,7 +848,7 @@ public class IpClientIntegrationTest {
     public void testHandleInfiniteLease() throws Exception {
         final long currentTime = System.currentTimeMillis();
         performDhcpHandshake(true /* isSuccessLease */, INFINITE_LEASE,
-                true /* isDhcpLeaseCacheEnabled */, false /* isDhcpRapidCommitEnabled */,
+                true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
         assertIpMemoryStoreNetworkAttributes(INFINITE_LEASE, currentTime, TEST_DEFAULT_MTU);
     }
@@ -809,7 +857,7 @@ public class IpClientIntegrationTest {
     public void testHandleNoLease() throws Exception {
         final long currentTime = System.currentTimeMillis();
         performDhcpHandshake(true /* isSuccessLease */, null /* no lease time */,
-                true /* isDhcpLeaseCacheEnabled */, false /* isDhcpRapidCommitEnabled */,
+                true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
         assertIpMemoryStoreNetworkAttributes(null, currentTime, TEST_DEFAULT_MTU);
     }
@@ -817,7 +865,7 @@ public class IpClientIntegrationTest {
     @Test
     public void testHandleDisableInitRebootState() throws Exception {
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
-                false /* isDhcpLeaseCacheEnabled */, false /* isDhcpRapidCommitEnabled */,
+                false /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
         assertIpMemoryNeverStoreNetworkAttributes();
     }
@@ -826,7 +874,7 @@ public class IpClientIntegrationTest {
     public void testHandleRapidCommitOption() throws Exception {
         final long currentTime = System.currentTimeMillis();
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
-                true /* isDhcpLeaseCacheEnabled */, true /* isDhcpRapidCommitEnabled */,
+                true /* isDhcpLeaseCacheEnabled */, true /* shouldReplyRapidCommitAck */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
     }
@@ -890,7 +938,7 @@ public class IpClientIntegrationTest {
     @Test
     public void testDhcpClientRapidCommitEnabled() throws Exception {
         startIpClientProvisioning(true /* isDhcpLeaseCacheEnabled */,
-                true /* isDhcpRapidCommitEnabled */, false /* isPreconnectionEnabled */,
+                true /* shouldReplyRapidCommitAck */, false /* isPreconnectionEnabled */,
                 false /* isDhcpIpConflictDetectEnabled */);
         final DhcpPacket packet = getNextDhcpPacket();
         assertTrue(packet instanceof DhcpDiscoverPacket);
@@ -1118,7 +1166,7 @@ public class IpClientIntegrationTest {
     public void testIpClientClearingIpAddressState() throws Exception {
         final long currentTime = System.currentTimeMillis();
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
-                true /* isDhcpLeaseCacheEnabled */, false /* isDhcpRapidCommitEnabled */,
+                true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
 
@@ -1145,7 +1193,7 @@ public class IpClientIntegrationTest {
 
         // start IpClient again and should enter Clearing State and wait for the message from kernel
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
-                true /* isDhcpLeaseCacheEnabled */, false /* isDhcpRapidCommitEnabled */,
+                true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
 
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
@@ -1156,81 +1204,145 @@ public class IpClientIntegrationTest {
     }
 
     @Test
-    public void testDhcpClientPreconnectionAbort() throws Exception {
-        doIpClientProvisioningWithPreconnectionTest(false /* isDhcpRapidCommitEnabled */,
-                true /* shouldAbortPreconnection */);
+    public void testDhcpClientPreconnection_success() throws Exception {
+        doIpClientProvisioningWithPreconnectionTest(true /* shouldReplyRapidCommitAck */,
+                false /* shouldAbortPreconnection */, false /* shouldFirePreconnectionTimeout */,
+                false /* timeoutBeforePreconnectionComplete */);
     }
 
     @Test
-    public void testDhcpClientPreconnectionEnabled_WithoutRapidCommit() throws Exception {
-        doIpClientProvisioningWithPreconnectionTest(false /* isDhcpRapidCommitEnabled */,
-                false /* shouldAbortPreconnection */);
+    public void testDhcpClientPreconnection_SuccessWithoutRapidCommit() throws Exception {
+        doIpClientProvisioningWithPreconnectionTest(false /* shouldReplyRapidCommitAck */,
+                false /* shouldAbortPreconnection */, false /* shouldFirePreconnectionTimeout */,
+                false /* timeoutBeforePreconnectionComplete */);
     }
 
     @Test
-    public void testDhcpClientPreconnectionEnabled() throws Exception {
-        doIpClientProvisioningWithPreconnectionTest(true /* isDhcpRapidCommitEnabled */,
-                false /* shouldAbortPreconnection */);
+    public void testDhcpClientPreconnection_Abort() throws Exception {
+        doIpClientProvisioningWithPreconnectionTest(true /* shouldReplyRapidCommitAck */,
+                true /* shouldAbortPreconnection */, false /* shouldFirePreconnectionTimeout */,
+                false /* timeoutBeforePreconnectionComplete */);
     }
 
     @Test
-    public void testDhcpClientPreconnectionEnabled_WithRapidCommit() throws Exception {
-        doIpClientProvisioningWithPreconnectionTest(true /* isDhcpRapidCommitEnabled */,
-                true /* shouldAbortPreconnection */);
+    public void testDhcpClientPreconnection_AbortWithoutRapiCommit() throws Exception {
+        doIpClientProvisioningWithPreconnectionTest(false /* shouldReplyRapidCommitAck */,
+                true /* shouldAbortPreconnection */, false /* shouldFirePreconnectionTimeout */,
+                false /* timeoutBeforePreconnectionComplete */);
     }
 
+    @Test
+    public void testDhcpClientPreconnection_TimeoutBeforeAbort() throws Exception {
+        doIpClientProvisioningWithPreconnectionTest(true /* shouldReplyRapidCommitAck */,
+                true /* shouldAbortPreconnection */, true /* shouldFirePreconnectionTimeout */,
+                true /* timeoutBeforePreconnectionComplete */);
+    }
+
+    @Test
+    public void testDhcpClientPreconnection_TimeoutBeforeAbortWithoutRapidCommit()
+            throws Exception {
+        doIpClientProvisioningWithPreconnectionTest(false /* shouldReplyRapidCommitAck */,
+                true /* shouldAbortPreconnection */, true /* shouldFirePreconnectionTimeout */,
+                true /* timeoutBeforePreconnectionComplete */);
+    }
+
+    @Test
+    public void testDhcpClientPreconnection_TimeoutafterAbort() throws Exception {
+        doIpClientProvisioningWithPreconnectionTest(true /* shouldReplyRapidCommitAck */,
+                true /* shouldAbortPreconnection */, true /* shouldFirePreconnectionTimeout */,
+                false /* timeoutBeforePreconnectionComplete */);
+    }
+
+    @Test
+    public void testDhcpClientPreconnection_TimeoutAfterAbortWithoutRapidCommit() throws Exception {
+        doIpClientProvisioningWithPreconnectionTest(false /* shouldReplyRapidCommitAck */,
+                true /* shouldAbortPreconnection */, true /* shouldFirePreconnectionTimeout */,
+                false /* timeoutBeforePreconnectionComplete */);
+    }
+
+    @Test
+    public void testDhcpClientPreconnection_TimeoutBeforeSuccess() throws Exception {
+        doIpClientProvisioningWithPreconnectionTest(true /* shouldReplyRapidCommitAck */,
+                false /* shouldAbortPreconnection */, true /* shouldFirePreconnectionTimeout */,
+                true /* timeoutBeforePreconnectionComplete */);
+    }
+
+    @Test
+    public void testDhcpClientPreconnection_TimeoutBeforeSuccessWithoutRapidCommit()
+            throws Exception {
+        doIpClientProvisioningWithPreconnectionTest(false /* shouldReplyRapidCommitAck */,
+                false /* shouldAbortPreconnection */, true /* shouldFirePreconnectionTimeout */,
+                true /* timeoutBeforePreconnectionComplete */);
+    }
+
+    @Test
+    public void testDhcpClientPreconnection_TimeoutAfterSuccess() throws Exception {
+        doIpClientProvisioningWithPreconnectionTest(true /* shouldReplyRapidCommitAck */,
+                false /* shouldAbortPreconnection */, true /* shouldFirePreconnectionTimeout */,
+                false /* timeoutBeforePreconnectionComplete */);
+    }
+
+    @Test
+    public void testDhcpClientPreconnection_TimeoutAfterSuccessWithoutRapidCommit()
+            throws Exception {
+        doIpClientProvisioningWithPreconnectionTest(false /* shouldReplyRapidCommitAck */,
+                false /* shouldAbortPreconnection */, true /* shouldFirePreconnectionTimeout */,
+                false /* timeoutBeforePreconnectionComplete */);
+    }
+
+    @Test
     public void testDhcpDecline_conflictByArpReply() throws Exception {
         doIpAddressConflictDetectionTest(true /* causeIpAddressConflict */,
-                false /* isDhcpRapidCommitEnabled */, true /* isDhcpIpConflictDetectEnabled */,
+                false /* shouldReplyRapidCommitAck */, true /* isDhcpIpConflictDetectEnabled */,
                 true /* shouldResponseArpReply */);
     }
 
     @Test
     public void testDhcpDecline_conflictByArpProbe() throws Exception {
         doIpAddressConflictDetectionTest(true /* causeIpAddressConflict */,
-                false /* isDhcpRapidCommitEnabled */, true /* isDhcpIpConflictDetectEnabled */,
+                false /* shouldReplyRapidCommitAck */, true /* isDhcpIpConflictDetectEnabled */,
                 false /* shouldResponseArpReply */);
     }
 
     @Test
     public void testDhcpDecline_EnableFlagWithoutIpConflict() throws Exception {
         doIpAddressConflictDetectionTest(false /* causeIpAddressConflict */,
-                false /* isDhcpRapidCommitEnabled */, true /* isDhcpIpConflictDetectEnabled */,
+                false /* shouldReplyRapidCommitAck */, true /* isDhcpIpConflictDetectEnabled */,
                 false /* shouldResponseArpReply */);
     }
 
     @Test
     public void testDhcpDecline_WithoutIpConflict() throws Exception {
         doIpAddressConflictDetectionTest(false /* causeIpAddressConflict */,
-                false /* isDhcpRapidCommitEnabled */, false /* isDhcpIpConflictDetectEnabled */,
+                false /* shouldReplyRapidCommitAck */, false /* isDhcpIpConflictDetectEnabled */,
                 false /* shouldResponseArpReply */);
     }
 
     @Test
     public void testDhcpDecline_WithRapidCommitWithoutIpConflict() throws Exception {
         doIpAddressConflictDetectionTest(false /* causeIpAddressConflict */,
-                true /* isDhcpRapidCommitEnabled */, false /* isDhcpIpConflictDetectEnabled */,
+                true /* shouldReplyRapidCommitAck */, false /* isDhcpIpConflictDetectEnabled */,
                 false /* shouldResponseArpReply */);
     }
 
     @Test
     public void testDhcpDecline_WithRapidCommitConflictByArpReply() throws Exception {
         doIpAddressConflictDetectionTest(true /* causeIpAddressConflict */,
-                true /* isDhcpRapidCommitEnabled */, true /* isDhcpIpConflictDetectEnabled */,
+                true /* shouldReplyRapidCommitAck */, true /* isDhcpIpConflictDetectEnabled */,
                 true /* shouldResponseArpReply */);
     }
 
     @Test
     public void testDhcpDecline_WithRapidCommitConflictByArpProbe() throws Exception {
         doIpAddressConflictDetectionTest(true /* causeIpAddressConflict */,
-                true /* isDhcpRapidCommitEnabled */, true /* isDhcpIpConflictDetectEnabled */,
+                true /* shouldReplyRapidCommitAck */, true /* isDhcpIpConflictDetectEnabled */,
                 false /* shouldResponseArpReply */);
     }
 
     @Test
     public void testDhcpDecline_EnableFlagWithRapidCommitWithoutIpConflict() throws Exception {
         doIpAddressConflictDetectionTest(false /* causeIpAddressConflict */,
-                true /* isDhcpRapidCommitEnabled */, true /* isDhcpIpConflictDetectEnabled */,
+                true /* shouldReplyRapidCommitAck */, true /* isDhcpIpConflictDetectEnabled */,
                 false /* shouldResponseArpReply */);
     }
 }
