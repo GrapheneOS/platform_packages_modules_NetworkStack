@@ -47,6 +47,7 @@ import static com.android.networkstack.apishim.ConstantsShim.KEY_NETWORK_VALIDAT
 import static com.android.networkstack.apishim.ConstantsShim.KEY_TCP_METRICS_COLLECTION_PERIOD_MILLIS;
 import static com.android.networkstack.apishim.ConstantsShim.KEY_TCP_PACKET_FAIL_RATE;
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
+import static com.android.server.connectivity.NetworkMonitor.extractCharset;
 
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
@@ -138,11 +139,14 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.URL;
 import java.net.UnknownHostException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -448,7 +452,6 @@ public class NetworkMonitorTest {
     @After
     public void tearDown() {
         mFakeDns.clearAll();
-        assertTrue(mCreatedNetworkMonitors.size() > 0);
         // Make a local copy of mCreatedNetworkMonitors because during the iteration below,
         // WrappedNetworkMonitor#onQuitting will delete elements from it on the handler threads.
         WrappedNetworkMonitor[] networkMonitors = mCreatedNetworkMonitors.toArray(
@@ -1324,6 +1327,48 @@ public class NetworkMonitorTest {
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1)).notifyNetworkTestedWithExtras(
                 eq(NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS),
                 eq(TEST_REDIRECT_URL), anyLong(), argThat(getNotifyNetworkTestedBundleMatcher()));
+    }
+
+    @Test
+    public void testExtractCharset() {
+        assertEquals(StandardCharsets.UTF_8, extractCharset(null));
+        assertEquals(StandardCharsets.UTF_8, extractCharset("text/html;charset=utf-8"));
+        assertEquals(StandardCharsets.UTF_8, extractCharset("text/html;charset=UtF-8"));
+        assertEquals(StandardCharsets.UTF_8, extractCharset("text/html; Charset=\"utf-8\""));
+        assertEquals(StandardCharsets.UTF_8, extractCharset("image/png"));
+        assertEquals(StandardCharsets.UTF_8, extractCharset("Text/HTML;"));
+        assertEquals(StandardCharsets.UTF_8, extractCharset("multipart/form-data; boundary=-aa*-"));
+        assertEquals(StandardCharsets.UTF_8, extractCharset("text/plain;something=else"));
+        assertEquals(StandardCharsets.UTF_8, extractCharset("text/plain;charset=ImNotACharset"));
+
+        assertEquals(StandardCharsets.ISO_8859_1, extractCharset("text/plain; CharSeT=ISO-8859-1"));
+        assertEquals(Charset.forName("Shift_JIS"), extractCharset("text/plain;charset=Shift_JIS"));
+        assertEquals(Charset.forName("Windows-1251"), extractCharset(
+                "text/plain;charset=Windows-1251 ; somethingelse"));
+    }
+
+    @Test
+    public void testReadAsString() throws IOException {
+        final String repeatedString = "1aテスト-?";
+        // Infinite stream repeating characters
+        class TestInputStream extends InputStream {
+            private final byte[] mBytes = repeatedString.getBytes(StandardCharsets.UTF_8);
+            private int mPosition = -1;
+
+            @Override
+            public int read() {
+                mPosition = (mPosition + 1) % mBytes.length;
+                return mBytes[mPosition];
+            }
+        }
+
+        final String readString = NetworkMonitor.readAsString(new TestInputStream(),
+                1500 /* maxLength */, StandardCharsets.UTF_8);
+
+        assertEquals(1500, readString.length());
+        for (int i = 0; i < readString.length(); i++) {
+            assertEquals(repeatedString.charAt(i % repeatedString.length()), readString.charAt(i));
+        }
     }
 
     private void makeDnsTimeoutEvent(WrappedNetworkMonitor wrappedMonitor, int count) {
