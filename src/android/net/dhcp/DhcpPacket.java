@@ -1,3 +1,19 @@
+/*
+ * Copyright (C) 2019 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package android.net.dhcp;
 
 import static com.android.server.util.NetworkStackConstants.IPV4_ADDR_ALL;
@@ -14,6 +30,8 @@ import android.text.TextUtils;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
+
+import com.android.networkstack.apishim.ShimUtils;
 
 import java.io.UnsupportedEncodingException;
 import java.net.Inet4Address;
@@ -350,7 +368,6 @@ public abstract class DhcpPacket {
     // Set in unit tests, to ensure that the test does not break when run on different devices and
     // on different releases.
     static String testOverrideVendorId = null;
-    static String testOverrideHostname = null;
 
     protected DhcpPacket(int transId, short secs, Inet4Address clientIp, Inet4Address yourIp,
                          Inet4Address nextIp, Inet4Address relayIp,
@@ -724,9 +741,16 @@ public abstract class DhcpPacket {
         return "android-dhcp-" + Build.VERSION.RELEASE;
     }
 
-    private String getHostname() {
-        if (testOverrideHostname != null) return testOverrideHostname;
-        return SystemProperties.get("net.hostname");
+    /**
+     * Get the DHCP client hostname after transliteration.
+     */
+    @VisibleForTesting
+    public String getHostname() {
+        if (mHostName == null
+                && !ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
+            return SystemProperties.get("net.hostname");
+        }
+        return mHostName;
     }
 
     /**
@@ -1328,10 +1352,11 @@ public abstract class DhcpPacket {
      */
     public static ByteBuffer buildDiscoverPacket(int encap, int transactionId,
             short secs, byte[] clientMac, boolean broadcast, byte[] expectedParams,
-            boolean rapidCommit) {
+            boolean rapidCommit, String hostname) {
         DhcpPacket pkt = new DhcpDiscoverPacket(transactionId, secs, INADDR_ANY /* relayIp */,
                 clientMac, broadcast, INADDR_ANY /* srcIp */, rapidCommit);
         pkt.mRequestedParams = expectedParams;
+        pkt.mHostName = hostname;
         return pkt.buildPacket(encap, DHCP_SERVER, DHCP_CLIENT);
     }
 
