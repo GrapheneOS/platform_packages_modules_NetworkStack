@@ -24,6 +24,16 @@
             <item type="bool" name="config_no_sim_card_uses_neighbor_mcc"/>
             <!-- Configuration value for DhcpResults -->
             <item type="array" name="config_default_dns_servers"/>
+            <!-- Configuration for including DHCP client hostname option.
+            If this option is true, client hostname set in Settings.Global.DEVICE_NAME will be
+            included in DHCPDISCOVER/DHCPREQUEST, otherwise, the DHCP hostname option will not
+            be sent. RFC952 and RFC1123 stipulates an valid hostname should be only comprised of
+            'a-z', 'A-Z' and '-', and the length should be up to 63 octets or less (RFC1035#2.3.4),
+            platform will perform best-effort transliteration for other characters. Anything that
+            could be used to identify the device uniquely is not recommended, e.g. user's name,
+            random number and etc.
+            -->
+            <item type="bool" name="config_dhcp_client_hostname"/>
         </policy>
     </overlayable>
 </resources>
