@@ -232,6 +232,23 @@ public class NetworkStackUtils {
      * Look up the value of a property for a particular namespace from {@link DeviceConfig}.
      * @param namespace The namespace containing the property to look up.
      * @param name The name of the property to look up.
+     * @param minimumValue The minimum value of a property.
+     * @param maximumValue The maximum value of a property.
+     * @param defaultValue The value to return if the property does not exist or its value is null.
+     * @return the corresponding value, or defaultValue if none exists or the fetched value is
+     *         greater than maximumValue.
+     */
+    public static int getDeviceConfigPropertyInt(@NonNull String namespace, @NonNull String name,
+            int minimumValue, int maximumValue, int defaultValue) {
+        int value = getDeviceConfigPropertyInt(namespace, name, defaultValue);
+        if (value < minimumValue || value > maximumValue) return defaultValue;
+        return value;
+    }
+
+    /**
+     * Look up the value of a property for a particular namespace from {@link DeviceConfig}.
+     * @param namespace The namespace containing the property to look up.
+     * @param name The name of the property to look up.
      * @param defaultValue The value to return if the property does not exist or its value is null.
      * @return the corresponding value, or defaultValue if none exists.
      */
