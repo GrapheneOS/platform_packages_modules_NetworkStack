@@ -38,6 +38,8 @@ import android.net.INetd;
 import android.net.MarkMaskParcel;
 import android.net.Network;
 import android.net.netlink.StructNlMsgHdr;
+import android.util.Log;
+import android.util.Log.TerribleFailureHandler;
 
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
@@ -198,9 +200,15 @@ public class TcpSocketTrackerTest {
     @Mock private INetd mNetd;
     private MockitoSession mSession;
     @Mock NetworkShim mNetworkShim;
+    private TerribleFailureHandler mOldWtfHandler;
+
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
+        // Override the default TerribleFailureHandler, as that handler might terminate the process
+        // (if we're on an eng build).
+        mOldWtfHandler =
+                Log.setWtfHandler((tag, what, system) -> Log.e(tag, what.getMessage(), what));
         when(mDependencies.getNetd()).thenReturn(mNetd);
         when(mDependencies.isTcpInfoParsingSupported()).thenReturn(true);
         when(mDependencies.connectToKernel()).thenReturn(mMockFd);
@@ -222,6 +230,7 @@ public class TcpSocketTrackerTest {
     @After
     public void tearDown() {
         mSession.finishMocking();
+        Log.setWtfHandler(mOldWtfHandler);
     }
 
     private MarkMaskParcel makeMarkMaskParcel(final int mask, final int mark) {
