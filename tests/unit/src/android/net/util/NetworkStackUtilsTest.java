@@ -54,9 +54,11 @@ import org.mockito.MockitoSession;
 public class NetworkStackUtilsTest {
     private static final String TEST_NAME_SPACE = "connectivity";
     private static final String TEST_EXPERIMENT_FLAG = "experiment_flag";
-    private static final int TEST_FLAG_VERSION = 28;
-    private static final String TEST_FLAG_VERSION_STRING = "28";
-    private static final int TEST_DEFAULT_FLAG_VERSION = 0;
+    private static final int TEST_FLAG_VALUE = 28;
+    private static final String TEST_FLAG_VALUE_STRING = "28";
+    private static final int TEST_DEFAULT_FLAG_VALUE = 0;
+    private static final int TEST_MAX_FLAG_VALUE = 1000;
+    private static final int TEST_MIN_FLAG_VALUE = 100;
     private static final long TEST_PACKAGE_VERSION = 290000000;
     private static final String TEST_PACKAGE_NAME = "NetworkStackUtilsTest";
     private MockitoSession mSession;
@@ -87,18 +89,58 @@ public class NetworkStackUtilsTest {
     public void testGetDeviceConfigPropertyInt_Null() {
         doReturn(null).when(() -> DeviceConfig.getProperty(eq(TEST_NAME_SPACE),
                 eq(TEST_EXPERIMENT_FLAG)));
-        assertEquals(TEST_DEFAULT_FLAG_VERSION, NetworkStackUtils.getDeviceConfigPropertyInt(
+        assertEquals(TEST_DEFAULT_FLAG_VALUE, NetworkStackUtils.getDeviceConfigPropertyInt(
                 TEST_NAME_SPACE, TEST_EXPERIMENT_FLAG,
-                TEST_DEFAULT_FLAG_VERSION /* default value */));
+                TEST_DEFAULT_FLAG_VALUE /* default value */));
     }
 
     @Test
     public void testGetDeviceConfigPropertyInt_NotNull() {
-        doReturn(TEST_FLAG_VERSION_STRING).when(() -> DeviceConfig.getProperty(eq(TEST_NAME_SPACE),
+        doReturn(TEST_FLAG_VALUE_STRING).when(() -> DeviceConfig.getProperty(eq(TEST_NAME_SPACE),
                 eq(TEST_EXPERIMENT_FLAG)));
-        assertEquals(TEST_FLAG_VERSION, NetworkStackUtils.getDeviceConfigPropertyInt(
+        assertEquals(TEST_FLAG_VALUE, NetworkStackUtils.getDeviceConfigPropertyInt(
                 TEST_NAME_SPACE, TEST_EXPERIMENT_FLAG,
-                TEST_DEFAULT_FLAG_VERSION /* default value */));
+                TEST_DEFAULT_FLAG_VALUE /* default value */));
+    }
+
+    @Test
+    public void testGetDeviceConfigPropertyInt_NormalValue() {
+        doReturn(TEST_FLAG_VALUE_STRING).when(() -> DeviceConfig.getProperty(eq(TEST_NAME_SPACE),
+                eq(TEST_EXPERIMENT_FLAG)));
+        assertEquals(TEST_FLAG_VALUE, NetworkStackUtils.getDeviceConfigPropertyInt(
+                TEST_NAME_SPACE, TEST_EXPERIMENT_FLAG, 0 /* minimum value */,
+                TEST_MAX_FLAG_VALUE /* maximum value */,
+                TEST_DEFAULT_FLAG_VALUE /* default value */));
+    }
+
+    @Test
+    public void testGetDeviceConfigPropertyInt_NullValue() {
+        doReturn(null).when(() -> DeviceConfig.getProperty(
+                eq(TEST_NAME_SPACE), eq(TEST_EXPERIMENT_FLAG)));
+        assertEquals(TEST_DEFAULT_FLAG_VALUE, NetworkStackUtils.getDeviceConfigPropertyInt(
+                TEST_NAME_SPACE, TEST_EXPERIMENT_FLAG, 0 /* minimum value */,
+                TEST_MAX_FLAG_VALUE /* maximum value */,
+                TEST_DEFAULT_FLAG_VALUE /* default value */));
+    }
+
+    @Test
+    public void testGetDeviceConfigPropertyInt_OverMaximumValue() {
+        doReturn(Integer.toString(TEST_MAX_FLAG_VALUE + 10)).when(() -> DeviceConfig.getProperty(
+                eq(TEST_NAME_SPACE), eq(TEST_EXPERIMENT_FLAG)));
+        assertEquals(TEST_DEFAULT_FLAG_VALUE, NetworkStackUtils.getDeviceConfigPropertyInt(
+                TEST_NAME_SPACE, TEST_EXPERIMENT_FLAG, TEST_MIN_FLAG_VALUE /* minimum value */,
+                TEST_MAX_FLAG_VALUE /* maximum value */,
+                TEST_DEFAULT_FLAG_VALUE /* default value */));
+    }
+
+    @Test
+    public void testGetDeviceConfigPropertyInt_BelowMinimumValue() {
+        doReturn(Integer.toString(TEST_MIN_FLAG_VALUE - 10)).when(() -> DeviceConfig.getProperty(
+                eq(TEST_NAME_SPACE), eq(TEST_EXPERIMENT_FLAG)));
+        assertEquals(TEST_DEFAULT_FLAG_VALUE, NetworkStackUtils.getDeviceConfigPropertyInt(
+                TEST_NAME_SPACE, TEST_EXPERIMENT_FLAG, TEST_MIN_FLAG_VALUE /* minimum value */,
+                TEST_MAX_FLAG_VALUE /* maximum value */,
+                TEST_DEFAULT_FLAG_VALUE /* default value */));
     }
 
     @Test
@@ -121,7 +163,7 @@ public class NetworkStackUtilsTest {
 
     @Test
     public void testFeatureIsEnabledWithExceptionsEnabled() {
-        doReturn(TEST_FLAG_VERSION_STRING).when(() -> DeviceConfig.getProperty(eq(TEST_NAME_SPACE),
+        doReturn(TEST_FLAG_VALUE_STRING).when(() -> DeviceConfig.getProperty(eq(TEST_NAME_SPACE),
                 eq(TEST_EXPERIMENT_FLAG)));
         assertTrue(NetworkStackUtils.isFeatureEnabled(mContext, TEST_NAME_SPACE,
                 TEST_EXPERIMENT_FLAG));
@@ -137,7 +179,7 @@ public class NetworkStackUtilsTest {
 
     @Test
     public void testFeatureIsEnabledWithException() throws Exception {
-        doReturn(TEST_FLAG_VERSION_STRING).when(() -> DeviceConfig.getProperty(eq(TEST_NAME_SPACE),
+        doReturn(TEST_FLAG_VALUE_STRING).when(() -> DeviceConfig.getProperty(eq(TEST_NAME_SPACE),
                 eq(TEST_EXPERIMENT_FLAG)));
         doThrow(NameNotFoundException.class).when(mPm).getPackageInfo(anyString(), anyInt());
         assertFalse(NetworkStackUtils.isFeatureEnabled(mContext, TEST_NAME_SPACE,
