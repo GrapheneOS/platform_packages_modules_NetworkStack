@@ -46,4 +46,7 @@
     <!-- Set to true if NetworkMonitor needs to load the resource by neighbor mcc when device
          doesn't have a SIM card inserted. -->
     <bool name="config_no_sim_card_uses_neighbor_mcc">false</bool>
+
+    <!-- Configuration for including DHCP client hostname option -->
+    <bool name="config_dhcp_client_hostname">false</bool>
 </resources>
