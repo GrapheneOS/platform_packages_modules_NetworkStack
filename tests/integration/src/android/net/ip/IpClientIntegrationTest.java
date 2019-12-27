@@ -311,7 +311,8 @@ public class IpClientIntegrationTest {
                 }
 
                 @Override
-                public int getIntDeviceConfig(final String name) {
+                public int getIntDeviceConfig(final String name, int minimumValue,
+                        int maximumValue, int defaultValue) {
                     return getDeviceConfigPropertyInt(name, 0 /* default value */);
                 }
 
