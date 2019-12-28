@@ -68,6 +68,7 @@ import android.net.ipmemorystore.OnStatusListener;
 import android.net.metrics.DhcpClientEvent;
 import android.net.metrics.DhcpErrorEvent;
 import android.net.metrics.IpConnectivityLog;
+import android.net.util.HostnameTransliterator;
 import android.net.util.InterfaceParams;
 import android.net.util.NetworkStackUtils;
 import android.net.util.PacketReader;
@@ -76,6 +77,7 @@ import android.os.Handler;
 import android.os.Message;
 import android.os.PowerManager;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.util.EventLog;
@@ -154,34 +156,40 @@ public class DhcpClient extends StateMachine {
     // seconds to avoid excessive traffic, but it's too long).
     @VisibleForTesting
     public static final String DHCP_RESTART_CONFIG_DELAY = "dhcp_restart_configuration_delay";
-    private static final int DEFAULT_DHCP_RESTART_CONFIG_DELAY_SEC = 1 * SECONDS;
+    private static final int DEFAULT_DHCP_RESTART_CONFIG_DELAY_MS = 1 * SECONDS;
+    private static final int MAX_DHCP_CLIENT_RESTART_CONFIG_DELAY_MS = 10 * SECONDS;
 
     // Initial random delay before sending first ARP probe.
     @VisibleForTesting
     public static final String ARP_FIRST_PROBE_DELAY_MS = "arp_first_probe_delay";
     private static final int DEFAULT_ARP_FIRST_PROBE_DELAY_MS = 100;
+    private static final int MAX_ARP_FIRST_PROBE_DELAY_MS = 1 * SECONDS;
 
     // Minimum delay until retransmitting the probe. The probe will be retransmitted after a
     // random number of milliseconds in the range ARP_PROBE_MIN_MS and ARP_PROBE_MAX_MS.
     @VisibleForTesting
     public static final String ARP_PROBE_MIN_MS = "arp_probe_min";
     private static final int DEFAULT_ARP_PROBE_MIN_MS = 100;
+    private static final int MAX_ARP_PROBE_MIN_MS = 1 * SECONDS;
 
     // Maximum delay until retransmitting the probe.
     @VisibleForTesting
     public static final String ARP_PROBE_MAX_MS = "arp_probe_max";
     private static final int DEFAULT_ARP_PROBE_MAX_MS = 300;
+    private static final int MAX_ARP_PROBE_MAX_MS = 2 * SECONDS;
 
     // Initial random delay before sending first ARP Announcement after completing Probe packet
     // transmission.
     @VisibleForTesting
     public static final String ARP_FIRST_ANNOUNCE_DELAY_MS = "arp_first_announce_delay";
     private static final int DEFAULT_ARP_FIRST_ANNOUNCE_DELAY_MS = 100;
+    private static final int MAX_ARP_FIRST_ANNOUNCE_DELAY_MS = 2 * SECONDS;
 
     // Time between retransmitting ARP Announcement packets.
     @VisibleForTesting
     public static final String ARP_ANNOUNCE_INTERVAL_MS = "arp_announce_interval";
     private static final int DEFAULT_ARP_ANNOUNCE_INTERVAL_MS = 100;
+    private static final int MAX_ARP_ANNOUNCE_INTERVAL_MS = 2 * SECONDS;
 
     // Max conflict count before configuring interface with declined IP address anyway.
     private static final int MAX_CONFLICTS_COUNT = 2;
@@ -306,6 +314,8 @@ public class DhcpClient extends StateMachine {
     private final NetworkStackIpMemoryStore mIpMemoryStore;
     @Nullable
     private DhcpPacketHandler mDhcpPacketHandler;
+    @Nullable
+    private final String mHostname;
 
     // Milliseconds SystemClock timestamps used to record transition times to DhcpBoundState.
     private long mLastInitEnterTime;
@@ -350,6 +360,22 @@ public class DhcpClient extends StateMachine {
         }
 
         /**
+         * Get the configuration from RRO to check whether or not to send hostname option in
+         * DHCPDISCOVER/DHCPREQUEST message.
+         */
+        public boolean getSendHostnameOption(final Context context) {
+            return context.getResources().getBoolean(R.bool.config_dhcp_client_hostname);
+        }
+
+        /**
+         * Get the device name from system settings.
+         */
+        public String getDeviceName(final Context context) {
+            return Settings.Global.getString(context.getContentResolver(),
+                    Settings.Global.DEVICE_NAME);
+        }
+
+        /**
          * Get a IpMemoryStore instance.
          */
         public NetworkStackIpMemoryStore getIpMemoryStore() {
@@ -367,33 +393,10 @@ public class DhcpClient extends StateMachine {
         /**
          * Get the Integer value of relevant DeviceConfig properties of Connectivity namespace.
          */
-        public int getIntDeviceConfig(final String name) {
-            final int defaultValue;
-            switch (name) {
-                case DHCP_RESTART_CONFIG_DELAY:
-                    defaultValue = DEFAULT_DHCP_RESTART_CONFIG_DELAY_SEC;
-                    break;
-                case ARP_FIRST_PROBE_DELAY_MS:
-                    defaultValue = DEFAULT_ARP_FIRST_PROBE_DELAY_MS;
-                    break;
-                case ARP_PROBE_MIN_MS:
-                    defaultValue = DEFAULT_ARP_PROBE_MIN_MS;
-                    break;
-                case ARP_PROBE_MAX_MS:
-                    defaultValue = DEFAULT_ARP_PROBE_MAX_MS;
-                    break;
-                case ARP_FIRST_ANNOUNCE_DELAY_MS:
-                    defaultValue = DEFAULT_ARP_FIRST_ANNOUNCE_DELAY_MS;
-                    break;
-                case ARP_ANNOUNCE_INTERVAL_MS:
-                    defaultValue = DEFAULT_ARP_ANNOUNCE_INTERVAL_MS;
-                    break;
-                default:
-                    Log.e(TAG, "Invalid experiment flag: " + name);
-                    return 0;
-            }
-            return NetworkStackUtils.getDeviceConfigPropertyInt(NAMESPACE_CONNECTIVITY, name,
-                    defaultValue);
+        public int getIntDeviceConfig(final String name, int minimumValue, int maximumValue,
+                int defaultValue) {
+            return NetworkStackUtils.getDeviceConfigPropertyInt(NAMESPACE_CONNECTIVITY,
+                    name, minimumValue, maximumValue, defaultValue);
         }
 
         /**
@@ -450,6 +453,11 @@ public class DhcpClient extends StateMachine {
         mRenewAlarm = makeWakeupMessage("RENEW", CMD_RENEW_DHCP);
         mRebindAlarm = makeWakeupMessage("REBIND", CMD_REBIND_DHCP);
         mExpiryAlarm = makeWakeupMessage("EXPIRY", CMD_EXPIRE_DHCP);
+
+        // Transliterate hostname read from system settings if RRO option is enabled.
+        final boolean sendHostname = deps.getSendHostnameOption(context);
+        mHostname = sendHostname ? new HostnameTransliterator().transliterate(
+                deps.getDeviceName(mContext)) : null;
     }
 
     public void registerForPreDhcpNotification() {
@@ -641,7 +649,7 @@ public class DhcpClient extends StateMachine {
     private boolean sendDiscoverPacket() {
         final ByteBuffer packet = DhcpPacket.buildDiscoverPacket(
                 DhcpPacket.ENCAP_L2, mTransactionId, getSecs(), mHwAddr,
-                DO_UNICAST, REQUESTED_PARAMS, isDhcpRapidCommitEnabled());
+                DO_UNICAST, REQUESTED_PARAMS, isDhcpRapidCommitEnabled(), mHostname);
         return transmitPacket(packet, "DHCPDISCOVER", DhcpPacket.ENCAP_L2, INADDR_BROADCAST);
     }
 
@@ -655,7 +663,7 @@ public class DhcpClient extends StateMachine {
         final ByteBuffer packet = DhcpPacket.buildRequestPacket(
                 encap, mTransactionId, getSecs(), clientAddress,
                 DO_UNICAST, mHwAddr, requestedAddress,
-                serverAddress, REQUESTED_PARAMS, null);
+                serverAddress, REQUESTED_PARAMS, mHostname);
         String serverStr = (serverAddress != null) ? serverAddress.getHostAddress() : null;
         String description = "DHCPREQUEST ciaddr=" + clientAddress.getHostAddress() +
                              " request=" + requestedAddress.getHostAddress() +
@@ -744,7 +752,7 @@ public class DhcpClient extends StateMachine {
         mDhcpLease = results;
         if (mDhcpLease.dnsServers.isEmpty()) {
             // supplement customized dns servers
-            String[] dnsServersList =
+            final String[] dnsServersList =
                     mContext.getResources().getStringArray(R.array.config_default_dns_servers);
             for (final String dnsServer : dnsServersList) {
                 try {
@@ -1259,7 +1267,7 @@ public class DhcpClient extends StateMachine {
             final Layer2PacketParcelable l2Packet = new Layer2PacketParcelable();
             final ByteBuffer packet = DhcpPacket.buildDiscoverPacket(
                     DhcpPacket.ENCAP_L2, mTransactionId, getSecs(), mHwAddr,
-                    DO_UNICAST, REQUESTED_PARAMS, true /* rapid commit */);
+                    DO_UNICAST, REQUESTED_PARAMS, true /* rapid commit */, mHostname);
 
             l2Packet.dstMacAddress = MacAddress.fromBytes(DhcpPacket.ETHER_BROADCAST);
             l2Packet.payload = packet.array();
@@ -1429,32 +1437,30 @@ public class DhcpClient extends StateMachine {
     //    address being probed for, and the packet's 'sender hardware address' is not the
     //    hardware address of any of the host's interfaces, then the host SHOULD similarly
     //    treat this as an address conflict.
-    private boolean checkArpSenderIpOrTargetIp(@NonNull ArpPacket packet,
+    private boolean packetHasIpAddressConflict(@NonNull ArpPacket packet,
             @NonNull Inet4Address targetIp) {
-        return ((!packet.senderIp.equals(INADDR_ANY) && packet.senderIp.equals(targetIp))
-                || (isArpProbe(packet) && packet.targetIp.equals(targetIp)));
+        return (((!packet.senderIp.equals(INADDR_ANY) && packet.senderIp.equals(targetIp))
+                || (isArpProbe(packet) && packet.targetIp.equals(targetIp)))
+                && !Arrays.equals(packet.senderHwAddress.toByteArray(), mHwAddr));
     }
 
     private boolean hasIpAddressConflict(@NonNull ArpPacket packet,
             @NonNull Inet4Address targetIp) {
-        if (checkArpSenderIpOrTargetIp(packet, targetIp)
-                && !Arrays.equals(packet.senderHwAddress.toByteArray(), mHwAddr)) {
-            if (DBG) {
-                final String senderIpString = packet.senderIp.getHostAddress();
-                final String targetIpString = packet.targetIp.getHostAddress();
-                final MacAddress senderMacAddress = packet.senderHwAddress;
-                final MacAddress hostMacAddress = MacAddress.fromBytes(mHwAddr);
-                Log.d(TAG, "IP address conflict detected:"
-                        + (packet.opCode == ARP_REQUEST ? "ARP Request" : "ARP Reply")
-                        + " ARP sender MAC: " + senderMacAddress.toString()
-                        + " host MAC: "       + hostMacAddress.toString()
-                        + " ARP sender IP: "  + senderIpString
-                        + " ARP target IP: "  + targetIpString
-                        + " host target IP: " + targetIp.getHostAddress());
-            }
-            return true;
+        if (!packetHasIpAddressConflict(packet, targetIp)) return false;
+        if (DBG) {
+            final String senderIpString = packet.senderIp.getHostAddress();
+            final String targetIpString = packet.targetIp.getHostAddress();
+            final MacAddress senderMacAddress = packet.senderHwAddress;
+            final MacAddress hostMacAddress = MacAddress.fromBytes(mHwAddr);
+            Log.d(TAG, "IP address conflict detected:"
+                    + (packet.opCode == ARP_REQUEST ? "ARP Request" : "ARP Reply")
+                    + " ARP sender MAC: " + senderMacAddress.toString()
+                    + " host MAC: "       + hostMacAddress.toString()
+                    + " ARP sender IP: "  + senderIpString
+                    + " ARP target IP: "  + targetIpString
+                    + " host target IP: " + targetIp.getHostAddress());
         }
-        return false;
+        return true;
     }
 
     class IpAddressConflictDetectingState extends LoggingState {
@@ -1492,13 +1498,7 @@ public class DhcpClient extends StateMachine {
             }
 
             // Read the customized parameters from DeviceConfig.
-            mArpFirstProbeDelayMs = mDependencies.getIntDeviceConfig(ARP_FIRST_PROBE_DELAY_MS);
-            mArpProbeMaxDelayMs = mDependencies.getIntDeviceConfig(ARP_PROBE_MAX_MS);
-            mArpProbeMinDelayMs = mDependencies.getIntDeviceConfig(ARP_PROBE_MIN_MS);
-            mArpAnnounceIntervalMs = mDependencies.getIntDeviceConfig(ARP_ANNOUNCE_INTERVAL_MS);
-            mArpFirstAnnounceDelayMs = mDependencies.getIntDeviceConfig(
-                    ARP_FIRST_ANNOUNCE_DELAY_MS);
-
+            readIpConflictParametersFromDeviceConfig();
             if (VDBG) {
                 Log.d(TAG, "ARP First Probe delay: "    + mArpFirstProbeDelayMs
                         + " ARP Probe Max delay: "      + mArpProbeMaxDelayMs
@@ -1575,6 +1575,33 @@ public class DhcpClient extends StateMachine {
             removeMessages(CMD_ARP_PROBE);
             removeMessages(CMD_ARP_ANNOUNCEMENT);
             removeMessages(EVENT_IP_CONFLICT);
+        }
+
+        // The following timing parameters are defined in RFC5227 as fixed constants, which
+        // are too long to adopt in the mobile network scenario, however more appropriate to
+        // reference these fixed value as maximumValue argument to restrict the upper bound,
+        // the minimum values of 10/20ms are used to avoid tight loops due to misconfiguration.
+        private void readIpConflictParametersFromDeviceConfig() {
+            // PROBE_WAIT
+            mArpFirstProbeDelayMs = mDependencies.getIntDeviceConfig(ARP_FIRST_PROBE_DELAY_MS,
+                    10, MAX_ARP_FIRST_PROBE_DELAY_MS, DEFAULT_ARP_FIRST_PROBE_DELAY_MS);
+
+            // PROBE_MIN
+            mArpProbeMinDelayMs = mDependencies.getIntDeviceConfig(ARP_PROBE_MIN_MS, 10,
+                    MAX_ARP_PROBE_MIN_MS, DEFAULT_ARP_PROBE_MIN_MS);
+
+            // PROBE_MAX
+            mArpProbeMaxDelayMs = Math.max(mArpProbeMinDelayMs + 1,
+                    mDependencies.getIntDeviceConfig(ARP_PROBE_MAX_MS, 20, MAX_ARP_PROBE_MAX_MS,
+                    DEFAULT_ARP_PROBE_MAX_MS));
+
+            // ANNOUNCE_WAIT
+            mArpFirstAnnounceDelayMs = mDependencies.getIntDeviceConfig(ARP_FIRST_ANNOUNCE_DELAY_MS,
+                    20, MAX_ARP_FIRST_ANNOUNCE_DELAY_MS, DEFAULT_ARP_FIRST_ANNOUNCE_DELAY_MS);
+
+            // ANNOUNCE_INTERVAL
+            mArpAnnounceIntervalMs = mDependencies.getIntDeviceConfig(ARP_ANNOUNCE_INTERVAL_MS, 20,
+                    MAX_ARP_ANNOUNCE_INTERVAL_MS, DEFAULT_ARP_ANNOUNCE_INTERVAL_MS);
         }
 
         private boolean sendArpProbe() {
@@ -1781,7 +1808,8 @@ public class DhcpClient extends StateMachine {
                 return;
             }
 
-            mTimeout = mDependencies.getIntDeviceConfig(DHCP_RESTART_CONFIG_DELAY);
+            mTimeout = mDependencies.getIntDeviceConfig(DHCP_RESTART_CONFIG_DELAY, 100,
+                    MAX_DHCP_CLIENT_RESTART_CONFIG_DELAY_MS, DEFAULT_DHCP_RESTART_CONFIG_DELAY_MS);
             super.enter();
             sendPacket();
         }
