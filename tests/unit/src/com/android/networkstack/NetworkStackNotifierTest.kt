@@ -1,0 +1,394 @@
+/*
+ * Copyright (C) 2020 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.android.networkstack
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.NotificationManager.IMPORTANCE_DEFAULT
+import android.app.PendingIntent
+import android.app.PendingIntent.FLAG_UPDATE_CURRENT
+import android.content.Context
+import android.content.Intent
+import android.content.res.Resources
+import android.net.CaptivePortalData
+import android.net.ConnectivityManager
+import android.net.ConnectivityManager.EXTRA_NETWORK
+import android.net.ConnectivityManager.NetworkCallback
+import android.net.LinkProperties
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED
+import android.net.NetworkCapabilities.TRANSPORT_CELLULAR
+import android.net.NetworkCapabilities.TRANSPORT_WIFI
+import android.net.Uri
+import android.os.Handler
+import android.os.UserHandle
+import android.provider.Settings
+import android.testing.AndroidTestingRunner
+import android.testing.TestableLooper
+import android.testing.TestableLooper.RunWithLooper
+import androidx.test.filters.SmallTest
+import androidx.test.platform.app.InstrumentationRegistry
+import com.android.dx.mockito.inline.extended.ExtendedMockito.verify
+import com.android.networkstack.NetworkStackNotifier.CHANNEL_CONNECTED
+import com.android.networkstack.NetworkStackNotifier.CHANNEL_VENUE_INFO
+import com.android.networkstack.NetworkStackNotifier.Dependencies
+import com.android.networkstack.NetworkStackNotifier.MSG_DISMISS_CONNECTED
+import com.android.networkstack.apishim.NetworkInformationShimImpl
+import org.junit.Assume.assumeTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.mockito.ArgumentCaptor
+import org.mockito.ArgumentMatchers.anyInt
+import org.mockito.ArgumentMatchers.eq
+import org.mockito.Captor
+import org.mockito.Mock
+import org.mockito.Mockito.any
+import org.mockito.Mockito.doReturn
+import org.mockito.Mockito.never
+import org.mockito.MockitoAnnotations
+import kotlin.reflect.KClass
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+@RunWith(AndroidTestingRunner::class)
+@SmallTest
+@RunWithLooper
+class NetworkStackNotifierTest {
+    @Mock
+    private lateinit var mContext: Context
+    @Mock
+    private lateinit var mCurrentUserContext: Context
+    @Mock
+    private lateinit var mAllUserContext: Context
+    @Mock
+    private lateinit var mDependencies: Dependencies
+    @Mock
+    private lateinit var mNm: NotificationManager
+    @Mock
+    private lateinit var mCm: ConnectivityManager
+    @Mock
+    private lateinit var mResources: Resources
+    @Mock
+    private lateinit var mPendingIntent: PendingIntent
+    @Captor
+    private lateinit var mNoteCaptor: ArgumentCaptor<Notification>
+    @Captor
+    private lateinit var mNoteIdCaptor: ArgumentCaptor<Int>
+    @Captor
+    private lateinit var mIntentCaptor: ArgumentCaptor<Intent>
+    private lateinit var mLooper: TestableLooper
+    private lateinit var mHandler: Handler
+    private lateinit var mNotifier: NetworkStackNotifier
+
+    private lateinit var mAllNetworksCb: NetworkCallback
+    private lateinit var mDefaultNetworkCb: NetworkCallback
+
+    private val TEST_NETWORK = Network(42)
+    private val TEST_NETWORK_TAG = TEST_NETWORK.networkHandle.toString()
+    private val TEST_SSID = "TestSsid"
+    private val EMPTY_CAPABILITIES = NetworkCapabilities()
+    private val VALIDATED_CAPABILITIES = NetworkCapabilities()
+            .addTransportType(TRANSPORT_WIFI)
+            .addCapability(NET_CAPABILITY_VALIDATED)
+
+    private val TEST_CONNECTED_NO_SSID_TITLE = "Connected without SSID"
+    private val TEST_CONNECTED_SSID_TITLE = "Connected to TestSsid"
+
+    private val TEST_VENUE_INFO_URL = "https://testvenue.example.com/info"
+    private val EMPTY_CAPPORT_LP = LinkProperties()
+    private val TEST_CAPPORT_LP = LinkProperties().apply {
+        captivePortalData = CaptivePortalData.Builder()
+                .setCaptive(false)
+                .setVenueInfoUrl(Uri.parse(TEST_VENUE_INFO_URL))
+                .build()
+    }
+
+    @Before
+    fun setUp() {
+        MockitoAnnotations.initMocks(this)
+        mLooper = TestableLooper.get(this)
+        doReturn(mResources).`when`(mContext).resources
+        doReturn(TEST_CONNECTED_NO_SSID_TITLE).`when`(mResources).getString(R.string.connected)
+        doReturn(TEST_CONNECTED_SSID_TITLE).`when`(mResources).getString(
+                R.string.connected_to_ssid_param1, TEST_SSID)
+
+        // applicationInfo is used by Notification.Builder
+        val realContext = InstrumentationRegistry.getInstrumentation().context
+        doReturn(realContext.applicationInfo).`when`(mContext).applicationInfo
+        doReturn(realContext.packageName).`when`(mContext).packageName
+
+        doReturn(mCurrentUserContext).`when`(mContext).createPackageContextAsUser(
+                realContext.packageName, 0, UserHandle.CURRENT)
+        doReturn(mAllUserContext).`when`(mContext).createPackageContextAsUser(
+                realContext.packageName, 0, UserHandle.ALL)
+
+        mAllUserContext.mockService(Context.NOTIFICATION_SERVICE, NotificationManager::class, mNm)
+        mContext.mockService(Context.CONNECTIVITY_SERVICE, ConnectivityManager::class, mCm)
+
+        doReturn(NotificationChannel(CHANNEL_VENUE_INFO, "TestChannel", IMPORTANCE_DEFAULT))
+                .`when`(mNm).getNotificationChannel(CHANNEL_VENUE_INFO)
+
+        doReturn(mPendingIntent).`when`(mDependencies).getActivityPendingIntent(
+                any(), any(), anyInt())
+        mNotifier = NetworkStackNotifier(mContext, mLooper.looper, mDependencies)
+        mHandler = mNotifier.handler
+
+        val allNetworksCbCaptor = ArgumentCaptor.forClass(NetworkCallback::class.java)
+        verify(mCm).registerNetworkCallback(any() /* request */, allNetworksCbCaptor.capture(),
+                eq(mHandler))
+        mAllNetworksCb = allNetworksCbCaptor.value
+
+        val defaultNetworkCbCaptor = ArgumentCaptor.forClass(NetworkCallback::class.java)
+        verify(mCm).registerDefaultNetworkCallback(defaultNetworkCbCaptor.capture(), eq(mHandler))
+        mDefaultNetworkCb = defaultNetworkCbCaptor.value
+    }
+
+    private fun <T : Any> Context.mockService(name: String, clazz: KClass<T>, service: T) {
+        doReturn(service).`when`(this).getSystemService(name)
+        doReturn(name).`when`(this).getSystemServiceName(clazz.java)
+        doReturn(service).`when`(this).getSystemService(clazz.java)
+    }
+
+    @Test
+    fun testNoNotification() {
+        onCapabilitiesChanged(EMPTY_CAPABILITIES)
+        onCapabilitiesChanged(VALIDATED_CAPABILITIES)
+
+        mLooper.processAllMessages()
+        verify(mNm, never()).notify(any(), anyInt(), any())
+    }
+
+    private fun verifyConnectedNotification() {
+        verify(mNm).notify(eq(TEST_NETWORK_TAG), mNoteIdCaptor.capture(), mNoteCaptor.capture())
+        val note = mNoteCaptor.value
+        assertEquals(mPendingIntent, note.contentIntent)
+        assertEquals(CHANNEL_CONNECTED, note.channelId)
+        verify(mDependencies).getActivityPendingIntent(
+                eq(mCurrentUserContext), mIntentCaptor.capture(), eq(FLAG_UPDATE_CURRENT))
+    }
+
+    private fun verifyDismissConnectedNotification(noteId: Int) {
+        assertTrue(mHandler.hasMessages(MSG_DISMISS_CONNECTED, TEST_NETWORK))
+        // Execute dismiss message now
+        mHandler.sendMessageAtFrontOfQueue(
+                mHandler.obtainMessage(MSG_DISMISS_CONNECTED, TEST_NETWORK))
+        mLooper.processMessages(1)
+        verify(mNm).cancel(TEST_NETWORK_TAG, noteId)
+    }
+
+    @Test
+    fun testConnectedNotification_NoSsid() {
+        onCapabilitiesChanged(EMPTY_CAPABILITIES)
+        mNotifier.notifyCaptivePortalValidationPending(TEST_NETWORK)
+        onCapabilitiesChanged(VALIDATED_CAPABILITIES)
+        mLooper.processAllMessages()
+
+        verifyConnectedNotification()
+        verify(mResources).getString(R.string.connected)
+        verifyWifiSettingsIntent(mIntentCaptor.value)
+        verifyDismissConnectedNotification(mNoteIdCaptor.value)
+    }
+
+    @Test
+    fun testConnectedNotification_WithSsid() {
+        // NetworkCapabilities#getSSID is not available for API <= Q
+        assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
+        val capabilities = NetworkCapabilities(VALIDATED_CAPABILITIES)
+                .setSSID(TEST_SSID)
+
+        onCapabilitiesChanged(EMPTY_CAPABILITIES)
+        mNotifier.notifyCaptivePortalValidationPending(TEST_NETWORK)
+        onCapabilitiesChanged(capabilities)
+        mLooper.processAllMessages()
+
+        verifyConnectedNotification()
+        verify(mResources).getString(R.string.connected_to_ssid_param1, TEST_SSID)
+        verifyWifiSettingsIntent(mIntentCaptor.value)
+        verifyDismissConnectedNotification(mNoteIdCaptor.value)
+    }
+
+    @Test
+    fun testConnectedNotification_WithNonWifiNetwork() {
+        // NetworkCapabilities#getSSID is not available for API <= Q
+        assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
+        val capabilities = NetworkCapabilities()
+                .addTransportType(TRANSPORT_CELLULAR)
+                .addCapability(NET_CAPABILITY_VALIDATED)
+                .setSSID(TEST_SSID)
+
+        onCapabilitiesChanged(EMPTY_CAPABILITIES)
+        mNotifier.notifyCaptivePortalValidationPending(TEST_NETWORK)
+        onCapabilitiesChanged(capabilities)
+        mLooper.processAllMessages()
+
+        verify(mNm).notify(eq(TEST_NETWORK_TAG), mNoteIdCaptor.capture(), mNoteCaptor.capture())
+        val note = mNoteCaptor.value
+        assertNull(note.contentIntent)
+        assertEquals(CHANNEL_CONNECTED, note.channelId)
+        verify(mResources).getString(R.string.connected_to_ssid_param1, TEST_SSID)
+        verifyDismissConnectedNotification(mNoteIdCaptor.value)
+    }
+
+    @Test
+    fun testConnectedVenueInfoNotification() {
+        // Venue info (CaptivePortalData) is not available for API <= Q
+        assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
+        mNotifier.notifyCaptivePortalValidationPending(TEST_NETWORK)
+        onLinkPropertiesChanged(TEST_CAPPORT_LP)
+        onDefaultNetworkAvailable(TEST_NETWORK)
+        onCapabilitiesChanged(VALIDATED_CAPABILITIES)
+
+        mLooper.processAllMessages()
+
+        verify(mNm).notify(eq(TEST_NETWORK_TAG), mNoteIdCaptor.capture(), mNoteCaptor.capture())
+
+        verifyConnectedNotification()
+        verifyVenueInfoIntent(mIntentCaptor.value)
+        verify(mResources).getString(R.string.tap_for_info)
+
+        onDefaultNetworkLost(TEST_NETWORK)
+        mLooper.processAllMessages()
+        // Notification only shown on default network
+        verify(mNm).cancel(TEST_NETWORK_TAG, mNoteIdCaptor.value)
+    }
+
+    @Test
+    fun testConnectedVenueInfoNotification_VenueInfoDisabled() {
+        // Venue info (CaptivePortalData) is not available for API <= Q
+        assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
+        doReturn(null).`when`(mNm).getNotificationChannel(CHANNEL_VENUE_INFO)
+        mNotifier.notifyCaptivePortalValidationPending(TEST_NETWORK)
+        onLinkPropertiesChanged(TEST_CAPPORT_LP)
+        onDefaultNetworkAvailable(TEST_NETWORK)
+        onCapabilitiesChanged(VALIDATED_CAPABILITIES)
+        mLooper.processAllMessages()
+
+        verifyConnectedNotification()
+        verifyWifiSettingsIntent(mIntentCaptor.value)
+        verify(mResources, never()).getString(R.string.tap_for_info)
+        verifyDismissConnectedNotification(mNoteIdCaptor.value)
+    }
+
+    @Test
+    fun testVenueInfoNotification() {
+        // Venue info (CaptivePortalData) is not available for API <= Q
+        assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
+        onLinkPropertiesChanged(TEST_CAPPORT_LP)
+        onDefaultNetworkAvailable(TEST_NETWORK)
+        onCapabilitiesChanged(VALIDATED_CAPABILITIES)
+        mLooper.processAllMessages()
+
+        verify(mNm).notify(eq(TEST_NETWORK_TAG), mNoteIdCaptor.capture(), mNoteCaptor.capture())
+        verify(mDependencies).getActivityPendingIntent(
+                eq(mCurrentUserContext), mIntentCaptor.capture(), eq(FLAG_UPDATE_CURRENT))
+        verifyVenueInfoIntent(mIntentCaptor.value)
+
+        onLost(TEST_NETWORK)
+        mLooper.processAllMessages()
+        verify(mNm).cancel(TEST_NETWORK_TAG, mNoteIdCaptor.value)
+    }
+
+    @Test
+    fun testVenueInfoNotification_VenueInfoDisabled() {
+        // Venue info (CaptivePortalData) is not available for API <= Q
+        assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
+        doReturn(null).`when`(mNm).getNotificationChannel(CHANNEL_VENUE_INFO)
+        onLinkPropertiesChanged(TEST_CAPPORT_LP)
+        onDefaultNetworkAvailable(TEST_NETWORK)
+        onCapabilitiesChanged(VALIDATED_CAPABILITIES)
+        mLooper.processAllMessages()
+
+        verify(mNm, never()).notify(any(), anyInt(), any())
+    }
+
+    @Test
+    fun testNonDefaultVenueInfoNotification() {
+        // Venue info (CaptivePortalData) is not available for API <= Q
+        assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
+        onLinkPropertiesChanged(TEST_CAPPORT_LP)
+        onCapabilitiesChanged(VALIDATED_CAPABILITIES)
+        mLooper.processAllMessages()
+
+        verify(mNm, never()).notify(eq(TEST_NETWORK_TAG), anyInt(), any())
+    }
+
+    @Test
+    fun testEmptyCaptivePortalDataVenueInfoNotification() {
+        // Venue info (CaptivePortalData) is not available for API <= Q
+        assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
+        onLinkPropertiesChanged(EMPTY_CAPPORT_LP)
+        onCapabilitiesChanged(VALIDATED_CAPABILITIES)
+        mLooper.processAllMessages()
+
+        verify(mNm, never()).notify(eq(TEST_NETWORK_TAG), anyInt(), any())
+    }
+
+    @Test
+    fun testUnvalidatedNetworkVenueInfoNotification() {
+        // Venue info (CaptivePortalData) is not available for API <= Q
+        assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
+        onLinkPropertiesChanged(TEST_CAPPORT_LP)
+        onCapabilitiesChanged(EMPTY_CAPABILITIES)
+        mLooper.processAllMessages()
+
+        verify(mNm, never()).notify(eq(TEST_NETWORK_TAG), anyInt(), any())
+    }
+
+    private fun verifyVenueInfoIntent(intent: Intent) {
+        assertEquals(Intent.ACTION_VIEW, intent.action)
+        assertEquals(Uri.parse(TEST_VENUE_INFO_URL), intent.data)
+        assertEquals<Network?>(TEST_NETWORK, intent.getParcelableExtra(EXTRA_NETWORK))
+    }
+
+    private fun verifyWifiSettingsIntent(intent: Intent) {
+        assertEquals(Settings.ACTION_WIFI_SETTINGS, intent.action)
+    }
+
+    private fun onDefaultNetworkAvailable(network: Network) {
+        mHandler.post {
+            mDefaultNetworkCb.onAvailable(network)
+        }
+    }
+
+    private fun onDefaultNetworkLost(network: Network) {
+        mHandler.post {
+            mDefaultNetworkCb.onLost(network)
+        }
+    }
+
+    private fun onCapabilitiesChanged(capabilities: NetworkCapabilities) {
+        mHandler.post {
+            mAllNetworksCb.onCapabilitiesChanged(TEST_NETWORK, capabilities)
+        }
+    }
+
+    private fun onLinkPropertiesChanged(lp: LinkProperties) {
+        mHandler.post {
+            mAllNetworksCb.onLinkPropertiesChanged(TEST_NETWORK, lp)
+        }
+    }
+
+    private fun onLost(network: Network) {
+        mHandler.post {
+            mAllNetworksCb.onLost(network)
+        }
+    }
+}
