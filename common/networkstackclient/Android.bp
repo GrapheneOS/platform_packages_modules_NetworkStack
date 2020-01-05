@@ -42,7 +42,10 @@ aidl_interface {
 aidl_interface {
     name: "networkstack-aidl-interfaces",
     local_include_dir: "src",
-    include_dirs: ["frameworks/base/core/java"], // For framework parcelables.
+    include_dirs: [
+        "frameworks/base/core/java", // For framework parcelables.
+        "frameworks/native/aidl/binder/android/os", // For PersistableBundle.aidl
+    ],
     srcs: [
         "src/android/net/DhcpResultsParcelable.aidl",
         "src/android/net/INetworkMonitor.aidl",
