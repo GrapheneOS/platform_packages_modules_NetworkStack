@@ -38,6 +38,8 @@ import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_FALLBACK_PROBE_S
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_OTHER_FALLBACK_URLS;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USE_HTTPS;
 
+import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DNS_EVENTS;
+import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_TCP_METRICS;
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
 
 import static junit.framework.Assert.assertEquals;
@@ -48,6 +50,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyInt;
@@ -88,6 +91,7 @@ import android.os.Bundle;
 import android.os.ConditionVariable;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PersistableBundle;
 import android.os.Process;
 import android.os.RemoteException;
 import android.os.SystemClock;
@@ -771,15 +775,17 @@ public class NetworkMonitorTest {
     }
 
     @Test
-    public void testIsDataStall_EvaluationDnsOnNotMeteredNetwork() {
+    public void testIsDataStall_EvaluationDnsOnNotMeteredNetwork() throws Exception {
         WrappedNetworkMonitor wrappedMonitor = makeNotMeteredNetworkMonitor();
         wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 100);
         makeDnsTimeoutEvent(wrappedMonitor, DEFAULT_DNS_TIMEOUT_THRESHOLD);
         assertTrue(wrappedMonitor.isDataStall());
+        verify(mCallbacks).notifyDataStallSuspected(anyLong(), eq(DETECTION_METHOD_DNS_EVENTS),
+                any(PersistableBundle.class));
     }
 
     @Test
-    public void testIsDataStall_EvaluationDnsOnMeteredNetwork() {
+    public void testIsDataStall_EvaluationDnsOnMeteredNetwork() throws Exception {
         WrappedNetworkMonitor wrappedMonitor = makeMeteredNetworkMonitor();
         wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 100);
         assertFalse(wrappedMonitor.isDataStall());
@@ -787,10 +793,12 @@ public class NetworkMonitorTest {
         wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
         makeDnsTimeoutEvent(wrappedMonitor, DEFAULT_DNS_TIMEOUT_THRESHOLD);
         assertTrue(wrappedMonitor.isDataStall());
+        verify(mCallbacks).notifyDataStallSuspected(anyLong(), eq(DETECTION_METHOD_DNS_EVENTS),
+                any(PersistableBundle.class));
     }
 
     @Test
-    public void testIsDataStall_EvaluationDnsWithDnsTimeoutCount() {
+    public void testIsDataStall_EvaluationDnsWithDnsTimeoutCount() throws Exception {
         WrappedNetworkMonitor wrappedMonitor = makeMeteredNetworkMonitor();
         wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
         makeDnsTimeoutEvent(wrappedMonitor, 3);
@@ -802,6 +810,8 @@ public class NetworkMonitorTest {
 
         makeDnsTimeoutEvent(wrappedMonitor, 3);
         assertTrue(wrappedMonitor.isDataStall());
+        verify(mCallbacks).notifyDataStallSuspected(anyLong(), eq(DETECTION_METHOD_DNS_EVENTS),
+                any(PersistableBundle.class));
 
         // Set the value to larger than the default dns log size.
         setConsecutiveDnsTimeoutThreshold(51);
@@ -812,6 +822,8 @@ public class NetworkMonitorTest {
 
         makeDnsTimeoutEvent(wrappedMonitor, 1);
         assertTrue(wrappedMonitor.isDataStall());
+        verify(mCallbacks, times(2)).notifyDataStallSuspected(anyLong(),
+                eq(DETECTION_METHOD_DNS_EVENTS), any(PersistableBundle.class));
     }
 
     @Test
@@ -828,7 +840,7 @@ public class NetworkMonitorTest {
     }
 
     @Test
-    public void testIsDataStall_EvaluationDnsWithDnsTimeThreshold() {
+    public void testIsDataStall_EvaluationDnsWithDnsTimeThreshold() throws Exception {
         // Test dns events happened in valid dns time threshold.
         WrappedNetworkMonitor wrappedMonitor = makeMeteredNetworkMonitor();
         wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 100);
@@ -836,6 +848,8 @@ public class NetworkMonitorTest {
         assertFalse(wrappedMonitor.isDataStall());
         wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
         assertTrue(wrappedMonitor.isDataStall());
+        verify(mCallbacks).notifyDataStallSuspected(anyLong(), eq(DETECTION_METHOD_DNS_EVENTS),
+                any(PersistableBundle.class));
 
         // Test dns events happened before valid dns time threshold.
         setValidDataStallDnsTimeThreshold(0);
@@ -848,7 +862,7 @@ public class NetworkMonitorTest {
     }
 
     @Test
-    public void testIsDataStall_EvaluationTcp() {
+    public void testIsDataStall_EvaluationTcp() throws Exception {
         // Evaluate TCP only. Expect ignoring DNS signal.
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
         WrappedNetworkMonitor wrappedMonitor = makeMonitor(METERED_CAPABILITIES);
@@ -869,6 +883,8 @@ public class NetworkMonitorTest {
         wrappedMonitor.sendTcpPollingEvent();
         HandlerUtilsKt.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
         assertTrue(wrappedMonitor.isDataStall());
+        verify(mCallbacks).notifyDataStallSuspected(anyLong(), eq(DETECTION_METHOD_TCP_METRICS),
+                any(PersistableBundle.class));
     }
 
     @Test
