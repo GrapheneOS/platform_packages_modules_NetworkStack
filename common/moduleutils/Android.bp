@@ -19,3 +19,16 @@ filegroup {
     name: "net-module-utils-srcs",
     srcs: ["src/**/*.java"],
 }
+
+// Shared utility sources to be used by tethering modules
+filegroup {
+    name: "tethering-module-utils-srcs",
+    srcs: [
+        "src/android/net/ip/InterfaceController.java",
+        "src/android/net/netlink/*.java",
+        "src/android/net/shared/NetdUtils.java",
+        "src/android/net/shared/RouteUtils.java",
+        "src/android/net/util/InterfaceParams.java",
+        "src/android/net/util/SharedLog.java"
+    ],
+}
