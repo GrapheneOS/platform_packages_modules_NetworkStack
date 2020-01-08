@@ -16,6 +16,9 @@
 
 package android.net.ip;
 
+import static android.net.INetd.IF_STATE_DOWN;
+import static android.net.INetd.IF_STATE_UP;
+
 import android.net.INetd;
 import android.net.InterfaceConfigurationParcel;
 import android.net.LinkAddress;
@@ -48,13 +51,31 @@ public class InterfaceController {
         mLog = log;
     }
 
-    private boolean setInterfaceAddress(LinkAddress addr) {
+    /**
+     * Set the IPv4 address and also optionally bring the interface up or down.
+     */
+    public boolean setInterfaceConfiguration(final LinkAddress ipv4Addr,
+            final Boolean setIfaceUp) {
+        if (!(ipv4Addr.getAddress() instanceof Inet4Address)) {
+            throw new IllegalArgumentException("Invalid or mismatched Inet4Address");
+        }
+        // Note: currently netd only support INetd#IF_STATE_UP and #IF_STATE_DOWN.
+        // Other flags would be ignored.
+
         final InterfaceConfigurationParcel ifConfig = new InterfaceConfigurationParcel();
         ifConfig.ifName = mIfName;
-        ifConfig.ipv4Addr = addr.getAddress().getHostAddress();
-        ifConfig.prefixLength = addr.getPrefixLength();
+        ifConfig.ipv4Addr = ipv4Addr.getAddress().getHostAddress();
+        ifConfig.prefixLength = ipv4Addr.getPrefixLength();
+        // Netd ignores hwaddr in interfaceSetCfg.
         ifConfig.hwAddr = "";
-        ifConfig.flags = new String[0];
+        if (setIfaceUp == null) {
+            // Empty array means no change.
+            ifConfig.flags = new String[0];
+        } else {
+            // Netd ignores any flag that's not IF_STATE_UP or IF_STATE_DOWN in interfaceSetCfg.
+            ifConfig.flags = setIfaceUp.booleanValue()
+                    ? new String[] {IF_STATE_UP} : new String[] {IF_STATE_DOWN};
+        }
         try {
             mNetd.interfaceSetCfg(ifConfig);
         } catch (RemoteException | ServiceSpecificException e) {
@@ -68,18 +89,15 @@ public class InterfaceController {
     /**
      * Set the IPv4 address of the interface.
      */
-    public boolean setIPv4Address(LinkAddress address) {
-        if (!(address.getAddress() instanceof Inet4Address)) {
-            return false;
-        }
-        return setInterfaceAddress(address);
+    public boolean setIPv4Address(final LinkAddress address) {
+        return setInterfaceConfiguration(address, null);
     }
 
     /**
      * Clear the IPv4Address of the interface.
      */
     public boolean clearIPv4Address() {
-        return setInterfaceAddress(new LinkAddress("0.0.0.0/0"));
+        return setIPv4Address(new LinkAddress("0.0.0.0/0"));
     }
 
     private boolean setEnableIPv6(boolean enabled) {
