@@ -1270,7 +1270,7 @@ public class DhcpClient extends StateMachine {
                     DO_UNICAST, REQUESTED_PARAMS, true /* rapid commit */, mHostname);
 
             l2Packet.dstMacAddress = MacAddress.fromBytes(DhcpPacket.ETHER_BROADCAST);
-            l2Packet.payload = packet.array();
+            l2Packet.payload = Arrays.copyOf(packet.array(), packet.limit());
             mController.sendMessage(CMD_START_PRECONNECTION, l2Packet);
         }
     }
