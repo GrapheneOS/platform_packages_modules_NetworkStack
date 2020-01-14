@@ -223,7 +223,8 @@ genrule {
     name: "statslog-networkstack-java-gen",
     tools: ["stats-log-api-gen"],
     cmd: "$(location stats-log-api-gen) --java $(out) --module network_stack" +
-         " --javaPackage com.android.networkstack.metrics --javaClass NetworkStackStatsLog",
+         " --javaPackage com.android.networkstack.metrics --javaClass NetworkStackStatsLog" +
+         " --supportQ",
     out: ["com/android/networkstack/metrics/NetworkStackStatsLog.java"],
 }
 
