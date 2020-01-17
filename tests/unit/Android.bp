@@ -54,6 +54,7 @@ android_test {
     test_suites: ["device-tests", "mts"],
     defaults: ["NetworkStackTestsDefaults"],
     static_libs: ["NetworkStackApiStableLib"],
+    compile_multilib: "both",
 }
 
 // Additional dependencies of libnetworkstackutilsjni that are not provided by the system when
