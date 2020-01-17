@@ -311,7 +311,7 @@ public class TcpSocketTracker {
             }
         }
         final SocketInfo info = new SocketInfo(tcpInfo, family, mark, time);
-        log("pollSocketsInfo, " + info);
+        log("parseSockInfo, " + info);
         return info;
     }
 
