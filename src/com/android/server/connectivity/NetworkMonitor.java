@@ -752,7 +752,18 @@ public class NetworkMonitor extends StateMachine {
             }
             mEvaluationState.reportEvaluationResult(result, null /* redirectUrl */);
             mValidations++;
+            initSocketTrackingIfRequired();
+            // start periodical polling.
             sendTcpPollingEvent();
+        }
+
+        private void initSocketTrackingIfRequired() {
+            if (!isValidationRequired()) return;
+
+            final TcpSocketTracker tst = getTcpSocketTracker();
+            if (tst != null) {
+                tst.pollSocketsInfo();
+            }
         }
 
         @Override
@@ -2229,7 +2240,7 @@ public class NetworkMonitor extends StateMachine {
     @VisibleForTesting
     protected boolean isDataStall() {
         Boolean result = null;
-        final StringJoiner msg = VDBG_STALL ? new StringJoiner(", ") : null;
+        final StringJoiner msg = (DBG || VDBG_STALL) ? new StringJoiner(", ") : null;
         // Reevaluation will generate traffic. Thus, set a minimal reevaluation timer to limit the
         // possible traffic cost in metered network.
         if (!mNetworkCapabilities.hasCapability(NET_CAPABILITY_NOT_METERED)
@@ -2247,9 +2258,9 @@ public class NetworkMonitor extends StateMachine {
             } else if (tst.isDataStallSuspected()) {
                 result = true;
             }
-            if (VDBG_STALL) {
+            if (DBG || VDBG_STALL) {
                 msg.add("tcp packets received=" + tst.getLatestReceivedCount())
-                     .add("tcp fail rate=" + tst.getLatestPacketFailPercentage());
+                    .add("latest tcp fail rate=" + tst.getLatestPacketFailPercentage());
             }
         }
 
@@ -2262,13 +2273,13 @@ public class NetworkMonitor extends StateMachine {
                 result = true;
                 logNetworkEvent(NetworkEvent.NETWORK_CONSECUTIVE_DNS_TIMEOUT_FOUND);
             }
-            if (VDBG_STALL) {
+            if (DBG || VDBG_STALL) {
                 msg.add("consecutive dns timeout count="
                         + mDnsStallDetector.getConsecutiveTimeoutCount());
             }
         }
-
-        if (VDBG_STALL) {
+        // log only data stall suspected.
+        if ((DBG && Boolean.TRUE.equals(result)) || VDBG_STALL) {
             log("isDataStall: result=" + result + ", " + msg);
         }
 
