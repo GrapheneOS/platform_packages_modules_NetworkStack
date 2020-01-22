@@ -92,5 +92,7 @@ fun assertRunsInAtMost(descr: String, timeLimit: Long, fn: () -> Unit) {
  * @param clazz Class to test.
  */
 fun <T> assertFieldCountEquals(count: Int, clazz: Class<T>) {
-    assertEquals(count, clazz.declaredFields.filter { !Modifier.isStatic(it.modifiers) }.size)
+    assertEquals(count, clazz.declaredFields.filter {
+        !Modifier.isStatic(it.modifiers) && !Modifier.isTransient(it.modifiers)
+    }.size)
 }
