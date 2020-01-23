@@ -181,4 +181,9 @@ public class NetworkObserverRegistry extends INetdUnsolicitedEventListener.Stub 
     public int getInterfaceVersion() {
         return INetdUnsolicitedEventListener.VERSION;
     }
+
+    @Override
+    public String getInterfaceHash() {
+        return INetdUnsolicitedEventListener.HASH;
+    }
 }
