@@ -129,6 +129,7 @@ import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
@@ -542,9 +543,10 @@ public class NetworkMonitorTest {
         final CellInfoGsm cellInfoGsm2 = new CellInfoGsm();
         final CellInfoLte cellInfoLte = new CellInfoLte();
         final CellIdentityGsm cellIdentityGsm =
-                new CellIdentityGsm(0, 0, 0, 0, "460", "01", "", "");
+                new CellIdentityGsm(0, 0, 0, 0, "460", "01", "", "", Collections.emptyList());
         final CellIdentityLte cellIdentityLte =
-                new CellIdentityLte(0, 0, 0, 0, 0, "466", "01", "", "");
+                new CellIdentityLte(0, 0, 0, 0, 0, "466", "01", "", "",
+                        Collections.emptyList(), null);
         cellInfoGsm1.setCellIdentity(cellIdentityGsm);
         cellInfoGsm2.setCellIdentity(cellIdentityGsm);
         cellInfoLte.setCellIdentity(cellIdentityLte);
