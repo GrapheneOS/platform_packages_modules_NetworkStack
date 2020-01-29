@@ -190,6 +190,11 @@ public class IpMemoryStoreServiceTest {
             public int getInterfaceVersion() {
                 return this.VERSION;
             }
+
+            @Override
+            public String getInterfaceHash() {
+                return this.HASH;
+            }
         };
     }
 
@@ -214,6 +219,11 @@ public class IpMemoryStoreServiceTest {
             @Override
             public int getInterfaceVersion() {
                 return this.VERSION;
+            }
+
+            @Override
+            public String getInterfaceHash() {
+                return this.HASH;
             }
         };
     }
@@ -242,6 +252,11 @@ public class IpMemoryStoreServiceTest {
             public int getInterfaceVersion() {
                 return this.VERSION;
             }
+
+            @Override
+            public String getInterfaceHash() {
+                return this.HASH;
+            }
         };
     }
 
@@ -269,6 +284,11 @@ public class IpMemoryStoreServiceTest {
             public int getInterfaceVersion() {
                 return this.VERSION;
             }
+
+            @Override
+            public String getInterfaceHash() {
+                return this.HASH;
+            }
         };
     }
 
@@ -292,6 +312,11 @@ public class IpMemoryStoreServiceTest {
             @Override
             public int getInterfaceVersion() {
                 return this.VERSION;
+            }
+
+            @Override
+            public String getInterfaceHash() {
+                return this.HASH;
             }
         };
     }

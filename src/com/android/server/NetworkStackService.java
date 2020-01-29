@@ -331,6 +331,11 @@ public class NetworkStackService extends Service {
         public int getInterfaceVersion() {
             return this.VERSION;
         }
+
+        @Override
+        public String getInterfaceHash() {
+            return this.HASH;
+        }
     }
 
     /**
@@ -418,6 +423,11 @@ public class NetworkStackService extends Service {
         @Override
         public int getInterfaceVersion() {
             return this.VERSION;
+        }
+
+        @Override
+        public String getInterfaceHash() {
+            return this.HASH;
         }
     }
 }
