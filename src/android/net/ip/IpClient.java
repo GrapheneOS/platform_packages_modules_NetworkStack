@@ -683,6 +683,11 @@ public class IpClient extends StateMachine {
         public int getInterfaceVersion() {
             return this.VERSION;
         }
+
+        @Override
+        public String getInterfaceHash() {
+            return this.HASH;
+        }
     }
 
     public String getInterfaceName() {
