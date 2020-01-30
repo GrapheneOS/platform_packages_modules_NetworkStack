@@ -81,7 +81,6 @@ java_defaults {
     name: "NetworkStackAndroidLibraryDefaults",
     srcs: [
         ":framework-networkstack-shared-srcs",
-        ":statslog-networkstack-java-gen",
     ],
     libs: ["unsupportedappusage"],
     static_libs: [
@@ -103,7 +102,11 @@ java_defaults {
 android_library {
     name: "NetworkStackApiCurrentLib",
     defaults: ["NetworkStackApiCurrentLevel", "NetworkStackAndroidLibraryDefaults"],
-    srcs: [":NetworkStackApiCurrentShims", "src/**/*.java"],
+    srcs: [
+        ":NetworkStackApiCurrentShims",
+        "src/**/*.java",
+        ":statslog-networkstack-java-gen"
+    ],
     manifest: "AndroidManifestBase.xml",
 }
 
@@ -119,7 +122,10 @@ java_library {
 android_library {
     name: "NetworkStackApiStableLib",
     defaults: ["NetworkStackApiStableLevel"],
-    srcs: ["src/**/*.java"],
+    srcs: [
+        "src/**/*.java",
+        ":statslog-networkstack-java-gen-q",
+    ],
     // API stable uses a jarjared version of the shims
     static_libs: [
         "NetworkStackApiStableDependencies",
@@ -217,6 +223,15 @@ cc_library_shared {
         "-Werror",
         "-Wno-unused-parameter",
     ],
+}
+
+genrule {
+    name: "statslog-networkstack-java-gen-q",
+    tools: ["stats-log-api-gen"],
+    cmd: "$(location stats-log-api-gen) --java $(out) --module network_stack" +
+         " --javaPackage com.android.networkstack.metrics --javaClass NetworkStackStatsLog" +
+         " --compileQ",
+    out: ["com/android/networkstack/metrics/NetworkStackStatsLog.java"],
 }
 
 genrule {
