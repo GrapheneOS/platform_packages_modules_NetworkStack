@@ -53,6 +53,7 @@ import static junit.framework.Assert.fail;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -139,6 +140,7 @@ import java.net.NetworkInterface;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -636,8 +638,19 @@ public class IpClientIntegrationTest {
             } else {
                 fail("invalid DHCP packet");
             }
+
             // wait for reply to DHCPOFFER packet if disabling rapid commit option
             if (shouldReplyRapidCommitAck || !(packet instanceof DhcpDiscoverPacket)) {
+                if (!isDhcpIpConflictDetectEnabled && isSuccessLease) {
+                    // verify IPv4-only provisioning success before exiting loop.
+                    // 1. if it's a failure lease, onProvisioningSuccess() won't be called;
+                    // 2. if duplicated IPv4 address detection is enabled, verify TIMEOUT
+                    //    will affect ARP packet capture running in other test cases.
+                    ArgumentCaptor<LinkProperties> captor =
+                            ArgumentCaptor.forClass(LinkProperties.class);
+                    verifyProvisioningSuccess(captor, Collections.singletonList(CLIENT_ADDR));
+                }
+
                 return packetList;
             }
         }
@@ -690,6 +703,16 @@ public class IpClientIntegrationTest {
         final LinkProperties emptyLp = new LinkProperties();
         emptyLp.setInterfaceName(mIfaceName);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(emptyLp);
+    }
+
+    private void verifyProvisioningSuccess(ArgumentCaptor<LinkProperties> captor,
+            final Collection<InetAddress> addresses) throws Exception {
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        LinkProperties lp = captor.getValue();
+        assertNotNull(lp);
+        assertNotEquals(0, lp.getDnsServers().size());
+        assertEquals(addresses.size(), lp.getAddresses().size());
+        assertTrue(lp.getAddresses().containsAll(addresses));
     }
 
     private void doRestoreInitialMtuTest(final boolean shouldChangeMtu,
@@ -862,6 +885,8 @@ public class IpClientIntegrationTest {
             assertTrue(packet instanceof DhcpDeclinePacket);
             assertEquals(packet.mServerIdentifier, SERVER_ADDR);
             assertEquals(packet.mRequestedIp, CLIENT_ADDR);
+
+            verify(mCb, never()).onProvisioningFailure(any());
             assertIpMemoryNeverStoreNetworkAttributes();
         } else if (isDhcpIpConflictDetectEnabled) {
             int arpPacketCount = 0;
@@ -875,6 +900,8 @@ public class IpClientIntegrationTest {
             assertArpProbe(packetList.get(0));
             assertArpAnnounce(packetList.get(3));
 
+            ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+            verifyProvisioningSuccess(captor, Collections.singletonList(CLIENT_ADDR));
             assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime,
                     TEST_DEFAULT_MTU);
         }
@@ -903,6 +930,8 @@ public class IpClientIntegrationTest {
         performDhcpHandshake(false /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
+
+        verify(mCb, never()).onProvisioningSuccess(any());
         assertIpMemoryNeverStoreNetworkAttributes();
     }
 
@@ -1232,13 +1261,6 @@ public class IpClientIntegrationTest {
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
 
-        ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
-        LinkProperties lp = captor.getValue();
-        assertNotNull(lp);
-        assertEquals(1, lp.getAddresses().size());
-        assertTrue(lp.getAddresses().contains(InetAddress.getByName(CLIENT_ADDR.getHostAddress())));
-
         // Stop IpClient and expect a final LinkProperties callback with an empty LP.
         mIpc.stop();
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(argThat(
@@ -1257,12 +1279,6 @@ public class IpClientIntegrationTest {
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
-
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
-        lp = captor.getValue();
-        assertNotNull(lp);
-        assertEquals(1, lp.getAddresses().size());
-        assertTrue(lp.getAddresses().contains(InetAddress.getByName(CLIENT_ADDR.getHostAddress())));
     }
 
     @Test
