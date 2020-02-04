@@ -83,6 +83,7 @@ import android.net.shared.PrivateDnsConfig;
 import android.net.util.SharedLog;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.ConditionVariable;
 import android.os.Handler;
@@ -105,6 +106,7 @@ import androidx.test.runner.AndroidJUnit4;
 
 import com.android.internal.util.CollectionUtils;
 import com.android.networkstack.R;
+import com.android.networkstack.apishim.ShimUtils;
 import com.android.networkstack.metrics.DataStallDetectionStats;
 import com.android.networkstack.metrics.DataStallStatsUtils;
 import com.android.networkstack.netlink.TcpSocketTracker;
@@ -123,6 +125,7 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.URL;
@@ -542,11 +545,10 @@ public class NetworkMonitorTest {
         final CellInfoGsm cellInfoGsm1 = new CellInfoGsm();
         final CellInfoGsm cellInfoGsm2 = new CellInfoGsm();
         final CellInfoLte cellInfoLte = new CellInfoLte();
-        final CellIdentityGsm cellIdentityGsm =
-                new CellIdentityGsm(0, 0, 0, 0, "460", "01", "", "", Collections.emptyList());
-        final CellIdentityLte cellIdentityLte =
-                new CellIdentityLte(0, 0, 0, 0, 0, "466", "01", "", "",
-                        Collections.emptyList(), null);
+        final CellIdentityGsm cellIdentityGsm = makeCellIdentityGsm(
+                0, 0, 0, 0, "460", "01", "", "");
+        final CellIdentityLte cellIdentityLte = makeCellIdentityLte(
+                0, 0, 0, 0, 0, "466", "01", "", "");
         cellInfoGsm1.setCellIdentity(cellIdentityGsm);
         cellInfoGsm2.setCellIdentity(cellIdentityGsm);
         cellInfoLte.setCellIdentity(cellIdentityLte);
@@ -567,6 +569,37 @@ public class NetworkMonitorTest {
                 wnm.getContextByMccIfNoSimCardOrDefault().getResources().getConfiguration().mcc);
         doReturn(false).when(mResources).getBoolean(R.bool.config_no_sim_card_uses_neighbor_mcc);
         assertEquals(wnm.getContext(), wnm.getContextByMccIfNoSimCardOrDefault());
+    }
+
+    private static CellIdentityGsm makeCellIdentityGsm(int lac, int cid, int arfcn, int bsic,
+            String mccStr, String mncStr, String alphal, String alphas)
+            throws ReflectiveOperationException {
+        if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
+            return new CellIdentityGsm(lac, cid, arfcn, bsic, mccStr, mncStr, alphal, alphas,
+                    Collections.emptyList() /* additionalPlmns */);
+        } else {
+            // API <= Q does not have the additionalPlmns parameter
+            final Constructor<CellIdentityGsm> constructor = CellIdentityGsm.class.getConstructor(
+                    int.class, int.class, int.class, int.class, String.class, String.class,
+                    String.class, String.class);
+            return constructor.newInstance(lac, cid, arfcn, bsic, mccStr, mncStr, alphal, alphas);
+        }
+    }
+
+    private static CellIdentityLte makeCellIdentityLte(int ci, int pci, int tac, int earfcn,
+            int bandwidth, String mccStr, String mncStr, String alphal, String alphas)
+            throws ReflectiveOperationException {
+        if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
+            return new CellIdentityLte(ci, pci, tac, earfcn, bandwidth, mccStr, mncStr, alphal,
+                    alphas, Collections.emptyList() /* additionalPlmns */, null /* csgInfo */);
+        } else {
+            // API <= Q does not have the additionalPlmns and csgInfo parameters
+            final Constructor<CellIdentityLte> constructor = CellIdentityLte.class.getConstructor(
+                    int.class, int.class, int.class, int.class, int.class, String.class,
+                    String.class, String.class, String.class);
+            return constructor.newInstance(ci, pci, tac, earfcn, bandwidth, mccStr, mncStr, alphal,
+                    alphas);
+        }
     }
 
     @Test
