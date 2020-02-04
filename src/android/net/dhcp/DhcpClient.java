@@ -1348,6 +1348,11 @@ public class DhcpClient extends StateMachine {
         @Override
         public void enter() {
             super.enter();
+            // We must call notifySuccess to apply the rest of the DHCP configuration (e.g., DNS
+            // servers) before adding the IP address to the interface. Otherwise, as soon as
+            // IpClient sees the IP address appear, it will enter provisioned state without any
+            // configuration information from DHCP. http://b/146850745.
+            notifySuccess();
             mController.sendMessage(CMD_CONFIGURE_LINKADDRESS, mDhcpLease.ipAddress);
         }
 
@@ -1632,7 +1637,6 @@ public class DhcpClient extends StateMachine {
                 transitionTo(mStoppedState);
             }
 
-            notifySuccess();
             scheduleLeaseTimers();
             logTimeToBoundState();
         }
@@ -1701,6 +1705,7 @@ public class DhcpClient extends StateMachine {
                     // the registered IpManager.Callback.  IP address changes
                     // are not supported here.
                     acceptDhcpResults(results, mLeaseMsg);
+                    notifySuccess();
                     transitionTo(mDhcpBoundState);
                 }
             } else if (packet instanceof DhcpNakPacket) {
