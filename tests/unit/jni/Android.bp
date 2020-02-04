@@ -28,14 +28,13 @@ cc_library_shared {
         "hardware/google/apf",
     ],
     shared_libs: [
-        "libbinder",
         "liblog",
-        "libcutils",
-        "libnativehelper",
-        "netd_aidl_interface-cpp",
+        "libnativehelper_compat_libc++",
     ],
     static_libs: [
         "libapf",
         "libpcap",
     ],
+    sdk_version: "29",
+    stl: "c++_static",
 }
