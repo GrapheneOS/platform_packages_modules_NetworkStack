@@ -100,12 +100,14 @@ import android.net.util.InterfaceParams;
 import android.net.util.IpUtils;
 import android.net.util.NetworkStackUtils;
 import android.net.util.PacketReader;
+import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.ParcelFileDescriptor;
 import android.os.PowerManager;
 import android.os.RemoteException;
+import android.os.SystemProperties;
 import android.system.ErrnoException;
 import android.system.Os;
 
@@ -115,6 +117,7 @@ import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.internal.util.StateMachine;
+import com.android.networkstack.apishim.ShimUtils;
 import com.android.networkstack.arp.ArpPacket;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
@@ -599,10 +602,20 @@ public class IpClientIntegrationTest {
             final List<DhcpPacket> packetList) throws Exception {
         for (DhcpPacket packet : packetList) {
             if (!isHostnameConfigurationEnabled || hostname == null) {
-                assertNull(packet.getHostname());
+                assertNoHostname(packet.getHostname());
             } else {
                 assertEquals(packet.getHostname(), hostnameAfterTransliteration);
             }
+        }
+    }
+
+    private void assertNoHostname(String hostname) {
+        if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
+            assertNull(hostname);
+        } else {
+            // Until Q, if no hostname is set, the device falls back to the hostname set via
+            // system property, to avoid breaking Q devices already launched with that setup.
+            assertEquals(SystemProperties.get("net.hostname"), hostname);
         }
     }
 
