@@ -377,6 +377,7 @@ public class NetworkMonitor extends StateMachine {
     private final int mDataStallMinEvaluateTime;
     private final int mDataStallValidDnsTimeThreshold;
     private final int mDataStallEvaluationType;
+    @Nullable
     private final DnsStallDetector mDnsStallDetector;
     private long mLastProbeTime;
     // Set to true if data stall is suspected and reset to false after metrics are sent to statsd.
@@ -455,10 +456,11 @@ public class NetworkMonitor extends StateMachine {
         mRandom = deps.getRandom();
         // TODO: Evaluate to move data stall configuration to a specific class.
         mConsecutiveDnsTimeoutThreshold = getConsecutiveDnsTimeoutThreshold();
-        mDnsStallDetector = new DnsStallDetector(mConsecutiveDnsTimeoutThreshold);
         mDataStallMinEvaluateTime = getDataStallMinEvaluateTime();
         mDataStallValidDnsTimeThreshold = getDataStallValidDnsTimeThreshold();
         mDataStallEvaluationType = getDataStallEvaluationType();
+        mDnsStallDetector = initDnsStallDetectorIfRequired(mDataStallEvaluationType,
+                mConsecutiveDnsTimeoutThreshold);
         mTcpTracker = tst;
 
         // Provide empty LinkProperties and NetworkCapabilities to make sure they are never null,
@@ -628,9 +630,12 @@ public class NetworkMonitor extends StateMachine {
                     return HANDLED;
                 case CMD_FORCE_REEVALUATION:
                 case CMD_CAPTIVE_PORTAL_RECHECK:
-                    final int dnsCount = mDnsStallDetector.getConsecutiveTimeoutCount();
-                    validationLog("Forcing reevaluation for UID " + message.arg1
-                            + ". Dns signal count: " + dnsCount);
+                    String msg = "Forcing reevaluation for UID " + message.arg1;
+                    final DnsStallDetector dsd = getDnsStallDetector();
+                    if (dsd != null) {
+                        msg += ". Dns signal count: " + dsd.getConsecutiveTimeoutCount();
+                    }
+                    validationLog(msg);
                     mUidResponsibleForReeval = message.arg1;
                     transitionTo(mEvaluatingState);
                     return HANDLED;
@@ -713,7 +718,10 @@ public class NetworkMonitor extends StateMachine {
                     break;
                 }
                 case EVENT_DNS_NOTIFICATION:
-                    mDnsStallDetector.accumulateConsecutiveDnsTimeoutCount(message.arg1);
+                    final DnsStallDetector detector = getDnsStallDetector();
+                    if (detector != null) {
+                        detector.accumulateConsecutiveDnsTimeoutCount(message.arg1);
+                    }
                     break;
                 // Set mAcceptPartialConnectivity to true and if network start evaluating or
                 // re-evaluating and get the result of partial connectivity, ProbingState will
@@ -777,7 +785,10 @@ public class NetworkMonitor extends StateMachine {
                     transitionTo(mEvaluatingPrivateDnsState);
                     break;
                 case EVENT_DNS_NOTIFICATION:
-                    mDnsStallDetector.accumulateConsecutiveDnsTimeoutCount(message.arg1);
+                    final DnsStallDetector dsd = getDnsStallDetector();
+                    if (dsd == null) break;
+
+                    dsd.accumulateConsecutiveDnsTimeoutCount(message.arg1);
                     if (evaluateDataStall()) {
                         transitionTo(mEvaluatingState);
                     }
@@ -873,11 +884,13 @@ public class NetworkMonitor extends StateMachine {
 
     @VisibleForTesting
     protected void addDnsEvents(@NonNull final DataStallDetectionStats.Builder stats) {
-        final int size = mDnsStallDetector.mResultIndices.size();
+        final DnsStallDetector dsd = getDnsStallDetector();
+        if (dsd == null) return;
+
+        final int size = dsd.mResultIndices.size();
         for (int i = 1; i <= DEFAULT_DNS_LOG_SIZE && i <= size; i++) {
-            final int index = mDnsStallDetector.mResultIndices.indexOf(size - i);
-            stats.addDnsEvent(mDnsStallDetector.mDnsEvents[index].mReturnCode,
-                    mDnsStallDetector.mDnsEvents[index].mTimeStamp);
+            final int index = dsd.mResultIndices.indexOf(size - i);
+            stats.addDnsEvent(dsd.mDnsEvents[index].mReturnCode, dsd.mDnsEvents[index].mTimeStamp);
         }
     }
 
@@ -2218,6 +2231,7 @@ public class NetworkMonitor extends StateMachine {
     }
 
     @VisibleForTesting
+    @Nullable
     protected DnsStallDetector getDnsStallDetector() {
         return mDnsStallDetector;
     }
@@ -2267,15 +2281,16 @@ public class NetworkMonitor extends StateMachine {
         // Check dns signal. Suspect it may be a data stall if both :
         // 1. The number of consecutive DNS query timeouts >= mConsecutiveDnsTimeoutThreshold.
         // 2. Those consecutive DNS queries happened in the last mValidDataStallDnsTimeThreshold ms.
-        if ((result == null) && dataStallEvaluateTypeEnabled(DATA_STALL_EVALUATION_TYPE_DNS)) {
-            if (mDnsStallDetector.isDataStallSuspected(mConsecutiveDnsTimeoutThreshold,
+        final DnsStallDetector dsd = getDnsStallDetector();
+        if ((result == null) && (dsd != null)
+                && dataStallEvaluateTypeEnabled(DATA_STALL_EVALUATION_TYPE_DNS)) {
+            if (dsd.isDataStallSuspected(mConsecutiveDnsTimeoutThreshold,
                     mDataStallValidDnsTimeThreshold)) {
                 result = true;
                 logNetworkEvent(NetworkEvent.NETWORK_CONSECUTIVE_DNS_TIMEOUT_FOUND);
             }
             if (DBG || VDBG_STALL) {
-                msg.add("consecutive dns timeout count="
-                        + mDnsStallDetector.getConsecutiveTimeoutCount());
+                msg.add("consecutive dns timeout count=" + dsd.getConsecutiveTimeoutCount());
             }
         }
         // log only data stall suspected.
@@ -2425,5 +2440,11 @@ public class NetworkMonitor extends StateMachine {
                     ? new TcpSocketTracker(new TcpSocketTracker.Dependencies(context,
                         ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)), network)
                     : null;
+    }
+
+    @Nullable
+    private DnsStallDetector initDnsStallDetectorIfRequired(int type, int threshold) {
+        return ((type & DATA_STALL_EVALUATION_TYPE_DNS) != 0)
+                ? new DnsStallDetector(threshold) : null;
     }
 }

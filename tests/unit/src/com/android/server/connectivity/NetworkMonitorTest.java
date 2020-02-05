@@ -839,9 +839,6 @@ public class NetworkMonitorTest {
         // Evaluate TCP only. Expect ignoring DNS signal.
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
         WrappedNetworkMonitor wrappedMonitor = makeMonitor(METERED_CAPABILITIES);
-        // Condition met for DNS.
-        wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
-        makeDnsTimeoutEvent(wrappedMonitor, DEFAULT_DNS_TIMEOUT_THRESHOLD);
         assertFalse(wrappedMonitor.isDataStall());
         // Packet received.
         when(mTstDependencies.isTcpInfoParsingSupported()).thenReturn(true);
