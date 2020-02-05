@@ -2253,6 +2253,10 @@ public class NetworkMonitor extends StateMachine {
 
     @VisibleForTesting
     protected boolean isDataStall() {
+        if (!isValidationRequired()) {
+            return false;
+        }
+
         Boolean result = null;
         final StringJoiner msg = (DBG || VDBG_STALL) ? new StringJoiner(", ") : null;
         // Reevaluation will generate traffic. Thus, set a minimal reevaluation timer to limit the
