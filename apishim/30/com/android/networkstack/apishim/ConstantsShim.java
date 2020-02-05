@@ -16,6 +16,7 @@
 
 package com.android.networkstack.apishim;
 
+import static android.net.ConnectivityDiagnosticsManager.ConnectivityReport;
 import static android.net.ConnectivityDiagnosticsManager.DataStallReport;
 
 /**
@@ -26,4 +27,15 @@ public class ConstantsShim extends com.android.networkstack.apishim.api29.Consta
             DataStallReport.DETECTION_METHOD_DNS_EVENTS;
     public static final int DETECTION_METHOD_TCP_METRICS =
             DataStallReport.DETECTION_METHOD_TCP_METRICS;
+    public static final String KEY_DNS_CONSECUTIVE_TIMEOUTS =
+            DataStallReport.KEY_DNS_CONSECUTIVE_TIMEOUTS;
+    public static final String KEY_NETWORK_PROBES_ATTEMPTED_BITMASK =
+            ConnectivityReport.KEY_NETWORK_PROBES_ATTEMPTED_BITMASK;
+    public static final String KEY_NETWORK_PROBES_SUCCEEDED_BITMASK =
+            ConnectivityReport.KEY_NETWORK_PROBES_SUCCEEDED_BITMASK;
+    public static final String KEY_NETWORK_VALIDATION_RESULT =
+            ConnectivityReport.KEY_NETWORK_VALIDATION_RESULT;
+    public static final String KEY_TCP_METRICS_COLLECTION_PERIOD_MILLIS =
+            DataStallReport.KEY_TCP_METRICS_COLLECTION_PERIOD_MILLIS;
+    public static final String KEY_TCP_PACKET_FAIL_RATE = DataStallReport.KEY_TCP_PACKET_FAIL_RATE;
 }
