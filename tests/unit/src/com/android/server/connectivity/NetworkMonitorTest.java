@@ -61,6 +61,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import static java.util.stream.Collectors.toList;
+
 import android.annotation.NonNull;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -104,7 +106,6 @@ import android.util.ArrayMap;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
-import com.android.internal.util.CollectionUtils;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.ShimUtils;
 import com.android.networkstack.metrics.DataStallDetectionStats;
@@ -257,9 +258,8 @@ public class NetworkMonitorTest {
                 return null;
             }
 
-            DnsEntry answer = CollectionUtils.find(mAnswers, e -> e.matches(hostname, type));
-            if (answer != null) return answer.mAddresses;
-            else return null;
+            return mAnswers.stream().filter(e -> e.matches(hostname, type))
+                    .map(answer -> answer.mAddresses).findFirst().orElse(null);
         }
 
         /** Sets the answer for a given name and type. */
@@ -274,8 +274,8 @@ public class NetworkMonitorTest {
 
         private List<InetAddress> generateAnswer(String[] answer) {
             if (answer == null) return new ArrayList<>();
-            return CollectionUtils.map(Arrays.asList(answer),
-                    addr -> InetAddress.parseNumericAddress(addr));
+            return Arrays.stream(answer).map(addr -> InetAddress.parseNumericAddress(addr))
+                    .collect(toList());
         }
 
         /** Simulates a getAllByName call for the specified name on the specified mock network. */
