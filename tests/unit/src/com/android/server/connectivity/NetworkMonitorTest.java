@@ -815,6 +815,19 @@ public class NetworkMonitorTest {
     }
 
     @Test
+    public void testIsDataStall_SkipEvaluateOnValidationNotRequiredNetwork() {
+        // Make DNS and TCP stall condition satisfied.
+        setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_DNS | DATA_STALL_EVALUATION_TYPE_TCP);
+        when(mTstDependencies.isTcpInfoParsingSupported()).thenReturn(true);
+        when(mTst.getLatestReceivedCount()).thenReturn(0);
+        when(mTst.isDataStallSuspected()).thenReturn(true);
+        final WrappedNetworkMonitor nm = makeMonitor(NO_INTERNET_CAPABILITIES);
+        nm.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
+        makeDnsTimeoutEvent(nm, DEFAULT_DNS_TIMEOUT_THRESHOLD);
+        assertFalse(nm.isDataStall());
+    }
+
+    @Test
     public void testIsDataStall_EvaluationDnsWithDnsTimeThreshold() {
         // Test dns events happened in valid dns time threshold.
         WrappedNetworkMonitor wrappedMonitor = makeMeteredNetworkMonitor();
