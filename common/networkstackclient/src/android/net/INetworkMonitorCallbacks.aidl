@@ -31,4 +31,6 @@ oneway interface INetworkMonitorCallbacks {
     void notifyProbeStatusChanged(int probesCompleted, int probesSucceeded);
     void notifyNetworkTestedWithExtras(int testResult, @nullable String redirectUrl,
             long timestampMillis, in PersistableBundle extras);
+    void notifyDataStallSuspected(long timestampMillis, int detectionMethod,
+            in PersistableBundle extras);
 }
