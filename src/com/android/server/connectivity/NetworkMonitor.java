@@ -68,6 +68,8 @@ import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USE_HTTPS;
 import static android.net.util.NetworkStackUtils.isEmpty;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
+import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DNS_EVENTS;
+import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_TCP_METRICS;
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
 import static com.android.networkstack.util.DnsUtils.TYPE_ADDRCONFIG;
 
@@ -103,6 +105,7 @@ import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Message;
+import android.os.PersistableBundle;
 import android.os.Process;
 import android.os.RemoteException;
 import android.os.SystemClock;
@@ -610,6 +613,15 @@ public class NetworkMonitor extends StateMachine {
             mCallback.hideProvisioningNotification();
         } catch (RemoteException e) {
             Log.e(TAG, "Error hiding provisioning notification", e);
+        }
+    }
+
+    private void notifyDataStallSuspected(int detectionMethod, PersistableBundle extras) {
+        try {
+            mCallback.notifyDataStallSuspected(
+                    SystemClock.elapsedRealtime(), detectionMethod, extras);
+        } catch (RemoteException e) {
+            Log.e(TAG, "Error sending notification for suspected data stall", e);
         }
     }
 
@@ -2275,6 +2287,9 @@ public class NetworkMonitor extends StateMachine {
                 result = false;
             } else if (tst.isDataStallSuspected()) {
                 result = true;
+
+                // TODO(b/147249364): add metrics to PersistableBundle once keys are defined
+                notifyDataStallSuspected(DETECTION_METHOD_TCP_METRICS, PersistableBundle.EMPTY);
             }
             if (DBG || VDBG_STALL) {
                 msg.add("tcp packets received=" + tst.getLatestReceivedCount())
@@ -2292,6 +2307,9 @@ public class NetworkMonitor extends StateMachine {
                     mDataStallValidDnsTimeThreshold)) {
                 result = true;
                 logNetworkEvent(NetworkEvent.NETWORK_CONSECUTIVE_DNS_TIMEOUT_FOUND);
+
+                // TODO(b/147249364): add metrics to PersistableBundle once keys are defined
+                notifyDataStallSuspected(DETECTION_METHOD_DNS_EVENTS, PersistableBundle.EMPTY);
             }
             if (DBG || VDBG_STALL) {
                 msg.add("consecutive dns timeout count=" + dsd.getConsecutiveTimeoutCount());
