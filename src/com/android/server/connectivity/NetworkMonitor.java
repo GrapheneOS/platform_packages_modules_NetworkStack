@@ -70,6 +70,12 @@ import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DNS_EVENTS;
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_TCP_METRICS;
+import static com.android.networkstack.apishim.ConstantsShim.KEY_DNS_CONSECUTIVE_TIMEOUTS;
+import static com.android.networkstack.apishim.ConstantsShim.KEY_NETWORK_PROBES_ATTEMPTED_BITMASK;
+import static com.android.networkstack.apishim.ConstantsShim.KEY_NETWORK_PROBES_SUCCEEDED_BITMASK;
+import static com.android.networkstack.apishim.ConstantsShim.KEY_NETWORK_VALIDATION_RESULT;
+import static com.android.networkstack.apishim.ConstantsShim.KEY_TCP_METRICS_COLLECTION_PERIOD_MILLIS;
+import static com.android.networkstack.apishim.ConstantsShim.KEY_TCP_PACKET_FAIL_RATE;
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
 import static com.android.networkstack.util.DnsUtils.TYPE_ADDRCONFIG;
 
@@ -584,9 +590,15 @@ public class NetworkMonitor extends StateMachine {
         return NetworkMonitorUtils.isPrivateDnsValidationRequired(mNetworkCapabilities);
     }
 
-    private void notifyNetworkTested(int result, @Nullable String redirectUrl) {
+    private void notifyNetworkTested(
+            int result, @Nullable String redirectUrl, PersistableBundle extras) {
         try {
-            mCallback.notifyNetworkTested(result, redirectUrl);
+            if (mCallbackVersion <= 5) {
+                mCallback.notifyNetworkTested(result, redirectUrl);
+            } else {
+                mCallback.notifyNetworkTestedWithExtras(
+                        result, redirectUrl, SystemClock.elapsedRealtime(), extras);
+            }
         } catch (RemoteException e) {
             Log.e(TAG, "Error sending network test result", e);
         }
@@ -2288,8 +2300,10 @@ public class NetworkMonitor extends StateMachine {
             } else if (tst.isDataStallSuspected()) {
                 result = true;
 
-                // TODO(b/147249364): add metrics to PersistableBundle once keys are defined
-                notifyDataStallSuspected(DETECTION_METHOD_TCP_METRICS, PersistableBundle.EMPTY);
+                final PersistableBundle extras = new PersistableBundle();
+                extras.putInt(KEY_TCP_PACKET_FAIL_RATE, tst.getLatestPacketFailPercentage());
+                extras.putInt(KEY_TCP_METRICS_COLLECTION_PERIOD_MILLIS, getTcpPollingInterval());
+                notifyDataStallSuspected(DETECTION_METHOD_TCP_METRICS, extras);
             }
             if (DBG || VDBG_STALL) {
                 msg.add("tcp packets received=" + tst.getLatestReceivedCount())
@@ -2308,8 +2322,10 @@ public class NetworkMonitor extends StateMachine {
                 result = true;
                 logNetworkEvent(NetworkEvent.NETWORK_CONSECUTIVE_DNS_TIMEOUT_FOUND);
 
-                // TODO(b/147249364): add metrics to PersistableBundle once keys are defined
-                notifyDataStallSuspected(DETECTION_METHOD_DNS_EVENTS, PersistableBundle.EMPTY);
+                final PersistableBundle extras = new PersistableBundle();
+                extras.putInt(KEY_DNS_CONSECUTIVE_TIMEOUTS,
+                        mDnsStallDetector.getConsecutiveTimeoutCount());
+                notifyDataStallSuspected(DETECTION_METHOD_DNS_EVENTS, extras);
             }
             if (DBG || VDBG_STALL) {
                 msg.add("consecutive dns timeout count=" + dsd.getConsecutiveTimeoutCount());
@@ -2387,7 +2403,12 @@ public class NetworkMonitor extends StateMachine {
         protected void reportEvaluationResult(int result, @Nullable String redirectUrl) {
             mEvaluationResult = result;
             mRedirectUrl = redirectUrl;
-            notifyNetworkTested(getNetworkTestResult(), mRedirectUrl);
+            final PersistableBundle extras = new PersistableBundle();
+
+            extras.putInt(KEY_NETWORK_VALIDATION_RESULT, result);
+            extras.putInt(KEY_NETWORK_PROBES_SUCCEEDED_BITMASK, mProbeResults);
+            extras.putInt(KEY_NETWORK_PROBES_ATTEMPTED_BITMASK, mProbeCompleted);
+            notifyNetworkTested(getNetworkTestResult(), mRedirectUrl, extras);
         }
 
         protected int getNetworkTestResult() {
