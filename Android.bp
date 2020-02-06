@@ -133,6 +133,15 @@ android_library {
     manifest: "AndroidManifestBase.xml",
 }
 
+filegroup {
+    name: "NetworkStackJarJarRules",
+    srcs: ["jarjar-rules-shared.txt"],
+    visibility: [
+        "//packages/modules/NetworkStack/tests/unit",
+        "//packages/modules/NetworkStack/tests/integration",
+    ]
+}
+
 // Common defaults for compiling the actual APK, based on the NetworkStackApiXBase android libraries
 java_defaults {
     name: "NetworkStackAppDefaults",
@@ -143,7 +152,7 @@ java_defaults {
     ],
     // Resources already included in NetworkStackBase
     resource_dirs: [],
-    jarjar_rules: "jarjar-rules-shared.txt",
+    jarjar_rules: ":NetworkStackJarJarRules",
     use_embedded_native_libs: true,
     optimize: {
         proguard_flags_files: ["proguard.flags"],
@@ -201,6 +210,7 @@ android_library {
     defaults: ["NetworkStackAppDefaults", "NetworkStackReleaseApiLevel"],
     static_libs: ["NetworkStackApiStableLib"],
     manifest: "AndroidManifestBase.xml",
+    visibility: ["//frameworks/base/tests/net/integration"],
 }
 
 cc_library_shared {
