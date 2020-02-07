@@ -14,25 +14,8 @@
 // limitations under the License.
 //
 
-android_test {
-    name: "NetworkStackIntegrationTests",
-    certificate: "networkstack",
-    min_sdk_version: "29",
-    srcs: ["src/**/*.java"],
-    test_suites: ["device-tests"],
-    static_libs: [
-        "androidx.annotation_annotation",
-        "androidx.test.rules",
-        "mockito-target-extended-minus-junit4",
-        "net-tests-utils",
-        "testables",
-        "TestNetworkStackLib",
-    ],
-    libs: [
-        "android.test.runner",
-        "android.test.base",
-        "android.test.mock",
-    ],
+java_defaults {
+    name: "NetworkStackIntegrationTestsJniDefaults",
     defaults: ["libnetworkstackutilsjni_deps"],
     jni_libs: [
         // For mockito extended
@@ -41,4 +24,51 @@ android_test {
         // For NetworkStackUtils included in NetworkStackBase
         "libnetworkstackutilsjni",
     ],
+    visibility: ["//visibility:private"],
+}
+
+android_library {
+    name: "NetworkStackIntegrationTestsLib",
+    min_sdk_version: "29",
+    srcs: ["src/**/*.java"],
+    static_libs: [
+        "androidx.annotation_annotation",
+        "androidx.test.rules",
+        "mockito-target-extended-minus-junit4",
+        "net-tests-utils",
+        "testables",
+        "NetworkStackApiStableLib",
+    ],
+    libs: [
+        "android.test.runner",
+        "android.test.base",
+        "android.test.mock",
+    ],
+    jarjar_rules: ":NetworkStackJarJarRules",
+    visibility: ["//visibility:private"],
+}
+
+// Network stack integration tests.
+android_test {
+    name: "NetworkStackIntegrationTests",
+    defaults: ["NetworkStackIntegrationTestsJniDefaults"],
+    static_libs: ["NetworkStackIntegrationTestsLib"],
+    certificate: "networkstack",
+    platform_apis: true,
+    test_suites: ["device-tests"],
+    min_sdk_version: "29",
+}
+
+// Special version of the network stack tests that includes all tests necessary for code coverage
+// purposes. This is currently the union of NetworkStackTests and NetworkStackIntegrationTests.
+android_test {
+    name: "NetworkStackCoverageTests",
+    certificate: "networkstack",
+    platform_apis: true,
+    min_sdk_version: "29",
+    test_suites: ["device-tests", "mts"],
+    defaults: ["NetworkStackIntegrationTestsJniDefaults"],
+    static_libs: ["NetworkStackTestsLib", "NetworkStackIntegrationTestsLib"],
+    compile_multilib: "both",
+    manifest: "AndroidManifest_coverage.xml",
 }

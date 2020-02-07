@@ -25,13 +25,12 @@ import static android.net.dhcp.DhcpPacket.ENCAP_L2;
 import static android.net.dhcp.DhcpPacket.INADDR_BROADCAST;
 import static android.net.dhcp.DhcpPacket.INFINITE_LEASE;
 import static android.net.ipmemorystore.Status.SUCCESS;
-import static android.net.networkstack.shared.Inet4AddressUtils.getBroadcastAddress;
-import static android.net.networkstack.shared.Inet4AddressUtils.getPrefixMaskAsInet4Address;
+import static android.net.shared.Inet4AddressUtils.getBroadcastAddress;
+import static android.net.shared.Inet4AddressUtils.getPrefixMaskAsInet4Address;
 import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
 import static android.system.OsConstants.IPPROTO_TCP;
 
-import static com.android.internal.util.BitUtils.uint16;
 import static com.android.server.util.NetworkStackConstants.ARP_REPLY;
 import static com.android.server.util.NetworkStackConstants.ARP_REQUEST;
 import static com.android.server.util.NetworkStackConstants.ETHER_ADDR_LEN;
@@ -96,18 +95,19 @@ import android.net.dhcp.DhcpRequestPacket;
 import android.net.ipmemorystore.NetworkAttributes;
 import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener;
 import android.net.ipmemorystore.Status;
-import android.net.networkstack.util.StateMachine;
 import android.net.shared.ProvisioningConfiguration;
 import android.net.util.InterfaceParams;
 import android.net.util.IpUtils;
 import android.net.util.NetworkStackUtils;
 import android.net.util.PacketReader;
+import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.ParcelFileDescriptor;
 import android.os.PowerManager;
 import android.os.RemoteException;
+import android.os.SystemProperties;
 import android.system.ErrnoException;
 import android.system.Os;
 
@@ -116,6 +116,8 @@ import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.internal.util.StateMachine;
+import com.android.networkstack.apishim.ShimUtils;
 import com.android.networkstack.arp.ArpPacket;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
@@ -600,10 +602,20 @@ public class IpClientIntegrationTest {
             final List<DhcpPacket> packetList) throws Exception {
         for (DhcpPacket packet : packetList) {
             if (!isHostnameConfigurationEnabled || hostname == null) {
-                assertNull(packet.getHostname());
+                assertNoHostname(packet.getHostname());
             } else {
                 assertEquals(packet.getHostname(), hostnameAfterTransliteration);
             }
+        }
+    }
+
+    private void assertNoHostname(String hostname) {
+        if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
+            assertNull(hostname);
+        } else {
+            // Until Q, if no hostname is set, the device falls back to the hostname set via
+            // system property, to avoid breaking Q devices already launched with that setup.
+            assertEquals(SystemProperties.get("net.hostname"), hostname);
         }
     }
 
@@ -1135,6 +1147,10 @@ public class IpClientIntegrationTest {
         checksum = (short) ~checksum;
         int tempSum = checksumFold(uint16(checksum) + uint16(newWord) + 0xffff - uint16(oldWord));
         return (short) ~tempSum;
+    }
+
+    public static int uint16(short s) {
+        return s & 0xffff;
     }
 
     private static short icmpv6Checksum(ByteBuffer buf, int ipOffset, int transportOffset,
