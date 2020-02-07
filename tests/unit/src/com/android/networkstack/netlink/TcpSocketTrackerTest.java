@@ -61,7 +61,6 @@ import org.mockito.quality.Strictness;
 import java.io.FileDescriptor;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.HashMap;
 
 // TODO: Add more tests for missing coverage.
 @RunWith(AndroidJUnit4.class)
@@ -174,6 +173,8 @@ public class TcpSocketTrackerTest {
             "0000000000000000"; // deliverRate = 0
     private static final byte[] SOCK_DIAG_TCP_INET_BYTES =
             HexEncoding.decode(SOCK_DIAG_TCP_INET_HEX.toCharArray(), false);
+    private static final TcpInfo TEST_TCPINFO =
+            new TcpInfo(5 /* retransmits */, 0 /* lost */, 10 /* segsOut */, 0 /* segsIn */);
 
     private static final String TEST_RESPONSE_HEX = SOCK_DIAG_TCP_INET_HEX
             // struct nlmsghdr
@@ -253,52 +254,8 @@ public class TcpSocketTrackerTest {
         buffer.position(SOCKDIAG_MSG_HEADER_SIZE);
         final TcpSocketTracker.SocketInfo parsed =
                 tst.parseSockInfo(buffer, AF_INET, 276, 100L);
-        final HashMap<TcpInfo.Field, Number> expected = new HashMap<>();
-        expected.put(TcpInfo.Field.STATE, (byte) 0x01);
-        expected.put(TcpInfo.Field.CASTATE, (byte) 0x00);
-        expected.put(TcpInfo.Field.RETRANSMITS, (byte) 0x05);
-        expected.put(TcpInfo.Field.PROBES, (byte) 0x00);
-        expected.put(TcpInfo.Field.BACKOFF, (byte) 0x00);
-        expected.put(TcpInfo.Field.OPTIONS, (byte) 0x07);
-        expected.put(TcpInfo.Field.WSCALE, (byte) 0x88);
-        expected.put(TcpInfo.Field.DELIVERY_RATE_APP_LIMITED, (byte) 0x00);
-        expected.put(TcpInfo.Field.RTO, 1806666);
-        expected.put(TcpInfo.Field.ATO, 0);
-        expected.put(TcpInfo.Field.SND_MSS, 1326);
-        expected.put(TcpInfo.Field.RCV_MSS, 536);
-        expected.put(TcpInfo.Field.UNACKED, 0);
-        expected.put(TcpInfo.Field.SACKED, 0);
-        expected.put(TcpInfo.Field.LOST, 0);
-        expected.put(TcpInfo.Field.RETRANS, 0);
-        expected.put(TcpInfo.Field.FACKETS, 0);
-        expected.put(TcpInfo.Field.LAST_DATA_SENT, 187);
-        expected.put(TcpInfo.Field.LAST_ACK_SENT, 0);
-        expected.put(TcpInfo.Field.LAST_DATA_RECV, 187);
-        expected.put(TcpInfo.Field.LAST_ACK_RECV, 187);
-        expected.put(TcpInfo.Field.PMTU, 1500);
-        expected.put(TcpInfo.Field.RCV_SSTHRESH, 87600);
-        expected.put(TcpInfo.Field.RTT, 601150);
-        expected.put(TcpInfo.Field.RTTVAR, 300575);
-        expected.put(TcpInfo.Field.SND_SSTHRESH, 1400);
-        expected.put(TcpInfo.Field.SND_CWND, 10);
-        expected.put(TcpInfo.Field.ADVMSS, 1448);
-        expected.put(TcpInfo.Field.REORDERING, 3);
-        expected.put(TcpInfo.Field.RCV_RTT, 0);
-        expected.put(TcpInfo.Field.RCV_SPACE, 87600);
-        expected.put(TcpInfo.Field.TOTAL_RETRANS, 0);
-        expected.put(TcpInfo.Field.PACING_RATE, 44115L);
-        expected.put(TcpInfo.Field.MAX_PACING_RATE, -1L);
-        expected.put(TcpInfo.Field.BYTES_ACKED, 1L);
-        expected.put(TcpInfo.Field.BYTES_RECEIVED, 0L);
-        expected.put(TcpInfo.Field.SEGS_OUT, 10);
-        expected.put(TcpInfo.Field.SEGS_IN, 0);
-        expected.put(TcpInfo.Field.NOTSENT_BYTES, 0);
-        expected.put(TcpInfo.Field.MIN_RTT, 601150);
-        expected.put(TcpInfo.Field.DATA_SEGS_IN, 0);
-        expected.put(TcpInfo.Field.DATA_SEGS_OUT, 0);
-        expected.put(TcpInfo.Field.DELIVERY_RATE, 0L);
 
-        assertEquals(parsed.tcpInfo, new TcpInfo(expected));
+        assertEquals(parsed.tcpInfo, TEST_TCPINFO);
         assertEquals(parsed.fwmark, 789125);
         assertEquals(parsed.updateTime, 100);
         assertEquals(parsed.ipFamily, AF_INET);

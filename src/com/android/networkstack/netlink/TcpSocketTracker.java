@@ -340,16 +340,16 @@ public class TcpSocketTracker {
             return null;
         }
 
-        stat.sentCount = current.tcpInfo.getValue(TcpInfo.Field.SEGS_OUT).intValue();
-        stat.receivedCount = current.tcpInfo.getValue(TcpInfo.Field.SEGS_IN).intValue();
-        stat.lostCount = current.tcpInfo.getValue(TcpInfo.Field.LOST).intValue();
-        stat.retransmitCount = current.tcpInfo.getValue(TcpInfo.Field.RETRANSMITS).intValue();
+        stat.sentCount = current.tcpInfo.mSegsOut;
+        stat.receivedCount = current.tcpInfo.mSegsIn;
+        stat.lostCount = current.tcpInfo.mLost;
+        stat.retransmitCount = current.tcpInfo.mRetransmits;
 
         if (previous != null && previous.tcpInfo != null) {
-            stat.sentCount -= previous.tcpInfo.getValue(TcpInfo.Field.SEGS_OUT).intValue();
-            stat.receivedCount -= previous.tcpInfo.getValue(TcpInfo.Field.SEGS_IN).intValue();
-            stat.lostCount -= previous.tcpInfo.getValue(TcpInfo.Field.LOST).intValue();
-            stat.retransmitCount -= previous.tcpInfo.getValue(TcpInfo.Field.RETRANSMITS).intValue();
+            stat.sentCount -= previous.tcpInfo.mSegsOut;
+            stat.receivedCount -= previous.tcpInfo.mSegsIn;
+            stat.lostCount -= previous.tcpInfo.mLost;
+            stat.retransmitCount -= previous.tcpInfo.mRetransmits;
         }
 
         return stat;
