@@ -80,7 +80,6 @@ java_defaults {
         "libbacktrace",
         "libbase",
         "libbinder",
-        "libbinderthreadstate",
         "libc++",
         "libcgrouprc",
         "libcrypto",
