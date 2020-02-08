@@ -68,6 +68,14 @@ import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USE_HTTPS;
 import static android.net.util.NetworkStackUtils.isEmpty;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
+import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DNS_EVENTS;
+import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_TCP_METRICS;
+import static com.android.networkstack.apishim.ConstantsShim.KEY_DNS_CONSECUTIVE_TIMEOUTS;
+import static com.android.networkstack.apishim.ConstantsShim.KEY_NETWORK_PROBES_ATTEMPTED_BITMASK;
+import static com.android.networkstack.apishim.ConstantsShim.KEY_NETWORK_PROBES_SUCCEEDED_BITMASK;
+import static com.android.networkstack.apishim.ConstantsShim.KEY_NETWORK_VALIDATION_RESULT;
+import static com.android.networkstack.apishim.ConstantsShim.KEY_TCP_METRICS_COLLECTION_PERIOD_MILLIS;
+import static com.android.networkstack.apishim.ConstantsShim.KEY_TCP_PACKET_FAIL_RATE;
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
 import static com.android.networkstack.util.DnsUtils.TYPE_ADDRCONFIG;
 
@@ -103,6 +111,7 @@ import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Message;
+import android.os.PersistableBundle;
 import android.os.Process;
 import android.os.RemoteException;
 import android.os.SystemClock;
@@ -377,6 +386,7 @@ public class NetworkMonitor extends StateMachine {
     private final int mDataStallMinEvaluateTime;
     private final int mDataStallValidDnsTimeThreshold;
     private final int mDataStallEvaluationType;
+    @Nullable
     private final DnsStallDetector mDnsStallDetector;
     private long mLastProbeTime;
     // Set to true if data stall is suspected and reset to false after metrics are sent to statsd.
@@ -455,10 +465,11 @@ public class NetworkMonitor extends StateMachine {
         mRandom = deps.getRandom();
         // TODO: Evaluate to move data stall configuration to a specific class.
         mConsecutiveDnsTimeoutThreshold = getConsecutiveDnsTimeoutThreshold();
-        mDnsStallDetector = new DnsStallDetector(mConsecutiveDnsTimeoutThreshold);
         mDataStallMinEvaluateTime = getDataStallMinEvaluateTime();
         mDataStallValidDnsTimeThreshold = getDataStallValidDnsTimeThreshold();
         mDataStallEvaluationType = getDataStallEvaluationType();
+        mDnsStallDetector = initDnsStallDetectorIfRequired(mDataStallEvaluationType,
+                mConsecutiveDnsTimeoutThreshold);
         mTcpTracker = tst;
 
         // Provide empty LinkProperties and NetworkCapabilities to make sure they are never null,
@@ -579,9 +590,15 @@ public class NetworkMonitor extends StateMachine {
         return NetworkMonitorUtils.isPrivateDnsValidationRequired(mNetworkCapabilities);
     }
 
-    private void notifyNetworkTested(int result, @Nullable String redirectUrl) {
+    private void notifyNetworkTested(
+            int result, @Nullable String redirectUrl, PersistableBundle extras) {
         try {
-            mCallback.notifyNetworkTested(result, redirectUrl);
+            if (mCallbackVersion <= 5) {
+                mCallback.notifyNetworkTested(result, redirectUrl);
+            } else {
+                mCallback.notifyNetworkTestedWithExtras(
+                        result, redirectUrl, SystemClock.elapsedRealtime(), extras);
+            }
         } catch (RemoteException e) {
             Log.e(TAG, "Error sending network test result", e);
         }
@@ -611,6 +628,15 @@ public class NetworkMonitor extends StateMachine {
         }
     }
 
+    private void notifyDataStallSuspected(int detectionMethod, PersistableBundle extras) {
+        try {
+            mCallback.notifyDataStallSuspected(
+                    SystemClock.elapsedRealtime(), detectionMethod, extras);
+        } catch (RemoteException e) {
+            Log.e(TAG, "Error sending notification for suspected data stall", e);
+        }
+    }
+
     // DefaultState is the parent of all States.  It exists only to handle CMD_* messages but
     // does not entail any real state (hence no enter() or exit() routines).
     private class DefaultState extends State {
@@ -628,9 +654,12 @@ public class NetworkMonitor extends StateMachine {
                     return HANDLED;
                 case CMD_FORCE_REEVALUATION:
                 case CMD_CAPTIVE_PORTAL_RECHECK:
-                    final int dnsCount = mDnsStallDetector.getConsecutiveTimeoutCount();
-                    validationLog("Forcing reevaluation for UID " + message.arg1
-                            + ". Dns signal count: " + dnsCount);
+                    String msg = "Forcing reevaluation for UID " + message.arg1;
+                    final DnsStallDetector dsd = getDnsStallDetector();
+                    if (dsd != null) {
+                        msg += ". Dns signal count: " + dsd.getConsecutiveTimeoutCount();
+                    }
+                    validationLog(msg);
                     mUidResponsibleForReeval = message.arg1;
                     transitionTo(mEvaluatingState);
                     return HANDLED;
@@ -713,7 +742,10 @@ public class NetworkMonitor extends StateMachine {
                     break;
                 }
                 case EVENT_DNS_NOTIFICATION:
-                    mDnsStallDetector.accumulateConsecutiveDnsTimeoutCount(message.arg1);
+                    final DnsStallDetector detector = getDnsStallDetector();
+                    if (detector != null) {
+                        detector.accumulateConsecutiveDnsTimeoutCount(message.arg1);
+                    }
                     break;
                 // Set mAcceptPartialConnectivity to true and if network start evaluating or
                 // re-evaluating and get the result of partial connectivity, ProbingState will
@@ -777,7 +809,10 @@ public class NetworkMonitor extends StateMachine {
                     transitionTo(mEvaluatingPrivateDnsState);
                     break;
                 case EVENT_DNS_NOTIFICATION:
-                    mDnsStallDetector.accumulateConsecutiveDnsTimeoutCount(message.arg1);
+                    final DnsStallDetector dsd = getDnsStallDetector();
+                    if (dsd == null) break;
+
+                    dsd.accumulateConsecutiveDnsTimeoutCount(message.arg1);
                     if (evaluateDataStall()) {
                         transitionTo(mEvaluatingState);
                     }
@@ -873,11 +908,13 @@ public class NetworkMonitor extends StateMachine {
 
     @VisibleForTesting
     protected void addDnsEvents(@NonNull final DataStallDetectionStats.Builder stats) {
-        final int size = mDnsStallDetector.mResultIndices.size();
+        final DnsStallDetector dsd = getDnsStallDetector();
+        if (dsd == null) return;
+
+        final int size = dsd.mResultIndices.size();
         for (int i = 1; i <= DEFAULT_DNS_LOG_SIZE && i <= size; i++) {
-            final int index = mDnsStallDetector.mResultIndices.indexOf(size - i);
-            stats.addDnsEvent(mDnsStallDetector.mDnsEvents[index].mReturnCode,
-                    mDnsStallDetector.mDnsEvents[index].mTimeStamp);
+            final int index = dsd.mResultIndices.indexOf(size - i);
+            stats.addDnsEvent(dsd.mDnsEvents[index].mReturnCode, dsd.mDnsEvents[index].mTimeStamp);
         }
     }
 
@@ -2218,6 +2255,7 @@ public class NetworkMonitor extends StateMachine {
     }
 
     @VisibleForTesting
+    @Nullable
     protected DnsStallDetector getDnsStallDetector() {
         return mDnsStallDetector;
     }
@@ -2239,6 +2277,10 @@ public class NetworkMonitor extends StateMachine {
 
     @VisibleForTesting
     protected boolean isDataStall() {
+        if (!isValidationRequired()) {
+            return false;
+        }
+
         Boolean result = null;
         final StringJoiner msg = (DBG || VDBG_STALL) ? new StringJoiner(", ") : null;
         // Reevaluation will generate traffic. Thus, set a minimal reevaluation timer to limit the
@@ -2257,6 +2299,11 @@ public class NetworkMonitor extends StateMachine {
                 result = false;
             } else if (tst.isDataStallSuspected()) {
                 result = true;
+
+                final PersistableBundle extras = new PersistableBundle();
+                extras.putInt(KEY_TCP_PACKET_FAIL_RATE, tst.getLatestPacketFailPercentage());
+                extras.putInt(KEY_TCP_METRICS_COLLECTION_PERIOD_MILLIS, getTcpPollingInterval());
+                notifyDataStallSuspected(DETECTION_METHOD_TCP_METRICS, extras);
             }
             if (DBG || VDBG_STALL) {
                 msg.add("tcp packets received=" + tst.getLatestReceivedCount())
@@ -2267,15 +2314,21 @@ public class NetworkMonitor extends StateMachine {
         // Check dns signal. Suspect it may be a data stall if both :
         // 1. The number of consecutive DNS query timeouts >= mConsecutiveDnsTimeoutThreshold.
         // 2. Those consecutive DNS queries happened in the last mValidDataStallDnsTimeThreshold ms.
-        if ((result == null) && dataStallEvaluateTypeEnabled(DATA_STALL_EVALUATION_TYPE_DNS)) {
-            if (mDnsStallDetector.isDataStallSuspected(mConsecutiveDnsTimeoutThreshold,
+        final DnsStallDetector dsd = getDnsStallDetector();
+        if ((result == null) && (dsd != null)
+                && dataStallEvaluateTypeEnabled(DATA_STALL_EVALUATION_TYPE_DNS)) {
+            if (dsd.isDataStallSuspected(mConsecutiveDnsTimeoutThreshold,
                     mDataStallValidDnsTimeThreshold)) {
                 result = true;
                 logNetworkEvent(NetworkEvent.NETWORK_CONSECUTIVE_DNS_TIMEOUT_FOUND);
+
+                final PersistableBundle extras = new PersistableBundle();
+                extras.putInt(KEY_DNS_CONSECUTIVE_TIMEOUTS,
+                        mDnsStallDetector.getConsecutiveTimeoutCount());
+                notifyDataStallSuspected(DETECTION_METHOD_DNS_EVENTS, extras);
             }
             if (DBG || VDBG_STALL) {
-                msg.add("consecutive dns timeout count="
-                        + mDnsStallDetector.getConsecutiveTimeoutCount());
+                msg.add("consecutive dns timeout count=" + dsd.getConsecutiveTimeoutCount());
             }
         }
         // log only data stall suspected.
@@ -2350,7 +2403,12 @@ public class NetworkMonitor extends StateMachine {
         protected void reportEvaluationResult(int result, @Nullable String redirectUrl) {
             mEvaluationResult = result;
             mRedirectUrl = redirectUrl;
-            notifyNetworkTested(getNetworkTestResult(), mRedirectUrl);
+            final PersistableBundle extras = new PersistableBundle();
+
+            extras.putInt(KEY_NETWORK_VALIDATION_RESULT, result);
+            extras.putInt(KEY_NETWORK_PROBES_SUCCEEDED_BITMASK, mProbeResults);
+            extras.putInt(KEY_NETWORK_PROBES_ATTEMPTED_BITMASK, mProbeCompleted);
+            notifyNetworkTested(getNetworkTestResult(), mRedirectUrl, extras);
         }
 
         protected int getNetworkTestResult() {
@@ -2425,5 +2483,11 @@ public class NetworkMonitor extends StateMachine {
                     ? new TcpSocketTracker(new TcpSocketTracker.Dependencies(context,
                         ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)), network)
                     : null;
+    }
+
+    @Nullable
+    private DnsStallDetector initDnsStallDetectorIfRequired(int type, int threshold) {
+        return ((type & DATA_STALL_EVALUATION_TYPE_DNS) != 0)
+                ? new DnsStallDetector(threshold) : null;
     }
 }

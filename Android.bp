@@ -133,6 +133,15 @@ android_library {
     manifest: "AndroidManifestBase.xml",
 }
 
+filegroup {
+    name: "NetworkStackJarJarRules",
+    srcs: ["jarjar-rules-shared.txt"],
+    visibility: [
+        "//packages/modules/NetworkStack/tests/unit",
+        "//packages/modules/NetworkStack/tests/integration",
+    ]
+}
+
 // Common defaults for compiling the actual APK, based on the NetworkStackApiXBase android libraries
 java_defaults {
     name: "NetworkStackAppDefaults",
@@ -143,7 +152,7 @@ java_defaults {
     ],
     // Resources already included in NetworkStackBase
     resource_dirs: [],
-    jarjar_rules: "jarjar-rules-shared.txt",
+    jarjar_rules: ":NetworkStackJarJarRules",
     use_embedded_native_libs: true,
     optimize: {
         proguard_flags_files: ["proguard.flags"],
@@ -165,13 +174,21 @@ android_app {
     required: ["PlatformNetworkPermissionConfig", "PlatformCaptivePortalLogin"],
 }
 
+// Pre-merge the AndroidManifest for NetworkStackNext, so that its manifest can be merged on top
+android_library {
+    name: "NetworkStackNextManifestBase",
+    defaults: ["NetworkStackAppDefaults", "NetworkStackDevApiLevel"],
+    static_libs: ["NetworkStackApiCurrentLib"],
+    manifest: "AndroidManifest.xml"
+}
+
 // NetworkStack build targeting the current API release, for testing on in-development SDK
 android_app {
     name: "NetworkStackNext",
     defaults: ["NetworkStackAppDefaults", "NetworkStackDevApiLevel"],
-    static_libs: ["NetworkStackApiCurrentLib"],
+    static_libs: ["NetworkStackNextManifestBase"],
     certificate: "networkstack",
-    manifest: ":NetworkStackNextAndroidManifest",
+    manifest: "AndroidManifest_Next.xml",
     // The permission configuration *must* be included to ensure security of the device
     required: ["NetworkPermissionConfig"],
 }
@@ -193,6 +210,7 @@ android_library {
     defaults: ["NetworkStackAppDefaults", "NetworkStackReleaseApiLevel"],
     static_libs: ["NetworkStackApiStableLib"],
     manifest: "AndroidManifestBase.xml",
+    visibility: ["//frameworks/base/tests/net/integration"],
 }
 
 cc_library_shared {
@@ -252,21 +270,6 @@ genrule {
     out: ["TestAndroidManifest.xml"],
     cmd: "sed -E 's/versionCode=\"[0-9]+\"/versionCode=\""
         + version_code_networkstack_test
-        + "\"/' $(in) > $(out)",
-    visibility: ["//visibility:private"],
-}
-
-// genrule to modify the NetworkStack manifest for NetworkStackNext, which is the "next" version
-// that builds against the "next", non-stable APIs.
-// A genrule seems simpler than having yet another manifest to merge. The only elements that would
-// change in the manifest are the version code, and the min/target SDK which are populated
-// automatically on build with the current SDK.
-genrule {
-    name: "NetworkStackNextAndroidManifest",
-    srcs: ["AndroidManifest.xml"],
-    out: ["NetworkStackNextAndroidManifest.xml"],
-    cmd: "sed -E 's/versionCode=\"[0-9]+\"/versionCode=\""
-        + version_code_networkstack_next
         + "\"/' $(in) > $(out)",
     visibility: ["//visibility:private"],
 }
