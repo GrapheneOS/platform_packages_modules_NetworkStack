@@ -31,17 +31,21 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeTrue;
 
 import android.app.Instrumentation;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.netlink.StructNlMsgHdr;
+import android.os.Build;
 import android.os.Process;
 import android.system.Os;
 
 import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
+
+import com.android.networkstack.apishim.ShimUtils;
 
 import libcore.util.HexEncoding;
 
@@ -191,6 +195,8 @@ public class InetDiagSocketTest {
 
     @Test
     public void testGetConnectionOwnerUid() throws Exception {
+        // Skip the test for API <= Q, as b/141603906 this was only fixed in Q-QPR2
+        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
         checkGetConnectionOwnerUid("::", null);
         checkGetConnectionOwnerUid("::", "::");
         checkGetConnectionOwnerUid("0.0.0.0", null);
@@ -204,6 +210,8 @@ public class InetDiagSocketTest {
     /* Verify fix for b/141603906 */
     @Test
     public void testB141603906() throws Exception {
+        // Skip the test for API <= Q, as b/141603906 this was only fixed in Q-QPR2
+        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
         final InetSocketAddress src = new InetSocketAddress(0);
         final InetSocketAddress dst = new InetSocketAddress(0);
         final int numThreads = 8;
