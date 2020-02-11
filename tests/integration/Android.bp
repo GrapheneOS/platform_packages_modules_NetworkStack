@@ -67,6 +67,7 @@ android_test {
     platform_apis: true,
     min_sdk_version: "29",
     test_suites: ["device-tests", "mts"],
+    test_config: "AndroidTest_Coverage.xml",
     defaults: ["NetworkStackIntegrationTestsJniDefaults"],
     static_libs: ["NetworkStackTestsLib", "NetworkStackIntegrationTestsLib"],
     compile_multilib: "both",
