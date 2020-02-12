@@ -89,6 +89,8 @@ public class TcpInfoTest {
             "0000000000000000";   // sndBufLimited = 0
     private static final byte[] TCP_INFO_BYTES =
             HexEncoding.decode(TCP_INFO_HEX.toCharArray(), false);
+    private static final TcpInfo TEST_TCPINFO =
+            new TcpInfo(0 /* retransmits */, 0 /* lost */, 2 /* segsOut */, 1 /* segsIn */);
 
     private static final String EXPANDED_TCP_INFO_HEX = TCP_INFO_HEX
             + "00000000"         // tcpi_delivered
@@ -100,37 +102,45 @@ public class TcpInfoTest {
     @Test
     public void testParseTcpInfo() {
         final ByteBuffer buffer = ByteBuffer.wrap(TCP_INFO_BYTES);
-        final Map<TcpInfo.Field, Number> expected = makeTestTcpInfoHash();
-        final TcpInfo parsedInfo = TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1);
+        // Length is less than required
+        final TcpInfo nullInfo = TcpInfo.parse(buffer, SHORT_TEST_TCP_INFO);
+        assertEquals(nullInfo, null);
 
-        assertEquals(parsedInfo, new TcpInfo(expected));
+        final TcpInfo parsedInfo = TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1);
+        assertEquals(parsedInfo, TEST_TCPINFO);
+
+        // Make a data that TcpInfo is not started from the begining of the buffer.
+        final ByteBuffer bufferWithHeader =
+                ByteBuffer.allocate(EXPANDED_TCP_INFO_BYTES.length + TCP_INFO_BYTES.length);
+        bufferWithHeader.put(EXPANDED_TCP_INFO_BYTES);
+        bufferWithHeader.put(TCP_INFO_BYTES);
+        final TcpInfo infoWithHeader = TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1);
+        bufferWithHeader.position(EXPANDED_TCP_INFO_BYTES.length);
+        assertEquals(parsedInfo, TEST_TCPINFO);
+    }
+
+    @Test
+    public void testFieldOffset() {
+        assertEquals(TcpInfo.RETRANSMITS_OFFSET, 2);
+        assertEquals(TcpInfo.LOST_OFFSET, 32);
+        assertEquals(TcpInfo.SEGS_OUT_OFFSET, 136);
+        assertEquals(TcpInfo.SEGS_IN_OFFSET, 140);
     }
 
     @Test
     public void testParseTcpInfoExpanded() {
         final ByteBuffer buffer = ByteBuffer.wrap(EXPANDED_TCP_INFO_BYTES);
-        final Map<TcpInfo.Field, Number> expected = makeTestTcpInfoHash();
         final TcpInfo parsedInfo =
                 TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1 + EXPANDED_TCP_INFO_LENGTH);
 
-        assertEquals(parsedInfo, new TcpInfo(expected));
+        assertEquals(parsedInfo, TEST_TCPINFO);
         assertEquals(buffer.limit(), buffer.position());
 
         // reset the index.
         buffer.position(0);
         final TcpInfo parsedInfoShorterLen = TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1);
-        assertEquals(parsedInfoShorterLen, new TcpInfo(expected));
+        assertEquals(parsedInfoShorterLen, TEST_TCPINFO);
         assertEquals(TCP_INFO_LENGTH_V1, buffer.position());
-    }
-
-    @Test
-    public void testValidOffset() {
-        final ByteBuffer buffer = ByteBuffer.wrap(TCP_INFO_BYTES);
-
-        final Map<TcpInfo.Field, Number> expected = makeShortTestTcpInfoHash();
-        final TcpInfo parsedInfo = TcpInfo.parse(buffer, SHORT_TEST_TCP_INFO);
-
-        assertEquals(parsedInfo, new TcpInfo(expected));
     }
 
     @Test
@@ -156,37 +166,12 @@ public class TcpInfoTest {
     @Test
     public void testMalformedTcpInfo() {
         final ByteBuffer buffer = ByteBuffer.wrap(MALFORMED_TCP_INFO_BYTES);
-        final Map<TcpInfo.Field, Number> expected = makeShortTestTcpInfoHash();
 
         TcpInfo parsedInfo = TcpInfo.parse(buffer, SHORT_TEST_TCP_INFO);
-        assertEquals(parsedInfo, new TcpInfo(expected));
+        assertEquals(parsedInfo, null);
 
         parsedInfo = TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1);
         assertEquals(parsedInfo, null);
-    }
-
-    @Test
-    public void testGetValue() {
-        ByteBuffer buffer = ByteBuffer.wrap(TCP_INFO_BYTES);
-
-        final Map<TcpInfo.Field, Number> expected = makeShortTestTcpInfoHash();
-        expected.put(TcpInfo.Field.MAX_PACING_RATE, 10_000L);
-        expected.put(TcpInfo.Field.FACKETS, 10);
-
-        final TcpInfo expectedInfo = new TcpInfo(expected);
-        assertEquals((byte) 0x01, expectedInfo.getValue(TcpInfo.Field.STATE));
-        assertEquals((byte) 0x00, expectedInfo.getValue(TcpInfo.Field.CASTATE));
-        assertEquals((byte) 0x00, expectedInfo.getValue(TcpInfo.Field.RETRANSMITS));
-        assertEquals((byte) 0x00, expectedInfo.getValue(TcpInfo.Field.PROBES));
-        assertEquals((byte) 0x00, expectedInfo.getValue(TcpInfo.Field.BACKOFF));
-        assertEquals((byte) 0x07, expectedInfo.getValue(TcpInfo.Field.OPTIONS));
-        assertEquals((byte) 0x88, expectedInfo.getValue(TcpInfo.Field.WSCALE));
-        assertEquals((byte) 0x00, expectedInfo.getValue(TcpInfo.Field.DELIVERY_RATE_APP_LIMITED));
-
-        assertEquals(10_000L, expectedInfo.getValue(TcpInfo.Field.MAX_PACING_RATE));
-        assertEquals(10, expectedInfo.getValue(TcpInfo.Field.FACKETS));
-        assertEquals(null, expectedInfo.getValue(TcpInfo.Field.RTT));
-
     }
 
     // Make a TcpInfo contains only first 8 bytes.

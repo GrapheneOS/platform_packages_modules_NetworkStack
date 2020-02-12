@@ -22,11 +22,9 @@ import androidx.annotation.Nullable;
 
 import com.android.internal.annotations.VisibleForTesting;
 
+import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -91,27 +89,39 @@ public class TcpInfo {
     }
 
     private static final String TAG = "TcpInfo";
-    private final Map<Field, Number> mFieldsValues;
+    @VisibleForTesting
+    static final int LOST_OFFSET = getFieldOffset(Field.LOST);
+    @VisibleForTesting
+    static final int RETRANSMITS_OFFSET = getFieldOffset(Field.RETRANSMITS);
+    @VisibleForTesting
+    static final int SEGS_IN_OFFSET = getFieldOffset(Field.SEGS_IN);
+    @VisibleForTesting
+    static final int SEGS_OUT_OFFSET = getFieldOffset(Field.SEGS_OUT);
+    final int mSegsIn;
+    final int mSegsOut;
+    final int mLost;
+    final int mRetransmits;
+
+    private static int getFieldOffset(@NonNull final Field needle) {
+        int offset = 0;
+        for (final Field field : Field.values()) {
+            if (field == needle) return offset;
+            offset += field.size;
+        }
+        throw new IllegalArgumentException("Unknown field");
+    }
 
     private TcpInfo(@NonNull ByteBuffer bytes, int infolen) {
-        final int start = bytes.position();
-        final LinkedHashMap<Field, Number> fields = new LinkedHashMap<>();
-        for (final Field field : Field.values()) {
-            switch (field.size) {
-                case Byte.BYTES:
-                    fields.put(field, getByte(bytes, start, infolen));
-                    break;
-                case Integer.BYTES:
-                    fields.put(field, getInt(bytes, start, infolen));
-                    break;
-                case Long.BYTES:
-                    fields.put(field, getLong(bytes, start, infolen));
-                    break;
-                default:
-                    Log.e(TAG, "Unexpected size:" + field.size);
-            }
+        // SEGS_IN is the last required field in the buffer, so if the buffer is long enough for
+        // SEGS_IN it's long enough for everything
+        if (SEGS_IN_OFFSET + Field.SEGS_IN.size > infolen) {
+            throw new IllegalArgumentException("Length " + infolen + " is less than required.");
         }
-        mFieldsValues = Collections.unmodifiableMap(fields);
+        final int start = bytes.position();
+        mSegsIn = bytes.getInt(start + SEGS_IN_OFFSET);
+        mSegsOut = bytes.getInt(start + SEGS_OUT_OFFSET);
+        mLost = bytes.getInt(start + LOST_OFFSET);
+        mRetransmits = bytes.get(start + RETRANSMITS_OFFSET);
         // tcp_info structure grows over time as new fields are added. Jump to the end of the
         // structure, as unknown fields might remain at the end of the structure if the tcp_info
         // struct was expanded.
@@ -119,12 +129,11 @@ public class TcpInfo {
     }
 
     @VisibleForTesting
-    TcpInfo(@NonNull Map<Field, Number> info) {
-        final LinkedHashMap<Field, Number> fields = new LinkedHashMap<>();
-        for (final Field field : Field.values()) {
-            fields.put(field, info.get(field));
-        }
-        mFieldsValues = Collections.unmodifiableMap(fields);
+    TcpInfo(int retransmits, int lost, int segsOut, int segsIn) {
+        mRetransmits = retransmits;
+        mLost = lost;
+        mSegsOut = segsOut;
+        mSegsIn = segsIn;
     }
 
     /** Parse a TcpInfo from a giving ByteBuffer with a specific length. */
@@ -132,51 +141,11 @@ public class TcpInfo {
     public static TcpInfo parse(@NonNull ByteBuffer bytes, int infolen) {
         try {
             return new TcpInfo(bytes, infolen);
-        } catch (BufferUnderflowException | IllegalArgumentException e) {
+        } catch (BufferUnderflowException | BufferOverflowException | IllegalArgumentException
+                | IndexOutOfBoundsException e) {
             Log.e(TAG, "parsing error.", e);
             return null;
         }
-    }
-
-    /**
-     * Helper function for handling different struct tcp_info versions in the kernel.
-     */
-    private static boolean isValidTargetPosition(int start, int len, int pos, int targetBytes)
-            throws IllegalArgumentException {
-        // Equivalent to new Range(start, start + len).contains(new Range(pos, pos + targetBytes))
-        if (len < 0 || targetBytes < 0) throw new IllegalArgumentException();
-        // Check that start < pos < start + len
-        if (pos < start || pos > start + len) return false;
-        // Pos is inside the range and targetBytes is positive. Offset is valid if end of 2nd range
-        // is below end of 1st range.
-        return pos + targetBytes <= start + len;
-    }
-
-    /** Get value for specific key. */
-    @Nullable
-    public Number getValue(@NonNull Field key) {
-        return mFieldsValues.get(key);
-    }
-
-    @Nullable
-    private static Byte getByte(@NonNull ByteBuffer buffer, int start, int len) {
-        if (!isValidTargetPosition(start, len, buffer.position(), Byte.BYTES)) return null;
-
-        return buffer.get();
-    }
-
-    @Nullable
-    private static Integer getInt(@NonNull ByteBuffer buffer, int start, int len) {
-        if (!isValidTargetPosition(start, len, buffer.position(), Integer.BYTES)) return null;
-
-        return buffer.getInt();
-    }
-
-    @Nullable
-    private static Long getLong(@NonNull ByteBuffer buffer, int start, int len) {
-        if (!isValidTargetPosition(start, len, buffer.position(), Long.BYTES)) return null;
-
-        return buffer.getLong();
     }
 
     private static String decodeWscale(byte num) {
@@ -210,33 +179,18 @@ public class TcpInfo {
         if (!(obj instanceof TcpInfo)) return false;
         TcpInfo other = (TcpInfo) obj;
 
-        for (final Field key : mFieldsValues.keySet()) {
-            if (!Objects.equals(mFieldsValues.get(key), other.mFieldsValues.get(key))) {
-                return false;
-            }
-        }
-        return true;
+        return mSegsIn == other.mSegsIn && mSegsOut == other.mSegsOut
+            && mRetransmits == other.mRetransmits && mLost == other.mLost;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(mFieldsValues.values().toArray());
+        return Objects.hash(mLost, mRetransmits, mSegsIn, mSegsOut);
     }
 
     @Override
     public String toString() {
-        String str = "TcpInfo{ ";
-        for (final Field key : mFieldsValues.keySet()) {
-            str += key.name().toLowerCase() + "=";
-            if (key == Field.STATE) {
-                str += getTcpStateName(mFieldsValues.get(key).intValue()) + " ";
-            } else if (key == Field.WSCALE) {
-                str += decodeWscale(mFieldsValues.get(key).byteValue()) + " ";
-            } else {
-                str += mFieldsValues.get(key) + " ";
-            }
-        }
-        str += "}";
-        return str;
+        return "TcpInfo{lost=" + mLost + ", retransmit=" + mRetransmits + ", received=" + mSegsIn
+                + ", sent=" + mSegsOut + "}";
     }
 }
