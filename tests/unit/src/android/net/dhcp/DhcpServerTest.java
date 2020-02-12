@@ -81,7 +81,9 @@ public class DhcpServerTest {
     private static final String TEST_IFACE = "testiface";
 
     private static final Inet4Address TEST_SERVER_ADDR = parseAddr("192.168.0.2");
-    private static final LinkAddress TEST_SERVER_LINKADDR = new LinkAddress(TEST_SERVER_ADDR, 20);
+    private static final int TEST_PREFIX_LENGTH = 20;
+    private static final LinkAddress TEST_SERVER_LINKADDR = new LinkAddress(
+            TEST_SERVER_ADDR, TEST_PREFIX_LENGTH);
     private static final Set<Inet4Address> TEST_DEFAULT_ROUTERS = new HashSet<>(
             Arrays.asList(parseAddr("192.168.0.123"), parseAddr("192.168.0.124")));
     private static final Set<Inet4Address> TEST_DNS_SERVERS = new HashSet<>(
@@ -100,10 +102,11 @@ public class DhcpServerTest {
     private static final long TEST_CLOCK_TIME = 1234L;
     private static final int TEST_LEASE_EXPTIME_SECS = 3600;
     private static final DhcpLease TEST_LEASE = new DhcpLease(null, TEST_CLIENT_MAC,
-            TEST_CLIENT_ADDR, TEST_LEASE_EXPTIME_SECS * 1000L + TEST_CLOCK_TIME,
+            TEST_CLIENT_ADDR, TEST_PREFIX_LENGTH, TEST_LEASE_EXPTIME_SECS * 1000L + TEST_CLOCK_TIME,
             null /* hostname */);
     private static final DhcpLease TEST_LEASE_WITH_HOSTNAME = new DhcpLease(null, TEST_CLIENT_MAC,
-            TEST_CLIENT_ADDR, TEST_LEASE_EXPTIME_SECS * 1000L + TEST_CLOCK_TIME, TEST_HOSTNAME);
+            TEST_CLIENT_ADDR, TEST_PREFIX_LENGTH, TEST_LEASE_EXPTIME_SECS * 1000L + TEST_CLOCK_TIME,
+            TEST_HOSTNAME);
 
     @NonNull @Mock
     private Context mContext;
