@@ -16,14 +16,25 @@
 
 package android.net.shared;
 
+import static android.net.shared.ParcelableUtil.fromParcelableArray;
+import static android.net.shared.ParcelableUtil.toParcelableArray;
+
+import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.net.INetd;
+import android.net.InformationElementParcelable;
 import android.net.Network;
 import android.net.ProvisioningConfigurationParcelable;
+import android.net.ScanResultInfoParcelable;
 import android.net.StaticIpConfiguration;
 import android.net.apf.ApfCapabilities;
 import android.net.ip.IIpClient;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.StringJoiner;
 
@@ -193,10 +204,173 @@ public class ProvisioningConfiguration {
         }
 
         /**
+         * Specify the information elements included in wifi scan result that was obtained
+         * prior to connecting to the access point, if this is a WiFi network.
+         *
+         * <p>The scan result can be used to infer whether the network is metered.
+         */
+        public Builder withScanResultInfo(ScanResultInfo scanResultInfo) {
+            mConfig.mScanResultInfo = scanResultInfo;
+            return this;
+        }
+
+        /**
          * Build the configuration using previously specified parameters.
          */
         public ProvisioningConfiguration build() {
             return new ProvisioningConfiguration(mConfig);
+        }
+    }
+
+    /**
+     * Class wrapper of {@link android.net.wifi.ScanResult} to encapsulate the SSID and
+     * InformationElements fields of ScanResult.
+     */
+    public static class ScanResultInfo {
+        private final String mSsid;
+        private final List<InformationElement> mInformationElements;
+
+       /**
+        * Class wrapper of {@link android.net.wifi.ScanResult.InformationElement} to encapsulate
+        * the specific IE id and payload fields.
+        */
+        public static class InformationElement {
+            private final int mId;
+            private final byte[] mPayload;
+
+            public InformationElement(int id, @NonNull ByteBuffer payload) {
+                mId = id;
+                mPayload = convertToByteArray(payload.asReadOnlyBuffer());
+            }
+
+           /**
+            * Get the element ID of the information element.
+            */
+            public int getId() {
+                return mId;
+            }
+
+           /**
+            * Get the specific content of the information element.
+            */
+            public ByteBuffer getPayload() {
+                return ByteBuffer.wrap(mPayload).asReadOnlyBuffer();
+            }
+
+            @Override
+            public boolean equals(Object o) {
+                if (o == this) return true;
+                if (!(o instanceof InformationElement)) return false;
+                InformationElement other = (InformationElement) o;
+                return mId == other.mId && Arrays.equals(mPayload, other.mPayload);
+            }
+
+            @Override
+            public int hashCode() {
+                return Objects.hash(mId, mPayload);
+            }
+
+            @Override
+            public String toString() {
+                return "ID: " + mId + ", " + Arrays.toString(mPayload);
+            }
+
+            /**
+             * Convert this InformationElement to a {@link InformationElementParcelable}.
+             */
+            public InformationElementParcelable toStableParcelable() {
+                final InformationElementParcelable p = new InformationElementParcelable();
+                p.id = mId;
+                p.payload = mPayload.clone();
+                return p;
+            }
+
+            /**
+             * Create an instance of {@link InformationElement} based on the contents of the
+             * specified {@link InformationElementParcelable}.
+             */
+            public static InformationElement fromStableParcelable(InformationElementParcelable p) {
+                if (p == null) return null;
+                return new InformationElement(p.id,
+                        ByteBuffer.wrap(p.payload.clone()).asReadOnlyBuffer());
+            }
+        }
+
+        public ScanResultInfo(String ssid, @NonNull List<InformationElement> informationElements) {
+            mSsid = ssid;
+            mInformationElements =
+                    Collections.unmodifiableList(new ArrayList<>(informationElements));
+        }
+
+        /**
+         * Get the scanned network name.
+         */
+        public String getSsid() {
+            return mSsid;
+        }
+
+        /**
+         * Get all information elements found in the beacon.
+         */
+        public List<InformationElement> getInformationElements() {
+            return mInformationElements;
+        }
+
+        @Override
+        public String toString() {
+            StringBuffer str = new StringBuffer();
+            str.append("SSID: ").append(mSsid);
+            str.append(", Information Elements: {");
+            for (InformationElement ie : mInformationElements) {
+                str.append("[").append(ie.toString()).append("]");
+            }
+            str.append("}");
+            return str.toString();
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o == this) return true;
+            if (!(o instanceof ScanResultInfo)) return false;
+            ScanResultInfo other = (ScanResultInfo) o;
+            return Objects.equals(mSsid, other.mSsid)
+                    && mInformationElements.equals(other.mInformationElements);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(mSsid, mInformationElements);
+        }
+
+        /**
+         * Convert this ScanResultInfo to a {@link ScanResultInfoParcelable}.
+         */
+        public ScanResultInfoParcelable toStableParcelable() {
+            final ScanResultInfoParcelable p = new ScanResultInfoParcelable();
+            p.ssid = mSsid;
+            p.informationElements = toParcelableArray(mInformationElements,
+                    InformationElement::toStableParcelable, InformationElementParcelable.class);
+            return p;
+        }
+
+        /**
+         * Create an instance of {@link ScanResultInfo} based on the contents of the specified
+         * {@link ScanResultInfoParcelable}.
+         */
+        public static ScanResultInfo fromStableParcelable(ScanResultInfoParcelable p) {
+            if (p == null) return null;
+            final List<InformationElement> ies = new ArrayList<InformationElement>();
+            ies.addAll(fromParcelableArray(p.informationElements,
+                    InformationElement::fromStableParcelable));
+            return new ScanResultInfo(p.ssid, ies);
+        }
+
+        private static byte[] convertToByteArray(final ByteBuffer buffer) {
+            if (buffer == null) return null;
+            byte[] bytes = new byte[buffer.limit()];
+            final ByteBuffer copy = buffer.asReadOnlyBuffer();
+            copy.get(bytes);
+            return bytes;
         }
     }
 
@@ -213,6 +387,7 @@ public class ProvisioningConfiguration {
     public int mIPv6AddrGenMode = INetd.IPV6_ADDR_GEN_MODE_STABLE_PRIVACY;
     public Network mNetwork = null;
     public String mDisplayName = null;
+    public ScanResultInfo mScanResultInfo;
 
     public ProvisioningConfiguration() {} // used by Builder
 
@@ -232,6 +407,7 @@ public class ProvisioningConfiguration {
         mIPv6AddrGenMode = other.mIPv6AddrGenMode;
         mNetwork = other.mNetwork;
         mDisplayName = other.mDisplayName;
+        mScanResultInfo = other.mScanResultInfo;
     }
 
     /**
@@ -254,6 +430,7 @@ public class ProvisioningConfiguration {
         p.ipv6AddrGenMode = mIPv6AddrGenMode;
         p.network = mNetwork;
         p.displayName = mDisplayName;
+        p.scanResultInfo = mScanResultInfo == null ? null : mScanResultInfo.toStableParcelable();
         return p;
     }
 
@@ -279,6 +456,7 @@ public class ProvisioningConfiguration {
         config.mIPv6AddrGenMode = p.ipv6AddrGenMode;
         config.mNetwork = p.network;
         config.mDisplayName = p.displayName;
+        config.mScanResultInfo = ScanResultInfo.fromStableParcelable(p.scanResultInfo);
         return config;
     }
 
@@ -298,6 +476,7 @@ public class ProvisioningConfiguration {
                 .add("mIPv6AddrGenMode: " + mIPv6AddrGenMode)
                 .add("mNetwork: " + mNetwork)
                 .add("mDisplayName: " + mDisplayName)
+                .add("mScanResultInfo: " + mScanResultInfo)
                 .toString();
     }
 
@@ -317,7 +496,8 @@ public class ProvisioningConfiguration {
                 && mProvisioningTimeoutMs == other.mProvisioningTimeoutMs
                 && mIPv6AddrGenMode == other.mIPv6AddrGenMode
                 && Objects.equals(mNetwork, other.mNetwork)
-                && Objects.equals(mDisplayName, other.mDisplayName);
+                && Objects.equals(mDisplayName, other.mDisplayName)
+                && Objects.equals(mScanResultInfo, other.mScanResultInfo);
     }
 
     public boolean isValid() {
