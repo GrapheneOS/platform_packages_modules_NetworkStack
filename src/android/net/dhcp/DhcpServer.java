@@ -274,22 +274,10 @@ public class DhcpServer extends IDhcpServer.Stub {
      */
     @Override
     public void start(@Nullable INetworkStackStatusCallback cb) {
-        startWithCallbacks(cb, null);
-    }
-
-    /**
-     * Start listening for and responding to packets, with optional callbacks for lease events.
-     *
-     * <p>It is not legal to call this method more than once; in particular the server cannot be
-     * restarted after being stopped.
-     */
-    @Override
-    public void startWithCallbacks(@Nullable INetworkStackStatusCallback statusCb,
-            @Nullable IDhcpLeaseCallbacks leaseCb) {
         mDeps.checkCaller();
         mHandlerThread.start();
         mHandler = new ServerHandler(mHandlerThread.getLooper());
-        sendMessage(CMD_START_DHCP_SERVER, new Pair<>(statusCb, leaseCb));
+        sendMessage(CMD_START_DHCP_SERVER, cb);
     }
 
     /**
@@ -356,12 +344,9 @@ public class DhcpServer extends IDhcpServer.Stub {
                     cb = pair.second;
                     break;
                 case CMD_START_DHCP_SERVER:
-                    final Pair<INetworkStackStatusCallback, IDhcpLeaseCallbacks> obj =
-                            (Pair<INetworkStackStatusCallback, IDhcpLeaseCallbacks>) msg.obj;
-                    cb = obj.first;
-                    mLeaseRepo.addLeaseCallbacks(obj.second);
                     mPacketListener = mDeps.makePacketListener();
                     mPacketListener.start();
+                    cb = (INetworkStackStatusCallback) msg.obj;
                     break;
                 case CMD_STOP_DHCP_SERVER:
                     if (mPacketListener != null) {
