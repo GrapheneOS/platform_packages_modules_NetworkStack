@@ -28,6 +28,7 @@ import android.net.LinkAddress;
 import android.net.Network;
 import android.net.StaticIpConfiguration;
 import android.net.apf.ApfCapabilities;
+import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
 
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
@@ -36,6 +37,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.function.Consumer;
 
 /**
@@ -45,6 +48,17 @@ import java.util.function.Consumer;
 @SmallTest
 public class ProvisioningConfigurationTest {
     private ProvisioningConfiguration mConfig;
+
+    private ScanResultInfo makeScanResultInfo(final String ssid) {
+        final byte[] payload = new byte[] {
+            (byte) 0x00, (byte) 0x17, (byte) 0xF2, (byte) 0x06, (byte) 0x01,
+            (byte) 0x01, (byte) 0x03, (byte) 0x01, (byte) 0x00, (byte) 0x00,
+        };
+        final ScanResultInfo.InformationElement ie =
+                new ScanResultInfo.InformationElement(0xdd /* vendor specific IE id */,
+                        ByteBuffer.wrap(payload));
+        return new ScanResultInfo(ssid, Collections.singletonList(ie));
+    }
 
     @Before
     public void setUp() {
@@ -67,8 +81,9 @@ public class ProvisioningConfigurationTest {
         mConfig.mNetwork = new Network(321);
         mConfig.mDisplayName = "test_config";
         mConfig.mEnablePreconnection = false;
+        mConfig.mScanResultInfo = makeScanResultInfo("ssid");
         // Any added field must be included in equals() to be tested properly
-        assertFieldCountEquals(13, ProvisioningConfiguration.class);
+        assertFieldCountEquals(14, ProvisioningConfiguration.class);
     }
 
     @Test
@@ -97,6 +112,12 @@ public class ProvisioningConfigurationTest {
     @Test
     public void testParcelUnparcel_NullNetwork() {
         mConfig.mNetwork = null;
+        doParcelUnparcelTest();
+    }
+
+    @Test
+    public void testParcelUnparcel_NullScanResultInfo() {
+        mConfig.mScanResultInfo = null;
         doParcelUnparcelTest();
     }
 
@@ -136,7 +157,9 @@ public class ProvisioningConfigurationTest {
         assertNotEqualsAfterChange(c -> c.mDisplayName = "other_test");
         assertNotEqualsAfterChange(c -> c.mDisplayName = null);
         assertNotEqualsAfterChange(c -> c.mEnablePreconnection = true);
-        assertFieldCountEquals(13, ProvisioningConfiguration.class);
+        assertNotEqualsAfterChange(c -> c.mScanResultInfo = null);
+        assertNotEqualsAfterChange(c -> c.mScanResultInfo = makeScanResultInfo("another ssid"));
+        assertFieldCountEquals(14, ProvisioningConfiguration.class);
     }
 
     private void assertNotEqualsAfterChange(Consumer<ProvisioningConfiguration> mutator) {

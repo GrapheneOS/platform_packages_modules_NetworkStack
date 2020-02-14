@@ -45,6 +45,7 @@ aidl_interface {
     include_dirs: [
         "frameworks/base/core/java", // For framework parcelables.
         "frameworks/native/aidl/binder/android/os", // For PersistableBundle.aidl
+        "frameworks/base/wifi/aidl-export", // For wifi parcelables.
     ],
     srcs: [
         "src/android/net/DhcpResultsParcelable.aidl",
@@ -53,14 +54,14 @@ aidl_interface {
         "src/android/net/INetworkStackConnector.aidl",
         "src/android/net/INetworkStackStatusCallback.aidl",
         "src/android/net/InitialConfigurationParcelable.aidl",
+        "src/android/net/InformationElementParcelable.aidl",
         "src/android/net/Layer2PacketParcelable.aidl",
         "src/android/net/NattKeepalivePacketDataParcelable.aidl",
         "src/android/net/PrivateDnsConfigParcel.aidl",
         "src/android/net/ProvisioningConfigurationParcelable.aidl",
+        "src/android/net/ScanResultInfoParcelable.aidl",
         "src/android/net/TcpKeepalivePacketDataParcelable.aidl",
-        "src/android/net/dhcp/DhcpLeaseParcelable.aidl",
         "src/android/net/dhcp/DhcpServingParamsParcel.aidl",
-        "src/android/net/dhcp/IDhcpLeaseCallbacks.aidl",
         "src/android/net/dhcp/IDhcpServer.aidl",
         "src/android/net/dhcp/IDhcpServerCallbacks.aidl",
         "src/android/net/ip/IIpClient.aidl",

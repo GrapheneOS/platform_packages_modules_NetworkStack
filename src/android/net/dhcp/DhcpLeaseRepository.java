@@ -31,8 +31,6 @@ import android.net.IpPrefix;
 import android.net.MacAddress;
 import android.net.dhcp.DhcpServer.Clock;
 import android.net.util.SharedLog;
-import android.os.RemoteCallbackList;
-import android.os.RemoteException;
 import android.util.ArrayMap;
 
 import androidx.annotation.NonNull;
@@ -47,7 +45,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -76,7 +73,6 @@ class DhcpLeaseRepository {
     @NonNull
     private Set<Inet4Address> mReservedAddrs;
     private int mSubnetAddr;
-    private int mPrefixLength;
     private int mSubnetMask;
     private int mNumAddresses;
     private long mLeaseTimeMs;
@@ -87,9 +83,6 @@ class DhcpLeaseRepository {
      * update this when removing entries, but it must always be updated when adding/updating.
      */
     private long mNextExpirationCheck = EXPIRATION_NEVER;
-
-    @NonNull
-    private RemoteCallbackList<IDhcpLeaseCallbacks> mLeaseCallbacks = new RemoteCallbackList<>();
 
     static class DhcpLeaseException extends Exception {
         DhcpLeaseException(String message) {
@@ -138,34 +131,27 @@ class DhcpLeaseRepository {
             long leaseTimeMs) {
         mPrefix = prefix;
         mReservedAddrs = Collections.unmodifiableSet(new HashSet<>(reservedAddrs));
-        mPrefixLength = prefix.getPrefixLength();
-        mSubnetMask = prefixLengthToV4NetmaskIntHTH(mPrefixLength);
+        mSubnetMask = prefixLengthToV4NetmaskIntHTH(prefix.getPrefixLength());
         mSubnetAddr = inet4AddressToIntHTH((Inet4Address) prefix.getAddress()) & mSubnetMask;
         mNumAddresses = 1 << (IPV4_ADDR_BITS - prefix.getPrefixLength());
         mLeaseTimeMs = leaseTimeMs;
 
+        cleanMap(mCommittedLeases);
         cleanMap(mDeclinedAddrs);
-        if (cleanMap(mCommittedLeases)) {
-            notifyLeasesChanged();
-        }
     }
 
     /**
      * From a map keyed by {@link Inet4Address}, remove entries where the key is invalid (as
      * specified by {@link #isValidAddress(Inet4Address)}), or is a reserved address.
-     * @return true iff at least one entry was removed.
      */
-    private <T> boolean cleanMap(Map<Inet4Address, T> map) {
+    private <T> void cleanMap(Map<Inet4Address, T> map) {
         final Iterator<Entry<Inet4Address, T>> it = map.entrySet().iterator();
-        boolean removed = false;
         while (it.hasNext()) {
             final Inet4Address addr = it.next().getKey();
             if (!isValidAddress(addr) || mReservedAddrs.contains(addr)) {
                 it.remove();
-                removed = true;
             }
         }
-        return removed;
     }
 
     /**
@@ -195,7 +181,7 @@ class DhcpLeaseRepository {
             mLog.log("Offering extended lease " + newLease);
             // Do not update lease time in the map: the offer is not committed yet.
         } else if (reqAddr != null && isValidAddress(reqAddr) && isAvailable(reqAddr)) {
-            newLease = new DhcpLease(clientId, hwAddr, reqAddr, mPrefixLength, expTime, hostname);
+            newLease = new DhcpLease(clientId, hwAddr, reqAddr, expTime, hostname);
             mLog.log("Offering requested lease " + newLease);
         } else {
             newLease = makeNewOffer(clientId, hwAddr, expTime, hostname);
@@ -281,8 +267,7 @@ class DhcpLeaseRepository {
         if (assignedLease != null) {
             if (sidSet && reqAddr != null) {
                 // Client in SELECTING state; remove any current lease before creating a new one.
-                // Do not notify of change as it will be done when the new lease is committed.
-                removeLease(assignedLease.getNetAddr(), false /* notifyChange */);
+                mCommittedLeases.remove(assignedLease.getNetAddr());
             } else if (!assignedLease.getNetAddr().equals(leaseAddr)) {
                 // reqAddr null (RENEWING/REBINDING): client renewing its own lease for clientAddr.
                 // reqAddr set with sid not set (INIT-REBOOT): client verifying configuration.
@@ -329,7 +314,7 @@ class DhcpLeaseRepository {
         final DhcpLease lease;
         if (currentLease == null) {
             if (isValidAddress(addr) && !mReservedAddrs.contains(addr)) {
-                lease = new DhcpLease(clientId, hwAddr, addr, mPrefixLength, expTime, hostname);
+                lease = new DhcpLease(clientId, hwAddr, addr, expTime, hostname);
             } else {
                 throw new InvalidAddressException("Lease not found and address unavailable");
             }
@@ -343,13 +328,6 @@ class DhcpLeaseRepository {
     private void commitLease(@NonNull DhcpLease lease) {
         mCommittedLeases.put(lease.getNetAddr(), lease);
         maybeUpdateEarliestExpiration(lease.getExpTime());
-        notifyLeasesChanged();
-    }
-
-    private void removeLease(@NonNull Inet4Address address, boolean notifyChange) {
-        // Earliest expiration remains <= the first expiry time on remove, so no need to update it.
-        mCommittedLeases.remove(address);
-        if (notifyChange) notifyLeasesChanged();
     }
 
     /**
@@ -365,31 +343,13 @@ class DhcpLeaseRepository {
             return false;
         }
         if (currentLease.matchesClient(clientId, hwAddr)) {
+            mCommittedLeases.remove(addr);
             mLog.log("Released lease " + currentLease);
-            removeLease(addr, true /* notifyChange */);
             return true;
         }
         mLog.w(String.format("Not releasing lease %s: does not match client (cid %s, hwAddr %s)",
                 currentLease, DhcpLease.clientIdToString(clientId), hwAddr));
         return false;
-    }
-
-    private void notifyLeasesChanged() {
-        final List<DhcpLeaseParcelable> leaseParcelables =
-                new ArrayList<>(mCommittedLeases.size());
-        for (DhcpLease committedLease : mCommittedLeases.values()) {
-            leaseParcelables.add(committedLease.toParcelable());
-        }
-
-        final int cbCount = mLeaseCallbacks.beginBroadcast();
-        for (int i = 0; i < cbCount; i++) {
-            try {
-                mLeaseCallbacks.getBroadcastItem(i).onLeasesChanged(leaseParcelables);
-            } catch (RemoteException e) {
-                mLog.e("Could not send lease callback", e);
-            }
-        }
-        mLeaseCallbacks.finishBroadcast();
     }
 
     public void markLeaseDeclined(@NonNull Inet4Address addr) {
@@ -420,14 +380,6 @@ class DhcpLeaseRepository {
     public Set<Inet4Address> getDeclinedAddresses() {
         removeExpiredLeases(mClock.elapsedRealtime());
         return new HashSet<>(mDeclinedAddrs.keySet());
-    }
-
-    /**
-     * Add callbacks that will be called on leases update.
-     */
-    public void addLeaseCallbacks(@NonNull IDhcpLeaseCallbacks cb) {
-        Objects.requireNonNull(cb, "Callbacks must be non-null");
-        mLeaseCallbacks.register(cb);
     }
 
     /**
@@ -589,7 +541,7 @@ class DhcpLeaseRepository {
         for (int i = 0; i < mNumAddresses; i++) {
             final Inet4Address addr = intToInet4AddressHTH(intAddr);
             if (isAvailable(addr) && !mDeclinedAddrs.containsKey(addr)) {
-                return new DhcpLease(clientId, hwAddr, addr, mPrefixLength, expTime, hostname);
+                return new DhcpLease(clientId, hwAddr, addr, expTime, hostname);
             }
             intAddr = getNextAddress(intAddr);
         }
@@ -605,7 +557,7 @@ class DhcpLeaseRepository {
             // However declined addresses may have been requested (typically by the machine that was
             // already using the address) after being declined.
             if (isAvailable(addr)) {
-                return new DhcpLease(clientId, hwAddr, addr, mPrefixLength, expTime, hostname);
+                return new DhcpLease(clientId, hwAddr, addr, expTime, hostname);
             }
         }
 
