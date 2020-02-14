@@ -153,11 +153,15 @@ import com.android.networkstack.netlink.TcpSocketTracker;
 import com.android.networkstack.util.DnsUtils;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.UnknownHostException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -171,6 +175,8 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * {@hide}
@@ -1810,15 +1816,10 @@ public class NetworkMonitor extends StateMachine {
         final int oldTag = TrafficStats.getAndSetThreadStatsTag(
                 TrafficStatsConstants.TAG_SYSTEM_PROBE);
         try {
-            urlConnection = (HttpURLConnection) mCleartextDnsNetwork.openConnection(url);
-            urlConnection.setInstanceFollowRedirects(probeType == ValidationProbeEvent.PROBE_PAC);
-            urlConnection.setConnectTimeout(SOCKET_TIMEOUT_MS);
-            urlConnection.setReadTimeout(SOCKET_TIMEOUT_MS);
-            urlConnection.setRequestProperty("Connection", "close");
-            urlConnection.setUseCaches(false);
-            if (mCaptivePortalUserAgent != null) {
-                urlConnection.setRequestProperty("User-Agent", mCaptivePortalUserAgent);
-            }
+            // Follow redirects for PAC probes as such probes verify connectivity by fetching the
+            // PAC proxy file, which may be configured behind a redirect.
+            final boolean followRedirect = probeType == ValidationProbeEvent.PROBE_PAC;
+            urlConnection = makeProbeConnection(url, followRedirect);
             // cannot read request header after connection
             String requestHeader = urlConnection.getRequestProperties().toString();
 
@@ -1883,6 +1884,61 @@ public class NetworkMonitor extends StateMachine {
             return new CaptivePortalProbeResult(httpResponseCode, redirectUrl, url.toString());
         } else {
             return probeSpec.getResult(httpResponseCode, redirectUrl);
+        }
+    }
+
+    private HttpURLConnection makeProbeConnection(URL url, boolean followRedirects)
+            throws IOException {
+        final HttpURLConnection conn = (HttpURLConnection) mCleartextDnsNetwork.openConnection(url);
+        conn.setInstanceFollowRedirects(followRedirects);
+        conn.setConnectTimeout(SOCKET_TIMEOUT_MS);
+        conn.setReadTimeout(SOCKET_TIMEOUT_MS);
+        conn.setRequestProperty("Connection", "close");
+        conn.setUseCaches(false);
+        if (mCaptivePortalUserAgent != null) {
+            conn.setRequestProperty("User-Agent", mCaptivePortalUserAgent);
+        }
+        return conn;
+    }
+
+    @VisibleForTesting
+    @NonNull
+    protected static String readAsString(InputStream is, int maxLength, Charset charset)
+            throws IOException {
+        final InputStreamReader reader = new InputStreamReader(is, charset);
+        final char[] buffer = new char[1000];
+        final StringBuilder builder = new StringBuilder();
+        int totalReadLength = 0;
+        while (totalReadLength < maxLength) {
+            final int availableLength = Math.min(maxLength - totalReadLength, buffer.length);
+            final int currentLength = reader.read(buffer, 0, availableLength);
+            if (currentLength < 0) break; // EOF
+
+            totalReadLength += currentLength;
+            builder.append(buffer, 0, currentLength);
+        }
+        return builder.toString();
+    }
+
+    /**
+     * Attempt to extract the {@link Charset} of the response from its Content-Type header.
+     *
+     * <p>If the {@link Charset} cannot be extracted, UTF-8 is returned by default.
+     */
+    @VisibleForTesting
+    @NonNull
+    protected static Charset extractCharset(@Nullable String contentTypeHeader) {
+        if (contentTypeHeader == null) return StandardCharsets.UTF_8;
+        // See format in https://tools.ietf.org/html/rfc7231#section-3.1.1.1
+        final Pattern charsetPattern = Pattern.compile("; *charset=\"?([^ ;\"]+)\"?",
+                Pattern.CASE_INSENSITIVE);
+        final Matcher matcher = charsetPattern.matcher(contentTypeHeader);
+        if (!matcher.find()) return StandardCharsets.UTF_8;
+
+        try {
+            return Charset.forName(matcher.group(1));
+        } catch (IllegalArgumentException e) {
+            return StandardCharsets.UTF_8;
         }
     }
 
