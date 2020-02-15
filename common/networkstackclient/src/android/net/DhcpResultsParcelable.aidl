@@ -25,4 +25,5 @@ parcelable DhcpResultsParcelable {
     String serverAddress;
     String vendorInfo;
     String serverHostName;
+    String captivePortalApiUrl;
 }

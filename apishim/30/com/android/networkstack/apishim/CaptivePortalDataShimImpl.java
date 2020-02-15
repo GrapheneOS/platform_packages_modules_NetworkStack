@@ -23,6 +23,7 @@ import android.os.Build;
 import android.os.RemoteException;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.VisibleForTesting;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -47,7 +48,7 @@ public class CaptivePortalDataShimImpl
     @NonNull
     public static CaptivePortalDataShim fromJson(JSONObject obj) throws JSONException,
             UnsupportedApiLevelException {
-        if (!ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
+        if (!isSupported()) {
             return com.android.networkstack.apishim.api29.CaptivePortalDataShimImpl.fromJson(obj);
         }
 
@@ -67,6 +68,11 @@ public class CaptivePortalDataShimImpl
                 .setBytesRemaining(getLongOrDefault(obj, "bytes-remaining", -1L))
                 .setExpiryTime(expiryTimeMs)
                 .build());
+    }
+
+    @VisibleForTesting
+    public static boolean isSupported() {
+        return ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q);
     }
 
     private static long getLongOrDefault(JSONObject o, String key, long def) throws JSONException {
