@@ -15,9 +15,35 @@
 //
 
 // Shared utility sources to be used by multiple network modules
+// TODO: remove all frameworks/base dependencies on packages/modules/NetworkStack and
+// frameworks/base/packages/Tethering by moving these files to frameworks/libs/net.
 filegroup {
     name: "net-module-utils-srcs",
+    srcs: [
+        "src/android/net/util/SharedLog.java",
+        "src/android/net/shared/InitialConfiguration.java",
+        "src/android/net/shared/IpConfigurationParcelableUtil.java",
+        "src/android/net/shared/LinkPropertiesParcelableUtil.java",
+        "src/android/net/shared/ParcelableUtil.java",
+        "src/android/net/shared/NetdUtils.java",
+        "src/android/net/shared/NetworkMonitorUtils.java",
+        "src/android/net/shared/ParcelableUtil.java",
+        "src/android/net/shared/PrivateDnsConfig.java",
+        "src/android/net/shared/ProvisioningConfiguration.java",
+        "src/android/net/shared/RouteUtils.java",
+        "src/android/net/util/InterfaceParams.java",
+    ],
+    visibility: [
+        "//frameworks/base/services/net",
+    ]
+}
+
+filegroup {
+    name: "networkstack-module-utils-srcs",
     srcs: ["src/**/*.java"],
+    visibility: [
+        "//packages/modules/NetworkStack",
+    ]
 }
 
 // Shared utility sources to be used by tethering modules
