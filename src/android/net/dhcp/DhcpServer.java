@@ -359,7 +359,9 @@ public class DhcpServer extends IDhcpServer.Stub {
                     final Pair<INetworkStackStatusCallback, IDhcpLeaseCallbacks> obj =
                             (Pair<INetworkStackStatusCallback, IDhcpLeaseCallbacks>) msg.obj;
                     cb = obj.first;
-                    mLeaseRepo.addLeaseCallbacks(obj.second);
+                    if (obj.second != null) {
+                        mLeaseRepo.addLeaseCallbacks(obj.second);
+                    }
                     mPacketListener = mDeps.makePacketListener();
                     mPacketListener.start();
                     break;
