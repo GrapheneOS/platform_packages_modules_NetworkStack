@@ -67,6 +67,7 @@ import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.internal.util.HexDump;
+import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.server.networkstack.tests.R;
 import com.android.server.util.NetworkStackConstants;
 
@@ -936,7 +937,8 @@ public class ApfTest {
         private byte[] mLastApfProgram;
 
         MockIpClientCallback() {
-            super(mock(IIpClientCallbacks.class), mock(SharedLog.class));
+            super(mock(IIpClientCallbacks.class), mock(SharedLog.class),
+                    NetworkInformationShimImpl.newInstance());
         }
 
         @Override

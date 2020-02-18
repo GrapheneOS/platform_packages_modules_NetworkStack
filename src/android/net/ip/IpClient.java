@@ -69,6 +69,8 @@ import com.android.internal.util.Preconditions;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.internal.util.WakeupMessage;
+import com.android.networkstack.apishim.NetworkInformationShim;
+import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.networkstack.apishim.ShimUtils;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
@@ -112,6 +114,7 @@ public class IpClient extends StateMachine {
     private static final ConcurrentHashMap<String, SharedLog> sSmLogs = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, LocalLog> sPktLogs = new ConcurrentHashMap<>();
     private final NetworkStackIpMemoryStore mIpMemoryStore;
+    private final NetworkInformationShim mShim = NetworkInformationShimImpl.newInstance();
 
     /**
      * Dump all state machine and connectivity packet logs to the specified writer.
@@ -165,11 +168,15 @@ public class IpClient extends StateMachine {
         private static final String PREFIX = "INVOKE ";
         private final IIpClientCallbacks mCallback;
         private final SharedLog mLog;
+        @NonNull
+        private final NetworkInformationShim mShim;
 
         @VisibleForTesting
-        protected IpClientCallbacksWrapper(IIpClientCallbacks callback, SharedLog log) {
+        protected IpClientCallbacksWrapper(IIpClientCallbacks callback, SharedLog log,
+                @NonNull NetworkInformationShim shim) {
             mCallback = callback;
             mLog = log;
+            mShim = shim;
         }
 
         private void log(String msg) {
@@ -224,7 +231,7 @@ public class IpClient extends StateMachine {
         public void onProvisioningSuccess(LinkProperties newLp) {
             log("onProvisioningSuccess({" + newLp + "})");
             try {
-                mCallback.onProvisioningSuccess(newLp);
+                mCallback.onProvisioningSuccess(mShim.makeSensitiveFieldsParcelingCopy(newLp));
             } catch (RemoteException e) {
                 log("Failed to call onProvisioningSuccess", e);
             }
@@ -236,7 +243,7 @@ public class IpClient extends StateMachine {
         public void onProvisioningFailure(LinkProperties newLp) {
             log("onProvisioningFailure({" + newLp + "})");
             try {
-                mCallback.onProvisioningFailure(newLp);
+                mCallback.onProvisioningFailure(mShim.makeSensitiveFieldsParcelingCopy(newLp));
             } catch (RemoteException e) {
                 log("Failed to call onProvisioningFailure", e);
             }
@@ -248,7 +255,7 @@ public class IpClient extends StateMachine {
         public void onLinkPropertiesChange(LinkProperties newLp) {
             log("onLinkPropertiesChange({" + newLp + "})");
             try {
-                mCallback.onLinkPropertiesChange(newLp);
+                mCallback.onLinkPropertiesChange(mShim.makeSensitiveFieldsParcelingCopy(newLp));
             } catch (RemoteException e) {
                 log("Failed to call onLinkPropertiesChange", e);
             }
@@ -530,7 +537,7 @@ public class IpClient extends StateMachine {
         sPktLogs.putIfAbsent(mInterfaceName, new LocalLog(MAX_PACKET_RECORDS));
         mConnectivityPacketLog = sPktLogs.get(mInterfaceName);
         mMsgStateLogger = new MessageHandlingLogger();
-        mCallback = new IpClientCallbacksWrapper(callback, mLog);
+        mCallback = new IpClientCallbacksWrapper(callback, mLog, mShim);
 
         // TODO: Consider creating, constructing, and passing in some kind of
         // InterfaceController.Dependencies class.
@@ -1302,7 +1309,7 @@ public class IpClient extends StateMachine {
     private void doImmediateProvisioningFailure(int failureType) {
         logError("onProvisioningFailure(): %s", failureType);
         recordMetric(failureType);
-        mCallback.onProvisioningFailure(new LinkProperties(mLinkProperties));
+        mCallback.onProvisioningFailure(mLinkProperties);
     }
 
     private boolean startIPv4() {
@@ -1423,7 +1430,7 @@ public class IpClient extends StateMachine {
             if (mStartTimeMillis > 0) {
                 // Completed a life-cycle; send a final empty LinkProperties
                 // (cleared in resetLinkProperties() above) and record an event.
-                mCallback.onLinkPropertiesChange(new LinkProperties(mLinkProperties));
+                mCallback.onLinkPropertiesChange(mLinkProperties);
                 recordMetric(IpManagerEvent.COMPLETE_LIFECYCLE);
                 mStartTimeMillis = 0;
             }
@@ -1898,8 +1905,7 @@ public class IpClient extends StateMachine {
                         mDhcpClient.sendMessage(DhcpClient.EVENT_LINKADDRESS_CONFIGURED);
                     } else {
                         logError("Failed to set IPv4 address.");
-                        dispatchCallback(PROV_CHANGE_LOST_PROVISIONING,
-                                new LinkProperties(mLinkProperties));
+                        dispatchCallback(PROV_CHANGE_LOST_PROVISIONING, mLinkProperties);
                         transitionTo(mStoppingState);
                     }
                     break;

@@ -59,4 +59,10 @@ public class NetworkInformationShimImpl extends
         if (nc == null) return null;
         return nc.getSSID();
     }
+
+    @NonNull
+    @Override
+    public LinkProperties makeSensitiveFieldsParcelingCopy(@NonNull final LinkProperties lp) {
+        return lp.makeSensitiveFieldsParcelingCopy();
+    }
 }
