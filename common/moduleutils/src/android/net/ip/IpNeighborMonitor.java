@@ -31,9 +31,9 @@ import android.net.netlink.NetlinkMessage;
 import android.net.netlink.NetlinkSocket;
 import android.net.netlink.RtNetlinkNeighborMessage;
 import android.net.netlink.StructNdMsg;
-import android.net.util.NetworkStackUtils;
 import android.net.util.PacketReader;
 import android.net.util.SharedLog;
+import android.net.util.SocketUtils;
 import android.os.Handler;
 import android.os.SystemClock;
 import android.system.ErrnoException;
@@ -42,6 +42,7 @@ import android.system.OsConstants;
 import android.util.Log;
 
 import java.io.FileDescriptor;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.SocketAddress;
 import java.net.SocketException;
@@ -128,6 +129,14 @@ public class IpNeighborMonitor extends PacketReader {
         }
     }
 
+    // TODO: move NetworkStackUtils.closeSocketQuietly to somewhere accessible to this file.
+    private void closeSocketQuietly(FileDescriptor fd) {
+        try {
+            SocketUtils.closeSocket(fd);
+        } catch (IOException ignored) {
+        }
+    }
+
     public interface NeighborEventConsumer {
         // Every neighbor event received on the netlink socket is passed in
         // here. Subclasses should filter for events of interest.
@@ -158,7 +167,7 @@ public class IpNeighborMonitor extends PacketReader {
             }
         } catch (ErrnoException|SocketException e) {
             logError("Failed to create rtnetlink socket", e);
-            NetworkStackUtils.closeSocketQuietly(fd);
+            closeSocketQuietly(fd);
             return null;
         }
 
