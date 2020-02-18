@@ -18,6 +18,7 @@ package android.net.dhcp;
 
 import android.net.INetworkStackStatusCallback;
 import android.net.dhcp.DhcpServingParamsParcel;
+import android.net.dhcp.IDhcpLeaseCallbacks;
 
 /** @hide */
 oneway interface IDhcpServer {
@@ -26,7 +27,11 @@ oneway interface IDhcpServer {
     const int STATUS_INVALID_ARGUMENT = 2;
     const int STATUS_UNKNOWN_ERROR = 3;
 
-    void start(in INetworkStackStatusCallback cb);
-    void updateParams(in DhcpServingParamsParcel params, in INetworkStackStatusCallback cb);
-    void stop(in INetworkStackStatusCallback cb);
+    void start(in INetworkStackStatusCallback cb) = 0;
+    void startWithCallbacks(in INetworkStackStatusCallback statusCb,
+        in IDhcpLeaseCallbacks leaseCb) = 3;
+    void updateParams(in DhcpServingParamsParcel params, in INetworkStackStatusCallback cb) = 1;
+    void stop(in INetworkStackStatusCallback cb) = 2;
+
+    // Next available ID: 4
 }
