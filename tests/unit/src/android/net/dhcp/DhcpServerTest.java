@@ -118,6 +118,8 @@ public class DhcpServerTest {
     private Clock mClock;
     @NonNull @Mock
     private DhcpPacketListener mPacketListener;
+    @NonNull @Mock
+    private IDhcpLeaseCallbacks mLeaseCallbacks;
 
     @NonNull @Captor
     private ArgumentCaptor<ByteBuffer> mSentPacketCaptor;
@@ -152,6 +154,22 @@ public class DhcpServerTest {
         }
     };
 
+    private DhcpServingParams makeServingParams() throws Exception {
+        return new DhcpServingParams.Builder()
+                .setDefaultRouters(TEST_DEFAULT_ROUTERS)
+                .setDhcpLeaseTimeSecs(TEST_LEASE_TIME_SECS)
+                .setDnsServers(TEST_DNS_SERVERS)
+                .setServerAddr(TEST_SERVER_LINKADDR)
+                .setLinkMtu(TEST_MTU)
+                .setExcludedAddrs(TEST_EXCLUDED_ADDRS)
+                .build();
+    }
+
+    private void startServer() throws Exception {
+        mServer.start(mAssertSuccessCallback);
+        mLooper.processAllMessages();
+    }
+
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
@@ -164,27 +182,16 @@ public class DhcpServerTest {
                 .sendPacket(any(), mSentPacketCaptor.capture(), mResponseDstAddrCaptor.capture());
         when(mClock.elapsedRealtime()).thenReturn(TEST_CLOCK_TIME);
 
-        final DhcpServingParams servingParams = new DhcpServingParams.Builder()
-                .setDefaultRouters(TEST_DEFAULT_ROUTERS)
-                .setDhcpLeaseTimeSecs(TEST_LEASE_TIME_SECS)
-                .setDnsServers(TEST_DNS_SERVERS)
-                .setServerAddr(TEST_SERVER_LINKADDR)
-                .setLinkMtu(TEST_MTU)
-                .setExcludedAddrs(TEST_EXCLUDED_ADDRS)
-                .build();
-
         mLooper = TestableLooper.get(this);
         mHandlerThread = spy(new HandlerThread("TestDhcpServer"));
         when(mHandlerThread.getLooper()).thenReturn(mLooper.getLooper());
-        mServer = new DhcpServer(mContext, mHandlerThread, TEST_IFACE, servingParams,
+        mServer = new DhcpServer(mContext, mHandlerThread, TEST_IFACE, makeServingParams(),
                 new SharedLog(DhcpServerTest.class.getSimpleName()), mDeps);
-
-        mServer.start(mAssertSuccessCallback);
-        mLooper.processAllMessages();
     }
 
     @After
     public void tearDown() throws Exception {
+        verify(mRepository, never()).addLeaseCallbacks(eq(null));
         mServer.stop(mAssertSuccessCallback);
         mLooper.processMessages(1);
         verify(mPacketListener, times(1)).stop();
@@ -193,11 +200,22 @@ public class DhcpServerTest {
 
     @Test
     public void testStart() throws Exception {
+        startServer();
+
         verify(mPacketListener, times(1)).start();
     }
 
     @Test
+    public void testStartWithCallbacks() throws Exception {
+        mServer.startWithCallbacks(mAssertSuccessCallback, mLeaseCallbacks);
+        mLooper.processAllMessages();
+        verify(mRepository).addLeaseCallbacks(eq(mLeaseCallbacks));
+    }
+
+    @Test
     public void testDiscover() throws Exception {
+        startServer();
+
         // TODO: refactor packet construction to eliminate unnecessary/confusing/duplicate fields
         when(mRepository.getOffer(isNull() /* clientId */, eq(TEST_CLIENT_MAC),
                 eq(INADDR_ANY) /* relayAddr */, isNull() /* reqAddr */, isNull() /* hostname */))
@@ -215,6 +233,8 @@ public class DhcpServerTest {
 
     @Test
     public void testDiscover_RapidCommit() throws Exception {
+        startServer();
+
         when(mDeps.isFeatureEnabled(eq(mContext), eq(DHCP_RAPID_COMMIT_VERSION))).thenReturn(true);
         when(mRepository.getCommittedLease(isNull() /* clientId */, eq(TEST_CLIENT_MAC),
                 eq(INADDR_ANY) /* relayAddr */, isNull() /* hostname */)).thenReturn(TEST_LEASE);
@@ -231,6 +251,8 @@ public class DhcpServerTest {
 
     @Test
     public void testDiscover_OutOfAddresses() throws Exception {
+        startServer();
+
         when(mRepository.getOffer(isNull() /* clientId */, eq(TEST_CLIENT_MAC),
                 eq(INADDR_ANY) /* relayAddr */, isNull() /* reqAddr */, isNull() /* hostname */))
                 .thenThrow(new OutOfAddressesException("Test exception"));
@@ -256,6 +278,8 @@ public class DhcpServerTest {
 
     @Test
     public void testRequest_Selecting_Ack() throws Exception {
+        startServer();
+
         when(mRepository.requestLease(isNull() /* clientId */, eq(TEST_CLIENT_MAC),
                 eq(INADDR_ANY) /* clientAddr */, eq(INADDR_ANY) /* relayAddr */,
                 eq(TEST_CLIENT_ADDR) /* reqAddr */, eq(true) /* sidSet */, eq(TEST_HOSTNAME)))
@@ -273,6 +297,8 @@ public class DhcpServerTest {
 
     @Test
     public void testRequest_Selecting_Nak() throws Exception {
+        startServer();
+
         when(mRepository.requestLease(isNull(), eq(TEST_CLIENT_MAC),
                 eq(INADDR_ANY) /* clientAddr */, eq(INADDR_ANY) /* relayAddr */,
                 eq(TEST_CLIENT_ADDR) /* reqAddr */, eq(true) /* sidSet */, isNull() /* hostname */))
@@ -288,6 +314,8 @@ public class DhcpServerTest {
 
     @Test
     public void testRequest_Selecting_WrongClientPort() throws Exception {
+        startServer();
+
         final DhcpRequestPacket request = makeRequestSelectingPacket();
         mServer.processPacket(request, 50000);
 
@@ -298,6 +326,8 @@ public class DhcpServerTest {
 
     @Test
     public void testRelease() throws Exception {
+        startServer();
+
         final DhcpReleasePacket release = new DhcpReleasePacket(TEST_TRANSACTION_ID,
                 TEST_SERVER_ADDR, TEST_CLIENT_ADDR,
                 INADDR_ANY /* relayIp */, TEST_CLIENT_MAC_BYTES);
