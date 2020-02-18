@@ -16,6 +16,7 @@
 
 package android.net;
 
+import android.net.CaptivePortalData;
 import android.net.INetworkMonitor;
 import android.net.PrivateDnsConfigParcel;
 
@@ -33,4 +34,5 @@ oneway interface INetworkMonitorCallbacks {
             long timestampMillis, in PersistableBundle extras);
     void notifyDataStallSuspected(long timestampMillis, int detectionMethod,
             in PersistableBundle extras);
+    void notifyCaptivePortalDataChanged(in CaptivePortalData data);
 }
