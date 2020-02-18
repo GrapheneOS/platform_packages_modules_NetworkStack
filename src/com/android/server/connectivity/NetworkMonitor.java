@@ -612,7 +612,7 @@ public class NetworkMonitor extends StateMachine {
     private void notifyNetworkTested(
             int result, @Nullable String redirectUrl, PersistableBundle extras) {
         try {
-            if (mCallbackVersion <= 5) {
+            if (mCallbackVersion <= 4) {
                 mCallback.notifyNetworkTested(result, redirectUrl);
             } else {
                 mCallback.notifyNetworkTestedWithExtras(
