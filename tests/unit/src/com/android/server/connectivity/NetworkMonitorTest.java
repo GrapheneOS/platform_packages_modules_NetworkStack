@@ -1425,7 +1425,7 @@ public class NetworkMonitorTest {
     public void testNotifyNetwork_NotifyNetworkTestedOldInterfaceVersion() throws Exception {
         // Use old interface version so notifyNetworkTested is used over
         // notifyNetworkTestedWithExtras
-        resetCallbacks(5);
+        resetCallbacks(4);
 
         // Trigger Network validation
         setStatus(mHttpsConnection, 204);
