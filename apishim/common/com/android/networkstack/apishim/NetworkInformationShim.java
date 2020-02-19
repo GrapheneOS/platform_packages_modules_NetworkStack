@@ -44,4 +44,10 @@ public interface NetworkInformationShim {
      */
     @Nullable
     String getSSID(@Nullable NetworkCapabilities nc);
+
+    /**
+     * @see LinkProperties#makeSensitiveFieldsParcelingCopy()
+     */
+    @NonNull
+    LinkProperties makeSensitiveFieldsParcelingCopy(@NonNull LinkProperties lp);
 }
