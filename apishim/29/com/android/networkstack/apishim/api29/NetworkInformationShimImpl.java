@@ -62,4 +62,10 @@ public class NetworkInformationShimImpl implements NetworkInformationShim {
         // Not supported on this API level
         return null;
     }
+
+    @NonNull
+    @Override
+    public LinkProperties makeSensitiveFieldsParcelingCopy(@NonNull final LinkProperties lp) {
+        return new LinkProperties(lp);
+    }
 }
