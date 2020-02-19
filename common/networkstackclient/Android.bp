@@ -66,7 +66,6 @@ aidl_interface {
     include_dirs: [
         "frameworks/base/core/java", // For framework parcelables.
         "frameworks/native/aidl/binder", // For PersistableBundle.aidl
-        "frameworks/base/wifi/aidl-export", // For wifi parcelables.
     ],
     srcs: [
         "src/android/net/DataStallReportParcelable.aidl",
