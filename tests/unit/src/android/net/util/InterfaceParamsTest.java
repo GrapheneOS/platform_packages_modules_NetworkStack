@@ -17,6 +17,7 @@
 package android.net.util;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -49,6 +50,7 @@ public class InterfaceParamsTest {
         assertEquals("lo", ifParams.name);
         assertTrue(ifParams.index > 0);
         assertNotNull(ifParams.macAddr);
+        assertFalse(ifParams.hasMacAddress);
         assertTrue(ifParams.defaultMtu >= NetworkStackConstants.ETHER_MTU);
     }
 }
