@@ -52,6 +52,7 @@ import static junit.framework.Assert.fail;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -917,6 +918,24 @@ public class IpClientIntegrationTest {
             assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime,
                     TEST_DEFAULT_MTU);
         }
+    }
+
+    @Test
+    public void testInterfaceParams() throws Exception {
+        InterfaceParams params = InterfaceParams.getByName(mIfaceName);
+        assertNotNull(params);
+        assertEquals(mIfaceName, params.name);
+        assertTrue(params.index > 0);
+        assertNotNull(params.macAddr);
+        assertTrue(params.hasMacAddress);
+
+        // Sanity check.
+        params = InterfaceParams.getByName("lo");
+        assertNotNull(params);
+        assertEquals("lo", params.name);
+        assertTrue(params.index > 0);
+        assertNotNull(params.macAddr);
+        assertFalse(params.hasMacAddress);
     }
 
     @Test
