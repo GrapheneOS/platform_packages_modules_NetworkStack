@@ -51,10 +51,14 @@ filegroup {
     name: "tethering-module-utils-srcs",
     srcs: [
         "src/android/net/ip/InterfaceController.java",
+        "src/android/net/ip/IpNeighborMonitor.java",
         "src/android/net/netlink/*.java",
         "src/android/net/shared/NetdUtils.java",
         "src/android/net/shared/RouteUtils.java",
+        "src/android/net/util/FdEventsReader.java",
         "src/android/net/util/InterfaceParams.java",
+        "src/android/net/util/PacketReader.java",
         "src/android/net/util/SharedLog.java"
     ],
+    visibility: ["//frameworks/base/packages/Tethering"],
 }
