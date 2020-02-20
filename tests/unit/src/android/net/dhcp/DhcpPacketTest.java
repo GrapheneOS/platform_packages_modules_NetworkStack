@@ -78,10 +78,12 @@ public class DhcpPacketTest {
     private static final Inet4Address BROADCAST_ADDR = getBroadcastAddress(
             SERVER_ADDR, PREFIX_LENGTH);
     private static final String HOSTNAME = "testhostname";
+    private static final String CAPTIVE_PORTAL_API_URL = "https://example.com/capportapi";
     private static final short MTU = 1500;
     // Use our own empty address instead of IPV4_ADDR_ANY or INADDR_ANY to ensure that the code
     // doesn't use == instead of equals when comparing addresses.
     private static final Inet4Address ANY = v4Address("0.0.0.0");
+    private static final byte[] TEST_EMPTY_OPTIONS_SKIP_LIST = new byte[0];
 
     private static final byte[] CLIENT_MAC = new byte[] { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05 };
 
@@ -169,7 +171,8 @@ public class DhcpPacketTest {
                 .setDomainBytes(domainBytes)
                 .setVendorInfoBytes(vendorInfoBytes)
                 .build();
-        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_BOOTP);
+        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_BOOTP,
+                TEST_EMPTY_OPTIONS_SKIP_LIST);
         assertEquals(expectedDomain, offerPacket.mDomainName);
         assertEquals(expectedVendorInfo, offerPacket.mVendorInfo);
     }
@@ -215,14 +218,16 @@ public class DhcpPacketTest {
 
         if (!expectValid) {
             try {
-                offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_BOOTP);
+                offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_BOOTP,
+                        TEST_EMPTY_OPTIONS_SKIP_LIST);
                 fail("Invalid packet parsed successfully: " + offerPacket);
             } catch (ParseException expected) {
             }
             return;
         }
 
-        offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_BOOTP);
+        offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_BOOTP,
+                TEST_EMPTY_OPTIONS_SKIP_LIST);
         assertNotNull(offerPacket);
         assertEquals(rawLeaseTime, offerPacket.mLeaseTime);
         DhcpResults dhcpResults = offerPacket.toDhcpResults();  // Just check this doesn't crash.
@@ -266,7 +271,8 @@ public class DhcpPacketTest {
         ByteBuffer packet = new TestDhcpPacket(type, clientIp, yourIp)
                 .setNetmaskBytes(netmaskBytes)
                 .build();
-        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_BOOTP);
+        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_BOOTP,
+                TEST_EMPTY_OPTIONS_SKIP_LIST);
         DhcpResults results = offerPacket.toDhcpResults();
 
         if (expected != null) {
@@ -351,7 +357,8 @@ public class DhcpPacketTest {
             "3a0400000e103b040000189cff00000000000000000000"));
         // CHECKSTYLE:ON Generated code
 
-        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3);
+        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3,
+                TEST_EMPTY_OPTIONS_SKIP_LIST);
         assertTrue(offerPacket instanceof DhcpOfferPacket);  // Implicitly checks it's non-null.
         DhcpResults dhcpResults = offerPacket.toDhcpResults();
         assertDhcpResults("192.168.159.247/20", "192.168.159.254", "8.8.8.8,8.8.4.4",
@@ -384,13 +391,96 @@ public class DhcpPacketTest {
         // CHECKSTYLE:ON Generated code
 
         assertEquals(337, packet.limit());
-        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3);
+        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3,
+                TEST_EMPTY_OPTIONS_SKIP_LIST);
         assertTrue(offerPacket instanceof DhcpOfferPacket);  // Implicitly checks it's non-null.
         DhcpResults dhcpResults = offerPacket.toDhcpResults();
         assertDhcpResults("192.168.43.247/24", "192.168.43.1", "192.168.43.1",
                 null, "192.168.43.1", "dhcp.android.com", "ANDROID_METERED", 3600, true, 0,
                 dhcpResults);
         assertTrue(dhcpResults.hasMeteredHint());
+    }
+
+    private void runCapportOptionTest(boolean enabled) throws Exception {
+        // CHECKSTYLE:OFF Generated code
+        final ByteBuffer packet = ByteBuffer.wrap(HexDump.hexStringToByteArray(
+                // IP header.
+                "450001518d0600004011144dc0a82b01c0a82bf7" +
+                // UDP header
+                "00430044013d9ac7" +
+                // BOOTP header
+                "02010600dfc23d1f0002000000000000c0a82bf7c0a82b0100000000" +
+                // MAC address.
+                "30766ff2a90c00000000000000000000" +
+                // Server name ("dhcp.android.com" plus invalid "AAAA" after null terminator).
+                "646863702e616e64726f69642e636f6d00000000000000000000000000000000" +
+                "0000000000004141414100000000000000000000000000000000000000000000" +
+                // File.
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                // Options
+                "638253633501023604c0a82b01330400000e103a04000007083b0400000c4e0104ffffff00" +
+                "1c04c0a82bff0304c0a82b010604c0a82b012b0f414e44524f49445f4d455445524544721d" +
+                "68747470733a2f2f706f7274616c6170692e6578616d706c652e636f6dff"));
+        // CHECKSTYLE:ON Generated code
+
+        final DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3,
+                enabled ? TEST_EMPTY_OPTIONS_SKIP_LIST
+                        : new byte[] { DhcpPacket.DHCP_CAPTIVE_PORTAL });
+        assertTrue(offerPacket instanceof DhcpOfferPacket);  // Implicitly checks it's non-null.
+        final DhcpResults dhcpResults = offerPacket.toDhcpResults();
+        final String testUrl = enabled ? "https://portalapi.example.com" : null;
+        assertEquals(testUrl, dhcpResults.captivePortalApiUrl);
+    }
+
+    @Test
+    public void testCapportOption() throws Exception {
+        runCapportOptionTest(true /* enabled */);
+    }
+
+    @Test
+    public void testCapportOption_Disabled() throws Exception {
+        runCapportOptionTest(false /* enabled */);
+    }
+
+    @Test
+    public void testCapportOption_Invalid() throws Exception {
+        // CHECKSTYLE:OFF Generated code
+        final ByteBuffer packet = ByteBuffer.wrap(HexDump.hexStringToByteArray(
+                // IP header.
+                "450001518d0600004011144dc0a82b01c0a82bf7" +
+                // UDP header
+                "00430044013d9ac7" +
+                // BOOTP header
+                "02010600dfc23d1f0002000000000000c0a82bf7c0a82b0100000000" +
+                // MAC address.
+                "30766ff2a90c00000000000000000000" +
+                // Server name ("dhcp.android.com" plus invalid "AAAA" after null terminator).
+                "646863702e616e64726f69642e636f6d00000000000000000000000000000000" +
+                "0000000000004141414100000000000000000000000000000000000000000000" +
+                // File.
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                // Options
+                "638253633501023604c0a82b01330400000e103a04000007083b0400000c4e0104ffffff00" +
+                "1c04c0a82bff0304c0a82b010604c0a82b012b0f414e44524f49445f4d455445524544" +
+                // Option 114 (0x72, capport), length 10 (0x0a)
+                "720a" +
+                // バグ-com in UTF-8, plus the ff byte that marks the end of options.
+                "e38390e382b02d636f6dff"));
+        // CHECKSTYLE:ON Generated code
+
+        final DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3,
+                TEST_EMPTY_OPTIONS_SKIP_LIST);
+        assertTrue(offerPacket instanceof DhcpOfferPacket);  // Implicitly checks it's non-null.
+        final DhcpResults dhcpResults = offerPacket.toDhcpResults();
+        // Output URL will be garbled because some characters do not exist in the target charset,
+        // but the parser should not crash.
+        assertTrue(dhcpResults.captivePortalApiUrl.length() > 0);
     }
 
     @Test
@@ -400,7 +490,8 @@ public class DhcpPacketTest {
             "450001518d0600004011144dc0a82b01c0a82bf7");
 
         try {
-            DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, packet.length, ENCAP_L3);
+            DhcpPacket.decodeFullPacket(packet, packet.length, ENCAP_L3,
+                    TEST_EMPTY_OPTIONS_SKIP_LIST);
         } catch (DhcpPacket.ParseException expected) {
             assertDhcpErrorCodes(DhcpErrorEvent.L3_TOO_SHORT, expected.errorCode);
             return;
@@ -419,7 +510,7 @@ public class DhcpPacketTest {
             "02010600dfc23d1f0002000000000000c0a82bf7c0a82b0100000000");
 
         try {
-            DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, packet.length, ENCAP_L3);
+            DhcpPacket.decodeFullPacket(packet, packet.length, ENCAP_L3);
         } catch (DhcpPacket.ParseException expected) {
             assertDhcpErrorCodes(DhcpErrorEvent.L3_TOO_SHORT, expected.errorCode);
             return;
@@ -448,7 +539,7 @@ public class DhcpPacketTest {
             "00000000000000000000000000000000000000000000000000000000000000");
 
         try {
-            DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, packet.length, ENCAP_L3);
+            DhcpPacket.decodeFullPacket(packet, packet.length, ENCAP_L3);
         } catch (DhcpPacket.ParseException expected) {
             assertDhcpErrorCodes(DhcpErrorEvent.L3_TOO_SHORT, expected.errorCode);
             return;
@@ -479,7 +570,7 @@ public class DhcpPacketTest {
             );
 
         try {
-            DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, packet.length, ENCAP_L3);
+            DhcpPacket.decodeFullPacket(packet, packet.length, ENCAP_L3);
         } catch (DhcpPacket.ParseException expected) {
             assertDhcpErrorCodes(DhcpErrorEvent.DHCP_NO_COOKIE, expected.errorCode);
             return;
@@ -511,7 +602,7 @@ public class DhcpPacketTest {
             "1c04c0a82bff0304c0a82b010604c0a82b012b0f414e44524f49445f4d455445524544ff");
 
         try {
-            DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, packet.length, ENCAP_L3);
+            DhcpPacket.decodeFullPacket(packet, packet.length, ENCAP_L3);
         } catch (DhcpPacket.ParseException expected) {
             assertDhcpErrorCodes(DhcpErrorEvent.DHCP_BAD_MAGIC_COOKIE, expected.errorCode);
             return;
@@ -590,7 +681,8 @@ public class DhcpPacketTest {
             packet.put(mtuBytes);
             packet.clear();
         }
-        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3);
+        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3,
+                TEST_EMPTY_OPTIONS_SKIP_LIST);
         assertTrue(offerPacket instanceof DhcpOfferPacket);  // Implicitly checks it's non-null.
         DhcpResults dhcpResults = offerPacket.toDhcpResults();
         assertDhcpResults("192.168.159.247/20", "192.168.159.254", "8.8.8.8,8.8.4.4",
@@ -665,7 +757,8 @@ public class DhcpPacketTest {
         assertEquals(6, packet.get(hwAddrLenOffset));
 
         // Expect the expected.
-        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3);
+        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3,
+                TEST_EMPTY_OPTIONS_SKIP_LIST);
         assertNotNull(offerPacket);
         assertEquals(6, offerPacket.getClientMac().length);
         assertEquals(expectedClientMac, HexDump.toHexString(offerPacket.getClientMac()));
@@ -673,7 +766,7 @@ public class DhcpPacketTest {
         // Reduce the hardware address length and verify that it shortens the client MAC.
         packet.flip();
         packet.put(hwAddrLenOffset, (byte) 5);
-        offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3);
+        offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3, TEST_EMPTY_OPTIONS_SKIP_LIST);
         assertNotNull(offerPacket);
         assertEquals(5, offerPacket.getClientMac().length);
         assertEquals(expectedClientMac.substring(0, 10),
@@ -681,7 +774,7 @@ public class DhcpPacketTest {
 
         packet.flip();
         packet.put(hwAddrLenOffset, (byte) 3);
-        offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3);
+        offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3, TEST_EMPTY_OPTIONS_SKIP_LIST);
         assertNotNull(offerPacket);
         assertEquals(3, offerPacket.getClientMac().length);
         assertEquals(expectedClientMac.substring(0, 6),
@@ -691,7 +784,7 @@ public class DhcpPacketTest {
         // and crash, and b) hardcode it to 6.
         packet.flip();
         packet.put(hwAddrLenOffset, (byte) -1);
-        offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3);
+        offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3, TEST_EMPTY_OPTIONS_SKIP_LIST);
         assertNotNull(offerPacket);
         assertEquals(6, offerPacket.getClientMac().length);
         assertEquals(expectedClientMac, HexDump.toHexString(offerPacket.getClientMac()));
@@ -700,7 +793,7 @@ public class DhcpPacketTest {
         // hardcode it to 6.
         packet.flip();
         packet.put(hwAddrLenOffset, (byte) 17);
-        offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3);
+        offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3, TEST_EMPTY_OPTIONS_SKIP_LIST);
         assertNotNull(offerPacket);
         assertEquals(6, offerPacket.getClientMac().length);
         assertEquals(expectedClientMac, HexDump.toHexString(offerPacket.getClientMac()));
@@ -740,7 +833,8 @@ public class DhcpPacketTest {
             "0000000000000000000000000000000000000000000000ff000000"));
         // CHECKSTYLE:ON Generated code
 
-        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L2);
+        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L2,
+                TEST_EMPTY_OPTIONS_SKIP_LIST);
         assertTrue(offerPacket instanceof DhcpOfferPacket);
         DhcpResults dhcpResults = offerPacket.toDhcpResults();
         assertDhcpResults("172.17.152.118/16", "172.17.1.1", "172.17.1.1",
@@ -772,7 +866,8 @@ public class DhcpPacketTest {
             "0f0f646f6d61696e3132332e636f2e756b0000000000ff00000000"));
         // CHECKSTYLE:ON Generated code
 
-        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3);
+        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3,
+                TEST_EMPTY_OPTIONS_SKIP_LIST);
         assertTrue(offerPacket instanceof DhcpOfferPacket);
         DhcpResults dhcpResults = offerPacket.toDhcpResults();
         assertDhcpResults("10.63.93.4/20", "10.63.80.1", "192.0.2.1,192.0.2.2",
@@ -806,7 +901,8 @@ public class DhcpPacketTest {
             "0f0b6c616e63732e61632e756b000000000000000000ff00000000"));
         // CHECKSTYLE:ON Generated code
 
-        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L2);
+        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L2,
+                TEST_EMPTY_OPTIONS_SKIP_LIST);
         assertTrue(offerPacket instanceof DhcpOfferPacket);
         assertEquals("BCF5AC000000", HexDump.toHexString(offerPacket.getClientMac()));
         DhcpResults dhcpResults = offerPacket.toDhcpResults();
@@ -842,7 +938,8 @@ public class DhcpPacketTest {
             "d18180060f0777766d2e6564751c040a0fffffff000000"));
         // CHECKSTYLE:ON Generated code
 
-        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L2);
+        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L2,
+                TEST_EMPTY_OPTIONS_SKIP_LIST);
         assertTrue(offerPacket instanceof DhcpOfferPacket);
         assertEquals("9CD917000000", HexDump.toHexString(offerPacket.getClientMac()));
         DhcpResults dhcpResults = offerPacket.toDhcpResults();
@@ -880,7 +977,7 @@ public class DhcpPacketTest {
         // CHECKSTYLE:ON Generated code
 
         try {
-            DhcpPacket.decodeFullPacket(packet, ENCAP_L2);
+            DhcpPacket.decodeFullPacket(packet, ENCAP_L2, TEST_EMPTY_OPTIONS_SKIP_LIST);
             fail("Packet with invalid dst port did not throw ParseException");
         } catch (ParseException expected) {}
     }
@@ -912,7 +1009,8 @@ public class DhcpPacketTest {
             "0308c0a8bd01ffffff0006080808080808080404ff000000000000"));
         // CHECKSTYLE:ON Generated code
 
-        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L2);
+        DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L2,
+                TEST_EMPTY_OPTIONS_SKIP_LIST);
         assertTrue(offerPacket instanceof DhcpOfferPacket);
         assertEquals("FC3D93000000", HexDump.toHexString(offerPacket.getClientMac()));
         DhcpResults dhcpResults = offerPacket.toDhcpResults();
@@ -931,8 +1029,8 @@ public class DhcpPacketTest {
 
         ByteBuffer packet = DhcpPacket.buildDiscoverPacket(
                 DhcpPacket.ENCAP_L2, transactionId, secs, hwaddr,
-                false /* do unicast */, DhcpClient.REQUESTED_PARAMS, false /* rapid commit */,
-                testHostname);
+                false /* do unicast */, DhcpClient.DEFAULT_REQUESTED_PARAMS,
+                false /* rapid commit */, testHostname);
 
         final byte[] headers = new byte[] {
             // Ethernet header.
@@ -1021,7 +1119,7 @@ public class DhcpPacketTest {
                 BROADCAST_ADDR /* bcAddr */, Collections.singletonList(SERVER_ADDR) /* gateways */,
                 Collections.singletonList(SERVER_ADDR) /* dnsServers */,
                 SERVER_ADDR /* dhcpServerIdentifier */, null /* domainName */, hostname,
-                false /* metered */, MTU);
+                false /* metered */, MTU, CAPTIVE_PORTAL_API_URL);
 
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         // BOOTP headers
@@ -1085,6 +1183,9 @@ public class DhcpPacketTest {
         // MTU
         bos.write(new byte[] { (byte) 0x1a, (byte) 0x02 });
         bos.write(shortToByteArray(MTU));
+        // capport URL. Option 114 = 0x72
+        bos.write(new byte[] { (byte) 0x72, (byte) CAPTIVE_PORTAL_API_URL.length() });
+        bos.write(CAPTIVE_PORTAL_API_URL.getBytes(Charset.forName("US-ASCII")));
         // End options.
         bos.write(0xff);
 

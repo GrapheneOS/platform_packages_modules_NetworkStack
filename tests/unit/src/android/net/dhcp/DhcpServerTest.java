@@ -383,7 +383,8 @@ public class DhcpServerTest {
 
     private DhcpPacket getPacket() throws Exception {
         verify(mDeps, times(1)).sendPacket(any(), any(), any());
-        return DhcpPacket.decodeFullPacket(mSentPacketCaptor.getValue(), ENCAP_BOOTP);
+        return DhcpPacket.decodeFullPacket(mSentPacketCaptor.getValue(), ENCAP_BOOTP,
+                new byte[0] /* optionsToSkip */);
     }
 
     private static Inet4Address parseAddr(@Nullable String inet4Addr) {
