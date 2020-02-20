@@ -36,6 +36,7 @@ import android.net.ProvisioningConfigurationParcelable;
 import android.net.ProxyInfo;
 import android.net.RouteInfo;
 import android.net.TcpKeepalivePacketDataParcelable;
+import android.net.Uri;
 import android.net.apf.ApfCapabilities;
 import android.net.apf.ApfFilter;
 import android.net.dhcp.DhcpClient;
@@ -57,6 +58,7 @@ import android.text.TextUtils;
 import android.util.LocalLog;
 import android.util.Log;
 import android.util.Pair;
+import android.util.Patterns;
 import android.util.SparseArray;
 
 import androidx.annotation.NonNull;
@@ -1192,6 +1194,15 @@ public class IpClient extends StateMachine {
             if (mDhcpResults.mtu != 0) {
                 newLp.setMtu(mDhcpResults.mtu);
             }
+
+            final String capportUrl = mDhcpResults.captivePortalApiUrl;
+            // Uri.parse does no syntax check; do a simple regex check to eliminate garbage.
+            // If the URL is still incorrect data fetching will fail later, which is fine.
+            if (capportUrl != null && Patterns.WEB_URL.matcher(capportUrl).matches()) {
+                NetworkInformationShimImpl.newInstance()
+                        .setCaptivePortalApiUrl(newLp, Uri.parse(capportUrl));
+            }
+            // TODO: also look at the IPv6 RA (netlink) for captive portal URL
         }
 
         // [4] Add in TCP buffer sizes and HTTP Proxy config, if available.
