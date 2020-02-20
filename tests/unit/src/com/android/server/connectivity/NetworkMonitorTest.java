@@ -124,12 +124,14 @@ import android.util.ArrayMap;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.apishim.ShimUtils;
 import com.android.networkstack.metrics.DataStallDetectionStats;
 import com.android.networkstack.metrics.DataStallStatsUtils;
 import com.android.networkstack.netlink.TcpSocketTracker;
+import com.android.server.NetworkStackService.NetworkStackServiceManager;
 import com.android.testutils.HandlerUtilsKt;
 
 import org.junit.After;
@@ -182,6 +184,8 @@ public class NetworkMonitorTest {
     private @Mock ConnectivityManager mCm;
     private @Mock TelephonyManager mTelephony;
     private @Mock WifiManager mWifi;
+    private @Mock NetworkStackServiceManager mServiceManager;
+    private @Mock NetworkStackNotifier mNotifier;
     private @Mock HttpURLConnection mHttpConnection;
     private @Mock HttpURLConnection mHttpsConnection;
     private @Mock HttpURLConnection mFallbackConnection;
@@ -410,6 +414,8 @@ public class NetworkMonitorTest {
         when(mContext.getSystemService(Context.WIFI_SERVICE)).thenReturn(mWifi);
         when(mContext.getResources()).thenReturn(mResources);
 
+        when(mServiceManager.getNotifier()).thenReturn(mNotifier);
+
         when(mResources.getString(anyInt())).thenReturn("");
         when(mResources.getStringArray(anyInt())).thenReturn(new String[0]);
 
@@ -513,7 +519,7 @@ public class NetworkMonitorTest {
         private final ConditionVariable mQuitCv = new ConditionVariable(false);
 
         WrappedNetworkMonitor() {
-            super(mContext, mCallbacks, mNetwork, mLogger, mValidationLogger,
+            super(mContext, mCallbacks, mNetwork, mLogger, mValidationLogger, mServiceManager,
                     mDependencies, mDataStallStatsUtils, mTst);
         }
 
@@ -1099,6 +1105,7 @@ public class NetworkMonitorTest {
         final ArgumentCaptor<Network> networkCaptor = ArgumentCaptor.forClass(Network.class);
         verify(mCm, timeout(HANDLER_TIMEOUT_MS).times(1))
                 .startCaptivePortalApp(networkCaptor.capture(), bundleCaptor.capture());
+        verify(mNotifier).notifyCaptivePortalValidationPending(networkCaptor.getValue());
         final Bundle bundle = bundleCaptor.getValue();
         final Network bundleNetwork = bundle.getParcelable(ConnectivityManager.EXTRA_NETWORK);
         assertEquals(TEST_NETID, bundleNetwork.netId);
