@@ -307,6 +307,10 @@ public abstract class DhcpPacket {
     protected static final byte DHCP_RAPID_COMMIT = 80;
     protected boolean mRapidCommit;
 
+    @VisibleForTesting
+    public static final byte DHCP_CAPTIVE_PORTAL = (byte) 114;
+    protected String mCaptivePortalUrl;
+
     /**
      * DHCP zero-length option code: pad
      */
@@ -785,6 +789,7 @@ public abstract class DhcpPacket {
         if (mMtu != null && Short.toUnsignedInt(mMtu) >= IPV4_MIN_MTU) {
             addTlv(buf, DHCP_MTU, mMtu);
         }
+        addTlv(buf, DHCP_CAPTIVE_PORTAL, mCaptivePortalUrl);
     }
 
     /**
@@ -871,6 +876,23 @@ public abstract class DhcpPacket {
         }
     }
 
+    private static int skipOption(ByteBuffer packet, int optionLen)
+            throws BufferUnderflowException {
+        int expectedLen = 0;
+        for (int i = 0; i < optionLen; i++) {
+            expectedLen++;
+            packet.get();
+        }
+        return expectedLen;
+    }
+
+    private static boolean shouldSkipOption(byte optionType, byte[] optionsToSkip) {
+        for (byte option : optionsToSkip) {
+            if (option == optionType) return true;
+        }
+        return false;
+    }
+
     /**
      * Creates a concrete DhcpPacket from the supplied ByteBuffer.  The
      * buffer may have an L2 encapsulation (which is the full EthernetII
@@ -881,8 +903,8 @@ public abstract class DhcpPacket {
      * in object fields.
      */
     @VisibleForTesting
-    static DhcpPacket decodeFullPacket(ByteBuffer packet, int pktType) throws ParseException
-    {
+    static DhcpPacket decodeFullPacket(ByteBuffer packet, int pktType, byte[] optionsToSkip)
+            throws ParseException {
         // bootp parameters
         int transactionId;
         short secs;
@@ -900,6 +922,7 @@ public abstract class DhcpPacket {
         String vendorId = null;
         String vendorInfo = null;
         boolean rapidCommit = false;
+        String captivePortalUrl = null;
         byte[] expectedParams = null;
         String hostName = null;
         String domainName = null;
@@ -1080,6 +1103,11 @@ public abstract class DhcpPacket {
                     int optionLen = packet.get() & 0xFF;
                     int expectedLen = 0;
 
+                    if (shouldSkipOption(optionType, optionsToSkip)) {
+                        skipOption(packet, optionLen);
+                        continue;
+                    }
+
                     switch(optionType) {
                         case DHCP_SUBNET_MASK:
                             netMask = readIpAddress(packet);
@@ -1172,12 +1200,12 @@ public abstract class DhcpPacket {
                             expectedLen = 0;
                             rapidCommit = true;
                             break;
+                        case DHCP_CAPTIVE_PORTAL:
+                            expectedLen = optionLen;
+                            captivePortalUrl = readAsciiString(packet, optionLen, true);
+                            break;
                         default:
-                            // ignore any other parameters
-                            for (int i = 0; i < optionLen; i++) {
-                                expectedLen++;
-                                byte throwaway = packet.get();
-                            }
+                            expectedLen = skipOption(packet, optionLen);
                     }
 
                     if (expectedLen != optionLen) {
@@ -1263,6 +1291,7 @@ public abstract class DhcpPacket {
         newPacket.mT2 = T2;
         newPacket.mVendorId = vendorId;
         newPacket.mVendorInfo = vendorInfo;
+        newPacket.mCaptivePortalUrl = captivePortalUrl;
         if ((optionOverload & OPTION_OVERLOAD_SNAME) == 0) {
             newPacket.mServerHostName = serverHostName;
         } else {
@@ -1274,16 +1303,24 @@ public abstract class DhcpPacket {
     /**
      * Parse a packet from an array of bytes, stopping at the given length.
      */
-    public static DhcpPacket decodeFullPacket(byte[] packet, int length, int pktType)
-            throws ParseException {
+    public static DhcpPacket decodeFullPacket(byte[] packet, int length, int pktType,
+            byte[] optionsToSkip) throws ParseException {
         ByteBuffer buffer = ByteBuffer.wrap(packet, 0, length).order(ByteOrder.BIG_ENDIAN);
         try {
-            return decodeFullPacket(buffer, pktType);
+            return decodeFullPacket(buffer, pktType, optionsToSkip);
         } catch (ParseException e) {
             throw e;
         } catch (Exception e) {
             throw new ParseException(DhcpErrorEvent.PARSING_ERROR, e.getMessage());
         }
+    }
+
+    /**
+     * Parse a packet from an array of bytes, stopping at the given length.
+     */
+    public static DhcpPacket decodeFullPacket(byte[] packet, int length, int pktType)
+            throws ParseException {
+        return decodeFullPacket(packet, length, pktType, new byte[0]);
     }
 
     /**
@@ -1328,6 +1365,7 @@ public abstract class DhcpPacket {
         results.leaseDuration = (mLeaseTime != null) ? mLeaseTime : INFINITE_LEASE;
         results.mtu = (mMtu != null && MIN_MTU <= mMtu && mMtu <= MAX_MTU) ? mMtu : 0;
         results.serverHostName = mServerHostName;
+        results.captivePortalApiUrl = mCaptivePortalUrl;
 
         return results;
     }
@@ -1369,7 +1407,7 @@ public abstract class DhcpPacket {
             Inet4Address yourIp, byte[] mac, Integer timeout, Inet4Address netMask,
             Inet4Address bcAddr, List<Inet4Address> gateways, List<Inet4Address> dnsServers,
             Inet4Address dhcpServerIdentifier, String domainName, String hostname, boolean metered,
-            short mtu) {
+            short mtu, String captivePortalUrl) {
         DhcpPacket pkt = new DhcpOfferPacket(
                 transactionId, (short) 0, broadcast, serverIpAddr, relayIp,
                 INADDR_ANY /* clientIp */, yourIp, mac);
@@ -1382,6 +1420,7 @@ public abstract class DhcpPacket {
         pkt.mSubnetMask = netMask;
         pkt.mBroadcastAddress = bcAddr;
         pkt.mMtu = mtu;
+        pkt.mCaptivePortalUrl = captivePortalUrl;
         if (metered) {
             pkt.mVendorInfo = VENDOR_INFO_ANDROID_METERED;
         }
@@ -1396,7 +1435,7 @@ public abstract class DhcpPacket {
             Inet4Address requestClientIp, byte[] mac, Integer timeout, Inet4Address netMask,
             Inet4Address bcAddr, List<Inet4Address> gateways, List<Inet4Address> dnsServers,
             Inet4Address dhcpServerIdentifier, String domainName, String hostname, boolean metered,
-            short mtu, boolean rapidCommit) {
+            short mtu, boolean rapidCommit, String captivePortalUrl) {
         DhcpPacket pkt = new DhcpAckPacket(
                 transactionId, (short) 0, broadcast, serverIpAddr, relayIp, requestClientIp, yourIp,
                 mac, rapidCommit);
@@ -1409,6 +1448,7 @@ public abstract class DhcpPacket {
         pkt.mServerIdentifier = dhcpServerIdentifier;
         pkt.mBroadcastAddress = bcAddr;
         pkt.mMtu = mtu;
+        pkt.mCaptivePortalUrl = captivePortalUrl;
         if (metered) {
             pkt.mVendorInfo = VENDOR_INFO_ANDROID_METERED;
         }
