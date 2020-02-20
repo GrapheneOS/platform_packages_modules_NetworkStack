@@ -35,6 +35,11 @@ public interface CaptivePortalDataShim {
     Uri getUserPortalUrl();
 
     /**
+     * @see android.net.CaptivePortalData#getVenueInfoUrl()
+     */
+    Uri getVenueInfoUrl();
+
+    /**
      * @see INetworkMonitorCallbacks#notifyCaptivePortalDataChanged(android.net.CaptivePortalData)
      */
     void notifyChanged(INetworkMonitorCallbacks cb) throws RemoteException;
