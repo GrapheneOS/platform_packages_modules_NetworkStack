@@ -49,7 +49,7 @@ public interface NetworkInformationShim {
      * @see NetworkCapabilities#getSSID()
      */
     @Nullable
-    String getSSID(@Nullable NetworkCapabilities nc);
+    String getSsid(@Nullable NetworkCapabilities nc);
 
     /**
      * @see LinkProperties#makeSensitiveFieldsParcelingCopy()
