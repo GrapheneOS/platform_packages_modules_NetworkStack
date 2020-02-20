@@ -43,6 +43,8 @@ import android.net.ip.IIpClientCallbacks;
 import android.net.ip.IpClient;
 import android.net.shared.PrivateDnsConfig;
 import android.net.util.SharedLog;
+import android.os.Build;
+import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.RemoteException;
 import android.util.ArraySet;
@@ -53,6 +55,8 @@ import androidx.annotation.VisibleForTesting;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.IndentingPrintWriter;
+import com.android.networkstack.NetworkStackNotifier;
+import com.android.networkstack.apishim.ShimUtils;
 import com.android.server.connectivity.NetworkMonitor;
 import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
 import com.android.server.util.PermissionUtil;
@@ -103,6 +107,11 @@ public class NetworkStackService extends Service {
          * Get an instance of the IpMemoryStoreService.
          */
         IIpMemoryStore getIpMemoryStoreService();
+
+        /**
+         * Get an instance of the NetworkNotifier.
+         */
+        NetworkStackNotifier getNotifier();
     }
 
     /**
@@ -119,6 +128,8 @@ public class NetworkStackService extends Service {
         @GuardedBy("mIpClients")
         private final ArrayList<WeakReference<IpClient>> mIpClients = new ArrayList<>();
         private final IpMemoryStoreService mIpMemoryStoreService;
+        @Nullable
+        private final NetworkStackNotifier mNotifier;
 
         private static final int MAX_VALIDATION_LOGS = 10;
         @GuardedBy("mValidationLogs")
@@ -164,6 +175,15 @@ public class NetworkStackService extends Service {
                     (IBinder) context.getSystemService(Context.NETD_SERVICE));
             mObserverRegistry = new NetworkObserverRegistry();
             mIpMemoryStoreService = new IpMemoryStoreService(context);
+            // NetworkStackNotifier only shows notifications relevant for API level > Q
+            if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
+                final HandlerThread notifierThread = new HandlerThread(
+                        NetworkStackNotifier.class.getSimpleName());
+                notifierThread.start();
+                mNotifier = new NetworkStackNotifier(context, notifierThread.getLooper());
+            } else {
+                mNotifier = null;
+            }
 
             int netdVersion;
             try {
@@ -220,7 +240,7 @@ public class NetworkStackService extends Service {
             mPermChecker.enforceNetworkStackCallingPermission();
             updateSystemAidlVersion(cb.getInterfaceVersion());
             final SharedLog log = addValidationLogs(network, name);
-            final NetworkMonitor nm = new NetworkMonitor(mContext, cb, network, log);
+            final NetworkMonitor nm = new NetworkMonitor(mContext, cb, network, log, this);
             cb.onNetworkMonitorCreated(new NetworkMonitorConnector(nm, mPermChecker));
         }
 
@@ -247,6 +267,11 @@ public class NetworkStackService extends Service {
         @Override
         public IIpMemoryStore getIpMemoryStoreService() {
             return mIpMemoryStoreService;
+        }
+
+        @Override
+        public NetworkStackNotifier getNotifier() {
+            return mNotifier;
         }
 
         @Override
