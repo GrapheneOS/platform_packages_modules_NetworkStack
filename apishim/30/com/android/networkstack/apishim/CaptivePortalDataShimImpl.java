@@ -96,6 +96,11 @@ public class CaptivePortalDataShimImpl
     }
 
     @Override
+    public Uri getVenueInfoUrl() {
+        return mData.getVenueInfoUrl();
+    }
+
+    @Override
     public void notifyChanged(INetworkMonitorCallbacks cb) throws RemoteException {
         cb.notifyCaptivePortalDataChanged(mData);
     }

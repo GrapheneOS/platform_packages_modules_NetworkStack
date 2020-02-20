@@ -145,6 +145,7 @@ import com.android.internal.util.RingBufferIndices;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.internal.util.TrafficStatsConstants;
+import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.CaptivePortalDataShim;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
@@ -155,6 +156,7 @@ import com.android.networkstack.metrics.DataStallDetectionStats;
 import com.android.networkstack.metrics.DataStallStatsUtils;
 import com.android.networkstack.netlink.TcpSocketTracker;
 import com.android.networkstack.util.DnsUtils;
+import com.android.server.NetworkStackService.NetworkStackServiceManager;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -348,6 +350,8 @@ public class NetworkMonitor extends StateMachine {
     private final TelephonyManager mTelephonyManager;
     private final WifiManager mWifiManager;
     private final ConnectivityManager mCm;
+    @Nullable
+    private final NetworkStackNotifier mNotifier;
     private final IpConnectivityLog mMetricsLog;
     private final Dependencies mDependencies;
     private final DataStallStatsUtils mDetectionStatsUtils;
@@ -431,8 +435,8 @@ public class NetworkMonitor extends StateMachine {
     }
 
     public NetworkMonitor(Context context, INetworkMonitorCallbacks cb, Network network,
-            SharedLog validationLog) {
-        this(context, cb, network, new IpConnectivityLog(), validationLog,
+            SharedLog validationLog, @NonNull NetworkStackServiceManager serviceManager) {
+        this(context, cb, network, new IpConnectivityLog(), validationLog, serviceManager,
                 Dependencies.DEFAULT, new DataStallStatsUtils(),
                 getTcpSocketTrackerOrNull(context, network));
     }
@@ -440,8 +444,8 @@ public class NetworkMonitor extends StateMachine {
     @VisibleForTesting
     public NetworkMonitor(Context context, INetworkMonitorCallbacks cb, Network network,
             IpConnectivityLog logger, SharedLog validationLogs,
-            Dependencies deps, DataStallStatsUtils detectionStatsUtils,
-            @Nullable TcpSocketTracker tst) {
+            @NonNull NetworkStackServiceManager serviceManager, Dependencies deps,
+            DataStallStatsUtils detectionStatsUtils, @Nullable TcpSocketTracker tst) {
         // Add suffix indicating which NetworkMonitor we're talking about.
         super(TAG + "/" + network.toString());
 
@@ -461,6 +465,7 @@ public class NetworkMonitor extends StateMachine {
         mTelephonyManager = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
         mWifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
         mCm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        mNotifier = serviceManager.getNotifier();
 
         // CHECKSTYLE:OFF IndentationCheck
         addState(mDefaultState);
@@ -962,6 +967,9 @@ public class NetworkMonitor extends StateMachine {
                     }
                     appExtras.putString(ConnectivityManager.EXTRA_CAPTIVE_PORTAL_USER_AGENT,
                             mCaptivePortalUserAgent);
+                    if (mNotifier != null) {
+                        mNotifier.notifyCaptivePortalValidationPending(network);
+                    }
                     mCm.startCaptivePortalApp(network, appExtras);
                     return HANDLED;
                 default:

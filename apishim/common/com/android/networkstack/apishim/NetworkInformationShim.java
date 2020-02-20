@@ -40,6 +40,12 @@ public interface NetworkInformationShim {
     void setCaptivePortalApiUrl(@NonNull LinkProperties lp, @Nullable Uri url);
 
     /**
+     * @see LinkProperties#getCaptivePortalData()
+     */
+    @Nullable
+    CaptivePortalDataShim getCaptivePortalData(@Nullable LinkProperties lp);
+
+    /**
      * @see NetworkCapabilities#getSSID()
      */
     @Nullable
