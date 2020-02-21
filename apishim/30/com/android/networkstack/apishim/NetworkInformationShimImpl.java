@@ -23,6 +23,7 @@ import android.os.Build;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 
 /**
  * Compatibility implementation of {@link NetworkInformationShim}.
@@ -35,10 +36,18 @@ public class NetworkInformationShimImpl extends
      * Get a new instance of {@link NetworkInformationShim}.
      */
     public static NetworkInformationShim newInstance() {
-        if (!ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
+        if (!useApiAboveQ()) {
             return com.android.networkstack.apishim.api29.NetworkInformationShimImpl.newInstance();
         }
         return new NetworkInformationShimImpl();
+    }
+
+    /**
+     * Indicates whether the shim can use APIs above the Q SDK.
+     */
+    @VisibleForTesting
+    public static boolean useApiAboveQ() {
+        return ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q);
     }
 
     @Nullable
@@ -55,8 +64,21 @@ public class NetworkInformationShimImpl extends
 
     @Nullable
     @Override
+    public CaptivePortalDataShim getCaptivePortalData(@Nullable LinkProperties lp) {
+        if (lp == null || lp.getCaptivePortalData() == null) return null;
+        return new CaptivePortalDataShimImpl(lp.getCaptivePortalData());
+    }
+
+    @Nullable
+    @Override
     public String getSSID(@Nullable NetworkCapabilities nc) {
         if (nc == null) return null;
         return nc.getSSID();
+    }
+
+    @NonNull
+    @Override
+    public LinkProperties makeSensitiveFieldsParcelingCopy(@NonNull final LinkProperties lp) {
+        return lp.makeSensitiveFieldsParcelingCopy();
     }
 }

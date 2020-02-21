@@ -22,7 +22,9 @@ import android.net.Uri;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 
+import com.android.networkstack.apishim.CaptivePortalDataShim;
 import com.android.networkstack.apishim.NetworkInformationShim;
 
 /**
@@ -44,6 +46,14 @@ public class NetworkInformationShimImpl implements NetworkInformationShim {
         return new NetworkInformationShimImpl();
     }
 
+    /**
+     * Indicates whether the shim can use APIs above the Q SDK.
+     */
+    @VisibleForTesting
+    public static boolean useApiAboveQ() {
+        return false;
+    }
+
     @Nullable
     @Override
     public Uri getCaptivePortalApiUrl(@Nullable LinkProperties lp) {
@@ -58,8 +68,20 @@ public class NetworkInformationShimImpl implements NetworkInformationShim {
 
     @Nullable
     @Override
+    public CaptivePortalDataShim getCaptivePortalData(@Nullable LinkProperties lp) {
+        return null;
+    }
+
+    @Nullable
+    @Override
     public String getSSID(@Nullable NetworkCapabilities nc) {
         // Not supported on this API level
         return null;
+    }
+
+    @NonNull
+    @Override
+    public LinkProperties makeSensitiveFieldsParcelingCopy(@NonNull final LinkProperties lp) {
+        return new LinkProperties(lp);
     }
 }

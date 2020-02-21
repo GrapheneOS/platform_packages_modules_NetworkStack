@@ -23,7 +23,6 @@ import android.os.Build;
 import android.os.RemoteException;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.VisibleForTesting;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -70,7 +69,6 @@ public class CaptivePortalDataShimImpl
                 .build());
     }
 
-    @VisibleForTesting
     public static boolean isSupported() {
         return ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q);
     }
@@ -93,6 +91,11 @@ public class CaptivePortalDataShimImpl
     @Override
     public Uri getUserPortalUrl() {
         return mData.getUserPortalUrl();
+    }
+
+    @Override
+    public Uri getVenueInfoUrl() {
+        return mData.getVenueInfoUrl();
     }
 
     @Override

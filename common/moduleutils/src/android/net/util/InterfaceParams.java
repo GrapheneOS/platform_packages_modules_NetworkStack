@@ -38,6 +38,7 @@ import java.net.SocketException;
 public class InterfaceParams {
     public final String name;
     public final int index;
+    public final boolean hasMacAddress;
     public final MacAddress macAddr;
     public final int defaultMtu;
 
@@ -69,7 +70,8 @@ public class InterfaceParams {
         checkArgument((index > 0), "invalid interface index");
         this.name = name;
         this.index = index;
-        this.macAddr = (macAddr != null) ? macAddr : MacAddress.fromBytes(new byte[] {
+        this.hasMacAddress = (macAddr != null);
+        this.macAddr = hasMacAddress ? macAddr : MacAddress.fromBytes(new byte[] {
                 0x02, 0x00, 0x00, 0x00, 0x00, 0x00 });
         this.defaultMtu = (defaultMtu > IPV6_MIN_MTU) ? defaultMtu : IPV6_MIN_MTU;
     }
