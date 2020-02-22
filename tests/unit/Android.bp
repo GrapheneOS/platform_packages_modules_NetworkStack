@@ -20,6 +20,7 @@ java_defaults {
     srcs: ["src/**/*.java", "src/**/*.kt"],
     resource_dirs: ["res"],
     static_libs: [
+        "androidx.test.ext.junit",
         "androidx.test.rules",
         "kotlin-reflect",
         "mockito-target-extended-minus-junit4",
