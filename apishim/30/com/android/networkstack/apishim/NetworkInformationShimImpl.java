@@ -25,6 +25,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
+import java.net.Inet4Address;
+
 /**
  * Compatibility implementation of {@link NetworkInformationShim}.
  */
@@ -80,5 +82,11 @@ public class NetworkInformationShimImpl extends
     @Override
     public LinkProperties makeSensitiveFieldsParcelingCopy(@NonNull final LinkProperties lp) {
         return lp.makeSensitiveFieldsParcelingCopy();
+    }
+
+    @Override
+    public void setDhcpServerAddress(@NonNull LinkProperties lp,
+            @NonNull Inet4Address serverAddress) {
+        lp.setDhcpServerAddress(serverAddress);
     }
 }
