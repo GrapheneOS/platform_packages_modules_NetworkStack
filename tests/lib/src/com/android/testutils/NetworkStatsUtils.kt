@@ -17,14 +17,19 @@
 package com.android.testutils
 
 import android.net.NetworkStats
+import kotlin.test.assertTrue
 
+@JvmOverloads
 fun orderInsensitiveEquals(
     leftStats: NetworkStats,
-    rightStats: NetworkStats
+    rightStats: NetworkStats,
+    compareTime: Boolean = false
 ): Boolean {
     if (leftStats == rightStats) return true
-    if (leftStats.getElapsedRealtime() != rightStats.getElapsedRealtime() ||
-            leftStats.size() != rightStats.size()) return false
+    if (compareTime && leftStats.getElapsedRealtime() != rightStats.getElapsedRealtime()) {
+        return false
+    }
+    if (leftStats.size() != rightStats.size()) return false
     val left = NetworkStats.Entry()
     val right = NetworkStats.Entry()
     // Order insensitive compare.
@@ -32,8 +37,26 @@ fun orderInsensitiveEquals(
         leftStats.getValues(i, left)
         val j: Int = rightStats.findIndexHinted(left.iface, left.uid, left.set, left.tag,
                 left.metered, left.roaming, left.defaultNetwork, i)
+        if (j == -1) return false
         rightStats.getValues(j, right)
         if (left != right) return false
     }
     return true
+}
+
+/**
+ * Assert that two {@link NetworkStats} are equals, assuming the order of the records are not
+ * necessarily the same.
+ *
+ * @note {@code elapsedRealtime} is not compared by default, given that in test cases that is not
+ *       usually used.
+ */
+@JvmOverloads
+fun assertNetworkStatsEquals(
+    expected: NetworkStats,
+    actual: NetworkStats,
+    compareTime: Boolean = false
+) {
+    assertTrue(orderInsensitiveEquals(expected, actual, compareTime),
+            "expected: " + expected + "but was: " + actual)
 }

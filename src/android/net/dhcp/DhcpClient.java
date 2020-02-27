@@ -17,6 +17,7 @@
 package android.net.dhcp;
 
 import static android.net.dhcp.DhcpPacket.DHCP_BROADCAST_ADDRESS;
+import static android.net.dhcp.DhcpPacket.DHCP_CAPTIVE_PORTAL;
 import static android.net.dhcp.DhcpPacket.DHCP_DNS_SERVER;
 import static android.net.dhcp.DhcpPacket.DHCP_DOMAIN_NAME;
 import static android.net.dhcp.DhcpPacket.DHCP_LEASE_TIME;
@@ -95,6 +96,7 @@ import com.android.internal.util.StateMachine;
 import com.android.internal.util.TrafficStatsConstants;
 import com.android.internal.util.WakeupMessage;
 import com.android.networkstack.R;
+import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.apishim.SocketUtilsShimImpl;
 import com.android.networkstack.arp.ArpPacket;
 
@@ -260,8 +262,9 @@ public class DhcpClient extends StateMachine {
     private static final SparseArray<String> sMessageNames =
             MessageUtils.findMessageNames(sMessageClasses);
 
-    // DHCP parameters that we request.
-    /* package */ static final byte[] REQUESTED_PARAMS = new byte[] {
+    // DHCP parameters that we request by default.
+    @VisibleForTesting
+    /* package */ static final byte[] DEFAULT_REQUESTED_PARAMS = new byte[] {
         DHCP_SUBNET_MASK,
         DHCP_ROUTER,
         DHCP_DNS_SERVER,
@@ -273,6 +276,21 @@ public class DhcpClient extends StateMachine {
         DHCP_REBINDING_TIME,
         DHCP_VENDOR_INFO,
     };
+
+    @NonNull
+    private byte[] getRequestedParams() {
+        if (isCapportApiEnabled()) {
+            final byte[] params = Arrays.copyOf(DEFAULT_REQUESTED_PARAMS,
+                    DEFAULT_REQUESTED_PARAMS.length + 1);
+            params[params.length - 1] = DHCP_CAPTIVE_PORTAL;
+            return params;
+        }
+        return DEFAULT_REQUESTED_PARAMS;
+    }
+
+    private static boolean isCapportApiEnabled() {
+        return CaptivePortalDataShimImpl.isSupported();
+    }
 
     // DHCP flag that means "yes, we support unicast."
     private static final boolean DO_UNICAST   = false;
@@ -556,8 +574,10 @@ public class DhcpClient extends StateMachine {
         @Override
         protected void handlePacket(byte[] recvbuf, int length) {
             try {
+                final byte[] optionsToSkip =
+                        isCapportApiEnabled() ? new byte[0] : new byte[] { DHCP_CAPTIVE_PORTAL };
                 final DhcpPacket packet = DhcpPacket.decodeFullPacket(recvbuf, length,
-                        DhcpPacket.ENCAP_L2);
+                        DhcpPacket.ENCAP_L2, optionsToSkip);
                 if (DBG) Log.d(TAG, "Received packet: " + packet);
                 sendMessage(CMD_RECEIVED_PACKET, packet);
             } catch (DhcpPacket.ParseException e) {
@@ -649,7 +669,7 @@ public class DhcpClient extends StateMachine {
     private boolean sendDiscoverPacket() {
         final ByteBuffer packet = DhcpPacket.buildDiscoverPacket(
                 DhcpPacket.ENCAP_L2, mTransactionId, getSecs(), mHwAddr,
-                DO_UNICAST, REQUESTED_PARAMS, isDhcpRapidCommitEnabled(), mHostname);
+                DO_UNICAST, getRequestedParams(), isDhcpRapidCommitEnabled(), mHostname);
         return transmitPacket(packet, "DHCPDISCOVER", DhcpPacket.ENCAP_L2, INADDR_BROADCAST);
     }
 
@@ -663,7 +683,7 @@ public class DhcpClient extends StateMachine {
         final ByteBuffer packet = DhcpPacket.buildRequestPacket(
                 encap, mTransactionId, getSecs(), clientAddress,
                 DO_UNICAST, mHwAddr, requestedAddress,
-                serverAddress, REQUESTED_PARAMS, mHostname);
+                serverAddress, getRequestedParams(), mHostname);
         String serverStr = (serverAddress != null) ? serverAddress.getHostAddress() : null;
         String description = "DHCPREQUEST ciaddr=" + clientAddress.getHostAddress() +
                              " request=" + requestedAddress.getHostAddress() +
@@ -1267,7 +1287,7 @@ public class DhcpClient extends StateMachine {
             final Layer2PacketParcelable l2Packet = new Layer2PacketParcelable();
             final ByteBuffer packet = DhcpPacket.buildDiscoverPacket(
                     DhcpPacket.ENCAP_L2, mTransactionId, getSecs(), mHwAddr,
-                    DO_UNICAST, REQUESTED_PARAMS, true /* rapid commit */, mHostname);
+                    DO_UNICAST, getRequestedParams(), true /* rapid commit */, mHostname);
 
             l2Packet.dstMacAddress = MacAddress.fromBytes(DhcpPacket.ETHER_BROADCAST);
             l2Packet.payload = Arrays.copyOf(packet.array(), packet.limit());

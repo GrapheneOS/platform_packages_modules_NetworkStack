@@ -60,7 +60,7 @@ filegroup {
         "apishim/common/**/*.java",
         "apishim/29/**/*.java",
         "apishim/30/**/*.java",
-        ":net-module-utils-srcs",
+        ":networkstack-module-utils-srcs",
     ],
 }
 
@@ -71,7 +71,7 @@ filegroup {
     srcs: [
         "apishim/common/**/*.java",
         "apishim/29/**/*.java",
-        ":net-module-utils-srcs",
+        ":networkstack-module-utils-srcs",
     ],
 }
 

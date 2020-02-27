@@ -37,6 +37,9 @@ aidl_interface {
         "3",
         "4",
     ],
+    visibility: [
+        "//system/tools/aidl/build"
+    ],
 }
 
 aidl_interface {
@@ -45,6 +48,7 @@ aidl_interface {
     include_dirs: [
         "frameworks/base/core/java", // For framework parcelables.
         "frameworks/native/aidl/binder/android/os", // For PersistableBundle.aidl
+        "frameworks/base/wifi/aidl-export", // For wifi parcelables.
     ],
     srcs: [
         "src/android/net/DhcpResultsParcelable.aidl",
@@ -53,12 +57,16 @@ aidl_interface {
         "src/android/net/INetworkStackConnector.aidl",
         "src/android/net/INetworkStackStatusCallback.aidl",
         "src/android/net/InitialConfigurationParcelable.aidl",
+        "src/android/net/InformationElementParcelable.aidl",
         "src/android/net/Layer2PacketParcelable.aidl",
         "src/android/net/NattKeepalivePacketDataParcelable.aidl",
         "src/android/net/PrivateDnsConfigParcel.aidl",
         "src/android/net/ProvisioningConfigurationParcelable.aidl",
+        "src/android/net/ScanResultInfoParcelable.aidl",
         "src/android/net/TcpKeepalivePacketDataParcelable.aidl",
+        "src/android/net/dhcp/DhcpLeaseParcelable.aidl",
         "src/android/net/dhcp/DhcpServingParamsParcel.aidl",
+        "src/android/net/dhcp/IDhcpLeaseCallbacks.aidl",
         "src/android/net/dhcp/IDhcpServer.aidl",
         "src/android/net/dhcp/IDhcpServerCallbacks.aidl",
         "src/android/net/ip/IIpClient.aidl",
@@ -79,6 +87,11 @@ aidl_interface {
         "3",
         "4",
     ],
+    // TODO: have tethering depend on networkstack-client and set visibility to private
+    visibility: [
+        "//system/tools/aidl/build",
+        "//frameworks/base/packages/Tethering"
+    ],
 }
 
 java_library {
@@ -88,9 +101,16 @@ java_library {
         ":framework-annotations",
         "src/android/net/IpMemoryStoreClient.java",
         "src/android/net/ipmemorystore/**/*.java",
+        "src/android/net/networkstack/**/*.java",
     ],
     static_libs: [
         "ipmemorystore-aidl-interfaces-V3-java",
         "networkstack-aidl-interfaces-unstable-java",
     ],
+    visibility: [
+        "//frameworks/base/packages/Tethering",
+        "//frameworks/base/services/net",
+        "//frameworks/opt/net/wifi/service",
+        "//packages/modules/NetworkStack",
+    ]
 }

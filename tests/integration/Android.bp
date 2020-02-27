@@ -27,9 +27,8 @@ java_defaults {
     visibility: ["//visibility:private"],
 }
 
-android_library {
-    name: "NetworkStackIntegrationTestsLib",
-    min_sdk_version: "29",
+java_defaults {
+    name: "NetworkStackIntegrationTestsDefaults",
     srcs: ["src/**/*.java"],
     static_libs: [
         "androidx.annotation_annotation",
@@ -37,7 +36,6 @@ android_library {
         "mockito-target-extended-minus-junit4",
         "net-tests-utils",
         "testables",
-        "NetworkStackApiStableLib",
     ],
     libs: [
         "android.test.runner",
@@ -46,6 +44,15 @@ android_library {
     ],
     jarjar_rules: ":NetworkStackJarJarRules",
     visibility: ["//visibility:private"],
+}
+
+android_library {
+    name: "NetworkStackIntegrationTestsLib",
+    defaults: ["NetworkStackIntegrationTestsDefaults"],
+    min_sdk_version: "29",
+    static_libs: [
+        "NetworkStackApiStableLib",
+    ],
 }
 
 // Network stack integration tests.
@@ -59,6 +66,21 @@ android_test {
     min_sdk_version: "29",
 }
 
+// Network stack next integration tests.
+android_test {
+    name: "NetworkStackNextIntegrationTests",
+    defaults: [
+        "NetworkStackIntegrationTestsDefaults",
+        "NetworkStackIntegrationTestsJniDefaults",
+    ],
+    static_libs: [
+        "NetworkStackApiCurrentLib",
+    ],
+    certificate: "networkstack",
+    platform_apis: true,
+    test_suites: ["device-tests"],
+}
+
 // Special version of the network stack tests that includes all tests necessary for code coverage
 // purposes. This is currently the union of NetworkStackTests and NetworkStackIntegrationTests.
 android_test {
@@ -67,6 +89,7 @@ android_test {
     platform_apis: true,
     min_sdk_version: "29",
     test_suites: ["device-tests", "mts"],
+    test_config: "AndroidTest_Coverage.xml",
     defaults: ["NetworkStackIntegrationTestsJniDefaults"],
     static_libs: ["NetworkStackTestsLib", "NetworkStackIntegrationTestsLib"],
     compile_multilib: "both",

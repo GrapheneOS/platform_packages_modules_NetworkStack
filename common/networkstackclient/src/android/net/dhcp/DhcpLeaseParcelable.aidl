@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2019, The Android Open Source Project
+ * Copyright (c) 2020, The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,19 @@
  * limitations under the License.
  */
 
-package android.net;
+package android.net.dhcp;
 
-import android.net.StaticIpConfiguration;
-
-parcelable DhcpResultsParcelable {
-    StaticIpConfiguration baseConfiguration;
-    int leaseDuration;
-    int mtu;
-    String serverAddress;
-    String vendorInfo;
-    String serverHostName;
-    String captivePortalApiUrl;
+parcelable DhcpLeaseParcelable {
+    // Client ID of the lease; may be null.
+    byte[] clientId;
+    // MAC address provided by the client.
+    byte[] hwAddr;
+    // IPv4 address of the lease, in network byte order.
+    int netAddr;
+    // Prefix length of the lease (0-32)
+    int prefixLength;
+    // Expiration time of the lease, to compare with SystemClock.elapsedRealtime().
+    long expTime;
+    // Hostname provided by the client, if any, or null.
+    String hostname;
 }

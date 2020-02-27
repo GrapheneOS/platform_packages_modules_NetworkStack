@@ -57,8 +57,9 @@ public class IpConfigurationParcelableUtilTest {
         mDhcpResults.leaseDuration = 3600;
         mDhcpResults.serverHostName = "dhcp.example.com";
         mDhcpResults.mtu = 1450;
+        mDhcpResults.captivePortalApiUrl = "https://example.com/testapi";
         // Any added DhcpResults field must be included in equals() to be tested properly
-        assertFieldCountEquals(9, DhcpResults.class);
+        assertFieldCountEquals(10, DhcpResults.class);
     }
 
     @Test
@@ -105,6 +106,12 @@ public class IpConfigurationParcelableUtilTest {
     @Test
     public void testParcelUnparcelDhcpResults_NullServerHostName() {
         mDhcpResults.serverHostName = null;
+        doDhcpResultsParcelUnparcelTest();
+    }
+
+    @Test
+    public void testParcelUnparcelDhcpResults_NullCaptivePortalApiUrl() {
+        mDhcpResults.captivePortalApiUrl = null;
         doDhcpResultsParcelUnparcelTest();
     }
 

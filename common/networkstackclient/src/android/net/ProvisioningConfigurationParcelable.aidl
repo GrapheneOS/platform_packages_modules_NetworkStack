@@ -19,6 +19,7 @@ package android.net;
 
 import android.net.InitialConfigurationParcelable;
 import android.net.Network;
+import android.net.ScanResultInfoParcelable;
 import android.net.StaticIpConfiguration;
 import android.net.apf.ApfCapabilities;
 
@@ -36,4 +37,5 @@ parcelable ProvisioningConfigurationParcelable {
     Network network;
     String displayName;
     boolean enablePreconnection;
+    ScanResultInfoParcelable scanResultInfo;
 }
