@@ -94,7 +94,6 @@ import android.net.INetworkMonitorCallbacks;
 import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
-import android.net.NetworkInfo;
 import android.net.Uri;
 import android.net.captiveportal.CaptivePortalProbeResult;
 import android.net.metrics.IpConnectivityLog;
@@ -179,7 +178,6 @@ public class NetworkMonitorTest {
     private @Mock Resources mResources;
     private @Mock IpConnectivityLog mLogger;
     private @Mock SharedLog mValidationLogger;
-    private @Mock NetworkInfo mNetworkInfo;
     private @Mock DnsResolver mDnsResolver;
     private @Mock ConnectivityManager mCm;
     private @Mock TelephonyManager mTelephony;
@@ -419,7 +417,6 @@ public class NetworkMonitorTest {
         when(mResources.getString(anyInt())).thenReturn("");
         when(mResources.getStringArray(anyInt())).thenReturn(new String[0]);
 
-        when(mNetworkInfo.getType()).thenReturn(ConnectivityManager.TYPE_WIFI);
         setFallbackUrl(TEST_FALLBACK_URL);
         setOtherFallbackUrls(TEST_OTHER_FALLBACK_URL);
         setFallbackSpecs(null); // Test with no fallback spec by default
