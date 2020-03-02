@@ -37,6 +37,7 @@ import static android.net.util.DataStallUtils.DATA_STALL_EVALUATION_TYPE_TCP;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_FALLBACK_PROBE_SPECS;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_OTHER_FALLBACK_URLS;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USE_HTTPS;
+import static android.net.util.NetworkStackUtils.DISMISS_PORTAL_IN_VALIDATED_NETWORK;
 
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DNS_EVENTS;
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_TCP_METRICS;
@@ -59,6 +60,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeFalse;
 import static org.junit.Assume.assumeTrue;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -481,6 +483,7 @@ public class NetworkMonitorTest {
 
         mCreatedNetworkMonitors = new HashSet<>();
         mRegisteredReceivers = new HashSet<>();
+        setDismissPortalInValidatedNetwork(false);
     }
 
     @After
@@ -1089,7 +1092,7 @@ public class NetworkMonitorTest {
     public void testLaunchCaptivePortalApp() throws Exception {
         setSslException(mHttpsConnection);
         setPortal302(mHttpConnection);
-
+        when(mHttpConnection.getHeaderField(eq("location"))).thenReturn(TEST_LOGIN_URL);
         final NetworkMonitor nm = makeMonitor(METERED_CAPABILITIES);
         notifyNetworkConnected(nm, METERED_CAPABILITIES);
 
@@ -1113,6 +1116,9 @@ public class NetworkMonitorTest {
         // framework and only intended for the captive portal app, but the framework needs
         // the network to identify the right NetworkMonitor.
         assertEquals(TEST_NETID, networkCaptor.getValue().netId);
+        // Portal URL should be detection URL.
+        final String redirectUrl = bundle.getString(ConnectivityManager.EXTRA_CAPTIVE_PORTAL_URL);
+        assertEquals(TEST_HTTP_URL, redirectUrl);
 
         // Have the app report that the captive portal is dismissed, and check that we revalidate.
         setStatus(mHttpsConnection, 204);
@@ -1445,6 +1451,50 @@ public class NetworkMonitorTest {
     }
 
     @Test
+    public void testDismissPortalInValidatedNetworkEnabledOsSupported() throws Exception {
+        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
+        testDismissPortalInValidatedNetworkEnabled(TEST_LOGIN_URL);
+    }
+
+    @Test
+    public void testDismissPortalInValidatedNetworkEnabledOsNotSupported() throws Exception {
+        assumeFalse(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
+        testDismissPortalInValidatedNetworkEnabled(TEST_HTTP_URL);
+    }
+
+    private void testDismissPortalInValidatedNetworkEnabled(String portalUrl) throws Exception {
+        setDismissPortalInValidatedNetwork(true);
+        setSslException(mHttpsConnection);
+        setPortal302(mHttpConnection);
+        when(mHttpConnection.getHeaderField(eq("location"))).thenReturn(TEST_LOGIN_URL);
+        final NetworkMonitor nm = makeMonitor(METERED_CAPABILITIES);
+        notifyNetworkConnected(nm, METERED_CAPABILITIES);
+
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1))
+            .showProvisioningNotification(any(), any());
+
+        assertEquals(1, mRegisteredReceivers.size());
+        // Check that startCaptivePortalApp sends the expected intent.
+        nm.launchCaptivePortalApp();
+
+        final ArgumentCaptor<Bundle> bundleCaptor = ArgumentCaptor.forClass(Bundle.class);
+        final ArgumentCaptor<Network> networkCaptor = ArgumentCaptor.forClass(Network.class);
+        verify(mCm, timeout(HANDLER_TIMEOUT_MS).times(1))
+            .startCaptivePortalApp(networkCaptor.capture(), bundleCaptor.capture());
+        verify(mNotifier).notifyCaptivePortalValidationPending(networkCaptor.getValue());
+        final Bundle bundle = bundleCaptor.getValue();
+        final Network bundleNetwork = bundle.getParcelable(ConnectivityManager.EXTRA_NETWORK);
+        assertEquals(TEST_NETID, bundleNetwork.netId);
+        // Network is passed both in bundle and as parameter, as the bundle is opaque to the
+        // framework and only intended for the captive portal app, but the framework needs
+        // the network to identify the right NetworkMonitor.
+        assertEquals(TEST_NETID, networkCaptor.getValue().netId);
+        // Portal URL should be redirect URL.
+        final String redirectUrl = bundle.getString(ConnectivityManager.EXTRA_CAPTIVE_PORTAL_URL);
+        assertEquals(portalUrl, redirectUrl);
+    }
+
+    @Test
     public void testEvaluationState_clearProbeResults() throws Exception {
         final NetworkMonitor nm = runValidatedNetworkTest();
         nm.getEvaluationState().clearProbeResults();
@@ -1602,6 +1652,11 @@ public class NetworkMonitorTest {
     private void setCaptivePortalMode(int mode) {
         when(mDependencies.getSetting(any(),
                 eq(Settings.Global.CAPTIVE_PORTAL_MODE), anyInt())).thenReturn(mode);
+    }
+
+    private void setDismissPortalInValidatedNetwork(boolean enabled) {
+        when(mDependencies.isFeatureEnabled(any(), any(),
+                eq(DISMISS_PORTAL_IN_VALIDATED_NETWORK), anyBoolean())).thenReturn(enabled);
     }
 
     private void runPortalNetworkTest(int result) {
