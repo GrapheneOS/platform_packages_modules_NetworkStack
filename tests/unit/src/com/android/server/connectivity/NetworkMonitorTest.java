@@ -639,7 +639,7 @@ public class NetworkMonitorTest {
             int bandwidth, String mccStr, String mncStr, String alphal, String alphas)
             throws ReflectiveOperationException {
         if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
-            return new CellIdentityLte(ci, pci, tac, earfcn, Collections.emptyList() /* bands */,
+            return new CellIdentityLte(ci, pci, tac, earfcn, new int[] {} /* bands */,
                     bandwidth, mccStr, mncStr, alphal, alphas,
                     Collections.emptyList() /* additionalPlmns */, null /* csgInfo */);
         } else {
