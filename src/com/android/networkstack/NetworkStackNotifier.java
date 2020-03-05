@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 The Android Open Source Project
+ * Copyright (C) 2020 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@ import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.Message;
 import android.os.UserHandle;
 import android.provider.Settings;
 import android.text.TextUtils;
@@ -52,9 +51,6 @@ import java.util.function.Consumer;
  * Displays notification related to connected networks.
  */
 public class NetworkStackNotifier {
-    @VisibleForTesting
-    protected static final int MSG_DISMISS_CONNECTED = 1;
-
     private final Context mContext;
     private final Handler mHandler;
     private final NotificationManager mNotificationManager;
@@ -65,9 +61,14 @@ public class NetworkStackNotifier {
     @Nullable
     private Network mDefaultNetwork;
     @NonNull
-    private static final NetworkInformationShim NETWORK_INFO_SHIM =
-            NetworkInformationShimImpl.newInstance();
+    private final NetworkInformationShim mInfoShim = NetworkInformationShimImpl.newInstance();
 
+    /**
+     * The TrackedNetworkStatus object is a data class that keeps track of the relevant state of the
+     * various networks on the device. For efficiency the members are mutable, which means any
+     * instance of this object should only ever be accessed on the looper thread passed in the
+     * constructor. Any access (read or write) from any other thread would be incorrect.
+     */
     private static class TrackedNetworkStatus {
         private boolean mValidatedNotificationPending;
         private int mShownNotification = NOTE_NONE;
@@ -77,20 +78,6 @@ public class NetworkStackNotifier {
         private boolean isValidated() {
             if (mNetworkCapabilities == null) return false;
             return mNetworkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
-        }
-
-        private boolean isWifiNetwork() {
-            if (mNetworkCapabilities == null) return false;
-            return mNetworkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
-        }
-
-        @Nullable
-        private CaptivePortalDataShim getCaptivePortalData() {
-            return NETWORK_INFO_SHIM.getCaptivePortalData(mLinkProperties);
-        }
-
-        private String getSSID() {
-            return NETWORK_INFO_SHIM.getSSID(mNetworkCapabilities);
         }
     }
 
@@ -105,7 +92,8 @@ public class NetworkStackNotifier {
 
     private static final int NOTE_ID_NETWORK_INFO = 1;
 
-    private static final int CONNECTED_NOTIFICATION_TIMEOUT_MS = 20 * 1000;
+    @VisibleForTesting
+    protected static final long CONNECTED_NOTIFICATION_TIMEOUT_MS = 20_000L;
 
     protected static class Dependencies {
         public PendingIntent getActivityPendingIntent(Context context, Intent intent, int flags) {
@@ -120,14 +108,15 @@ public class NetworkStackNotifier {
     protected NetworkStackNotifier(@NonNull Context context, @NonNull Looper looper,
             @NonNull Dependencies dependencies) {
         mContext = context;
-        mHandler = new NotifierHandler(looper);
+        mHandler = new Handler(looper);
         mDependencies = dependencies;
         mNotificationManager = getContextAsUser(mContext, UserHandle.ALL)
                 .getSystemService(NotificationManager.class);
         final ConnectivityManager cm = context.getSystemService(ConnectivityManager.class);
         cm.registerDefaultNetworkCallback(new DefaultNetworkCallback(), mHandler);
         cm.registerNetworkCallback(
-                new NetworkRequest.Builder().build(),
+                new NetworkRequest.Builder()
+                        .addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(),
                 new AllNetworksCallback(),
                 mHandler);
 
@@ -165,28 +154,20 @@ public class NetworkStackNotifier {
         mHandler.post(() -> setCaptivePortalValidationPending(network));
     }
 
-    private class NotifierHandler extends Handler {
-        NotifierHandler(Looper looper) {
-            super(looper);
-        }
-
-        @Override
-        public void handleMessage(Message msg) {
-            switch(msg.what) {
-                case MSG_DISMISS_CONNECTED:
-                    final Network network = (Network) msg.obj;
-                    final TrackedNetworkStatus networkStatus = mNetworkStatus.get(network);
-                    if (networkStatus != null
-                            && networkStatus.mShownNotification == NOTE_CONNECTED) {
-                        dismissNotification(getNotificationTag(network), networkStatus);
-                    }
-                    break;
-            }
-        }
+    private void setCaptivePortalValidationPending(@NonNull Network network) {
+        updateNetworkStatus(network, status -> {
+            status.mValidatedNotificationPending = true;
+            status.mShownNotification = NOTE_NONE;
+        });
     }
 
-    private void setCaptivePortalValidationPending(@NonNull Network network) {
-        updateNetworkStatus(network, status -> status.mValidatedNotificationPending = true);
+    @Nullable
+    private CaptivePortalDataShim getCaptivePortalData(@NonNull TrackedNetworkStatus status) {
+        return mInfoShim.getCaptivePortalData(status.mLinkProperties);
+    }
+
+    private String getSsid(@NonNull TrackedNetworkStatus status) {
+        return mInfoShim.getSsid(status.mNetworkCapabilities);
     }
 
     private void updateNetworkStatus(@NonNull Network network,
@@ -201,7 +182,7 @@ public class NetworkStackNotifier {
         // The required network attributes callbacks were not fired yet for this network
         if (networkStatus == null) return;
 
-        final CaptivePortalDataShim capportData = networkStatus.getCaptivePortalData();
+        final CaptivePortalDataShim capportData = getCaptivePortalData(networkStatus);
         final boolean showVenueInfo = capportData != null && capportData.getVenueInfoUrl() != null
                 // Only show venue info on validated networks, to prevent misuse of the notification
                 // as an alternate login flow that uses the default browser (which would be broken
@@ -245,13 +226,12 @@ public class NetworkStackNotifier {
         } else if (showValidated) {
             if (networkStatus.mShownNotification == NOTE_CONNECTED) return;
 
-            builder = getNotificationBuilder(CHANNEL_CONNECTED, networkStatus, res);
-            if (networkStatus.isWifiNetwork()) {
-                builder.setContentIntent(mDependencies.getActivityPendingIntent(
-                        getContextAsUser(mContext, UserHandle.CURRENT),
-                        new Intent(Settings.ACTION_WIFI_SETTINGS),
-                        PendingIntent.FLAG_UPDATE_CURRENT));
-            }
+            builder = getNotificationBuilder(CHANNEL_CONNECTED, networkStatus, res)
+                    .setTimeoutAfter(CONNECTED_NOTIFICATION_TIMEOUT_MS)
+                    .setContentIntent(mDependencies.getActivityPendingIntent(
+                            getContextAsUser(mContext, UserHandle.CURRENT),
+                            new Intent(Settings.ACTION_WIFI_SETTINGS),
+                            PendingIntent.FLAG_UPDATE_CURRENT));
 
             networkStatus.mShownNotification = NOTE_CONNECTED;
         } else {
@@ -268,11 +248,6 @@ public class NetworkStackNotifier {
             networkStatus.mValidatedNotificationPending = false;
         }
         mNotificationManager.notify(notificationTag, NOTE_ID_NETWORK_INFO, builder.build());
-        mHandler.removeMessages(MSG_DISMISS_CONNECTED, network);
-        if (networkStatus.mShownNotification == NOTE_CONNECTED) {
-            mHandler.sendMessageDelayed(mHandler.obtainMessage(MSG_DISMISS_CONNECTED, network),
-                    CONNECTED_NOTIFICATION_TIMEOUT_MS);
-        }
     }
 
     private void dismissNotification(@NonNull String tag, @NonNull TrackedNetworkStatus status) {
@@ -304,9 +279,9 @@ public class NetworkStackNotifier {
         return mNotificationManager.getNotificationChannel(CHANNEL_VENUE_INFO) != null;
     }
 
-    private static String getConnectedNotificationTitle(@NonNull Resources res,
+    private String getConnectedNotificationTitle(@NonNull Resources res,
             @NonNull TrackedNetworkStatus status) {
-        final String ssid = status.getSSID();
+        final String ssid = getSsid(status);
         if (TextUtils.isEmpty(ssid)) {
             return res.getString(R.string.connected);
         }
