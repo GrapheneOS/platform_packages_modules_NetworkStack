@@ -24,9 +24,11 @@ import static android.net.dhcp.DhcpPacket.DHCP_SERVER;
 import static android.net.dhcp.DhcpPacket.ENCAP_L2;
 import static android.net.dhcp.DhcpPacket.INADDR_BROADCAST;
 import static android.net.dhcp.DhcpPacket.INFINITE_LEASE;
+import static android.net.ip.IpClient.removeDoubleQuotes;
 import static android.net.ipmemorystore.Status.SUCCESS;
 import static android.net.shared.Inet4AddressUtils.getBroadcastAddress;
 import static android.net.shared.Inet4AddressUtils.getPrefixMaskAsInet4Address;
+import static android.net.shared.IpConfigurationParcelableUtil.fromStableParcelable;
 import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
 import static android.system.OsConstants.IPPROTO_TCP;
@@ -47,6 +49,7 @@ import static com.android.server.util.NetworkStackConstants.ICMPV6_ROUTER_SOLICI
 import static com.android.server.util.NetworkStackConstants.IPV6_HEADER_LEN;
 import static com.android.server.util.NetworkStackConstants.IPV6_LEN_OFFSET;
 import static com.android.server.util.NetworkStackConstants.IPV6_PROTOCOL_OFFSET;
+import static com.android.server.util.NetworkStackConstants.VENDOR_SPECIFIC_IE_ID;
 
 import static junit.framework.Assert.fail;
 
@@ -78,6 +81,8 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.content.res.Resources;
 import android.net.ConnectivityManager;
+import android.net.DhcpResults;
+import android.net.DhcpResultsParcelable;
 import android.net.INetd;
 import android.net.InetAddresses;
 import android.net.InterfaceConfigurationParcel;
@@ -100,6 +105,7 @@ import android.net.ipmemorystore.NetworkAttributes;
 import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener;
 import android.net.ipmemorystore.Status;
 import android.net.shared.ProvisioningConfiguration;
+import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
 import android.net.util.InterfaceParams;
 import android.net.util.IpUtils;
 import android.net.util.NetworkStackUtils;
@@ -152,6 +158,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.Random;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -226,6 +233,10 @@ public class IpClientIntegrationTest {
     private static final String TEST_HOST_NAME = "AOSP on Crosshatch";
     private static final String TEST_HOST_NAME_TRANSLITERATION = "AOSP-on-Crosshatch";
     private static final String TEST_CAPTIVE_PORTAL_URL = "https://example.com/capportapi";
+    private static final byte[] TEST_HOTSPOT_OUI = new byte[] {
+            (byte) 0x00, (byte) 0x17, (byte) 0xF2
+    };
+    private static final byte TEST_VENDOR_SPECIFIC_TYPE = 0x06;
 
     private static class TapPacketReader extends PacketReader {
         private final ParcelFileDescriptor mTapFd;
@@ -549,12 +560,15 @@ public class IpClientIntegrationTest {
     private void startIpClientProvisioning(final boolean isDhcpLeaseCacheEnabled,
             final boolean shouldReplyRapidCommitAck, final boolean isPreconnectionEnabled,
             final boolean isDhcpIpConflictDetectEnabled,
-            final boolean isHostnameConfigurationEnabled, final String hostname)
+            final boolean isHostnameConfigurationEnabled, final String hostname,
+            final String displayName, final ScanResultInfo scanResultInfo)
             throws RemoteException {
         ProvisioningConfiguration.Builder builder = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
                 .withoutIPv6();
         if (isPreconnectionEnabled) builder.withPreconnection();
+        if (displayName != null) builder.withDisplayName(displayName);
+        if (scanResultInfo != null) builder.withScanResultInfo(scanResultInfo);
 
         mDependencies.setDhcpLeaseCacheEnabled(isDhcpLeaseCacheEnabled);
         mDependencies.setDhcpRapidCommitEnabled(shouldReplyRapidCommitAck);
@@ -575,7 +589,8 @@ public class IpClientIntegrationTest {
             throws RemoteException {
         startIpClientProvisioning(isDhcpLeaseCacheEnabled, isDhcpRapidCommitEnabled,
                 isPreconnectionEnabled, isDhcpIpConflictDetectEnabled,
-                false /* isHostnameConfigurationEnabled */, null /* hostname */);
+                false /* isHostnameConfigurationEnabled */, null /* hostname */,
+                null /* displayName */, null /* ScanResultInfo */);
     }
 
     private void assertIpMemoryStoreNetworkAttributes(final Integer leaseTimeSec,
@@ -633,10 +648,11 @@ public class IpClientIntegrationTest {
             final boolean shouldReplyRapidCommitAck, final int mtu,
             final boolean isDhcpIpConflictDetectEnabled,
             final boolean isHostnameConfigurationEnabled, final String hostname,
-            final String captivePortalApiUrl) throws Exception {
+            final String captivePortalApiUrl, final String displayName,
+            final ScanResultInfo scanResultInfo) throws Exception {
         startIpClientProvisioning(isDhcpLeaseCacheEnabled, shouldReplyRapidCommitAck,
                 false /* isPreconnectionEnabled */, isDhcpIpConflictDetectEnabled,
-                isHostnameConfigurationEnabled, hostname);
+                isHostnameConfigurationEnabled, hostname, displayName, scanResultInfo);
         return handleDhcpPackets(isSuccessLease, leaseTimeSec, shouldReplyRapidCommitAck, mtu,
                 isDhcpIpConflictDetectEnabled, captivePortalApiUrl);
     }
@@ -693,7 +709,7 @@ public class IpClientIntegrationTest {
         return performDhcpHandshake(isSuccessLease, leaseTimeSec, isDhcpLeaseCacheEnabled,
                 isDhcpRapidCommitEnabled, mtu, isDhcpIpConflictDetectEnabled,
                 false /* isHostnameConfigurationEnabled */, null /* hostname */,
-                null /* captivePortalApiUrl */);
+                null /* captivePortalApiUrl */, null /* displayName */, null /* scanResultInfo */);
     }
 
     private DhcpPacket getNextDhcpPacket() throws ParseException {
@@ -1484,7 +1500,7 @@ public class IpClientIntegrationTest {
                 false /* isDhcpRapidCommitEnabled */, TEST_DEFAULT_MTU,
                 false /* isDhcpIpConflictDetectEnabled */,
                 true /* isHostnameConfigurationEnabled */, TEST_HOST_NAME /* hostname */,
-                null /* captivePortalApiUrl */);
+                null /* captivePortalApiUrl */, null /* displayName */, null /* scanResultInfo */);
         assertEquals(2, sentPackets.size());
         assertHostname(true, TEST_HOST_NAME, TEST_HOST_NAME_TRANSLITERATION, sentPackets);
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
@@ -1498,7 +1514,7 @@ public class IpClientIntegrationTest {
                 false /* isDhcpRapidCommitEnabled */, TEST_DEFAULT_MTU,
                 false /* isDhcpIpConflictDetectEnabled */,
                 false /* isHostnameConfigurationEnabled */, TEST_HOST_NAME,
-                null /* captivePortalApiUrl */);
+                null /* captivePortalApiUrl */, null /* displayName */, null /* scanResultInfo */);
         assertEquals(2, sentPackets.size());
         assertHostname(false, TEST_HOST_NAME, TEST_HOST_NAME_TRANSLITERATION, sentPackets);
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
@@ -1512,7 +1528,7 @@ public class IpClientIntegrationTest {
                 false /* isDhcpRapidCommitEnabled */, TEST_DEFAULT_MTU,
                 false /* isDhcpIpConflictDetectEnabled */,
                 true /* isHostnameConfigurationEnabled */, null /* hostname */,
-                null /* captivePortalApiUrl */);
+                null /* captivePortalApiUrl */, null /* displayName */, null /* scanResultInfo */);
         assertEquals(2, sentPackets.size());
         assertHostname(true, null /* hostname */, null /* hostnameAfterTransliteration */,
                 sentPackets);
@@ -1565,5 +1581,100 @@ public class IpClientIntegrationTest {
         // Only run the test on platforms / builds where the API is disabled
         assumeFalse(CaptivePortalDataShimImpl.isSupported());
         runDhcpClientCaptivePortalApiTest(false /* featureEnabled */, true /* serverSendsOption */);
+    }
+
+    private ScanResultInfo makeScanResultInfo(final int id, final String ssid,
+            final byte[] oui, final byte type, final byte[] data) {
+        final ByteBuffer payload = ByteBuffer.allocate(4 + data.length);
+        payload.put(oui);
+        payload.put(type);
+        payload.put(data);
+        payload.flip();
+        final ScanResultInfo.InformationElement ie =
+                new ScanResultInfo.InformationElement(id /* IE id */, payload);
+        return new ScanResultInfo(ssid, Collections.singletonList(ie));
+    }
+
+    private void doUpstreamHotspotDetectionTest(final int id, final String displayName,
+            final String ssid, final byte[] oui, final byte type, final byte[] data)
+            throws Exception {
+        final ScanResultInfo info = makeScanResultInfo(id, ssid, oui, type, data);
+        final long currentTime = System.currentTimeMillis();
+        final List<DhcpPacket> sentPackets = performDhcpHandshake(true /* isSuccessLease */,
+                TEST_LEASE_DURATION_S, true /* isDhcpLeaseCacheEnabled */,
+                false /* isDhcpRapidCommitEnabled */, TEST_DEFAULT_MTU,
+                false /* isDhcpIpConflictDetectEnabled */,
+                false /* isHostnameConfigurationEnabled */, null /* hostname */,
+                null /* captivePortalApiUrl */, displayName, info /* scanResultInfo */);
+        assertEquals(2, sentPackets.size());
+
+        ArgumentCaptor<DhcpResultsParcelable> captor =
+                ArgumentCaptor.forClass(DhcpResultsParcelable.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onNewDhcpResults(captor.capture());
+        DhcpResults lease = fromStableParcelable(captor.getValue());
+        assertNotNull(lease);
+        assertEquals(lease.getIpAddress().getAddress(), CLIENT_ADDR);
+        assertEquals(lease.getGateway(), SERVER_ADDR);
+        assertEquals(1, lease.getDnsServers().size());
+        assertTrue(lease.getDnsServers().contains(SERVER_ADDR));
+        assertEquals(lease.getServerAddress(), SERVER_ADDR);
+        assertEquals(lease.getMtu(), TEST_DEFAULT_MTU);
+        if (id == VENDOR_SPECIFIC_IE_ID
+                && ssid.equals(removeDoubleQuotes(displayName))
+                && Arrays.equals(oui, TEST_HOTSPOT_OUI)
+                && type == TEST_VENDOR_SPECIFIC_TYPE) {
+            assertEquals(lease.vendorInfo, DhcpPacket.VENDOR_INFO_ANDROID_METERED);
+        } else {
+            assertNull(lease.vendorInfo);
+        }
+
+        assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
+    }
+
+    @Test
+    public void testUpstreamHotspotDetection() throws Exception {
+        byte[] data = new byte[10];
+        new Random().nextBytes(data);
+        doUpstreamHotspotDetectionTest(0xdd, "\"ssid\"", "ssid",
+                new byte[] { (byte) 0x00, (byte) 0x17, (byte) 0xF2 }, (byte) 0x06, data);
+    }
+
+    @Test
+    public void testUpstreamHotspotDetection_incorrectIeId() throws Exception {
+        byte[] data = new byte[10];
+        new Random().nextBytes(data);
+        doUpstreamHotspotDetectionTest(0xdc, "\"ssid\"", "ssid",
+                new byte[] { (byte) 0x00, (byte) 0x17, (byte) 0xF2 }, (byte) 0x06, data);
+    }
+
+    @Test
+    public void testUpstreamHotspotDetection_incorrectOUI() throws Exception {
+        byte[] data = new byte[10];
+        new Random().nextBytes(data);
+        doUpstreamHotspotDetectionTest(0xdd, "\"ssid\"", "ssid",
+                new byte[] { (byte) 0x00, (byte) 0x1A, (byte) 0x11 }, (byte) 0x06, data);
+    }
+
+    @Test
+    public void testUpstreamHotspotDetection_incorrectSsid() throws Exception {
+        byte[] data = new byte[10];
+        new Random().nextBytes(data);
+        doUpstreamHotspotDetectionTest(0xdd, "\"another ssid\"", "ssid",
+                new byte[] { (byte) 0x00, (byte) 0x17, (byte) 0xF2 }, (byte) 0x06, data);
+    }
+
+    @Test
+    public void testUpstreamHotspotDetection_incorrectType() throws Exception {
+        byte[] data = new byte[10];
+        new Random().nextBytes(data);
+        doUpstreamHotspotDetectionTest(0xdd, "\"ssid\"", "ssid",
+                new byte[] { (byte) 0x00, (byte) 0x17, (byte) 0xF2 }, (byte) 0x0a, data);
+    }
+
+    @Test
+    public void testUpstreamHotspotDetection_zeroLengthData() throws Exception {
+        byte[] data = new byte[0];
+        doUpstreamHotspotDetectionTest(0xdd, "\"ssid\"", "ssid",
+                new byte[] { (byte) 0x00, (byte) 0x17, (byte) 0xF2 }, (byte) 0x06, data);
     }
 }
