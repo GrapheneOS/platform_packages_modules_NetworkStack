@@ -71,7 +71,7 @@ public class NetworkInformationShimImpl extends
 
     @Nullable
     @Override
-    public String getSSID(@Nullable NetworkCapabilities nc) {
+    public String getSsid(@Nullable NetworkCapabilities nc) {
         if (nc == null) return null;
         return nc.getSSID();
     }
