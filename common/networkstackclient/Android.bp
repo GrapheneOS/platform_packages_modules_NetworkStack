@@ -36,6 +36,7 @@ aidl_interface {
         "2",
         "3",
         "4",
+        "5",
     ],
     visibility: [
         "//system/tools/aidl/build"
@@ -86,6 +87,7 @@ aidl_interface {
         "2",
         "3",
         "4",
+        "5",
     ],
     // TODO: have tethering depend on networkstack-client and set visibility to private
     visibility: [
@@ -104,7 +106,7 @@ java_library {
         "src/android/net/networkstack/**/*.java",
     ],
     static_libs: [
-        "ipmemorystore-aidl-interfaces-V3-java",
+        "ipmemorystore-aidl-interfaces-V5-java",
         "networkstack-aidl-interfaces-unstable-java",
     ],
     visibility: [
