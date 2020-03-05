@@ -20,6 +20,7 @@ import static android.net.RouteInfo.RTN_UNICAST;
 import static android.net.shared.IpConfigurationParcelableUtil.toStableParcelable;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
+import static com.android.server.util.NetworkStackConstants.VENDOR_SPECIFIC_IE_ID;
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
 import android.content.Context;
@@ -40,10 +41,13 @@ import android.net.Uri;
 import android.net.apf.ApfCapabilities;
 import android.net.apf.ApfFilter;
 import android.net.dhcp.DhcpClient;
+import android.net.dhcp.DhcpPacket;
 import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.IpManagerEvent;
 import android.net.shared.InitialConfiguration;
 import android.net.shared.ProvisioningConfiguration;
+import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
+import android.net.shared.ProvisioningConfiguration.ScanResultInfo.InformationElement;
 import android.net.util.InterfaceParams;
 import android.net.util.NetworkStackUtils;
 import android.net.util.SharedLog;
@@ -64,6 +68,7 @@ import android.util.SparseArray;
 import androidx.annotation.NonNull;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.util.HexDump;
 import com.android.internal.util.IState;
 import com.android.internal.util.IndentingPrintWriter;
 import com.android.internal.util.MessageUtils;
@@ -80,6 +85,10 @@ import com.android.server.NetworkStackService.NetworkStackServiceManager;
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.net.InetAddress;
+import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -405,6 +414,13 @@ public class IpClient extends StateMachine {
     private static final int PROV_CHANGE_LOST_PROVISIONING = 2;
     private static final int PROV_CHANGE_GAINED_PROVISIONING = 3;
     private static final int PROV_CHANGE_STILL_PROVISIONED = 4;
+
+    // Specific vendor OUI(3 bytes)/vendor specific type(1 byte) pattern for upstream hotspot
+    // device detection. Add new byte array pattern below in turn.
+    private static final List<byte[]> METERED_IE_PATTERN_LIST = Collections.unmodifiableList(
+            Arrays.asList(
+                    new byte[] { (byte) 0x00, (byte) 0x17, (byte) 0xf2, (byte) 0x06 }
+    ));
 
     private final State mStoppedState = new StoppedState();
     private final State mStoppingState = new StoppingState();
@@ -1265,15 +1281,70 @@ public class IpClient extends StateMachine {
         return (delta != PROV_CHANGE_LOST_PROVISIONING);
     }
 
+    @VisibleForTesting
+    static String removeDoubleQuotes(@NonNull String ssid) {
+        final int length = ssid.length();
+        if ((length > 1) && (ssid.charAt(0) == '"') && (ssid.charAt(length - 1) == '"')) {
+            return ssid.substring(1, length - 1);
+        }
+        return ssid;
+    }
+
+    private List<ByteBuffer> getVendorSpecificIEs(@NonNull ScanResultInfo scanResultInfo) {
+        ArrayList<ByteBuffer> vendorSpecificPayloadList = new ArrayList<>();
+        for (InformationElement ie : scanResultInfo.getInformationElements()) {
+            if (ie.getId() == VENDOR_SPECIFIC_IE_ID) {
+                vendorSpecificPayloadList.add(ie.getPayload());
+            }
+        }
+        return vendorSpecificPayloadList;
+    }
+
+    private boolean detectUpstreamHotspotFromVendorIe() {
+        if (mConfiguration.mScanResultInfo == null) return false;
+        final ScanResultInfo scanResultInfo = mConfiguration.mScanResultInfo;
+        final String ssid = scanResultInfo.getSsid();
+        final List<ByteBuffer> vendorSpecificPayloadList = getVendorSpecificIEs(scanResultInfo);
+
+        if (mConfiguration.mDisplayName == null
+                || !removeDoubleQuotes(mConfiguration.mDisplayName).equals(ssid)) {
+            return false;
+        }
+
+        for (ByteBuffer payload : vendorSpecificPayloadList) {
+            byte[] ouiAndType = new byte[4];
+            try {
+                payload.get(ouiAndType);
+            } catch (BufferUnderflowException e) {
+                Log.e(mTag, "Couldn't parse vendor specific IE, buffer underflow");
+                return false;
+            }
+            for (byte[] pattern : METERED_IE_PATTERN_LIST) {
+                if (Arrays.equals(pattern, ouiAndType)) {
+                    if (DBG) {
+                        Log.d(mTag, "detected upstream hotspot that matches OUI:"
+                                + HexDump.toHexString(ouiAndType));
+                    }
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private void handleIPv4Success(DhcpResults dhcpResults) {
         mDhcpResults = new DhcpResults(dhcpResults);
         final LinkProperties newLp = assembleLinkProperties();
         final int delta = setLinkProperties(newLp);
 
-        if (DBG) {
-            Log.d(mTag, "onNewDhcpResults(" + Objects.toString(dhcpResults) + ")");
+        if (mDhcpResults.vendorInfo == null && detectUpstreamHotspotFromVendorIe()) {
+            mDhcpResults.vendorInfo = DhcpPacket.VENDOR_INFO_ANDROID_METERED;
         }
-        mCallback.onNewDhcpResults(dhcpResults);
+
+        if (DBG) {
+            Log.d(mTag, "onNewDhcpResults(" + Objects.toString(mDhcpResults) + ")");
+        }
+        mCallback.onNewDhcpResults(mDhcpResults);
         maybeSaveNetworkToIpMemoryStore();
 
         dispatchCallback(delta, newLp);
