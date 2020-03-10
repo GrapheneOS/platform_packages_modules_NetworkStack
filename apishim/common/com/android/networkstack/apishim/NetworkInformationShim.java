@@ -23,6 +23,8 @@ import android.net.Uri;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.net.Inet4Address;
+
 /**
  * Compatibility interface for network info classes such as {@link LinkProperties} and
  * {@link NetworkCapabilities}.
@@ -56,4 +58,12 @@ public interface NetworkInformationShim {
      */
     @NonNull
     LinkProperties makeSensitiveFieldsParcelingCopy(@NonNull LinkProperties lp);
+
+    /**
+     * @see LinkProperties#setDhcpServerAddress()
+     */
+    @NonNull
+    void setDhcpServerAddress(@NonNull LinkProperties lp,
+            @NonNull Inet4Address serverAddress);
+
 }
