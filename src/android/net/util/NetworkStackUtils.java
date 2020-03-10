@@ -141,6 +141,14 @@ public class NetworkStackUtils {
      */
     public static final String DHCP_IP_CONFLICT_DETECT_VERSION = "dhcp_ip_conflict_detect_version";
 
+    /**
+     * Minimum module version at which to enable dismissal CaptivePortalLogin app in validated
+     * network feature. CaptivePortalLogin app will also use validation facilities in
+     * {@link NetworkMonitor} to perform portal validation if feature is enabled.
+     */
+    public static final String DISMISS_PORTAL_IN_VALIDATED_NETWORK =
+            "dismiss_portal_in_validated_network";
+
     static {
         System.loadLibrary("networkstackutilsjni");
     }
@@ -270,12 +278,32 @@ public class NetworkStackUtils {
      */
     public static boolean isFeatureEnabled(@NonNull Context context, @NonNull String namespace,
             @NonNull String name) {
+        final int propertyVersion = getDeviceConfigPropertyInt(namespace, name,
+                0 /* default value */);
+        return isFeatureEnabled(context, namespace, name, false);
+    }
+
+    /**
+     * Check whether or not one specific experimental feature for a particular namespace from
+     * {@link DeviceConfig} is enabled by comparing NetworkStack module version {@link NetworkStack}
+     * with current version of property. If this property version is valid, the corresponding
+     * experimental feature would be enabled, otherwise disabled.
+     * @param context The global context information about an app environment.
+     * @param namespace The namespace containing the property to look up.
+     * @param name The name of the property to look up.
+     * @param defaultEnabled The value to return if the property does not exist or its value is
+     *                       null.
+     * @return true if this feature is enabled, or false if disabled.
+     */
+    public static boolean isFeatureEnabled(@NonNull Context context, @NonNull String namespace,
+            @NonNull String name, boolean defaultEnabled) {
         try {
             final int propertyVersion = getDeviceConfigPropertyInt(namespace, name,
                     0 /* default value */);
             final long packageVersion = context.getPackageManager().getPackageInfo(
                     context.getPackageName(), 0).getLongVersionCode();
-            return (propertyVersion != 0 && packageVersion >= (long) propertyVersion);
+            return (propertyVersion == 0 && defaultEnabled)
+                    || (propertyVersion != 0 && packageVersion >= (long) propertyVersion);
         } catch (NameNotFoundException e) {
             Log.e(TAG, "Could not find the package name", e);
             return false;
