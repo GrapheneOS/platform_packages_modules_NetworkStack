@@ -80,6 +80,8 @@ class DhcpLeaseRepository {
     private int mSubnetMask;
     private int mNumAddresses;
     private long mLeaseTimeMs;
+    @Nullable
+    private Inet4Address mClientAddr;
 
     /**
      * Next timestamp when committed or declined leases should be checked for expired ones. This
@@ -128,21 +130,24 @@ class DhcpLeaseRepository {
     private final LinkedHashMap<Inet4Address, Long> mDeclinedAddrs = new LinkedHashMap<>();
 
     DhcpLeaseRepository(@NonNull IpPrefix prefix, @NonNull Set<Inet4Address> reservedAddrs,
-            long leaseTimeMs, @NonNull SharedLog log, @NonNull Clock clock) {
-        updateParams(prefix, reservedAddrs, leaseTimeMs);
+            long leaseTimeMs, @Nullable Inet4Address clientAddr, @NonNull SharedLog log,
+            @NonNull Clock clock) {
         mLog = log;
         mClock = clock;
+        mClientAddr = clientAddr;
+        updateParams(prefix, reservedAddrs, leaseTimeMs, clientAddr);
     }
 
     public void updateParams(@NonNull IpPrefix prefix, @NonNull Set<Inet4Address> reservedAddrs,
-            long leaseTimeMs) {
+            long leaseTimeMs, @Nullable Inet4Address clientAddr) {
         mPrefix = prefix;
         mReservedAddrs = Collections.unmodifiableSet(new HashSet<>(reservedAddrs));
         mPrefixLength = prefix.getPrefixLength();
         mSubnetMask = prefixLengthToV4NetmaskIntHTH(mPrefixLength);
         mSubnetAddr = inet4AddressToIntHTH((Inet4Address) prefix.getAddress()) & mSubnetMask;
-        mNumAddresses = 1 << (IPV4_ADDR_BITS - prefix.getPrefixLength());
+        mNumAddresses = clientAddr != null ? 1 : 1 << (IPV4_ADDR_BITS - prefix.getPrefixLength());
         mLeaseTimeMs = leaseTimeMs;
+        mClientAddr = clientAddr;
 
         cleanMap(mDeclinedAddrs);
         if (cleanMap(mCommittedLeases)) {
@@ -514,6 +519,9 @@ class DhcpLeaseRepository {
      * address (with the ordering in {@link #getAddrIndex(int)}) is returned.
      */
     private int getValidAddress(int addr) {
+        // Only mClientAddr is valid if static client address is enforced.
+        if (mClientAddr != null) return inet4AddressToIntHTH(mClientAddr);
+
         final int lastByteMask = 0xff;
         int addrIndex = getAddrIndex(addr); // 0-based index of the address in the subnet
 
