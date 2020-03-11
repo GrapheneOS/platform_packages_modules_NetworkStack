@@ -27,6 +27,8 @@ import androidx.annotation.VisibleForTesting;
 import com.android.networkstack.apishim.CaptivePortalDataShim;
 import com.android.networkstack.apishim.NetworkInformationShim;
 
+import java.net.Inet4Address;
+
 /**
  * Compatibility implementation of {@link NetworkInformationShim}.
  *
@@ -83,5 +85,11 @@ public class NetworkInformationShimImpl implements NetworkInformationShim {
     @Override
     public LinkProperties makeSensitiveFieldsParcelingCopy(@NonNull final LinkProperties lp) {
         return new LinkProperties(lp);
+    }
+
+    @Override
+    public void setDhcpServerAddress(@NonNull LinkProperties lp,
+            @NonNull Inet4Address serverAddress) {
+        // Not supported on this API level: no-op
     }
 }

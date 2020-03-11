@@ -65,6 +65,7 @@ import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_MODE_PROMPT;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_OTHER_FALLBACK_URLS;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USER_AGENT;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USE_HTTPS;
+import static android.net.util.NetworkStackUtils.DISMISS_PORTAL_IN_VALIDATED_NETWORK;
 import static android.net.util.NetworkStackUtils.isEmpty;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
@@ -960,7 +961,11 @@ public class NetworkMonitor extends StateMachine {
                     final Network network = new Network(mCleartextDnsNetwork);
                     appExtras.putParcelable(ConnectivityManager.EXTRA_NETWORK, network);
                     final CaptivePortalProbeResult probeRes = mLastPortalProbeResult;
-                    appExtras.putString(EXTRA_CAPTIVE_PORTAL_URL, probeRes.detectUrl);
+                    // Use redirect URL from AP if exists.
+                    final String portalUrl =
+                            (useRedirectUrlForPortal() && probeRes.redirectUrl != null)
+                            ? probeRes.redirectUrl : probeRes.detectUrl;
+                    appExtras.putString(EXTRA_CAPTIVE_PORTAL_URL, portalUrl);
                     if (probeRes.probeSpec != null) {
                         final String encodedSpec = probeRes.probeSpec.getEncodedSpec();
                         appExtras.putString(EXTRA_CAPTIVE_PORTAL_PROBE_SPEC, encodedSpec);
@@ -975,6 +980,15 @@ public class NetworkMonitor extends StateMachine {
                 default:
                     return NOT_HANDLED;
             }
+        }
+
+        private boolean useRedirectUrlForPortal() {
+            // It must match the conditions in CaptivePortalLogin in which the redirect URL is not
+            // used to validate that the portal is gone.
+            final boolean aboveQ =
+                    ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q);
+            return aboveQ && mDependencies.isFeatureEnabled(mContext, NAMESPACE_CONNECTIVITY,
+                    DISMISS_PORTAL_IN_VALIDATED_NETWORK, aboveQ /* defaultEnabled */);
         }
 
         @Override
@@ -2383,6 +2397,23 @@ public class NetworkMonitor extends StateMachine {
                 @NonNull Intent broadcast) {
             context.sendBroadcastAsUser(broadcast, UserHandle.CURRENT,
                     NetworkMonitorUtils.PERMISSION_ACCESS_NETWORK_CONDITIONS);
+        }
+
+        /**
+         * Check whether or not one specific experimental feature for a particular namespace from
+         * {@link DeviceConfig} is enabled by comparing NetworkStack module version
+         * {@link NetworkStack} with current version of property. If this property version is valid,
+         * the corresponding experimental feature would be enabled, otherwise disabled.
+         * @param context The global context information about an app environment.
+         * @param namespace The namespace containing the property to look up.
+         * @param name The name of the property to look up.
+         * @param defaultEnabled The value to return if the property does not exist or its value is
+         *                       null.
+         * @return true if this feature is enabled, or false if disabled.
+         */
+        public boolean isFeatureEnabled(@NonNull Context context, @NonNull String namespace,
+                @NonNull String name, boolean defaultEnabled) {
+            return NetworkStackUtils.isFeatureEnabled(context, namespace, name, defaultEnabled);
         }
 
         public static final Dependencies DEFAULT = new Dependencies();
