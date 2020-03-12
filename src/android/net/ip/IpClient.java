@@ -1195,6 +1195,10 @@ public class IpClient extends StateMachine {
                 newLp.setMtu(mDhcpResults.mtu);
             }
 
+            if (mDhcpResults.serverAddress != null) {
+                mShim.setDhcpServerAddress(newLp, mDhcpResults.serverAddress);
+            }
+
             final String capportUrl = mDhcpResults.captivePortalApiUrl;
             // Uri.parse does no syntax check; do a simple regex check to eliminate garbage.
             // If the URL is still incorrect data fetching will fail later, which is fine.
@@ -1272,6 +1276,7 @@ public class IpClient extends StateMachine {
 
         if (DBG) {
             Log.d(mTag, "onNewDhcpResults(" + Objects.toString(dhcpResults) + ")");
+            Log.d(mTag, "handleIPv4Success newLp{" + newLp + "}");
         }
         mCallback.onNewDhcpResults(dhcpResults);
         maybeSaveNetworkToIpMemoryStore();
