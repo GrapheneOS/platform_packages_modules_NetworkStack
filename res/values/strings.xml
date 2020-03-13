@@ -47,4 +47,7 @@
          information page, so that the user can access that page. This is the message of
          the notification. [CHAR LIMIT=50] -->
     <string name="tap_for_info">Tap for venue information</string>
+
+    <!-- The label of application. It's also a sender name of notification. [CHAR LIMIT=50]-->
+    <string name="application_label">Connectivity Manager</string>
 </resources>
