@@ -228,7 +228,7 @@ open class TestableNetworkCallback private constructor(
     ) {
         expectCallback<Available>(net, tmt)
         if (suspended) {
-            expectCallback<CallbackEntry.Suspended>(net, tmt)
+            expectCallback<Suspended>(net, tmt)
         }
         expectCapabilitiesThat(net, tmt) { validated == it.hasCapability(NET_CAPABILITY_VALIDATED) }
         expectCallback<LinkPropertiesChanged>(net, tmt)
@@ -278,15 +278,22 @@ open class TestableNetworkCallback private constructor(
     @JvmOverloads
     open fun <T : CallbackEntry> expectCallback(
         type: KClass<T>,
-        n: HasNetwork?,
+        n: Network?,
         timeoutMs: Long = defaultTimeoutMs
     ) = pollForNextCallback(timeoutMs).also {
-        val network = n?.network ?: NULL_NETWORK
+        val network = n ?: NULL_NETWORK
         // TODO : remove this .java access if the tests ever use kotlin-reflect. At the time of
         // this writing this would be the only use of this library in the tests.
         assertTrue(type.java.isInstance(it) && it.network == network,
                 "Unexpected callback : $it, expected ${type.java} with Network[$network]")
     } as T
+
+    @JvmOverloads
+    open fun <T : CallbackEntry> expectCallback(
+        type: KClass<T>,
+        n: HasNetwork?,
+        timeoutMs: Long = defaultTimeoutMs
+    ) = expectCallback(type, n?.network, timeoutMs)
 
     fun expectAvailableCallbacks(
         n: HasNetwork,
