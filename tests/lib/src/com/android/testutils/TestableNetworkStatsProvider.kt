@@ -24,35 +24,35 @@ private const val DEFAULT_TIMEOUT_MS = 200L
 
 open class TestableNetworkStatsProvider : INetworkStatsProvider.Stub() {
     sealed class CallbackType {
-        data class RequestUpdate(val token: Int) : CallbackType()
-        data class SetLimit(val iface: String?, val quotaBytes: Long) : CallbackType()
-        data class SetAlert(val quotaBytes: Long) : CallbackType()
+        data class OnRequestStatsUpdate(val token: Int) : CallbackType()
+        data class OnSetLimit(val iface: String?, val quotaBytes: Long) : CallbackType()
+        data class OnSetAlert(val quotaBytes: Long) : CallbackType()
     }
 
     private val history = ArrayTrackRecord<CallbackType>().ReadHead()
 
-    override fun requestStatsUpdate(token: Int) {
-        history.add(CallbackType.RequestUpdate(token))
+    override fun onRequestStatsUpdate(token: Int) {
+        history.add(CallbackType.OnRequestStatsUpdate(token))
     }
 
-    override fun setLimit(iface: String?, quotaBytes: Long) {
-        history.add(CallbackType.SetLimit(iface, quotaBytes))
+    override fun onSetLimit(iface: String?, quotaBytes: Long) {
+        history.add(CallbackType.OnSetLimit(iface, quotaBytes))
     }
 
-    override fun setAlert(quotaBytes: Long) {
-        history.add(CallbackType.SetAlert(quotaBytes))
+    override fun onSetAlert(quotaBytes: Long) {
+        history.add(CallbackType.OnSetAlert(quotaBytes))
     }
 
-    fun expectStatsUpdate(token: Int) {
-        assertEquals(CallbackType.RequestUpdate(token), history.poll(DEFAULT_TIMEOUT_MS))
+    fun expectOnRequestStatsUpdate(token: Int) {
+        assertEquals(CallbackType.OnRequestStatsUpdate(token), history.poll(DEFAULT_TIMEOUT_MS))
     }
 
-    fun expectSetLimit(iface: String?, quotaBytes: Long) {
-        assertEquals(CallbackType.SetLimit(iface, quotaBytes), history.poll(DEFAULT_TIMEOUT_MS))
+    fun expectOnSetLimit(iface: String?, quotaBytes: Long) {
+        assertEquals(CallbackType.OnSetLimit(iface, quotaBytes), history.poll(DEFAULT_TIMEOUT_MS))
     }
 
-    fun expectSetAlert(quotaBytes: Long) {
-        assertEquals(CallbackType.SetAlert(quotaBytes), history.poll(DEFAULT_TIMEOUT_MS))
+    fun expectOnSetAlert(quotaBytes: Long) {
+        assertEquals(CallbackType.OnSetAlert(quotaBytes), history.poll(DEFAULT_TIMEOUT_MS))
     }
 
     @JvmOverloads
