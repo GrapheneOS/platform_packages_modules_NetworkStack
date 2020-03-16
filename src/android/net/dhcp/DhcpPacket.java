@@ -162,49 +162,49 @@ public abstract class DhcpPacket {
     /**
      * DHCP Optional Type: DHCP Subnet Mask
      */
-    protected static final byte DHCP_SUBNET_MASK = 1;
+    public static final byte DHCP_SUBNET_MASK = 1;
     protected Inet4Address mSubnetMask;
 
     /**
      * DHCP Optional Type: DHCP Router
      */
-    protected static final byte DHCP_ROUTER = 3;
+    public static final byte DHCP_ROUTER = 3;
     protected List <Inet4Address> mGateways;
 
     /**
      * DHCP Optional Type: DHCP DNS Server
      */
-    protected static final byte DHCP_DNS_SERVER = 6;
+    public static final byte DHCP_DNS_SERVER = 6;
     protected List<Inet4Address> mDnsServers;
 
     /**
      * DHCP Optional Type: DHCP Host Name
      */
-    protected static final byte DHCP_HOST_NAME = 12;
+    public static final byte DHCP_HOST_NAME = 12;
     protected String mHostName;
 
     /**
      * DHCP Optional Type: DHCP DOMAIN NAME
      */
-    protected static final byte DHCP_DOMAIN_NAME = 15;
+    public static final byte DHCP_DOMAIN_NAME = 15;
     protected String mDomainName;
 
     /**
      * DHCP Optional Type: DHCP Interface MTU
      */
-    protected static final byte DHCP_MTU = 26;
+    public static final byte DHCP_MTU = 26;
     protected Short mMtu;
 
     /**
      * DHCP Optional Type: DHCP BROADCAST ADDRESS
      */
-    protected static final byte DHCP_BROADCAST_ADDRESS = 28;
+    public static final byte DHCP_BROADCAST_ADDRESS = 28;
     protected Inet4Address mBroadcastAddress;
 
     /**
      * DHCP Optional Type: Vendor specific information
      */
-    protected static final byte DHCP_VENDOR_INFO = 43;
+    public static final byte DHCP_VENDOR_INFO = 43;
     protected String mVendorInfo;
 
     /**
@@ -215,7 +215,7 @@ public abstract class DhcpPacket {
     /**
      * DHCP Optional Type: Option overload option
      */
-    protected static final byte DHCP_OPTION_OVERLOAD = 52;
+    public static final byte DHCP_OPTION_OVERLOAD = 52;
 
     /**
      * Possible values of the option overload option.
@@ -227,14 +227,14 @@ public abstract class DhcpPacket {
     /**
      * DHCP Optional Type: DHCP Requested IP Address
      */
-    protected static final byte DHCP_REQUESTED_IP = 50;
+    public static final byte DHCP_REQUESTED_IP = 50;
     @VisibleForTesting(otherwise = VisibleForTesting.PROTECTED)
     public Inet4Address mRequestedIp;
 
     /**
      * DHCP Optional Type: DHCP Lease Time
      */
-    protected static final byte DHCP_LEASE_TIME = 51;
+    public static final byte DHCP_LEASE_TIME = 51;
     protected Integer mLeaseTime;
 
     /**
@@ -254,72 +254,71 @@ public abstract class DhcpPacket {
     /**
      * DHCP Optional Type: DHCP Server Identifier
      */
-    protected static final byte DHCP_SERVER_IDENTIFIER = 54;
+    public static final byte DHCP_SERVER_IDENTIFIER = 54;
     @VisibleForTesting(otherwise = VisibleForTesting.PROTECTED)
     public Inet4Address mServerIdentifier;
 
     /**
      * DHCP Optional Type: DHCP Parameter List
      */
-    protected static final byte DHCP_PARAMETER_LIST = 55;
+    public static final byte DHCP_PARAMETER_LIST = 55;
     protected byte[] mRequestedParams;
 
     /**
      * DHCP Optional Type: DHCP MESSAGE
      */
-    protected static final byte DHCP_MESSAGE = 56;
+    public static final byte DHCP_MESSAGE = 56;
     protected String mMessage;
 
     /**
      * DHCP Optional Type: Maximum DHCP Message Size
      */
-    protected static final byte DHCP_MAX_MESSAGE_SIZE = 57;
+    public static final byte DHCP_MAX_MESSAGE_SIZE = 57;
     protected Short mMaxMessageSize;
 
     /**
      * DHCP Optional Type: DHCP Renewal Time Value
      */
-    protected static final byte DHCP_RENEWAL_TIME = 58;
+    public static final byte DHCP_RENEWAL_TIME = 58;
     protected Integer mT1;
 
     /**
      * DHCP Optional Type: Rebinding Time Value
      */
-    protected static final byte DHCP_REBINDING_TIME = 59;
+    public static final byte DHCP_REBINDING_TIME = 59;
     protected Integer mT2;
 
     /**
      * DHCP Optional Type: Vendor Class Identifier
      */
-    protected static final byte DHCP_VENDOR_CLASS_ID = 60;
+    public static final byte DHCP_VENDOR_CLASS_ID = 60;
     protected String mVendorId;
 
     /**
      * DHCP Optional Type: DHCP Client Identifier
      */
-    protected static final byte DHCP_CLIENT_IDENTIFIER = 61;
+    public static final byte DHCP_CLIENT_IDENTIFIER = 61;
     protected byte[] mClientId;
 
     /**
      * DHCP zero-length Optional Type: Rapid Commit. Per RFC4039, both DHCPDISCOVER and DHCPACK
      * packet may include this option.
      */
-    protected static final byte DHCP_RAPID_COMMIT = 80;
+    public static final byte DHCP_RAPID_COMMIT = 80;
     protected boolean mRapidCommit;
 
-    @VisibleForTesting
     public static final byte DHCP_CAPTIVE_PORTAL = (byte) 114;
     protected String mCaptivePortalUrl;
 
     /**
      * DHCP zero-length option code: pad
      */
-    protected static final byte DHCP_OPTION_PAD = 0x00;
+    public static final byte DHCP_OPTION_PAD = 0x00;
 
     /**
      * DHCP zero-length option code: end of options
      */
-    protected static final byte DHCP_OPTION_END = (byte) 0xff;
+    public static final byte DHCP_OPTION_END = (byte) 0xff;
 
     /**
      * The transaction identifier used in this particular DHCP negotiation
