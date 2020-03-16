@@ -54,7 +54,7 @@ public interface NetworkInformationShim {
     String getSsid(@Nullable NetworkCapabilities nc);
 
     /**
-     * @see LinkProperties#makeSensitiveFieldsParcelingCopy()
+     * @see LinkProperties#LinkProperties(LinkProperties, boolean)
      */
     @NonNull
     LinkProperties makeSensitiveFieldsParcelingCopy(@NonNull LinkProperties lp);
