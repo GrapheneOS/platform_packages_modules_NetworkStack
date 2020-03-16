@@ -23,4 +23,6 @@
     <string name="connected_to_ssid_param1" msgid="2312858438037646286">"Connesso alla rete %1$s"</string>
     <string name="connected" msgid="4563643884927480998">"Connesso"</string>
     <string name="tap_for_info" msgid="5203220728001805560">"Tocca per avere informazioni sul luogo"</string>
+    <!-- no translation found for application_label (8095087899576605955) -->
+    <skip />
 </resources>
