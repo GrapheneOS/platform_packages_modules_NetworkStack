@@ -49,4 +49,10 @@
 
     <!-- Configuration for including DHCP client hostname option -->
     <bool name="config_dhcp_client_hostname">false</bool>
+
+    <!-- Customized neighbor unreachable probe parameters. -->
+    <integer name="config_nud_steadystate_solicit_num">10</integer>
+    <integer name="config_nud_steadystate_solicit_interval">750</integer>
+    <integer name="config_nud_postroaming_solicit_num">5</integer>
+    <integer name="config_nud_postroaming_solicit_interval">750</integer>
 </resources>
