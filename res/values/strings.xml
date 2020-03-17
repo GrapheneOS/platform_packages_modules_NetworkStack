@@ -21,7 +21,7 @@
     <!-- Notifications are shown after the user logs in to a captive portal network, to indicate
          that the network should now have internet connectivity. This is the description of the
          channel for these notifications. [CHAR LIMIT=300] -->
-    <string name="notification_channel_description_connected">Notifications shown when the device has successfully and authenticated to a captive portal network</string>
+    <string name="notification_channel_description_connected">Notifications shown when the device has successfully authenticated to a captive portal network</string>
 
     <!-- Notifications are shown when a user connects to a network that advertises a venue
          information page, so that the user can access that page. This is the channel name of
