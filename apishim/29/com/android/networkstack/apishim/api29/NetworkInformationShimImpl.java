@@ -76,7 +76,7 @@ public class NetworkInformationShimImpl implements NetworkInformationShim {
 
     @Nullable
     @Override
-    public String getSSID(@Nullable NetworkCapabilities nc) {
+    public String getSsid(@Nullable NetworkCapabilities nc) {
         // Not supported on this API level
         return null;
     }
