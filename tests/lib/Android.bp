@@ -32,8 +32,12 @@ java_library {
     srcs: [
         "src/**/*.java",
         "src/**/*.kt",
+        ":net-module-utils-srcs-for-tests",
     ],
     defaults: ["lib_mockito_extended"],
+    libs: [
+        "androidx.annotation_annotation",
+    ],
     static_libs: [
         "net-tests-utils-multivariant",
     ],
