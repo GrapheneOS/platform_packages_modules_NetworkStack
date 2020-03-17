@@ -34,6 +34,14 @@
             random number and etc.
             -->
             <item type="bool" name="config_dhcp_client_hostname"/>
+            <!-- Customized neighbor unreachable probe parameters.
+            Legal config_*_num value should be in the range of 5-15; and config_*_interval value
+            should be in the range of 750-1000ms.
+            -->
+            <item type="integer" name="config_nud_steadystate_solicit_num"/>
+            <item type="integer" name="config_nud_steadystate_solicit_interval"/>
+            <item type="integer" name="config_nud_postroaming_solicit_num"/>
+            <item type="integer" name="config_nud_postroaming_solicit_interval"/>
         </policy>
     </overlayable>
 </resources>
