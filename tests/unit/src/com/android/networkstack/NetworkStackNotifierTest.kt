@@ -106,8 +106,8 @@ class NetworkStackNotifierTest {
             .addTransportType(TRANSPORT_WIFI)
             .addCapability(NET_CAPABILITY_VALIDATED)
 
-    private val TEST_CONNECTED_NO_SSID_TITLE = "Connected without SSID"
-    private val TEST_CONNECTED_SSID_TITLE = "Connected to TestSsid"
+    private val TEST_CONNECTED_DESCRIPTION = "Connected"
+    private val TEST_VENUE_DESCRIPTION = "Connected / Tap to view website"
 
     private val TEST_VENUE_INFO_URL = "https://testvenue.example.com/info"
     private val EMPTY_CAPPORT_LP = LinkProperties()
@@ -123,9 +123,8 @@ class NetworkStackNotifierTest {
         MockitoAnnotations.initMocks(this)
         mLooper = TestableLooper.get(this)
         doReturn(mResources).`when`(mContext).resources
-        doReturn(TEST_CONNECTED_NO_SSID_TITLE).`when`(mResources).getString(R.string.connected)
-        doReturn(TEST_CONNECTED_SSID_TITLE).`when`(mResources).getString(
-                R.string.connected_to_ssid_param1, TEST_SSID)
+        doReturn(TEST_CONNECTED_DESCRIPTION).`when`(mResources).getString(R.string.connected)
+        doReturn(TEST_VENUE_DESCRIPTION).`when`(mResources).getString(R.string.tap_for_info)
 
         // applicationInfo is used by Notification.Builder
         val realContext = InstrumentationRegistry.getInstrumentation().context
@@ -201,19 +200,15 @@ class NetworkStackNotifierTest {
         mNotifier.notifyCaptivePortalValidationPending(TEST_NETWORK)
         onCapabilitiesChanged(VALIDATED_CAPABILITIES)
         mLooper.processAllMessages()
-
-        verifyConnectedNotification()
-        verify(mResources).getString(R.string.connected)
-        verifyWifiSettingsIntent(mIntentCaptor.value)
-        verifyCanceledNotificationAfterNetworkLost()
+        // There is no notification when SSID is not set.
+        verify(mNm, never()).notify(any(), anyInt(), any())
     }
 
     @Test
     fun testConnectedNotification_WithSsid() {
         // NetworkCapabilities#getSSID is not available for API <= Q
         assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
-        val capabilities = NetworkCapabilities(VALIDATED_CAPABILITIES)
-                .setSSID(TEST_SSID)
+        val capabilities = NetworkCapabilities(VALIDATED_CAPABILITIES).setSSID(TEST_SSID)
 
         onCapabilitiesChanged(EMPTY_CAPABILITIES)
         mNotifier.notifyCaptivePortalValidationPending(TEST_NETWORK)
@@ -221,7 +216,7 @@ class NetworkStackNotifierTest {
         mLooper.processAllMessages()
 
         verifyConnectedNotification()
-        verify(mResources).getString(R.string.connected_to_ssid_param1, TEST_SSID)
+        verify(mResources).getString(R.string.connected)
         verifyWifiSettingsIntent(mIntentCaptor.value)
         verifyCanceledNotificationAfterNetworkLost()
     }
@@ -233,7 +228,8 @@ class NetworkStackNotifierTest {
         mNotifier.notifyCaptivePortalValidationPending(TEST_NETWORK)
         onLinkPropertiesChanged(TEST_CAPPORT_LP)
         onDefaultNetworkAvailable(TEST_NETWORK)
-        onCapabilitiesChanged(VALIDATED_CAPABILITIES)
+        val capabilities = NetworkCapabilities(VALIDATED_CAPABILITIES).setSSID(TEST_SSID)
+        onCapabilitiesChanged(capabilities)
 
         mLooper.processAllMessages()
 
@@ -251,7 +247,8 @@ class NetworkStackNotifierTest {
         mNotifier.notifyCaptivePortalValidationPending(TEST_NETWORK)
         onLinkPropertiesChanged(TEST_CAPPORT_LP)
         onDefaultNetworkAvailable(TEST_NETWORK)
-        onCapabilitiesChanged(VALIDATED_CAPABILITIES)
+        val capabilities = NetworkCapabilities(VALIDATED_CAPABILITIES).setSSID(TEST_SSID)
+        onCapabilitiesChanged(capabilities)
         mLooper.processAllMessages()
 
         verifyConnectedNotification()
@@ -266,7 +263,8 @@ class NetworkStackNotifierTest {
         assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
         onLinkPropertiesChanged(TEST_CAPPORT_LP)
         onDefaultNetworkAvailable(TEST_NETWORK)
-        onCapabilitiesChanged(VALIDATED_CAPABILITIES)
+        val capabilities = NetworkCapabilities(VALIDATED_CAPABILITIES).setSSID(TEST_SSID)
+        onCapabilitiesChanged(capabilities)
         mLooper.processAllMessages()
 
         verify(mNm).notify(eq(TEST_NETWORK_TAG), mNoteIdCaptor.capture(), mNoteCaptor.capture())
