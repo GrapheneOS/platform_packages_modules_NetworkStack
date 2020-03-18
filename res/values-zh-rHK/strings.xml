@@ -23,4 +23,6 @@
     <string name="connected_to_ssid_param1" msgid="2312858438037646286">"已連線至「%1$s」"</string>
     <string name="connected" msgid="4563643884927480998">"已連線"</string>
     <string name="tap_for_info" msgid="5203220728001805560">"輕按即可查看場地資料"</string>
+    <!-- no translation found for application_label (8095087899576605955) -->
+    <skip />
 </resources>

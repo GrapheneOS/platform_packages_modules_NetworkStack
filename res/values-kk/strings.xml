@@ -19,8 +19,10 @@
     <string name="notification_channel_name_connected" msgid="1795068343200033922">"Адаптивті портал аутентификациясы"</string>
     <string name="notification_channel_description_connected" msgid="1664506646629701401">"Құрылғы адаптивті портал желісінде аутентификацияланған кезде, хабарландыру көрсетіледі."</string>
     <string name="notification_channel_name_network_venue_info" msgid="6526543187249265733">"Желінің орын туралы ақпараты"</string>
-    <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"Желінің жер туралы ақпарат беті барын көрсету үшін хабарландыру көрсетіледі."</string>
+    <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"Желінің орын туралы ақпарат беті барын көрсету үшін хабарландыру көрсетіледі."</string>
     <string name="connected_to_ssid_param1" msgid="2312858438037646286">"%1$s құрылғысымен байланыстырылды."</string>
     <string name="connected" msgid="4563643884927480998">"Байланыстырылды."</string>
     <string name="tap_for_info" msgid="5203220728001805560">"Орын ақпаратын көру үшін түртіңіз"</string>
+    <!-- no translation found for application_label (8095087899576605955) -->
+    <skip />
 </resources>
