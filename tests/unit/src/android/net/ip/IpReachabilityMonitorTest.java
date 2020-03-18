@@ -20,6 +20,7 @@ import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
+import android.net.INetd;
 import android.net.util.InterfaceParams;
 import android.net.util.SharedLog;
 import android.os.Handler;
@@ -40,11 +41,11 @@ import org.mockito.MockitoAnnotations;
 @RunWith(AndroidJUnit4.class)
 @SmallTest
 public class IpReachabilityMonitorTest {
-
     @Mock IpReachabilityMonitor.Callback mCallback;
     @Mock IpReachabilityMonitor.Dependencies mDependencies;
     @Mock SharedLog mLog;
     @Mock Context mContext;
+    @Mock INetd mNetd;
     Handler mHandler;
 
     @Before
@@ -57,7 +58,7 @@ public class IpReachabilityMonitorTest {
     IpReachabilityMonitor makeMonitor() {
         final InterfaceParams ifParams = new InterfaceParams("fake0", 1, null);
         return new IpReachabilityMonitor(
-                mContext, ifParams, mHandler, mLog, mCallback, false, mDependencies);
+                mContext, ifParams, mHandler, mLog, mCallback, false, mDependencies, mNetd);
     }
 
     @Test
