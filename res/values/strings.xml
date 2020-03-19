@@ -31,22 +31,15 @@
          information page, so that the user can access that page. [CHAR LIMIT=300] -->
     <string name="notification_channel_description_network_venue_info">Notifications shown to indicate the network has a venue information page</string>
 
-    <!-- Notifications are shown after the user logs in to a captive portal network, to indicate
-         that the network should now have internet connectivity. This is the title of the
-         notification, indicating that the device is connected to the network with the SSID given
-         as parameter. [CHAR LIMIT=50] -->
-    <string name="connected_to_ssid_param1">Connected to %1$s</string>
-
     <!-- A notification is shown after the user logs in to a captive portal network, to indicate
-         that the network should now have internet connectivity. This is the title of the
-         notification, indicating that the device is connected to the network without SSID
-         information. [CHAR LIMIT=50] -->
+         that the network should now have internet connectivity. This is the description of the
+         notification, indicating that the device is connected to the network. [CHAR LIMIT=50] -->
     <string name="connected">Connected</string>
 
     <!-- Notifications are shown when a user connects to a network that advertises a venue
-         information page, so that the user can access that page. This is the message of
+         information page, so that the user can access that page. This is the description of
          the notification. [CHAR LIMIT=50] -->
-    <string name="tap_for_info">Tap for venue information</string>
+    <string name="tap_for_info">Connected / Tap to view website</string>
 
     <!-- The label of application. It's also a sender name of notification. [CHAR LIMIT=50]-->
     <string name="application_label">Connectivity Manager</string>
