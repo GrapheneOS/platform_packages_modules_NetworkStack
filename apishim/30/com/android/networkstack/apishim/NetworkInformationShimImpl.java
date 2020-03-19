@@ -81,7 +81,7 @@ public class NetworkInformationShimImpl extends
     @NonNull
     @Override
     public LinkProperties makeSensitiveFieldsParcelingCopy(@NonNull final LinkProperties lp) {
-        return lp.makeSensitiveFieldsParcelingCopy();
+        return new LinkProperties(lp, true);
     }
 
     @Override
