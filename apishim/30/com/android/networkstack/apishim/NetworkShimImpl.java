@@ -44,6 +44,6 @@ public class NetworkShimImpl extends com.android.networkstack.apishim.api29.Netw
      */
     @Override
     public int getNetId() {
-        return mNetwork.netId;
+        return mNetwork.getNetId();
     }
 }
