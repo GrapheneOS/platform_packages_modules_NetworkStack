@@ -181,6 +181,9 @@ public class NetworkStackNotifier {
         final TrackedNetworkStatus networkStatus = mNetworkStatus.get(network);
         // The required network attributes callbacks were not fired yet for this network
         if (networkStatus == null) return;
+        // Don't show the notification when SSID is unknown to prevent sending something vague to
+        // the user.
+        final boolean hasSsid = !TextUtils.isEmpty(getSsid(networkStatus));
 
         final CaptivePortalDataShim capportData = getCaptivePortalData(networkStatus);
         final boolean showVenueInfo = capportData != null && capportData.getVenueInfoUrl() != null
@@ -191,9 +194,11 @@ public class NetworkStackNotifier {
                 && isVenueInfoNotificationEnabled()
                 // Most browsers do not yet support opening a page on a non-default network, so the
                 // venue info link should not be shown if the network is not the default one.
-                && network.equals(mDefaultNetwork);
+                && network.equals(mDefaultNetwork)
+                && hasSsid;
         final boolean showValidated =
-                networkStatus.mValidatedNotificationPending && networkStatus.isValidated();
+                networkStatus.mValidatedNotificationPending && networkStatus.isValidated()
+                && hasSsid;
         final String notificationTag = getNotificationTag(network);
 
         final Resources res = mContext.getResources();
@@ -216,7 +221,7 @@ public class NetworkStackNotifier {
             // channel even if the notification contains venue info: the "venue info" notification
             // then doubles as a "connected" notification.
             final String channel = showValidated ? CHANNEL_CONNECTED : CHANNEL_VENUE_INFO;
-            builder = getNotificationBuilder(channel, networkStatus, res)
+            builder = getNotificationBuilder(channel, networkStatus, res, getSsid(networkStatus))
                     .setContentText(res.getString(R.string.tap_for_info))
                     .setContentIntent(mDependencies.getActivityPendingIntent(
                             getContextAsUser(mContext, UserHandle.CURRENT),
@@ -226,8 +231,10 @@ public class NetworkStackNotifier {
         } else if (showValidated) {
             if (networkStatus.mShownNotification == NOTE_CONNECTED) return;
 
-            builder = getNotificationBuilder(CHANNEL_CONNECTED, networkStatus, res)
+            builder = getNotificationBuilder(CHANNEL_CONNECTED, networkStatus, res,
+                    getSsid(networkStatus))
                     .setTimeoutAfter(CONNECTED_NOTIFICATION_TIMEOUT_MS)
+                    .setContentText(res.getString(R.string.connected))
                     .setContentIntent(mDependencies.getActivityPendingIntent(
                             getContextAsUser(mContext, UserHandle.CURRENT),
                             new Intent(Settings.ACTION_WIFI_SETTINGS),
@@ -256,9 +263,10 @@ public class NetworkStackNotifier {
     }
 
     private Notification.Builder getNotificationBuilder(@NonNull String channelId,
-            @NonNull TrackedNetworkStatus networkStatus, @NonNull Resources res) {
+            @NonNull TrackedNetworkStatus networkStatus, @NonNull Resources res,
+            @NonNull String ssid) {
         return new Notification.Builder(mContext, channelId)
-                .setContentTitle(getConnectedNotificationTitle(res, networkStatus))
+                .setContentTitle(ssid)
                 .setSmallIcon(R.drawable.icon_wifi);
     }
 
@@ -277,16 +285,6 @@ public class NetworkStackNotifier {
 
     private boolean isVenueInfoNotificationEnabled() {
         return mNotificationManager.getNotificationChannel(CHANNEL_VENUE_INFO) != null;
-    }
-
-    private String getConnectedNotificationTitle(@NonNull Resources res,
-            @NonNull TrackedNetworkStatus status) {
-        final String ssid = getSsid(status);
-        if (TextUtils.isEmpty(ssid)) {
-            return res.getString(R.string.connected);
-        }
-
-        return res.getString(R.string.connected_to_ssid_param1, ssid);
     }
 
     private static String getNotificationTag(@NonNull Network network) {
