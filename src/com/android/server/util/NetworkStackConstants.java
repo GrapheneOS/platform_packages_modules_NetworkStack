@@ -148,6 +148,14 @@ public final class NetworkStackConstants {
     public static final int INFINITE_LEASE = 0xffffffff;
     public static final int DHCP4_CLIENT_PORT = 68;
 
+    /**
+     * IEEE802.11 standard constants.
+     *
+     * See also:
+     *     - https://ieeexplore.ieee.org/document/7786995
+     */
+    public static final int VENDOR_SPECIFIC_IE_ID = 0xdd;
+
     private NetworkStackConstants() {
         throw new UnsupportedOperationException("This class is not to be instantiated");
     }
