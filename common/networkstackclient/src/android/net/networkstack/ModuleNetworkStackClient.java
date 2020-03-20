@@ -16,12 +16,12 @@
 
 package android.net.networkstack;
 
-import static android.content.Context.NETWORK_STACK_SERVICE;
 import static android.os.Build.VERSION.SDK_INT;
 
 import android.annotation.NonNull;
 import android.content.Context;
 import android.net.INetworkStackConnector;
+import android.net.NetworkStack;
 import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
@@ -47,14 +47,14 @@ public class ModuleNetworkStackClient extends NetworkStackClientBase {
         // TODO(b/149676685): change this check to "< R" once R is defined
         if (SDK_INT < Build.VERSION_CODES.Q
                 || (SDK_INT == Build.VERSION_CODES.Q && "REL".equals(Build.VERSION.CODENAME))) {
-            // NETWORK_STACK_SERVICE is not available through getSystemService before R
+            // The NetworkStack connector is not available through NetworkStack before R
             throw new UnsupportedOperationException(
                     "ModuleNetworkStackClient is not supported on API " + SDK_INT);
         }
 
         if (sInstance == null) {
             sInstance = new ModuleNetworkStackClient();
-            sInstance.startPolling(packageContext);
+            sInstance.startPolling();
         }
         return sInstance;
     }
@@ -64,10 +64,10 @@ public class ModuleNetworkStackClient extends NetworkStackClientBase {
         sInstance = null;
     }
 
-    private void startPolling(Context context) {
+    private void startPolling() {
         // If the service is already registered (as it will be most of the time), do not poll and
         // fulfill requests immediately.
-        final IBinder nss = (IBinder) context.getSystemService(NETWORK_STACK_SERVICE);
+        final IBinder nss = NetworkStack.getService();
         if (nss != null) {
             // Calling onNetworkStackConnected here means that pending oneway Binder calls to the
             // NetworkStack get sent from the current thread and not a worker thread; this is fine
@@ -75,21 +75,18 @@ public class ModuleNetworkStackClient extends NetworkStackClientBase {
             onNetworkStackConnected(INetworkStackConnector.Stub.asInterface(nss));
             return;
         }
-        new Thread(new PollingRunner(context)).start();
+        new Thread(new PollingRunner()).start();
     }
 
     private class PollingRunner implements Runnable {
-        private final Context mContext;
 
-        private PollingRunner(Context context) {
-            mContext = context;
-        }
+        private PollingRunner() {}
 
         @Override
         public void run() {
             // Block until the NetworkStack connector is registered in ServiceManager.
             IBinder nss;
-            while ((nss = (IBinder) mContext.getSystemService(NETWORK_STACK_SERVICE)) == null) {
+            while ((nss = NetworkStack.getService()) == null) {
                 try {
                     Thread.sleep(200);
                 } catch (InterruptedException e) {
