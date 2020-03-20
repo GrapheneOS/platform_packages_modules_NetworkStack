@@ -84,8 +84,8 @@ public class ConnectivityPacketSummary {
 
     /**
      * Create a string summary of a received packet.
-     * @param hwaddr MacAddress of the receiving device.
-     * @param buffer Buffer of the packet. Length is assumed to be the buffer length.
+     * @param hwaddr MacAddress of the interface sending/receiving the packet.
+     * @param buffer The packet bytes. Length is assumed to be the buffer length.
      * @return A summary of the packet.
      */
     public static String summarize(MacAddress hwaddr, byte[] buffer) {
@@ -97,8 +97,8 @@ public class ConnectivityPacketSummary {
 
     /**
      * Create a string summary of a received packet.
-     * @param macAddr MacAddress of the receiving device.
-     * @param buffer Buffer of the packet.
+     * @param macAddr MacAddress of the interface sending/receiving the packet.
+     * @param buffer The packet bytes.
      * @param length Length of the packet.
      * @return A summary of the packet.
      */
