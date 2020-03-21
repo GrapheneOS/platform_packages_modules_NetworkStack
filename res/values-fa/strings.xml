@@ -21,8 +21,8 @@
     <skip />
     <string name="notification_channel_name_network_venue_info" msgid="6526543187249265733">"اطلاعات محل شبکه"</string>
     <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"اعلان‌هایی که نمایش داده می‌شوند تا نشان دهند شبکه صفحه اطلاعات محل دارد"</string>
-    <string name="connected_to_ssid_param1" msgid="2312858438037646286">"‏به ‎%1$s متصل شد"</string>
     <string name="connected" msgid="4563643884927480998">"متصل"</string>
-    <string name="tap_for_info" msgid="5203220728001805560">"برای دریافت اطلاعات محل شبکه ضربه بزنید"</string>
+    <!-- no translation found for tap_for_info (6849746325626883711) -->
+    <skip />
     <string name="application_label" msgid="8095087899576605955">"مدیر اتصال"</string>
 </resources>

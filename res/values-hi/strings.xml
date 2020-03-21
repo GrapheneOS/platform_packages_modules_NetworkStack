@@ -24,11 +24,9 @@
     <skip />
     <!-- no translation found for notification_channel_description_network_venue_info (5131499595382733605) -->
     <skip />
-    <!-- no translation found for connected_to_ssid_param1 (2312858438037646286) -->
-    <skip />
     <!-- no translation found for connected (4563643884927480998) -->
     <skip />
-    <!-- no translation found for tap_for_info (5203220728001805560) -->
+    <!-- no translation found for tap_for_info (6849746325626883711) -->
     <skip />
     <string name="application_label" msgid="8095087899576605955">"कनेक्टिविटी मैनेजर"</string>
 </resources>

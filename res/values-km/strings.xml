@@ -21,8 +21,8 @@
     <skip />
     <string name="notification_channel_name_network_venue_info" msgid="6526543187249265733">"ព័ត៌មាន​អំពីទីតាំងបណ្ដាញ"</string>
     <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"ការជូនដំណឹងបង្ហាញ​ ដើម្បី​បង្ហាញ​ថាបណ្ដាញ​មានទំព័រព័ត៌មានអំពីទីតាំង"</string>
-    <string name="connected_to_ssid_param1" msgid="2312858438037646286">"បានភ្ជាប់ជាមួយ %1$s"</string>
     <string name="connected" msgid="4563643884927480998">"បានភ្ជាប់"</string>
-    <string name="tap_for_info" msgid="5203220728001805560">"ចុច ដើម្បី​ទទួលបានព័ត៌មានអំពីទីតាំង"</string>
+    <!-- no translation found for tap_for_info (6849746325626883711) -->
+    <skip />
     <string name="application_label" msgid="8095087899576605955">"កម្មវិធី​គ្រប់គ្រង​ការតភ្ជាប់"</string>
 </resources>
