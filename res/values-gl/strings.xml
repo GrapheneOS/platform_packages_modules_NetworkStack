@@ -17,12 +17,12 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="notification_channel_name_connected" msgid="1795068343200033922">"Autenticación de portal cativo"</string>
-    <string name="notification_channel_description_connected" msgid="1664506646629701401">"Móstranse notificacións cando o dispositivo se autentica correctamente nunha rede de portal cativo"</string>
+    <!-- no translation found for notification_channel_description_connected (7239184168268014518) -->
+    <skip />
     <string name="notification_channel_name_network_venue_info" msgid="6526543187249265733">"Rede con información sobre o lugar"</string>
     <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"Móstranse notificacións para indicar que a rede ten unha páxina de información sobre o lugar"</string>
-    <string name="connected_to_ssid_param1" msgid="2312858438037646286">"Dispositivo conectado a %1$s"</string>
     <string name="connected" msgid="4563643884927480998">"Dispositivo conectado á rede"</string>
-    <string name="tap_for_info" msgid="5203220728001805560">"Toca para ver a información sobre o lugar"</string>
-    <!-- no translation found for application_label (8095087899576605955) -->
+    <!-- no translation found for tap_for_info (6849746325626883711) -->
     <skip />
+    <string name="application_label" msgid="8095087899576605955">"Xestor de conectividade"</string>
 </resources>
