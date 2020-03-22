@@ -17,12 +17,12 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="notification_channel_name_connected" msgid="1795068343200033922">"Captive portal အထောက်အထားစိစစ်ခြင်း"</string>
-    <string name="notification_channel_description_connected" msgid="1664506646629701401">"Captive portal ကွန်ရက်တွင် စက်ကို အောင်မြင်စွာ အထောက်အထားစိစစ်ပြီးသောအခါ အကြောင်းကြားချက်များ ပြသည်"</string>
+    <!-- no translation found for notification_channel_description_connected (7239184168268014518) -->
+    <skip />
     <string name="notification_channel_name_network_venue_info" msgid="6526543187249265733">"ကွန်ရက်နေရာအချက်အလက်"</string>
     <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"ကွန်ရက်တွင် နေရာအချက်အလက် စာမျက်နှာ ရှိကြောင်း ညွှန်ပြရန် အကြောင်းကြားချက်များ ပြသည်"</string>
-    <string name="connected_to_ssid_param1" msgid="2312858438037646286">"%1$s သို့ ချိတ်ဆက်ထားသည်"</string>
     <string name="connected" msgid="4563643884927480998">"ချိတ်ဆက်ထားသည်"</string>
-    <string name="tap_for_info" msgid="5203220728001805560">"နေရာအချက်အလက်အတွက် တို့ပါ"</string>
-    <!-- no translation found for application_label (8095087899576605955) -->
+    <!-- no translation found for tap_for_info (6849746325626883711) -->
     <skip />
+    <string name="application_label" msgid="8095087899576605955">"ချိတ်ဆက်မှု မန်နေဂျာ"</string>
 </resources>
