@@ -29,7 +29,9 @@ import android.net.ScanResultInfoParcelable;
 import android.net.StaticIpConfiguration;
 import android.net.apf.ApfCapabilities;
 import android.net.ip.IIpClient;
+import android.util.Log;
 
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -61,6 +63,8 @@ import java.util.StringJoiner;
  * @hide
  */
 public class ProvisioningConfiguration {
+    private static final String TAG = "ProvisioningConfiguration";
+
     // TODO: Delete this default timeout once those callers that care are
     // fixed to pass in their preferred timeout.
     //
@@ -281,7 +285,7 @@ public class ProvisioningConfiguration {
             public InformationElementParcelable toStableParcelable() {
                 final InformationElementParcelable p = new InformationElementParcelable();
                 p.id = mId;
-                p.payload = mPayload.clone();
+                p.payload = mPayload != null ? mPayload.clone() : null;
                 return p;
             }
 
@@ -367,10 +371,16 @@ public class ProvisioningConfiguration {
 
         private static byte[] convertToByteArray(final ByteBuffer buffer) {
             if (buffer == null) return null;
-            byte[] bytes = new byte[buffer.limit()];
+            final byte[] bytes = new byte[buffer.limit()];
             final ByteBuffer copy = buffer.asReadOnlyBuffer();
-            copy.get(bytes);
-            return bytes;
+            try {
+                copy.position(0);
+                copy.get(bytes);
+            } catch (BufferUnderflowException e) {
+                Log.wtf(TAG, "Buffer under flow exception should never happen.");
+            } finally {
+                return bytes;
+            }
         }
     }
 
