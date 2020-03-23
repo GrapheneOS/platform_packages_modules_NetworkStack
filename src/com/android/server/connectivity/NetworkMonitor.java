@@ -1608,7 +1608,8 @@ public class NetworkMonitor extends StateMachine {
                 settingProviderUrls = new URL[0];
             }
 
-            return getArrayConfig(settingProviderUrls, R.array.config_captive_portal_fallback_urls,
+            return getProbeUrlArrayConfig(settingProviderUrls,
+                    R.array.config_captive_portal_fallback_urls,
                     R.array.default_captive_portal_fallback_urls, this::makeURL);
         } catch (Exception e) {
             // Don't let a misconfiguration bootloop the system.
@@ -1627,7 +1628,8 @@ public class NetworkMonitor extends StateMachine {
                     ? emptySpecs
                     : parseCaptivePortalProbeSpecs(settingsValue).toArray(emptySpecs);
 
-            return getArrayConfig(providerValue, R.array.config_captive_portal_fallback_probe_specs,
+            return getProbeUrlArrayConfig(providerValue,
+                    R.array.config_captive_portal_fallback_probe_specs,
                     R.array.default_captive_portal_fallback_probe_specs,
                     CaptivePortalProbeSpec::parseSpecOrNull);
         } catch (Exception e) {
@@ -1674,9 +1676,9 @@ public class NetworkMonitor extends StateMachine {
      * @param resourceConverter Converter from the resource strings to stored setting class. Null
      *                          return values are ignored.
      */
-    private <T> T[] getArrayConfig(@NonNull T[] providerValue, @ArrayRes int configResId,
+    private <T> T[] getProbeUrlArrayConfig(@NonNull T[] providerValue, @ArrayRes int configResId,
             @ArrayRes int defaultResId, @NonNull Function<String, T> resourceConverter) {
-        final Resources res = mContext.getResources();
+        final Resources res = getContextByMccIfNoSimCardOrDefault().getResources();
         String[] configValue = res.getStringArray(configResId);
 
         if (configValue.length == 0) {
