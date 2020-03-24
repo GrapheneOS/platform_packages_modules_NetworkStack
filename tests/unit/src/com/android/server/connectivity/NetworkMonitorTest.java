@@ -204,6 +204,8 @@ public class NetworkMonitorTest {
     private @Mock TcpSocketTracker mTst;
     private HashSet<WrappedNetworkMonitor> mCreatedNetworkMonitors;
     private HashSet<BroadcastReceiver> mRegisteredReceivers;
+    private @Mock Context mMccContext;
+    private @Mock Resources mMccResource;
 
     private static final int TEST_NETID = 4242;
     private static final String TEST_HTTP_URL = "http://www.google.com/gen_204";
@@ -418,6 +420,8 @@ public class NetworkMonitorTest {
 
         when(mResources.getString(anyInt())).thenReturn("");
         when(mResources.getStringArray(anyInt())).thenReturn(new String[0]);
+        doReturn(mConfiguration).when(mResources).getConfiguration();
+        when(mMccContext.getResources()).thenReturn(mMccResource);
 
         setFallbackUrl(TEST_FALLBACK_URL);
         setOtherFallbackUrls(TEST_OTHER_FALLBACK_URL);
@@ -594,20 +598,10 @@ public class NetworkMonitorTest {
                 eq(android.Manifest.permission.ACCESS_FINE_LOCATION),  anyInt(), anyInt());
         doReturn(new ContextWrapper(mContext)).when(mContext).createConfigurationContext(any());
         // Prepare CellInfo and check if the vote mechanism is working or not.
-        final CellInfoGsm cellInfoGsm1 = new CellInfoGsm();
-        final CellInfoGsm cellInfoGsm2 = new CellInfoGsm();
-        final CellInfoLte cellInfoLte = new CellInfoLte();
-        final CellIdentityGsm cellIdentityGsm = makeCellIdentityGsm(
-                0, 0, 0, 0, "460", "01", "", "");
-        final CellIdentityLte cellIdentityLte = makeCellIdentityLte(
-                0, 0, 0, 0, 0, "466", "01", "", "");
-        cellInfoGsm1.setCellIdentity(cellIdentityGsm);
-        cellInfoGsm2.setCellIdentity(cellIdentityGsm);
-        cellInfoLte.setCellIdentity(cellIdentityLte);
         final List<CellInfo> cellList = new ArrayList<CellInfo>();
-        cellList.add(cellInfoGsm1);
-        cellList.add(cellInfoGsm2);
-        cellList.add(cellInfoLte);
+        cellList.add(makeTestCellInfoGsm("460"));
+        cellList.add(makeTestCellInfoGsm("460"));
+        cellList.add(makeTestCellInfoLte("466"));
         doReturn(cellList).when(mTelephony).getAllCellInfo();
         // The count of 460 is 2 and the count of 466 is 1, so the getLocationMcc() should return
         // 460.
@@ -616,11 +610,64 @@ public class NetworkMonitorTest {
         // is enabled and the sim is not ready.
         doReturn(true).when(mResources).getBoolean(R.bool.config_no_sim_card_uses_neighbor_mcc);
         doReturn(TelephonyManager.SIM_STATE_ABSENT).when(mTelephony).getSimState();
-        doReturn(mConfiguration).when(mResources).getConfiguration();
         assertEquals(460,
                 wnm.getContextByMccIfNoSimCardOrDefault().getResources().getConfiguration().mcc);
         doReturn(false).when(mResources).getBoolean(R.bool.config_no_sim_card_uses_neighbor_mcc);
         assertEquals(wnm.getContext(), wnm.getContextByMccIfNoSimCardOrDefault());
+    }
+
+    private CellInfoGsm makeTestCellInfoGsm(String mcc) throws Exception {
+        final CellInfoGsm info = new CellInfoGsm();
+        final CellIdentityGsm ci = makeCellIdentityGsm(0, 0, 0, 0, mcc, "01", "", "");
+        info.setCellIdentity(ci);
+        return info;
+    }
+
+    private CellInfoLte makeTestCellInfoLte(String mcc) throws Exception {
+        final CellInfoLte info = new CellInfoLte();
+        final CellIdentityLte ci = makeCellIdentityLte(0, 0, 0, 0, 0, mcc, "01", "", "");
+        info.setCellIdentity(ci);
+        return info;
+    }
+
+    @Test
+    public void testMakeFallbackUrls() throws Exception {
+        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        // Value exist in setting provider.
+        URL[] urls = wnm.makeCaptivePortalFallbackUrls();
+        assertEquals(urls[0].toString(), TEST_FALLBACK_URL);
+
+        // Clear setting provider value. Verify it to get configuration from resource instead.
+        setFallbackUrl(null);
+        // Verify that getting resource with exception.
+        when(mResources.getStringArray(R.array.config_captive_portal_fallback_urls))
+                .thenThrow(Resources.NotFoundException.class);
+        urls = wnm.makeCaptivePortalFallbackUrls();
+        assertEquals(urls.length, 0);
+
+        // Verify resource return 2 different URLs.
+        doReturn(new String[] {"http://testUrl1.com", "http://testUrl2.com"}).when(mResources)
+                .getStringArray(R.array.config_captive_portal_fallback_urls);
+        urls = wnm.makeCaptivePortalFallbackUrls();
+        assertEquals(urls.length, 2);
+        assertEquals("http://testUrl1.com", urls[0].toString());
+        assertEquals("http://testUrl2.com", urls[1].toString());
+
+        // Value is expected to be replaced by location resource.
+        doReturn(true).when(mResources).getBoolean(R.bool.config_no_sim_card_uses_neighbor_mcc);
+
+        final List<CellInfo> cellList = new ArrayList<CellInfo>();
+        final int testMcc = 460;
+        cellList.add(makeTestCellInfoGsm(Integer.toString(testMcc)));
+        doReturn(cellList).when(mTelephony).getAllCellInfo();
+        final Configuration config = mResources.getConfiguration();
+        config.mcc = testMcc;
+        doReturn(mMccContext).when(mContext).createConfigurationContext(eq(config));
+        doReturn(new String[] {"http://testUrl3.com"}).when(mMccResource)
+                .getStringArray(R.array.config_captive_portal_fallback_urls);
+        urls = wnm.makeCaptivePortalFallbackUrls();
+        assertEquals(urls.length, 1);
+        assertEquals("http://testUrl3.com", urls[0].toString());
     }
 
     private static CellIdentityGsm makeCellIdentityGsm(int lac, int cid, int arfcn, int bsic,
