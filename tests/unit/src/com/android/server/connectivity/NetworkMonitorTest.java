@@ -40,6 +40,10 @@ import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_OTHER_FALLBACK_U
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USE_HTTPS;
 import static android.net.util.NetworkStackUtils.DISMISS_PORTAL_IN_VALIDATED_NETWORK;
 import static android.net.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION;
+import static android.net.util.NetworkStackUtils.TEST_CAPTIVE_PORTAL_HTTPS_URL;
+import static android.net.util.NetworkStackUtils.TEST_CAPTIVE_PORTAL_HTTP_URL;
+import static android.net.util.NetworkStackUtils.TEST_URL_EXPIRATION_TIME;
+import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
 import static com.android.server.connectivity.NetworkMonitor.extractCharset;
@@ -172,6 +176,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 import javax.net.ssl.SSLHandshakeException;
 
@@ -203,6 +208,7 @@ public class NetworkMonitorTest {
     private @Mock HttpURLConnection mOtherHttpsConnection2;
     private @Mock HttpURLConnection mFallbackConnection;
     private @Mock HttpURLConnection mOtherFallbackConnection;
+    private @Mock HttpURLConnection mTestOverriddenUrlConnection;
     private @Mock HttpURLConnection mCapportApiConnection;
     private @Mock Random mRandom;
     private @Mock NetworkMonitor.Dependencies mDependencies;
@@ -231,6 +237,8 @@ public class NetworkMonitorTest {
     private static final String TEST_HTTPS_OTHER_URL2 = "https://other2.google.com/gen_204";
     private static final String TEST_FALLBACK_URL = "http://fallback.google.com/gen_204";
     private static final String TEST_OTHER_FALLBACK_URL = "http://otherfallback.google.com/gen_204";
+    private static final String TEST_INVALID_OVERRIDE_URL = "https://override.example.com/test";
+    private static final String TEST_OVERRIDE_URL = "http://localhost:12345/test";
     private static final String TEST_CAPPORT_API_URL = "https://capport.example.com/api";
     private static final String TEST_LOGIN_URL = "https://testportal.example.com/login";
     private static final String TEST_VENUE_INFO_URL = "https://venue.example.com/info";
@@ -462,6 +470,9 @@ public class NetworkMonitorTest {
                     return mFallbackConnection;
                 case TEST_OTHER_FALLBACK_URL:
                     return mOtherFallbackConnection;
+                case TEST_OVERRIDE_URL:
+                case TEST_INVALID_OVERRIDE_URL:
+                    return mTestOverriddenUrlConnection;
                 case TEST_CAPPORT_API_URL:
                     return mCapportApiConnection;
                 default:
@@ -1186,6 +1197,84 @@ public class NetworkMonitorTest {
         setPortal302(mHttpConnection);
 
         runNoValidationNetworkTest();
+    }
+
+    @Test
+    public void testIsCaptivePortal_OverriddenHttpsUrlValid() throws Exception {
+        setDeviceConfig(TEST_URL_EXPIRATION_TIME,
+                String.valueOf(currentTimeMillis() + TimeUnit.MINUTES.toMillis(9)));
+        setDeviceConfig(TEST_CAPTIVE_PORTAL_HTTPS_URL, TEST_OVERRIDE_URL);
+        setStatus(mTestOverriddenUrlConnection, 204);
+        setStatus(mHttpConnection, 204);
+
+        runValidatedNetworkTest();
+        verify(mHttpsConnection, never()).getResponseCode();
+        verify(mTestOverriddenUrlConnection).getResponseCode();
+    }
+
+    @Test
+    public void testIsCaptivePortal_OverriddenHttpUrlPortal() throws Exception {
+        setDeviceConfig(TEST_URL_EXPIRATION_TIME,
+                String.valueOf(currentTimeMillis() + TimeUnit.MINUTES.toMillis(9)));
+        setDeviceConfig(TEST_CAPTIVE_PORTAL_HTTP_URL, TEST_OVERRIDE_URL);
+        setStatus(mHttpsConnection, 500);
+        setPortal302(mTestOverriddenUrlConnection);
+
+        runPortalNetworkTest();
+        verify(mHttpConnection, never()).getResponseCode();
+        verify(mTestOverriddenUrlConnection).getResponseCode();
+    }
+
+    @Test
+    public void testIsCaptivePortal_InvalidHttpOverrideUrl() throws Exception {
+        setDeviceConfig(TEST_URL_EXPIRATION_TIME,
+                String.valueOf(currentTimeMillis() + TimeUnit.MINUTES.toMillis(9)));
+        setDeviceConfig(TEST_CAPTIVE_PORTAL_HTTP_URL, TEST_INVALID_OVERRIDE_URL);
+        setStatus(mHttpsConnection, 500);
+        setPortal302(mHttpConnection);
+
+        runPortalNetworkTest();
+        verify(mTestOverriddenUrlConnection, never()).getResponseCode();
+        verify(mHttpConnection).getResponseCode();
+    }
+
+    @Test
+    public void testIsCaptivePortal_InvalidHttpsOverrideUrl() throws Exception {
+        setDeviceConfig(TEST_URL_EXPIRATION_TIME,
+                String.valueOf(currentTimeMillis() + TimeUnit.MINUTES.toMillis(9)));
+        setDeviceConfig(TEST_CAPTIVE_PORTAL_HTTPS_URL, TEST_INVALID_OVERRIDE_URL);
+        setStatus(mHttpsConnection, 204);
+        setStatus(mHttpConnection, 204);
+
+        runValidatedNetworkTest();
+        verify(mTestOverriddenUrlConnection, never()).getResponseCode();
+        verify(mHttpsConnection).getResponseCode();
+    }
+
+    @Test
+    public void testIsCaptivePortal_ExpiredHttpsOverrideUrl() throws Exception {
+        setDeviceConfig(TEST_URL_EXPIRATION_TIME,
+                String.valueOf(currentTimeMillis() - TimeUnit.MINUTES.toMillis(1)));
+        setDeviceConfig(TEST_CAPTIVE_PORTAL_HTTPS_URL, TEST_OVERRIDE_URL);
+        setStatus(mHttpsConnection, 204);
+        setStatus(mHttpConnection, 204);
+
+        runValidatedNetworkTest();
+        verify(mTestOverriddenUrlConnection, never()).getResponseCode();
+        verify(mHttpsConnection).getResponseCode();
+    }
+
+    @Test
+    public void testIsCaptivePortal_TestHttpUrlExpirationTooLarge() throws Exception {
+        setDeviceConfig(TEST_URL_EXPIRATION_TIME,
+                String.valueOf(currentTimeMillis() + TimeUnit.MINUTES.toMillis(20)));
+        setDeviceConfig(TEST_CAPTIVE_PORTAL_HTTP_URL, TEST_OVERRIDE_URL);
+        setStatus(mHttpsConnection, 500);
+        setPortal302(mHttpConnection);
+
+        runPortalNetworkTest();
+        verify(mTestOverriddenUrlConnection, never()).getResponseCode();
+        verify(mHttpConnection).getResponseCode();
     }
 
     @Test
@@ -1983,6 +2072,11 @@ public class NetworkMonitorTest {
     private void setDismissPortalInValidatedNetwork(boolean enabled) {
         when(mDependencies.isFeatureEnabled(any(), any(),
                 eq(DISMISS_PORTAL_IN_VALIDATED_NETWORK), anyBoolean())).thenReturn(enabled);
+    }
+
+    private void setDeviceConfig(String key, String value) {
+        doReturn(value).when(mDependencies).getDeviceConfigProperty(eq(NAMESPACE_CONNECTIVITY),
+                eq(key), any() /* defaultValue */);
     }
 
     private NetworkMonitor runPortalNetworkTest() throws RemoteException {
