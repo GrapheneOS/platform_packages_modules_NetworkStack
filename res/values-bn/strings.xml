@@ -17,8 +17,7 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="notification_channel_name_connected" msgid="1795068343200033922">"ক্যাপটিভ পোর্টালের যাচাইকরণ"</string>
-    <!-- no translation found for notification_channel_description_connected (7239184168268014518) -->
-    <skip />
+    <string name="notification_channel_description_connected" msgid="7239184168268014518">"ক্যাপটিভ পোর্টাল নেটওয়ার্কে ডিভাইস সফলভাবে যাচাই করা হলে এই বিজ্ঞপ্তি দেখানো হয়"</string>
     <string name="notification_channel_name_network_venue_info" msgid="6526543187249265733">"নেটওয়ার্ক ভেন্যু সংক্রান্ত তথ্য"</string>
     <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"নেটওয়ার্কে একটি ভেন্যুর তথ্য সংক্রান্ত পৃষ্ঠা রয়েছে তা বোঝানোর জন্য বিজ্ঞপ্তি দেখানো হয়েছে"</string>
     <string name="connected" msgid="4563643884927480998">"কানেক্ট করা হয়েছে"</string>
