@@ -1591,7 +1591,8 @@ public class NetworkMonitor extends StateMachine {
                 DEFAULT_TCP_POLLING_INTERVAL_MS);
     }
 
-    private URL[] makeCaptivePortalFallbackUrls() {
+    @VisibleForTesting
+    URL[] makeCaptivePortalFallbackUrls() {
         try {
             final String firstUrl = mDependencies.getSetting(mContext, CAPTIVE_PORTAL_FALLBACK_URL,
                     null);
