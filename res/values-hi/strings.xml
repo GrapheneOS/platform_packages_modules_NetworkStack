@@ -26,7 +26,6 @@
     <skip />
     <!-- no translation found for connected (4563643884927480998) -->
     <skip />
-    <!-- no translation found for tap_for_info (6849746325626883711) -->
-    <skip />
+    <string name="tap_for_info" msgid="6849746325626883711">"कनेक्ट है / वेबसाइट देखने के लिए टैप करें"</string>
     <string name="application_label" msgid="8095087899576605955">"कनेक्टिविटी मैनेजर"</string>
 </resources>
