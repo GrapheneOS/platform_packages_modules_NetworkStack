@@ -24,6 +24,5 @@
     <string name="connected" msgid="4563643884927480998">"कनेक्ट केले आहे"</string>
     <!-- no translation found for tap_for_info (6849746325626883711) -->
     <skip />
-    <!-- no translation found for application_label (8095087899576605955) -->
-    <skip />
+    <string name="application_label" msgid="8095087899576605955">"कनेक्टिव्हिटी व्यवस्थापक"</string>
 </resources>

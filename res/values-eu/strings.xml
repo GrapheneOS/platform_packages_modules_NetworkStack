@@ -17,8 +17,7 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="notification_channel_name_connected" msgid="1795068343200033922">"Sare-zerbitzuen atariko autentifikazioa"</string>
-    <!-- no translation found for notification_channel_description_connected (7239184168268014518) -->
-    <skip />
+    <string name="notification_channel_description_connected" msgid="7239184168268014518">"Jakinarazpenak agertuko dira gailua sare-zerbitzuaren atari batean behar bezala autentifikatzen denean"</string>
     <string name="notification_channel_name_network_venue_info" msgid="6526543187249265733">"Sareari dagokion tokiaren informazioa"</string>
     <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"Jakinarazpenak agertuko dira sareari dagokion tokiak informazio-orri bat duela adierazteko"</string>
     <string name="connected" msgid="4563643884927480998">"Konektatuta"</string>
