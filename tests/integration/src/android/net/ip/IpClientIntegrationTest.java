@@ -109,19 +109,16 @@ import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
 import android.net.util.InterfaceParams;
 import android.net.util.IpUtils;
 import android.net.util.NetworkStackUtils;
-import android.net.util.PacketReader;
 import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
-import android.os.ParcelFileDescriptor;
 import android.os.PowerManager;
 import android.os.RemoteException;
 import android.os.SystemProperties;
 import android.system.ErrnoException;
 import android.system.Os;
 
-import androidx.annotation.Nullable;
 import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
@@ -134,6 +131,7 @@ import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
 import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
 import com.android.testutils.HandlerUtilsKt;
+import com.android.testutils.TapPacketReader;
 
 import org.junit.After;
 import org.junit.Before;
@@ -145,7 +143,6 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 
 import java.io.FileDescriptor;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.InetAddress;
@@ -159,8 +156,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Random;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Tests for IpClient.
@@ -192,6 +187,7 @@ public class IpClientIntegrationTest {
     private HandlerThread mPacketReaderThread;
     private Handler mHandler;
     private TapPacketReader mPacketReader;
+    private FileDescriptor mTapFd;
     private IpClient mIpc;
     private Dependencies mDependencies;
     private byte[] mClientMac;
@@ -237,46 +233,6 @@ public class IpClientIntegrationTest {
             (byte) 0x00, (byte) 0x17, (byte) 0xF2
     };
     private static final byte TEST_VENDOR_SPECIFIC_TYPE = 0x06;
-
-    private static class TapPacketReader extends PacketReader {
-        private final ParcelFileDescriptor mTapFd;
-        private final LinkedBlockingQueue<byte[]> mReceivedPackets =
-                new LinkedBlockingQueue<byte[]>();
-
-        TapPacketReader(Handler h, ParcelFileDescriptor tapFd) {
-            super(h, DATA_BUFFER_LEN);
-            mTapFd = tapFd;
-        }
-
-        @Override
-        protected FileDescriptor createFd() {
-            return mTapFd.getFileDescriptor();
-        }
-
-        @Override
-        protected void handlePacket(byte[] recvbuf, int length) {
-            final byte[] newPacket = Arrays.copyOf(recvbuf, length);
-            try {
-                mReceivedPackets.put(newPacket);
-            } catch (InterruptedException e) {
-                fail("fail to put the new packet in the queue");
-            }
-        }
-
-        /**
-         * Get the next packet that was received on the interface.
-         *
-         */
-        @Nullable
-        public byte[] popPacket(long timeoutMs) {
-            try {
-                return mReceivedPackets.poll(timeoutMs, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                // Fall through
-            }
-            return null;
-        }
-    }
 
     private class Dependencies extends IpClient.Dependencies {
         private boolean mIsDhcpLeaseCacheEnabled;
@@ -411,6 +367,7 @@ public class IpClientIntegrationTest {
     public void tearDown() throws Exception {
         if (mPacketReader != null) {
             mHandler.post(() -> mPacketReader.stop()); // Also closes the socket
+            mTapFd = null;
         }
         if (mPacketReaderThread != null) {
             mPacketReaderThread.quitSafely();
@@ -440,8 +397,8 @@ public class IpClientIntegrationTest {
         mPacketReaderThread.start();
         mHandler = mPacketReaderThread.getThreadHandler();
 
-        final ParcelFileDescriptor tapFd = iface.getFileDescriptor();
-        mPacketReader = new TapPacketReader(mHandler, tapFd);
+        mTapFd = iface.getFileDescriptor().getFileDescriptor();
+        mPacketReader = new TapPacketReader(mHandler, mTapFd, DATA_BUFFER_LEN);
         mHandler.post(() -> mPacketReader.start());
     }
 
@@ -532,21 +489,12 @@ public class IpClientIntegrationTest {
             false /* broadcast */, "duplicated request IP address");
     }
 
-    private void sendResponse(final ByteBuffer packet) throws IOException {
-        try (FileOutputStream out = new FileOutputStream(mPacketReader.createFd())) {
-            byte[] packetBytes = new byte[packet.limit()];
-            packet.get(packetBytes);
-            packet.flip();  // So we can reuse it in the future.
-            out.write(packetBytes);
-        }
-    }
-
     private void sendArpReply(final byte[] clientMac) throws IOException {
         final ByteBuffer packet = ArpPacket.buildArpPacket(clientMac /* dst */,
                 SERVER_MAC /* src */, INADDR_ANY.getAddress() /* target IP */,
                 clientMac /* target HW address */, CLIENT_ADDR.getAddress() /* sender IP */,
                 (short) ARP_REPLY);
-        sendResponse(packet);
+        mPacketReader.sendResponse(packet);
     }
 
     private void sendArpProbe() throws IOException {
@@ -554,7 +502,7 @@ public class IpClientIntegrationTest {
                 SERVER_MAC /* src */, CLIENT_ADDR.getAddress() /* target IP */,
                 new byte[ETHER_ADDR_LEN] /* target HW address */,
                 INADDR_ANY.getAddress() /* sender IP */, (short) ARP_REQUEST);
-        sendResponse(packet);
+        mPacketReader.sendResponse(packet);
     }
 
     private void startIpClientProvisioning(final boolean isDhcpLeaseCacheEnabled,
@@ -667,18 +615,18 @@ public class IpClientIntegrationTest {
             packetList.add(packet);
             if (packet instanceof DhcpDiscoverPacket) {
                 if (shouldReplyRapidCommitAck) {
-                    sendResponse(buildDhcpAckPacket(packet, leaseTimeSec, (short) mtu,
+                    mPacketReader.sendResponse(buildDhcpAckPacket(packet, leaseTimeSec, (short) mtu,
                               true /* rapidCommit */, captivePortalApiUrl));
                 } else {
-                    sendResponse(buildDhcpOfferPacket(packet, leaseTimeSec, (short) mtu,
-                            captivePortalApiUrl));
+                    mPacketReader.sendResponse(buildDhcpOfferPacket(packet, leaseTimeSec,
+                            (short) mtu, captivePortalApiUrl));
                 }
             } else if (packet instanceof DhcpRequestPacket) {
                 final ByteBuffer byteBuffer = isSuccessLease
                         ? buildDhcpAckPacket(packet, leaseTimeSec, (short) mtu,
                                 false /* rapidCommit */, captivePortalApiUrl)
                         : buildDhcpNakPacket(packet);
-                sendResponse(byteBuffer);
+                mPacketReader.sendResponse(byteBuffer);
             } else {
                 fail("invalid DHCP packet");
             }
@@ -777,7 +725,7 @@ public class IpClientIntegrationTest {
             assertEquals(NetworkInterface.getByName(mIfaceName).getMTU(), mtu);
         }
 
-        if (shouldRemoveTapInterface) removeTapInterface(mPacketReader.createFd());
+        if (shouldRemoveTapInterface) removeTapInterface(mTapFd);
         try {
             mIpc.shutdown();
             awaitIpClientShutdown();
@@ -845,12 +793,12 @@ public class IpClientIntegrationTest {
 
         final short mtu = (short) TEST_DEFAULT_MTU;
         if (!shouldReplyRapidCommitAck) {
-            sendResponse(buildDhcpOfferPacket(packet, TEST_LEASE_DURATION_S, mtu,
+            mPacketReader.sendResponse(buildDhcpOfferPacket(packet, TEST_LEASE_DURATION_S, mtu,
                     null /* captivePortalUrl */));
             packet = getNextDhcpPacket();
             assertTrue(packet instanceof DhcpRequestPacket);
         }
-        sendResponse(buildDhcpAckPacket(packet, TEST_LEASE_DURATION_S, mtu,
+        mPacketReader.sendResponse(buildDhcpAckPacket(packet, TEST_LEASE_DURATION_S, mtu,
                 shouldReplyRapidCommitAck, null /* captivePortalUrl */));
 
         if (!shouldAbortPreconnection) {
@@ -1126,7 +1074,7 @@ public class IpClientIntegrationTest {
     @Test
     public void testRestoreInitialInterfaceMtu_NotFoundInterfaceWhenStartingProvisioning()
             throws Exception {
-        removeTapInterface(mPacketReader.createFd());
+        removeTapInterface(mTapFd);
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
                 .withoutIPv6()
@@ -1284,7 +1232,7 @@ public class IpClientIntegrationTest {
         ByteBuffer ra = buildRaPacket(pio, rdnss1, rdnss2);
 
         waitForRouterSolicitation();
-        sendResponse(ra);
+        mPacketReader.sendResponse(ra);
 
         ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
@@ -1299,7 +1247,7 @@ public class IpClientIntegrationTest {
         // If the RDNSS lifetime is above the minimum, the DNS server is accepted.
         rdnss1 = buildRdnssOption(68, lowlifeDnsServer);
         ra = buildRaPacket(pio, rdnss1, rdnss2);
-        sendResponse(ra);
+        mPacketReader.sendResponse(ra);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(captor.capture());
         lp = captor.getValue();
         assertNotNull(lp);
@@ -1312,7 +1260,7 @@ public class IpClientIntegrationTest {
         rdnss1 = buildRdnssOption(0, dnsServer);
         rdnss2 = buildRdnssOption(0, lowlifeDnsServer);
         ra = buildRaPacket(pio, rdnss1, rdnss2);
-        sendResponse(ra);
+        mPacketReader.sendResponse(ra);
 
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(captor.capture());
         lp = captor.getValue();
@@ -1546,8 +1494,8 @@ public class IpClientIntegrationTest {
 
         // Send Offer and handle Request -> Ack
         final String serverSentUrl = serverSendsOption ? TEST_CAPTIVE_PORTAL_URL : null;
-        sendResponse(buildDhcpOfferPacket(discover, TEST_LEASE_DURATION_S, (short) TEST_DEFAULT_MTU,
-                serverSentUrl));
+        mPacketReader.sendResponse(buildDhcpOfferPacket(discover, TEST_LEASE_DURATION_S,
+                (short) TEST_DEFAULT_MTU, serverSentUrl));
         final int testMtu = 1345;
         handleDhcpPackets(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 false /* isDhcpRapidCommitEnabled */, testMtu,
