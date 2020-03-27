@@ -17,12 +17,10 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="notification_channel_name_connected" msgid="1795068343200033922">"Autentifikācija caurlaides lapā"</string>
-    <string name="notification_channel_description_connected" msgid="1664506646629701401">"Paziņojumi, kas tiek rādīti, kad ierīcē ir sekmīgi izveidots savienojums un ir veikta autentifikācija caurlaides lapas tīklā"</string>
+    <string name="notification_channel_description_connected" msgid="7239184168268014518">"Paziņojumi, kas tiek rādīti, kad ierīcē ir sekmīgi veikta autentifikācija caurlaides lapas tīklā"</string>
     <string name="notification_channel_name_network_venue_info" msgid="6526543187249265733">"Norises vietas informācija"</string>
     <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"Paziņojumi par to, ka tīklam ir norises vietas informācijas lapa"</string>
-    <string name="connected_to_ssid_param1" msgid="2312858438037646286">"Savienojums ar ierīci %1$s izveidots"</string>
     <string name="connected" msgid="4563643884927480998">"Izveidots savienojums"</string>
-    <string name="tap_for_info" msgid="5203220728001805560">"Pieskarieties, lai skatītu norises vietas datus"</string>
-    <!-- no translation found for application_label (8095087899576605955) -->
-    <skip />
+    <string name="tap_for_info" msgid="6849746325626883711">"Izveidots savienojums / piesk., lai skatītu vietni"</string>
+    <string name="application_label" msgid="8095087899576605955">"Savienojamības pārzinis"</string>
 </resources>
