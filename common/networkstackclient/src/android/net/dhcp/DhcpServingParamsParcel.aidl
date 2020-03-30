@@ -26,5 +26,6 @@ parcelable DhcpServingParamsParcel {
     long dhcpLeaseTimeSecs;
     int linkMtu;
     boolean metered;
+    int clientAddr;
 }
 
