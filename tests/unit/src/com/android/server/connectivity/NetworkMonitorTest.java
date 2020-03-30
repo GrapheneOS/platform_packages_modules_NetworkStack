@@ -524,7 +524,7 @@ public class NetworkMonitorTest {
 
         WrappedNetworkMonitor() {
             super(mContext, mCallbacks, mNetwork, mLogger, mValidationLogger, mServiceManager,
-                    mDependencies, mDataStallStatsUtils, mTst);
+                    mDependencies, mTst);
         }
 
         @Override
@@ -1332,21 +1332,48 @@ public class NetworkMonitorTest {
     }
 
     @Test
-    public void testDataStall_StallSuspectedAndSendMetrics() throws IOException {
+    public void testDataStall_StallDnsSuspectedAndSendMetrics() throws IOException {
+        // Connect a VALID network to simulate the data stall detection because data stall
+        // evaluation will only start from validated state.
+        setStatus(mHttpsConnection, 204);
         WrappedNetworkMonitor wrappedMonitor = makeNotMeteredNetworkMonitor();
+        wrappedMonitor.notifyNetworkConnected(TEST_LINK_PROPERTIES, METERED_CAPABILITIES);
+        verifyNetworkTested(VALIDATION_RESULT_VALID);
+        // Setup dns data stall signal.
         wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
         makeDnsTimeoutEvent(wrappedMonitor, 5);
         assertTrue(wrappedMonitor.isDataStall());
-        verify(mDataStallStatsUtils, times(1)).write(makeEmptyDataStallDetectionStats(), any());
+        // Trigger a dns signal to start evaluate data stall and upload metrics.
+        wrappedMonitor.notifyDnsResponse(RETURN_CODE_DNS_TIMEOUT);
+        // Setup information to prevent null data and cause NPE during testing.
+        when(mTelephony.getDataNetworkType()).thenReturn(TelephonyManager.NETWORK_TYPE_LTE);
+        when(mTelephony.getNetworkOperator()).thenReturn(TEST_MCCMNC);
+        when(mTelephony.getSimOperator()).thenReturn(TEST_MCCMNC);
+        // Verify data sent as expectation.
+        final DataStallDetectionStats stats = wrappedMonitor.buildDataStallDetectionStats(
+                NetworkCapabilities.TRANSPORT_CELLULAR);
+        final ArgumentCaptor<CaptivePortalProbeResult> probeResultCaptor =
+                ArgumentCaptor.forClass(CaptivePortalProbeResult.class);
+        verify(mDependencies, timeout(HANDLER_TIMEOUT_MS).times(1))
+                .writeDataStallDetectionStats(eq(stats), probeResultCaptor.capture());
+        assertTrue(probeResultCaptor.getValue().isSuccessful());
     }
 
     @Test
     public void testDataStall_NoStallSuspectedAndSendMetrics() throws IOException {
+        // Connect a VALID network to simulate the data stall detection because data stall
+        // evaluation will only start from validated state.
+        setStatus(mHttpsConnection, 204);
         WrappedNetworkMonitor wrappedMonitor = makeNotMeteredNetworkMonitor();
+        wrappedMonitor.notifyNetworkConnected(TEST_LINK_PROPERTIES, METERED_CAPABILITIES);
+        verifyNetworkTested(VALIDATION_RESULT_VALID);
+        // Setup no data stall dns signal.
         wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
         makeDnsTimeoutEvent(wrappedMonitor, 3);
         assertFalse(wrappedMonitor.isDataStall());
-        verify(mDataStallStatsUtils, never()).write(makeEmptyDataStallDetectionStats(), any());
+        // Trigger a dns signal to start evaluate data stall.
+        wrappedMonitor.notifyDnsResponse(RETURN_CODE_DNS_SUCCESS);
+        verify(mDependencies, never()).writeDataStallDetectionStats(any(), any());
     }
 
     @Test
