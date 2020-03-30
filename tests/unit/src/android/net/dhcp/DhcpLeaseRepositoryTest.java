@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -71,6 +72,7 @@ import java.util.Set;
 public class DhcpLeaseRepositoryTest {
     private static final Inet4Address TEST_DEF_ROUTER = parseAddr4("192.168.42.247");
     private static final Inet4Address TEST_SERVER_ADDR = parseAddr4("192.168.42.241");
+    private static final Inet4Address TEST_CLIENT_ADDR = parseAddr4("192.168.42.2");
     private static final Inet4Address TEST_RESERVED_ADDR = parseAddr4("192.168.42.243");
     private static final MacAddress TEST_MAC_1 = MacAddress.fromBytes(
             new byte[] { 5, 4, 3, 2, 1, 0 });
@@ -108,12 +110,17 @@ public class DhcpLeaseRepositoryTest {
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
+        initDhcpLeaseRepositoryWithOption(null);
+    }
+
+    private void initDhcpLeaseRepositoryWithOption(final Inet4Address clientAddr) {
+        reset(mCallbacks, mClock);
         mLog = new SharedLog("DhcpLeaseRepositoryTest");
         when(mClock.elapsedRealtime()).thenReturn(TEST_TIME);
         // Use a non-null Binder for linkToDeath
         when(mCallbacks.asBinder()).thenReturn(mCallbacksBinder);
         mRepo = new DhcpLeaseRepository(
-                TEST_IP_PREFIX, TEST_EXCL_SET, TEST_LEASE_TIME_MS, mLog, mClock);
+                TEST_IP_PREFIX, TEST_EXCL_SET, TEST_LEASE_TIME_MS, clientAddr, mLog, mClock);
         mRepo.addLeaseCallbacks(mCallbacks);
         verify(mCallbacks, atLeastOnce()).asBinder();
     }
@@ -145,7 +152,8 @@ public class DhcpLeaseRepositoryTest {
     @Test
     public void testAddressExhaustion() throws Exception {
         // Use a /28 to quickly run out of addresses
-        mRepo.updateParams(new IpPrefix(TEST_SERVER_ADDR, 28), TEST_EXCL_SET, TEST_LEASE_TIME_MS);
+        mRepo.updateParams(new IpPrefix(TEST_SERVER_ADDR, 28), TEST_EXCL_SET, TEST_LEASE_TIME_MS,
+                null /* clientAddr */);
 
         // /28 should have 16 addresses, 14 w/o the first/last, 11 w/o excluded addresses
         requestAddresses((byte) 11);
@@ -191,7 +199,8 @@ public class DhcpLeaseRepositoryTest {
         // Update from /22 to /28 and add another reserved address
         Set<Inet4Address> newReserved = new HashSet<>(TEST_EXCL_SET);
         newReserved.add(reservedAddr);
-        mRepo.updateParams(new IpPrefix(TEST_SERVER_ADDR, 28), newReserved, TEST_LEASE_TIME_MS);
+        mRepo.updateParams(new IpPrefix(TEST_SERVER_ADDR, 28), newReserved, TEST_LEASE_TIME_MS,
+                null /* clientAddr */);
         // Callback is called for the second time with just this lease
         verifyLeasesChangedCallback(2 /* times */, reqAddrIn28Lease);
         verifyNoMoreInteractions(mCallbacks);
@@ -223,7 +232,7 @@ public class DhcpLeaseRepositoryTest {
     @Test
     public void testUpdateParams_UsesNewPrefix() throws Exception {
         final IpPrefix newPrefix = new IpPrefix(parseAddr4("192.168.123.0"), 24);
-        mRepo.updateParams(newPrefix, TEST_EXCL_SET, TEST_LEASE_TIME_MS);
+        mRepo.updateParams(newPrefix, TEST_EXCL_SET, TEST_LEASE_TIME_MS, null /* clientAddr */);
 
         DhcpLease lease = mRepo.getOffer(CLIENTID_UNSPEC, TEST_MAC_1,
                 IPV4_ADDR_ANY /* relayAddr */, INETADDR_UNSPEC /* reqAddr */, HOSTNAME_NONE);
@@ -311,6 +320,31 @@ public class DhcpLeaseRepositoryTest {
         DhcpLease offer = mRepo.getOffer(CLIENTID_UNSPEC, TEST_MAC_1, IPV4_ADDR_ANY /* relayAddr */,
                 invalidAddr /* reqAddr */, HOSTNAME_NONE);
         assertNotEquals(invalidAddr, offer.getNetAddr());
+    }
+
+    @Test
+    public void testGetOffer_StaticClientAddress() throws Exception {
+        initDhcpLeaseRepositoryWithOption(TEST_CLIENT_ADDR);
+        final DhcpLease offer = mRepo.getOffer(CLIENTID_UNSPEC, TEST_MAC_1,
+                IPV4_ADDR_ANY /* relayAddr */, TEST_INETADDR_1 /* reqAddr */, TEST_HOSTNAME_1);
+        assertEquals(TEST_CLIENT_ADDR, offer.getNetAddr());
+        assertEquals(TEST_HOSTNAME_1, offer.getHostname());
+    }
+
+    @Test
+    public void testGetOffer_StaticClientAddressInUse() throws Exception {
+        initDhcpLeaseRepositoryWithOption(TEST_CLIENT_ADDR);
+        final byte[] clientId = new byte[] { 1 };
+        final DhcpLease lease = mRepo.requestLease(clientId, TEST_MAC_1,
+                IPV4_ADDR_ANY /* clientAddr */, IPV4_ADDR_ANY /* relayAddr */,
+                TEST_CLIENT_ADDR /* reqAddr */, false, TEST_HOSTNAME_1);
+
+        // Static client address only support single client use case.
+        try {
+            mRepo.getOffer(CLIENTID_UNSPEC, TEST_MAC_1, IPV4_ADDR_ANY /* relayAddr */,
+                    INETADDR_UNSPEC /* reqAddr */, HOSTNAME_NONE);
+            fail("Repository should be out of addresses and throw");
+        } catch (DhcpLeaseRepository.OutOfAddressesException e) { /* expected */ }
     }
 
     @Test(expected = DhcpLeaseRepository.InvalidSubnetException.class)
@@ -507,7 +541,8 @@ public class DhcpLeaseRepositoryTest {
     @Test
     public void testMarkLeaseDeclined_UsedIfOutOfAddresses() throws Exception {
         // Use a /28 to quickly run out of addresses
-        mRepo.updateParams(new IpPrefix(TEST_SERVER_ADDR, 28), TEST_EXCL_SET, TEST_LEASE_TIME_MS);
+        mRepo.updateParams(new IpPrefix(TEST_SERVER_ADDR, 28), TEST_EXCL_SET, TEST_LEASE_TIME_MS,
+                null /* clientAddr */);
 
         mRepo.markLeaseDeclined(TEST_INETADDR_1);
         mRepo.markLeaseDeclined(TEST_INETADDR_2);
