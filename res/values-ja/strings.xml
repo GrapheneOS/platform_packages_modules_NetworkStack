@@ -17,8 +17,7 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="notification_channel_name_connected" msgid="1795068343200033922">"キャプティブ ポータルの認証"</string>
-    <!-- no translation found for notification_channel_description_connected (7239184168268014518) -->
-    <skip />
+    <string name="notification_channel_description_connected" msgid="7239184168268014518">"デバイスが認証されてキャプティブ ポータル ネットワークにアクセスできるようになると、通知が表示されます"</string>
     <string name="notification_channel_name_network_venue_info" msgid="6526543187249265733">"ネットワークの場所に関する情報"</string>
     <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"場所に関する情報のページがネットワークにあることを示す通知が表示されます"</string>
     <string name="connected" msgid="4563643884927480998">"接続完了"</string>
