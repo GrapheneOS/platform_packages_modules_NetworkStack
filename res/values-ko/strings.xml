@@ -17,8 +17,7 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="notification_channel_name_connected" msgid="1795068343200033922">"종속 포털 인증"</string>
-    <!-- no translation found for notification_channel_description_connected (7239184168268014518) -->
-    <skip />
+    <string name="notification_channel_description_connected" msgid="7239184168268014518">"기기가 종속 포털 네트워크에 액세스하도록 인증되었을 때 표시되는 알림입니다."</string>
     <string name="notification_channel_name_network_venue_info" msgid="6526543187249265733">"네트워크 장소 정보"</string>
     <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"네트워크에 장소 정보 페이지가 있음을 나타내기 위해 표시되는 알림입니다."</string>
     <string name="connected" msgid="4563643884927480998">"연결됨"</string>

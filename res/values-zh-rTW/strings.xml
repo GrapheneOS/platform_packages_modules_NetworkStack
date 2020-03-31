@@ -17,8 +17,7 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="notification_channel_name_connected" msgid="1795068343200033922">"網頁認證入口驗證"</string>
-    <!-- no translation found for notification_channel_description_connected (7239184168268014518) -->
-    <skip />
+    <string name="notification_channel_description_connected" msgid="7239184168268014518">"當裝置成功通過網頁認證入口網路驗證時，系統就會顯示這類通知"</string>
     <string name="notification_channel_name_network_venue_info" msgid="6526543187249265733">"網路驗證資訊"</string>
     <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"當網路有驗證資訊頁面時，系統就會顯示這類通知"</string>
     <string name="connected" msgid="4563643884927480998">"已連線"</string>
