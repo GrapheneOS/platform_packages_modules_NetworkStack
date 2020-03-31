@@ -85,6 +85,12 @@ public class DhcpServingParams {
     public final boolean metered;
 
     /**
+     * Client inet address. This will be the only address offered by DhcpServer if set.
+     */
+    @Nullable
+    public final Inet4Address clientAddr;
+
+    /**
      * Checked exception thrown when some parameters used to build {@link DhcpServingParams} are
      * missing or invalid.
      */
@@ -97,7 +103,7 @@ public class DhcpServingParams {
     private DhcpServingParams(@NonNull LinkAddress serverAddr,
             @NonNull Set<Inet4Address> defaultRouters,
             @NonNull Set<Inet4Address> dnsServers, @NonNull Set<Inet4Address> excludedAddrs,
-            long dhcpLeaseTimeSecs, int linkMtu, boolean metered) {
+            long dhcpLeaseTimeSecs, int linkMtu, boolean metered, Inet4Address clientAddr) {
         this.serverAddr = serverAddr;
         this.defaultRouters = defaultRouters;
         this.dnsServers = dnsServers;
@@ -105,6 +111,7 @@ public class DhcpServingParams {
         this.dhcpLeaseTimeSecs = dhcpLeaseTimeSecs;
         this.linkMtu = linkMtu;
         this.metered = metered;
+        this.clientAddr = clientAddr;
     }
 
     /**
@@ -119,6 +126,11 @@ public class DhcpServingParams {
         final LinkAddress serverAddr = new LinkAddress(
                 intToInet4AddressHTH(parcel.serverAddr),
                 parcel.serverAddrPrefixLength);
+        Inet4Address clientAddr = null;
+        if (parcel.clientAddr != 0) {
+            clientAddr = intToInet4AddressHTH(parcel.clientAddr);
+        }
+
         return new Builder()
                 .setServerAddr(serverAddr)
                 .setDefaultRouters(toInet4AddressSet(parcel.defaultRouters))
@@ -127,6 +139,7 @@ public class DhcpServingParams {
                 .setDhcpLeaseTimeSecs(parcel.dhcpLeaseTimeSecs)
                 .setLinkMtu(parcel.linkMtu)
                 .setMetered(parcel.metered)
+                .setClientAddr(clientAddr)
                 .build();
     }
 
@@ -181,6 +194,7 @@ public class DhcpServingParams {
         private long mDhcpLeaseTimeSecs;
         private int mLinkMtu = MTU_UNSET;
         private boolean mMetered;
+        private Inet4Address mClientAddr;
 
         /**
          * Set the server address and served prefix for the DHCP server.
@@ -305,6 +319,16 @@ public class DhcpServingParams {
         }
 
         /**
+         * Set the client address.
+         *
+         * <p>If not set, the default value is null.
+         */
+        public Builder setClientAddr(@Nullable Inet4Address clientAddr) {
+            this.mClientAddr = clientAddr;
+            return this;
+        }
+
+        /**
          * Create a new {@link DhcpServingParams} instance based on parameters set in the builder.
          *
          * <p>This method has no side-effects. If it does not throw, a valid
@@ -358,7 +382,7 @@ public class DhcpServingParams {
                     Collections.unmodifiableSet(new HashSet<>(mDefaultRouters)),
                     Collections.unmodifiableSet(new HashSet<>(mDnsServers)),
                     Collections.unmodifiableSet(excl),
-                    mDhcpLeaseTimeSecs, mLinkMtu, mMetered);
+                    mDhcpLeaseTimeSecs, mLinkMtu, mMetered, mClientAddr);
         }
     }
 
