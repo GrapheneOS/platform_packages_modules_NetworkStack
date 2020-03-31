@@ -63,8 +63,12 @@ import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_MODE;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_MODE_IGNORE;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_MODE_PROMPT;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_OTHER_FALLBACK_URLS;
+import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_OTHER_HTTPS_URLS;
+import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_OTHER_HTTP_URLS;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USER_AGENT;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USE_HTTPS;
+import static android.net.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_HTTPS_URLS;
+import static android.net.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_HTTP_URLS;
 import static android.net.util.NetworkStackUtils.DISMISS_PORTAL_IN_VALIDATED_NETWORK;
 import static android.net.util.NetworkStackUtils.isEmpty;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
@@ -359,9 +363,11 @@ public class NetworkMonitor extends StateMachine {
     private final TcpSocketTracker mTcpTracker;
     // Configuration values for captive portal detection probes.
     private final String mCaptivePortalUserAgent;
-    private final URL mCaptivePortalHttpsUrl;
-    private final URL mCaptivePortalHttpUrl;
     private final URL[] mCaptivePortalFallbackUrls;
+    @NonNull
+    private final URL[] mCaptivePortalHttpUrls;
+    @NonNull
+    private final URL[] mCaptivePortalHttpsUrls;
     @Nullable
     private final CaptivePortalProbeSpec[] mCaptivePortalFallbackSpecs;
 
@@ -483,8 +489,8 @@ public class NetworkMonitor extends StateMachine {
         mIsCaptivePortalCheckEnabled = getIsCaptivePortalCheckEnabled();
         mUseHttps = getUseHttpsValidation();
         mCaptivePortalUserAgent = getCaptivePortalUserAgent();
-        mCaptivePortalHttpsUrl = makeURL(getCaptivePortalServerHttpsUrl());
-        mCaptivePortalHttpUrl = makeURL(getCaptivePortalServerHttpUrl());
+        mCaptivePortalHttpsUrls = makeCaptivePortalHttpsUrls();
+        mCaptivePortalHttpUrls = makeCaptivePortalHttpUrls();
         mCaptivePortalFallbackUrls = makeCaptivePortalFallbackUrls();
         mCaptivePortalFallbackSpecs = makeCaptivePortalFallbackProbeSpecs();
         mRandom = deps.getRandom();
@@ -1596,19 +1602,8 @@ public class NetworkMonitor extends StateMachine {
         try {
             final String firstUrl = mDependencies.getSetting(mContext, CAPTIVE_PORTAL_FALLBACK_URL,
                     null);
-
-            final URL[] settingProviderUrls;
-            if (!TextUtils.isEmpty(firstUrl)) {
-                final String otherUrls = mDependencies.getDeviceConfigProperty(
-                        NAMESPACE_CONNECTIVITY, CAPTIVE_PORTAL_OTHER_FALLBACK_URLS, "");
-                // otherUrls may be empty, but .split() ignores trailing empty strings
-                final String separator = ",";
-                final String[] urls = (firstUrl + separator + otherUrls).split(separator);
-                settingProviderUrls = convertStrings(urls, this::makeURL, new URL[0]);
-            } else {
-                settingProviderUrls = new URL[0];
-            }
-
+            final URL[] settingProviderUrls =
+                combineCaptivePortalUrls(firstUrl, CAPTIVE_PORTAL_OTHER_FALLBACK_URLS);
             return getProbeUrlArrayConfig(settingProviderUrls,
                     R.array.config_captive_portal_fallback_urls,
                     R.array.default_captive_portal_fallback_urls, this::makeURL);
@@ -1638,6 +1633,49 @@ public class NetworkMonitor extends StateMachine {
             Log.e(TAG, "Error parsing configured fallback probe specs", e);
             return null;
         }
+    }
+
+    private URL[] makeCaptivePortalHttpsUrls() {
+        final String firstUrl = getCaptivePortalServerHttpsUrl();
+        try {
+            final URL[] settingProviderUrls =
+                combineCaptivePortalUrls(firstUrl, CAPTIVE_PORTAL_OTHER_HTTPS_URLS);
+            return getProbeUrlArrayConfig(settingProviderUrls,
+                    R.array.config_captive_portal_https_urls,
+                    DEFAULT_CAPTIVE_PORTAL_HTTPS_URLS, this::makeURL);
+        } catch (Exception e) {
+            // Don't let a misconfiguration bootloop the system.
+            Log.e(TAG, "Error parsing configured https URLs", e);
+            // Ensure URL aligned with legacy configuration.
+            return new URL[]{makeURL(firstUrl)};
+        }
+    }
+
+    private URL[] makeCaptivePortalHttpUrls() {
+        final String firstUrl = getCaptivePortalServerHttpUrl();
+        try {
+            final URL[] settingProviderUrls =
+                    combineCaptivePortalUrls(firstUrl, CAPTIVE_PORTAL_OTHER_HTTP_URLS);
+            return getProbeUrlArrayConfig(settingProviderUrls,
+                    R.array.config_captive_portal_http_urls,
+                    DEFAULT_CAPTIVE_PORTAL_HTTP_URLS, this::makeURL);
+        } catch (Exception e) {
+            // Don't let a misconfiguration bootloop the system.
+            Log.e(TAG, "Error parsing configured http URLs", e);
+            // Ensure URL aligned with legacy configuration.
+            return new URL[]{makeURL(firstUrl)};
+        }
+    }
+
+    private URL[] combineCaptivePortalUrls(final String firstUrl, final String name) {
+        if (TextUtils.isEmpty(firstUrl)) return new URL[0];
+
+        final String otherUrls = mDependencies.getDeviceConfigProperty(
+                NAMESPACE_CONNECTIVITY, name, "");
+        // otherUrls may be empty, but .split() ignores trailing empty strings
+        final String separator = ",";
+        final String[] urls = (firstUrl + separator + otherUrls).split(separator);
+        return convertStrings(urls, this::makeURL, new URL[0]);
     }
 
     /**
@@ -1680,6 +1718,24 @@ public class NetworkMonitor extends StateMachine {
     private <T> T[] getProbeUrlArrayConfig(@NonNull T[] providerValue, @ArrayRes int configResId,
             @ArrayRes int defaultResId, @NonNull Function<String, T> resourceConverter) {
         final Resources res = getContextByMccIfNoSimCardOrDefault().getResources();
+        return getProbeUrlArrayConfig(providerValue, configResId, res.getStringArray(defaultResId),
+                resourceConverter);
+    }
+
+    /**
+     * Get an array configuration from resources or the settings provider.
+     *
+     * <p>The configuration resource is prioritized, then the provider values, then the default
+     * resource values.
+     * @param providerValue Values obtained from the setting provider.
+     * @param configResId ID of the configuration resource.
+     * @param defaultConfig Values of default configuration.
+     * @param resourceConverter Converter from the resource strings to stored setting class. Null
+     *                          return values are ignored.
+     */
+    private <T> T[] getProbeUrlArrayConfig(@NonNull T[] providerValue, @ArrayRes int configResId,
+            String[] defaultConfig, @NonNull Function<String, T> resourceConverter) {
+        final Resources res = getContextByMccIfNoSimCardOrDefault().getResources();
         String[] configValue = res.getStringArray(configResId);
 
         if (configValue.length == 0) {
@@ -1687,7 +1743,7 @@ public class NetworkMonitor extends StateMachine {
                 return providerValue;
             }
 
-            configValue = res.getStringArray(defaultResId);
+            configValue = defaultConfig;
         }
 
         return convertStrings(configValue, resourceConverter, Arrays.copyOf(providerValue, 0));
@@ -1748,8 +1804,8 @@ public class NetworkMonitor extends StateMachine {
         }
 
         URL pacUrl = null;
-        URL httpsUrl = mCaptivePortalHttpsUrl;
-        URL httpUrl = mCaptivePortalHttpUrl;
+        final URL[] httpsUrls = mCaptivePortalHttpsUrls;
+        final URL[] httpUrls = mCaptivePortalHttpUrls;
 
         // On networks with a PAC instead of fetching a URL that should result in a 204
         // response, we instead simply fetch the PAC script.  This is done for a few reasons:
@@ -1776,7 +1832,8 @@ public class NetworkMonitor extends StateMachine {
             }
         }
 
-        if ((pacUrl == null) && (httpUrl == null || httpsUrl == null)) {
+        if ((pacUrl == null) && (httpUrls.length == 0 || httpsUrls.length == 0
+                || httpUrls[0] == null || httpsUrls[0] == null)) {
             return CaptivePortalProbeResult.FAILED;
         }
 
@@ -1788,9 +1845,9 @@ public class NetworkMonitor extends StateMachine {
             reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP, result);
         } else if (mUseHttps) {
             // Probe results are reported inside sendParallelHttpProbes.
-            result = sendParallelHttpProbes(proxyInfo, httpsUrl, httpUrl);
+            result = sendParallelHttpProbes(proxyInfo, httpsUrls[0], httpUrls[0]);
         } else {
-            result = sendDnsAndHttpProbes(proxyInfo, httpUrl, ValidationProbeEvent.PROBE_HTTP);
+            result = sendDnsAndHttpProbes(proxyInfo, httpUrls[0], ValidationProbeEvent.PROBE_HTTP);
             reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP, result);
         }
 
