@@ -59,6 +59,7 @@ aidl_interface {
         "src/android/net/INetworkStackStatusCallback.aidl",
         "src/android/net/InitialConfigurationParcelable.aidl",
         "src/android/net/InformationElementParcelable.aidl",
+        "src/android/net/Layer2InformationParcelable.aidl",
         "src/android/net/Layer2PacketParcelable.aidl",
         "src/android/net/NattKeepalivePacketDataParcelable.aidl",
         "src/android/net/PrivateDnsConfigParcel.aidl",
