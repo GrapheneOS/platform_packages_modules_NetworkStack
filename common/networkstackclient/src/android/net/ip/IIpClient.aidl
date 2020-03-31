@@ -15,6 +15,7 @@
  */
 package android.net.ip;
 
+import android.net.Layer2InformationParcelable;
 import android.net.ProxyInfo;
 import android.net.ProvisioningConfigurationParcelable;
 import android.net.NattKeepalivePacketDataParcelable;
@@ -36,4 +37,5 @@ oneway interface IIpClient {
     void setL2KeyAndGroupHint(in String l2Key, in String groupHint);
     void addNattKeepalivePacketFilter(int slot, in NattKeepalivePacketDataParcelable pkt);
     void notifyPreconnectionComplete(boolean success);
+    void updateLayer2Information(in Layer2InformationParcelable info);
 }
