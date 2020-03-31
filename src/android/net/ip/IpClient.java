@@ -28,6 +28,7 @@ import android.net.ConnectivityManager;
 import android.net.DhcpResults;
 import android.net.INetd;
 import android.net.IpPrefix;
+import android.net.Layer2InformationParcelable;
 import android.net.Layer2PacketParcelable;
 import android.net.LinkAddress;
 import android.net.LinkProperties;
@@ -705,6 +706,12 @@ public class IpClient extends StateMachine {
         }
 
         @Override
+        public void updateLayer2Information(Layer2InformationParcelable info) {
+            enforceNetworkStackCallingPermission();
+            IpClient.this.updateLayer2Information(info);
+        }
+
+        @Override
         public int getInterfaceVersion() {
             return this.VERSION;
         }
@@ -875,6 +882,13 @@ public class IpClient extends StateMachine {
      */
     public void notifyPreconnectionComplete(boolean success) {
         sendMessage(CMD_COMPLETE_PRECONNECTION, success ? 1 : 0);
+    }
+
+    /**
+     * Update the network bssid, L2Key and GroupHint layer2 information.
+     */
+    public void updateLayer2Information(@NonNull Layer2InformationParcelable info) {
+        // TODO: add specific implementation.
     }
 
     /**
