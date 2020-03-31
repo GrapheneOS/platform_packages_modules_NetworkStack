@@ -56,6 +56,18 @@ public class NetworkStackUtils {
             "captive_portal_other_fallback_urls";
 
     /**
+     * A comma separated list of URLs used for captive portal detection in addition to the HTTP url
+     * associated with the CAPTIVE_PORTAL_HTTP_URL settings.
+     */
+    public static final String CAPTIVE_PORTAL_OTHER_HTTP_URLS = "captive_portal_other_http_urls";
+
+    /**
+     * A comma separated list of URLs used for network validation. in addition to the HTTPS url
+     * associated with the CAPTIVE_PORTAL_HTTPS_URL settings.
+     */
+    public static final String CAPTIVE_PORTAL_OTHER_HTTPS_URLS = "captive_portal_other_https_urls";
+
+    /**
      * Which User-Agent string to use in the header of the captive portal detection probes.
      * The User-Agent field is unset when this setting has no value (HttpUrlConnection default).
      */
@@ -111,6 +123,17 @@ public class NetworkStackUtils {
      */
     public static final int CAPTIVE_PORTAL_MODE_AVOID = 2;
 
+    /**
+     * The default list of HTTP URLs to use for detecting captive portals.
+     */
+    public static final String[] DEFAULT_CAPTIVE_PORTAL_HTTP_URLS =
+            new String [] {"http://connectivitycheck.gstatic.com/generate_204"};
+    /**
+     * The default list of HTTPS URLs for network validation, to use for confirming internet
+     * connectivity.
+     */
+    public static final String[] DEFAULT_CAPTIVE_PORTAL_HTTPS_URLS =
+            new String [] {"https://www.google.com/generate_204"};
     /**
      * @deprecated Considering boolean experiment flag is likely to cause misconfiguration
      *             particularly when NetworkStack module rolls back to previous version. It's

@@ -39,6 +39,10 @@
     </string-array>
     <string-array name="config_captive_portal_fallback_probe_specs" translatable="false">
     </string-array>
+    <string-array name="config_captive_portal_http_urls" translatable="false">
+    </string-array>
+    <string-array name="config_captive_portal_https_urls" translatable="false">
+    </string-array>
 
     <!-- Customized default DNS Servers address. -->
     <string-array name="config_default_dns_servers" translatable="false">
