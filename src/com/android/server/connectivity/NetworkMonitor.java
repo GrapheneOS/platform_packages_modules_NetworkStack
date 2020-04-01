@@ -355,7 +355,6 @@ public class NetworkMonitor extends StateMachine {
     private final NetworkStackNotifier mNotifier;
     private final IpConnectivityLog mMetricsLog;
     private final Dependencies mDependencies;
-    private final DataStallStatsUtils mDetectionStatsUtils;
     private final TcpSocketTracker mTcpTracker;
     // Configuration values for captive portal detection probes.
     private final String mCaptivePortalUserAgent;
@@ -438,15 +437,14 @@ public class NetworkMonitor extends StateMachine {
     public NetworkMonitor(Context context, INetworkMonitorCallbacks cb, Network network,
             SharedLog validationLog, @NonNull NetworkStackServiceManager serviceManager) {
         this(context, cb, network, new IpConnectivityLog(), validationLog, serviceManager,
-                Dependencies.DEFAULT, new DataStallStatsUtils(),
-                getTcpSocketTrackerOrNull(context, network));
+                Dependencies.DEFAULT, getTcpSocketTrackerOrNull(context, network));
     }
 
     @VisibleForTesting
     public NetworkMonitor(Context context, INetworkMonitorCallbacks cb, Network network,
             IpConnectivityLog logger, SharedLog validationLogs,
             @NonNull NetworkStackServiceManager serviceManager, Dependencies deps,
-            DataStallStatsUtils detectionStatsUtils, @Nullable TcpSocketTracker tst) {
+            @Nullable TcpSocketTracker tst) {
         // Add suffix indicating which NetworkMonitor we're talking about.
         super(TAG + "/" + network.toString());
 
@@ -460,7 +458,6 @@ public class NetworkMonitor extends StateMachine {
         mCallback = cb;
         mCallbackVersion = getCallbackVersion(cb);
         mDependencies = deps;
-        mDetectionStatsUtils = detectionStatsUtils;
         mNetwork = network;
         mCleartextDnsNetwork = deps.getPrivateDnsBypassNetwork(network);
         mTelephonyManager = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
@@ -897,7 +894,8 @@ public class NetworkMonitor extends StateMachine {
         final int[] transports = mNetworkCapabilities.getTransportTypes();
 
         for (int i = 0; i < transports.length; i++) {
-            DataStallStatsUtils.write(buildDataStallDetectionStats(transports[i]), result);
+            final DataStallDetectionStats stats = buildDataStallDetectionStats(transports[i]);
+            mDependencies.writeDataStallDetectionStats(stats, result);
         }
         mCollectDataStallMetrics = false;
     }
@@ -2417,6 +2415,18 @@ public class NetworkMonitor extends StateMachine {
         public boolean isFeatureEnabled(@NonNull Context context, @NonNull String namespace,
                 @NonNull String name, boolean defaultEnabled) {
             return NetworkStackUtils.isFeatureEnabled(context, namespace, name, defaultEnabled);
+        }
+
+        /**
+         * Collect data stall detection level information for each transport type. Write metrics
+         * data to statsd pipeline.
+         * @param stats a {@link DataStallDetectionStats} that contains the detection level
+         *              information.
+         * @para result the network reevaluation result.
+         */
+        public void writeDataStallDetectionStats(@NonNull final DataStallDetectionStats stats,
+                @NonNull final CaptivePortalProbeResult result) {
+            DataStallStatsUtils.write(stats, result);
         }
 
         public static final Dependencies DEFAULT = new Dependencies();
