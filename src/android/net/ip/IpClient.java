@@ -772,14 +772,6 @@ public class IpClient extends StateMachine {
             return;
         }
 
-        mInterfaceParams = mDependencies.getInterfaceParams(mInterfaceName);
-        if (mInterfaceParams == null) {
-            logError("Failed to find InterfaceParams for " + mInterfaceName);
-            doImmediateProvisioningFailure(IpManagerEvent.ERROR_INTERFACE_NOT_FOUND);
-            return;
-        }
-
-        mCallback.setNeighborDiscoveryOffload(true);
         sendMessage(CMD_START, new android.net.shared.ProvisioningConfiguration(req));
     }
 
@@ -1650,6 +1642,17 @@ public class IpClient extends StateMachine {
                 // tethering or during an IpClient restart.
                 stopAllIP();
             }
+
+            // Ensure that interface parameters are fetched on the handler thread so they are
+            // properly ordered with other events, such as restoring the interface MTU on teardown.
+            mInterfaceParams = mDependencies.getInterfaceParams(mInterfaceName);
+            if (mInterfaceParams == null) {
+                logError("Failed to find InterfaceParams for " + mInterfaceName);
+                doImmediateProvisioningFailure(IpManagerEvent.ERROR_INTERFACE_NOT_FOUND);
+                transitionTo(mStoppedState);
+                return;
+            }
+            mCallback.setNeighborDiscoveryOffload(true);
         }
 
         @Override
