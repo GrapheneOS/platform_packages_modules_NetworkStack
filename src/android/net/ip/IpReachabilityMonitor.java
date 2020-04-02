@@ -27,6 +27,7 @@ import android.net.INetd;
 import android.net.LinkProperties;
 import android.net.RouteInfo;
 import android.net.ip.IpNeighborMonitor.NeighborEvent;
+import android.net.ip.IpNeighborMonitor.NeighborEventConsumer;
 import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.IpReachabilityEvent;
 import android.net.netlink.StructNdMsg;
@@ -154,11 +155,12 @@ public class IpReachabilityMonitor {
     }
 
     /**
-     * Encapsulates IpReachabilityMonitor depencencies on systems that hinder unit testing.
+     * Encapsulates IpReachabilityMonitor dependencies on systems that hinder unit testing.
      * TODO: consider also wrapping MultinetworkPolicyTracker in this interface.
      */
     interface Dependencies {
         void acquireWakeLock(long durationMs);
+        IpNeighborMonitor makeIpNeighborMonitor(Handler h, SharedLog log, NeighborEventConsumer cb);
 
         static Dependencies makeDefault(Context context, String iface) {
             final String lockName = TAG + "." + iface;
@@ -168,6 +170,11 @@ public class IpReachabilityMonitor {
             return new Dependencies() {
                 public void acquireWakeLock(long durationMs) {
                     lock.acquire(durationMs);
+                }
+
+                public IpNeighborMonitor makeIpNeighborMonitor(Handler h, SharedLog log,
+                        NeighborEventConsumer cb) {
+                    return new IpNeighborMonitor(h, log, cb);
                 }
             };
         }
@@ -223,7 +230,7 @@ public class IpReachabilityMonitor {
         }
         setNeighbourParametersForSteadyState();
 
-        mIpNeighborMonitor = new IpNeighborMonitor(h, mLog,
+        mIpNeighborMonitor = mDependencies.makeIpNeighborMonitor(h, mLog,
                 (NeighborEvent event) -> {
                     if (mInterfaceParams.index != event.ifindex) return;
                     if (!mNeighborWatchList.containsKey(event.ip)) return;
