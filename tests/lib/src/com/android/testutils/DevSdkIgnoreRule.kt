@@ -27,8 +27,14 @@ import org.junit.runners.model.Statement
  *
  * If the device is not using a release SDK, the development SDK is considered to be higher than
  * [Build.VERSION.SDK_INT].
+ *
+ * @param ignoreClassUpTo Skip all tests in the class if the device dev SDK is <= this value.
+ * @param ignoreClassAfter Skip all tests in the class if the device dev SDK is > this value.
  */
-class DevSdkIgnoreRule : TestRule {
+class DevSdkIgnoreRule @JvmOverloads constructor(
+    private val ignoreClassUpTo: Int? = null,
+    private val ignoreClassAfter: Int? = null
+) : TestRule {
     override fun apply(base: Statement, description: Description): Statement {
         return IgnoreBySdkStatement(base, description)
     }
@@ -49,7 +55,7 @@ class DevSdkIgnoreRule : TestRule {
      */
     annotation class IgnoreUpTo(val value: Int)
 
-    private class IgnoreBySdkStatement(
+    private inner class IgnoreBySdkStatement(
         private val base: Statement,
         private val description: Description
     ) : Statement() {
@@ -63,6 +69,8 @@ class DevSdkIgnoreRule : TestRule {
             val sdkInt = Build.VERSION.SDK_INT
             val devApiLevel = sdkInt + if (release) 0 else 1
             val message = "Skipping test for ${if (!release) "non-" else ""}release SDK $sdkInt"
+            assumeTrue(message, ignoreClassAfter == null || devApiLevel <= ignoreClassAfter)
+            assumeTrue(message, ignoreClassUpTo == null || devApiLevel > ignoreClassUpTo)
             assumeTrue(message, ignoreAfter == null || devApiLevel <= ignoreAfter.value)
             assumeTrue(message, ignoreUpTo == null || devApiLevel > ignoreUpTo.value)
             base.evaluate()
