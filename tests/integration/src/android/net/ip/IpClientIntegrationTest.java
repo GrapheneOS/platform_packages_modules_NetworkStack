@@ -130,6 +130,7 @@ import com.android.networkstack.arp.ArpPacket;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
 import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
+import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
 import com.android.testutils.HandlerUtilsKt;
 import com.android.testutils.TapPacketReader;
 
@@ -660,6 +661,12 @@ public class IpClientIntegrationTest {
                 null /* captivePortalApiUrl */, null /* displayName */, null /* scanResultInfo */);
     }
 
+    private List<DhcpPacket> performDhcpHandshake() throws Exception {
+        return performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
+                false /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
+                TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
+    }
+
     private DhcpPacket getNextDhcpPacket() throws ParseException {
         byte[] packet;
         while ((packet = mPacketReader.popPacket(PACKET_TIMEOUT_MS)) != null) {
@@ -1045,6 +1052,14 @@ public class IpClientIntegrationTest {
                 false /* isDhcpIpConflictDetectEnabled */);
         final DhcpPacket packet = getNextDhcpPacket();
         assertTrue(packet instanceof DhcpDiscoverPacket);
+    }
+
+    @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
+    public void testDhcpServerInLinkProperties() throws Exception {
+        performDhcpHandshake();
+        ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        assertEquals(SERVER_ADDR, captor.getValue().getDhcpServerAddress());
     }
 
     @Test
