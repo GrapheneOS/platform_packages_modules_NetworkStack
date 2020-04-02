@@ -18,13 +18,13 @@ package com.android.testutils
 
 import android.os.Parcel
 import android.os.Parcelable
-import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
  * Return a new instance of `T` after being parceled then unparceled.
  */
-fun <T: Parcelable> parcelingRoundTrip(source: T): T {
+fun <T : Parcelable> parcelingRoundTrip(source: T): T {
     val creator: Parcelable.Creator<T>
     try {
         creator = source.javaClass.getField("CREATOR").get(null) as Parcelable.Creator<T>
@@ -46,13 +46,23 @@ fun <T: Parcelable> parcelingRoundTrip(source: T): T {
 
 /**
  * Assert that after being parceled then unparceled, `source` is equal to the original
- * object.
+ * object. If a customized equals function is provided, uses the provided one.
  */
-fun <T: Parcelable> assertParcelingIsLossless(source: T) {
-    assertEquals(source, parcelingRoundTrip(source))
+@JvmOverloads
+fun <T : Parcelable> assertParcelingIsLossless(
+    source: T,
+    equals: (T, T) -> Boolean = { a, b -> a == b }
+) {
+    val actual = parcelingRoundTrip(source)
+    assertTrue(equals(source, actual), "Expected $source, but was $actual")
 }
 
-fun <T: Parcelable> assertParcelSane(obj: T, fieldCount: Int) {
+@JvmOverloads
+fun <T : Parcelable> assertParcelSane(
+    obj: T,
+    fieldCount: Int,
+    equals: (T, T) -> Boolean = { a, b -> a == b }
+) {
     assertFieldCountEquals(fieldCount, obj::class.java)
-    assertParcelingIsLossless(obj)
+    assertParcelingIsLossless(obj, equals)
 }
