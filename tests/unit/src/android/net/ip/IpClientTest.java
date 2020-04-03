@@ -221,7 +221,7 @@ public class IpClientTest {
         final IpClient ipc = new IpClient(mContext, TEST_IFNAME, mCb, mObserverRegistry,
                 mNetworkStackServiceManager, mDependencies);
         ipc.startProvisioning(new ProvisioningConfiguration());
-        verify(mCb, times(1)).onProvisioningFailure(any());
+        verify(mCb, timeout(TEST_TIMEOUT_MS).times(1)).onProvisioningFailure(any());
         verify(mIpMemoryStore, never()).storeNetworkAttributes(any(), any(), any());
         ipc.shutdown();
     }
@@ -249,7 +249,7 @@ public class IpClientTest {
                 .build();
 
         ipc.startProvisioning(config);
-        verify(mCb, times(1)).setNeighborDiscoveryOffload(true);
+        verify(mCb, timeout(TEST_TIMEOUT_MS).times(1)).setNeighborDiscoveryOffload(true);
         verify(mCb, timeout(TEST_TIMEOUT_MS).times(1)).setFallbackMulticastFilter(false);
 
         final LinkProperties lp = makeIPv6ProvisionedLinkProperties();
@@ -364,7 +364,7 @@ public class IpClientTest {
                 .build();
 
         ipc.startProvisioning(config);
-        verify(mCb, times(1)).setNeighborDiscoveryOffload(true);
+        verify(mCb, timeout(TEST_TIMEOUT_MS).times(1)).setNeighborDiscoveryOffload(true);
         verify(mCb, timeout(TEST_TIMEOUT_MS).times(1)).setFallbackMulticastFilter(false);
         verify(mCb, never()).onProvisioningFailure(any());
         ipc.setL2KeyAndGroupHint(l2Key, groupHint);
