@@ -16,10 +16,15 @@
 
 package android.net.netlink;
 
+import static android.net.netlink.NetlinkTestUtilsKt.makeDelNeighMessage;
+import static android.net.netlink.NetlinkTestUtilsKt.makeNewNeighMessage;
+import static android.net.netlink.StructNdMsg.NUD_STALE;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import android.net.InetAddresses;
 import android.net.netlink.NetlinkConstants;
 import android.net.netlink.NetlinkMessage;
 import android.net.netlink.RtNetlinkNeighborMessage;
@@ -46,83 +51,11 @@ import java.util.Arrays;
 public class RtNetlinkNeighborMessageTest {
     private final String TAG = "RtNetlinkNeighborMessageTest";
 
-    // Hexadecimal representation of packet capture.
-    public static final String RTM_DELNEIGH_HEX =
-            // struct nlmsghdr
-            "4c000000" +     // length = 76
-            "1d00" +         // type = 29 (RTM_DELNEIGH)
-            "0000" +         // flags
-            "00000000" +     // seqno
-            "00000000" +     // pid (0 == kernel)
-            // struct ndmsg
-            "02" +           // family
-            "00" +           // pad1
-            "0000" +         // pad2
-            "15000000" +     // interface index (21  == wlan0, on test device)
-            "0400" +         // NUD state (0x04 == NUD_STALE)
-            "00" +           // flags
-            "01" +           // type
-            // struct nlattr: NDA_DST
-            "0800" +         // length = 8
-            "0100" +         // type (1 == NDA_DST, for neighbor messages)
-            "c0a89ffe" +     // IPv4 address (== 192.168.159.254)
-            // struct nlattr: NDA_LLADDR
-            "0a00" +         // length = 10
-            "0200" +         // type (2 == NDA_LLADDR, for neighbor messages)
-            "00005e000164" + // MAC Address (== 00:00:5e:00:01:64)
-            "0000" +         // padding, for 4 byte alignment
-            // struct nlattr: NDA_PROBES
-            "0800" +         // length = 8
-            "0400" +         // type (4 == NDA_PROBES, for neighbor messages)
-            "01000000" +     // number of probes
-            // struct nlattr: NDA_CACHEINFO
-            "1400" +         // length = 20
-            "0300" +         // type (3 == NDA_CACHEINFO, for neighbor messages)
-            "05190000" +     // ndm_used, as "clock ticks ago"
-            "05190000" +     // ndm_confirmed, as "clock ticks ago"
-            "190d0000" +     // ndm_updated, as "clock ticks ago"
-            "00000000";      // ndm_refcnt
-    public static final byte[] RTM_DELNEIGH =
-            HexEncoding.decode(RTM_DELNEIGH_HEX.toCharArray(), false);
+    public static final byte[] RTM_DELNEIGH = makeDelNeighMessage(
+            InetAddresses.parseNumericAddress("192.168.159.254"), NUD_STALE);
 
-    // Hexadecimal representation of packet capture.
-    public static final String RTM_NEWNEIGH_HEX =
-            // struct nlmsghdr
-            "58000000" +     // length = 88
-            "1c00" +         // type = 28 (RTM_NEWNEIGH)
-            "0000" +         // flags
-            "00000000" +     // seqno
-            "00000000" +     // pid (0 == kernel)
-            // struct ndmsg
-            "0a" +           // family
-            "00" +           // pad1
-            "0000" +         // pad2
-            "15000000" +     // interface index (21  == wlan0, on test device)
-            "0400" +         // NUD state (0x04 == NUD_STALE)
-            "80" +           // flags
-            "01" +           // type
-            // struct nlattr: NDA_DST
-            "1400" +         // length = 20
-            "0100" +         // type (1 == NDA_DST, for neighbor messages)
-            "fe8000000000000086c9b2fffe6aed4b" + // IPv6 address (== fe80::86c9:b2ff:fe6a:ed4b)
-            // struct nlattr: NDA_LLADDR
-            "0a00" +         // length = 10
-            "0200" +         // type (2 == NDA_LLADDR, for neighbor messages)
-            "84c9b26aed4b" + // MAC Address (== 84:c9:b2:6a:ed:4b)
-            "0000" +         // padding, for 4 byte alignment
-            // struct nlattr: NDA_PROBES
-            "0800" +         // length = 8
-            "0400" +         // type (4 == NDA_PROBES, for neighbor messages)
-            "01000000" +     // number of probes
-            // struct nlattr: NDA_CACHEINFO
-            "1400" +         // length = 20
-            "0300" +         // type (3 == NDA_CACHEINFO, for neighbor messages)
-            "eb0e0000" +     // ndm_used, as "clock ticks ago"
-            "861f0000" +     // ndm_confirmed, as "clock ticks ago"
-            "00000000" +     // ndm_updated, as "clock ticks ago"
-            "05000000";      // ndm_refcnt
-    public static final byte[] RTM_NEWNEIGH =
-            HexEncoding.decode(RTM_NEWNEIGH_HEX.toCharArray(), false);
+    public static final byte[] RTM_NEWNEIGH = makeNewNeighMessage(
+            InetAddresses.parseNumericAddress("fe80::86c9:b2ff:fe6a:ed4b"), NUD_STALE);
 
     // An example of the full response from an RTM_GETNEIGH query.
     private static final String RTM_GETNEIGH_RESPONSE_HEX =
@@ -165,7 +98,7 @@ public class RtNetlinkNeighborMessageTest {
         assertNotNull(ndmsgHdr);
         assertEquals((byte) OsConstants.AF_INET, ndmsgHdr.ndm_family);
         assertEquals(21, ndmsgHdr.ndm_ifindex);
-        assertEquals(StructNdMsg.NUD_STALE, ndmsgHdr.ndm_state);
+        assertEquals(NUD_STALE, ndmsgHdr.ndm_state);
         final InetAddress destination = neighMsg.getDestination();
         assertNotNull(destination);
         assertEquals(InetAddress.parseNumericAddress("192.168.159.254"), destination);
@@ -192,7 +125,7 @@ public class RtNetlinkNeighborMessageTest {
         assertNotNull(ndmsgHdr);
         assertEquals((byte) OsConstants.AF_INET6, ndmsgHdr.ndm_family);
         assertEquals(21, ndmsgHdr.ndm_ifindex);
-        assertEquals(StructNdMsg.NUD_STALE, ndmsgHdr.ndm_state);
+        assertEquals(NUD_STALE, ndmsgHdr.ndm_state);
         final InetAddress destination = neighMsg.getDestination();
         assertNotNull(destination);
         assertEquals(InetAddress.parseNumericAddress("fe80::86c9:b2ff:fe6a:ed4b"), destination);
