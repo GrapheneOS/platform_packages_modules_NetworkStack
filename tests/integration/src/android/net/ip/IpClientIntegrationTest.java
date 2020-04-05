@@ -130,6 +130,7 @@ import com.android.networkstack.arp.ArpPacket;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
 import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
+import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
 import com.android.testutils.HandlerUtilsKt;
 import com.android.testutils.TapPacketReader;
 
@@ -524,7 +525,6 @@ public class IpClientIntegrationTest {
         mDependencies.setHostnameConfiguration(isHostnameConfigurationEnabled, hostname);
         mIpc.setL2KeyAndGroupHint(TEST_L2KEY, TEST_GROUPHINT);
         mIpc.startProvisioning(builder.build());
-        verify(mCb).setNeighborDiscoveryOffload(true);
         if (!isPreconnectionEnabled) {
             verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
         }
@@ -642,7 +642,6 @@ public class IpClientIntegrationTest {
                             ArgumentCaptor.forClass(LinkProperties.class);
                     verifyProvisioningSuccess(captor, Collections.singletonList(CLIENT_ADDR));
                 }
-
                 return packetList;
             }
         }
@@ -658,6 +657,12 @@ public class IpClientIntegrationTest {
                 isDhcpRapidCommitEnabled, mtu, isDhcpIpConflictDetectEnabled,
                 false /* isHostnameConfigurationEnabled */, null /* hostname */,
                 null /* captivePortalApiUrl */, null /* displayName */, null /* scanResultInfo */);
+    }
+
+    private List<DhcpPacket> performDhcpHandshake() throws Exception {
+        return performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
+                false /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
+                TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
     }
 
     private DhcpPacket getNextDhcpPacket() throws ParseException {
@@ -724,6 +729,12 @@ public class IpClientIntegrationTest {
             mNetd.interfaceSetMtu(mIfaceName, mtu);
             assertEquals(NetworkInterface.getByName(mIfaceName).getMTU(), mtu);
         }
+
+        // Sometimes, IpClient receives an update with an empty LinkProperties during startup,
+        // when the link-local address is deleted after interface bringup. Reset expectations
+        // here to ensure that verifyAfterIpClientShutdown does not fail because it sees two
+        // empty LinkProperties changes instead of one.
+        reset(mCb);
 
         if (shouldRemoveTapInterface) removeTapInterface(mTapFd);
         try {
@@ -1047,6 +1058,14 @@ public class IpClientIntegrationTest {
         assertTrue(packet instanceof DhcpDiscoverPacket);
     }
 
+    @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
+    public void testDhcpServerInLinkProperties() throws Exception {
+        performDhcpHandshake();
+        ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        assertEquals(SERVER_ADDR, captor.getValue().getDhcpServerAddress());
+    }
+
     @Test
     public void testRestoreInitialInterfaceMtu() throws Exception {
         doRestoreInitialMtuTest(true /* shouldChangeMtu */, false /* shouldRemoveTapInterface */);
@@ -1081,8 +1100,35 @@ public class IpClientIntegrationTest {
                 .build();
 
         mIpc.startProvisioning(config);
-        verify(mCb).onProvisioningFailure(any());
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(any());
         verify(mCb, never()).setNeighborDiscoveryOffload(true);
+    }
+
+    @Test
+    public void testRestoreInitialInterfaceMtu_stopIpClientAndRestart() throws Exception {
+        long currentTime = System.currentTimeMillis();
+
+        performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
+                true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
+                TEST_MIN_MTU, false /* isDhcpIpConflictDetectEnabled */);
+        assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_MIN_MTU);
+
+        // Pretend that ConnectivityService set the MTU.
+        mNetd.interfaceSetMtu(mIfaceName, TEST_MIN_MTU);
+        assertEquals(NetworkInterface.getByName(mIfaceName).getMTU(), TEST_MIN_MTU);
+
+        reset(mCb);
+        reset(mIpMemoryStore);
+
+        // Stop IpClient and then restart provisioning immediately.
+        mIpc.stop();
+        currentTime = System.currentTimeMillis();
+        // Intend to set mtu option to 0, then verify that won't influence interface mtu restore.
+        performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
+                true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
+                0 /* mtu */, false /* isDhcpIpConflictDetectEnabled */);
+        assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, 0 /* mtu */);
+        assertEquals(NetworkInterface.getByName(mIfaceName).getMTU(), TEST_DEFAULT_MTU);
     }
 
     private boolean isRouterSolicitation(final byte[] packetBytes) {
