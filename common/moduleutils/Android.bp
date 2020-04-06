@@ -22,7 +22,6 @@ filegroup {
     srcs: [
         "src/android/net/util/SharedLog.java",
         "src/android/net/shared/InitialConfiguration.java",
-        "src/android/net/shared/IpConfigurationParcelableUtil.java",
         "src/android/net/shared/Layer2Information.java",
         "src/android/net/shared/LinkPropertiesParcelableUtil.java",
         "src/android/net/shared/ParcelableUtil.java",
