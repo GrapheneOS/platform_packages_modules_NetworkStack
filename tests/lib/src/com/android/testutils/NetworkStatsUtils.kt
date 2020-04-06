@@ -29,16 +29,24 @@ fun orderInsensitiveEquals(
     if (compareTime && leftStats.getElapsedRealtime() != rightStats.getElapsedRealtime()) {
         return false
     }
-    if (leftStats.size() != rightStats.size()) return false
+
+    // While operations such as add/subtract will preserve empty entries. This will make
+    // the result be hard to verify during test. Remove them before comparing since they
+    // are not really affect correctness.
+    // TODO (b/152827872): Remove empty entries after addition/subtraction.
+    val leftTrimmedEmpty = leftStats.removeEmptyEntries()
+    val rightTrimmedEmpty = rightStats.removeEmptyEntries()
+
+    if (leftTrimmedEmpty.size() != rightTrimmedEmpty.size()) return false
     val left = NetworkStats.Entry()
     val right = NetworkStats.Entry()
     // Order insensitive compare.
-    for (i in 0 until leftStats.size()) {
-        leftStats.getValues(i, left)
-        val j: Int = rightStats.findIndexHinted(left.iface, left.uid, left.set, left.tag,
+    for (i in 0 until leftTrimmedEmpty.size()) {
+        leftTrimmedEmpty.getValues(i, left)
+        val j: Int = rightTrimmedEmpty.findIndexHinted(left.iface, left.uid, left.set, left.tag,
                 left.metered, left.roaming, left.defaultNetwork, i)
         if (j == -1) return false
-        rightStats.getValues(j, right)
+        rightTrimmedEmpty.getValues(j, right)
         if (left != right) return false
     }
     return true
@@ -58,5 +66,13 @@ fun assertNetworkStatsEquals(
     compareTime: Boolean = false
 ) {
     assertTrue(orderInsensitiveEquals(expected, actual, compareTime),
-            "expected: " + expected + "but was: " + actual)
+            "expected: " + expected + " but was: " + actual)
+}
+
+/**
+ * Assert that after being parceled then unparceled, {@link NetworkStats} is equal to the original
+ * object.
+ */
+fun assertParcelingIsLossless(stats: NetworkStats) {
+    assertParcelingIsLossless(stats, { a, b -> orderInsensitiveEquals(a, b) })
 }
