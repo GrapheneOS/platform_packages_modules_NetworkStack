@@ -19,7 +19,7 @@ package android.net.dhcp;
 /* @hide */
 interface IDhcpServer {
   oneway void start(in android.net.INetworkStackStatusCallback cb) = 0;
-  oneway void startWithCallbacks(in android.net.INetworkStackStatusCallback statusCb, in android.net.dhcp.IDhcpLeaseCallbacks leaseCb) = 3;
+  oneway void startWithCallbacks(in android.net.INetworkStackStatusCallback statusCb, in android.net.dhcp.IDhcpEventCallbacks eventCb) = 3;
   oneway void updateParams(in android.net.dhcp.DhcpServingParamsParcel params, in android.net.INetworkStackStatusCallback cb) = 1;
   oneway void stop(in android.net.INetworkStackStatusCallback cb) = 2;
   const int STATUS_UNKNOWN = 0;
