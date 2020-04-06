@@ -18,7 +18,7 @@ package android.net.dhcp;
 
 import android.net.INetworkStackStatusCallback;
 import android.net.dhcp.DhcpServingParamsParcel;
-import android.net.dhcp.IDhcpLeaseCallbacks;
+import android.net.dhcp.IDhcpEventCallbacks;
 
 /** @hide */
 oneway interface IDhcpServer {
@@ -29,7 +29,7 @@ oneway interface IDhcpServer {
 
     void start(in INetworkStackStatusCallback cb) = 0;
     void startWithCallbacks(in INetworkStackStatusCallback statusCb,
-        in IDhcpLeaseCallbacks leaseCb) = 3;
+        in IDhcpEventCallbacks eventCb) = 3;
     void updateParams(in DhcpServingParamsParcel params, in INetworkStackStatusCallback cb) = 1;
     void stop(in INetworkStackStatusCallback cb) = 2;
 

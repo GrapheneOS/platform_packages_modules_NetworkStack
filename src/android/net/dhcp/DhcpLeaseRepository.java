@@ -89,7 +89,7 @@ class DhcpLeaseRepository {
     private long mNextExpirationCheck = EXPIRATION_NEVER;
 
     @NonNull
-    private RemoteCallbackList<IDhcpLeaseCallbacks> mLeaseCallbacks = new RemoteCallbackList<>();
+    private RemoteCallbackList<IDhcpEventCallbacks> mEventCallbacks = new RemoteCallbackList<>();
 
     static class DhcpLeaseException extends Exception {
         DhcpLeaseException(String message) {
@@ -381,15 +381,15 @@ class DhcpLeaseRepository {
             leaseParcelables.add(committedLease.toParcelable());
         }
 
-        final int cbCount = mLeaseCallbacks.beginBroadcast();
+        final int cbCount = mEventCallbacks.beginBroadcast();
         for (int i = 0; i < cbCount; i++) {
             try {
-                mLeaseCallbacks.getBroadcastItem(i).onLeasesChanged(leaseParcelables);
+                mEventCallbacks.getBroadcastItem(i).onLeasesChanged(leaseParcelables);
             } catch (RemoteException e) {
                 mLog.e("Could not send lease callback", e);
             }
         }
-        mLeaseCallbacks.finishBroadcast();
+        mEventCallbacks.finishBroadcast();
     }
 
     public void markLeaseDeclined(@NonNull Inet4Address addr) {
@@ -425,9 +425,9 @@ class DhcpLeaseRepository {
     /**
      * Add callbacks that will be called on leases update.
      */
-    public void addLeaseCallbacks(@NonNull IDhcpLeaseCallbacks cb) {
+    public void addLeaseCallbacks(@NonNull IDhcpEventCallbacks cb) {
         Objects.requireNonNull(cb, "Callbacks must be non-null");
-        mLeaseCallbacks.register(cb);
+        mEventCallbacks.register(cb);
     }
 
     /**
