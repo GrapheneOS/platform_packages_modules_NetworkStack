@@ -16,9 +16,10 @@
 
 package android.net.dhcp;
 
+import android.net.IpPrefix;
 import android.net.dhcp.DhcpLeaseParcelable;
 
-oneway interface IDhcpLeaseCallbacks {
+oneway interface IDhcpEventCallbacks {
     /**
      * Called when a lease is committed or released on the DHCP server.
      *
@@ -27,4 +28,15 @@ oneway interface IDhcpLeaseCallbacks {
      * @param newLeases The new list of leases tracked by the server.
      */
     void onLeasesChanged(in List<DhcpLeaseParcelable> newLeases);
+
+    /**
+     * Called when DHCP server receives DHCPDECLINE message and only if a new IPv4 address prefix
+     * (e.g. a different subnet prefix) is requested.
+     *
+     * <p>When this callback is called, IpServer must call IDhcpServer#updateParams with a new
+     * prefix, as processing of DHCP packets should be paused until the new prefix and route
+     * configuration on IpServer is completed.
+     * @param currentPrefix The current prefix parameter serving on DHCP server.
+     */
+    void onNewPrefixRequest(in IpPrefix currentPrefix);
 }
