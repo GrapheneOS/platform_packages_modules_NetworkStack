@@ -139,6 +139,7 @@ filegroup {
     visibility: [
         "//packages/modules/NetworkStack/tests/unit",
         "//packages/modules/NetworkStack/tests/integration",
+        "//frameworks/base/packages/Tethering/tests/integration",
     ]
 }
 
