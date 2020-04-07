@@ -57,7 +57,8 @@ public class ProvisioningConfigurationTest {
         final ScanResultInfo.InformationElement ie =
                 new ScanResultInfo.InformationElement(0xdd /* vendor specific IE id */,
                         ByteBuffer.wrap(payload));
-        return new ScanResultInfo(ssid, Collections.singletonList(ie));
+        return new ScanResultInfo(ssid, "01:02:03:04:05:06" /* bssid string */,
+                Collections.singletonList(ie));
     }
 
     @Before
