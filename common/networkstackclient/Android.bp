@@ -51,7 +51,7 @@ aidl_interface {
     local_include_dir: "src",
     include_dirs: [
         "frameworks/base/core/java", // For framework parcelables.
-        "frameworks/native/aidl/binder/android/os", // For PersistableBundle.aidl
+        "frameworks/native/aidl/binder", // For PersistableBundle.aidl
         "frameworks/base/wifi/aidl-export", // For wifi parcelables.
     ],
     srcs: [
