@@ -16,6 +16,7 @@
 // later when a module using the interface is updated, e.g., Mainline modules.
 
 package android.net.dhcp;
-interface IDhcpLeaseCallbacks {
+interface IDhcpEventCallbacks {
   oneway void onLeasesChanged(in List<android.net.dhcp.DhcpLeaseParcelable> newLeases);
+  oneway void onNewPrefixRequest(in android.net.IpPrefix currentPrefix);
 }
