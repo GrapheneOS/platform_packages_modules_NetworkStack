@@ -18,5 +18,6 @@
 package android.net;
 parcelable ScanResultInfoParcelable {
   String ssid;
+  String bssid;
   android.net.InformationElementParcelable[] informationElements;
 }
