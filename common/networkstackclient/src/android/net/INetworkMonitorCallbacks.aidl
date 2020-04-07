@@ -19,6 +19,7 @@ package android.net;
 import android.net.CaptivePortalData;
 import android.net.INetworkMonitor;
 import android.net.PrivateDnsConfigParcel;
+import android.os.PersistableBundle;
 
 /** @hide */
 oneway interface INetworkMonitorCallbacks {
