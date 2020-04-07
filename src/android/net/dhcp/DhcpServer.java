@@ -285,11 +285,11 @@ public class DhcpServer extends IDhcpServer.Stub {
      */
     @Override
     public void startWithCallbacks(@Nullable INetworkStackStatusCallback statusCb,
-            @Nullable IDhcpLeaseCallbacks leaseCb) {
+            @Nullable IDhcpEventCallbacks eventCb) {
         mDeps.checkCaller();
         mHandlerThread.start();
         mHandler = new ServerHandler(mHandlerThread.getLooper());
-        sendMessage(CMD_START_DHCP_SERVER, new Pair<>(statusCb, leaseCb));
+        sendMessage(CMD_START_DHCP_SERVER, new Pair<>(statusCb, eventCb));
     }
 
     /**
@@ -356,8 +356,8 @@ public class DhcpServer extends IDhcpServer.Stub {
                     cb = pair.second;
                     break;
                 case CMD_START_DHCP_SERVER:
-                    final Pair<INetworkStackStatusCallback, IDhcpLeaseCallbacks> obj =
-                            (Pair<INetworkStackStatusCallback, IDhcpLeaseCallbacks>) msg.obj;
+                    final Pair<INetworkStackStatusCallback, IDhcpEventCallbacks> obj =
+                            (Pair<INetworkStackStatusCallback, IDhcpEventCallbacks>) msg.obj;
                     cb = obj.first;
                     if (obj.second != null) {
                         mLeaseRepo.addLeaseCallbacks(obj.second);
