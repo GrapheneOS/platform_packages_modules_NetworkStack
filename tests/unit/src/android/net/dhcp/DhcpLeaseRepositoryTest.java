@@ -98,7 +98,7 @@ public class DhcpLeaseRepositoryTest {
     private DhcpLeaseRepository mRepo;
     @NonNull
     @Mock
-    private IDhcpLeaseCallbacks mCallbacks;
+    private IDhcpEventCallbacks mCallbacks;
     private final Binder mCallbacksBinder = new Binder();
 
     private static Inet4Address parseAddr4(String inet4Addr) {

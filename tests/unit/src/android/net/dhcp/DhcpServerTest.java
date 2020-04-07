@@ -119,7 +119,7 @@ public class DhcpServerTest {
     @NonNull @Mock
     private DhcpPacketListener mPacketListener;
     @NonNull @Mock
-    private IDhcpLeaseCallbacks mLeaseCallbacks;
+    private IDhcpEventCallbacks mEventCallbacks;
 
     @NonNull @Captor
     private ArgumentCaptor<ByteBuffer> mSentPacketCaptor;
@@ -207,9 +207,9 @@ public class DhcpServerTest {
 
     @Test
     public void testStartWithCallbacks() throws Exception {
-        mServer.startWithCallbacks(mAssertSuccessCallback, mLeaseCallbacks);
+        mServer.startWithCallbacks(mAssertSuccessCallback, mEventCallbacks);
         mLooper.processAllMessages();
-        verify(mRepository).addLeaseCallbacks(eq(mLeaseCallbacks));
+        verify(mRepository).addLeaseCallbacks(eq(mEventCallbacks));
     }
 
     @Test
