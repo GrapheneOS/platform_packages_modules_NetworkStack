@@ -234,6 +234,7 @@ public class IpClientIntegrationTest {
             (byte) 0x00, (byte) 0x17, (byte) 0xF2
     };
     private static final byte TEST_VENDOR_SPECIFIC_TYPE = 0x06;
+    private static final String TEST_DEFAULT_BSSID = "00:11:22:33:44:55";
 
     private class Dependencies extends IpClient.Dependencies {
         private boolean mIsDhcpLeaseCacheEnabled;
@@ -1578,7 +1579,7 @@ public class IpClientIntegrationTest {
     }
 
     private ScanResultInfo makeScanResultInfo(final int id, final String ssid,
-            final byte[] oui, final byte type, final byte[] data) {
+            final String bssid, final byte[] oui, final byte type, final byte[] data) {
         final ByteBuffer payload = ByteBuffer.allocate(4 + data.length);
         payload.put(oui);
         payload.put(type);
@@ -1586,13 +1587,14 @@ public class IpClientIntegrationTest {
         payload.flip();
         final ScanResultInfo.InformationElement ie =
                 new ScanResultInfo.InformationElement(id /* IE id */, payload);
-        return new ScanResultInfo(ssid, Collections.singletonList(ie));
+        return new ScanResultInfo(ssid, bssid, Collections.singletonList(ie));
     }
 
     private void doUpstreamHotspotDetectionTest(final int id, final String displayName,
             final String ssid, final byte[] oui, final byte type, final byte[] data)
             throws Exception {
-        final ScanResultInfo info = makeScanResultInfo(id, ssid, oui, type, data);
+        final ScanResultInfo info = makeScanResultInfo(id, ssid, TEST_DEFAULT_BSSID, oui, type,
+                data);
         final long currentTime = System.currentTimeMillis();
         final List<DhcpPacket> sentPackets = performDhcpHandshake(true /* isSuccessLease */,
                 TEST_LEASE_DURATION_S, true /* isDhcpLeaseCacheEnabled */,
