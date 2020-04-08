@@ -42,5 +42,5 @@
     <string name="tap_for_info">Connected / Tap to view website</string>
 
     <!-- The label of application. It's also a sender name of notification. [CHAR LIMIT=50]-->
-    <string name="application_label">Connectivity Manager</string>
+    <string name="application_label">Network manager</string>
 </resources>
