@@ -231,7 +231,11 @@ public class ProvisioningConfiguration {
      * InformationElements fields of ScanResult.
      */
     public static class ScanResultInfo {
+        @NonNull
         private final String mSsid;
+        @NonNull
+        private final String mBssid;
+        @NonNull
         private final List<InformationElement> mInformationElements;
 
        /**
@@ -240,6 +244,7 @@ public class ProvisioningConfiguration {
         */
         public static class InformationElement {
             private final int mId;
+            @NonNull
             private final byte[] mPayload;
 
             public InformationElement(int id, @NonNull ByteBuffer payload) {
@@ -257,6 +262,7 @@ public class ProvisioningConfiguration {
            /**
             * Get the specific content of the information element.
             */
+            @NonNull
             public ByteBuffer getPayload() {
                 return ByteBuffer.wrap(mPayload).asReadOnlyBuffer();
             }
@@ -293,6 +299,7 @@ public class ProvisioningConfiguration {
              * Create an instance of {@link InformationElement} based on the contents of the
              * specified {@link InformationElementParcelable}.
              */
+            @Nullable
             public static InformationElement fromStableParcelable(InformationElementParcelable p) {
                 if (p == null) return null;
                 return new InformationElement(p.id,
@@ -300,8 +307,12 @@ public class ProvisioningConfiguration {
             }
         }
 
-        public ScanResultInfo(String ssid, @NonNull List<InformationElement> informationElements) {
+        public ScanResultInfo(@NonNull String ssid, @NonNull String bssid,
+                @NonNull List<InformationElement> informationElements) {
+            Objects.requireNonNull(ssid, "ssid must not be null.");
+            Objects.requireNonNull(bssid, "bssid must not be null.");
             mSsid = ssid;
+            mBssid = bssid;
             mInformationElements =
                     Collections.unmodifiableList(new ArrayList<>(informationElements));
         }
@@ -309,13 +320,23 @@ public class ProvisioningConfiguration {
         /**
          * Get the scanned network name.
          */
+        @NonNull
         public String getSsid() {
             return mSsid;
         }
 
         /**
+         * Get the address of the access point.
+         */
+        @NonNull
+        public String getBssid() {
+            return mBssid;
+        }
+
+        /**
          * Get all information elements found in the beacon.
          */
+        @NonNull
         public List<InformationElement> getInformationElements() {
             return mInformationElements;
         }
@@ -324,6 +345,7 @@ public class ProvisioningConfiguration {
         public String toString() {
             StringBuffer str = new StringBuffer();
             str.append("SSID: ").append(mSsid);
+            str.append(", BSSID: ").append(mBssid);
             str.append(", Information Elements: {");
             for (InformationElement ie : mInformationElements) {
                 str.append("[").append(ie.toString()).append("]");
@@ -338,12 +360,13 @@ public class ProvisioningConfiguration {
             if (!(o instanceof ScanResultInfo)) return false;
             ScanResultInfo other = (ScanResultInfo) o;
             return Objects.equals(mSsid, other.mSsid)
+                    && Objects.equals(mBssid, other.mBssid)
                     && mInformationElements.equals(other.mInformationElements);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(mSsid, mInformationElements);
+            return Objects.hash(mSsid, mBssid, mInformationElements);
         }
 
         /**
@@ -352,6 +375,7 @@ public class ProvisioningConfiguration {
         public ScanResultInfoParcelable toStableParcelable() {
             final ScanResultInfoParcelable p = new ScanResultInfoParcelable();
             p.ssid = mSsid;
+            p.bssid = mBssid;
             p.informationElements = toParcelableArray(mInformationElements,
                     InformationElement::toStableParcelable, InformationElementParcelable.class);
             return p;
@@ -366,11 +390,10 @@ public class ProvisioningConfiguration {
             final List<InformationElement> ies = new ArrayList<InformationElement>();
             ies.addAll(fromParcelableArray(p.informationElements,
                     InformationElement::fromStableParcelable));
-            return new ScanResultInfo(p.ssid, ies);
+            return new ScanResultInfo(p.ssid, p.bssid, ies);
         }
 
-        private static byte[] convertToByteArray(final ByteBuffer buffer) {
-            if (buffer == null) return null;
+        private static byte[] convertToByteArray(@NonNull final ByteBuffer buffer) {
             final byte[] bytes = new byte[buffer.limit()];
             final ByteBuffer copy = buffer.asReadOnlyBuffer();
             try {
