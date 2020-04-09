@@ -27,5 +27,5 @@ parcelable DhcpServingParamsParcel {
     int linkMtu;
     boolean metered;
     int clientAddr;
+    boolean changePrefixOnDecline;
 }
-
