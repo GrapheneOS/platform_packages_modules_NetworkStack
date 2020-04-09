@@ -202,6 +202,7 @@ android_app {
     manifest: "AndroidManifest.xml",
     // The permission configuration *must* be included to ensure security of the device
     required: ["NetworkPermissionConfig"],
+    updatable: true,
 }
 
 // Android library to derive test APKs for integration tests
