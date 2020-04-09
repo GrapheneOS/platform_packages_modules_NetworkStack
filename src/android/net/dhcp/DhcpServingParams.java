@@ -91,6 +91,13 @@ public class DhcpServingParams {
     public final Inet4Address clientAddr;
 
     /**
+     * Indicates whether the DHCP server should request a new prefix from IpServer when receiving
+     * DHCPDECLINE message in certain particular link (e.g. there is only one downstream USB
+     * tethering client). If it's false, process DHCPDECLINE message as RFC2131#4.3.3 suggests.
+     */
+    public final boolean changePrefixOnDecline;
+
+    /**
      * Checked exception thrown when some parameters used to build {@link DhcpServingParams} are
      * missing or invalid.
      */
@@ -103,7 +110,8 @@ public class DhcpServingParams {
     private DhcpServingParams(@NonNull LinkAddress serverAddr,
             @NonNull Set<Inet4Address> defaultRouters,
             @NonNull Set<Inet4Address> dnsServers, @NonNull Set<Inet4Address> excludedAddrs,
-            long dhcpLeaseTimeSecs, int linkMtu, boolean metered, Inet4Address clientAddr) {
+            long dhcpLeaseTimeSecs, int linkMtu, boolean metered, Inet4Address clientAddr,
+            boolean changePrefixOnDecline) {
         this.serverAddr = serverAddr;
         this.defaultRouters = defaultRouters;
         this.dnsServers = dnsServers;
@@ -112,6 +120,7 @@ public class DhcpServingParams {
         this.linkMtu = linkMtu;
         this.metered = metered;
         this.clientAddr = clientAddr;
+        this.changePrefixOnDecline = changePrefixOnDecline;
     }
 
     /**
@@ -140,6 +149,7 @@ public class DhcpServingParams {
                 .setLinkMtu(parcel.linkMtu)
                 .setMetered(parcel.metered)
                 .setClientAddr(clientAddr)
+                .setChangePrefixOnDecline(parcel.changePrefixOnDecline)
                 .build();
     }
 
@@ -195,6 +205,7 @@ public class DhcpServingParams {
         private int mLinkMtu = MTU_UNSET;
         private boolean mMetered;
         private Inet4Address mClientAddr;
+        private boolean mChangePrefixOnDecline;
 
         /**
          * Set the server address and served prefix for the DHCP server.
@@ -329,6 +340,17 @@ public class DhcpServingParams {
         }
 
         /**
+         * Set whether the DHCP server should request a new prefix from IpServer when receiving
+         * DHCPDECLINE message in certain particular link.
+         *
+         * <p>If not set, the default value is false.
+         */
+        public Builder setChangePrefixOnDecline(boolean changePrefixOnDecline) {
+            this.mChangePrefixOnDecline = changePrefixOnDecline;
+            return this;
+        }
+
+        /**
          * Create a new {@link DhcpServingParams} instance based on parameters set in the builder.
          *
          * <p>This method has no side-effects. If it does not throw, a valid
@@ -382,7 +404,7 @@ public class DhcpServingParams {
                     Collections.unmodifiableSet(new HashSet<>(mDefaultRouters)),
                     Collections.unmodifiableSet(new HashSet<>(mDnsServers)),
                     Collections.unmodifiableSet(excl),
-                    mDhcpLeaseTimeSecs, mLinkMtu, mMetered, mClientAddr);
+                    mDhcpLeaseTimeSecs, mLinkMtu, mMetered, mClientAddr, mChangePrefixOnDecline);
         }
     }
 
