@@ -1717,6 +1717,7 @@ public class DhcpClient extends StateMachine {
                         Log.d(TAG, "Renewed lease not for our current IP address!");
                         notifyFailure();
                         transitionTo(mDhcpInitState);
+                        return;
                     }
                     setDhcpLeaseExpiry(packet);
                     // Updating our notion of DhcpResults here only causes the
