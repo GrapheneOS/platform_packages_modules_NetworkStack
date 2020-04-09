@@ -72,6 +72,7 @@ import static android.net.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_HTTP_URL
 import static android.net.util.NetworkStackUtils.DISMISS_PORTAL_IN_VALIDATED_NETWORK;
 import static android.net.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION;
 import static android.net.util.NetworkStackUtils.isEmpty;
+import static android.net.util.NetworkStackUtils.isIPv6ULA;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DNS_EVENTS;
@@ -424,7 +425,7 @@ public class NetworkMonitor extends StateMachine {
     private boolean mAcceptPartialConnectivity = false;
     private final EvaluationState mEvaluationState = new EvaluationState();
 
-    private final boolean mPrivateIpNotPortalEnabled;
+    private final boolean mPrivateIpNoInternetEnabled;
 
     private int getCallbackVersion(INetworkMonitorCallbacks cb) {
         int version;
@@ -487,7 +488,7 @@ public class NetworkMonitor extends StateMachine {
         // CHECKSTYLE:ON IndentationCheck
 
         mIsCaptivePortalCheckEnabled = getIsCaptivePortalCheckEnabled();
-        mPrivateIpNotPortalEnabled = getIsPrivateIpNotPortalEnabled();
+        mPrivateIpNoInternetEnabled = getIsPrivateIpNoInternetEnabled();
         mUseHttps = getUseHttpsValidation();
         mCaptivePortalUserAgent = getCaptivePortalUserAgent();
         mCaptivePortalHttpsUrls = makeCaptivePortalHttpsUrls();
@@ -1438,7 +1439,7 @@ public class NetworkMonitor extends StateMachine {
         return mode != CAPTIVE_PORTAL_MODE_IGNORE;
     }
 
-    private boolean getIsPrivateIpNotPortalEnabled() {
+    private boolean getIsPrivateIpNoInternetEnabled() {
         return mDependencies.isFeatureEnabled(mContext, DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION)
                 || mContext.getResources().getBoolean(
                         R.bool.config_force_dns_probe_private_ip_no_internet);
@@ -1888,9 +1889,9 @@ public class NetworkMonitor extends StateMachine {
         // information to callers that does not make sense because the state machine has already
         // changed state.
         final InetAddress[] resolvedAddr = sendDnsProbe(host);
-        // The private IP logic only applies to the HTTP probe, not the HTTPS probe (which would
-        // fail anyway) or the PAC probe.
-        if (mPrivateIpNotPortalEnabled && probeType == ValidationProbeEvent.PROBE_HTTP
+        // The private IP logic only applies to captive portal detection (the HTTP probe), not
+        // network validation (the HTTPS probe, which would likely fail anyway) or the PAC probe.
+        if (mPrivateIpNoInternetEnabled && probeType == ValidationProbeEvent.PROBE_HTTP
                 && (proxy == null) && hasPrivateIpAddress(resolvedAddr)) {
             return CaptivePortalProbeResult.PRIVATE_IP;
         }
@@ -1928,8 +1929,7 @@ public class NetworkMonitor extends StateMachine {
     }
 
     /**
-     * Check if any of the provided IP addresses include a private IP, as defined by
-     * {@link com.android.server.util.NetworkStackConstants#PRIVATE_IPV4_RANGES}.
+     * Check if any of the provided IP addresses include a private IP.
      * @return true if an IP address is private.
      */
     private static boolean hasPrivateIpAddress(@Nullable InetAddress[] addresses) {
@@ -1937,7 +1937,8 @@ public class NetworkMonitor extends StateMachine {
             return false;
         }
         for (InetAddress address : addresses) {
-            if (address.isLinkLocalAddress() || address.isSiteLocalAddress()) {
+            if (address.isLinkLocalAddress() || address.isSiteLocalAddress()
+                    || isIPv6ULA(address)) {
                 return true;
             }
         }
@@ -2266,10 +2267,11 @@ public class NetworkMonitor extends StateMachine {
         }
         // Consider a DNS response with a private IP address on the HTTP probe as an indication that
         // the network is not connected to the Internet, and have the whole evaluation fail in that
-        // case.
+        // case, instead of potentially detecting a captive portal. This logic only affects portal
+        // detection, not network validation.
         // This only applies if the DNS probe completed within PROBE_TIMEOUT_MS, as the fallback
         // probe should not be delayed by this check.
-        if (mPrivateIpNotPortalEnabled && (httpResult.isDnsPrivateIpResponse())) {
+        if (mPrivateIpNoInternetEnabled && (httpResult.isDnsPrivateIpResponse())) {
             validationLog("DNS response to the URL is private IP");
             return CaptivePortalProbeResult.FAILED;
         }
