@@ -38,6 +38,7 @@ import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_FALLBACK_PROBE_S
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_OTHER_FALLBACK_URLS;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USE_HTTPS;
 import static android.net.util.NetworkStackUtils.DISMISS_PORTAL_IN_VALIDATED_NETWORK;
+import static android.net.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION;
 
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DNS_EVENTS;
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_TCP_METRICS;
@@ -93,6 +94,7 @@ import android.net.ConnectivityManager;
 import android.net.DnsResolver;
 import android.net.INetd;
 import android.net.INetworkMonitorCallbacks;
+import android.net.InetAddresses;
 import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -152,6 +154,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.net.HttpURLConnection;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URL;
 import java.net.UnknownHostException;
@@ -744,6 +747,38 @@ public class NetworkMonitorTest {
     public void testIsCaptivePortal_HttpProbeIsPortal() throws IOException {
         setSslException(mHttpsConnection);
         setPortal302(mHttpConnection);
+        runPortalNetworkTest(VALIDATION_RESULT_PORTAL);
+    }
+
+    private void setupPrivateIpResponse(String privateAddr) throws Exception {
+        setSslException(mHttpsConnection);
+        setPortal302(mHttpConnection);
+        final String httpHost = new URL(TEST_HTTP_URL).getHost();
+        mFakeDns.setAnswer(httpHost, new String[] { "2001:db8::123" }, TYPE_AAAA);
+        final InetAddress parsedPrivateAddr = InetAddresses.parseNumericAddress(privateAddr);
+        mFakeDns.setAnswer(httpHost, new String[] { privateAddr },
+                (parsedPrivateAddr instanceof Inet6Address) ? TYPE_AAAA : TYPE_A);
+    }
+
+    @Test
+    public void testIsCaptivePortal_PrivateIpNotPortal_Enabled_IPv4() throws Exception {
+        when(mDependencies.isFeatureEnabled(any(), eq(DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION)))
+                .thenReturn(true);
+        setupPrivateIpResponse("192.168.1.1");
+        runFailedNetworkTest();
+    }
+
+    @Test
+    public void testIsCaptivePortal_PrivateIpNotPortal_Enabled_IPv6() throws Exception {
+        when(mDependencies.isFeatureEnabled(any(), eq(DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION)))
+                .thenReturn(true);
+        setupPrivateIpResponse("fec0:1234::1");
+        runFailedNetworkTest();
+    }
+
+    @Test
+    public void testIsCaptivePortal_PrivateIpNotPortal_Disabled() throws Exception {
+        setupPrivateIpResponse("192.168.1.1");
         runPortalNetworkTest(VALIDATION_RESULT_PORTAL);
     }
 
