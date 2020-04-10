@@ -385,4 +385,12 @@ public class NetworkStackUtils {
                 (address instanceof Inet6Address) ? "[%s]:%d" : "%s:%d",
                         address.getHostAddress(), port);
     }
+
+    /**
+     * Return true if the provided address is non-null and an IPv6 Unique Local Address (RFC4193).
+     */
+    public static boolean isIPv6ULA(@Nullable InetAddress addr) {
+        return addr instanceof Inet6Address
+                && ((addr.getAddress()[0] & 0xfe) == 0xfc);
+    }
 }
