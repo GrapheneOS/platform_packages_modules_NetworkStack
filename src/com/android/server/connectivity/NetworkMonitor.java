@@ -67,6 +67,8 @@ import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_OTHER_HTTPS_URLS
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_OTHER_HTTP_URLS;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USER_AGENT;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USE_HTTPS;
+import static android.net.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT;
+import static android.net.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_FALLBACK_PROBE_SPECS;
 import static android.net.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_HTTPS_URLS;
 import static android.net.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_HTTP_URLS;
 import static android.net.util.NetworkStackUtils.DISMISS_PORTAL_IN_VALIDATED_NETWORK;
@@ -1600,20 +1602,20 @@ public class NetworkMonitor extends StateMachine {
 
     private String getCaptivePortalServerHttpsUrl() {
         final Context targetContext = getCustomizedContextOrDefault();
-        return getSettingFromResource(targetContext, R.string.config_captive_portal_https_url,
-                R.string.default_captive_portal_https_url, CAPTIVE_PORTAL_HTTPS_URL);
+        return getSettingFromResource(targetContext,
+                R.string.config_captive_portal_https_url, CAPTIVE_PORTAL_HTTPS_URL,
+                targetContext.getResources().getString(R.string.default_captive_portal_https_url));
     }
 
     private int getDnsProbeTimeout() {
         return getIntSetting(mContext, R.integer.config_captive_portal_dns_probe_timeout,
-                CONFIG_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT,
-                R.integer.default_captive_portal_dns_probe_timeout);
+                CONFIG_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT, DEFAULT_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT);
     }
 
     /**
      * Gets an integer setting from resources or device config
      *
-     * configResource is used if set, followed by device config if set, followed by defaultResource.
+     * configResource is used if set, followed by device config if set, followed by defaultValue.
      * If none of these are set then an exception is thrown.
      *
      * TODO: move to a common location such as a ConfigUtils class.
@@ -1621,13 +1623,13 @@ public class NetworkMonitor extends StateMachine {
      */
     @VisibleForTesting
     int getIntSetting(@NonNull final Context context, @StringRes int configResource,
-            @NonNull String symbol, @StringRes int defaultResource) {
+            @NonNull String symbol, int defaultValue) {
         final Resources res = context.getResources();
         try {
             return res.getInteger(configResource);
         } catch (Resources.NotFoundException e) {
             return mDependencies.getDeviceConfigPropertyInt(NAMESPACE_CONNECTIVITY,
-                    symbol, res.getInteger(defaultResource));
+                    symbol, defaultValue);
         }
     }
 
@@ -1679,8 +1681,9 @@ public class NetworkMonitor extends StateMachine {
      */
     public String getCaptivePortalServerHttpUrl() {
         final Context targetContext = getCustomizedContextOrDefault();
-        return getSettingFromResource(targetContext, R.string.config_captive_portal_http_url,
-                R.string.default_captive_portal_http_url, CAPTIVE_PORTAL_HTTP_URL);
+        return getSettingFromResource(targetContext,
+                R.string.config_captive_portal_http_url, CAPTIVE_PORTAL_HTTP_URL,
+                targetContext.getResources().getString(R.string.default_captive_portal_http_url));
     }
 
     private int getConsecutiveDnsTimeoutThreshold() {
@@ -1722,7 +1725,8 @@ public class NetworkMonitor extends StateMachine {
                 combineCaptivePortalUrls(firstUrl, CAPTIVE_PORTAL_OTHER_FALLBACK_URLS);
             return getProbeUrlArrayConfig(settingProviderUrls,
                     R.array.config_captive_portal_fallback_urls,
-                    R.array.default_captive_portal_fallback_urls, this::makeURL);
+                    R.array.default_captive_portal_fallback_urls,
+                    this::makeURL);
         } catch (Exception e) {
             // Don't let a misconfiguration bootloop the system.
             Log.e(TAG, "Error parsing configured fallback URLs", e);
@@ -1742,7 +1746,7 @@ public class NetworkMonitor extends StateMachine {
 
             return getProbeUrlArrayConfig(providerValue,
                     R.array.config_captive_portal_fallback_probe_specs,
-                    R.array.default_captive_portal_fallback_probe_specs,
+                    DEFAULT_CAPTIVE_PORTAL_FALLBACK_PROBE_SPECS,
                     CaptivePortalProbeSpec::parseSpecOrNull);
         } catch (Exception e) {
             // Don't let a misconfiguration bootloop the system.
@@ -1756,6 +1760,8 @@ public class NetworkMonitor extends StateMachine {
         try {
             final URL[] settingProviderUrls =
                 combineCaptivePortalUrls(firstUrl, CAPTIVE_PORTAL_OTHER_HTTPS_URLS);
+            // firstUrl will at least be default configuration, so default value in
+            // getProbeUrlArrayConfig is actually never used.
             return getProbeUrlArrayConfig(settingProviderUrls,
                     R.array.config_captive_portal_https_urls,
                     DEFAULT_CAPTIVE_PORTAL_HTTPS_URLS, this::makeURL);
@@ -1772,6 +1778,8 @@ public class NetworkMonitor extends StateMachine {
         try {
             final URL[] settingProviderUrls =
                     combineCaptivePortalUrls(firstUrl, CAPTIVE_PORTAL_OTHER_HTTP_URLS);
+            // firstUrl will at least be default configuration, so default value in
+            // getProbeUrlArrayConfig is actually never used.
             return getProbeUrlArrayConfig(settingProviderUrls,
                     R.array.config_captive_portal_http_urls,
                     DEFAULT_CAPTIVE_PORTAL_HTTP_URLS, this::makeURL);
@@ -1783,11 +1791,11 @@ public class NetworkMonitor extends StateMachine {
         }
     }
 
-    private URL[] combineCaptivePortalUrls(final String firstUrl, final String name) {
+    private URL[] combineCaptivePortalUrls(final String firstUrl, final String propertyName) {
         if (TextUtils.isEmpty(firstUrl)) return new URL[0];
 
         final String otherUrls = mDependencies.getDeviceConfigProperty(
-                NAMESPACE_CONNECTIVITY, name, "");
+                NAMESPACE_CONNECTIVITY, propertyName, "");
         // otherUrls may be empty, but .split() ignores trailing empty strings
         final String separator = ",";
         final String[] urls = (firstUrl + separator + otherUrls).split(separator);
@@ -1797,27 +1805,26 @@ public class NetworkMonitor extends StateMachine {
     /**
      * Read a setting from a resource or the settings provider.
      *
-     * <p>The configuration resource is prioritized, then the provider value, then the default
-     * resource value.
+     * <p>The configuration resource is prioritized, then the provider value.
      * @param context The context
      * @param configResource The resource id for the configuration parameter
-     * @param defaultResource The resource id for the default value
      * @param symbol The symbol in the settings provider
+     * @param defaultValue The default value
      * @return The best available value
      */
-    @NonNull
+    @Nullable
     private String getSettingFromResource(@NonNull final Context context,
-            @StringRes int configResource, @StringRes int defaultResource,
-            @NonNull String symbol) {
+            @StringRes int configResource, @NonNull String symbol, @NonNull String defaultValue) {
         final Resources res = context.getResources();
         String setting = res.getString(configResource);
 
         if (!TextUtils.isEmpty(setting)) return setting;
 
         setting = mDependencies.getSetting(context, symbol, null);
+
         if (!TextUtils.isEmpty(setting)) return setting;
 
-        return res.getString(defaultResource);
+        return defaultValue;
     }
 
     /**
