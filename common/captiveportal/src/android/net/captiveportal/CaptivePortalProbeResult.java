@@ -36,10 +36,11 @@ public final class CaptivePortalProbeResult {
      */
     public static final int PARTIAL_CODE = -1;
 
-    // DNS response with private IP on the probe URL means the network, especially Wi-Fi network is
-    // not connected to the Internet. This code represents the result of a single probe, for correct
-    // logging of the probe results. The result of the whole evaluation would typically be FAILED if
-    // one of the probes returns this status.
+    // DNS response with private IP on the probe URL suggests that the network, especially Wi-Fi
+    // network is not connected to the Internet. This code represents the result of a single probe,
+    // for correct logging of the probe results. The result of the whole evaluation would typically
+    // be FAILED if one of the probes returns this status.
+    // This logic is only used if the config_force_dns_probe_private_ip_no_internet flag is set.
     public static final int DNS_PRIVATE_IP_RESPONSE_CODE = -2;
 
     @NonNull
