@@ -67,4 +67,22 @@
          could result in valid captive portals being incorrectly classified as having no
          connectivity.-->
     <bool name="config_force_dns_probe_private_ip_no_internet">false</bool>
+
+    <!-- Define the min and max range of the content-length that should be in the HTTP response
+         header of probe responses for the validation success/failed regexp to be used. The RegExp
+         will be used to match the probe response content when the content-length is inside this
+         interval(Strictly greater than the config_min_matches_http_content_length and strictly
+         smaller than the config_max_matches_http_content_length). When the content-length is out of
+         this interval, the RegExp will not be used. -->
+    <integer name="config_min_matches_http_content_length">0</integer>
+    <integer name="config_max_matches_http_content_length">0</integer>
+    <!-- A regular expression to match the content of a network validation probe.
+         Treat the network validation as failed when the content matches the
+         config_network_validation_failed_content_regexp and treat the network validation as success
+         when the content matches the config_network_validation_success_content_regexp. If the
+         content matches both of the config_network_validation_failed_content_regexp and
+         the config_network_validation_success_content_regexp, the result will be considered as
+         failed. -->
+    <string name="config_network_validation_failed_content_regexp" translatable="false"></string>
+    <string name="config_network_validation_success_content_regexp" translatable="false"></string>
 </resources>
