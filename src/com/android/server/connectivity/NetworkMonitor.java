@@ -70,6 +70,7 @@ import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USE_HTTPS;
 import static android.net.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_HTTPS_URLS;
 import static android.net.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_HTTP_URLS;
 import static android.net.util.NetworkStackUtils.DISMISS_PORTAL_IN_VALIDATED_NETWORK;
+import static android.net.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION;
 import static android.net.util.NetworkStackUtils.isEmpty;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
@@ -423,6 +424,8 @@ public class NetworkMonitor extends StateMachine {
     private boolean mAcceptPartialConnectivity = false;
     private final EvaluationState mEvaluationState = new EvaluationState();
 
+    private final boolean mPrivateIpNotPortalEnabled;
+
     private int getCallbackVersion(INetworkMonitorCallbacks cb) {
         int version;
         try {
@@ -484,6 +487,7 @@ public class NetworkMonitor extends StateMachine {
         // CHECKSTYLE:ON IndentationCheck
 
         mIsCaptivePortalCheckEnabled = getIsCaptivePortalCheckEnabled();
+        mPrivateIpNotPortalEnabled = getIsPrivateIpNotPortalEnabled();
         mUseHttps = getUseHttpsValidation();
         mCaptivePortalUserAgent = getCaptivePortalUserAgent();
         mCaptivePortalHttpsUrls = makeCaptivePortalHttpsUrls();
@@ -1434,6 +1438,12 @@ public class NetworkMonitor extends StateMachine {
         return mode != CAPTIVE_PORTAL_MODE_IGNORE;
     }
 
+    private boolean getIsPrivateIpNotPortalEnabled() {
+        return mDependencies.isFeatureEnabled(mContext, DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION)
+                || mContext.getResources().getBoolean(
+                        R.bool.config_force_dns_probe_private_ip_no_internet);
+    }
+
     private boolean getUseHttpsValidation() {
         return mDependencies.getDeviceConfigPropertyInt(NAMESPACE_CONNECTIVITY,
                 CAPTIVE_PORTAL_USE_HTTPS, 1) == 1;
@@ -1877,7 +1887,13 @@ public class NetworkMonitor extends StateMachine {
         // state machine thread. Reporting results here would cause races and potentially send
         // information to callers that does not make sense because the state machine has already
         // changed state.
-        sendDnsProbe(host);
+        final InetAddress[] resolvedAddr = sendDnsProbe(host);
+        // The private IP logic only applies to the HTTP probe, not the HTTPS probe (which would
+        // fail anyway) or the PAC probe.
+        if (mPrivateIpNotPortalEnabled && probeType == ValidationProbeEvent.PROBE_HTTP
+                && (proxy == null) && hasPrivateIpAddress(resolvedAddr)) {
+            return CaptivePortalProbeResult.PRIVATE_IP;
+        }
         return sendHttpProbe(url, probeType, null);
     }
 
@@ -1891,23 +1907,41 @@ public class NetworkMonitor extends StateMachine {
     }
 
     /** Do a DNS resolution of the given server. */
-    private void sendDnsProbe(String host) {
+    private InetAddress[] sendDnsProbe(String host) {
         if (TextUtils.isEmpty(host)) {
-            return;
+            return null;
         }
 
-        final String name = ValidationProbeEvent.getProbeName(ValidationProbeEvent.PROBE_DNS);
         final Stopwatch watch = new Stopwatch().start();
         int result;
-        String connectInfo;
+        InetAddress[] addresses;
         try {
-            InetAddress[] addresses = sendDnsProbeWithTimeout(host, getDnsProbeTimeout());
+            addresses = sendDnsProbeWithTimeout(host, getDnsProbeTimeout());
             result = ValidationProbeEvent.DNS_SUCCESS;
         } catch (UnknownHostException e) {
+            addresses = null;
             result = ValidationProbeEvent.DNS_FAILURE;
         }
         final long latency = watch.stop();
         logValidationProbe(latency, ValidationProbeEvent.PROBE_DNS, result);
+        return addresses;
+    }
+
+    /**
+     * Check if any of the provided IP addresses include a private IP, as defined by
+     * {@link com.android.server.util.NetworkStackConstants#PRIVATE_IPV4_RANGES}.
+     * @return true if an IP address is private.
+     */
+    private static boolean hasPrivateIpAddress(@Nullable InetAddress[] addresses) {
+        if (addresses == null) {
+            return false;
+        }
+        for (InetAddress address : addresses) {
+            if (address.isLinkLocalAddress() || address.isSiteLocalAddress()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -2230,6 +2264,15 @@ public class NetworkMonitor extends StateMachine {
             reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTPS, httpsResult);
             return httpsResult;
         }
+        // Consider a DNS response with a private IP address on the HTTP probe as an indication that
+        // the network is not connected to the Internet, and have the whole evaluation fail in that
+        // case.
+        // This only applies if the DNS probe completed within PROBE_TIMEOUT_MS, as the fallback
+        // probe should not be delayed by this check.
+        if (mPrivateIpNotPortalEnabled && (httpResult.isDnsPrivateIpResponse())) {
+            validationLog("DNS response to the URL is private IP");
+            return CaptivePortalProbeResult.FAILED;
+        }
         // If a fallback method exists, use it to retry portal detection.
         // If we have new-style probe specs, use those. Otherwise, use the fallback URLs.
         final CaptivePortalProbeSpec probeSpec = nextFallbackSpec();
@@ -2446,6 +2489,16 @@ public class NetworkMonitor extends StateMachine {
         public int getDeviceConfigPropertyInt(@NonNull String namespace, @NonNull String name,
                 int defaultValue) {
             return NetworkStackUtils.getDeviceConfigPropertyInt(namespace, name, defaultValue);
+        }
+
+        /**
+         * Check whether or not one experimental feature in the connectivity namespace is
+         * enabled.
+         * @param name Flag name of the experiment in the connectivity namespace.
+         * @see NetworkStackUtils#isFeatureEnabled(Context, String, String)
+         */
+        public boolean isFeatureEnabled(@NonNull Context context, @NonNull String name) {
+            return NetworkStackUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name);
         }
 
         /**
