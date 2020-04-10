@@ -142,6 +142,7 @@ import android.util.Pair;
 
 import androidx.annotation.ArrayRes;
 import androidx.annotation.BoolRes;
+import androidx.annotation.IntegerRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
@@ -167,6 +168,7 @@ import com.android.server.NetworkStackService.NetworkStackServiceManager;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -193,6 +195,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * {@hide}
@@ -1504,7 +1507,7 @@ public class NetworkMonitor extends StateMachine {
     @VisibleForTesting
     protected Context getContextByMccIfNoSimCardOrDefault() {
         final boolean useNeighborResource =
-                getResBooleanConfig(mContext, R.bool.config_no_sim_card_uses_neighbor_mcc);
+                getResBooleanConfig(mContext, R.bool.config_no_sim_card_uses_neighbor_mcc, false);
         if (!useNeighborResource
                 || TelephonyManager.SIM_STATE_READY == mTelephonyManager.getSimState()) {
             return mContext;
@@ -1552,13 +1555,41 @@ public class NetworkMonitor extends StateMachine {
     }
 
     @VisibleForTesting
-    protected boolean getResBooleanConfig(@NonNull final Context context,
-            @BoolRes int configResource) {
+    boolean getResBooleanConfig(@NonNull final Context context,
+            @BoolRes int configResource, final boolean defaultValue) {
         final Resources res = context.getResources();
         try {
             return res.getBoolean(configResource);
         } catch (Resources.NotFoundException e) {
-            return false;
+            return defaultValue;
+        }
+    }
+
+    /**
+     * Gets integer config from resources.
+     */
+    @VisibleForTesting
+    int getResIntConfig(@NonNull final Context context,
+            @IntegerRes final int configResource, final int defaultValue) {
+        final Resources res = context.getResources();
+        try {
+            return res.getInteger(configResource);
+        } catch (Resources.NotFoundException e) {
+            return defaultValue;
+        }
+    }
+
+    /**
+     * Gets string config from resources.
+     */
+    @VisibleForTesting
+    String getResStringConfig(@NonNull final Context context,
+            @StringRes final int configResource, @Nullable final String defaultValue) {
+        final Resources res = context.getResources();
+        try {
+            return res.getString(configResource);
+        } catch (Resources.NotFoundException e) {
+            return defaultValue;
         }
     }
 
@@ -1999,6 +2030,24 @@ public class NetworkMonitor extends StateMachine {
                                 "Empty 200 response interpreted as failed response.");
                         httpResponseCode = CaptivePortalProbeResult.FAILED_CODE;
                     }
+                } else if (matchesHttpContentLength(contentLength)) {
+                    final InputStream is = new BufferedInputStream(urlConnection.getInputStream());
+                    final String content = readAsString(is, (int) contentLength,
+                            extractCharset(urlConnection.getContentType()));
+                    if (matchesHttpContent(content,
+                            R.string.config_network_validation_failed_content_regexp)) {
+                        httpResponseCode = CaptivePortalProbeResult.FAILED_CODE;
+                    } else if (matchesHttpContent(content,
+                            R.string.config_network_validation_success_content_regexp)) {
+                        httpResponseCode = CaptivePortalProbeResult.SUCCESS_CODE;
+                    }
+
+                    if (httpResponseCode != 200) {
+                        validationLog(probeType, url, "200 response with Content-length ="
+                                + contentLength + ", content matches custom regexp, interpreted"
+                                + " as " + httpResponseCode
+                                + " response.");
+                    }
                 } else if (contentLength <= 4) {
                     // Consider 200 response with "Content-length <= 4" to not be a captive
                     // portal. There's no point in considering this a captive portal as the
@@ -2027,6 +2076,34 @@ public class NetworkMonitor extends StateMachine {
         } else {
             return probeSpec.getResult(httpResponseCode, redirectUrl);
         }
+    }
+
+    @VisibleForTesting
+    boolean matchesHttpContent(final String content, @StringRes final int configResource) {
+        final String resString = getResStringConfig(mContext, configResource, "");
+        try {
+            return content.matches(resString);
+        } catch (PatternSyntaxException e) {
+            Log.e(TAG, "Pattern syntax exception occurs when matching the resource=" + resString,
+                    e);
+            return false;
+        }
+    }
+
+    @VisibleForTesting
+    boolean matchesHttpContentLength(final long contentLength) {
+        // Consider that the Resources#getInteger() is returning an integer, so if the contentLength
+        // is lower or equal to 0 or higher than Integer.MAX_VALUE, then it's an invalid value.
+        if (contentLength <= 0) return false;
+        if (contentLength > Integer.MAX_VALUE) {
+            logw("matchesHttpContentLength : Get invalid contentLength = " + contentLength);
+            return false;
+        }
+        return (contentLength > getResIntConfig(mContext,
+                R.integer.config_min_matches_http_content_length, Integer.MAX_VALUE)
+                &&
+                contentLength < getResIntConfig(mContext,
+                R.integer.config_max_matches_http_content_length, 0));
     }
 
     private HttpURLConnection makeProbeConnection(URL url, boolean followRedirects)
