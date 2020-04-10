@@ -205,8 +205,8 @@ public class DhcpServer extends IDhcpServer.Stub {
                 @NonNull SharedLog log, @NonNull Clock clock) {
             return new DhcpLeaseRepository(
                     DhcpServingParams.makeIpPrefix(servingParams.serverAddr),
-                    servingParams.excludedAddrs,
-                    servingParams.dhcpLeaseTimeSecs * 1000, log.forSubComponent(REPO_TAG), clock);
+                    servingParams.excludedAddrs, servingParams.dhcpLeaseTimeSecs * 1000,
+                    servingParams.clientAddr, log.forSubComponent(REPO_TAG), clock);
         }
 
         @Override
@@ -351,7 +351,8 @@ public class DhcpServer extends IDhcpServer.Stub {
                     mLeaseRepo.updateParams(
                             DhcpServingParams.makeIpPrefix(mServingParams.serverAddr),
                             params.excludedAddrs,
-                            params.dhcpLeaseTimeSecs);
+                            params.dhcpLeaseTimeSecs,
+                            params.clientAddr);
 
                     cb = pair.second;
                     break;
