@@ -172,6 +172,15 @@ public class NetworkStackUtils {
     public static final String DISMISS_PORTAL_IN_VALIDATED_NETWORK =
             "dismiss_portal_in_validated_network";
 
+    /**
+     * Experiment flag to enable considering DNS probes returning private IP addresses as failed
+     * when attempting to detect captive portals.
+     *
+     * This flag is enabled if !=0 and less than the module APK version.
+     */
+    public static final String DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION =
+            "dns_probe_private_ip_no_internet";
+
     static {
         System.loadLibrary("networkstackutilsjni");
     }
