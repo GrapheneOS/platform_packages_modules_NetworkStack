@@ -16,6 +16,9 @@
 
 package android.net.util;
 
+import static android.net.InetAddresses.parseNumericAddress;
+import static android.net.util.NetworkStackUtils.isIPv6ULA;
+
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.doReturn;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
 
@@ -184,5 +187,16 @@ public class NetworkStackUtilsTest {
         doThrow(NameNotFoundException.class).when(mPm).getPackageInfo(anyString(), anyInt());
         assertFalse(NetworkStackUtils.isFeatureEnabled(mContext, TEST_NAME_SPACE,
                 TEST_EXPERIMENT_FLAG));
+    }
+
+    @Test
+    public void testIsIPv6ULA() {
+        assertTrue(isIPv6ULA(parseNumericAddress("fc00::")));
+        assertTrue(isIPv6ULA(parseNumericAddress("fc00::1")));
+        assertTrue(isIPv6ULA(parseNumericAddress("fc00:1234::5678")));
+        assertTrue(isIPv6ULA(parseNumericAddress("fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff")));
+
+        assertFalse(isIPv6ULA(parseNumericAddress("fe00::")));
+        assertFalse(isIPv6ULA(parseNumericAddress("2480:1248::123:456")));
     }
 }
