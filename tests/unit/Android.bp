@@ -59,7 +59,10 @@ android_library {
     min_sdk_version: "29",
     defaults: ["NetworkStackTestsDefaults"],
     static_libs: ["NetworkStackApiStableLib"],
-    visibility: ["//packages/modules/NetworkStack/tests/integration"]
+    visibility: [
+        "//packages/modules/NetworkStack/tests/integration",
+        "//frameworks/base/packages/Tethering/tests/integration",
+    ]
 }
 
 android_test {
@@ -77,7 +80,6 @@ android_test {
 java_defaults {
     name: "libnetworkstackutilsjni_deps",
     jni_libs: [
-        "libartbase",
         "libbacktrace",
         "libbase",
         "libbinder",
