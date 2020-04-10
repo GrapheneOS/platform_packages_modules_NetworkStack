@@ -33,11 +33,12 @@ import android.net.shared.Inet4AddressUtils;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.testutils.MiscAssertsKt;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.lang.reflect.Modifier;
 import java.net.Inet4Address;
 import java.util.Arrays;
 import java.util.Collection;
@@ -56,6 +57,7 @@ public class DhcpServingParamsTest {
     private static final Set<Inet4Address> TEST_DNS_SERVERS = new HashSet<>(
             Arrays.asList(parseAddr("192.168.0.126"), parseAddr("192.168.0.127")));
     private static final Inet4Address TEST_SERVER_ADDR = parseAddr("192.168.0.2");
+    private static final Inet4Address TEST_CLIENT_ADDR = parseAddr("192.168.0.42");
     private static final LinkAddress TEST_LINKADDR = new LinkAddress(TEST_SERVER_ADDR, 20);
     private static final int TEST_MTU = 1500;
     private static final Set<Inet4Address> TEST_EXCLUDED_ADDRS = new HashSet<>(
@@ -71,7 +73,8 @@ public class DhcpServingParamsTest {
                 .setServerAddr(TEST_LINKADDR)
                 .setLinkMtu(TEST_MTU)
                 .setExcludedAddrs(TEST_EXCLUDED_ADDRS)
-                .setMetered(TEST_METERED);
+                .setMetered(TEST_METERED)
+                .setClientAddr(TEST_CLIENT_ADDR);
     }
 
     @Test
@@ -178,6 +181,7 @@ public class DhcpServingParamsTest {
         parcel.linkMtu = TEST_MTU;
         parcel.excludedAddrs = toIntArray(TEST_EXCLUDED_ADDRS);
         parcel.metered = TEST_METERED;
+        parcel.clientAddr = inet4AddressToIntHTH(TEST_CLIENT_ADDR);
         final DhcpServingParams parceled = DhcpServingParams.fromParcelableObject(parcel);
 
         assertEquals(params.defaultRouters, parceled.defaultRouters);
@@ -187,12 +191,9 @@ public class DhcpServingParamsTest {
         assertEquals(params.linkMtu, parceled.linkMtu);
         assertEquals(params.excludedAddrs, parceled.excludedAddrs);
         assertEquals(params.metered, parceled.metered);
+        assertEquals(params.clientAddr, parceled.clientAddr);
 
-        // Ensure that we do not miss any field if added in the future
-        final long numFields = Arrays.stream(DhcpServingParams.class.getDeclaredFields())
-                .filter(f -> !Modifier.isStatic(f.getModifiers()))
-                .count();
-        assertEquals(7, numFields);
+        MiscAssertsKt.assertFieldCountEquals(9, DhcpServingParamsParcel.class);
     }
 
     @Test(expected = InvalidParameterException.class)
