@@ -64,6 +64,11 @@ fun assertContainsExactly(actual: IntArray, vararg expected: Int) {
             "$actual does not contain exactly $expected")
 }
 
+fun assertContainsStringsExactly(actual: Array<String>, vararg expected: String) {
+    assertEquals(actual.sorted(), expected.sorted(),
+            "$actual does not contain exactly $expected")
+}
+
 fun <T> assertContainsAll(list: Collection<T>, vararg elems: T) {
     assertContainsAll(list, elems.asList())
 }
