@@ -72,6 +72,7 @@ import static android.net.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_HTTP_URL
 import static android.net.util.NetworkStackUtils.DISMISS_PORTAL_IN_VALIDATED_NETWORK;
 import static android.net.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION;
 import static android.net.util.NetworkStackUtils.isEmpty;
+import static android.net.util.NetworkStackUtils.isIPv6ULA;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DNS_EVENTS;
@@ -142,6 +143,7 @@ import android.util.Pair;
 
 import androidx.annotation.ArrayRes;
 import androidx.annotation.BoolRes;
+import androidx.annotation.IntegerRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
@@ -167,6 +169,7 @@ import com.android.server.NetworkStackService.NetworkStackServiceManager;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -193,6 +196,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * {@hide}
@@ -424,7 +428,7 @@ public class NetworkMonitor extends StateMachine {
     private boolean mAcceptPartialConnectivity = false;
     private final EvaluationState mEvaluationState = new EvaluationState();
 
-    private final boolean mPrivateIpNotPortalEnabled;
+    private final boolean mPrivateIpNoInternetEnabled;
 
     private int getCallbackVersion(INetworkMonitorCallbacks cb) {
         int version;
@@ -487,7 +491,7 @@ public class NetworkMonitor extends StateMachine {
         // CHECKSTYLE:ON IndentationCheck
 
         mIsCaptivePortalCheckEnabled = getIsCaptivePortalCheckEnabled();
-        mPrivateIpNotPortalEnabled = getIsPrivateIpNotPortalEnabled();
+        mPrivateIpNoInternetEnabled = getIsPrivateIpNoInternetEnabled();
         mUseHttps = getUseHttpsValidation();
         mCaptivePortalUserAgent = getCaptivePortalUserAgent();
         mCaptivePortalHttpsUrls = makeCaptivePortalHttpsUrls();
@@ -1438,7 +1442,7 @@ public class NetworkMonitor extends StateMachine {
         return mode != CAPTIVE_PORTAL_MODE_IGNORE;
     }
 
-    private boolean getIsPrivateIpNotPortalEnabled() {
+    private boolean getIsPrivateIpNoInternetEnabled() {
         return mDependencies.isFeatureEnabled(mContext, DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION)
                 || mContext.getResources().getBoolean(
                         R.bool.config_force_dns_probe_private_ip_no_internet);
@@ -1504,7 +1508,7 @@ public class NetworkMonitor extends StateMachine {
     @VisibleForTesting
     protected Context getContextByMccIfNoSimCardOrDefault() {
         final boolean useNeighborResource =
-                getResBooleanConfig(mContext, R.bool.config_no_sim_card_uses_neighbor_mcc);
+                getResBooleanConfig(mContext, R.bool.config_no_sim_card_uses_neighbor_mcc, false);
         if (!useNeighborResource
                 || TelephonyManager.SIM_STATE_READY == mTelephonyManager.getSimState()) {
             return mContext;
@@ -1552,13 +1556,41 @@ public class NetworkMonitor extends StateMachine {
     }
 
     @VisibleForTesting
-    protected boolean getResBooleanConfig(@NonNull final Context context,
-            @BoolRes int configResource) {
+    boolean getResBooleanConfig(@NonNull final Context context,
+            @BoolRes int configResource, final boolean defaultValue) {
         final Resources res = context.getResources();
         try {
             return res.getBoolean(configResource);
         } catch (Resources.NotFoundException e) {
-            return false;
+            return defaultValue;
+        }
+    }
+
+    /**
+     * Gets integer config from resources.
+     */
+    @VisibleForTesting
+    int getResIntConfig(@NonNull final Context context,
+            @IntegerRes final int configResource, final int defaultValue) {
+        final Resources res = context.getResources();
+        try {
+            return res.getInteger(configResource);
+        } catch (Resources.NotFoundException e) {
+            return defaultValue;
+        }
+    }
+
+    /**
+     * Gets string config from resources.
+     */
+    @VisibleForTesting
+    String getResStringConfig(@NonNull final Context context,
+            @StringRes final int configResource, @Nullable final String defaultValue) {
+        final Resources res = context.getResources();
+        try {
+            return res.getString(configResource);
+        } catch (Resources.NotFoundException e) {
+            return defaultValue;
         }
     }
 
@@ -1888,9 +1920,9 @@ public class NetworkMonitor extends StateMachine {
         // information to callers that does not make sense because the state machine has already
         // changed state.
         final InetAddress[] resolvedAddr = sendDnsProbe(host);
-        // The private IP logic only applies to the HTTP probe, not the HTTPS probe (which would
-        // fail anyway) or the PAC probe.
-        if (mPrivateIpNotPortalEnabled && probeType == ValidationProbeEvent.PROBE_HTTP
+        // The private IP logic only applies to captive portal detection (the HTTP probe), not
+        // network validation (the HTTPS probe, which would likely fail anyway) or the PAC probe.
+        if (mPrivateIpNoInternetEnabled && probeType == ValidationProbeEvent.PROBE_HTTP
                 && (proxy == null) && hasPrivateIpAddress(resolvedAddr)) {
             return CaptivePortalProbeResult.PRIVATE_IP;
         }
@@ -1928,8 +1960,7 @@ public class NetworkMonitor extends StateMachine {
     }
 
     /**
-     * Check if any of the provided IP addresses include a private IP, as defined by
-     * {@link com.android.server.util.NetworkStackConstants#PRIVATE_IPV4_RANGES}.
+     * Check if any of the provided IP addresses include a private IP.
      * @return true if an IP address is private.
      */
     private static boolean hasPrivateIpAddress(@Nullable InetAddress[] addresses) {
@@ -1937,7 +1968,8 @@ public class NetworkMonitor extends StateMachine {
             return false;
         }
         for (InetAddress address : addresses) {
-            if (address.isLinkLocalAddress() || address.isSiteLocalAddress()) {
+            if (address.isLinkLocalAddress() || address.isSiteLocalAddress()
+                    || isIPv6ULA(address)) {
                 return true;
             }
         }
@@ -1999,6 +2031,24 @@ public class NetworkMonitor extends StateMachine {
                                 "Empty 200 response interpreted as failed response.");
                         httpResponseCode = CaptivePortalProbeResult.FAILED_CODE;
                     }
+                } else if (matchesHttpContentLength(contentLength)) {
+                    final InputStream is = new BufferedInputStream(urlConnection.getInputStream());
+                    final String content = readAsString(is, (int) contentLength,
+                            extractCharset(urlConnection.getContentType()));
+                    if (matchesHttpContent(content,
+                            R.string.config_network_validation_failed_content_regexp)) {
+                        httpResponseCode = CaptivePortalProbeResult.FAILED_CODE;
+                    } else if (matchesHttpContent(content,
+                            R.string.config_network_validation_success_content_regexp)) {
+                        httpResponseCode = CaptivePortalProbeResult.SUCCESS_CODE;
+                    }
+
+                    if (httpResponseCode != 200) {
+                        validationLog(probeType, url, "200 response with Content-length ="
+                                + contentLength + ", content matches custom regexp, interpreted"
+                                + " as " + httpResponseCode
+                                + " response.");
+                    }
                 } else if (contentLength <= 4) {
                     // Consider 200 response with "Content-length <= 4" to not be a captive
                     // portal. There's no point in considering this a captive portal as the
@@ -2027,6 +2077,34 @@ public class NetworkMonitor extends StateMachine {
         } else {
             return probeSpec.getResult(httpResponseCode, redirectUrl);
         }
+    }
+
+    @VisibleForTesting
+    boolean matchesHttpContent(final String content, @StringRes final int configResource) {
+        final String resString = getResStringConfig(mContext, configResource, "");
+        try {
+            return content.matches(resString);
+        } catch (PatternSyntaxException e) {
+            Log.e(TAG, "Pattern syntax exception occurs when matching the resource=" + resString,
+                    e);
+            return false;
+        }
+    }
+
+    @VisibleForTesting
+    boolean matchesHttpContentLength(final long contentLength) {
+        // Consider that the Resources#getInteger() is returning an integer, so if the contentLength
+        // is lower or equal to 0 or higher than Integer.MAX_VALUE, then it's an invalid value.
+        if (contentLength <= 0) return false;
+        if (contentLength > Integer.MAX_VALUE) {
+            logw("matchesHttpContentLength : Get invalid contentLength = " + contentLength);
+            return false;
+        }
+        return (contentLength > getResIntConfig(mContext,
+                R.integer.config_min_matches_http_content_length, Integer.MAX_VALUE)
+                &&
+                contentLength < getResIntConfig(mContext,
+                R.integer.config_max_matches_http_content_length, 0));
     }
 
     private HttpURLConnection makeProbeConnection(URL url, boolean followRedirects)
@@ -2266,10 +2344,11 @@ public class NetworkMonitor extends StateMachine {
         }
         // Consider a DNS response with a private IP address on the HTTP probe as an indication that
         // the network is not connected to the Internet, and have the whole evaluation fail in that
-        // case.
+        // case, instead of potentially detecting a captive portal. This logic only affects portal
+        // detection, not network validation.
         // This only applies if the DNS probe completed within PROBE_TIMEOUT_MS, as the fallback
         // probe should not be delayed by this check.
-        if (mPrivateIpNotPortalEnabled && (httpResult.isDnsPrivateIpResponse())) {
+        if (mPrivateIpNoInternetEnabled && (httpResult.isDnsPrivateIpResponse())) {
             validationLog("DNS response to the URL is private IP");
             return CaptivePortalProbeResult.FAILED;
         }
