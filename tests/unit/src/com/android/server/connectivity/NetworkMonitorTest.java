@@ -38,6 +38,7 @@ import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_FALLBACK_PROBE_S
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_OTHER_FALLBACK_URLS;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USE_HTTPS;
 import static android.net.util.NetworkStackUtils.DISMISS_PORTAL_IN_VALIDATED_NETWORK;
+import static android.net.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION;
 
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DNS_EVENTS;
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_TCP_METRICS;
@@ -93,6 +94,7 @@ import android.net.ConnectivityManager;
 import android.net.DnsResolver;
 import android.net.INetd;
 import android.net.INetworkMonitorCallbacks;
+import android.net.InetAddresses;
 import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -152,6 +154,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.net.HttpURLConnection;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URL;
 import java.net.UnknownHostException;
@@ -589,6 +592,89 @@ public class NetworkMonitorTest {
     }
 
     @Test
+    public void testMatchesHttpContent() throws Exception {
+        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        doReturn("[\\s\\S]*line2[\\s\\S]*").when(mResources).getString(
+                R.string.config_network_validation_failed_content_regexp);
+        assertTrue(wnm.matchesHttpContent("This is line1\nThis is line2\nThis is line3",
+                R.string.config_network_validation_failed_content_regexp));
+        assertFalse(wnm.matchesHttpContent("hello",
+                R.string.config_network_validation_failed_content_regexp));
+        // Set an invalid regex and expect to get the false even though the regex is the same as the
+        // content.
+        doReturn("[").when(mResources).getString(
+                R.string.config_network_validation_failed_content_regexp);
+        assertFalse(wnm.matchesHttpContent("[",
+                R.string.config_network_validation_failed_content_regexp));
+    }
+
+    @Test
+    public void testMatchesHttpContentLength() throws Exception {
+        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        // Set the range of content length.
+        doReturn(100).when(mResources).getInteger(R.integer.config_min_matches_http_content_length);
+        doReturn(1000).when(mResources).getInteger(
+                R.integer.config_max_matches_http_content_length);
+        assertFalse(wnm.matchesHttpContentLength(100));
+        assertFalse(wnm.matchesHttpContentLength(1000));
+        assertTrue(wnm.matchesHttpContentLength(500));
+
+        // Test the invalid value.
+        assertFalse(wnm.matchesHttpContentLength(-1));
+        assertFalse(wnm.matchesHttpContentLength(0));
+        assertFalse(wnm.matchesHttpContentLength(Integer.MAX_VALUE + 1L));
+
+        // Set the wrong value for min and max config to make sure the function is working even
+        // though the config is wrong.
+        doReturn(1000).when(mResources).getInteger(
+                R.integer.config_min_matches_http_content_length);
+        doReturn(100).when(mResources).getInteger(
+                R.integer.config_max_matches_http_content_length);
+        assertFalse(wnm.matchesHttpContentLength(100));
+        assertFalse(wnm.matchesHttpContentLength(1000));
+        assertFalse(wnm.matchesHttpContentLength(500));
+    }
+
+    @Test
+    public void testGetResStringConfig() throws Exception {
+        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        // Set the config and expect to get the customized value.
+        final String regExp = ".*HTTP.*200.*not a captive portal.*";
+        doReturn(regExp).when(mResources).getString(
+                R.string.config_network_validation_failed_content_regexp);
+        assertEquals(regExp, wnm.getResStringConfig(mContext,
+                R.string.config_network_validation_failed_content_regexp, null));
+        doThrow(new Resources.NotFoundException()).when(mResources).getString(eq(
+                R.string.config_network_validation_failed_content_regexp));
+        // If the config is not found, then expect to get the default value - null.
+        assertNull(wnm.getResStringConfig(mContext,
+                R.string.config_network_validation_failed_content_regexp, null));
+    }
+
+    @Test
+    public void testGetResIntConfig() throws Exception {
+        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        // Set the config and expect to get the customized value.
+        doReturn(100).when(mResources).getInteger(R.integer.config_min_matches_http_content_length);
+        doReturn(1000).when(mResources).getInteger(
+                R.integer.config_max_matches_http_content_length);
+        assertEquals(100, wnm.getResIntConfig(mContext,
+                R.integer.config_min_matches_http_content_length, Integer.MAX_VALUE));
+        assertEquals(1000, wnm.getResIntConfig(mContext,
+                R.integer.config_max_matches_http_content_length, 0));
+        doThrow(new Resources.NotFoundException())
+                .when(mResources).getInteger(
+                        eq(R.integer.config_min_matches_http_content_length));
+        doThrow(new Resources.NotFoundException())
+                .when(mResources).getInteger(eq(R.integer.config_max_matches_http_content_length));
+        // If the config is not found, then expect to get the default value.
+        assertEquals(Integer.MAX_VALUE, wnm.getResIntConfig(mContext,
+                R.integer.config_min_matches_http_content_length, Integer.MAX_VALUE));
+        assertEquals(0, wnm.getResIntConfig(mContext,
+                R.integer.config_max_matches_http_content_length, 0));
+    }
+
+    @Test
     public void testGetLocationMcc() throws Exception {
         final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
         doReturn(PackageManager.PERMISSION_DENIED).when(mContext).checkPermission(
@@ -744,6 +830,38 @@ public class NetworkMonitorTest {
     public void testIsCaptivePortal_HttpProbeIsPortal() throws IOException {
         setSslException(mHttpsConnection);
         setPortal302(mHttpConnection);
+        runPortalNetworkTest(VALIDATION_RESULT_PORTAL);
+    }
+
+    private void setupPrivateIpResponse(String privateAddr) throws Exception {
+        setSslException(mHttpsConnection);
+        setPortal302(mHttpConnection);
+        final String httpHost = new URL(TEST_HTTP_URL).getHost();
+        mFakeDns.setAnswer(httpHost, new String[] { "2001:db8::123" }, TYPE_AAAA);
+        final InetAddress parsedPrivateAddr = InetAddresses.parseNumericAddress(privateAddr);
+        mFakeDns.setAnswer(httpHost, new String[] { privateAddr },
+                (parsedPrivateAddr instanceof Inet6Address) ? TYPE_AAAA : TYPE_A);
+    }
+
+    @Test
+    public void testIsCaptivePortal_PrivateIpNotPortal_Enabled_IPv4() throws Exception {
+        when(mDependencies.isFeatureEnabled(any(), eq(DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION)))
+                .thenReturn(true);
+        setupPrivateIpResponse("192.168.1.1");
+        runFailedNetworkTest();
+    }
+
+    @Test
+    public void testIsCaptivePortal_PrivateIpNotPortal_Enabled_IPv6() throws Exception {
+        when(mDependencies.isFeatureEnabled(any(), eq(DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION)))
+                .thenReturn(true);
+        setupPrivateIpResponse("fec0:1234::1");
+        runFailedNetworkTest();
+    }
+
+    @Test
+    public void testIsCaptivePortal_PrivateIpNotPortal_Disabled() throws Exception {
+        setupPrivateIpResponse("192.168.1.1");
         runPortalNetworkTest(VALIDATION_RESULT_PORTAL);
     }
 
@@ -938,6 +1056,38 @@ public class NetworkMonitorTest {
 
         verify(mCallbacks, never()).notifyCaptivePortalDataChanged(any());
         verify(mHttpConnection).getResponseCode();
+    }
+
+    @Test
+    public void testIsCaptivePortal_HttpsProbeMatchesFailRegex() throws Exception {
+        setStatus(mHttpsConnection, 200);
+        setStatus(mHttpConnection, 500);
+        final String content = "test";
+        doReturn(new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)))
+                .when(mHttpsConnection).getInputStream();
+        doReturn(Long.valueOf(content.length())).when(mHttpsConnection).getContentLengthLong();
+        doReturn(1).when(mResources).getInteger(R.integer.config_min_matches_http_content_length);
+        doReturn(10).when(mResources).getInteger(
+                R.integer.config_max_matches_http_content_length);
+        doReturn("te.t").when(mResources).getString(
+                R.string.config_network_validation_failed_content_regexp);
+        runFailedNetworkTest();
+    }
+
+    @Test
+    public void testIsCaptivePortal_HttpProbeMatchesSuccessRegex() throws Exception {
+        setStatus(mHttpsConnection, 500);
+        setStatus(mHttpConnection, 200);
+        final String content = "test";
+        doReturn(new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)))
+                .when(mHttpConnection).getInputStream();
+        doReturn(Long.valueOf(content.length())).when(mHttpConnection).getContentLengthLong();
+        doReturn(1).when(mResources).getInteger(R.integer.config_min_matches_http_content_length);
+        doReturn(10).when(mResources).getInteger(
+                R.integer.config_max_matches_http_content_length);
+        doReturn("te.t").when(mResources).getString(
+                R.string.config_network_validation_success_content_regexp);
+        runPartialConnectivityNetworkTest(VALIDATION_RESULT_PARTIAL);
     }
 
     private void setupFallbackSpec() throws IOException {
@@ -1661,6 +1811,20 @@ public class NetworkMonitorTest {
         for (int i = 0; i < readString.length(); i++) {
             assertEquals(repeatedString.charAt(i % repeatedString.length()), readString.charAt(i));
         }
+    }
+
+    @Test
+    public void testReadAsString_StreamShorterThanLimit() throws Exception {
+        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        final String content = "The HTTP response code is 200 but it is not a captive portal.";
+        ByteArrayInputStream inputStream = new ByteArrayInputStream(
+                content.getBytes(StandardCharsets.UTF_8));
+        assertEquals(content, wnm.readAsString(inputStream, content.length(),
+                StandardCharsets.UTF_8));
+        // Reset the inputStream and test the case that the stream ends earlier than the limit.
+        inputStream = new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
+        assertEquals(content, wnm.readAsString(inputStream, content.length() + 10,
+                StandardCharsets.UTF_8));
     }
 
     private void makeDnsTimeoutEvent(WrappedNetworkMonitor wrappedMonitor, int count) {

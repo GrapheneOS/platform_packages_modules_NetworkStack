@@ -36,6 +36,13 @@ public final class CaptivePortalProbeResult {
      */
     public static final int PARTIAL_CODE = -1;
 
+    // DNS response with private IP on the probe URL suggests that the network, especially Wi-Fi
+    // network is not connected to the Internet. This code represents the result of a single probe,
+    // for correct logging of the probe results. The result of the whole evaluation would typically
+    // be FAILED if one of the probes returns this status.
+    // This logic is only used if the config_force_dns_probe_private_ip_no_internet flag is set.
+    public static final int DNS_PRIVATE_IP_RESPONSE_CODE = -2;
+
     @NonNull
     public static final CaptivePortalProbeResult FAILED = new CaptivePortalProbeResult(FAILED_CODE);
     @NonNull
@@ -43,6 +50,8 @@ public final class CaptivePortalProbeResult {
             new CaptivePortalProbeResult(SUCCESS_CODE);
     public static final CaptivePortalProbeResult PARTIAL =
             new CaptivePortalProbeResult(PARTIAL_CODE);
+    public static final CaptivePortalProbeResult PRIVATE_IP =
+            new CaptivePortalProbeResult(DNS_PRIVATE_IP_RESPONSE_CODE);
 
     private final int mHttpResponseCode;  // HTTP response code returned from Internet probe.
     @Nullable
@@ -84,5 +93,9 @@ public final class CaptivePortalProbeResult {
 
     public boolean isPartialConnectivity() {
         return mHttpResponseCode == PARTIAL_CODE;
+    }
+
+    public boolean isDnsPrivateIpResponse() {
+        return mHttpResponseCode == DNS_PRIVATE_IP_RESPONSE_CODE;
     }
 }

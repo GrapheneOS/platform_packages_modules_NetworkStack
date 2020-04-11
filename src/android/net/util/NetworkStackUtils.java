@@ -172,6 +172,15 @@ public class NetworkStackUtils {
     public static final String DISMISS_PORTAL_IN_VALIDATED_NETWORK =
             "dismiss_portal_in_validated_network";
 
+    /**
+     * Experiment flag to enable considering DNS probes returning private IP addresses as failed
+     * when attempting to detect captive portals.
+     *
+     * This flag is enabled if !=0 and less than the module APK version.
+     */
+    public static final String DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION =
+            "dns_probe_private_ip_no_internet";
+
     static {
         System.loadLibrary("networkstackutilsjni");
     }
@@ -375,5 +384,13 @@ public class NetworkStackUtils {
         return String.format(
                 (address instanceof Inet6Address) ? "[%s]:%d" : "%s:%d",
                         address.getHostAddress(), port);
+    }
+
+    /**
+     * Return true if the provided address is non-null and an IPv6 Unique Local Address (RFC4193).
+     */
+    public static boolean isIPv6ULA(@Nullable InetAddress addr) {
+        return addr instanceof Inet6Address
+                && ((addr.getAddress()[0] & 0xfe) == 0xfc);
     }
 }
