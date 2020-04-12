@@ -22,5 +22,5 @@
     <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"Er worden meldingen weergegeven om aan te geven dat het netwerk een locatie-informatiepagina heeft"</string>
     <string name="connected" msgid="4563643884927480998">"Verbonden"</string>
     <string name="tap_for_info" msgid="6849746325626883711">"Verbonden / Tik om de website te bekijken"</string>
-    <string name="application_label" msgid="8095087899576605955">"Connectivity Manager"</string>
+    <string name="application_label" msgid="1322847171305285454">"Netwerkbeheer"</string>
 </resources>

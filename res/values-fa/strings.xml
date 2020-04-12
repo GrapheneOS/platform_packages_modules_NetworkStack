@@ -22,5 +22,5 @@
     <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"اعلان‌هایی که نمایش داده می‌شوند تا نشان دهند شبکه صفحه اطلاعات محل دارد"</string>
     <string name="connected" msgid="4563643884927480998">"متصل"</string>
     <string name="tap_for_info" msgid="6849746325626883711">"متصل شد / برای مشاهده وب‌سایت ضربه بزنید"</string>
-    <string name="application_label" msgid="8095087899576605955">"مدیر اتصال"</string>
+    <string name="application_label" msgid="1322847171305285454">"مدیر شبکه"</string>
 </resources>
