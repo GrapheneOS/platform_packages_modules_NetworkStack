@@ -23,6 +23,23 @@ import org.junit.runner.Description
 import org.junit.runners.model.Statement
 
 /**
+ * Returns true if the development SDK version of the device is in the provided range.
+ *
+ * If the device is not using a release SDK, the development SDK is considered to be higher than
+ * [Build.VERSION.SDK_INT].
+ */
+fun isDevSdkInRange(minExclusive: Int?, maxInclusive: Int?): Boolean {
+    // In-development API n+1 will have SDK_INT == n and CODENAME != REL.
+    // Stable API n has SDK_INT == n and CODENAME == REL.
+    val release = "REL" == Build.VERSION.CODENAME
+    val sdkInt = Build.VERSION.SDK_INT
+    val devApiLevel = sdkInt + if (release) 0 else 1
+
+    return (minExclusive == null || devApiLevel > minExclusive) &&
+            (maxInclusive == null || devApiLevel <= maxInclusive)
+}
+
+/**
  * A test rule to ignore tests based on the development SDK level.
  *
  * If the device is not using a release SDK, the development SDK is considered to be higher than
@@ -63,16 +80,10 @@ class DevSdkIgnoreRule @JvmOverloads constructor(
             val ignoreAfter = description.getAnnotation(IgnoreAfter::class.java)
             val ignoreUpTo = description.getAnnotation(IgnoreUpTo::class.java)
 
-            // In-development API n+1 will have SDK_INT == n and CODENAME != REL.
-            // Stable API n has SDK_INT == n and CODENAME == REL.
-            val release = "REL" == Build.VERSION.CODENAME
-            val sdkInt = Build.VERSION.SDK_INT
-            val devApiLevel = sdkInt + if (release) 0 else 1
-            val message = "Skipping test for ${if (!release) "non-" else ""}release SDK $sdkInt"
-            assumeTrue(message, ignoreClassAfter == null || devApiLevel <= ignoreClassAfter)
-            assumeTrue(message, ignoreClassUpTo == null || devApiLevel > ignoreClassUpTo)
-            assumeTrue(message, ignoreAfter == null || devApiLevel <= ignoreAfter.value)
-            assumeTrue(message, ignoreUpTo == null || devApiLevel > ignoreUpTo.value)
+            val message = "Skipping test for build ${Build.VERSION.CODENAME} " +
+                    "with SDK ${Build.VERSION.SDK_INT}"
+            assumeTrue(message, isDevSdkInRange(ignoreClassUpTo, ignoreClassAfter))
+            assumeTrue(message, isDevSdkInRange(ignoreUpTo?.value, ignoreAfter?.value))
             base.evaluate()
         }
     }
