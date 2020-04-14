@@ -25,7 +25,10 @@ aidl_interface {
     ],
     backend: {
         java: {
-            apex_available: ["com.android.wifi",],
+            apex_available: [
+                "//apex_available:platform",
+                "com.android.wifi",
+            ],
         },
         ndk: {
             enabled: false,
