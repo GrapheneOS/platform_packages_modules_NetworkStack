@@ -27,6 +27,7 @@ import static android.net.INetworkMonitor.NETWORK_VALIDATION_PROBE_PRIVDNS;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_PARTIAL;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_VALID;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET;
+import static android.net.metrics.ValidationProbeEvent.PROBE_HTTP;
 import static android.net.util.DataStallUtils.CONFIG_DATA_STALL_CONSECUTIVE_DNS_TIMEOUT_THRESHOLD;
 import static android.net.util.DataStallUtils.CONFIG_DATA_STALL_EVALUATION_TYPE;
 import static android.net.util.DataStallUtils.CONFIG_DATA_STALL_MIN_EVALUATE_INTERVAL;
@@ -1731,13 +1732,15 @@ public class NetworkMonitorTest {
 
         resetCallbacks();
 
-        nm.reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP, CaptivePortalProbeResult.SUCCESS);
+        nm.reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP,
+                CaptivePortalProbeResult.success(PROBE_HTTP));
         // Verify result should be appended and notifyNetworkTestedWithExtras callback is triggered
         // once.
         assertEquals(nm.getEvaluationState().getNetworkTestResult(),
                 VALIDATION_RESULT_VALID | NETWORK_VALIDATION_PROBE_HTTP);
 
-        nm.reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP, CaptivePortalProbeResult.FAILED);
+        nm.reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP,
+                CaptivePortalProbeResult.failed(PROBE_HTTP));
         // Verify DNS probe result should not be cleared.
         assertTrue((nm.getEvaluationState().getNetworkTestResult() & NETWORK_VALIDATION_PROBE_DNS)
                 == NETWORK_VALIDATION_PROBE_DNS);
