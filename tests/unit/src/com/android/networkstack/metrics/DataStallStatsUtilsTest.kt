@@ -23,6 +23,7 @@ import com.android.server.connectivity.nano.DataStallEventProto
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
+import android.net.metrics.ValidationProbeEvent
 
 @RunWith(AndroidJUnit4::class)
 @SmallTest
@@ -30,14 +31,26 @@ class DataStallStatsUtilsTest {
     @Test
     fun testProbeResultToEnum() {
         assertEquals(DataStallStatsUtils.probeResultToEnum(null), DataStallEventProto.INVALID)
-        assertEquals(DataStallStatsUtils.probeResultToEnum(CaptivePortalProbeResult.FAILED),
+        // Metrics cares only http response code.
+        assertEquals(DataStallStatsUtils.probeResultToEnum(
+                CaptivePortalProbeResult.failed(ValidationProbeEvent.PROBE_HTTP)),
                 DataStallEventProto.INVALID)
-        assertEquals(DataStallStatsUtils.probeResultToEnum(CaptivePortalProbeResult.SUCCESS),
+        assertEquals(DataStallStatsUtils.probeResultToEnum(
+                CaptivePortalProbeResult.failed(ValidationProbeEvent.PROBE_HTTPS)),
+                DataStallEventProto.INVALID)
+        assertEquals(DataStallStatsUtils.probeResultToEnum(
+                CaptivePortalProbeResult.success(ValidationProbeEvent.PROBE_HTTP)),
+                DataStallEventProto.VALID)
+        assertEquals(DataStallStatsUtils.probeResultToEnum(
+                CaptivePortalProbeResult.success(ValidationProbeEvent.PROBE_HTTP)),
                 DataStallEventProto.VALID)
         assertEquals(DataStallStatsUtils.probeResultToEnum(CaptivePortalProbeResult.PARTIAL),
                 DataStallEventProto.PARTIAL)
-        assertEquals(DataStallStatsUtils.probeResultToEnum(
-                CaptivePortalProbeResult(CaptivePortalProbeResult.PORTAL_CODE)),
+        assertEquals(DataStallStatsUtils.probeResultToEnum(CaptivePortalProbeResult(
+                CaptivePortalProbeResult.PORTAL_CODE, ValidationProbeEvent.PROBE_HTTP)),
+                DataStallEventProto.PORTAL)
+        assertEquals(DataStallStatsUtils.probeResultToEnum(CaptivePortalProbeResult(
+                CaptivePortalProbeResult.PORTAL_CODE, ValidationProbeEvent.PROBE_HTTPS)),
                 DataStallEventProto.PORTAL)
     }
 }
