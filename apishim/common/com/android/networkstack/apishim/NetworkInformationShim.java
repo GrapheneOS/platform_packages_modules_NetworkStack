@@ -16,6 +16,7 @@
 
 package com.android.networkstack.apishim;
 
+import android.net.IpPrefix;
 import android.net.LinkProperties;
 import android.net.NetworkCapabilities;
 import android.net.Uri;
@@ -48,6 +49,17 @@ public interface NetworkInformationShim {
     CaptivePortalDataShim getCaptivePortalData(@Nullable LinkProperties lp);
 
     /**
+     * @see LinkProperties#getNat64Prefix()
+     */
+    @Nullable
+    IpPrefix getNat64Prefix(@NonNull LinkProperties lp);
+
+    /**
+     * @see LinkProperties#setNat64Prefix()
+     */
+    void setNat64Prefix(@NonNull LinkProperties lp, @Nullable IpPrefix prefix);
+
+    /**
      * @see NetworkCapabilities#getSSID()
      */
     @Nullable
@@ -62,8 +74,6 @@ public interface NetworkInformationShim {
     /**
      * @see LinkProperties#setDhcpServerAddress()
      */
-    @NonNull
-    void setDhcpServerAddress(@NonNull LinkProperties lp,
-            @NonNull Inet4Address serverAddress);
+    void setDhcpServerAddress(@NonNull LinkProperties lp, @NonNull Inet4Address serverAddress);
 
 }
