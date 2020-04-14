@@ -39,6 +39,7 @@ java_library {
         "androidx.annotation_annotation",
     ],
     static_libs: [
+        "androidx.test.ext.junit",
         "net-tests-utils-multivariant",
     ],
 }
