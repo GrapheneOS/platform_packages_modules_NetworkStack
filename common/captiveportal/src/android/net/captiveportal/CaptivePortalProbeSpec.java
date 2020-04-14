@@ -18,6 +18,7 @@ package android.net.captiveportal;
 
 import static android.net.captiveportal.CaptivePortalProbeResult.PORTAL_CODE;
 import static android.net.captiveportal.CaptivePortalProbeResult.SUCCESS_CODE;
+import static android.net.metrics.ValidationProbeEvent.PROBE_HTTP;
 
 import android.text.TextUtils;
 import android.util.Log;
@@ -40,6 +41,7 @@ public abstract class CaptivePortalProbeSpec {
     private static final String TAG = CaptivePortalProbeSpec.class.getSimpleName();
     private static final String REGEX_SEPARATOR = "@@/@@";
     private static final String SPEC_SEPARATOR = "@@,@@";
+    private static final String PROTOCOL_HTTP = "http";
 
     private final String mEncodedSpec;
     private final URL mUrl;
@@ -138,7 +140,7 @@ public abstract class CaptivePortalProbeSpec {
     }
 
     /**
-     * Get the probe result from HTTP status and location header.
+     * Get the HTTP probe result from HTTP status and location header.
      */
     @NonNull
     public abstract CaptivePortalProbeResult getResult(int status, @Nullable String locationHeader);
@@ -157,6 +159,7 @@ public abstract class CaptivePortalProbeSpec {
      * Implementation of {@link CaptivePortalProbeSpec} that is based on configurable regular
      * expressions for the HTTP status code and location header (if any). Matches indicate that
      * the page is not a portal.
+     * @throws IllegalArgumentException The protocol of the url is not http.
      * This probe cannot fail: it always returns SUCCESS_CODE or PORTAL_CODE
      */
     private static class RegexMatchProbeSpec extends CaptivePortalProbeSpec {
@@ -165,9 +168,17 @@ public abstract class CaptivePortalProbeSpec {
         @Nullable
         final Pattern mLocationHeaderRegex;
 
-        RegexMatchProbeSpec(
-                String spec, URL url, Pattern statusRegex, Pattern locationHeaderRegex) {
+        RegexMatchProbeSpec(@NonNull String spec, @NonNull URL url, @Nullable Pattern statusRegex,
+                @Nullable Pattern locationHeaderRegex) throws ParseException {
             super(spec, url);
+            final String protocol = url.getProtocol();
+            if (!PROTOCOL_HTTP.equals(protocol)) {
+                // The probe type taken in the result is hard-coded as PROBE_HTTP currently, so the
+                // probe type taken into the result of {@code getResult} have to change if other
+                // kind of probes are used.
+                throw new IllegalArgumentException("Protocol for probe spec should be http but was"
+                        + protocol);
+            }
             mStatusRegex = statusRegex;
             mLocationHeaderRegex = locationHeaderRegex;
         }
@@ -178,7 +189,7 @@ public abstract class CaptivePortalProbeSpec {
             final boolean locationMatch = safeMatch(locationHeader, mLocationHeaderRegex);
             final int returnCode = statusMatch && locationMatch ? SUCCESS_CODE : PORTAL_CODE;
             return new CaptivePortalProbeResult(
-                    returnCode, locationHeader, getUrl().toString(), this);
+                    returnCode, locationHeader, getUrl().toString(), this, PROBE_HTTP);
         }
     }
 
