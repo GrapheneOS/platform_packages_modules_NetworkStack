@@ -103,6 +103,7 @@ import android.net.NetworkCapabilities;
 import android.net.ProxyInfo;
 import android.net.TrafficStats;
 import android.net.Uri;
+import android.net.captiveportal.CapportApiProbeResult;
 import android.net.captiveportal.CaptivePortalProbeResult;
 import android.net.captiveportal.CaptivePortalProbeSpec;
 import android.net.metrics.IpConnectivityLog;
@@ -406,7 +407,8 @@ public class NetworkMonitor extends StateMachine {
     private final Stopwatch mEvaluationTimer = new Stopwatch();
 
     // This variable is set before transitioning to the mCaptivePortalState.
-    private CaptivePortalProbeResult mLastPortalProbeResult = CaptivePortalProbeResult.FAILED;
+    private CaptivePortalProbeResult mLastPortalProbeResult =
+            CaptivePortalProbeResult.failed(CaptivePortalProbeResult.PROBE_UNKNOWN);
 
     // Random generator to select fallback URL index
     private final Random mRandom;
@@ -1840,7 +1842,7 @@ public class NetworkMonitor extends StateMachine {
     protected CaptivePortalProbeResult isCaptivePortal() {
         if (!mIsCaptivePortalCheckEnabled) {
             validationLog("Validation disabled.");
-            return CaptivePortalProbeResult.SUCCESS;
+            return CaptivePortalProbeResult.success(CaptivePortalProbeResult.PROBE_UNKNOWN);
         }
 
         URL pacUrl = null;
@@ -1868,13 +1870,13 @@ public class NetworkMonitor extends StateMachine {
         if (proxyInfo != null && !Uri.EMPTY.equals(proxyInfo.getPacFileUrl())) {
             pacUrl = makeURL(proxyInfo.getPacFileUrl().toString());
             if (pacUrl == null) {
-                return CaptivePortalProbeResult.FAILED;
+                return CaptivePortalProbeResult.failed(CaptivePortalProbeResult.PROBE_UNKNOWN);
             }
         }
 
         if ((pacUrl == null) && (httpUrls.length == 0 || httpsUrls.length == 0
                 || httpUrls[0] == null || httpsUrls[0] == null)) {
-            return CaptivePortalProbeResult.FAILED;
+            return CaptivePortalProbeResult.failed(CaptivePortalProbeResult.PROBE_UNKNOWN);
         }
 
         long startTime = SystemClock.elapsedRealtime();
@@ -2073,7 +2075,8 @@ public class NetworkMonitor extends StateMachine {
         logValidationProbe(probeTimer.stop(), probeType, httpResponseCode);
 
         if (probeSpec == null) {
-            return new CaptivePortalProbeResult(httpResponseCode, redirectUrl, url.toString());
+            return new CaptivePortalProbeResult(httpResponseCode, redirectUrl, url.toString(),
+                    1 << probeType);
         } else {
             return probeSpec.getResult(httpResponseCode, redirectUrl);
         }
@@ -2162,33 +2165,29 @@ public class NetworkMonitor extends StateMachine {
         }
     }
 
-    private abstract static class ProbeThread extends Thread {
+    private class ProbeThread extends Thread {
         private final CountDownLatch mLatch;
-        private final ProxyInfo mProxy;
-        private final URL mUrl;
-        protected final Uri mCaptivePortalApiUrl;
+        private final Probe mProbe;
 
-        protected ProbeThread(CountDownLatch latch, ProxyInfo proxy, URL url,
+        ProbeThread(CountDownLatch latch, ProxyInfo proxy, URL url, int probeType,
                 Uri captivePortalApiUrl) {
             mLatch = latch;
-            mProxy = proxy;
-            mUrl = url;
-            mCaptivePortalApiUrl = captivePortalApiUrl;
+            mProbe = (probeType == ValidationProbeEvent.PROBE_HTTPS)
+                    ? new HttpsProbe(proxy, url, captivePortalApiUrl)
+                    : new HttpProbe(proxy, url, captivePortalApiUrl);
+            mResult = CaptivePortalProbeResult.failed(probeType);
         }
 
-        private volatile CaptivePortalProbeResult mResult = CaptivePortalProbeResult.FAILED;
+        private volatile CaptivePortalProbeResult mResult;
 
         public CaptivePortalProbeResult result() {
             return mResult;
         }
 
-        protected abstract CaptivePortalProbeResult sendProbe(ProxyInfo proxy, URL url);
-        public abstract boolean isConclusiveResult(CaptivePortalProbeResult result);
-
         @Override
         public void run() {
-            mResult = sendProbe(mProxy, mUrl);
-            if (isConclusiveResult(mResult)) {
+            mResult = mProbe.sendProbe();
+            if (isConclusiveResult(mResult, mProbe.mCaptivePortalApiUrl)) {
                 // Stop waiting immediately if any probe is conclusive.
                 while (mLatch.getCount() > 0) {
                     mLatch.countDown();
@@ -2199,36 +2198,34 @@ public class NetworkMonitor extends StateMachine {
         }
     }
 
-    final class HttpsProbeThread extends ProbeThread {
-        HttpsProbeThread(CountDownLatch latch, ProxyInfo proxy, URL url, Uri captivePortalApiUrl) {
-            super(latch, proxy, url, captivePortalApiUrl);
+    private abstract static class Probe {
+        protected final ProxyInfo mProxy;
+        protected final URL mUrl;
+        protected final Uri mCaptivePortalApiUrl;
+
+        protected Probe(ProxyInfo proxy, URL url, Uri captivePortalApiUrl) {
+            mProxy = proxy;
+            mUrl = url;
+            mCaptivePortalApiUrl = captivePortalApiUrl;
+        }
+        // sendProbe() is synchronous and blocks until it has the result.
+        protected abstract CaptivePortalProbeResult sendProbe();
+    }
+
+    final class HttpsProbe extends Probe {
+        HttpsProbe(ProxyInfo proxy, URL url, Uri captivePortalApiUrl) {
+            super(proxy, url, captivePortalApiUrl);
         }
 
         @Override
-        protected CaptivePortalProbeResult sendProbe(ProxyInfo proxy, URL url) {
-            return sendDnsAndHttpProbes(proxy, url, ValidationProbeEvent.PROBE_HTTPS);
-        }
-
-        @Override
-        public boolean isConclusiveResult(CaptivePortalProbeResult result) {
-            // isPortal() is not expected on the HTTPS probe, but check it nonetheless.
-            // In case the capport API is available, the API is authoritative on whether there is
-            // a portal, so the HTTPS probe is not enough to conclude there is connectivity,
-            // and a determination will be made once the capport API probe returns. Note that the
-            // API can only force the system to detect a portal even if the HTTPS probe succeeds.
-            // It cannot force the system to detect no portal if the HTTPS probe fails.
-            return (result.isPortal() || result.isSuccessful()) && mCaptivePortalApiUrl == null;
+        protected CaptivePortalProbeResult sendProbe() {
+            return sendDnsAndHttpProbes(mProxy, mUrl, ValidationProbeEvent.PROBE_HTTPS);
         }
     }
 
-    final class HttpProbeThread extends ProbeThread {
-        private volatile CaptivePortalDataShim mCapportData;
-        HttpProbeThread(CountDownLatch latch, ProxyInfo proxy, URL url, Uri captivePortalApiUrl) {
-            super(latch, proxy, url, captivePortalApiUrl);
-        }
-
-        CaptivePortalDataShim getCaptivePortalData() {
-            return mCapportData;
+    final class HttpProbe extends Probe {
+        HttpProbe(ProxyInfo proxy, URL url, Uri captivePortalApiUrl) {
+            super(proxy, url, captivePortalApiUrl);
         }
 
         private CaptivePortalDataShim tryCapportApiProbe() {
@@ -2277,33 +2274,61 @@ public class NetworkMonitor extends StateMachine {
         }
 
         @Override
-        protected CaptivePortalProbeResult sendProbe(ProxyInfo proxy, URL url) {
-            mCapportData = tryCapportApiProbe();
-            if (mCapportData != null && mCapportData.isCaptive()) {
-                if (mCapportData.getUserPortalUrl() == null) {
+        protected CaptivePortalProbeResult sendProbe() {
+            final CaptivePortalDataShim capportData = tryCapportApiProbe();
+            if (capportData != null && capportData.isCaptive()) {
+                if (capportData.getUserPortalUrl() == null) {
                     validationLog("Missing user-portal-url from capport response");
-                    return sendDnsAndHttpProbes(proxy, url, ValidationProbeEvent.PROBE_HTTP);
+                    return sendDnsAndHttpProbes(mProxy, mUrl, ValidationProbeEvent.PROBE_HTTP);
                 }
-                final String loginUrlString = mCapportData.getUserPortalUrl().toString();
+                final String loginUrlString = capportData.getUserPortalUrl().toString();
                 // Starting from R (where CaptivePortalData was introduced), the captive portal app
                 // delegates to NetworkMonitor for verifying when the network validates instead of
                 // probing the detectUrl. So pass the detectUrl to have the portal open on that,
                 // page; CaptivePortalLogin will not use it for probing.
-                return new CaptivePortalProbeResult(
+                return new CapportApiProbeResult(
                         CaptivePortalProbeResult.PORTAL_CODE,
                         loginUrlString /* redirectUrl */,
-                        loginUrlString /* detectUrl */);
+                        loginUrlString /* detectUrl */,
+                        capportData,
+                        1 << ValidationProbeEvent.PROBE_HTTP);
             }
 
             // If the API says it's not captive, still check for HTTP connectivity. This helps
             // with partial connectivity detection, and a broken API saying that there is no
             // redirect when there is one.
-            return sendDnsAndHttpProbes(proxy, url, ValidationProbeEvent.PROBE_HTTP);
+            final CaptivePortalProbeResult res =
+                    sendDnsAndHttpProbes(mProxy, mUrl, ValidationProbeEvent.PROBE_HTTP);
+            return capportData == null ? res : new CapportApiProbeResult(res, capportData);
+        }
+    }
+
+    private static boolean isConclusiveResult(@NonNull CaptivePortalProbeResult result,
+            @Nullable Uri captivePortalApiUrl) {
+        // isPortal() is not expected on the HTTPS probe, but treat the network as portal would make
+        // sense if the probe reports portal. In case the capport API is available, the API is
+        // authoritative on whether there is a portal, so the HTTPS probe is not enough to conclude
+        // there is connectivity, and a determination will be made once the capport API probe
+        // returns. Note that the API can only force the system to detect a portal even if the HTTPS
+        // probe succeeds. It cannot force the system to detect no portal if the HTTPS probe fails.
+        return result.isPortal()
+                || (result.isConcludedFromHttps() && result.isSuccessful()
+                        && captivePortalApiUrl == null);
+    }
+
+    private void reportProbeResult(@NonNull CaptivePortalProbeResult res) {
+        if (res instanceof CapportApiProbeResult) {
+            maybeReportCaptivePortalData(((CapportApiProbeResult) res).getCaptivePortalData());
         }
 
-        @Override
-        public boolean isConclusiveResult(CaptivePortalProbeResult result) {
-            return result.isPortal();
+        // This is not a if-else case since partial connectivity will concluded from both HTTP and
+        // HTTPS probe. Both HTTP and HTTPS result should be reported.
+        if (res.isConcludedFromHttps()) {
+            reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTPS, res);
+        }
+
+        if (res.isConcludedFromHttp()) {
+            reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP, res);
         }
     }
 
@@ -2314,9 +2339,10 @@ public class NetworkMonitor extends StateMachine {
         final CountDownLatch latch = new CountDownLatch(2);
 
         final Uri capportApiUrl = getCaptivePortalApiUrl(mLinkProperties);
-        final HttpsProbeThread httpsProbe = new HttpsProbeThread(latch, proxy, httpsUrl,
-                capportApiUrl);
-        final HttpProbeThread httpProbe = new HttpProbeThread(latch, proxy, httpUrl, capportApiUrl);
+        final ProbeThread httpsProbe = new ProbeThread(latch, proxy, httpsUrl,
+                ValidationProbeEvent.PROBE_HTTPS, capportApiUrl);
+        final ProbeThread httpProbe = new ProbeThread(latch, proxy, httpUrl,
+                ValidationProbeEvent.PROBE_HTTP, capportApiUrl);
 
         try {
             httpsProbe.start();
@@ -2324,22 +2350,20 @@ public class NetworkMonitor extends StateMachine {
             latch.await(PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             validationLog("Error: probes wait interrupted!");
-            return CaptivePortalProbeResult.FAILED;
+            return CaptivePortalProbeResult.failed(CaptivePortalProbeResult.PROBE_UNKNOWN);
         }
 
         final CaptivePortalProbeResult httpsResult = httpsProbe.result();
         final CaptivePortalProbeResult httpResult = httpProbe.result();
 
         // Look for a conclusive probe result first.
-        if (httpProbe.isConclusiveResult(httpResult)) {
-            maybeReportCaptivePortalData(httpProbe.getCaptivePortalData());
-            reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP, httpResult);
+        if (isConclusiveResult(httpResult, capportApiUrl)) {
+            reportProbeResult(httpProbe.result());
             return httpResult;
         }
 
-        if (httpsProbe.isConclusiveResult(httpsResult)) {
-            maybeReportCaptivePortalData(httpProbe.getCaptivePortalData());
-            reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTPS, httpsResult);
+        if (isConclusiveResult(httpsResult, capportApiUrl)) {
+            reportProbeResult(httpsProbe.result());
             return httpsResult;
         }
         // Consider a DNS response with a private IP address on the HTTP probe as an indication that
@@ -2350,7 +2374,7 @@ public class NetworkMonitor extends StateMachine {
         // probe should not be delayed by this check.
         if (mPrivateIpNoInternetEnabled && (httpResult.isDnsPrivateIpResponse())) {
             validationLog("DNS response to the URL is private IP");
-            return CaptivePortalProbeResult.FAILED;
+            return CaptivePortalProbeResult.failed(1 << ValidationProbeEvent.PROBE_HTTP);
         }
         // If a fallback method exists, use it to retry portal detection.
         // If we have new-style probe specs, use those. Otherwise, use the fallback URLs.
@@ -2367,8 +2391,7 @@ public class NetworkMonitor extends StateMachine {
         // Otherwise wait until http and https probes completes and use their results.
         try {
             httpProbe.join();
-            maybeReportCaptivePortalData(httpProbe.getCaptivePortalData());
-            reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP, httpProbe.result());
+            reportProbeResult(httpProbe.result());
 
             if (httpProbe.result().isPortal()) {
                 return httpProbe.result();
@@ -2386,7 +2409,7 @@ public class NetworkMonitor extends StateMachine {
             return httpsProbe.result();
         } catch (InterruptedException e) {
             validationLog("Error: http or https probe wait interrupted!");
-            return CaptivePortalProbeResult.FAILED;
+            return CaptivePortalProbeResult.failed(CaptivePortalProbeResult.PROBE_UNKNOWN);
         }
     }
 
