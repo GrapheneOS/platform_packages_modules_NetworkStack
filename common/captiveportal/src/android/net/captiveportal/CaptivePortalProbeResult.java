@@ -16,14 +16,20 @@
 
 package android.net.captiveportal;
 
+import static android.net.metrics.ValidationProbeEvent.PROBE_HTTP;
+import static android.net.metrics.ValidationProbeEvent.PROBE_HTTPS;
+
+import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 /**
  * Result of calling isCaptivePortal().
  * @hide
  */
-public final class CaptivePortalProbeResult {
+public class CaptivePortalProbeResult {
     public static final int SUCCESS_CODE = 204;
     public static final int FAILED_CODE = 599;
     public static final int PORTAL_CODE = 302;
@@ -42,18 +48,17 @@ public final class CaptivePortalProbeResult {
     // be FAILED if one of the probes returns this status.
     // This logic is only used if the config_force_dns_probe_private_ip_no_internet flag is set.
     public static final int DNS_PRIVATE_IP_RESPONSE_CODE = -2;
-
-    @NonNull
-    public static final CaptivePortalProbeResult FAILED = new CaptivePortalProbeResult(FAILED_CODE);
-    @NonNull
-    public static final CaptivePortalProbeResult SUCCESS =
-            new CaptivePortalProbeResult(SUCCESS_CODE);
-    public static final CaptivePortalProbeResult PARTIAL =
-            new CaptivePortalProbeResult(PARTIAL_CODE);
+    // The private IP logic only applies to the HTTP probe.
     public static final CaptivePortalProbeResult PRIVATE_IP =
-            new CaptivePortalProbeResult(DNS_PRIVATE_IP_RESPONSE_CODE);
+            new CaptivePortalProbeResult(DNS_PRIVATE_IP_RESPONSE_CODE, 1 << PROBE_HTTP);
+    // Partial connectivity should be concluded from both HTTP and HTTPS probes.
+    @NonNull
+    public static final CaptivePortalProbeResult PARTIAL = new CaptivePortalProbeResult(
+            PARTIAL_CODE, 1 << PROBE_HTTP | 1 << PROBE_HTTPS);
+    // Probe type that is used for unspecified probe result.
+    public static final int PROBE_UNKNOWN = 0;
 
-    private final int mHttpResponseCode;  // HTTP response code returned from Internet probe.
+    final int mHttpResponseCode;  // HTTP response code returned from Internet probe.
     @Nullable
     public final String redirectUrl;      // Redirect destination returned from Internet probe.
     @Nullable
@@ -62,21 +67,39 @@ public final class CaptivePortalProbeResult {
     @Nullable
     public final CaptivePortalProbeSpec probeSpec;
 
-    public CaptivePortalProbeResult(int httpResponseCode) {
-        this(httpResponseCode, null, null);
+    // Indicate what kind of probe this is. This is a bitmask constructed by
+    // bitwise-or-ing(i.e. {@code |}) the {@code ValidationProbeEvent.PROBE_HTTP} or
+    // {@code ValidationProbeEvent.PROBE_HTTPS} values. Set it as {@code PROBE_UNKNOWN} if the probe
+    // type is unspecified.
+    @ProbeType
+    public final int probeType;
+
+    @IntDef(value = {
+        PROBE_UNKNOWN,
+        1 << PROBE_HTTP,
+        1 << PROBE_HTTPS,
+    })
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface ProbeType {
+    }
+
+    public CaptivePortalProbeResult(int httpResponseCode, @ProbeType int probeType) {
+        this(httpResponseCode, null, null, null, probeType);
     }
 
     public CaptivePortalProbeResult(int httpResponseCode, @Nullable String redirectUrl,
-            @Nullable String detectUrl) {
-        this(httpResponseCode, redirectUrl, detectUrl, null);
+            @Nullable String detectUrl, @ProbeType int probeType) {
+        this(httpResponseCode, redirectUrl, detectUrl, null, probeType);
     }
 
     public CaptivePortalProbeResult(int httpResponseCode, @Nullable String redirectUrl,
-            @Nullable String detectUrl, @Nullable CaptivePortalProbeSpec probeSpec) {
+            @Nullable String detectUrl, @Nullable CaptivePortalProbeSpec probeSpec,
+            @ProbeType int probeType) {
         mHttpResponseCode = httpResponseCode;
         this.redirectUrl = redirectUrl;
         this.detectUrl = detectUrl;
         this.probeSpec = probeSpec;
+        this.probeType = probeType;
     }
 
     public boolean isSuccessful() {
@@ -97,5 +120,41 @@ public final class CaptivePortalProbeResult {
 
     public boolean isDnsPrivateIpResponse() {
         return mHttpResponseCode == DNS_PRIVATE_IP_RESPONSE_CODE;
+    }
+
+    /**
+     *  Make a failed {@code this} for either HTTPS or HTTP determined by {@param isHttps}.
+     *  @param probeType probe type of the result.
+     *  @return a failed {@link CaptivePortalProbeResult}
+     */
+    public static CaptivePortalProbeResult failed(@ProbeType int probeType) {
+        return new CaptivePortalProbeResult(FAILED_CODE, probeType);
+    }
+
+    /**
+     *  Make a success {@code this} for either HTTPS or HTTP determined by {@param isHttps}.
+     *  @param probeType probe type of the result.
+     *  @return a success {@link CaptivePortalProbeResult}
+     */
+    public static CaptivePortalProbeResult success(@ProbeType int probeType) {
+        return new CaptivePortalProbeResult(SUCCESS_CODE, probeType);
+    }
+
+    /**
+     * As {@code this} is the result of calling isCaptivePortal(), the result may be determined from
+     * one or more probes depending on the configuration of detection probes. Return if HTTPS probe
+     * is one of the probes that concludes it.
+     */
+    public boolean isConcludedFromHttps() {
+        return (probeType & (1 << PROBE_HTTPS)) != 0;
+    }
+
+    /**
+     * As {@code this} is the result of calling isCaptivePortal(), the result may be determined from
+     * one or more probes depending on the configuration of detection probes. Return if HTTP probe
+     * is one of the probes that concludes it.
+     */
+    public boolean isConcludedFromHttp() {
+        return (probeType & (1 << PROBE_HTTP)) != 0;
     }
 }
