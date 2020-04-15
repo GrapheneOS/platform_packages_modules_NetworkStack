@@ -52,6 +52,7 @@ aidl_interface {
         "frameworks/base/wifi/aidl-export", // For wifi parcelables.
     ],
     srcs: [
+        "src/android/net/DataStallReportParcelable.aidl",
         "src/android/net/DhcpResultsParcelable.aidl",
         "src/android/net/INetworkMonitor.aidl",
         "src/android/net/INetworkMonitorCallbacks.aidl",
@@ -62,6 +63,7 @@ aidl_interface {
         "src/android/net/Layer2InformationParcelable.aidl",
         "src/android/net/Layer2PacketParcelable.aidl",
         "src/android/net/NattKeepalivePacketDataParcelable.aidl",
+        "src/android/net/NetworkTestResultParcelable.aidl",
         "src/android/net/PrivateDnsConfigParcel.aidl",
         "src/android/net/ProvisioningConfigurationParcelable.aidl",
         "src/android/net/ScanResultInfoParcelable.aidl",
