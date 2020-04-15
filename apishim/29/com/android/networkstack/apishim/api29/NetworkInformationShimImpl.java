@@ -16,6 +16,7 @@
 
 package com.android.networkstack.apishim.api29;
 
+import android.net.IpPrefix;
 import android.net.LinkProperties;
 import android.net.NetworkCapabilities;
 import android.net.Uri;
@@ -72,6 +73,18 @@ public class NetworkInformationShimImpl implements NetworkInformationShim {
     @Override
     public CaptivePortalDataShim getCaptivePortalData(@Nullable LinkProperties lp) {
         return null;
+    }
+
+    @Nullable
+    @Override
+    public IpPrefix getNat64Prefix(@NonNull LinkProperties lp) {
+        // Not supported on this API level
+        return null;
+    }
+
+    @Override
+    public void setNat64Prefix(@NonNull LinkProperties lp, @Nullable IpPrefix prefix) {
+        // Not supported on this API level: no-op
     }
 
     @Nullable
