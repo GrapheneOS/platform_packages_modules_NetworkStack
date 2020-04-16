@@ -16,6 +16,9 @@
 
 package android.net.netlink;
 
+import static android.net.InetAddresses.parseNumericAddress;
+import static android.system.OsConstants.AF_INET6;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -31,16 +34,16 @@ import libcore.util.HexEncoding;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 @RunWith(AndroidJUnit4.class)
 @SmallTest
 public class NduseroptMessageTest {
 
-    // Pick ifindices that are high enough that they will "never" be an existing interface index,
-    // and always be represented numerically in the address. That way, the test will never need to
-    // determine the interface names corresponding to these indices. That simplifies the code and
-    // makes the test more useful because determining interface names might require permissions.
+    private static final byte ICMP_TYPE_RA = (byte) 134;
+
     private static final int IFINDEX1 = 15715755;
     private static final int IFINDEX2 = 1431655765;
 
@@ -59,8 +62,8 @@ public class NduseroptMessageTest {
     // Length 20, NDUSEROPT_SRCADDR, fe80:2:3:4:5:6:7:8
     private static final String NLA_SRCADDR = "1400" + "0100" + "fe800002000300040005000600070008";
 
-    private static final String SRCADDR1 = "fe80:2:3:4:5:6:7:8%" + IFINDEX1;
-    private static final String SRCADDR2 = "fe80:2:3:4:5:6:7:8%" + IFINDEX2;
+    private static final InetAddress SADDR1 = parseNumericAddress("fe80:2:3:4:5:6:7:8%" + IFINDEX1);
+    private static final InetAddress SADDR2 = parseNumericAddress("fe80:2:3:4:5:6:7:8%" + IFINDEX2);
 
     private static final String MSG_EMPTY = HDR_EMPTY + NLA_SRCADDR;
     private static final String MSG_PREF64 = HDR_16BYTE + OPT_PREF64 + NLA_SRCADDR;
@@ -68,12 +71,66 @@ public class NduseroptMessageTest {
     @Test
     public void testParsing() {
         NduseroptMessage msg = parseNduseroptMessage(toBuffer(MSG_EMPTY));
-        assertMatches((byte) 10, 0, IFINDEX1, (byte) 134, (byte) 0, SRCADDR1, msg);
+        assertMatches(AF_INET6, 0, IFINDEX1, ICMP_TYPE_RA, (byte) 0, SADDR1, msg);
         assertNull(msg.option);
 
         msg = parseNduseroptMessage(toBuffer(MSG_PREF64));
-        assertMatches((byte) 10, 16, IFINDEX2, (byte) 134, (byte) 0, SRCADDR2, msg);
+        assertMatches(AF_INET6, 16, IFINDEX2, ICMP_TYPE_RA, (byte) 0, SADDR2, msg);
         assertPref64Option("2001:db8:3:4:5:6::/96", msg.option);
+    }
+
+    @Test
+    public void testParseWithinNetlinkMessage() throws Exception {
+        // A NduseroptMessage inside a netlink message. Ensure that it parses the same way both by
+        // parsing the netlink message via NetlinkMessage.parse() and by parsing the option itself
+        // with NduseroptMessage.parse().
+        final String hexBytes =
+                "44000000440000000000000000000000"             // len=68, RTM_NEWNDUSEROPT
+                + "0A0010001E0000008600000000000000"           // IPv6, opt_bytes=16, ifindex=30, RA
+                + "260202580064FF9B0000000000000000"           // pref64, prefix=64:ff9b::/96, 600
+                + "14000100FE800000000000000250B6FFFEB7C499";  // srcaddr=fe80::250:b6ff:feb7:c499
+
+        ByteBuffer buf = toBuffer(hexBytes);
+        assertEquals(68, buf.limit());
+        buf.order(ByteOrder.nativeOrder());
+
+        NetlinkMessage nlMsg = NetlinkMessage.parse(buf);
+        assertNotNull(nlMsg);
+        assertTrue(nlMsg instanceof NduseroptMessage);
+
+        NduseroptMessage msg = (NduseroptMessage) nlMsg;
+        InetAddress srcaddr = InetAddress.getByName("fe80::250:b6ff:feb7:c499%30");
+        assertMatches(AF_INET6, 16, 30, ICMP_TYPE_RA, (byte) 0, srcaddr, msg);
+        assertPref64Option("64:ff9b::/96", msg.option);
+
+        final String hexBytesWithoutHeader = hexBytes.substring(StructNlMsgHdr.STRUCT_SIZE * 2);
+        ByteBuffer bufWithoutHeader = toBuffer(hexBytesWithoutHeader);
+        assertEquals(52, bufWithoutHeader.limit());
+        msg = parseNduseroptMessage(bufWithoutHeader);
+        assertMatches(AF_INET6, 16, 30, ICMP_TYPE_RA, (byte) 0, srcaddr, msg);
+        assertPref64Option("64:ff9b::/96", msg.option);
+    }
+
+    @Test
+    public void testParseUnknownOptionWithinNetlinkMessage() throws Exception {
+        final String hexBytes =
+                "4C0000004400000000000000000000000"
+                + "A0018001E0000008600000000000000"
+                + "1903000000001770FD123456789000000000000000000001"  // RDNSS option
+                + "14000100FE800000000000000250B6FFFEB7C499";
+
+        ByteBuffer buf = toBuffer(hexBytes);
+        assertEquals(76, buf.limit());
+        buf.order(ByteOrder.nativeOrder());
+
+        NetlinkMessage nlMsg = NetlinkMessage.parse(buf);
+        assertNotNull(nlMsg);
+        assertTrue(nlMsg instanceof NduseroptMessage);
+
+        NduseroptMessage msg = (NduseroptMessage) nlMsg;
+        InetAddress srcaddr = InetAddress.getByName("fe80::250:b6ff:feb7:c499%30");
+        assertMatches(AF_INET6, 24, 30, ICMP_TYPE_RA, (byte) 0, srcaddr, msg);
+        assertEquals(NdOption.UNKNOWN, msg.option);
     }
 
     @Test
@@ -85,7 +142,7 @@ public class NduseroptMessageTest {
         buf.put(optionStart, (byte) 42);
 
         NduseroptMessage msg = parseNduseroptMessage(buf);
-        assertMatches((byte) 10, 16, IFINDEX2, (byte) 134, (byte) 0, SRCADDR2, msg);
+        assertMatches(AF_INET6, 16, IFINDEX2, ICMP_TYPE_RA, (byte) 0, SADDR2, msg);
         assertEquals(NdOption.UNKNOWN, msg.option);
 
         buf.flip();
@@ -93,7 +150,7 @@ public class NduseroptMessageTest {
         buf.put(optionStart, (byte) 38);
 
         msg = parseNduseroptMessage(buf);
-        assertMatches((byte) 10, 16, IFINDEX2, (byte) 134, (byte) 0, SRCADDR2, msg);
+        assertMatches(AF_INET6, 16, IFINDEX2, ICMP_TYPE_RA, (byte) 0, SADDR2, msg);
         assertPref64Option("2001:db8:3:4:5:6::/96", msg.option);
     }
 
@@ -105,7 +162,7 @@ public class NduseroptMessageTest {
         ByteBuffer buf = toBuffer(hexString);
         assertEquals(52, buf.limit());
         NduseroptMessage msg = parseNduseroptMessage(buf);
-        assertMatches((byte) 10, 16, IFINDEX2, (byte) 134, (byte) 0, SRCADDR2, msg);
+        assertMatches(AF_INET6, 16, IFINDEX2, ICMP_TYPE_RA, (byte) 0, SADDR2, msg);
         assertNull(msg.option);
     }
 
@@ -117,7 +174,7 @@ public class NduseroptMessageTest {
         ByteBuffer buf = toBuffer(hexString);
         assertEquals(52, buf.limit());
         NduseroptMessage msg = parseNduseroptMessage(buf);
-        assertMatches((byte) 10, 16, IFINDEX2, (byte) 134, (byte) 0, SRCADDR2, msg);
+        assertMatches(AF_INET6, 16, IFINDEX2, ICMP_TYPE_RA, (byte) 0, SADDR2, msg);
         assertNull(msg.option);
     }
 
@@ -168,15 +225,15 @@ public class NduseroptMessageTest {
         return ByteBuffer.wrap(HexEncoding.decode(hexString));
     }
 
-    private void assertMatches(byte family, int optsLen, int ifindex, byte icmpType,
-            byte icmpCode, String srcaddr, NduseroptMessage msg) {
+    private void assertMatches(int family, int optsLen, int ifindex, byte icmpType,
+            byte icmpCode, InetAddress srcaddr, NduseroptMessage msg) {
         assertNotNull(msg);
         assertEquals(family, msg.family);
         assertEquals(ifindex, msg.ifindex);
         assertEquals(optsLen, msg.opts_len);
         assertEquals(icmpType, msg.icmp_type);
         assertEquals(icmpCode, msg.icmp_code);
-        assertEquals(srcaddr, msg.srcaddr.getHostAddress());
+        assertEquals(srcaddr, msg.srcaddr);
     }
 
     private void assertPref64Option(String prefix, NdOption opt) {
