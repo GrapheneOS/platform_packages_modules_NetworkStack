@@ -56,6 +56,7 @@ import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -693,14 +694,37 @@ public class NetworkMonitorTest {
         // The count of 460 is 2 and the count of 466 is 1, so the getLocationMcc() should return
         // 460.
         assertEquals("460", wnm.getLocationMcc());
-        // getContextByMccIfNoSimCardOrDefault() shouldn't return mContext when using neighbor mcc
+        // getCustomizedContextOrDefault() shouldn't return mContext when using neighbor mcc
         // is enabled and the sim is not ready.
         doReturn(true).when(mResources).getBoolean(R.bool.config_no_sim_card_uses_neighbor_mcc);
         doReturn(TelephonyManager.SIM_STATE_ABSENT).when(mTelephony).getSimState();
         assertEquals(460,
-                wnm.getContextByMccIfNoSimCardOrDefault().getResources().getConfiguration().mcc);
+                wnm.getCustomizedContextOrDefault().getResources().getConfiguration().mcc);
         doReturn(false).when(mResources).getBoolean(R.bool.config_no_sim_card_uses_neighbor_mcc);
-        assertEquals(wnm.getContext(), wnm.getContextByMccIfNoSimCardOrDefault());
+        assertEquals(wnm.getContext(), wnm.getCustomizedContextOrDefault());
+    }
+
+    @Test
+    public void testGetMccMncOverrideInfo() {
+        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        doReturn(new ContextWrapper(mContext)).when(mContext).createConfigurationContext(any());
+        // 1839 is VZW's carrier id.
+        doReturn(1839).when(mTelephony).getSimCarrierId();
+        assertNull(wnm.getMccMncOverrideInfo());
+        // 1854 is CTC's carrier id.
+        doReturn(1854).when(mTelephony).getSimCarrierId();
+        assertNotNull(wnm.getMccMncOverrideInfo());
+        // Check if the mcc & mnc has changed as expected.
+        assertEquals(460,
+                wnm.getCustomizedContextOrDefault().getResources().getConfiguration().mcc);
+        assertEquals(03,
+                wnm.getCustomizedContextOrDefault().getResources().getConfiguration().mnc);
+        // Every mcc and mnc should be set in sCarrierIdToMccMnc.
+        // Check if there is any unset value in mcc or mnc.
+        for (int i = 0; i < wnm.sCarrierIdToMccMnc.size(); i++) {
+            assertNotEquals(-1, wnm.sCarrierIdToMccMnc.valueAt(i).mcc);
+            assertNotEquals(-1, wnm.sCarrierIdToMccMnc.valueAt(i).mnc);
+        }
     }
 
     private CellInfoGsm makeTestCellInfoGsm(String mcc) throws Exception {
