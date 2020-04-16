@@ -192,7 +192,11 @@ public class NetworkMonitorTest {
     private @Mock NetworkStackServiceManager mServiceManager;
     private @Mock NetworkStackNotifier mNotifier;
     private @Mock HttpURLConnection mHttpConnection;
+    private @Mock HttpURLConnection mOtherHttpConnection1;
+    private @Mock HttpURLConnection mOtherHttpConnection2;
     private @Mock HttpURLConnection mHttpsConnection;
+    private @Mock HttpURLConnection mOtherHttpsConnection1;
+    private @Mock HttpURLConnection mOtherHttpsConnection2;
     private @Mock HttpURLConnection mFallbackConnection;
     private @Mock HttpURLConnection mOtherFallbackConnection;
     private @Mock HttpURLConnection mCapportApiConnection;
@@ -214,13 +218,20 @@ public class NetworkMonitorTest {
 
     private static final int TEST_NETID = 4242;
     private static final String TEST_HTTP_URL = "http://www.google.com/gen_204";
+    private static final String TEST_HTTP_OTHER_URL1 = "http://other1.google.com/gen_204";
+    private static final String TEST_HTTP_OTHER_URL2 = "http://other2.google.com/gen_204";
     private static final String TEST_HTTPS_URL = "https://www.google.com/gen_204";
+    private static final String TEST_HTTPS_OTHER_URL1 = "https://other1.google.com/gen_204";
+    private static final String TEST_HTTPS_OTHER_URL2 = "https://other2.google.com/gen_204";
     private static final String TEST_FALLBACK_URL = "http://fallback.google.com/gen_204";
     private static final String TEST_OTHER_FALLBACK_URL = "http://otherfallback.google.com/gen_204";
     private static final String TEST_CAPPORT_API_URL = "https://capport.example.com/api";
     private static final String TEST_LOGIN_URL = "https://testportal.example.com/login";
     private static final String TEST_VENUE_INFO_URL = "https://venue.example.com/info";
     private static final String TEST_MCCMNC = "123456";
+
+    private static final String[] TEST_HTTP_URLS = {TEST_HTTP_OTHER_URL1, TEST_HTTP_OTHER_URL2};
+    private static final String[] TEST_HTTPS_URLS = {TEST_HTTPS_OTHER_URL1, TEST_HTTPS_OTHER_URL2};
 
     private static final int VALIDATION_RESULT_INVALID = 0;
     private static final int VALIDATION_RESULT_PORTAL = 0;
@@ -444,8 +455,16 @@ public class NetworkMonitorTest {
             switch(url.toString()) {
                 case TEST_HTTP_URL:
                     return mHttpConnection;
+                case TEST_HTTP_OTHER_URL1:
+                    return mOtherHttpConnection1;
+                case TEST_HTTP_OTHER_URL2:
+                    return mOtherHttpConnection2;
                 case TEST_HTTPS_URL:
                     return mHttpsConnection;
+                case TEST_HTTPS_OTHER_URL1:
+                    return mOtherHttpsConnection1;
+                case TEST_HTTPS_OTHER_URL2:
+                    return mOtherHttpsConnection2;
                 case TEST_FALLBACK_URL:
                     return mFallbackConnection;
                 case TEST_OTHER_FALLBACK_URL:
@@ -486,7 +505,6 @@ public class NetworkMonitorTest {
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_DNS);
         setValidDataStallDnsTimeThreshold(500);
         setConsecutiveDnsTimeoutThreshold(5);
-
         mCreatedNetworkMonitors = new HashSet<>();
         mRegisteredReceivers = new HashSet<>();
         setDismissPortalInValidatedNetwork(false);
@@ -1852,6 +1870,59 @@ public class NetworkMonitorTest {
         inputStream = new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
         assertEquals(content, wnm.readAsString(inputStream, content.length() + 10,
                 StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void testMultipleProbesOnPortalNetwork() throws Exception {
+        setupResourceForMultipleProbes();
+        // One of the http probes is portal, then result is portal.
+        setPortal302(mOtherHttpConnection1);
+        runPortalNetworkTest(VALIDATION_RESULT_INVALID);
+        // Get conclusive result from one of the HTTP probe. Expect to create 2 HTTP and 2 HTTPS
+        // probes as resource configuration.
+        verify(mCleartextDnsNetwork, times(4)).openConnection(any());
+    }
+
+    @Test
+    public void testMultipleProbesOnValidNetwork() throws Exception {
+        setupResourceForMultipleProbes();
+        // One of the https probes succeeds, then it's validated.
+        setStatus(mOtherHttpsConnection2, 204);
+        runNetworkTest(VALIDATION_RESULT_VALID);
+        // Get conclusive result from one of the HTTPS probe. Expect to create 2 HTTP and 2 HTTPS
+        // probes as resource configuration.
+        verify(mCleartextDnsNetwork, times(4)).openConnection(any());
+    }
+
+    @Test
+    public void testMultipleProbesOnInValiadNetworkForPrioritizedResource() throws Exception {
+        setupResourceForMultipleProbes();
+        // The configuration resource is prioritized. Only use configurations from resource.(i.e
+        // Only configuration for mOtherHttpsConnection2, mOtherHttpsConnection2,
+        // mOtherHttpConnection2, mOtherHttpConnection2 will affect the result.)
+        // Configure mHttpsConnection is no-op.
+        setStatus(mHttpsConnection, 204);
+        runNetworkTest(VALIDATION_RESULT_INVALID);
+        // No conclusive result from both HTTP and HTTPS probes. Expect to create 2 HTTP and 2 HTTPS
+        // probes as resource configuration.
+        verify(mCleartextDnsNetwork, times(4)).openConnection(any());
+    }
+
+    @Test
+    public void testMultipleProbesOnInValiadNetwork() throws Exception {
+        setupResourceForMultipleProbes();
+        runNetworkTest(VALIDATION_RESULT_INVALID);
+        // No conclusive result from both HTTP and HTTPS probes. Expect to create 2 HTTP and 2 HTTPS
+        // probes as resource configuration.
+        verify(mCleartextDnsNetwork, times(4)).openConnection(any());
+    }
+
+    private void setupResourceForMultipleProbes() {
+        // Configure the resource to send multiple probe.
+        when(mResources.getStringArray(R.array.config_captive_portal_https_urls))
+                .thenReturn(TEST_HTTPS_URLS);
+        when(mResources.getStringArray(R.array.config_captive_portal_http_urls))
+                .thenReturn(TEST_HTTP_URLS);
     }
 
     private void makeDnsTimeoutEvent(WrappedNetworkMonitor wrappedMonitor, int count) {
