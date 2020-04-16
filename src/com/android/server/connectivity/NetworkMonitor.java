@@ -193,7 +193,13 @@ import java.util.Objects;
 import java.util.Random;
 import java.util.StringJoiner;
 import java.util.UUID;
+import java.util.concurrent.CompletionService;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -372,6 +378,10 @@ public class NetworkMonitor extends StateMachine {
     // Delay between reevaluations once a captive portal has been found.
     private static final int CAPTIVE_PORTAL_REEVALUATE_DELAY_MS = 10 * 60 * 1000;
     private static final int NETWORK_VALIDATION_RESULT_INVALID = 0;
+    // Max thread pool size for parallel probing. Fixed thread pool size to control the thread
+    // number used for either HTTP or HTTPS probing.
+    @VisibleForTesting
+    static final int MAX_PROBE_THREAD_POOL_SIZE = 5;
     private String mPrivateDnsProviderHostname = "";
 
     private final Context mContext;
@@ -1932,9 +1942,13 @@ public class NetworkMonitor extends StateMachine {
         if (pacUrl != null) {
             result = sendDnsAndHttpProbes(null, pacUrl, ValidationProbeEvent.PROBE_PAC);
             reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP, result);
+        } else if (mUseHttps && httpsUrls.length == 1 && httpUrls.length == 1) {
+            // Probe results are reported inside sendHttpAndHttpsParallelWithFallbackProbes.
+            result = sendHttpAndHttpsParallelWithFallbackProbes(
+                    proxyInfo, httpsUrls[0], httpUrls[0]);
         } else if (mUseHttps) {
-            // Probe results are reported inside sendParallelHttpProbes.
-            result = sendParallelHttpProbes(proxyInfo, httpsUrls[0], httpUrls[0]);
+            // Support result aggregation from multiple Urls.
+            result = sendMultiParallelHttpAndHttpsProbes(proxyInfo, httpsUrls, httpUrls);
         } else {
             result = sendDnsAndHttpProbes(proxyInfo, httpUrls[0], ValidationProbeEvent.PROBE_HTTP);
             reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP, result);
@@ -2326,7 +2340,9 @@ public class NetworkMonitor extends StateMachine {
             if (capportData != null && capportData.isCaptive()) {
                 if (capportData.getUserPortalUrl() == null) {
                     validationLog("Missing user-portal-url from capport response");
-                    return sendDnsAndHttpProbes(mProxy, mUrl, ValidationProbeEvent.PROBE_HTTP);
+                    return new CapportApiProbeResult(
+                            sendDnsAndHttpProbes(mProxy, mUrl, ValidationProbeEvent.PROBE_HTTP),
+                            capportData);
                 }
                 final String loginUrlString = capportData.getUserPortalUrl().toString();
                 // Starting from R (where CaptivePortalData was introduced), the captive portal app
@@ -2346,7 +2362,7 @@ public class NetworkMonitor extends StateMachine {
             // redirect when there is one.
             final CaptivePortalProbeResult res =
                     sendDnsAndHttpProbes(mProxy, mUrl, ValidationProbeEvent.PROBE_HTTP);
-            return capportData == null ? res : new CapportApiProbeResult(res, capportData);
+            return mCaptivePortalApiUrl == null ? res : new CapportApiProbeResult(res, capportData);
         }
     }
 
@@ -2361,6 +2377,117 @@ public class NetworkMonitor extends StateMachine {
         return result.isPortal()
                 || (result.isConcludedFromHttps() && result.isSuccessful()
                         && captivePortalApiUrl == null);
+    }
+
+    private CaptivePortalProbeResult sendMultiParallelHttpAndHttpsProbes(@NonNull ProxyInfo proxy,
+            @NonNull URL[] httpsUrls, @NonNull URL[] httpUrls) {
+        // If multiple URLs are required to ensure the correctness of validation, send parallel
+        // probes to explore the result in separate probe threads and aggregate those results into
+        // one as the final result for either HTTP or HTTPS.
+
+        // Number of probes to wait for.
+        final int num = httpsUrls.length + httpUrls.length;
+        // Fixed pool to prevent configuring too many urls to exhaust system resource.
+        final ExecutorService executor = Executors.newFixedThreadPool(
+                Math.min(num, MAX_PROBE_THREAD_POOL_SIZE));
+        final CompletionService<CaptivePortalProbeResult> ecs =
+                new ExecutorCompletionService<CaptivePortalProbeResult>(executor);
+        final Uri capportApiUrl = getCaptivePortalApiUrl(mLinkProperties);
+        final List<Future<CaptivePortalProbeResult>> futures = new ArrayList<>();
+
+        try {
+            // Queue https and http probe.
+
+            // Each of these HTTP probes will start with probing capport API if present. So if
+            // multiple HTTP URLs are configured, AP will send multiple identical accesses to the
+            // capport URL. Thus, send capport API probing with one of the HTTP probe is enough.
+            // Probe capport API with the first HTTP probe.
+            // TODO: Have the capport probe as a different probe for cleanliness.
+            final URL urlMaybeWithCapport = httpUrls[0];
+            for (final URL url : httpUrls) {
+                futures.add(ecs.submit(() -> new HttpProbe(proxy, url,
+                        url.equals(urlMaybeWithCapport) ? capportApiUrl : null).sendProbe()));
+            }
+
+            for (final URL url : httpsUrls) {
+                futures.add(
+                        ecs.submit(() -> new HttpsProbe(proxy, url, capportApiUrl).sendProbe()));
+            }
+
+            final ArrayList<CaptivePortalProbeResult> completedProbes = new ArrayList<>();
+            for (int i = 0; i < num; i++) {
+                completedProbes.add(ecs.take().get());
+                final CaptivePortalProbeResult res = evaluateCapportResult(
+                        completedProbes, httpsUrls.length, capportApiUrl != null /* hasCapport */);
+                if (res != null) {
+                    reportProbeResult(res);
+                    return res;
+                }
+            }
+        } catch (ExecutionException e) {
+            Log.e(TAG, "Error sending probes.", e);
+        } catch (InterruptedException e) {
+            // Ignore interrupted probe result because result is not important to conclude the
+            // result.
+        } finally {
+            // Interrupt ongoing probes since we have already gotten result from one of them.
+            futures.forEach(future -> future.cancel(true));
+            executor.shutdownNow();
+        }
+
+        return CaptivePortalProbeResult.failed(ValidationProbeEvent.PROBE_HTTPS);
+    }
+
+    @Nullable
+    private CaptivePortalProbeResult evaluateCapportResult(
+            List<CaptivePortalProbeResult> probes, int numHttps, boolean hasCapport) {
+        CaptivePortalProbeResult capportResult = null;
+        CaptivePortalProbeResult httpPortalResult = null;
+        int httpSuccesses = 0;
+        int httpsSuccesses = 0;
+        int httpsFailures = 0;
+
+        for (CaptivePortalProbeResult probe : probes) {
+            if (probe instanceof CapportApiProbeResult) {
+                capportResult = probe;
+            } else if (probe.isConcludedFromHttps()) {
+                if (probe.isSuccessful()) httpsSuccesses++;
+                else httpsFailures++;
+            } else { // http probes
+                if (probe.isPortal()) {
+                    // Unlike https probe, http probe may have redirect url information kept in the
+                    // probe result. Thus, the result can not be newly created with response code
+                    // only. If the captive portal behavior will be varied because of different
+                    // probe URLs, this means that if the portal returns different redirect URLs for
+                    // different probes and has a different behavior depending on the URL, then the
+                    // behavior of the login page may differ depending on the order in which the
+                    // probes terminate. However, NetworkMonitor does have to choose one of the
+                    // redirect URLs and right now there is no clue at all which of the probe has
+                    // the better redirect URL, so there is no telling which is best to use.
+                    // Therefore the current code just uses whichever happens to be the last one to
+                    // complete.
+                    httpPortalResult = probe;
+                } else if (probe.isSuccessful()) {
+                    httpSuccesses++;
+                }
+            }
+        }
+        // If there is Capport url configured but the result is not available yet, wait for it.
+        if (hasCapport && capportResult == null) return null;
+        // Capport API saying it's a portal is authoritative.
+        if (capportResult != null && capportResult.isPortal()) return capportResult;
+        // Any HTTP probes saying probe portal is conclusive.
+        if (httpPortalResult != null) return httpPortalResult;
+        // Any HTTPS probes works then the network validates.
+        if (httpsSuccesses > 0) {
+            return CaptivePortalProbeResult.success(1 << ValidationProbeEvent.PROBE_HTTPS);
+        }
+        // All HTTPS failed and at least one HTTP succeeded, then it's partial.
+        if (httpsFailures == numHttps && httpSuccesses > 0) {
+            return CaptivePortalProbeResult.PARTIAL;
+        }
+        // Otherwise, the result is unknown yet.
+        return null;
     }
 
     private void reportProbeResult(@NonNull CaptivePortalProbeResult res) {
@@ -2379,7 +2506,7 @@ public class NetworkMonitor extends StateMachine {
         }
     }
 
-    private CaptivePortalProbeResult sendParallelHttpProbes(
+    private CaptivePortalProbeResult sendHttpAndHttpsParallelWithFallbackProbes(
             ProxyInfo proxy, URL httpsUrl, URL httpUrl) {
         // Number of probes to wait for. If a probe completes with a conclusive answer
         // it shortcuts the latch immediately by forcing the count to 0.
