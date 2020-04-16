@@ -196,7 +196,13 @@ class ArrayTrackRecord<E> : TrackRecord<E> {
         /**
          * @return the current value of the mark.
          */
-        val mark get() = readHead.also { checkThread() }
+        var mark
+            get() = readHead.also { checkThread() }
+            set(v: Int) = rewind(v)
+        fun rewind(v: Int) {
+            checkThread()
+            readHead = v
+        }
 
         private fun checkThread() = check(Thread.currentThread() == owningThread) {
             "Must be called by the thread that created this object"
