@@ -141,6 +141,7 @@ import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.Pair;
+import android.util.SparseArray;
 
 import androidx.annotation.ArrayRes;
 import androidx.annotation.BoolRes;
@@ -218,6 +219,8 @@ public class NetworkMonitor extends StateMachine {
     private static final int SOCKET_TIMEOUT_MS = 10000;
     private static final int PROBE_TIMEOUT_MS  = 3000;
 
+    private static final int UNSET_MCC_OR_MNC = -1;
+
     private static final int CAPPORT_API_MAX_JSON_LENGTH = 4096;
     private static final String ACCEPT_HEADER = "Accept";
     private static final String CONTENT_TYPE_HEADER = "Content-Type";
@@ -239,6 +242,24 @@ public class NetworkMonitor extends StateMachine {
         ValidationStage(boolean isFirstValidation) {
             this.mIsFirstValidation = isFirstValidation;
         }
+    }
+
+    @VisibleForTesting
+    protected static final class MccMncOverrideInfo {
+        public final int mcc;
+        public final int mnc;
+        MccMncOverrideInfo(int mcc, int mnc) {
+            this.mcc = mcc;
+            this.mnc = mnc;
+        }
+    }
+
+    @VisibleForTesting
+    protected static final SparseArray<MccMncOverrideInfo> sCarrierIdToMccMnc = new SparseArray<>();
+
+    static {
+        // CTC
+        sCarrierIdToMccMnc.put(1854, new MccMncOverrideInfo(460, 03));
     }
 
     /**
@@ -1507,25 +1528,51 @@ public class NetworkMonitor extends StateMachine {
         }
     }
 
+    /**
+     * Return a matched MccMncOverrideInfo if carrier id and sim mccmnc are matching a record in
+     * sCarrierIdToMccMnc.
+     */
     @VisibleForTesting
-    protected Context getContextByMccIfNoSimCardOrDefault() {
+    @Nullable
+    MccMncOverrideInfo getMccMncOverrideInfo() {
+        final int carrierId = mTelephonyManager.getSimCarrierId();
+        return sCarrierIdToMccMnc.get(carrierId);
+    }
+
+    private Context getContextByMccMnc(final int mcc, final int mnc) {
+        final Configuration config = mContext.getResources().getConfiguration();
+        if (mcc != UNSET_MCC_OR_MNC) config.mcc = mcc;
+        if (mnc != UNSET_MCC_OR_MNC) config.mnc = mnc;
+        return mContext.createConfigurationContext(config);
+    }
+
+    @VisibleForTesting
+    protected Context getCustomizedContextOrDefault() {
+        // Return customized context if carrier id can match a record in sCarrierIdToMccMnc.
+        final MccMncOverrideInfo overrideInfo = getMccMncOverrideInfo();
+        if (overrideInfo != null) {
+            return getContextByMccMnc(overrideInfo.mcc, overrideInfo.mnc);
+        }
+
+        // Use neighbor mcc feature only works when the config_no_sim_card_uses_neighbor_mcc is
+        // true and there is no sim card inserted.
         final boolean useNeighborResource =
                 getResBooleanConfig(mContext, R.bool.config_no_sim_card_uses_neighbor_mcc, false);
         if (!useNeighborResource
                 || TelephonyManager.SIM_STATE_READY == mTelephonyManager.getSimState()) {
             return mContext;
         }
+
         final String mcc = getLocationMcc();
         if (TextUtils.isEmpty(mcc)) {
             return mContext;
         }
-        final Configuration config = mContext.getResources().getConfiguration();
-        config.mcc = Integer.parseInt(mcc);
-        return mContext.createConfigurationContext(config);
+
+        return getContextByMccMnc(Integer.parseInt(mcc), UNSET_MCC_OR_MNC);
     }
 
     private String getCaptivePortalServerHttpsUrl() {
-        final Context targetContext = getContextByMccIfNoSimCardOrDefault();
+        final Context targetContext = getCustomizedContextOrDefault();
         return getSettingFromResource(targetContext, R.string.config_captive_portal_https_url,
                 R.string.default_captive_portal_https_url, CAPTIVE_PORTAL_HTTPS_URL);
     }
@@ -1604,7 +1651,7 @@ public class NetworkMonitor extends StateMachine {
      * on one URL that can be used, while NetworkMonitor may implement more complex logic.
      */
     public String getCaptivePortalServerHttpUrl() {
-        final Context targetContext = getContextByMccIfNoSimCardOrDefault();
+        final Context targetContext = getCustomizedContextOrDefault();
         return getSettingFromResource(targetContext, R.string.config_captive_portal_http_url,
                 R.string.default_captive_portal_http_url, CAPTIVE_PORTAL_HTTP_URL);
     }
@@ -1759,7 +1806,7 @@ public class NetworkMonitor extends StateMachine {
      */
     private <T> T[] getProbeUrlArrayConfig(@NonNull T[] providerValue, @ArrayRes int configResId,
             @ArrayRes int defaultResId, @NonNull Function<String, T> resourceConverter) {
-        final Resources res = getContextByMccIfNoSimCardOrDefault().getResources();
+        final Resources res = getCustomizedContextOrDefault().getResources();
         return getProbeUrlArrayConfig(providerValue, configResId, res.getStringArray(defaultResId),
                 resourceConverter);
     }
@@ -1777,7 +1824,7 @@ public class NetworkMonitor extends StateMachine {
      */
     private <T> T[] getProbeUrlArrayConfig(@NonNull T[] providerValue, @ArrayRes int configResId,
             String[] defaultConfig, @NonNull Function<String, T> resourceConverter) {
-        final Resources res = getContextByMccIfNoSimCardOrDefault().getResources();
+        final Resources res = getCustomizedContextOrDefault().getResources();
         String[] configValue = res.getStringArray(configResId);
 
         if (configValue.length == 0) {
