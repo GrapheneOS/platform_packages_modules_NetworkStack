@@ -1757,14 +1757,14 @@ public class NetworkMonitorTest {
         resetCallbacks();
 
         nm.reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP,
-                CaptivePortalProbeResult.success(PROBE_HTTP));
+                CaptivePortalProbeResult.success(1 << PROBE_HTTP));
         // Verify result should be appended and notifyNetworkTestedWithExtras callback is triggered
         // once.
         assertEquals(nm.getEvaluationState().getNetworkTestResult(),
                 VALIDATION_RESULT_VALID | NETWORK_VALIDATION_PROBE_HTTP);
 
         nm.reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP,
-                CaptivePortalProbeResult.failed(PROBE_HTTP));
+                CaptivePortalProbeResult.failed(1 << PROBE_HTTP));
         // Verify DNS probe result should not be cleared.
         assertTrue((nm.getEvaluationState().getNetworkTestResult() & NETWORK_VALIDATION_PROBE_DNS)
                 == NETWORK_VALIDATION_PROBE_DNS);
