@@ -335,7 +335,8 @@ public abstract class DhcpPacket {
      * proposed by the client (from an earlier DHCP negotiation) or
      * supplied by the server.
      */
-    protected final Inet4Address mClientIp;
+    @VisibleForTesting(otherwise = VisibleForTesting.PROTECTED)
+    public final Inet4Address mClientIp;
     protected final Inet4Address mYourIp;
     private final Inet4Address mNextIp;
     protected final Inet4Address mRelayIp;
