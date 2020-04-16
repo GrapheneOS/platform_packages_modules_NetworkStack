@@ -66,22 +66,23 @@ public class NduseroptMessage extends NetlinkMessage {
         super(header);
 
         // The structure itself.
-        buf.order(ByteOrder.nativeOrder());
+        buf.order(ByteOrder.nativeOrder());  // Restored in the finally clause inside parse().
+        final int start = buf.position();
         family = buf.get();
         buf.get();  // Skip 1 byte of padding.
         opts_len = Short.toUnsignedInt(buf.getShort());
         ifindex = buf.getInt();
         icmp_type = buf.get();
         icmp_code = buf.get();
-        buf.order(ByteOrder.BIG_ENDIAN);
         buf.position(buf.position() + 6);  // Skip 6 bytes of padding.
 
         // The ND option.
         // Ensure we don't read past opts_len even if the option length is invalid.
         // Note that this check is not really necessary since if the option length is not valid,
         // this struct won't be very useful to the caller.
+        buf.order(ByteOrder.BIG_ENDIAN);
         int oldLimit = buf.limit();
-        buf.limit(STRUCT_SIZE + opts_len);
+        buf.limit(start + STRUCT_SIZE + opts_len);
         try {
             option = NdOption.parse(buf);
         } finally {
@@ -89,7 +90,7 @@ public class NduseroptMessage extends NetlinkMessage {
         }
 
         // The source address.
-        int newPosition = STRUCT_SIZE + opts_len;
+        int newPosition = start + STRUCT_SIZE + opts_len;
         if (newPosition >= buf.limit()) {
             throw new IllegalArgumentException("ND options extend past end of buffer");
         }
@@ -118,6 +119,7 @@ public class NduseroptMessage extends NetlinkMessage {
      */
     public static NduseroptMessage parse(@NonNull StructNlMsgHdr header, @NonNull ByteBuffer buf) {
         if (buf == null || buf.remaining() < STRUCT_SIZE) return null;
+        ByteOrder oldOrder = buf.order();
         try {
             return new NduseroptMessage(header, buf);
         } catch (IllegalArgumentException | UnknownHostException | BufferUnderflowException e) {
@@ -125,6 +127,8 @@ public class NduseroptMessage extends NetlinkMessage {
             // Convention in this package is that null indicates that the option was truncated, so
             // callers must already handle it.
             return null;
+        } finally {
+            buf.order(oldOrder);
         }
     }
 
