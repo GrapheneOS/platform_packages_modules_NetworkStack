@@ -41,16 +41,12 @@ import java.nio.ByteBuffer;
  * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *
  */
-public class StructNdOptPref64 {
+public class StructNdOptPref64 extends NdOption {
     public static final int STRUCT_SIZE = 16;
     public static final int TYPE = 38;
 
     private static final String TAG = StructNdOptPref64.class.getSimpleName();
 
-    /** The option type. Always ICMPV6_ND_OPTION_PREF64. */
-    public final byte type;
-    /** The length of the option in 8-byte units. Actually an unsigned 8-bit integer. */
-    public final int length;
     /**
      * How many seconds the prefix is expected to remain valid.
      * Valid values are from 0 to 65528 in multiples of 8.
@@ -72,9 +68,8 @@ public class StructNdOptPref64 {
         }
     }
 
-    StructNdOptPref64(@NonNull ByteBuffer buf) {
-        type = buf.get();
-        length = buf.get();
+    public StructNdOptPref64(@NonNull ByteBuffer buf) {
+        super(buf.get(), Byte.toUnsignedInt(buf.get()));
         if (type != TYPE) throw new IllegalArgumentException("Invalid type " + type);
         if (length != 2) throw new IllegalArgumentException("Invalid length " + length);
 
