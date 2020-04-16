@@ -103,6 +103,7 @@ import android.net.dhcp.DhcpRequestPacket;
 import android.net.ipmemorystore.NetworkAttributes;
 import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener;
 import android.net.ipmemorystore.Status;
+import android.net.shared.Layer2Information;
 import android.net.shared.ProvisioningConfiguration;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
 import android.net.util.InterfaceParams;
@@ -521,27 +522,20 @@ public class IpClientIntegrationTest {
             final boolean isHostnameConfigurationEnabled, final String hostname,
             final String displayName, final ScanResultInfo scanResultInfo)
             throws RemoteException {
-        ProvisioningConfiguration.Builder builder = new ProvisioningConfiguration.Builder()
+        ProvisioningConfiguration.Builder prov = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
+                .withLayer2Information(new Layer2Information(TEST_L2KEY, TEST_GROUPHINT,
+                        MacAddress.fromString(TEST_DEFAULT_BSSID)))
                 .withoutIPv6();
-        if (isPreconnectionEnabled) builder.withPreconnection();
-        if (displayName != null) builder.withDisplayName(displayName);
-        if (scanResultInfo != null) builder.withScanResultInfo(scanResultInfo);
+        if (isPreconnectionEnabled) prov.withPreconnection();
+        if (displayName != null) prov.withDisplayName(displayName);
+        if (scanResultInfo != null) prov.withScanResultInfo(scanResultInfo);
 
         mDependencies.setDhcpLeaseCacheEnabled(isDhcpLeaseCacheEnabled);
         mDependencies.setDhcpRapidCommitEnabled(shouldReplyRapidCommitAck);
         mDependencies.setDhcpIpConflictDetectEnabled(isDhcpIpConflictDetectEnabled);
         mDependencies.setHostnameConfiguration(isHostnameConfigurationEnabled, hostname);
-
-        if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
-            final Layer2InformationParcelable info = new Layer2InformationParcelable();
-            info.l2Key = TEST_L2KEY;
-            info.groupHint = TEST_GROUPHINT;
-            mIpc.updateLayer2Information(info);
-        } else {
-            mIpc.setL2KeyAndGroupHint(TEST_L2KEY, TEST_GROUPHINT);
-        }
-        mIpc.startProvisioning(builder.build());
+        mIpc.startProvisioning(prov.build());
         if (!isPreconnectionEnabled) {
             verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
         }

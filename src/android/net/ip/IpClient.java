@@ -793,6 +793,11 @@ public class IpClient extends StateMachine {
                         + " in provisioning configuration", e);
             }
         }
+
+        if (req.mLayer2Info != null) {
+            mL2Key = req.mLayer2Info.mL2Key;
+            mGroupHint = req.mLayer2Info.mGroupHint;
+        }
         sendMessage(CMD_START, new android.net.shared.ProvisioningConfiguration(req));
     }
 
@@ -903,7 +908,7 @@ public class IpClient extends StateMachine {
     }
 
     /**
-     * Update the network bssid, L2Key and GroupHint layer2 information.
+     * Update the network bssid, L2Key and GroupHint on L2 roaming happened.
      */
     public void updateLayer2Information(@NonNull Layer2InformationParcelable info) {
         sendMessage(CMD_UPDATE_L2INFORMATION, info);
@@ -1532,10 +1537,10 @@ public class IpClient extends StateMachine {
         mL2Key = info.l2Key;
         mGroupHint = info.groupHint;
 
-        // This means IpClient is still in the StoppedState, WiFi is trying to associate
-        // to the AP, just update L2Key and GroupHint at this stage, because these members
-        // will be used when starting DhcpClient.
-        if (info.bssid == null || mCurrentBssid == null) return;
+        if (info.bssid == null || mCurrentBssid == null) {
+            Log.wtf(mTag, "bssid in the parcelable or current tracked bssid should be non-null");
+            return;
+        }
 
         // If the BSSID has not changed, there is nothing to do.
         if (info.bssid.equals(mCurrentBssid)) return;
@@ -1609,10 +1614,6 @@ public class IpClient extends StateMachine {
                     mGroupHint = args.second;
                     break;
                 }
-
-                case CMD_UPDATE_L2INFORMATION:
-                    handleUpdateL2Information((Layer2InformationParcelable) msg.obj);
-                    break;
 
                 case CMD_SET_MULTICAST_FILTER:
                     mMulticastFiltering = (boolean) msg.obj;

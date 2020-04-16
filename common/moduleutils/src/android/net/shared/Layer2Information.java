@@ -23,9 +23,9 @@ import java.util.Objects;
 
 /** @hide */
 public class Layer2Information {
-    private final String mL2Key;
-    private final String mGroupHint;
-    private final MacAddress mBssid;
+    public final String mL2Key;
+    public final String mGroupHint;
+    public final MacAddress mBssid;
 
     /**
      * Create a Layer2Information with the specified configuration.
@@ -60,7 +60,7 @@ public class Layer2Information {
      * Create an instance of {@link Layer2Information} based on the contents of the specified
      * {@link Layer2InformationParcelable}.
      */
-    public Layer2Information fromStableParcelable(Layer2InformationParcelable p) {
+    public static Layer2Information fromStableParcelable(Layer2InformationParcelable p) {
         if (p == null) return null;
         return new Layer2Information(p.l2Key, p.groupHint, p.bssid);
     }
