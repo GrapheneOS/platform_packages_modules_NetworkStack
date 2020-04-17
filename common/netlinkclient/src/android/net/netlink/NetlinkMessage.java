@@ -64,6 +64,8 @@ public class NetlinkMessage {
                 return (NetlinkMessage) RtNetlinkNeighborMessage.parse(nlmsghdr, byteBuffer);
             case NetlinkConstants.SOCK_DIAG_BY_FAMILY:
                 return (NetlinkMessage) InetDiagMessage.parse(nlmsghdr, byteBuffer);
+            case NetlinkConstants.RTM_NEWNDUSEROPT:
+                return (NetlinkMessage) NduseroptMessage.parse(nlmsghdr, byteBuffer);
             default:
                 if (nlmsghdr.nlmsg_type <= NetlinkConstants.NLMSG_MAX_RESERVED) {
                     // Netlink control message.  Just parse the header for now,
