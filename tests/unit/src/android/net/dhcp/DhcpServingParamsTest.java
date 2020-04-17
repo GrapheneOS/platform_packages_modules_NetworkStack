@@ -63,6 +63,7 @@ public class DhcpServingParamsTest {
     private static final Set<Inet4Address> TEST_EXCLUDED_ADDRS = new HashSet<>(
             Arrays.asList(parseAddr("192.168.0.200"), parseAddr("192.168.0.201")));
     private static final boolean TEST_METERED = true;
+    private static final boolean TEST_CHANGE_PREFIX_ON_DECLINE = true;
 
     @Before
     public void setUp() {
@@ -74,7 +75,8 @@ public class DhcpServingParamsTest {
                 .setLinkMtu(TEST_MTU)
                 .setExcludedAddrs(TEST_EXCLUDED_ADDRS)
                 .setMetered(TEST_METERED)
-                .setClientAddr(TEST_CLIENT_ADDR);
+                .setClientAddr(TEST_CLIENT_ADDR)
+                .setChangePrefixOnDecline(TEST_CHANGE_PREFIX_ON_DECLINE);
     }
 
     @Test
@@ -101,6 +103,7 @@ public class DhcpServingParamsTest {
         assertEquals(TEST_LINKADDR, params.serverAddr);
         assertEquals(TEST_MTU, params.linkMtu);
         assertEquals(TEST_METERED, params.metered);
+        assertEquals(TEST_CHANGE_PREFIX_ON_DECLINE, params.changePrefixOnDecline);
 
         assertContains(params.excludedAddrs, TEST_EXCLUDED_ADDRS);
         assertContains(params.excludedAddrs, TEST_DEFAULT_ROUTERS);
@@ -182,6 +185,7 @@ public class DhcpServingParamsTest {
         parcel.excludedAddrs = toIntArray(TEST_EXCLUDED_ADDRS);
         parcel.metered = TEST_METERED;
         parcel.clientAddr = inet4AddressToIntHTH(TEST_CLIENT_ADDR);
+        parcel.changePrefixOnDecline = TEST_CHANGE_PREFIX_ON_DECLINE;
         final DhcpServingParams parceled = DhcpServingParams.fromParcelableObject(parcel);
 
         assertEquals(params.defaultRouters, parceled.defaultRouters);
@@ -192,8 +196,9 @@ public class DhcpServingParamsTest {
         assertEquals(params.excludedAddrs, parceled.excludedAddrs);
         assertEquals(params.metered, parceled.metered);
         assertEquals(params.clientAddr, parceled.clientAddr);
+        assertEquals(params.changePrefixOnDecline, parceled.changePrefixOnDecline);
 
-        MiscAssertsKt.assertFieldCountEquals(9, DhcpServingParamsParcel.class);
+        MiscAssertsKt.assertFieldCountEquals(10, DhcpServingParamsParcel.class);
     }
 
     @Test(expected = InvalidParameterException.class)
