@@ -19,35 +19,20 @@ package android.net.ip;
 import static android.net.netlink.NetlinkConstants.RTM_DELNEIGH;
 import static android.net.netlink.NetlinkConstants.hexify;
 import static android.net.netlink.NetlinkConstants.stringForNlMsgType;
-import static android.net.util.SocketUtils.makeNetlinkSocketAddress;
-import static android.system.OsConstants.AF_NETLINK;
 import static android.system.OsConstants.NETLINK_ROUTE;
-import static android.system.OsConstants.SOCK_DGRAM;
-import static android.system.OsConstants.SOCK_NONBLOCK;
 
 import android.net.MacAddress;
-import android.net.netlink.NetlinkErrorMessage;
 import android.net.netlink.NetlinkMessage;
 import android.net.netlink.NetlinkSocket;
 import android.net.netlink.RtNetlinkNeighborMessage;
 import android.net.netlink.StructNdMsg;
-import android.net.util.PacketReader;
 import android.net.util.SharedLog;
-import android.net.util.SocketUtils;
 import android.os.Handler;
-import android.os.SystemClock;
 import android.system.ErrnoException;
-import android.system.Os;
 import android.system.OsConstants;
 import android.util.Log;
 
-import java.io.FileDescriptor;
-import java.io.IOException;
 import java.net.InetAddress;
-import java.net.SocketAddress;
-import java.net.SocketException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.StringJoiner;
 
 
@@ -61,7 +46,7 @@ import java.util.StringJoiner;
  *
  * @hide
  */
-public class IpNeighborMonitor extends PacketReader {
+public class IpNeighborMonitor extends NetlinkMonitor {
     private static final String TAG = IpNeighborMonitor.class.getSimpleName();
     private static final boolean DBG = false;
     private static final boolean VDBG = false;
@@ -129,85 +114,27 @@ public class IpNeighborMonitor extends PacketReader {
         }
     }
 
-    // TODO: move NetworkStackUtils.closeSocketQuietly to somewhere accessible to this file.
-    private void closeSocketQuietly(FileDescriptor fd) {
-        try {
-            SocketUtils.closeSocket(fd);
-        } catch (IOException ignored) {
-        }
-    }
-
     public interface NeighborEventConsumer {
         // Every neighbor event received on the netlink socket is passed in
         // here. Subclasses should filter for events of interest.
         public void accept(NeighborEvent event);
     }
 
-    private final SharedLog mLog;
     private final NeighborEventConsumer mConsumer;
 
     public IpNeighborMonitor(Handler h, SharedLog log, NeighborEventConsumer cb) {
-        super(h, NetlinkSocket.DEFAULT_RECV_BUFSIZE);
-        mLog = log.forSubComponent(TAG);
+        super(h, log, TAG, NETLINK_ROUTE, OsConstants.RTMGRP_NEIGH);
         mConsumer = (cb != null) ? cb : (event) -> { /* discard */ };
     }
 
     @Override
-    protected FileDescriptor createFd() {
-        FileDescriptor fd = null;
-
-        try {
-            fd = Os.socket(AF_NETLINK, SOCK_DGRAM | SOCK_NONBLOCK, NETLINK_ROUTE);
-            Os.bind(fd, makeNetlinkSocketAddress(0, OsConstants.RTMGRP_NEIGH));
-            NetlinkSocket.connectToKernel(fd);
-
-            if (VDBG) {
-                final SocketAddress nlAddr = Os.getsockname(fd);
-                Log.d(TAG, "bound to sockaddr_nl{" + nlAddr.toString() + "}");
-            }
-        } catch (ErrnoException|SocketException e) {
-            logError("Failed to create rtnetlink socket", e);
-            closeSocketQuietly(fd);
-            return null;
+    public void processNetlinkMessage(NetlinkMessage nlMsg, final long whenMs) {
+        if (!(nlMsg instanceof RtNetlinkNeighborMessage)) {
+            mLog.e("non-rtnetlink neighbor msg: " + nlMsg);
+            return;
         }
 
-        return fd;
-    }
-
-    @Override
-    protected void handlePacket(byte[] recvbuf, int length) {
-        final long whenMs = SystemClock.elapsedRealtime();
-
-        final ByteBuffer byteBuffer = ByteBuffer.wrap(recvbuf, 0, length);
-        byteBuffer.order(ByteOrder.nativeOrder());
-
-        parseNetlinkMessageBuffer(byteBuffer, whenMs);
-    }
-
-    private void parseNetlinkMessageBuffer(ByteBuffer byteBuffer, long whenMs) {
-        while (byteBuffer.remaining() > 0) {
-            final int position = byteBuffer.position();
-            final NetlinkMessage nlMsg = NetlinkMessage.parse(byteBuffer);
-            if (nlMsg == null || nlMsg.getHeader() == null) {
-                byteBuffer.position(position);
-                mLog.e("unparsable netlink msg: " + hexify(byteBuffer));
-                break;
-            }
-
-            if (nlMsg instanceof NetlinkErrorMessage) {
-                mLog.e("netlink error: " + nlMsg);
-                continue;
-            } else if (!(nlMsg instanceof RtNetlinkNeighborMessage)) {
-                mLog.i("non-rtnetlink neighbor msg: " + nlMsg);
-                continue;
-            }
-
-            evaluateRtNetlinkNeighborMessage((RtNetlinkNeighborMessage) nlMsg, whenMs);
-        }
-    }
-
-    private void evaluateRtNetlinkNeighborMessage(
-            RtNetlinkNeighborMessage neighMsg, long whenMs) {
+        final RtNetlinkNeighborMessage neighMsg = (RtNetlinkNeighborMessage) nlMsg;
         final short msgType = neighMsg.getHeader().nlmsg_type;
         final StructNdMsg ndMsg = neighMsg.getNdHeader();
         if (ndMsg == null) {

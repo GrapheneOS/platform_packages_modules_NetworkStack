@@ -56,6 +56,7 @@ import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -191,7 +192,11 @@ public class NetworkMonitorTest {
     private @Mock NetworkStackServiceManager mServiceManager;
     private @Mock NetworkStackNotifier mNotifier;
     private @Mock HttpURLConnection mHttpConnection;
+    private @Mock HttpURLConnection mOtherHttpConnection1;
+    private @Mock HttpURLConnection mOtherHttpConnection2;
     private @Mock HttpURLConnection mHttpsConnection;
+    private @Mock HttpURLConnection mOtherHttpsConnection1;
+    private @Mock HttpURLConnection mOtherHttpsConnection2;
     private @Mock HttpURLConnection mFallbackConnection;
     private @Mock HttpURLConnection mOtherFallbackConnection;
     private @Mock HttpURLConnection mCapportApiConnection;
@@ -213,13 +218,20 @@ public class NetworkMonitorTest {
 
     private static final int TEST_NETID = 4242;
     private static final String TEST_HTTP_URL = "http://www.google.com/gen_204";
+    private static final String TEST_HTTP_OTHER_URL1 = "http://other1.google.com/gen_204";
+    private static final String TEST_HTTP_OTHER_URL2 = "http://other2.google.com/gen_204";
     private static final String TEST_HTTPS_URL = "https://www.google.com/gen_204";
+    private static final String TEST_HTTPS_OTHER_URL1 = "https://other1.google.com/gen_204";
+    private static final String TEST_HTTPS_OTHER_URL2 = "https://other2.google.com/gen_204";
     private static final String TEST_FALLBACK_URL = "http://fallback.google.com/gen_204";
     private static final String TEST_OTHER_FALLBACK_URL = "http://otherfallback.google.com/gen_204";
     private static final String TEST_CAPPORT_API_URL = "https://capport.example.com/api";
     private static final String TEST_LOGIN_URL = "https://testportal.example.com/login";
     private static final String TEST_VENUE_INFO_URL = "https://venue.example.com/info";
     private static final String TEST_MCCMNC = "123456";
+
+    private static final String[] TEST_HTTP_URLS = {TEST_HTTP_OTHER_URL1, TEST_HTTP_OTHER_URL2};
+    private static final String[] TEST_HTTPS_URLS = {TEST_HTTPS_OTHER_URL1, TEST_HTTPS_OTHER_URL2};
 
     private static final int VALIDATION_RESULT_INVALID = 0;
     private static final int VALIDATION_RESULT_PORTAL = 0;
@@ -443,8 +455,16 @@ public class NetworkMonitorTest {
             switch(url.toString()) {
                 case TEST_HTTP_URL:
                     return mHttpConnection;
+                case TEST_HTTP_OTHER_URL1:
+                    return mOtherHttpConnection1;
+                case TEST_HTTP_OTHER_URL2:
+                    return mOtherHttpConnection2;
                 case TEST_HTTPS_URL:
                     return mHttpsConnection;
+                case TEST_HTTPS_OTHER_URL1:
+                    return mOtherHttpsConnection1;
+                case TEST_HTTPS_OTHER_URL2:
+                    return mOtherHttpsConnection2;
                 case TEST_FALLBACK_URL:
                     return mFallbackConnection;
                 case TEST_OTHER_FALLBACK_URL:
@@ -485,7 +505,6 @@ public class NetworkMonitorTest {
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_DNS);
         setValidDataStallDnsTimeThreshold(500);
         setConsecutiveDnsTimeoutThreshold(5);
-
         mCreatedNetworkMonitors = new HashSet<>();
         mRegisteredReceivers = new HashSet<>();
         setDismissPortalInValidatedNetwork(false);
@@ -693,14 +712,37 @@ public class NetworkMonitorTest {
         // The count of 460 is 2 and the count of 466 is 1, so the getLocationMcc() should return
         // 460.
         assertEquals("460", wnm.getLocationMcc());
-        // getContextByMccIfNoSimCardOrDefault() shouldn't return mContext when using neighbor mcc
+        // getCustomizedContextOrDefault() shouldn't return mContext when using neighbor mcc
         // is enabled and the sim is not ready.
         doReturn(true).when(mResources).getBoolean(R.bool.config_no_sim_card_uses_neighbor_mcc);
         doReturn(TelephonyManager.SIM_STATE_ABSENT).when(mTelephony).getSimState();
         assertEquals(460,
-                wnm.getContextByMccIfNoSimCardOrDefault().getResources().getConfiguration().mcc);
+                wnm.getCustomizedContextOrDefault().getResources().getConfiguration().mcc);
         doReturn(false).when(mResources).getBoolean(R.bool.config_no_sim_card_uses_neighbor_mcc);
-        assertEquals(wnm.getContext(), wnm.getContextByMccIfNoSimCardOrDefault());
+        assertEquals(wnm.getContext(), wnm.getCustomizedContextOrDefault());
+    }
+
+    @Test
+    public void testGetMccMncOverrideInfo() {
+        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        doReturn(new ContextWrapper(mContext)).when(mContext).createConfigurationContext(any());
+        // 1839 is VZW's carrier id.
+        doReturn(1839).when(mTelephony).getSimCarrierId();
+        assertNull(wnm.getMccMncOverrideInfo());
+        // 1854 is CTC's carrier id.
+        doReturn(1854).when(mTelephony).getSimCarrierId();
+        assertNotNull(wnm.getMccMncOverrideInfo());
+        // Check if the mcc & mnc has changed as expected.
+        assertEquals(460,
+                wnm.getCustomizedContextOrDefault().getResources().getConfiguration().mcc);
+        assertEquals(03,
+                wnm.getCustomizedContextOrDefault().getResources().getConfiguration().mnc);
+        // Every mcc and mnc should be set in sCarrierIdToMccMnc.
+        // Check if there is any unset value in mcc or mnc.
+        for (int i = 0; i < wnm.sCarrierIdToMccMnc.size(); i++) {
+            assertNotEquals(-1, wnm.sCarrierIdToMccMnc.valueAt(i).mcc);
+            assertNotEquals(-1, wnm.sCarrierIdToMccMnc.valueAt(i).mnc);
+        }
     }
 
     private CellInfoGsm makeTestCellInfoGsm(String mcc) throws Exception {
@@ -1733,14 +1775,14 @@ public class NetworkMonitorTest {
         resetCallbacks();
 
         nm.reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP,
-                CaptivePortalProbeResult.success(PROBE_HTTP));
+                CaptivePortalProbeResult.success(1 << PROBE_HTTP));
         // Verify result should be appended and notifyNetworkTestedWithExtras callback is triggered
         // once.
         assertEquals(nm.getEvaluationState().getNetworkTestResult(),
                 VALIDATION_RESULT_VALID | NETWORK_VALIDATION_PROBE_HTTP);
 
         nm.reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP,
-                CaptivePortalProbeResult.failed(PROBE_HTTP));
+                CaptivePortalProbeResult.failed(1 << PROBE_HTTP));
         // Verify DNS probe result should not be cleared.
         assertTrue((nm.getEvaluationState().getNetworkTestResult() & NETWORK_VALIDATION_PROBE_DNS)
                 == NETWORK_VALIDATION_PROBE_DNS);
@@ -1828,6 +1870,59 @@ public class NetworkMonitorTest {
         inputStream = new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
         assertEquals(content, wnm.readAsString(inputStream, content.length() + 10,
                 StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void testMultipleProbesOnPortalNetwork() throws Exception {
+        setupResourceForMultipleProbes();
+        // One of the http probes is portal, then result is portal.
+        setPortal302(mOtherHttpConnection1);
+        runPortalNetworkTest(VALIDATION_RESULT_INVALID);
+        // Get conclusive result from one of the HTTP probe. Expect to create 2 HTTP and 2 HTTPS
+        // probes as resource configuration.
+        verify(mCleartextDnsNetwork, times(4)).openConnection(any());
+    }
+
+    @Test
+    public void testMultipleProbesOnValidNetwork() throws Exception {
+        setupResourceForMultipleProbes();
+        // One of the https probes succeeds, then it's validated.
+        setStatus(mOtherHttpsConnection2, 204);
+        runNetworkTest(VALIDATION_RESULT_VALID);
+        // Get conclusive result from one of the HTTPS probe. Expect to create 2 HTTP and 2 HTTPS
+        // probes as resource configuration.
+        verify(mCleartextDnsNetwork, times(4)).openConnection(any());
+    }
+
+    @Test
+    public void testMultipleProbesOnInValiadNetworkForPrioritizedResource() throws Exception {
+        setupResourceForMultipleProbes();
+        // The configuration resource is prioritized. Only use configurations from resource.(i.e
+        // Only configuration for mOtherHttpsConnection2, mOtherHttpsConnection2,
+        // mOtherHttpConnection2, mOtherHttpConnection2 will affect the result.)
+        // Configure mHttpsConnection is no-op.
+        setStatus(mHttpsConnection, 204);
+        runNetworkTest(VALIDATION_RESULT_INVALID);
+        // No conclusive result from both HTTP and HTTPS probes. Expect to create 2 HTTP and 2 HTTPS
+        // probes as resource configuration.
+        verify(mCleartextDnsNetwork, times(4)).openConnection(any());
+    }
+
+    @Test
+    public void testMultipleProbesOnInValiadNetwork() throws Exception {
+        setupResourceForMultipleProbes();
+        runNetworkTest(VALIDATION_RESULT_INVALID);
+        // No conclusive result from both HTTP and HTTPS probes. Expect to create 2 HTTP and 2 HTTPS
+        // probes as resource configuration.
+        verify(mCleartextDnsNetwork, times(4)).openConnection(any());
+    }
+
+    private void setupResourceForMultipleProbes() {
+        // Configure the resource to send multiple probe.
+        when(mResources.getStringArray(R.array.config_captive_portal_https_urls))
+                .thenReturn(TEST_HTTPS_URLS);
+        when(mResources.getStringArray(R.array.config_captive_portal_http_urls))
+                .thenReturn(TEST_HTTP_URLS);
     }
 
     private void makeDnsTimeoutEvent(WrappedNetworkMonitor wrappedMonitor, int count) {
