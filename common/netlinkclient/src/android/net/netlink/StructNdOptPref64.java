@@ -21,9 +21,11 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 /**
  * The PREF64 router advertisement option. RFC 8781.
@@ -89,7 +91,23 @@ public class StructNdOptPref64 extends NdOption {
         return (short) ((lifetime & 0xfff8) | (prefixLengthCode & 0x7));
     }
 
-    public StructNdOptPref64(@NonNull ByteBuffer buf) {
+    public StructNdOptPref64(@NonNull IpPrefix prefix, int lifetime) {
+        super((byte) TYPE, LENGTH);
+
+        Objects.requireNonNull(prefix, "prefix must not be null");
+        if (!(prefix.getAddress() instanceof Inet6Address)) {
+            throw new IllegalArgumentException("Must be an IPv6 prefix: " + prefix);
+        }
+        prefixLengthToPlc(prefix.getPrefixLength());  // Throw if the prefix length is invalid.
+        this.prefix = prefix;
+
+        if (lifetime < 0 || lifetime > 0xfff8) {
+            throw new IllegalArgumentException("Invalid lifetime " + lifetime);
+        }
+        this.lifetime = lifetime & 0xfff8;
+    }
+
+    private StructNdOptPref64(@NonNull ByteBuffer buf) {
         super(buf.get(), Byte.toUnsignedInt(buf.get()));
         if (type != TYPE) throw new IllegalArgumentException("Invalid type " + type);
         if (length != LENGTH) throw new IllegalArgumentException("Invalid length " + length);
@@ -129,13 +147,16 @@ public class StructNdOptPref64 extends NdOption {
         }
     }
 
+    protected void writeToByteBuffer(ByteBuffer buf) {
+        super.writeToByteBuffer(buf);
+        buf.putShort(getScaledLifetimePlc(lifetime,  prefixLengthToPlc(prefix.getPrefixLength())));
+        buf.put(prefix.getRawAddress(), 0, 12);
+    }
+
     /** Outputs the wire format of the option to a new big-endian ByteBuffer. */
     public ByteBuffer toByteBuffer() {
         ByteBuffer buf = ByteBuffer.allocate(STRUCT_SIZE);
-        buf.put(type);
-        buf.put((byte) length);
-        buf.putShort(getScaledLifetimePlc(lifetime,  prefixLengthToPlc(prefix.getPrefixLength())));
-        buf.put(prefix.getRawAddress(), 0, 12);
+        writeToByteBuffer(buf);
         buf.flip();
         return buf;
     }
