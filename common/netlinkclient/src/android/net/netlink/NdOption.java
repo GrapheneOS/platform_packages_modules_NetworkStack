@@ -30,7 +30,7 @@ public class NdOption {
     public final int length;
 
     /** Constructs a new NdOption. */
-    public NdOption(byte type, int length) {
+    NdOption(byte type, int length) {
         this.type = type;
         this.length = length;
     }
@@ -67,6 +67,11 @@ public class NdOption {
                 buf.position(newPosition);
                 return UNKNOWN;
         }
+    }
+
+    void writeToByteBuffer(ByteBuffer buf) {
+        buf.put(type);
+        buf.put((byte) length);
     }
 
     @Override
