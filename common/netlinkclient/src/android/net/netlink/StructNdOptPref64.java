@@ -44,6 +44,7 @@ import java.nio.ByteBuffer;
 public class StructNdOptPref64 extends NdOption {
     public static final int STRUCT_SIZE = 16;
     public static final int TYPE = 38;
+    public static final byte LENGTH = 2;
 
     private static final String TAG = StructNdOptPref64.class.getSimpleName();
 
@@ -55,7 +56,7 @@ public class StructNdOptPref64 extends NdOption {
     /** The NAT64 prefix. */
     public final IpPrefix prefix;
 
-    int plcToPrefixLength(int plc) {
+    static int plcToPrefixLength(int plc) {
         switch (plc) {
             case 0: return 96;
             case 1: return 64;
@@ -68,10 +69,30 @@ public class StructNdOptPref64 extends NdOption {
         }
     }
 
+    static int prefixLengthToPlc(int prefixLength) {
+        switch (prefixLength) {
+            case 96: return 0;
+            case 64: return 1;
+            case 56: return 2;
+            case 48: return 3;
+            case 40: return 4;
+            case 32: return 5;
+            default:
+                throw new IllegalArgumentException("Invalid prefix length " + prefixLength);
+        }
+    }
+
+    /**
+     * Returns the 2-byte "scaled lifetime and prefix length code" field: 13-bit lifetime, 3-bit PLC
+     */
+    static short getScaledLifetimePlc(int lifetime, int prefixLengthCode) {
+        return (short) ((lifetime & 0xfff8) | (prefixLengthCode & 0x7));
+    }
+
     public StructNdOptPref64(@NonNull ByteBuffer buf) {
         super(buf.get(), Byte.toUnsignedInt(buf.get()));
         if (type != TYPE) throw new IllegalArgumentException("Invalid type " + type);
-        if (length != 2) throw new IllegalArgumentException("Invalid length " + length);
+        if (length != LENGTH) throw new IllegalArgumentException("Invalid length " + length);
 
         int scaledLifetimePlc = Short.toUnsignedInt(buf.getShort());
         lifetime = scaledLifetimePlc & 0xfff8;
@@ -106,6 +127,17 @@ public class StructNdOptPref64 extends NdOption {
             Log.d(TAG, "Invalid PREF64 option: " + e);
             return null;
         }
+    }
+
+    /** Outputs the wire format of the option to a new big-endian ByteBuffer. */
+    public ByteBuffer toByteBuffer() {
+        ByteBuffer buf = ByteBuffer.allocate(STRUCT_SIZE);
+        buf.put(type);
+        buf.put((byte) length);
+        buf.putShort(getScaledLifetimePlc(lifetime,  prefixLengthToPlc(prefix.getPrefixLength())));
+        buf.put(prefix.getRawAddress(), 0, 12);
+        buf.flip();
+        return buf;
     }
 
     @Override
