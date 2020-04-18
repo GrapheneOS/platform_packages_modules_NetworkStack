@@ -407,7 +407,13 @@ public class IpClientIntegrationTest {
         mPacketReaderThread.start();
         mHandler = mPacketReaderThread.getThreadHandler();
 
-        mTapFd = iface.getFileDescriptor().getFileDescriptor();
+        // Detach the FileDescriptor from the ParcelFileDescriptor.
+        // Otherwise, the garbage collector might call the ParcelFileDescriptor's finalizer, which
+        // closes the FileDescriptor and destroys our tap interface. An alternative would be to
+        // make the ParcelFileDescriptor or the TestNetworkInterface a class member so they never
+        // go out of scope.
+        mTapFd = new FileDescriptor();
+        mTapFd.setInt$(iface.getFileDescriptor().detachFd());
         mPacketReader = new TapPacketReader(mHandler, mTapFd, DATA_BUFFER_LEN);
         mHandler.post(() -> mPacketReader.start());
     }
