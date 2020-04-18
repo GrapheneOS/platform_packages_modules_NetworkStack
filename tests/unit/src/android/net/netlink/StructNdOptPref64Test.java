@@ -20,9 +20,10 @@ import static android.net.netlink.StructNdOptPref64.getScaledLifetimePlc;
 import static android.net.netlink.StructNdOptPref64.plcToPrefixLength;
 import static android.net.netlink.StructNdOptPref64.prefixLengthToPlc;
 
+import static com.android.testutils.MiscAssertsKt.assertThrows;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
 
 import android.net.IpPrefix;
 
@@ -159,14 +160,11 @@ public class StructNdOptPref64Test {
     }
 
     private void assertInvalidPlc(int plc) {
-        try {
-            plcToPrefixLength(plc);
-            fail("Invalid plc " + plc + " should have thrown exception");
-        } catch (IllegalArgumentException expected) { }
+        assertThrows(IllegalArgumentException.class, () -> plcToPrefixLength(plc));
     }
 
     @Test
-    public void testPrefixLengthPlc() {
+    public void testPrefixLengthToPlc() {
         for (int i = 0; i < 6; i++) {
             assertEquals(i, prefixLengthToPlc(plcToPrefixLength(i)));
         }
@@ -174,5 +172,30 @@ public class StructNdOptPref64Test {
         assertInvalidPlc(6);
         assertInvalidPlc(7);
         assertEquals(0, prefixLengthToPlc(96));
+    }
+
+
+    private void assertInvalidParameters(IpPrefix prefix, int lifetime) {
+        assertThrows(IllegalArgumentException.class, () -> new StructNdOptPref64(prefix, lifetime));
+    }
+
+    @Test
+    public void testToByteBuffer() throws Exception {
+        final IpPrefix prefix1 = prefix(PREFIX1, 56);
+        final IpPrefix prefix2 = prefix(PREFIX2, 96);
+
+        StructNdOptPref64 opt = new StructNdOptPref64(prefix1, 600);
+        assertToByteBufferMatches(opt, "2602025a0064ff9b0000000000000000");
+        assertEquals(new IpPrefix("64:ff9b::/56"), opt.prefix);
+        assertEquals(600, opt.lifetime);
+
+        opt = new StructNdOptPref64(prefix2, 65519);
+        assertToByteBufferMatches(opt, "2602ffe820010db80001000200030064");
+        assertEquals(new IpPrefix("2001:db8:1:2:3:64::/96"), opt.prefix);
+        assertEquals(65512, opt.lifetime);
+
+        assertInvalidParameters(prefix1, 65535);
+        assertInvalidParameters(prefix2, -1);
+        assertInvalidParameters(prefix("1.2.3.4", 32), 600);
     }
 }
