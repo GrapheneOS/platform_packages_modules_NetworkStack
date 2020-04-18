@@ -16,8 +16,13 @@
 
 package android.net.netlink;
 
+import static android.net.netlink.StructNdOptPref64.getScaledLifetimePlc;
+import static android.net.netlink.StructNdOptPref64.plcToPrefixLength;
+import static android.net.netlink.StructNdOptPref64.prefixLengthToPlc;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 
 import android.net.IpPrefix;
 
@@ -57,11 +62,9 @@ public class StructNdOptPref64Test {
         assertEquals(prefix, opt.prefix);
     }
 
-    /**
-     * Returns the 2-byte "scaled lifetime and prefix length code" field: 13-bit lifetime, 3-bit PLC
-     */
-    private short getPref64ScaledLifetimePlc(int lifetime, int prefixLengthCode) {
-        return (short) ((lifetime & 0xfff8) | (prefixLengthCode & 0x7));
+    private void assertToByteBufferMatches(StructNdOptPref64 opt, String expected) {
+        String actual = HexEncoding.encodeToString(opt.toByteBuffer().array(), false /*upperCase*/);
+        assertEquals(expected, actual);
     }
 
     private ByteBuffer makeNdOptPref64(int lifetime, byte[] prefix, int prefixLengthCode) {
@@ -69,8 +72,8 @@ public class StructNdOptPref64Test {
 
         ByteBuffer buf = ByteBuffer.allocate(16)
                 .put((byte) StructNdOptPref64.TYPE)
-                .put((byte) 2)  // len=2 (16 bytes)
-                .putShort(getPref64ScaledLifetimePlc(lifetime, prefixLengthCode))
+                .put((byte) StructNdOptPref64.LENGTH)
+                .putShort(getScaledLifetimePlc(lifetime, prefixLengthCode))
                 .put(prefix, 0, 12);
 
         buf.flip();
@@ -85,6 +88,7 @@ public class StructNdOptPref64Test {
         byte[] rawBytes = HexEncoding.decode(hexBytes);
         StructNdOptPref64 opt = StructNdOptPref64.parse(ByteBuffer.wrap(rawBytes));
         assertPref64OptMatches(136, prefix("2001:db8:3:4:5:6::", 96), opt);
+        assertToByteBufferMatches(opt, hexBytes);
 
         hexBytes = "2602"                      // type=38, len=2 (16 bytes)
                 + "2752"                       // lifetime=10064, PLC=2 (/56)
@@ -92,6 +96,7 @@ public class StructNdOptPref64Test {
         rawBytes = HexEncoding.decode(hexBytes);
         opt = StructNdOptPref64.parse(ByteBuffer.wrap(rawBytes));
         assertPref64OptMatches(10064, prefix("64:ff9b::", 56), opt);
+        assertToByteBufferMatches(opt, hexBytes);
     }
 
     @Test
@@ -151,5 +156,23 @@ public class StructNdOptPref64Test {
         StructNdOptPref64 opt = StructNdOptPref64.parse(buf);
         assertPref64OptMatches(600, prefix(PREFIX1, 40), opt);
         assertEquals("NdOptPref64(64:ff9b::/40, 600)", opt.toString());
+    }
+
+    private void assertInvalidPlc(int plc) {
+        try {
+            plcToPrefixLength(plc);
+            fail("Invalid plc " + plc + " should have thrown exception");
+        } catch (IllegalArgumentException expected) { }
+    }
+
+    @Test
+    public void testPrefixLengthPlc() {
+        for (int i = 0; i < 6; i++) {
+            assertEquals(i, prefixLengthToPlc(plcToPrefixLength(i)));
+        }
+        assertInvalidPlc(-1);
+        assertInvalidPlc(6);
+        assertInvalidPlc(7);
+        assertEquals(0, prefixLengthToPlc(96));
     }
 }
