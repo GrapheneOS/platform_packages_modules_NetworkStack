@@ -1861,15 +1861,13 @@ public class NetworkMonitorTest {
     @Test
     public void testReadAsString_StreamShorterThanLimit() throws Exception {
         final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
-        final String content = "The HTTP response code is 200 but it is not a captive portal.";
-        ByteArrayInputStream inputStream = new ByteArrayInputStream(
-                content.getBytes(StandardCharsets.UTF_8));
-        assertEquals(content, wnm.readAsString(inputStream, content.length(),
-                StandardCharsets.UTF_8));
-        // Reset the inputStream and test the case that the stream ends earlier than the limit.
-        inputStream = new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
-        assertEquals(content, wnm.readAsString(inputStream, content.length() + 10,
-                StandardCharsets.UTF_8));
+        final byte[] content = "The HTTP response code is 200 but it is not a captive portal."
+                .getBytes(StandardCharsets.UTF_8);
+        assertEquals(new String(content), wnm.readAsString(new ByteArrayInputStream(content),
+                content.length, StandardCharsets.UTF_8));
+        // Test the case that the stream ends earlier than the limit.
+        assertEquals(new String(content), wnm.readAsString(new ByteArrayInputStream(content),
+                content.length + 10, StandardCharsets.UTF_8));
     }
 
     @Test
