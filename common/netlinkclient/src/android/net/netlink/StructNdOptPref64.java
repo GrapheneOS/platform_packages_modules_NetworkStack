@@ -56,7 +56,7 @@ public class StructNdOptPref64 extends NdOption {
      */
     public final int lifetime;
     /** The NAT64 prefix. */
-    public final IpPrefix prefix;
+    @NonNull public final IpPrefix prefix;
 
     static int plcToPrefixLength(int plc) {
         switch (plc) {
