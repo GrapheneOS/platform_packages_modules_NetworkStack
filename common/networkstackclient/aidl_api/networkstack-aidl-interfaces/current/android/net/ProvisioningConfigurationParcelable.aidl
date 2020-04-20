@@ -31,4 +31,5 @@ parcelable ProvisioningConfigurationParcelable {
   String displayName;
   boolean enablePreconnection;
   android.net.ScanResultInfoParcelable scanResultInfo;
+  android.net.Layer2InformationParcelable layer2Info;
 }
