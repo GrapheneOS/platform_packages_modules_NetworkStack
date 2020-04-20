@@ -583,7 +583,8 @@ public class IpClient extends StateMachine {
 
         mLinkObserver = new IpClientLinkObserver(
                 mInterfaceName,
-                () -> sendMessage(EVENT_NETLINK_LINKPROPERTIES_CHANGED), config) {
+                () -> sendMessage(EVENT_NETLINK_LINKPROPERTIES_CHANGED),
+                config, getHandler(), mLog) {
             @Override
             public void onInterfaceAdded(String iface) {
                 super.onInterfaceAdded(iface);
@@ -1225,6 +1226,7 @@ public class IpClient extends StateMachine {
             newLp.addRoute(route);
         }
         addAllReachableDnsServers(newLp, netlinkLinkProperties.getDnsServers());
+        newLp.setNat64Prefix(netlinkLinkProperties.getNat64Prefix());
 
         // [3] Add in data from DHCPv4, if available.
         //
@@ -1563,6 +1565,7 @@ public class IpClient extends StateMachine {
         public void enter() {
             stopAllIP();
 
+            mLinkObserver.clearInterfaceParams();
             resetLinkProperties();
             if (mStartTimeMillis > 0) {
                 // Completed a life-cycle; send a final empty LinkProperties
@@ -1712,6 +1715,7 @@ public class IpClient extends StateMachine {
                 transitionTo(mStoppedState);
                 return;
             }
+            mLinkObserver.setInterfaceParams(mInterfaceParams);
             mCallback.setNeighborDiscoveryOffload(true);
         }
 
