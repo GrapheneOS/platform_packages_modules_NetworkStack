@@ -25,6 +25,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
 import android.net.LinkAddress;
+import android.net.MacAddress;
 import android.net.Network;
 import android.net.StaticIpConfiguration;
 import android.net.apf.ApfCapabilities;
@@ -83,8 +84,10 @@ public class ProvisioningConfigurationTest {
         mConfig.mDisplayName = "test_config";
         mConfig.mEnablePreconnection = false;
         mConfig.mScanResultInfo = makeScanResultInfo("ssid");
+        mConfig.mLayer2Info = new Layer2Information("some l2key", "some groupHint",
+                MacAddress.fromString("00:01:02:03:04:05"));
         // Any added field must be included in equals() to be tested properly
-        assertFieldCountEquals(14, ProvisioningConfiguration.class);
+        assertFieldCountEquals(15, ProvisioningConfiguration.class);
     }
 
     @Test
@@ -160,7 +163,14 @@ public class ProvisioningConfigurationTest {
         assertNotEqualsAfterChange(c -> c.mEnablePreconnection = true);
         assertNotEqualsAfterChange(c -> c.mScanResultInfo = null);
         assertNotEqualsAfterChange(c -> c.mScanResultInfo = makeScanResultInfo("another ssid"));
-        assertFieldCountEquals(14, ProvisioningConfiguration.class);
+        assertNotEqualsAfterChange(c -> c.mLayer2Info = new Layer2Information("another l2key",
+                "some groupHint", MacAddress.fromString("00:01:02:03:04:05")));
+        assertNotEqualsAfterChange(c -> c.mLayer2Info = new Layer2Information("some l2key",
+                "another groupHint", MacAddress.fromString("00:01:02:03:04:05")));
+        assertNotEqualsAfterChange(c -> c.mLayer2Info = new Layer2Information("some l2key",
+                "some groupHint", MacAddress.fromString("01:02:03:04:05:06")));
+        assertNotEqualsAfterChange(c -> c.mLayer2Info = null);
+        assertFieldCountEquals(15, ProvisioningConfiguration.class);
     }
 
     private void assertNotEqualsAfterChange(Consumer<ProvisioningConfiguration> mutator) {
