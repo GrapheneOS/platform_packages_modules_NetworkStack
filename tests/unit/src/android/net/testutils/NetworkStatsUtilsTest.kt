@@ -19,7 +19,10 @@ package android.net.testutils
 import android.net.NetworkStats
 import android.net.NetworkStats.SET_DEFAULT
 import android.net.NetworkStats.TAG_NONE
+import android.os.Build
+import com.android.testutils.DevSdkIgnoreRule
 import com.android.testutils.orderInsensitiveEquals
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -32,6 +35,10 @@ private const val TEST_START = 1194220800000L
 
 @RunWith(JUnit4::class)
 class NetworkStatsUtilsTest {
+    // This is a unit test for a test utility that uses R APIs
+    @Rule @JvmField
+    val ignoreRule = DevSdkIgnoreRule(ignoreClassUpTo = Build.VERSION_CODES.Q)
+
     @Test
     fun testOrderInsensitiveEquals() {
         val testEntry = arrayOf(
