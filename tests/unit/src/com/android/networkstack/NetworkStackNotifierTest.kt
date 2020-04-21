@@ -98,6 +98,16 @@ class NetworkStackNotifierTest {
     private lateinit var mAllNetworksCb: NetworkCallback
     private lateinit var mDefaultNetworkCb: NetworkCallback
 
+    // Lazy-init as CaptivePortalData does not exist on Q.
+    private val mTestCapportLp by lazy {
+        LinkProperties().apply {
+            captivePortalData = CaptivePortalData.Builder()
+                    .setCaptive(false)
+                    .setVenueInfoUrl(Uri.parse(TEST_VENUE_INFO_URL))
+                    .build()
+        }
+    }
+
     private val TEST_NETWORK = Network(42)
     private val TEST_NETWORK_TAG = TEST_NETWORK.networkHandle.toString()
     private val TEST_SSID = "TestSsid"
@@ -111,12 +121,6 @@ class NetworkStackNotifierTest {
 
     private val TEST_VENUE_INFO_URL = "https://testvenue.example.com/info"
     private val EMPTY_CAPPORT_LP = LinkProperties()
-    private val TEST_CAPPORT_LP = LinkProperties().apply {
-        captivePortalData = CaptivePortalData.Builder()
-                .setCaptive(false)
-                .setVenueInfoUrl(Uri.parse(TEST_VENUE_INFO_URL))
-                .build()
-    }
 
     @Before
     fun setUp() {
@@ -226,7 +230,7 @@ class NetworkStackNotifierTest {
         // Venue info (CaptivePortalData) is not available for API <= Q
         assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
         mNotifier.notifyCaptivePortalValidationPending(TEST_NETWORK)
-        onLinkPropertiesChanged(TEST_CAPPORT_LP)
+        onLinkPropertiesChanged(mTestCapportLp)
         onDefaultNetworkAvailable(TEST_NETWORK)
         val capabilities = NetworkCapabilities(VALIDATED_CAPABILITIES).setSSID(TEST_SSID)
         onCapabilitiesChanged(capabilities)
@@ -245,7 +249,7 @@ class NetworkStackNotifierTest {
         assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
         doReturn(null).`when`(mNm).getNotificationChannel(CHANNEL_VENUE_INFO)
         mNotifier.notifyCaptivePortalValidationPending(TEST_NETWORK)
-        onLinkPropertiesChanged(TEST_CAPPORT_LP)
+        onLinkPropertiesChanged(mTestCapportLp)
         onDefaultNetworkAvailable(TEST_NETWORK)
         val capabilities = NetworkCapabilities(VALIDATED_CAPABILITIES).setSSID(TEST_SSID)
         onCapabilitiesChanged(capabilities)
@@ -261,7 +265,7 @@ class NetworkStackNotifierTest {
     fun testVenueInfoNotification() {
         // Venue info (CaptivePortalData) is not available for API <= Q
         assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
-        onLinkPropertiesChanged(TEST_CAPPORT_LP)
+        onLinkPropertiesChanged(mTestCapportLp)
         onDefaultNetworkAvailable(TEST_NETWORK)
         val capabilities = NetworkCapabilities(VALIDATED_CAPABILITIES).setSSID(TEST_SSID)
         onCapabilitiesChanged(capabilities)
@@ -279,7 +283,7 @@ class NetworkStackNotifierTest {
         // Venue info (CaptivePortalData) is not available for API <= Q
         assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
         doReturn(null).`when`(mNm).getNotificationChannel(CHANNEL_VENUE_INFO)
-        onLinkPropertiesChanged(TEST_CAPPORT_LP)
+        onLinkPropertiesChanged(mTestCapportLp)
         onDefaultNetworkAvailable(TEST_NETWORK)
         onCapabilitiesChanged(VALIDATED_CAPABILITIES)
         mLooper.processAllMessages()
@@ -291,7 +295,7 @@ class NetworkStackNotifierTest {
     fun testNonDefaultVenueInfoNotification() {
         // Venue info (CaptivePortalData) is not available for API <= Q
         assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
-        onLinkPropertiesChanged(TEST_CAPPORT_LP)
+        onLinkPropertiesChanged(mTestCapportLp)
         onCapabilitiesChanged(VALIDATED_CAPABILITIES)
         mLooper.processAllMessages()
 
@@ -313,7 +317,7 @@ class NetworkStackNotifierTest {
     fun testUnvalidatedNetworkVenueInfoNotification() {
         // Venue info (CaptivePortalData) is not available for API <= Q
         assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
-        onLinkPropertiesChanged(TEST_CAPPORT_LP)
+        onLinkPropertiesChanged(mTestCapportLp)
         onCapabilitiesChanged(EMPTY_CAPABILITIES)
         mLooper.processAllMessages()
 
