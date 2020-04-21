@@ -27,9 +27,10 @@ import kotlin.concurrent.withLock
  */
 interface TrackRecord<E> : List<E> {
     /**
-     * Adds an element to this queue, waking up threads waiting for one. Returns the element.
+     * Adds an element to this queue, waking up threads waiting for one. Returns true, as
+     * per the contract for List.
      */
-    fun add(e: E): TrackRecord<E>
+    fun add(e: E): Boolean
 
     /**
      * Returns the first element after {@param pos}, possibly blocking until one is available, or
@@ -91,12 +92,12 @@ class ArrayTrackRecord<E> : TrackRecord<E> {
     }
 
     // TrackRecord<E> implementation
-    override fun add(e: E): ArrayTrackRecord<E> {
+    override fun add(e: E): Boolean {
         lock.withLock {
             elements.add(e)
             condition.signalAll()
         }
-        return this
+        return true
     }
     override fun poll(timeoutMs: Long, pos: Int, predicate: (E) -> Boolean) = lock.withLock {
         elements.getOrNull(pollForIndexReadLocked(timeoutMs, pos, predicate))
