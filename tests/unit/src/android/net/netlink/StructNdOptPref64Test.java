@@ -64,7 +64,7 @@ public class StructNdOptPref64Test {
     }
 
     private void assertToByteBufferMatches(StructNdOptPref64 opt, String expected) {
-        String actual = HexEncoding.encodeToString(opt.toByteBuffer().array(), false /*upperCase*/);
+        String actual = HexEncoding.encodeToString(opt.toByteBuffer().array());
         assertEquals(expected, actual);
     }
 
@@ -85,18 +85,18 @@ public class StructNdOptPref64Test {
     public void testParseCannedOption() throws Exception {
         String hexBytes = "2602"               // type=38, len=2 (16 bytes)
                 + "0088"                       // lifetime=136, PLC=0 (/96)
-                + "20010db80003000400050006";  // 2001:db8:3:4:5:6/96
+                + "20010DB80003000400050006";  // 2001:db8:3:4:5:6/96
         byte[] rawBytes = HexEncoding.decode(hexBytes);
         StructNdOptPref64 opt = StructNdOptPref64.parse(ByteBuffer.wrap(rawBytes));
-        assertPref64OptMatches(136, prefix("2001:db8:3:4:5:6::", 96), opt);
+        assertPref64OptMatches(136, prefix("2001:DB8:3:4:5:6::", 96), opt);
         assertToByteBufferMatches(opt, hexBytes);
 
         hexBytes = "2602"                      // type=38, len=2 (16 bytes)
                 + "2752"                       // lifetime=10064, PLC=2 (/56)
-                + "0064ff9b0000000000000000";  // 64:ff9b::/56
+                + "0064FF9B0000000000000000";  // 64:ff9b::/56
         rawBytes = HexEncoding.decode(hexBytes);
         opt = StructNdOptPref64.parse(ByteBuffer.wrap(rawBytes));
-        assertPref64OptMatches(10064, prefix("64:ff9b::", 56), opt);
+        assertPref64OptMatches(10064, prefix("64:FF9B::", 56), opt);
         assertToByteBufferMatches(opt, hexBytes);
     }
 
@@ -185,12 +185,12 @@ public class StructNdOptPref64Test {
         final IpPrefix prefix2 = prefix(PREFIX2, 96);
 
         StructNdOptPref64 opt = new StructNdOptPref64(prefix1, 600);
-        assertToByteBufferMatches(opt, "2602025a0064ff9b0000000000000000");
+        assertToByteBufferMatches(opt, "2602025A0064FF9B0000000000000000");
         assertEquals(new IpPrefix("64:ff9b::/56"), opt.prefix);
         assertEquals(600, opt.lifetime);
 
         opt = new StructNdOptPref64(prefix2, 65519);
-        assertToByteBufferMatches(opt, "2602ffe820010db80001000200030064");
+        assertToByteBufferMatches(opt, "2602FFE820010DB80001000200030064");
         assertEquals(new IpPrefix("2001:db8:1:2:3:64::/96"), opt.prefix);
         assertEquals(65512, opt.lifetime);
 
