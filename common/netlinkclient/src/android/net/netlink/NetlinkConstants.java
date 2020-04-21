@@ -106,6 +106,10 @@ public class NetlinkConstants {
     /* see &lt;linux_src&gt;/include/uapi/linux/sock_diag.h */
     public static final short SOCK_DIAG_BY_FAMILY = 20;
 
+    // Netlink groups.
+    public static final int RTNLGRP_ND_USEROPT = 20;
+    public static final int RTMGRP_ND_USEROPT = 1 << (RTNLGRP_ND_USEROPT - 1);
+
     public static String stringForNlMsgType(short nlm_type) {
         switch (nlm_type) {
             case NLMSG_NOOP: return "NLMSG_NOOP";
