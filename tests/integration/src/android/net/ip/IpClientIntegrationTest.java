@@ -132,12 +132,14 @@ import com.android.networkstack.arp.ArpPacket;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
 import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
+import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
 import com.android.testutils.HandlerUtilsKt;
 import com.android.testutils.TapPacketReader;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
@@ -173,6 +175,9 @@ public class IpClientIntegrationTest {
     private static final String TEST_L2KEY = "some l2key";
     private static final String TEST_GROUPHINT = "some grouphint";
     private static final int TEST_LEASE_DURATION_S = 3_600; // 1 hour
+
+    @Rule
+    public final DevSdkIgnoreRule mIgnoreRule = new DevSdkIgnoreRule();
 
     @Mock private Context mContext;
     @Mock private ConnectivityManager mCm;
@@ -1650,11 +1655,17 @@ public class IpClientIntegrationTest {
 
         final Uri expectedUrl = featureEnabled && serverSendsOption
                 ? Uri.parse(TEST_CAPTIVE_PORTAL_URL) : null;
-        // Wait for LinkProperties containing DHCP-obtained info, such as MTU, and ensure that the
-        // URL is set as expected
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(argThat(lp ->
-                lp.getMtu() == testMtu
-                        && Objects.equals(expectedUrl, lp.getCaptivePortalApiUrl())));
+        // Wait for LinkProperties containing DHCP-obtained info, such as MTU
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(
+                argThat(lp -> lp.getMtu() == testMtu));
+
+        // Ensure that the URL was set as expected in the callbacks.
+        // Can't verify the URL up to Q as there is no such attribute in LinkProperties.
+        if (!ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) return;
+        verify(mCb).onLinkPropertiesChange(captor.capture());
+        assertTrue(captor.getAllValues().stream().anyMatch(
+                lp -> Objects.equals(expectedUrl, lp.getCaptivePortalApiUrl())));
     }
 
     @Test
