@@ -65,6 +65,7 @@ import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
@@ -103,6 +104,7 @@ import android.net.dhcp.DhcpRequestPacket;
 import android.net.ipmemorystore.NetworkAttributes;
 import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener;
 import android.net.ipmemorystore.Status;
+import android.net.netlink.StructNdOptPref64;
 import android.net.shared.Layer2Information;
 import android.net.shared.ProvisioningConfiguration;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
@@ -141,6 +143,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
@@ -1278,12 +1281,16 @@ public class IpClientIntegrationTest {
         return packet;
     }
 
-    @Test
-    public void testRaRdnss() throws Exception {
+    private void disableRouterSolicitationDelay() throws Exception {
         // Speed up the test by removing router_solicitation_delay.
         // We don't need to restore the default value because the interface is removed in tearDown.
         // TODO: speed up further by not waiting for RA but keying off first IPv6 packet.
         mNetd.setProcSysNet(INetd.IPV6, INetd.CONF, mIfaceName, "router_solicitation_delay", "0");
+    }
+
+    @Test
+    public void testRaRdnss() throws Exception {
+        disableRouterSolicitationDelay();
 
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
@@ -1335,6 +1342,83 @@ public class IpClientIntegrationTest {
         assertNotNull(lp);
         assertEquals(0, lp.getDnsServers().size());
         reset(mCb);
+    }
+
+    private void expectNat64PrefixUpdate(InOrder inOrder, IpPrefix expected) throws Exception {
+        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(
+                argThat(lp -> Objects.equals(expected, lp.getNat64Prefix())));
+
+    }
+
+    private void expectNoNat64PrefixUpdate(InOrder inOrder, IpPrefix unchanged) throws Exception {
+        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+        inOrder.verify(mCb, never()).onLinkPropertiesChange(argThat(
+                lp -> !Objects.equals(unchanged, lp.getNat64Prefix())));
+
+    }
+
+    @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
+    public void testPref64Option() throws Exception {
+        disableRouterSolicitationDelay();
+
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIpReachabilityMonitor()
+                .withoutIPv4()
+                .build();
+        mIpc.startProvisioning(config);
+
+        final String dnsServer = "2001:4860:4860::64";
+        final IpPrefix prefix = new IpPrefix("64:ff9b::/96");
+        final IpPrefix otherPrefix = new IpPrefix("2001:db8:64::/96");
+
+        final ByteBuffer pio = buildPioOption(600, 300, "2001:db8:1::/64");
+        ByteBuffer rdnss = buildRdnssOption(600, dnsServer);
+        ByteBuffer pref64 = new StructNdOptPref64(prefix, 600).toByteBuffer();
+        ByteBuffer ra = buildRaPacket(pio, rdnss, pref64);
+
+        waitForRouterSolicitation();
+        mPacketReader.sendResponse(ra);
+
+        InOrder inOrder = inOrder(mCb);
+        ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+
+        // The NAT64 prefix might have been detected before or after provisioning success.
+        LinkProperties lp = captor.getValue();
+        if (lp.getNat64Prefix() != null) {
+            assertEquals(prefix, lp.getNat64Prefix());
+        } else {
+            expectNat64PrefixUpdate(inOrder, prefix);
+        }
+
+        // Increase the lifetime and expect the prefix not to change.
+        pref64 = new StructNdOptPref64(prefix, 1800).toByteBuffer();
+        ra = buildRaPacket(pio, rdnss, pref64);
+        mPacketReader.sendResponse(ra);
+        expectNoNat64PrefixUpdate(inOrder, prefix);
+
+        // Withdraw the prefix and expect it to be set to null.
+        pref64 = new StructNdOptPref64(prefix, 0).toByteBuffer();
+        ra = buildRaPacket(pio, rdnss, pref64);
+        mPacketReader.sendResponse(ra);
+        expectNat64PrefixUpdate(inOrder, null);
+
+        // Re-announce the prefix.
+        pref64 = new StructNdOptPref64(prefix, 600).toByteBuffer();
+        ra = buildRaPacket(pio, rdnss, pref64);
+        mPacketReader.sendResponse(ra);
+        expectNat64PrefixUpdate(inOrder, prefix);
+
+        // Announce two prefixes. Don't expect any update because if there is already a NAT64
+        // prefix, any new prefix is ignored.
+        ByteBuffer otherPref64 = new StructNdOptPref64(otherPrefix, 600).toByteBuffer();
+        ra = buildRaPacket(pio, rdnss, pref64, otherPref64);
+        mPacketReader.sendResponse(ra);
+
+        pref64 = new StructNdOptPref64(prefix, 0).toByteBuffer();
+        ra = buildRaPacket(pio, rdnss, pref64, otherPref64);
+        mPacketReader.sendResponse(ra);
+        expectNat64PrefixUpdate(inOrder, otherPrefix);
     }
 
     @Test
