@@ -959,7 +959,9 @@ public class DhcpClient extends StateMachine {
                 Log.e(TAG, "Fail to start DHCP Packet Handler");
             }
             notifyFailure();
-            transitionTo(mStoppedState);
+            // We cannot call transitionTo because a transition is still in progress.
+            // Instead, ensure that we process CMD_STOP_DHCP as soon as the transition is complete.
+            deferMessage(obtainMessage(CMD_STOP_DHCP));
         }
 
         @Override
