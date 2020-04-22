@@ -72,8 +72,10 @@ import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -111,6 +113,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.ConditionVariable;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Looper;
 import android.os.PersistableBundle;
 import android.os.Process;
@@ -137,10 +140,13 @@ import com.android.networkstack.metrics.DataStallDetectionStats;
 import com.android.networkstack.metrics.DataStallStatsUtils;
 import com.android.networkstack.netlink.TcpSocketTracker;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
+import com.android.testutils.DevSdkIgnoreRule;
+import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
 import com.android.testutils.HandlerUtilsKt;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
@@ -180,6 +186,9 @@ public class NetworkMonitorTest {
     private static final String LOCATION_HEADER = "location";
     private static final String CONTENT_TYPE_HEADER = "Content-Type";
 
+    @Rule
+    public final DevSdkIgnoreRule mIgnoreRule = new DevSdkIgnoreRule();
+
     private @Mock Context mContext;
     private @Mock Configuration mConfiguration;
     private @Mock Resources mResources;
@@ -202,7 +211,10 @@ public class NetworkMonitorTest {
     private @Mock HttpURLConnection mCapportApiConnection;
     private @Mock Random mRandom;
     private @Mock NetworkMonitor.Dependencies mDependencies;
-    private @Mock INetworkMonitorCallbacks mCallbacks;
+    // Mockito can't create a mock of INetworkMonitorCallbacks on Q because it can't find
+    // CaptivePortalData on notifyCaptivePortalDataChanged. Use a spy on a mock IBinder instead.
+    private INetworkMonitorCallbacks mCallbacks = spy(
+            INetworkMonitorCallbacks.Stub.asInterface(mock(IBinder.class)));
     private @Spy Network mCleartextDnsNetwork = new Network(TEST_NETID);
     private @Mock Network mNetwork;
     private @Mock DataStallStatsUtils mDataStallStatsUtils;
@@ -257,9 +269,10 @@ public class NetworkMonitorTest {
     private static final int HANDLER_TIMEOUT_MS = 1000;
 
     private static final LinkProperties TEST_LINK_PROPERTIES = new LinkProperties();
-    private static final LinkProperties CAPPORT_LINK_PROPERTIES = makeCapportLinkProperties();
 
-    private static LinkProperties makeCapportLinkProperties() {
+    // Cannot have a static member for the LinkProperties with captive portal API information, as
+    // the initializer would crash on Q (the members in LinkProperties were introduced in R).
+    private static LinkProperties makeCapportLPs() {
         final LinkProperties lp = new LinkProperties(TEST_LINK_PROPERTIES);
         lp.setCaptivePortalApiUrl(Uri.parse(TEST_CAPPORT_API_URL));
         return lp;
@@ -534,7 +547,7 @@ public class NetworkMonitorTest {
     private void resetCallbacks(int interfaceVersion) {
         reset(mCallbacks);
         try {
-            when(mCallbacks.getInterfaceVersion()).thenReturn(interfaceVersion);
+            doReturn(interfaceVersion).when(mCallbacks).getInterfaceVersion();
         } catch (RemoteException e) {
             // Can't happen as mCallbacks is a mock
             fail("Error mocking getInterfaceVersion" + e);
@@ -997,7 +1010,7 @@ public class NetworkMonitorTest {
                 + "'bytes-remaining': " + bytesRemaining + ","
                 + "'seconds-remaining': " + secondsRemaining + "}");
 
-        runNetworkTest(CAPPORT_LINK_PROPERTIES, METERED_CAPABILITIES, VALIDATION_RESULT_PORTAL);
+        runNetworkTest(makeCapportLPs(), METERED_CAPABILITIES, VALIDATION_RESULT_PORTAL);
 
         verify(mHttpConnection, never()).getResponseCode();
         verify(mCapportApiConnection).getResponseCode();
@@ -1024,11 +1037,13 @@ public class NetworkMonitorTest {
 
         setApiContent(mCapportApiConnection, "{'captive': true, "
                 + "'user-portal-url': '" + TEST_LOGIN_URL + "'}");
-        nm.notifyLinkPropertiesChanged(CAPPORT_LINK_PROPERTIES);
+        nm.notifyLinkPropertiesChanged(makeCapportLPs());
 
         verifyNetworkTested(VALIDATION_RESULT_PORTAL);
-        verify(mCallbacks).notifyCaptivePortalDataChanged(
-                argThat(data -> Uri.parse(TEST_LOGIN_URL).equals(data.getUserPortalUrl())));
+        final ArgumentCaptor<CaptivePortalData> capportCaptor = ArgumentCaptor.forClass(
+                CaptivePortalData.class);
+        verify(mCallbacks).notifyCaptivePortalDataChanged(capportCaptor.capture());
+        assertEquals(Uri.parse(TEST_LOGIN_URL), capportCaptor.getValue().getUserPortalUrl());
         assertEquals(TEST_LOGIN_URL, mNetworkTestedRedirectUrlCaptor.getValue());
 
         // HTTP probe was sent on first validation but not re-sent when there was a portal URL.
@@ -1043,10 +1058,12 @@ public class NetworkMonitorTest {
         setStatus(mHttpConnection, 500);
         setApiContent(mCapportApiConnection, "{'captive': false,"
                 + "'venue-info-url': '" + TEST_VENUE_INFO_URL + "'}");
-        runNetworkTest(CAPPORT_LINK_PROPERTIES, METERED_CAPABILITIES, VALIDATION_RESULT_INVALID);
+        runNetworkTest(makeCapportLPs(), METERED_CAPABILITIES, VALIDATION_RESULT_INVALID);
 
-        verify(mCallbacks).notifyCaptivePortalDataChanged(argThat(data ->
-                Uri.parse(TEST_VENUE_INFO_URL).equals(data.getVenueInfoUrl())));
+        final ArgumentCaptor<CaptivePortalData> capportCaptor = ArgumentCaptor.forClass(
+                CaptivePortalData.class);
+        verify(mCallbacks).notifyCaptivePortalDataChanged(capportCaptor.capture());
+        assertEquals(Uri.parse(TEST_VENUE_INFO_URL), capportCaptor.getValue().getVenueInfoUrl());
     }
 
     @Test
@@ -1056,10 +1073,12 @@ public class NetworkMonitorTest {
         setStatus(mHttpConnection, 204);
         setApiContent(mCapportApiConnection, "{'captive': false,"
                 + "'venue-info-url': '" + TEST_VENUE_INFO_URL + "'}");
-        runNetworkTest(CAPPORT_LINK_PROPERTIES, METERED_CAPABILITIES, VALIDATION_RESULT_PARTIAL);
+        runNetworkTest(makeCapportLPs(), METERED_CAPABILITIES, VALIDATION_RESULT_PARTIAL);
 
-        verify(mCallbacks).notifyCaptivePortalDataChanged(argThat(data ->
-                Uri.parse(TEST_VENUE_INFO_URL).equals(data.getVenueInfoUrl())));
+        final ArgumentCaptor<CaptivePortalData> capportCaptor = ArgumentCaptor.forClass(
+                CaptivePortalData.class);
+        verify(mCallbacks).notifyCaptivePortalDataChanged(capportCaptor.capture());
+        assertEquals(Uri.parse(TEST_VENUE_INFO_URL), capportCaptor.getValue().getVenueInfoUrl());
     }
 
     @Test
@@ -1069,11 +1088,12 @@ public class NetworkMonitorTest {
         setStatus(mHttpConnection, 204);
         setApiContent(mCapportApiConnection, "{'captive': false,"
                 + "'venue-info-url': '" + TEST_VENUE_INFO_URL + "'}");
-        runNetworkTest(CAPPORT_LINK_PROPERTIES, METERED_CAPABILITIES,
-                VALIDATION_RESULT_VALID_ALL_PROBES);
+        runNetworkTest(makeCapportLPs(), METERED_CAPABILITIES, VALIDATION_RESULT_VALID_ALL_PROBES);
 
-        verify(mCallbacks).notifyCaptivePortalDataChanged(argThat(data ->
-                Uri.parse(TEST_VENUE_INFO_URL).equals(data.getVenueInfoUrl())));
+        final ArgumentCaptor<CaptivePortalData> capportCaptor = ArgumentCaptor.forClass(
+                CaptivePortalData.class);
+        verify(mCallbacks).notifyCaptivePortalDataChanged(capportCaptor.capture());
+        assertEquals(Uri.parse(TEST_VENUE_INFO_URL), capportCaptor.getValue().getVenueInfoUrl());
     }
 
     @Test
@@ -1082,20 +1102,22 @@ public class NetworkMonitorTest {
         setStatus(mHttpsConnection, 204);
         setPortal302(mHttpConnection);
         setApiContent(mCapportApiConnection, "{SomeInvalidText");
-        runNetworkTest(CAPPORT_LINK_PROPERTIES, METERED_CAPABILITIES, VALIDATION_RESULT_PORTAL);
+        runNetworkTest(makeCapportLPs(), METERED_CAPABILITIES, VALIDATION_RESULT_PORTAL);
 
         verify(mCallbacks, never()).notifyCaptivePortalDataChanged(any());
         verify(mHttpConnection).getResponseCode();
     }
 
-    @Test
+    @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
     public void testIsCaptivePortal_CapportApiNotSupported() throws Exception {
+        // Test that on a R+ device, if NetworkStack was compiled without CaptivePortalData support
+        // (built against Q), NetworkMonitor behaves as expected.
         assumeFalse(CaptivePortalDataShimImpl.isSupported());
         setSslException(mHttpsConnection);
         setPortal302(mHttpConnection);
         setApiContent(mCapportApiConnection, "{'captive': false,"
                 + "'venue-info-url': '" + TEST_VENUE_INFO_URL + "'}");
-        runNetworkTest(CAPPORT_LINK_PROPERTIES, METERED_CAPABILITIES, VALIDATION_RESULT_PORTAL);
+        runNetworkTest(makeCapportLPs(), METERED_CAPABILITIES, VALIDATION_RESULT_PORTAL);
 
         verify(mCallbacks, never()).notifyCaptivePortalDataChanged(any());
         verify(mHttpConnection).getResponseCode();
