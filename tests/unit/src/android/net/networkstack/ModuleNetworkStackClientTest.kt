@@ -29,10 +29,10 @@ import android.os.Build
 import android.os.IBinder
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
-import com.android.networkstack.apishim.ShimUtils
+import com.android.testutils.DevSdkIgnoreRule
 import org.junit.After
-import org.junit.Assume.assumeTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.ArgumentMatchers.any
@@ -49,6 +49,10 @@ class ModuleNetworkStackClientTest {
     private val TEST_IFNAME = "testiface"
     private val TEST_NETWORK = Network(43)
     private val TEST_TIMEOUT_MS = 500L
+
+    // ModuleNetworkStackClient is only available after Q
+    @Rule @JvmField
+    val mIgnoreRule = DevSdkIgnoreRule(ignoreClassUpTo = Build.VERSION_CODES.Q)
 
     @Mock
     private lateinit var mContext: Context
@@ -67,8 +71,6 @@ class ModuleNetworkStackClientTest {
 
     @Before
     fun setUp() {
-        // ModuleNetworkStackClient is only available after Q
-        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q))
         MockitoAnnotations.initMocks(this)
         doReturn(mConnector).`when`(mConnectorBinder).queryLocalInterface(
                 INetworkStackConnector::class.qualifiedName!!)
