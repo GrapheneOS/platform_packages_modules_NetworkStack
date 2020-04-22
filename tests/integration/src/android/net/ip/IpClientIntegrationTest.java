@@ -139,6 +139,7 @@ import com.android.testutils.TapPacketReader;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -1357,6 +1358,7 @@ public class IpClientIntegrationTest {
 
     }
 
+    @Ignore  // AOSP kernels don't support the PREF64 option yet.
     @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
     public void testPref64Option() throws Exception {
         disableRouterSolicitationDelay();
