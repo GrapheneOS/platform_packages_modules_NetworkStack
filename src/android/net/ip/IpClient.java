@@ -582,9 +582,10 @@ public class IpClient extends StateMachine {
                 mMinRdnssLifetimeSec);
 
         mLinkObserver = new IpClientLinkObserver(
+                mContext, getHandler(),
                 mInterfaceName,
                 () -> sendMessage(EVENT_NETLINK_LINKPROPERTIES_CHANGED),
-                config, getHandler(), mLog) {
+                config, mLog) {
             @Override
             public void onInterfaceAdded(String iface) {
                 super.onInterfaceAdded(iface);
