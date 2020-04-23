@@ -20,6 +20,8 @@ import static android.system.OsConstants.AF_INET6;
 
 import static com.android.server.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
 
+import android.app.AlarmManager;
+import android.content.Context;
 import android.net.InetAddresses;
 import android.net.IpPrefix;
 import android.net.LinkAddress;
@@ -104,14 +106,15 @@ public class IpClientLinkObserver implements NetworkObserver {
     private final Callback mCallback;
     private final LinkProperties mLinkProperties;
     private DnsServerRepository mDnsServerRepository;
+    private final AlarmManager mAlarmManager;
     private final Configuration mConfig;
 
     private final MyNetlinkMonitor mNetlinkMonitor;
 
     private static final boolean DBG = false;
 
-    public IpClientLinkObserver(String iface, Callback callback, Configuration config,
-            Handler h, SharedLog log) {
+    public IpClientLinkObserver(Context context, Handler h, String iface, Callback callback,
+            Configuration config, SharedLog log) {
         mInterfaceName = iface;
         mTag = "NetlinkTracker/" + mInterfaceName;
         mCallback = callback;
@@ -119,6 +122,7 @@ public class IpClientLinkObserver implements NetworkObserver {
         mLinkProperties.setInterfaceName(mInterfaceName);
         mConfig = config;
         mDnsServerRepository = new DnsServerRepository(config.minRdnssLifetime);
+        mAlarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         mNetlinkMonitor = new MyNetlinkMonitor(h, log, mTag);
         h.post(mNetlinkMonitor::start);
     }
@@ -253,8 +257,11 @@ public class IpClientLinkObserver implements NetworkObserver {
      * All methods except the constructor must be called on the handler thread.
      */
     private class MyNetlinkMonitor extends NetlinkMonitor {
+        private final Handler mHandler;
+
         MyNetlinkMonitor(Handler h, SharedLog log, String tag) {
             super(h, log, tag, OsConstants.NETLINK_ROUTE, NetlinkConstants.RTMGRP_ND_USEROPT);
+            mHandler = h;
         }
 
         private final NetworkInformationShim mShim = NetworkInformationShimImpl.newInstance();
@@ -274,6 +281,23 @@ public class IpClientLinkObserver implements NetworkObserver {
             mIfindex = ifindex;
         }
 
+        private final AlarmManager.OnAlarmListener mExpirePref64Alarm = () -> {
+            updatePref64(mShim.getNat64Prefix(mLinkProperties),
+                    mNat64PrefixExpiry, mNat64PrefixExpiry);
+        };
+
+        private void cancelPref64Alarm() {
+            mAlarmManager.cancel(mExpirePref64Alarm);
+        }
+
+        private void schedulePref64Alarm() {
+            // There is no need to cancel any existing alarms, because we are using the same
+            // OnAlarmListener object, and each such listener can only have at most one alarm.
+            final String tag = mTag + ".PREF64";
+            mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, mNat64PrefixExpiry, tag,
+                    mExpirePref64Alarm, mHandler);
+        }
+
         /**
          * Processes a PREF64 ND option.
          *
@@ -290,10 +314,16 @@ public class IpClientLinkObserver implements NetworkObserver {
             // If the prefix matches the current prefix, refresh its lifetime.
             if (prefix.equals(currentPrefix)) {
                 mNat64PrefixExpiry = expiry;
+                if (expiry > now) {
+                    schedulePref64Alarm();
+                }
             }
 
             // If we already have a prefix, continue using it and ignore the new one. Stopping and
             // restarting clatd is disruptive because it will break existing IPv4 connections.
+            // TODO: this means that if we receive an RA that adds a new prefix and deletes the old
+            // prefix, we might receive and ignore the new prefix, then delete the old prefix, and
+            // have no prefix until the next RA is received.
             if (mNat64PrefixExpiry > now) return;
 
             // The current prefix has expired. Either replace it with the new one or delete it.
@@ -301,14 +331,14 @@ public class IpClientLinkObserver implements NetworkObserver {
                 // If expiry > now, then prefix != currentPrefix (due to the return statement above)
                 mShim.setNat64Prefix(mLinkProperties, prefix);
                 mNat64PrefixExpiry = expiry;
+                schedulePref64Alarm();
             } else {
                 mShim.setNat64Prefix(mLinkProperties, null);
                 mNat64PrefixExpiry = 0;
+                cancelPref64Alarm();
             }
 
             mCallback.update();
-
-            // TODO: send a delayed message to remove the prefix when it expires.
         }
 
         private void processPref64Option(StructNdOptPref64 opt, final long now) {
