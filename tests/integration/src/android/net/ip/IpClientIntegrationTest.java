@@ -127,6 +127,7 @@ import androidx.test.runner.AndroidJUnit4;
 
 import com.android.internal.util.StateMachine;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
+import com.android.networkstack.apishim.ConstantsShim;
 import com.android.networkstack.apishim.ShimUtils;
 import com.android.networkstack.arp.ArpPacket;
 import com.android.server.NetworkObserverRegistry;
@@ -1086,6 +1087,8 @@ public class IpClientIntegrationTest {
 
     @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
     public void testDhcpServerInLinkProperties() throws Exception {
+        assumeTrue(ConstantsShim.VERSION > Build.VERSION_CODES.Q);
+
         performDhcpHandshake();
         ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
@@ -1361,6 +1364,8 @@ public class IpClientIntegrationTest {
     @Ignore  // AOSP kernels don't support the PREF64 option yet.
     @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
     public void testPref64Option() throws Exception {
+        assumeTrue(ConstantsShim.VERSION > Build.VERSION_CODES.Q);
+
         disableRouterSolicitationDelay();
 
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
