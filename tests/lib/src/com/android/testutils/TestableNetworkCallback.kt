@@ -36,6 +36,7 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 
 object NULL_NETWORK : Network(-1)
+object ANY_NETWORK : Network(-2)
 
 private val Int.capabilityName get() = NetworkCapabilities.capabilityNameOf(this)
 
@@ -100,7 +101,8 @@ open class RecorderCallback private constructor(
         }
     }
 
-    protected val history = backingRecord.newReadHead()
+    val history = backingRecord.newReadHead()
+    val mark get() = history.mark
 
     override fun onAvailable(network: Network) {
         history.add(Available(network))
@@ -172,16 +174,27 @@ open class TestableNetworkCallback private constructor(
         if (null != cb) fail("Expected no callback but got $cb")
     }
 
+    // Expects a callback of the specified type on the specified network within the timeout.
+    // If no callback arrives, or a different callback arrives, fail. Returns the callback.
     inline fun <reified T : CallbackEntry> expectCallback(
-        network: Network,
+        network: Network = ANY_NETWORK,
         timeoutMs: Long = defaultTimeoutMs
     ): T = pollForNextCallback(timeoutMs).let {
-        if (it !is T || it.network != network) {
+        if (it !is T || (ANY_NETWORK !== network && it.network != network)) {
             fail("Unexpected callback : $it, expected ${T::class} with Network[$network]")
         } else {
             it
         }
     }
+
+    // Expects a callback of the specified type matching the predicate within the timeout.
+    // Any callback that doesn't match the predicate will be skipped. Fails only if
+    // no matching callback is received within the timeout.
+    inline fun <reified T : CallbackEntry> eventuallyExpect(
+        timeoutMs: Long = defaultTimeoutMs,
+        from: Int = mark,
+        crossinline predicate: (T) -> Boolean = { true }
+    ) = history.poll(timeoutMs, from) { it is T && predicate(it) } as T
 
     fun expectCallbackThat(
         timeoutMs: Long = defaultTimeoutMs,
