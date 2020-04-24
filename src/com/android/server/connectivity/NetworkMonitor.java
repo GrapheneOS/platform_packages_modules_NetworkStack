@@ -77,12 +77,6 @@ import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DNS_EVENTS;
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_TCP_METRICS;
-import static com.android.networkstack.apishim.ConstantsShim.KEY_DNS_CONSECUTIVE_TIMEOUTS;
-import static com.android.networkstack.apishim.ConstantsShim.KEY_NETWORK_PROBES_ATTEMPTED_BITMASK;
-import static com.android.networkstack.apishim.ConstantsShim.KEY_NETWORK_PROBES_SUCCEEDED_BITMASK;
-import static com.android.networkstack.apishim.ConstantsShim.KEY_NETWORK_VALIDATION_RESULT;
-import static com.android.networkstack.apishim.ConstantsShim.KEY_TCP_METRICS_COLLECTION_PERIOD_MILLIS;
-import static com.android.networkstack.apishim.ConstantsShim.KEY_TCP_PACKET_FAIL_RATE;
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
 import static com.android.networkstack.util.DnsUtils.TYPE_ADDRCONFIG;
 
@@ -95,11 +89,13 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.net.ConnectivityManager;
+import android.net.DataStallReportParcelable;
 import android.net.DnsResolver;
 import android.net.INetworkMonitorCallbacks;
 import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.net.NetworkTestResultParcelable;
 import android.net.ProxyInfo;
 import android.net.TrafficStats;
 import android.net.Uri;
@@ -119,7 +115,6 @@ import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Message;
-import android.os.PersistableBundle;
 import android.os.Process;
 import android.os.RemoteException;
 import android.os.SystemClock;
@@ -659,18 +654,41 @@ public class NetworkMonitor extends StateMachine {
         return NetworkMonitorUtils.isPrivateDnsValidationRequired(mNetworkCapabilities);
     }
 
-    private void notifyNetworkTested(
-            int result, @Nullable String redirectUrl, PersistableBundle extras) {
+    private void notifyNetworkTested(NetworkTestResultParcelable result) {
         try {
             if (mCallbackVersion <= 5) {
-                mCallback.notifyNetworkTested(result, redirectUrl);
+                mCallback.notifyNetworkTested(
+                        getLegacyTestResult(result.result, result.probesSucceeded),
+                        result.redirectUrl);
             } else {
-                mCallback.notifyNetworkTestedWithExtras(
-                        result, redirectUrl, SystemClock.elapsedRealtime(), extras);
+                mCallback.notifyNetworkTestedWithExtras(result);
             }
         } catch (RemoteException e) {
             Log.e(TAG, "Error sending network test result", e);
         }
+    }
+
+    /**
+     * Get the test result that was used as an int up to interface version 5.
+     *
+     * <p>For callback version < 3 (only used in Q beta preview builds), the int represented one of
+     * the NETWORK_TEST_RESULT_* constants.
+     *
+     * <p>Q released with version 3, which used a single int for both the evaluation result bitmask,
+     * and the probesSucceeded bitmask.
+     */
+    protected int getLegacyTestResult(int evaluationResult, int probesSucceeded) {
+        if (mCallbackVersion < 3) {
+            if ((evaluationResult & NETWORK_VALIDATION_RESULT_VALID) != 0) {
+                return NETWORK_TEST_RESULT_VALID;
+            }
+            if ((evaluationResult & NETWORK_VALIDATION_RESULT_PARTIAL) != 0) {
+                return NETWORK_TEST_RESULT_PARTIAL_CONNECTIVITY;
+            }
+            return NETWORK_TEST_RESULT_INVALID;
+        }
+
+        return evaluationResult | probesSucceeded;
     }
 
     private void notifyProbeStatusChanged(int probesCompleted, int probesSucceeded) {
@@ -697,10 +715,9 @@ public class NetworkMonitor extends StateMachine {
         }
     }
 
-    private void notifyDataStallSuspected(int detectionMethod, PersistableBundle extras) {
+    private void notifyDataStallSuspected(@NonNull DataStallReportParcelable p) {
         try {
-            mCallback.notifyDataStallSuspected(
-                    SystemClock.elapsedRealtime(), detectionMethod, extras);
+            mCallback.notifyDataStallSuspected(p);
         } catch (RemoteException e) {
             Log.e(TAG, "Error sending notification for suspected data stall", e);
         }
@@ -2941,10 +2958,13 @@ public class NetworkMonitor extends StateMachine {
             } else if (tst.isDataStallSuspected()) {
                 result = true;
 
-                final PersistableBundle extras = new PersistableBundle();
-                extras.putInt(KEY_TCP_PACKET_FAIL_RATE, tst.getLatestPacketFailPercentage());
-                extras.putInt(KEY_TCP_METRICS_COLLECTION_PERIOD_MILLIS, getTcpPollingInterval());
-                notifyDataStallSuspected(DETECTION_METHOD_TCP_METRICS, extras);
+                final DataStallReportParcelable p = new DataStallReportParcelable();
+                p.detectionMethod = DETECTION_METHOD_TCP_METRICS;
+                p.timestampMillis = SystemClock.elapsedRealtime();
+                p.tcpPacketFailRate = tst.getLatestPacketFailPercentage();
+                p.tcpMetricsCollectionPeriodMillis = getTcpPollingInterval();
+
+                notifyDataStallSuspected(p);
             }
             if (DBG || VDBG_STALL) {
                 msg.add("tcp packets received=" + tst.getLatestReceivedCount())
@@ -2963,10 +2983,11 @@ public class NetworkMonitor extends StateMachine {
                 result = true;
                 logNetworkEvent(NetworkEvent.NETWORK_CONSECUTIVE_DNS_TIMEOUT_FOUND);
 
-                final PersistableBundle extras = new PersistableBundle();
-                extras.putInt(KEY_DNS_CONSECUTIVE_TIMEOUTS,
-                        mDnsStallDetector.getConsecutiveTimeoutCount());
-                notifyDataStallSuspected(DETECTION_METHOD_DNS_EVENTS, extras);
+                final DataStallReportParcelable p = new DataStallReportParcelable();
+                p.detectionMethod = DETECTION_METHOD_DNS_EVENTS;
+                p.timestampMillis = SystemClock.elapsedRealtime();
+                p.dnsConsecutiveTimeouts = mDnsStallDetector.getConsecutiveTimeoutCount();
+                notifyDataStallSuspected(p);
             }
             if (DBG || VDBG_STALL) {
                 msg.add("consecutive dns timeout count=" + dsd.getConsecutiveTimeoutCount());
@@ -3001,7 +3022,7 @@ public class NetworkMonitor extends StateMachine {
         // The latest validation result for this network. This is a bitmask of
         // INetworkMonitor.NETWORK_VALIDATION_RESULT_* constants.
         private int mEvaluationResult = NETWORK_VALIDATION_RESULT_INVALID;
-        // Indicates which probes have completed since clearProbeResults was called.
+        // Indicates which probes have succeeded since clearProbeResults was called.
         // This is a bitmask of INetworkMonitor.NETWORK_VALIDATION_PROBE_* constants.
         private int mProbeResults = 0;
         // A bitmask to record which probes are completed.
@@ -3044,25 +3065,23 @@ public class NetworkMonitor extends StateMachine {
         protected void reportEvaluationResult(int result, @Nullable String redirectUrl) {
             mEvaluationResult = result;
             mRedirectUrl = redirectUrl;
-            final PersistableBundle extras = new PersistableBundle();
-
-            extras.putInt(KEY_NETWORK_VALIDATION_RESULT, result);
-            extras.putInt(KEY_NETWORK_PROBES_SUCCEEDED_BITMASK, mProbeResults);
-            extras.putInt(KEY_NETWORK_PROBES_ATTEMPTED_BITMASK, mProbeCompleted);
-            notifyNetworkTested(getNetworkTestResult(), mRedirectUrl, extras);
+            final NetworkTestResultParcelable p = new NetworkTestResultParcelable();
+            p.result = result;
+            p.probesSucceeded = mProbeResults;
+            p.probesAttempted = mProbeCompleted;
+            p.redirectUrl = redirectUrl;
+            p.timestampMillis = SystemClock.elapsedRealtime();
+            notifyNetworkTested(p);
         }
 
-        protected int getNetworkTestResult() {
-            if (mCallbackVersion < 3) {
-                if ((mEvaluationResult & NETWORK_VALIDATION_RESULT_VALID) != 0) {
-                    return NETWORK_TEST_RESULT_VALID;
-                }
-                if ((mEvaluationResult & NETWORK_VALIDATION_RESULT_PARTIAL) != 0) {
-                    return NETWORK_TEST_RESULT_PARTIAL_CONNECTIVITY;
-                }
-                return NETWORK_TEST_RESULT_INVALID;
-            }
-            return mEvaluationResult | mProbeResults;
+        @VisibleForTesting
+        protected int getEvaluationResult() {
+            return mEvaluationResult;
+        }
+
+        @VisibleForTesting
+        protected int getProbeResults() {
+            return mProbeResults;
         }
 
         @VisibleForTesting
@@ -3080,7 +3099,7 @@ public class NetworkMonitor extends StateMachine {
         mAcceptPartialConnectivity = acceptPartial;
         // Ignore https probe in next validation if user accept partial connectivity on a partial
         // connectivity network.
-        if (((mEvaluationState.getNetworkTestResult() & NETWORK_VALIDATION_RESULT_PARTIAL) != 0)
+        if (((mEvaluationState.getEvaluationResult() & NETWORK_VALIDATION_RESULT_PARTIAL) != 0)
                 && mAcceptPartialConnectivity) {
             mUseHttps = false;
         }
