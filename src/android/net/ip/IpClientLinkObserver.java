@@ -282,6 +282,12 @@ public class IpClientLinkObserver implements NetworkObserver {
         }
 
         private final AlarmManager.OnAlarmListener mExpirePref64Alarm = () -> {
+            // TODO: in the rare case where the alarm fires and posts the lambda to the handler
+            // thread while we are processing an RA that changes the lifetime of the same prefix,
+            // this code will run anyway even if the alarm is rescheduled or cancelled. If the
+            // lifetime in the RA is zero this doesn't matter (we just harmlessly cancel the alarm
+            // one extra time) but if the lifetime is nonzero then the prefix will be added and
+            // immediately removed by this code.
             updatePref64(mShim.getNat64Prefix(mLinkProperties),
                     mNat64PrefixExpiry, mNat64PrefixExpiry);
         };
@@ -321,9 +327,11 @@ public class IpClientLinkObserver implements NetworkObserver {
 
             // If we already have a prefix, continue using it and ignore the new one. Stopping and
             // restarting clatd is disruptive because it will break existing IPv4 connections.
-            // TODO: this means that if we receive an RA that adds a new prefix and deletes the old
+            // Note: this means that if we receive an RA that adds a new prefix and deletes the old
             // prefix, we might receive and ignore the new prefix, then delete the old prefix, and
-            // have no prefix until the next RA is received.
+            // have no prefix until the next RA is received. This is because the kernel returns ND
+            // user options one at a time even if they are in the same RA.
+            // TODO: keep track of the last few prefixes seen, like DnsServerRepository does.
             if (mNat64PrefixExpiry > now) return;
 
             // The current prefix has expired. Either replace it with the new one or delete it.
