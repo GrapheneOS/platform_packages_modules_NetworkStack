@@ -206,7 +206,7 @@ public class DhcpServer extends IDhcpServer.Stub {
             return new DhcpLeaseRepository(
                     DhcpServingParams.makeIpPrefix(servingParams.serverAddr),
                     servingParams.excludedAddrs, servingParams.dhcpLeaseTimeSecs * 1000,
-                    servingParams.clientAddr, log.forSubComponent(REPO_TAG), clock);
+                    servingParams.singleClientAddr, log.forSubComponent(REPO_TAG), clock);
         }
 
         @Override
@@ -352,7 +352,7 @@ public class DhcpServer extends IDhcpServer.Stub {
                             DhcpServingParams.makeIpPrefix(mServingParams.serverAddr),
                             params.excludedAddrs,
                             params.dhcpLeaseTimeSecs,
-                            params.clientAddr);
+                            params.singleClientAddr);
 
                     cb = pair.second;
                     break;

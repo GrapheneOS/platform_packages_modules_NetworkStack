@@ -75,7 +75,7 @@ public class DhcpServingParamsTest {
                 .setLinkMtu(TEST_MTU)
                 .setExcludedAddrs(TEST_EXCLUDED_ADDRS)
                 .setMetered(TEST_METERED)
-                .setClientAddr(TEST_CLIENT_ADDR)
+                .setSingleClientAddr(TEST_CLIENT_ADDR)
                 .setChangePrefixOnDecline(TEST_CHANGE_PREFIX_ON_DECLINE);
     }
 
@@ -184,7 +184,7 @@ public class DhcpServingParamsTest {
         parcel.linkMtu = TEST_MTU;
         parcel.excludedAddrs = toIntArray(TEST_EXCLUDED_ADDRS);
         parcel.metered = TEST_METERED;
-        parcel.clientAddr = inet4AddressToIntHTH(TEST_CLIENT_ADDR);
+        parcel.singleClientAddr = inet4AddressToIntHTH(TEST_CLIENT_ADDR);
         parcel.changePrefixOnDecline = TEST_CHANGE_PREFIX_ON_DECLINE;
         final DhcpServingParams parceled = DhcpServingParams.fromParcelableObject(parcel);
 
@@ -195,7 +195,7 @@ public class DhcpServingParamsTest {
         assertEquals(params.linkMtu, parceled.linkMtu);
         assertEquals(params.excludedAddrs, parceled.excludedAddrs);
         assertEquals(params.metered, parceled.metered);
-        assertEquals(params.clientAddr, parceled.clientAddr);
+        assertEquals(params.singleClientAddr, parceled.singleClientAddr);
         assertEquals(params.changePrefixOnDecline, parceled.changePrefixOnDecline);
 
         MiscAssertsKt.assertFieldCountEquals(10, DhcpServingParamsParcel.class);
