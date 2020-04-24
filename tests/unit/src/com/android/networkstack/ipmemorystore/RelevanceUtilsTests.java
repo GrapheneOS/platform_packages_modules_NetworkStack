@@ -80,7 +80,7 @@ public class RelevanceUtilsTests {
             final long newExpiry = RelevanceUtils.bumpExpiryDuration(expiry);
             if (newExpiry == expiry) {
                 // The relevance should be capped. Make sure it is, then exit without failure.
-                assertEquals(newExpiry, RelevanceUtils.CAPPED_RELEVANCE_LIFETIME_MS);
+                assertEquals(RelevanceUtils.CAPPED_RELEVANCE_LIFETIME_MS, newExpiry);
                 return;
             }
             // Make sure the new expiry is further in the future than last time.
@@ -101,10 +101,10 @@ public class RelevanceUtilsTests {
         // Relevance at expiry and after expiry should be the cap.
         final int relevanceBeforeMaxLifetime = RelevanceUtils.computeRelevanceForTargetDate(expiry,
                 expiry - (RelevanceUtils.CAPPED_RELEVANCE_LIFETIME_MS + 1_000_000));
-        assertEquals(relevanceBeforeMaxLifetime, CAPPED_RELEVANCE);
+        assertEquals(CAPPED_RELEVANCE, relevanceBeforeMaxLifetime);
         final int relevanceForMaxLifetime = RelevanceUtils.computeRelevanceForTargetDate(expiry,
                 expiry - RelevanceUtils.CAPPED_RELEVANCE_LIFETIME_MS);
-        assertEquals(relevanceForMaxLifetime, CAPPED_RELEVANCE);
+        assertEquals(CAPPED_RELEVANCE, relevanceForMaxLifetime);
 
         // If the max relevance is reached at the cap lifetime, one millisecond less than this
         // should be very close. Strictly speaking this is a bit brittle, but it should be
@@ -122,10 +122,18 @@ public class RelevanceUtilsTests {
         assertTrue(relevanceOneMillisecBeforeExpiry >= 0);
 
         final int relevanceAtExpiry = RelevanceUtils.computeRelevanceForTargetDate(expiry, expiry);
-        assertEquals(relevanceAtExpiry, 0);
+        assertEquals(0, relevanceAtExpiry);
         final int relevanceAfterExpiry = RelevanceUtils.computeRelevanceForTargetDate(expiry,
                 expiry + 1_000_000);
-        assertEquals(relevanceAfterExpiry, 0);
+        assertEquals(0, relevanceAfterExpiry);
+
+        // Basic test of computeRelevanceForNow
+        assertEquals(0, RelevanceUtils.computeRelevanceForNow(expiry));
+        assertEquals(CAPPED_RELEVANCE, RelevanceUtils.computeRelevanceForNow(expiry
+                + RelevanceUtils.CAPPED_RELEVANCE_LIFETIME_MS + 5));
+        final int midRelevance = RelevanceUtils.computeRelevanceForNow(expiry
+                + RelevanceUtils.CAPPED_RELEVANCE_LIFETIME_MS / 2);
+        assertTrue(0 < midRelevance && midRelevance < CAPPED_RELEVANCE);
     }
 
     // testIncreaseRelevance makes sure bumping the expiry continuously always yields a
