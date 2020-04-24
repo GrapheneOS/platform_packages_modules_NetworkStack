@@ -17,23 +17,23 @@
 package android.net;
 
 import android.net.CaptivePortalData;
+import android.net.DataStallReportParcelable;
 import android.net.INetworkMonitor;
+import android.net.NetworkTestResultParcelable;
 import android.net.PrivateDnsConfigParcel;
 import android.os.PersistableBundle;
 
 /** @hide */
 oneway interface INetworkMonitorCallbacks {
-    void onNetworkMonitorCreated(in INetworkMonitor networkMonitor);
+    void onNetworkMonitorCreated(in INetworkMonitor networkMonitor) = 0;
 
     // Deprecated. Use notifyNetworkTestedWithExtras() instead.
-    void notifyNetworkTested(int testResult, @nullable String redirectUrl);
-    void notifyPrivateDnsConfigResolved(in PrivateDnsConfigParcel config);
-    void showProvisioningNotification(String action, String packageName);
-    void hideProvisioningNotification();
-    void notifyProbeStatusChanged(int probesCompleted, int probesSucceeded);
-    void notifyNetworkTestedWithExtras(int testResult, @nullable String redirectUrl,
-            long timestampMillis, in PersistableBundle extras);
-    void notifyDataStallSuspected(long timestampMillis, int detectionMethod,
-            in PersistableBundle extras);
-    void notifyCaptivePortalDataChanged(in CaptivePortalData data);
+    void notifyNetworkTested(int testResult, @nullable String redirectUrl) = 1;
+    void notifyPrivateDnsConfigResolved(in PrivateDnsConfigParcel config) = 2;
+    void showProvisioningNotification(String action, String packageName) = 3;
+    void hideProvisioningNotification() = 4;
+    void notifyProbeStatusChanged(int probesCompleted, int probesSucceeded) = 5;
+    void notifyNetworkTestedWithExtras(in NetworkTestResultParcelable result) = 6;
+    void notifyDataStallSuspected(in DataStallReportParcelable report) = 7;
+    void notifyCaptivePortalDataChanged(in CaptivePortalData data) = 8;
 }
