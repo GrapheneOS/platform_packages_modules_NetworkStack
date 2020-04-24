@@ -15,16 +15,11 @@
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
 
-package android.net.dhcp;
-parcelable DhcpServingParamsParcel {
-  int serverAddr;
-  int serverAddrPrefixLength;
-  int[] defaultRouters;
-  int[] dnsServers;
-  int[] excludedAddrs;
-  long dhcpLeaseTimeSecs;
-  int linkMtu;
-  boolean metered;
-  int singleClientAddr;
-  boolean changePrefixOnDecline;
+package android.net;
+parcelable DataStallReportParcelable {
+  long timestampMillis = 0;
+  int detectionMethod = 1;
+  int tcpPacketFailRate = 2;
+  int tcpMetricsCollectionPeriodMillis = 3;
+  int dnsConsecutiveTimeouts = 4;
 }

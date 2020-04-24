@@ -18,13 +18,13 @@
 package android.net;
 /* @hide */
 interface INetworkMonitorCallbacks {
-  oneway void onNetworkMonitorCreated(in android.net.INetworkMonitor networkMonitor);
-  oneway void notifyNetworkTested(int testResult, @nullable String redirectUrl);
-  oneway void notifyPrivateDnsConfigResolved(in android.net.PrivateDnsConfigParcel config);
-  oneway void showProvisioningNotification(String action, String packageName);
-  oneway void hideProvisioningNotification();
-  oneway void notifyProbeStatusChanged(int probesCompleted, int probesSucceeded);
-  oneway void notifyNetworkTestedWithExtras(int testResult, @nullable String redirectUrl, long timestampMillis, in android.os.PersistableBundle extras);
-  oneway void notifyDataStallSuspected(long timestampMillis, int detectionMethod, in android.os.PersistableBundle extras);
-  oneway void notifyCaptivePortalDataChanged(in android.net.CaptivePortalData data);
+  oneway void onNetworkMonitorCreated(in android.net.INetworkMonitor networkMonitor) = 0;
+  oneway void notifyNetworkTested(int testResult, @nullable String redirectUrl) = 1;
+  oneway void notifyPrivateDnsConfigResolved(in android.net.PrivateDnsConfigParcel config) = 2;
+  oneway void showProvisioningNotification(String action, String packageName) = 3;
+  oneway void hideProvisioningNotification() = 4;
+  oneway void notifyProbeStatusChanged(int probesCompleted, int probesSucceeded) = 5;
+  oneway void notifyNetworkTestedWithExtras(in android.net.NetworkTestResultParcelable result) = 6;
+  oneway void notifyDataStallSuspected(in android.net.DataStallReportParcelable report) = 7;
+  oneway void notifyCaptivePortalDataChanged(in android.net.CaptivePortalData data) = 8;
 }
