@@ -88,7 +88,7 @@ public class DhcpServingParams {
      * Client inet address. This will be the only address offered by DhcpServer if set.
      */
     @Nullable
-    public final Inet4Address clientAddr;
+    public final Inet4Address singleClientAddr;
 
     /**
      * Indicates whether the DHCP server should request a new prefix from IpServer when receiving
@@ -110,7 +110,7 @@ public class DhcpServingParams {
     private DhcpServingParams(@NonNull LinkAddress serverAddr,
             @NonNull Set<Inet4Address> defaultRouters,
             @NonNull Set<Inet4Address> dnsServers, @NonNull Set<Inet4Address> excludedAddrs,
-            long dhcpLeaseTimeSecs, int linkMtu, boolean metered, Inet4Address clientAddr,
+            long dhcpLeaseTimeSecs, int linkMtu, boolean metered, Inet4Address singleClientAddr,
             boolean changePrefixOnDecline) {
         this.serverAddr = serverAddr;
         this.defaultRouters = defaultRouters;
@@ -119,7 +119,7 @@ public class DhcpServingParams {
         this.dhcpLeaseTimeSecs = dhcpLeaseTimeSecs;
         this.linkMtu = linkMtu;
         this.metered = metered;
-        this.clientAddr = clientAddr;
+        this.singleClientAddr = singleClientAddr;
         this.changePrefixOnDecline = changePrefixOnDecline;
     }
 
@@ -136,8 +136,8 @@ public class DhcpServingParams {
                 intToInet4AddressHTH(parcel.serverAddr),
                 parcel.serverAddrPrefixLength);
         Inet4Address clientAddr = null;
-        if (parcel.clientAddr != 0) {
-            clientAddr = intToInet4AddressHTH(parcel.clientAddr);
+        if (parcel.singleClientAddr != 0) {
+            clientAddr = intToInet4AddressHTH(parcel.singleClientAddr);
         }
 
         return new Builder()
@@ -148,7 +148,7 @@ public class DhcpServingParams {
                 .setDhcpLeaseTimeSecs(parcel.dhcpLeaseTimeSecs)
                 .setLinkMtu(parcel.linkMtu)
                 .setMetered(parcel.metered)
-                .setClientAddr(clientAddr)
+                .setSingleClientAddr(clientAddr)
                 .setChangePrefixOnDecline(parcel.changePrefixOnDecline)
                 .build();
     }
@@ -334,7 +334,7 @@ public class DhcpServingParams {
          *
          * <p>If not set, the default value is null.
          */
-        public Builder setClientAddr(@Nullable Inet4Address clientAddr) {
+        public Builder setSingleClientAddr(@Nullable Inet4Address clientAddr) {
             this.mClientAddr = clientAddr;
             return this;
         }
