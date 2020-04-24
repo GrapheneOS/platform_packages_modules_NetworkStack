@@ -445,6 +445,21 @@ public class IpClientIntegrationTest {
         mNetworkObserverRegistry.register(mNetd);
         mIpc = new IpClient(mContext, mIfaceName, mCb, mNetworkObserverRegistry,
                 mNetworkStackServiceManager, mDependencies);
+
+        // Tell the IpMemoryStore immediately to answer any question about network attributes with a
+        // null response. Otherwise, the DHCP client will wait for two seconds before starting,
+        // while its query to the IpMemoryStore times out.
+        // This does not affect any test that makes the mock memory store return results, because
+        // unlike when(), it is documented that doAnswer() can be called more than once, to change
+        // the behaviour of a mock in the middle of a test.
+        doAnswer(invocation -> {
+            final String l2Key = invocation.getArgument(0);
+            ((OnNetworkAttributesRetrievedListener) invocation.getArgument(1))
+                    .onNetworkAttributesRetrieved(new Status(SUCCESS), l2Key, null);
+            return null;
+        }).when(mIpMemoryStore).retrieveNetworkAttributes(any(), any());
+
+        disableIpv6ProvisioningDelays();
     }
 
     private boolean packetContainsExpectedField(final byte[] packet, final int offset,
@@ -1302,17 +1317,16 @@ public class IpClientIntegrationTest {
         return packet;
     }
 
-    private void disableRouterSolicitationDelay() throws Exception {
-        // Speed up the test by removing router_solicitation_delay.
+    private void disableIpv6ProvisioningDelays() throws Exception {
+        // Speed up the test by disabling DAD and removing router_solicitation_delay.
         // We don't need to restore the default value because the interface is removed in tearDown.
-        // TODO: speed up further by not waiting for RA but keying off first IPv6 packet.
+        // TODO: speed up further by not waiting for RS but keying off first IPv6 packet.
         mNetd.setProcSysNet(INetd.IPV6, INetd.CONF, mIfaceName, "router_solicitation_delay", "0");
+        mNetd.setProcSysNet(INetd.IPV6, INetd.CONF, mIfaceName, "dad_transmits", "0");
     }
 
     @Test
     public void testRaRdnss() throws Exception {
-        disableRouterSolicitationDelay();
-
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
                 .withoutIPv4()
@@ -1382,8 +1396,6 @@ public class IpClientIntegrationTest {
     @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
     public void testPref64Option() throws Exception {
         assumeTrue(ConstantsShim.VERSION > Build.VERSION_CODES.Q);
-
-        disableRouterSolicitationDelay();
 
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
@@ -1505,8 +1517,6 @@ public class IpClientIntegrationTest {
         // TODO: once IpClient gets IP addresses directly from netlink instead of from netd, it
         // may be sufficient to call waitForIdle to see if IpClient has seen the address.
         addIpAddressAndWaitForIt(mIfaceName);
-
-        disableRouterSolicitationDelay();
 
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
