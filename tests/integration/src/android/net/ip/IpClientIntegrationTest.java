@@ -1344,27 +1344,37 @@ public class IpClientIntegrationTest {
         waitForRouterSolicitation();
         mPacketReader.sendResponse(ra);
 
+        InOrder inOrder = inOrder(mCb);
+
         ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
         LinkProperties lp = captor.getValue();
+
+        // Sometimes provisioning completes as soon as the link-local and the stable address appear,
+        // before the privacy address appears. If so, wait here for the LinkProperties update that
+        // contains the privacy address. Otherwise, future calls to verify() might get confused.
+        // TODO: move this code to a more general startIpv6Provisioning method so we can write more
+        // IPv6 tests without duplicating this complexity.
+        if (lp.getLinkAddresses().size() == 2) {
+            inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(
+                    argThat(x -> x.getLinkAddresses().size() == 3));
+        }
 
         // Expect that DNS servers with lifetimes below CONFIG_MIN_RDNSS_LIFETIME are not accepted.
         assertNotNull(lp);
         assertEquals(1, lp.getDnsServers().size());
         assertTrue(lp.getDnsServers().contains(InetAddress.getByName(dnsServer)));
-        reset(mCb);
 
         // If the RDNSS lifetime is above the minimum, the DNS server is accepted.
         rdnss1 = buildRdnssOption(68, lowlifeDnsServer);
         ra = buildRaPacket(pio, rdnss1, rdnss2);
         mPacketReader.sendResponse(ra);
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(captor.capture());
+        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(captor.capture());
         lp = captor.getValue();
         assertNotNull(lp);
         assertEquals(2, lp.getDnsServers().size());
         assertTrue(lp.getDnsServers().contains(InetAddress.getByName(dnsServer)));
         assertTrue(lp.getDnsServers().contains(InetAddress.getByName(lowlifeDnsServer)));
-        reset(mCb);
 
         // Expect that setting RDNSS lifetime of 0 causes loss of provisioning.
         rdnss1 = buildRdnssOption(0, dnsServer);
@@ -1372,7 +1382,7 @@ public class IpClientIntegrationTest {
         ra = buildRaPacket(pio, rdnss1, rdnss2);
         mPacketReader.sendResponse(ra);
 
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(captor.capture());
+        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(captor.capture());
         lp = captor.getValue();
         assertNotNull(lp);
         assertEquals(0, lp.getDnsServers().size());
