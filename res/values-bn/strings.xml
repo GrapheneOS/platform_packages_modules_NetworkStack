@@ -22,5 +22,5 @@
     <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"নেটওয়ার্কে একটি ভেন্যুর তথ্য সংক্রান্ত পৃষ্ঠা রয়েছে তা বোঝানোর জন্য বিজ্ঞপ্তি দেখানো হয়েছে"</string>
     <string name="connected" msgid="4563643884927480998">"কানেক্ট করা হয়েছে"</string>
     <string name="tap_for_info" msgid="6849746325626883711">"কানেক্ট করা আছে / ওয়েবসাইট দেখতে ট্যাপ করুন"</string>
-    <string name="application_label" msgid="8095087899576605955">"কানেক্টিভিটি ম্যানেজার"</string>
+    <string name="application_label" msgid="1322847171305285454">"নেটওয়ার্ক ম্যানেজার"</string>
 </resources>

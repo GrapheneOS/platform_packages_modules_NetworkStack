@@ -22,5 +22,5 @@
     <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"নেটৱৰ্কৰ এখন স্থলীৰ তথ্য পৃষ্ঠা থকাটো দৰ্শাবলৈ জাননীসমূহ দেখুওৱা হয়"</string>
     <string name="connected" msgid="4563643884927480998">"সংযোগ কৰা হৈছে"</string>
     <string name="tap_for_info" msgid="6849746325626883711">"সংযুক্ত / ৱেবছাইট চাবলৈ টিপক"</string>
-    <string name="application_label" msgid="8095087899576605955">"সংযোগ পৰিচালক"</string>
+    <string name="application_label" msgid="1322847171305285454">"নেটৱৰ্ক মেনেজাৰ"</string>
 </resources>
