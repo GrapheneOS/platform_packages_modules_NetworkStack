@@ -16,26 +16,25 @@
 
 package com.android.networkstack.apishim;
 
-import static android.net.ConnectivityDiagnosticsManager.ConnectivityReport;
 import static android.net.ConnectivityDiagnosticsManager.DataStallReport;
+
+import androidx.annotation.VisibleForTesting;
 
 /**
  * Utility class for defining and importing constants from the Android platform.
  */
 public class ConstantsShim extends com.android.networkstack.apishim.api29.ConstantsShim {
+    /**
+     * Constant that callers can use to determine what version of the shim they are using.
+     * Must be the same as the version of the shims.
+     * This should only be used by test code. Production code that uses the shims should be using
+     * the shimmed objects and methods themselves.
+     */
+    @VisibleForTesting
+    public static final int VERSION = 30;
+
     public static final int DETECTION_METHOD_DNS_EVENTS =
             DataStallReport.DETECTION_METHOD_DNS_EVENTS;
     public static final int DETECTION_METHOD_TCP_METRICS =
             DataStallReport.DETECTION_METHOD_TCP_METRICS;
-    public static final String KEY_DNS_CONSECUTIVE_TIMEOUTS =
-            DataStallReport.KEY_DNS_CONSECUTIVE_TIMEOUTS;
-    public static final String KEY_NETWORK_PROBES_ATTEMPTED_BITMASK =
-            ConnectivityReport.KEY_NETWORK_PROBES_ATTEMPTED_BITMASK;
-    public static final String KEY_NETWORK_PROBES_SUCCEEDED_BITMASK =
-            ConnectivityReport.KEY_NETWORK_PROBES_SUCCEEDED_BITMASK;
-    public static final String KEY_NETWORK_VALIDATION_RESULT =
-            ConnectivityReport.KEY_NETWORK_VALIDATION_RESULT;
-    public static final String KEY_TCP_METRICS_COLLECTION_PERIOD_MILLIS =
-            DataStallReport.KEY_TCP_METRICS_COLLECTION_PERIOD_MILLIS;
-    public static final String KEY_TCP_PACKET_FAIL_RATE = DataStallReport.KEY_TCP_PACKET_FAIL_RATE;
 }

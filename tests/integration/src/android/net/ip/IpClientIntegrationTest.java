@@ -132,6 +132,7 @@ import androidx.test.runner.AndroidJUnit4;
 
 import com.android.internal.util.StateMachine;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
+import com.android.networkstack.apishim.ConstantsShim;
 import com.android.networkstack.apishim.ShimUtils;
 import com.android.networkstack.arp.ArpPacket;
 import com.android.server.NetworkObserverRegistry;
@@ -1112,6 +1113,8 @@ public class IpClientIntegrationTest {
 
     @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
     public void testDhcpServerInLinkProperties() throws Exception {
+        assumeTrue(ConstantsShim.VERSION > Build.VERSION_CODES.Q);
+
         performDhcpHandshake();
         ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
@@ -1385,6 +1388,8 @@ public class IpClientIntegrationTest {
 
     @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
     public void testPref64Option() throws Exception {
+        assumeTrue(ConstantsShim.VERSION > Build.VERSION_CODES.Q);
+
         disableRouterSolicitationDelay();
 
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
@@ -1430,6 +1435,14 @@ public class IpClientIntegrationTest {
         expectNoNat64PrefixUpdate(inOrder, prefix);
         reset(mCb, mAlarm);
 
+        // Reduce the lifetime and expect to reschedule expiry.
+        pref64 = new StructNdOptPref64(prefix, 1500).toByteBuffer();
+        ra = buildRaPacket(pio, rdnss, pref64);
+        mPacketReader.sendResponse(ra);
+        pref64Alarm = expectAlarmSet(inOrder, "PREF64", 1496);
+        expectNoNat64PrefixUpdate(inOrder, prefix);
+        reset(mCb, mAlarm);
+
         // Withdraw the prefix and expect it to be set to null.
         pref64 = new StructNdOptPref64(prefix, 0).toByteBuffer();
         ra = buildRaPacket(pio, rdnss, pref64);
@@ -1455,7 +1468,7 @@ public class IpClientIntegrationTest {
         expectNoNat64PrefixUpdate(inOrder, prefix);
         reset(mCb, mAlarm);
 
-        // Withdraw the prefix and expect to switch to the new prefix.
+        // Withdraw the old prefix and continue to announce the new one. Expect a prefix change.
         pref64 = new StructNdOptPref64(prefix, 0).toByteBuffer();
         ra = buildRaPacket(pio, rdnss, pref64, otherPref64);
         mPacketReader.sendResponse(ra);
