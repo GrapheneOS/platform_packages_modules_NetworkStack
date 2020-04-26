@@ -449,6 +449,21 @@ public class IpClientIntegrationTest {
         mNetworkObserverRegistry.register(mNetd);
         mIpc = new IpClient(mContext, mIfaceName, mCb, mNetworkObserverRegistry,
                 mNetworkStackServiceManager, mDependencies);
+
+        // Tell the IpMemoryStore immediately to answer any question about network attributes with a
+        // null response. Otherwise, the DHCP client will wait for two seconds before starting,
+        // while its query to the IpMemoryStore times out.
+        // This does not affect any test that makes the mock memory store return results, because
+        // unlike when(), it is documented that doAnswer() can be called more than once, to change
+        // the behaviour of a mock in the middle of a test.
+        doAnswer(invocation -> {
+            final String l2Key = invocation.getArgument(0);
+            ((OnNetworkAttributesRetrievedListener) invocation.getArgument(1))
+                    .onNetworkAttributesRetrieved(new Status(SUCCESS), l2Key, null);
+            return null;
+        }).when(mIpMemoryStore).retrieveNetworkAttributes(any(), any());
+
+        disableIpv6ProvisioningDelays();
     }
 
     private void expectAlarmCancelled(InOrder inOrder, OnAlarmListener listener) {
@@ -1328,17 +1343,16 @@ public class IpClientIntegrationTest {
         return packet;
     }
 
-    private void disableRouterSolicitationDelay() throws Exception {
-        // Speed up the test by removing router_solicitation_delay.
+    private void disableIpv6ProvisioningDelays() throws Exception {
+        // Speed up the test by disabling DAD and removing router_solicitation_delay.
         // We don't need to restore the default value because the interface is removed in tearDown.
-        // TODO: speed up further by not waiting for RA but keying off first IPv6 packet.
+        // TODO: speed up further by not waiting for RS but keying off first IPv6 packet.
         mNetd.setProcSysNet(INetd.IPV6, INetd.CONF, mIfaceName, "router_solicitation_delay", "0");
+        mNetd.setProcSysNet(INetd.IPV6, INetd.CONF, mIfaceName, "dad_transmits", "0");
     }
 
     @Test
     public void testRaRdnss() throws Exception {
-        disableRouterSolicitationDelay();
-
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
                 .withoutIPv4()
@@ -1356,27 +1370,37 @@ public class IpClientIntegrationTest {
         waitForRouterSolicitation();
         mPacketReader.sendResponse(ra);
 
+        InOrder inOrder = inOrder(mCb);
+
         ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
         LinkProperties lp = captor.getValue();
+
+        // Sometimes provisioning completes as soon as the link-local and the stable address appear,
+        // before the privacy address appears. If so, wait here for the LinkProperties update that
+        // contains the privacy address. Otherwise, future calls to verify() might get confused.
+        // TODO: move this code to a more general startIpv6Provisioning method so we can write more
+        // IPv6 tests without duplicating this complexity.
+        if (lp.getLinkAddresses().size() == 2) {
+            inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(
+                    argThat(x -> x.getLinkAddresses().size() == 3));
+        }
 
         // Expect that DNS servers with lifetimes below CONFIG_MIN_RDNSS_LIFETIME are not accepted.
         assertNotNull(lp);
         assertEquals(1, lp.getDnsServers().size());
         assertTrue(lp.getDnsServers().contains(InetAddress.getByName(dnsServer)));
-        reset(mCb);
 
         // If the RDNSS lifetime is above the minimum, the DNS server is accepted.
         rdnss1 = buildRdnssOption(68, lowlifeDnsServer);
         ra = buildRaPacket(pio, rdnss1, rdnss2);
         mPacketReader.sendResponse(ra);
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(captor.capture());
+        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(captor.capture());
         lp = captor.getValue();
         assertNotNull(lp);
         assertEquals(2, lp.getDnsServers().size());
         assertTrue(lp.getDnsServers().contains(InetAddress.getByName(dnsServer)));
         assertTrue(lp.getDnsServers().contains(InetAddress.getByName(lowlifeDnsServer)));
-        reset(mCb);
 
         // Expect that setting RDNSS lifetime of 0 causes loss of provisioning.
         rdnss1 = buildRdnssOption(0, dnsServer);
@@ -1384,7 +1408,7 @@ public class IpClientIntegrationTest {
         ra = buildRaPacket(pio, rdnss1, rdnss2);
         mPacketReader.sendResponse(ra);
 
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(captor.capture());
+        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(captor.capture());
         lp = captor.getValue();
         assertNotNull(lp);
         assertEquals(0, lp.getDnsServers().size());
@@ -1406,8 +1430,6 @@ public class IpClientIntegrationTest {
     @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
     public void testPref64Option() throws Exception {
         assumeTrue(ConstantsShim.VERSION > Build.VERSION_CODES.Q);
-
-        disableRouterSolicitationDelay();
 
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
@@ -1562,8 +1584,6 @@ public class IpClientIntegrationTest {
         // TODO: once IpClient gets IP addresses directly from netlink instead of from netd, it
         // may be sufficient to call waitForIdle to see if IpClient has seen the address.
         addIpAddressAndWaitForIt(mIfaceName);
-
-        disableRouterSolicitationDelay();
 
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
@@ -1936,6 +1956,9 @@ public class IpClientIntegrationTest {
         doAnswer(invocation -> {
             // we don't rely on the Init-Reboot state to renew previous cached IP lease.
             // Just return null and force state machine enter INIT state.
+            final String l2Key = invocation.getArgument(0);
+            ((OnNetworkAttributesRetrievedListener) invocation.getArgument(1))
+                    .onNetworkAttributesRetrieved(new Status(SUCCESS), l2Key, null);
             return null;
         }).when(mIpMemoryStore).retrieveNetworkAttributes(eq(TEST_L2KEY), any());
 
