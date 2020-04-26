@@ -60,6 +60,9 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeFalse;
 import static org.junit.Assume.assumeTrue;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.longThat;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.doAnswer;
@@ -75,6 +78,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.app.AlarmManager;
+import android.app.AlarmManager.OnAlarmListener;
 import android.app.Instrumentation;
 import android.content.ContentResolver;
 import android.content.Context;
@@ -117,6 +121,7 @@ import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.RemoteException;
+import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.system.ErrnoException;
 import android.system.Os;
@@ -460,6 +465,28 @@ public class IpClientIntegrationTest {
         }).when(mIpMemoryStore).retrieveNetworkAttributes(any(), any());
 
         disableIpv6ProvisioningDelays();
+    }
+
+    private void expectAlarmCancelled(InOrder inOrder, OnAlarmListener listener) {
+        inOrder.verify(mAlarm, timeout(TEST_TIMEOUT_MS)).cancel(eq(listener));
+    }
+
+    private OnAlarmListener expectAlarmSet(InOrder inOrder, String tagMatch, int afterSeconds) {
+        // Allow +/- 3 seconds to prevent flaky tests.
+        final long when = SystemClock.elapsedRealtime() + afterSeconds * 1000;
+        final long min = when - 3 * 1000;
+        final long max = when + 3 * 1000;
+        ArgumentCaptor<OnAlarmListener> captor = ArgumentCaptor.forClass(OnAlarmListener.class);
+        if (inOrder != null) {
+            inOrder.verify(mAlarm, timeout(TEST_TIMEOUT_MS)).setExact(
+                    anyInt(), longThat(x -> x >= min && x <= max),
+                    contains(tagMatch), captor.capture(), eq(mIpc.getHandler()));
+        } else {
+            verify(mAlarm, timeout(TEST_TIMEOUT_MS)).setExact(
+                    anyInt(), longThat(x -> x >= min && x <= max),
+                    contains(tagMatch), captor.capture(), eq(mIpc.getHandler()));
+        }
+        return captor.getValue();
     }
 
     private boolean packetContainsExpectedField(final byte[] packet, final int offset,
@@ -1396,8 +1423,7 @@ public class IpClientIntegrationTest {
     }
 
     private void expectNoNat64PrefixUpdate(InOrder inOrder, IpPrefix unchanged) throws Exception {
-        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
-        inOrder.verify(mCb, never()).onLinkPropertiesChange(argThat(
+        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS).times(0)).onLinkPropertiesChange(argThat(
                 lp -> !Objects.equals(unchanged, lp.getNat64Prefix())));
 
     }
@@ -1425,11 +1451,16 @@ public class IpClientIntegrationTest {
         waitForRouterSolicitation();
         mPacketReader.sendResponse(ra);
 
-        InOrder inOrder = inOrder(mCb);
+        // The NAT64 prefix might be detected before or after provisioning success.
+        // Don't test order between these two events.
         ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
-        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        expectAlarmSet(null /*inOrder*/, "PREF64", 600);
+        reset(mCb, mAlarm);
 
-        // The NAT64 prefix might have been detected before or after provisioning success.
+        // From now on expect events in order.
+        InOrder inOrder = inOrder(mCb, mAlarm);
+
         LinkProperties lp = captor.getValue();
         if (lp.getNat64Prefix() != null) {
             assertEquals(prefix, lp.getNat64Prefix());
@@ -1441,30 +1472,50 @@ public class IpClientIntegrationTest {
         pref64 = new StructNdOptPref64(prefix, 1800).toByteBuffer();
         ra = buildRaPacket(pio, rdnss, pref64);
         mPacketReader.sendResponse(ra);
+        OnAlarmListener pref64Alarm = expectAlarmSet(inOrder, "PREF64", 1800);
         expectNoNat64PrefixUpdate(inOrder, prefix);
+        reset(mCb, mAlarm);
 
         // Withdraw the prefix and expect it to be set to null.
         pref64 = new StructNdOptPref64(prefix, 0).toByteBuffer();
         ra = buildRaPacket(pio, rdnss, pref64);
         mPacketReader.sendResponse(ra);
+        expectAlarmCancelled(inOrder, pref64Alarm);
         expectNat64PrefixUpdate(inOrder, null);
+        reset(mCb, mAlarm);
 
         // Re-announce the prefix.
         pref64 = new StructNdOptPref64(prefix, 600).toByteBuffer();
         ra = buildRaPacket(pio, rdnss, pref64);
         mPacketReader.sendResponse(ra);
+        expectAlarmSet(inOrder, "PREF64", 600);
         expectNat64PrefixUpdate(inOrder, prefix);
+        reset(mCb, mAlarm);
 
         // Announce two prefixes. Don't expect any update because if there is already a NAT64
         // prefix, any new prefix is ignored.
-        ByteBuffer otherPref64 = new StructNdOptPref64(otherPrefix, 600).toByteBuffer();
+        ByteBuffer otherPref64 = new StructNdOptPref64(otherPrefix, 1200).toByteBuffer();
         ra = buildRaPacket(pio, rdnss, pref64, otherPref64);
         mPacketReader.sendResponse(ra);
+        expectAlarmSet(inOrder, "PREF64", 600);
+        expectNoNat64PrefixUpdate(inOrder, prefix);
+        reset(mCb, mAlarm);
 
+        // Withdraw the prefix and expect to switch to the new prefix.
         pref64 = new StructNdOptPref64(prefix, 0).toByteBuffer();
         ra = buildRaPacket(pio, rdnss, pref64, otherPref64);
         mPacketReader.sendResponse(ra);
+        expectAlarmCancelled(inOrder, pref64Alarm);
+        // Need a different OnAlarmListener local variable because posting it to the handler in the
+        // lambda below requires it to be final.
+        final OnAlarmListener lastAlarm = expectAlarmSet(inOrder, "PREF64", 1200);
         expectNat64PrefixUpdate(inOrder, otherPrefix);
+        reset(mCb, mAlarm);
+
+        // Simulate prefix expiry.
+        mIpc.getHandler().post(() -> lastAlarm.onAlarm());
+        expectAlarmCancelled(inOrder, pref64Alarm);
+        expectNat64PrefixUpdate(inOrder, null);
     }
 
     private void addIpAddressAndWaitForIt(final String iface) throws Exception {
