@@ -1946,6 +1946,9 @@ public class IpClientIntegrationTest {
         doAnswer(invocation -> {
             // we don't rely on the Init-Reboot state to renew previous cached IP lease.
             // Just return null and force state machine enter INIT state.
+            final String l2Key = invocation.getArgument(0);
+            ((OnNetworkAttributesRetrievedListener) invocation.getArgument(1))
+                    .onNetworkAttributesRetrieved(new Status(SUCCESS), l2Key, null);
             return null;
         }).when(mIpMemoryStore).retrieveNetworkAttributes(eq(TEST_L2KEY), any());
 
