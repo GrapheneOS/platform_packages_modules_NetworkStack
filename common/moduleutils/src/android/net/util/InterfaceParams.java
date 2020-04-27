@@ -16,8 +16,6 @@
 
 package android.net.util;
 
-import static com.android.internal.util.Preconditions.checkArgument;
-
 import android.net.MacAddress;
 import android.text.TextUtils;
 
@@ -66,8 +64,12 @@ public class InterfaceParams {
     }
 
     public InterfaceParams(String name, int index, MacAddress macAddr, int defaultMtu) {
-        checkArgument((!TextUtils.isEmpty(name)), "impossible interface name");
-        checkArgument((index > 0), "invalid interface index");
+        if (TextUtils.isEmpty(name)) {
+            throw new IllegalArgumentException("impossible interface name");
+        }
+
+        if (index <= 0) throw new IllegalArgumentException("invalid interface index");
+
         this.name = name;
         this.index = index;
         this.hasMacAddress = (macAddr != null);
