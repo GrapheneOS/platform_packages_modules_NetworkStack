@@ -74,7 +74,6 @@ import com.android.internal.util.HexDump;
 import com.android.internal.util.IState;
 import com.android.internal.util.IndentingPrintWriter;
 import com.android.internal.util.MessageUtils;
-import com.android.internal.util.Preconditions;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.internal.util.WakeupMessage;
@@ -549,8 +548,8 @@ public class IpClient extends StateMachine {
             NetworkObserverRegistry observerRegistry, NetworkStackServiceManager nssManager,
             Dependencies deps) {
         super(IpClient.class.getSimpleName() + "." + ifName);
-        Preconditions.checkNotNull(ifName);
-        Preconditions.checkNotNull(callback);
+        Objects.requireNonNull(ifName);
+        Objects.requireNonNull(callback);
 
         mTag = getName();
 
