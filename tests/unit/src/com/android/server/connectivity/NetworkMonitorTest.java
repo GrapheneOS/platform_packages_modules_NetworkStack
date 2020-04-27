@@ -795,7 +795,7 @@ public class NetworkMonitorTest {
     private static CellIdentityGsm makeCellIdentityGsm(int lac, int cid, int arfcn, int bsic,
             String mccStr, String mncStr, String alphal, String alphas)
             throws ReflectiveOperationException {
-        if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
+        if (ShimUtils.isAtLeastR()) {
             return new CellIdentityGsm(lac, cid, arfcn, bsic, mccStr, mncStr, alphal, alphas,
                     Collections.emptyList() /* additionalPlmns */);
         } else {
@@ -810,7 +810,7 @@ public class NetworkMonitorTest {
     private static CellIdentityLte makeCellIdentityLte(int ci, int pci, int tac, int earfcn,
             int bandwidth, String mccStr, String mncStr, String alphal, String alphas)
             throws ReflectiveOperationException {
-        if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
+        if (ShimUtils.isAtLeastR()) {
             return new CellIdentityLte(ci, pci, tac, earfcn, new int[] {} /* bands */,
                     bandwidth, mccStr, mncStr, alphal, alphas,
                     Collections.emptyList() /* additionalPlmns */, null /* csgInfo */);
@@ -1707,13 +1707,13 @@ public class NetworkMonitorTest {
 
     @Test
     public void testDismissPortalInValidatedNetworkEnabledOsSupported() throws Exception {
-        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
+        assumeTrue(ShimUtils.isAtLeastR());
         testDismissPortalInValidatedNetworkEnabled(TEST_LOGIN_URL);
     }
 
     @Test
     public void testDismissPortalInValidatedNetworkEnabledOsNotSupported() throws Exception {
-        assumeFalse(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
+        assumeFalse(ShimUtils.isAtLeastR());
         testDismissPortalInValidatedNetworkEnabled(TEST_HTTP_URL);
     }
 
