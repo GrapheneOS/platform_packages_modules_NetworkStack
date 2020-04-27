@@ -35,6 +35,8 @@
     <string name="config_captive_portal_http_url" translatable="false"></string>
     <!--suppress CheckTagEmptyBody: overlayable resource to use as configuration hook -->
     <string name="config_captive_portal_https_url" translatable="false"></string>
+    <!-- Literal commas are not allowed in the url configuration because they
+         are used as a separator internally. -->
     <string-array name="config_captive_portal_fallback_urls" translatable="false">
     </string-array>
     <string-array name="config_captive_portal_fallback_probe_specs" translatable="false">
