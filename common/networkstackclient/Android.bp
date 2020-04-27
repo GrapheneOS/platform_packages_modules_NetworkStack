@@ -24,6 +24,11 @@ aidl_interface {
         "src/android/net/ipmemorystore/**/*.aidl",
     ],
     backend: {
+        java: {
+            apex_available: [
+                "//apex_available:platform",
+            ],
+        },
         ndk: {
             enabled: false,
         },
