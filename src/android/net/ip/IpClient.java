@@ -1699,6 +1699,18 @@ public class IpClient extends StateMachine {
     class ClearingIpAddressesState extends State {
         @Override
         public void enter() {
+            // Ensure that interface parameters are fetched on the handler thread so they are
+            // properly ordered with other events, such as restoring the interface MTU on teardown.
+            mInterfaceParams = mDependencies.getInterfaceParams(mInterfaceName);
+            if (mInterfaceParams == null) {
+                logError("Failed to find InterfaceParams for " + mInterfaceName);
+                doImmediateProvisioningFailure(IpManagerEvent.ERROR_INTERFACE_NOT_FOUND);
+                deferMessage(obtainMessage(CMD_STOP));
+                return;
+            }
+
+            mLinkObserver.setInterfaceParams(mInterfaceParams);
+
             if (readyToProceed()) {
                 deferMessage(obtainMessage(CMD_ADDRESSES_CLEARED));
             } else {
@@ -1708,16 +1720,6 @@ public class IpClient extends StateMachine {
                 stopAllIP();
             }
 
-            // Ensure that interface parameters are fetched on the handler thread so they are
-            // properly ordered with other events, such as restoring the interface MTU on teardown.
-            mInterfaceParams = mDependencies.getInterfaceParams(mInterfaceName);
-            if (mInterfaceParams == null) {
-                logError("Failed to find InterfaceParams for " + mInterfaceName);
-                doImmediateProvisioningFailure(IpManagerEvent.ERROR_INTERFACE_NOT_FOUND);
-                transitionTo(mStoppedState);
-                return;
-            }
-            mLinkObserver.setInterfaceParams(mInterfaceParams);
             mCallback.setNeighborDiscoveryOffload(true);
         }
 
@@ -1752,7 +1754,7 @@ public class IpClient extends StateMachine {
         }
 
         private boolean readyToProceed() {
-            return (!mLinkProperties.hasIpv4Address() && !mLinkProperties.hasGlobalIpv6Address());
+            return !mLinkProperties.hasIpv4Address() && !mLinkProperties.hasGlobalIpv6Address();
         }
     }
 
