@@ -653,7 +653,7 @@ public class IpClientIntegrationTest {
     }
 
     private void assertNoHostname(String hostname) {
-        if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
+        if (ShimUtils.isAtLeastR()) {
             assertNull(hostname);
         } else {
             // Until Q, if no hostname is set, the device falls back to the hostname set via
@@ -1815,7 +1815,7 @@ public class IpClientIntegrationTest {
 
         // Ensure that the URL was set as expected in the callbacks.
         // Can't verify the URL up to Q as there is no such attribute in LinkProperties.
-        if (!ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) return;
+        if (!ShimUtils.isAtLeastR()) return;
         verify(mCb).onLinkPropertiesChange(captor.capture());
         assertTrue(captor.getAllValues().stream().anyMatch(
                 lp -> Objects.equals(expectedUrl, lp.getCaptivePortalApiUrl())));
