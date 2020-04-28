@@ -121,7 +121,7 @@ public class NetlinkMonitor extends PacketReader {
                 }
 
                 processNetlinkMessage(nlMsg, whenMs);
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 mLog.e("Error handling netlink message", e);
             }
         }
