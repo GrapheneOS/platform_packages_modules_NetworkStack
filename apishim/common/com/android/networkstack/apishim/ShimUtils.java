@@ -42,4 +42,11 @@ public final class ShimUtils {
                 + ("REL".equals(Build.VERSION.CODENAME) ? 0 : 1);
         return devApiLevel > apiLevel;
     }
+
+    /**
+     * Check whether the device supports in-development or final R networking APIs.
+     */
+    public static boolean isAtLeastR() {
+        return isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q);
+    }
 }
