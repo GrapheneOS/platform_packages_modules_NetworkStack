@@ -36,7 +36,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -52,12 +51,11 @@ import android.net.dhcp.DhcpLeaseRepository.OutOfAddressesException;
 import android.net.dhcp.DhcpServer.Clock;
 import android.net.dhcp.DhcpServer.Dependencies;
 import android.net.util.SharedLog;
-import android.os.HandlerThread;
 import android.testing.AndroidTestingRunner;
-import android.testing.TestableLooper;
-import android.testing.TestableLooper.RunWithLooper;
 
 import androidx.test.filters.SmallTest;
+
+import com.android.testutils.HandlerUtilsKt;
 
 import org.junit.After;
 import org.junit.Before;
@@ -76,7 +74,6 @@ import java.util.Set;
 
 @RunWith(AndroidTestingRunner.class)
 @SmallTest
-@RunWithLooper
 public class DhcpServerTest {
     private static final String TEST_IFACE = "testiface";
 
@@ -107,6 +104,7 @@ public class DhcpServerTest {
     private static final DhcpLease TEST_LEASE_WITH_HOSTNAME = new DhcpLease(null, TEST_CLIENT_MAC,
             TEST_CLIENT_ADDR, TEST_PREFIX_LENGTH, TEST_LEASE_EXPTIME_SECS * 1000L + TEST_CLOCK_TIME,
             TEST_HOSTNAME);
+    private static final int TEST_TIMEOUT_MS = 10000;
 
     @NonNull @Mock
     private Context mContext;
@@ -126,10 +124,6 @@ public class DhcpServerTest {
     @NonNull @Captor
     private ArgumentCaptor<Inet4Address> mResponseDstAddrCaptor;
 
-    @NonNull
-    private HandlerThread mHandlerThread;
-    @NonNull
-    private TestableLooper mLooper;
     @NonNull
     private DhcpServer mServer;
 
@@ -167,7 +161,7 @@ public class DhcpServerTest {
 
     private void startServer() throws Exception {
         mServer.start(mAssertSuccessCallback);
-        mLooper.processAllMessages();
+        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
     }
 
     @Before
@@ -176,16 +170,14 @@ public class DhcpServerTest {
 
         when(mDeps.makeLeaseRepository(any(), any(), any())).thenReturn(mRepository);
         when(mDeps.makeClock()).thenReturn(mClock);
-        when(mDeps.makePacketListener()).thenReturn(mPacketListener);
+        when(mDeps.makePacketListener(any())).thenReturn(mPacketListener);
         when(mDeps.isFeatureEnabled(eq(mContext), eq(DHCP_RAPID_COMMIT_VERSION))).thenReturn(true);
         doNothing().when(mDeps)
                 .sendPacket(any(), mSentPacketCaptor.capture(), mResponseDstAddrCaptor.capture());
         when(mClock.elapsedRealtime()).thenReturn(TEST_CLOCK_TIME);
+        when(mPacketListener.start()).thenReturn(true);
 
-        mLooper = TestableLooper.get(this);
-        mHandlerThread = spy(new HandlerThread("TestDhcpServer"));
-        when(mHandlerThread.getLooper()).thenReturn(mLooper.getLooper());
-        mServer = new DhcpServer(mContext, mHandlerThread, TEST_IFACE, makeServingParams(),
+        mServer = new DhcpServer(mContext, TEST_IFACE, makeServingParams(),
                 new SharedLog(DhcpServerTest.class.getSimpleName()), mDeps);
     }
 
@@ -193,9 +185,8 @@ public class DhcpServerTest {
     public void tearDown() throws Exception {
         verify(mRepository, never()).addLeaseCallbacks(eq(null));
         mServer.stop(mAssertSuccessCallback);
-        mLooper.processMessages(1);
+        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
         verify(mPacketListener, times(1)).stop();
-        verify(mHandlerThread, times(1)).quitSafely();
     }
 
     @Test
@@ -207,8 +198,8 @@ public class DhcpServerTest {
 
     @Test
     public void testStartWithCallbacks() throws Exception {
-        mServer.startWithCallbacks(mAssertSuccessCallback, mEventCallbacks);
-        mLooper.processAllMessages();
+        mServer.start(mAssertSuccessCallback, mEventCallbacks);
+        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
         verify(mRepository).addLeaseCallbacks(eq(mEventCallbacks));
     }
 
