@@ -345,7 +345,7 @@ public class IpReachabilityMonitor {
 
             // Find all the neighbors that have gone into FAILED state.
             // Ignore entries for which we have never received an event. If there are neighbors
-            // that never respond to ARP/ND, the kernel will send several FAILED event, then
+            // that never respond to ARP/ND, the kernel will send several FAILED events, then
             // an INCOMPLETE event, and then more FAILED events. The INCOMPLETE event will
             // populate the map and the subsequent FAILED event will be processed.
             if (val == null || val.nudState != StructNdMsg.NUD_FAILED) continue;
