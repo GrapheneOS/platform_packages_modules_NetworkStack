@@ -170,6 +170,7 @@ import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.InterruptedIOException;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.MalformedURLException;
@@ -196,6 +197,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -359,9 +361,27 @@ public class NetworkMonitor extends StateMachine {
      * Message to self to poll current tcp status from kernel.
      */
     private static final int EVENT_POLL_TCPINFO = 21;
+
+    /**
+     * Message to self to do the bandwidth check in EvaluatingBandwidthState.
+     */
+    private static final int CMD_EVALUATE_BANDWIDTH = 22;
+
+    /**
+     * Message to self to know the bandwidth check is completed.
+     */
+    private static final int CMD_BANDWIDTH_CHECK_COMPLETE = 23;
+
+    /**
+     * Message to self to know the bandwidth check is timeouted.
+     */
+    private static final int CMD_BANDWIDTH_CHECK_TIMEOUT = 24;
+
     // Start mReevaluateDelayMs at this value and double.
     private static final int INITIAL_REEVALUATE_DELAY_MS = 1000;
     private static final int MAX_REEVALUATE_DELAY_MS = 10 * 60 * 1000;
+    // Default timeout of evaluating network bandwidth.
+    private static final int DEFAULT_EVALUATING_BANDWIDTH_TIMEOUT_MS = 10_000;
     // Before network has been evaluated this many times, ignore repeated reevaluate requests.
     private static final int IGNORE_REEVALUATE_ATTEMPTS = 5;
     private int mReevaluateToken = 0;
@@ -401,6 +421,12 @@ public class NetworkMonitor extends StateMachine {
     private final URL[] mCaptivePortalHttpsUrls;
     @Nullable
     private final CaptivePortalProbeSpec[] mCaptivePortalFallbackSpecs;
+    // Configuration values for network bandwidth check.
+    @Nullable
+    private final String mEvaluatingBandwidthUrl;
+    private final int mMaxRetryTimerMs;
+    private final int mEvaluatingBandwidthTimeoutMs;
+    private final AtomicInteger mNextEvaluatingBandwidthThreadId = new AtomicInteger(1);
 
     private NetworkCapabilities mNetworkCapabilities;
     private LinkProperties mLinkProperties;
@@ -416,6 +442,10 @@ public class NetworkMonitor extends StateMachine {
     private boolean mUserDoesNotWant = false;
     // Avoids surfacing "Sign in to network" notification.
     private boolean mDontDisplaySigninNotification = false;
+    // Set to true once the evaluating network bandwidth is passed or the captive portal respond
+    // APP_RETURN_WANTED_AS_IS which means the user wants to use this network anyway.
+    @VisibleForTesting
+    protected boolean mIsBandwidthCheckPassedOrIgnored = false;
 
     private final State mDefaultState = new DefaultState();
     private final State mValidatedState = new ValidatedState();
@@ -425,6 +455,7 @@ public class NetworkMonitor extends StateMachine {
     private final State mEvaluatingPrivateDnsState = new EvaluatingPrivateDnsState();
     private final State mProbingState = new ProbingState();
     private final State mWaitingForNextProbeState = new WaitingForNextProbeState();
+    private final State mEvaluatingBandwidthState = new EvaluatingBandwidthState();
 
     private CustomIntentReceiver mLaunchCaptivePortalAppBroadcastReceiver = null;
 
@@ -514,6 +545,7 @@ public class NetworkMonitor extends StateMachine {
                 addState(mWaitingForNextProbeState, mEvaluatingState);
             addState(mCaptivePortalState, mMaybeNotifyState);
         addState(mEvaluatingPrivateDnsState, mDefaultState);
+        addState(mEvaluatingBandwidthState, mDefaultState);
         addState(mValidatedState, mDefaultState);
         setInitialState(mDefaultState);
         // CHECKSTYLE:ON IndentationCheck
@@ -535,6 +567,15 @@ public class NetworkMonitor extends StateMachine {
         mDnsStallDetector = initDnsStallDetectorIfRequired(mDataStallEvaluationType,
                 mConsecutiveDnsTimeoutThreshold);
         mTcpTracker = tst;
+        // Read the configurations of evaluating network bandwidth.
+        mEvaluatingBandwidthUrl = getResStringConfig(mContext,
+                R.string.config_evaluating_bandwidth_url, null);
+        mMaxRetryTimerMs = getResIntConfig(mContext,
+                R.integer.config_evaluating_bandwidth_max_retry_timer_ms,
+                MAX_REEVALUATE_DELAY_MS);
+        mEvaluatingBandwidthTimeoutMs = getResIntConfig(mContext,
+                R.integer.config_evaluating_bandwidth_timeout_ms,
+                DEFAULT_EVALUATING_BANDWIDTH_TIMEOUT_MS);
 
         // Provide empty LinkProperties and NetworkCapabilities to make sure they are never null,
         // even before notifyNetworkConnected.
@@ -772,6 +813,9 @@ public class NetworkMonitor extends StateMachine {
                             break;
                         case APP_RETURN_WANTED_AS_IS:
                             mDontDisplaySigninNotification = true;
+                            // If the user wants to use this network anyway, there is no need to
+                            // perform the bandwidth check even if configured.
+                            mIsBandwidthCheckPassedOrIgnored = true;
                             // TODO: Distinguish this from a network that actually validates.
                             // Displaying the "x" on the system UI icon may still be a good idea.
                             transitionTo(mEvaluatingPrivateDnsState);
@@ -1265,8 +1309,12 @@ public class NetworkMonitor extends StateMachine {
                         mEvaluationState.removeProbeResult(NETWORK_VALIDATION_PROBE_PRIVDNS);
                     }
 
-                    // All good!
-                    transitionTo(mValidatedState);
+                    if (needEvaluatingBandwidth()) {
+                        transitionTo(mEvaluatingBandwidthState);
+                    } else {
+                        // All good!
+                        transitionTo(mValidatedState);
+                    }
                     break;
                 case CMD_PRIVATE_DNS_SETTINGS_CHANGED:
                     // When settings change the reevaluation timer must be reset.
@@ -1459,6 +1507,112 @@ public class NetworkMonitor extends StateMachine {
         }
     }
 
+    private final class EvaluatingBandwidthThread extends Thread {
+        final int mThreadId;
+
+        EvaluatingBandwidthThread(int id) {
+            mThreadId = id;
+        }
+
+        @Override
+        public void run() {
+            HttpURLConnection urlConnection = null;
+            try {
+                final URL url = makeURL(mEvaluatingBandwidthUrl);
+                urlConnection = makeProbeConnection(url, true /* followRedirects */);
+                // In order to exclude the time of DNS lookup, send the delay message of timeout
+                // here.
+                sendMessageDelayed(CMD_BANDWIDTH_CHECK_TIMEOUT, mEvaluatingBandwidthTimeoutMs);
+                readContentFromDownloadUrl(urlConnection);
+            } catch (InterruptedIOException e) {
+                // There is a timing issue that someone triggers the forcing reevaluation when
+                // executing the getInputStream(). The InterruptedIOException is thrown by
+                // Timeout#throwIfReached, it will reset the interrupt flag of Thread. So just
+                // return and wait for the bandwidth reevaluation, otherwise the
+                // CMD_BANDWIDTH_CHECK_COMPLETE will be sent.
+                validationLog("The thread is interrupted when executing the getInputStream(),"
+                        + " return and wait for the bandwidth reevaluation");
+                return;
+            } catch (IOException e) {
+                validationLog("Evaluating bandwidth failed: " + e + ", if the thread is not"
+                        + " interrupted, transition to validated state directly to make sure user"
+                        + " can use wifi normally.");
+            } finally {
+                if (urlConnection != null) {
+                    urlConnection.disconnect();
+                }
+            }
+            // Don't send CMD_BANDWIDTH_CHECK_COMPLETE if the IO is interrupted or timeout.
+            // Only send CMD_BANDWIDTH_CHECK_COMPLETE when the download is finished normally.
+            // Add a serial number for CMD_BANDWIDTH_CHECK_COMPLETE to prevent handling the obsolete
+            // CMD_BANDWIDTH_CHECK_COMPLETE.
+            if (!isInterrupted()) sendMessage(CMD_BANDWIDTH_CHECK_COMPLETE, mThreadId);
+        }
+
+        private void readContentFromDownloadUrl(@NonNull final HttpURLConnection conn)
+                throws IOException {
+            final byte[] buffer = new byte[1000];
+            final InputStream is = conn.getInputStream();
+            while (!isInterrupted() && is.read(buffer) > 0) { /* read again */ }
+        }
+    }
+
+    private class EvaluatingBandwidthState extends State {
+        private EvaluatingBandwidthThread mEvaluatingBandwidthThread;
+        private int mRetryBandwidthDelayMs;
+        private int mCurrentThreadId;
+
+        @Override
+        public void enter() {
+            mRetryBandwidthDelayMs = getResIntConfig(mContext,
+                    R.integer.config_evaluating_bandwidth_min_retry_timer_ms,
+                    INITIAL_REEVALUATE_DELAY_MS);
+            sendMessage(CMD_EVALUATE_BANDWIDTH);
+        }
+
+        @Override
+        public boolean processMessage(Message msg) {
+            switch (msg.what) {
+                case CMD_EVALUATE_BANDWIDTH:
+                    mCurrentThreadId = mNextEvaluatingBandwidthThreadId.getAndIncrement();
+                    mEvaluatingBandwidthThread = new EvaluatingBandwidthThread(mCurrentThreadId);
+                    mEvaluatingBandwidthThread.start();
+                    break;
+                case CMD_BANDWIDTH_CHECK_COMPLETE:
+                    // Only handle the CMD_BANDWIDTH_CHECK_COMPLETE which is sent by the newest
+                    // EvaluatingBandwidthThread.
+                    if (mCurrentThreadId == msg.arg1) {
+                        mIsBandwidthCheckPassedOrIgnored = true;
+                        transitionTo(mValidatedState);
+                    }
+                    break;
+                case CMD_BANDWIDTH_CHECK_TIMEOUT:
+                    validationLog("Evaluating bandwidth timeout!");
+                    mEvaluatingBandwidthThread.interrupt();
+                    scheduleReevaluatingBandwidth();
+                    break;
+                default:
+                    return NOT_HANDLED;
+            }
+            return HANDLED;
+        }
+
+        private void scheduleReevaluatingBandwidth() {
+            sendMessageDelayed(obtainMessage(CMD_EVALUATE_BANDWIDTH), mRetryBandwidthDelayMs);
+            mRetryBandwidthDelayMs *= 2;
+            if (mRetryBandwidthDelayMs > mMaxRetryTimerMs) {
+                mRetryBandwidthDelayMs = mMaxRetryTimerMs;
+            }
+        }
+
+        @Override
+        public void exit() {
+            mEvaluatingBandwidthThread.interrupt();
+            removeMessages(CMD_EVALUATE_BANDWIDTH);
+            removeMessages(CMD_BANDWIDTH_CHECK_TIMEOUT);
+        }
+    }
+
     // Limits the list of IP addresses returned by getAllByName or tried by openConnection to at
     // most one per address family. This ensures we only wait up to 20 seconds for TCP connections
     // to complete, regardless of how many IP addresses a host has.
@@ -1483,6 +1637,25 @@ public class NetworkMonitor extends StateMachine {
 
             return addressByFamily.values().toArray(new InetAddress[addressByFamily.size()]);
         }
+    }
+
+    @VisibleForTesting
+    boolean onlyWifiTransport() {
+        int[] transportTypes = mNetworkCapabilities.getTransportTypes();
+        return transportTypes.length == 1
+                && transportTypes[0] == NetworkCapabilities.TRANSPORT_WIFI;
+    }
+
+    @VisibleForTesting
+    boolean needEvaluatingBandwidth() {
+        if (mIsBandwidthCheckPassedOrIgnored
+                || TextUtils.isEmpty(mEvaluatingBandwidthUrl)
+                || !mNetworkCapabilities.hasCapability(NET_CAPABILITY_NOT_METERED)
+                || !onlyWifiTransport()) {
+            return false;
+        }
+
+        return true;
     }
 
     private boolean getIsCaptivePortalCheckEnabled() {
