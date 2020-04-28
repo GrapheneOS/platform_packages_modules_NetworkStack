@@ -93,6 +93,37 @@ public class NetworkStackUtils {
     public static final String CAPTIVE_PORTAL_HTTP_URL = "captive_portal_http_url";
 
     /**
+     * A test URL used to override configuration settings and overlays for the network validation
+     * HTTPS URL, when set in {@link android.provider.DeviceConfig} configuration.
+     *
+     * <p>This URL will be ignored if the host is not "localhost" (it can only be used to test with
+     * a local test server), and must not be set in production scenarios (as enforced by CTS tests).
+     *
+     * <p>{@link #TEST_URL_EXPIRATION_TIME} must also be set to use this setting.
+     */
+    public static final String TEST_CAPTIVE_PORTAL_HTTPS_URL = "test_captive_portal_https_url";
+
+    /**
+     * A test URL used to override configuration settings and overlays for the network validation
+     * HTTP URL, when set in {@link android.provider.DeviceConfig} configuration.
+     *
+     * <p>This URL will be ignored if the host is not "localhost" (it can only be used to test with
+     * a local test server), and must not be set in production scenarios (as enforced by CTS tests).
+     *
+     * <p>{@link #TEST_URL_EXPIRATION_TIME} must also be set to use this setting.
+     */
+    public static final String TEST_CAPTIVE_PORTAL_HTTP_URL = "test_captive_portal_http_url";
+
+    /**
+     * Expiration time of the test URL, in ms, relative to {@link System#currentTimeMillis()}.
+     *
+     * <p>After this expiration time, test URLs will be ignored. They will also be ignored if
+     * the expiration time is more than 10 minutes in the future, to avoid misconfiguration
+     * following test runs.
+     */
+    public static final String TEST_URL_EXPIRATION_TIME = "test_url_expiration_time";
+
+    /**
      * The URL used for fallback HTTP captive portal detection when previous HTTP
      * and HTTPS captive portal detection attemps did not return a conclusive answer.
      */
