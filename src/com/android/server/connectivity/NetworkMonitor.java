@@ -71,6 +71,9 @@ import static android.net.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_HTTPS_UR
 import static android.net.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_HTTP_URLS;
 import static android.net.util.NetworkStackUtils.DISMISS_PORTAL_IN_VALIDATED_NETWORK;
 import static android.net.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION;
+import static android.net.util.NetworkStackUtils.TEST_CAPTIVE_PORTAL_HTTPS_URL;
+import static android.net.util.NetworkStackUtils.TEST_CAPTIVE_PORTAL_HTTP_URL;
+import static android.net.util.NetworkStackUtils.TEST_URL_EXPIRATION_TIME;
 import static android.net.util.NetworkStackUtils.isEmpty;
 import static android.net.util.NetworkStackUtils.isIPv6ULA;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
@@ -119,6 +122,7 @@ import android.os.Process;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
+import android.provider.DeviceConfig;
 import android.provider.Settings;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.CellIdentityNr;
@@ -219,6 +223,7 @@ public class NetworkMonitor extends StateMachine {
 
     private static final int SOCKET_TIMEOUT_MS = 10000;
     private static final int PROBE_TIMEOUT_MS  = 3000;
+    private static final long TEST_URL_EXPIRATION_MS = TimeUnit.MINUTES.toMillis(10);
 
     private static final int UNSET_MCC_OR_MNC = -1;
 
@@ -1598,10 +1603,45 @@ public class NetworkMonitor extends StateMachine {
         return getContextByMccMnc(Integer.parseInt(mcc), UNSET_MCC_OR_MNC);
     }
 
+    @Nullable
+    private String getTestUrl(@NonNull String key) {
+        final String strExpiration = mDependencies.getDeviceConfigProperty(NAMESPACE_CONNECTIVITY,
+                TEST_URL_EXPIRATION_TIME, null);
+        if (strExpiration == null) return null;
+
+        final long expTime;
+        try {
+            expTime = Long.parseUnsignedLong(strExpiration);
+        } catch (NumberFormatException e) {
+            loge("Invalid test URL expiration time format", e);
+            return null;
+        }
+
+        final long now = System.currentTimeMillis();
+        if (expTime < now || (expTime - now) > TEST_URL_EXPIRATION_MS) return null;
+
+        return mDependencies.getDeviceConfigProperty(NAMESPACE_CONNECTIVITY,
+                key, null /* defaultValue */);
+    }
+
     private String getCaptivePortalServerHttpsUrl() {
+        final String testUrl = getTestUrl(TEST_CAPTIVE_PORTAL_HTTPS_URL);
+        if (isValidTestUrl(testUrl)) return testUrl;
         final Context targetContext = getCustomizedContextOrDefault();
         return getSettingFromResource(targetContext, R.string.config_captive_portal_https_url,
                 R.string.default_captive_portal_https_url, CAPTIVE_PORTAL_HTTPS_URL);
+    }
+
+    private static boolean isValidTestUrl(@Nullable String url) {
+        if (TextUtils.isEmpty(url)) return false;
+
+        try {
+            // Only accept test URLs on localhost
+            return Uri.parse(url).getHost().equals("localhost");
+        } catch (Throwable e) {
+            Log.wtf(TAG, "Error parsing test URL", e);
+            return false;
+        }
     }
 
     private int getDnsProbeTimeout() {
@@ -1678,6 +1718,8 @@ public class NetworkMonitor extends StateMachine {
      * on one URL that can be used, while NetworkMonitor may implement more complex logic.
      */
     public String getCaptivePortalServerHttpUrl() {
+        final String testUrl = getTestUrl(TEST_CAPTIVE_PORTAL_HTTP_URL);
+        if (isValidTestUrl(testUrl)) return testUrl;
         final Context targetContext = getCustomizedContextOrDefault();
         return getSettingFromResource(targetContext, R.string.config_captive_portal_http_url,
                 R.string.default_captive_portal_http_url, CAPTIVE_PORTAL_HTTP_URL);
