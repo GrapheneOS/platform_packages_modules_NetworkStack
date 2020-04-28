@@ -245,8 +245,7 @@ public abstract class FdEventsReader<BufferType> {
                 handlePacket(mBuffer, bytesRead);
             } catch (Exception e) {
                 logError("handlePacket error: ", e);
-                Log.wtf(FdEventsReader.class.getSimpleName(), "Error handling packet: stopping", e);
-                break;
+                Log.wtf(FdEventsReader.class.getSimpleName(), "Error handling packet", e);
             }
         }
 
