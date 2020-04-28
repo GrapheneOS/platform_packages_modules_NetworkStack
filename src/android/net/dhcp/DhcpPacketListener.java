@@ -19,6 +19,7 @@ package android.net.dhcp;
 import android.net.util.FdEventsReader;
 import android.os.Handler;
 import android.system.Os;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -59,6 +60,8 @@ abstract class DhcpPacketListener extends FdEventsReader<DhcpPacketListener.Payl
             onReceive(packet, recvbuf.mSrcAddr, recvbuf.mSrcPort);
         } catch (DhcpPacket.ParseException e) {
             logParseError(recvbuf.mBytes, length, e);
+        } catch (Throwable e) {
+            Log.wtf(DhcpPacketListener.class.getSimpleName(), "Error handling DHCP packet", e);
         }
     }
 
