@@ -133,9 +133,14 @@ public class ConnectivityPacketTracker {
                 return;
             }
 
-            final String summary = ConnectivityPacketSummary.summarize(
-                    mInterface.macAddr, recvbuf, length);
-            if (summary == null) return;
+            final String summary;
+            try {
+                summary = ConnectivityPacketSummary.summarize(mInterface.macAddr, recvbuf, length);
+                if (summary == null) return;
+            } catch (Exception e) {
+                if (DBG) Log.d(mTag, "Error creating packet summary", e);
+                return;
+            }
 
             if (DBG) Log.d(mTag, summary);
             addLogEntry(summary + "\n[" + HexDump.toHexString(recvbuf, 0, length) + "]");
