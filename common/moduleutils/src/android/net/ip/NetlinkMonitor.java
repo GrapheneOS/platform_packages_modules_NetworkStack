@@ -106,20 +106,24 @@ public class NetlinkMonitor extends PacketReader {
         byteBuffer.order(ByteOrder.nativeOrder());
 
         while (byteBuffer.remaining() > 0) {
-            final int position = byteBuffer.position();
-            final NetlinkMessage nlMsg = NetlinkMessage.parse(byteBuffer);
-            if (nlMsg == null || nlMsg.getHeader() == null) {
-                byteBuffer.position(position);
-                mLog.e("unparsable netlink msg: " + hexify(byteBuffer));
-                break;
-            }
+            try {
+                final int position = byteBuffer.position();
+                final NetlinkMessage nlMsg = NetlinkMessage.parse(byteBuffer);
+                if (nlMsg == null || nlMsg.getHeader() == null) {
+                    byteBuffer.position(position);
+                    mLog.e("unparsable netlink msg: " + hexify(byteBuffer));
+                    break;
+                }
 
-            if (nlMsg instanceof NetlinkErrorMessage) {
-                mLog.e("netlink error: " + nlMsg);
-                continue;
-            }
+                if (nlMsg instanceof NetlinkErrorMessage) {
+                    mLog.e("netlink error: " + nlMsg);
+                    continue;
+                }
 
-            processNetlinkMessage(nlMsg, whenMs);
+                processNetlinkMessage(nlMsg, whenMs);
+            } catch (Exception e) {
+                mLog.e("Error handling netlink message", e);
+            }
         }
     }
 
