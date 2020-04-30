@@ -449,6 +449,11 @@ public class IpClientIntegrationTest {
         mNetworkObserverRegistry.register(mNetd);
         mIpc = new IpClient(mContext, mIfaceName, mCb, mNetworkObserverRegistry,
                 mNetworkStackServiceManager, mDependencies);
+        // Wait for IpClient to enter its initial state. Otherwise, additional setup steps or tests
+        // that mock IpClient's dependencies might interact with those mocks while IpClient is
+        // starting. This would cause UnfinishedStubbingExceptions as mocks cannot be interacted
+        // with while they are being stubbed.
+        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
 
         // Tell the IpMemoryStore immediately to answer any question about network attributes with a
         // null response. Otherwise, the DHCP client will wait for two seconds before starting,
