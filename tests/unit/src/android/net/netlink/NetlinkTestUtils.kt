@@ -74,7 +74,7 @@ private fun makeNeighborMessage(
     (if (neighAddr is Inet6Address) "1400" else "0800") +
     "0100" +             // type (1 == NDA_DST, for neighbor messages)
                          // IP address:
-    encodeToString(neighAddr.address, false /* upperCase */) +
+    encodeToString(neighAddr.address) +
     // -- struct nlattr: NDA_LLADDR --
     "0a00" +             // length = 10
     "0200" +             // type (2 == NDA_LLADDR, for neighbor messages)
