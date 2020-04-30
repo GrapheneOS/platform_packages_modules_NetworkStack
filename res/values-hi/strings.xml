@@ -22,5 +22,5 @@
     <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"किसी नेटवर्क पर उस जगह के बारे में बताने वाले पेज की जानकारी दिखाने वाली सूचनाएं"</string>
     <string name="connected" msgid="4563643884927480998">"नेटवर्क से कनेक्ट हो गया है"</string>
     <string name="tap_for_info" msgid="6849746325626883711">"कनेक्ट है / वेबसाइट देखने के लिए टैप करें"</string>
-    <string name="application_label" msgid="8095087899576605955">"कनेक्टिविटी मैनेजर"</string>
+    <string name="application_label" msgid="1322847171305285454">"नेटवर्क मैनेजर"</string>
 </resources>
