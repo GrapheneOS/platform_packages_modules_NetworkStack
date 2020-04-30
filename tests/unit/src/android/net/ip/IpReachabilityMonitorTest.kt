@@ -22,6 +22,7 @@ import android.net.IpPrefix
 import android.net.LinkAddress
 import android.net.LinkProperties
 import android.net.RouteInfo
+import android.net.metrics.IpConnectivityLog
 import android.net.netlink.StructNdMsg.NUD_FAILED
 import android.net.netlink.StructNdMsg.NUD_STALE
 import android.net.netlink.makeNewNeighMessage
@@ -35,6 +36,7 @@ import android.system.ErrnoException
 import android.system.OsConstants.EAGAIN
 import androidx.test.filters.SmallTest
 import androidx.test.runner.AndroidJUnit4
+import com.android.testutils.waitForIdle
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -101,6 +103,7 @@ class IpReachabilityMonitorTest {
     private val context = mock(Context::class.java)
     private val netd = mock(INetd::class.java)
     private val fd = mock(FileDescriptor::class.java)
+    private val metricsLog = mock(IpConnectivityLog::class.java)
 
     private val handlerThread = HandlerThread(IpReachabilityMonitorTest::class.simpleName)
     private val handler by lazy { Handler(handlerThread.looper) }
@@ -180,6 +183,7 @@ class IpReachabilityMonitorTest {
                     callback,
                     false /* useMultinetworkPolicyTracker */,
                     dependencies,
+                    metricsLog,
                     netd))
         }
         reachabilityMonitor = monitorFuture.get(TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS)
@@ -189,6 +193,8 @@ class IpReachabilityMonitorTest {
 
     @After
     fun tearDown() {
+        // Ensure the handler thread is not accessing the fd while changing its mock
+        handlerThread.waitForIdle(TEST_TIMEOUT_MS)
         doReturn(false).`when`(fd).valid()
         handlerThread.quitSafely()
     }
