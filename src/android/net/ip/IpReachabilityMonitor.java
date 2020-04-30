@@ -187,7 +187,7 @@ public class IpReachabilityMonitor {
     private final Dependencies mDependencies;
     private final boolean mUsingMultinetworkPolicyTracker;
     private final ConnectivityManager mCm;
-    private final IpConnectivityLog mMetricsLog = new IpConnectivityLog();
+    private final IpConnectivityLog mMetricsLog;
     private final Context mContext;
     private final INetd mNetd;
     private LinkProperties mLinkProperties = new LinkProperties();
@@ -201,13 +201,13 @@ public class IpReachabilityMonitor {
             Context context, InterfaceParams ifParams, Handler h, SharedLog log, Callback callback,
             boolean usingMultinetworkPolicyTracker, final INetd netd) {
         this(context, ifParams, h, log, callback, usingMultinetworkPolicyTracker,
-                Dependencies.makeDefault(context, ifParams.name), netd);
+                Dependencies.makeDefault(context, ifParams.name), new IpConnectivityLog(), netd);
     }
 
     @VisibleForTesting
     IpReachabilityMonitor(Context context, InterfaceParams ifParams, Handler h, SharedLog log,
             Callback callback, boolean usingMultinetworkPolicyTracker, Dependencies dependencies,
-            final INetd netd) {
+            final IpConnectivityLog metricsLog, final INetd netd) {
         if (ifParams == null) throw new IllegalArgumentException("null InterfaceParams");
 
         mContext = context;
@@ -217,6 +217,7 @@ public class IpReachabilityMonitor {
         mUsingMultinetworkPolicyTracker = usingMultinetworkPolicyTracker;
         mCm = context.getSystemService(ConnectivityManager.class);
         mDependencies = dependencies;
+        mMetricsLog = metricsLog;
         mNetd = netd;
         Preconditions.checkNotNull(mNetd);
         Preconditions.checkArgument(!TextUtils.isEmpty(mInterfaceParams.name));
