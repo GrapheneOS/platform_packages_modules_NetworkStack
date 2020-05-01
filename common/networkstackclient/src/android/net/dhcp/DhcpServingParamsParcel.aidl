@@ -26,6 +26,7 @@ parcelable DhcpServingParamsParcel {
     long dhcpLeaseTimeSecs;
     int linkMtu;
     boolean metered;
-    int singleClientAddr;
-    boolean changePrefixOnDecline;
+    /** IP address to assign to a single client. 0.0.0.0 means support multiple clients.. */
+    int singleClientAddr = 0;
+    boolean changePrefixOnDecline = false;
 }

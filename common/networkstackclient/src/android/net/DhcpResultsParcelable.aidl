@@ -24,6 +24,6 @@ parcelable DhcpResultsParcelable {
     int mtu;
     String serverAddress;
     String vendorInfo;
-    String serverHostName;
-    String captivePortalApiUrl;
+    @nullable String serverHostName;
+    @nullable String captivePortalApiUrl;
 }
