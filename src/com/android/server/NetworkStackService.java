@@ -46,6 +46,7 @@ import android.net.util.SharedLog;
 import android.os.Build;
 import android.os.HandlerThread;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.RemoteException;
 import android.util.ArraySet;
 
@@ -86,8 +87,7 @@ public class NetworkStackService extends Service {
      */
     public static synchronized IBinder makeConnector(Context context) {
         if (sConnector == null) {
-            sConnector = new NetworkStackConnector(
-                    context, new NetworkStackConnector.PermissionChecker());
+            sConnector = new NetworkStackConnector(context);
         }
         return sConnector;
     }
@@ -115,6 +115,58 @@ public class NetworkStackService extends Service {
     }
 
     /**
+     * Permission checking dependency of the connector, useful for testing.
+     */
+    public static class PermissionChecker {
+        /**
+         * @see PermissionUtil#enforceNetworkStackCallingPermission()
+         */
+        public void enforceNetworkStackCallingPermission() {
+            PermissionUtil.enforceNetworkStackCallingPermission();
+        }
+    }
+
+    /**
+     * Dependencies of {@link NetworkStackConnector}, useful for testing.
+     */
+    public static class Dependencies {
+        /** @see IpMemoryStoreService */
+        @NonNull
+        public IpMemoryStoreService makeIpMemoryStoreService(@NonNull Context context) {
+            return new IpMemoryStoreService(context);
+        }
+
+        /** @see NetworkStackNotifier */
+        @NonNull
+        public NetworkStackNotifier makeNotifier(@NonNull Context context, @NonNull Looper looper) {
+            return new NetworkStackNotifier(context, looper);
+        }
+
+        /** @see DhcpServer */
+        @NonNull
+        public DhcpServer makeDhcpServer(@NonNull Context context, @NonNull String ifName,
+                @NonNull DhcpServingParams params, @NonNull SharedLog log) {
+            return new DhcpServer(context, ifName, params, log);
+        }
+
+        /** @see NetworkMonitor */
+        @NonNull
+        public NetworkMonitor makeNetworkMonitor(@NonNull Context context,
+                @NonNull INetworkMonitorCallbacks cb, @NonNull Network network,
+                @NonNull SharedLog log, @NonNull NetworkStackServiceManager nsServiceManager) {
+            return new NetworkMonitor(context, cb, network, log, nsServiceManager);
+        }
+
+        /** @see IpClient */
+        @NonNull
+        public IpClient makeIpClient(@NonNull Context context, @NonNull String ifName,
+                @NonNull IIpClientCallbacks cb, @NonNull NetworkObserverRegistry observerRegistry,
+                @NonNull NetworkStackServiceManager nsServiceManager) {
+            return new IpClient(context, ifName, cb, observerRegistry, nsServiceManager);
+        }
+    }
+
+    /**
      * Connector implementing INetworkStackConnector for clients.
      */
     @VisibleForTesting
@@ -123,6 +175,7 @@ public class NetworkStackService extends Service {
         private static final int NUM_VALIDATION_LOG_LINES = 20;
         private final Context mContext;
         private final PermissionChecker mPermChecker;
+        private final Dependencies mDeps;
         private final INetd mNetd;
         private final NetworkObserverRegistry mObserverRegistry;
         @GuardedBy("mIpClients")
@@ -142,19 +195,6 @@ public class NetworkStackService extends Service {
         private final ArraySet<Integer> mFrameworkAidlVersions = new ArraySet<>(1);
         private final int mNetdAidlVersion;
 
-        /**
-         * Permission checking dependency of the connector, useful for testing.
-         */
-        @VisibleForTesting
-        public static class PermissionChecker {
-            /**
-             * @see PermissionUtil#enforceNetworkStackCallingPermission()
-             */
-            public void enforceNetworkStackCallingPermission() {
-                PermissionUtil.enforceNetworkStackCallingPermission();
-            }
-        }
-
         private SharedLog addValidationLogs(Network network, String name) {
             final SharedLog log = new SharedLog(NUM_VALIDATION_LOG_LINES, network + " - " + name);
             synchronized (mValidationLogs) {
@@ -166,21 +206,27 @@ public class NetworkStackService extends Service {
             return log;
         }
 
+        NetworkStackConnector(@NonNull Context context) {
+            this(context, new PermissionChecker(), new Dependencies());
+        }
+
         @VisibleForTesting
         public NetworkStackConnector(
-                @NonNull Context context, @NonNull PermissionChecker permChecker) {
+                @NonNull Context context, @NonNull PermissionChecker permChecker,
+                @NonNull Dependencies deps) {
             mContext = context;
             mPermChecker = permChecker;
+            mDeps = deps;
             mNetd = INetd.Stub.asInterface(
                     (IBinder) context.getSystemService(Context.NETD_SERVICE));
             mObserverRegistry = new NetworkObserverRegistry();
-            mIpMemoryStoreService = new IpMemoryStoreService(context);
+            mIpMemoryStoreService = mDeps.makeIpMemoryStoreService(context);
             // NetworkStackNotifier only shows notifications relevant for API level > Q
             if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
                 final HandlerThread notifierThread = new HandlerThread(
                         NetworkStackNotifier.class.getSimpleName());
                 notifierThread.start();
-                mNotifier = new NetworkStackNotifier(context, notifierThread.getLooper());
+                mNotifier = mDeps.makeNotifier(context, notifierThread.getLooper());
             } else {
                 mNotifier = null;
             }
@@ -217,7 +263,7 @@ public class NetworkStackService extends Service {
             updateSystemAidlVersion(cb.getInterfaceVersion());
             final DhcpServer server;
             try {
-                server = new DhcpServer(
+                server = mDeps.makeDhcpServer(
                         mContext,
                         ifName,
                         DhcpServingParams.fromParcelableObject(params),
@@ -240,7 +286,7 @@ public class NetworkStackService extends Service {
             mPermChecker.enforceNetworkStackCallingPermission();
             updateSystemAidlVersion(cb.getInterfaceVersion());
             final SharedLog log = addValidationLogs(network, name);
-            final NetworkMonitor nm = new NetworkMonitor(mContext, cb, network, log, this);
+            final NetworkMonitor nm = mDeps.makeNetworkMonitor(mContext, cb, network, log, this);
             cb.onNetworkMonitorCreated(new NetworkMonitorConnector(nm, mPermChecker));
         }
 
@@ -248,7 +294,8 @@ public class NetworkStackService extends Service {
         public void makeIpClient(String ifName, IIpClientCallbacks cb) throws RemoteException {
             mPermChecker.enforceNetworkStackCallingPermission();
             updateSystemAidlVersion(cb.getInterfaceVersion());
-            final IpClient ipClient = new IpClient(mContext, ifName, cb, mObserverRegistry, this);
+            final IpClient ipClient = mDeps.makeIpClient(
+                    mContext, ifName, cb, mObserverRegistry, this);
 
             synchronized (mIpClients) {
                 final Iterator<WeakReference<IpClient>> it = mIpClients.iterator();
@@ -371,10 +418,10 @@ public class NetworkStackService extends Service {
         @NonNull
         private final NetworkMonitor mNm;
         @NonNull
-        private final NetworkStackConnector.PermissionChecker mPermChecker;
+        private final PermissionChecker mPermChecker;
 
         public NetworkMonitorConnector(@NonNull NetworkMonitor nm,
-                @NonNull NetworkStackConnector.PermissionChecker permChecker) {
+                @NonNull PermissionChecker permChecker) {
             mNm = nm;
             mPermChecker = permChecker;
         }
