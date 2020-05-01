@@ -27,6 +27,7 @@ import android.net.INetd;
 import android.net.LinkProperties;
 import android.net.RouteInfo;
 import android.net.ip.IpNeighborMonitor.NeighborEvent;
+import android.net.ip.IpNeighborMonitor.NeighborEventConsumer;
 import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.IpReachabilityEvent;
 import android.net.netlink.StructNdMsg;
@@ -154,11 +155,12 @@ public class IpReachabilityMonitor {
     }
 
     /**
-     * Encapsulates IpReachabilityMonitor depencencies on systems that hinder unit testing.
+     * Encapsulates IpReachabilityMonitor dependencies on systems that hinder unit testing.
      * TODO: consider also wrapping MultinetworkPolicyTracker in this interface.
      */
     interface Dependencies {
         void acquireWakeLock(long durationMs);
+        IpNeighborMonitor makeIpNeighborMonitor(Handler h, SharedLog log, NeighborEventConsumer cb);
 
         static Dependencies makeDefault(Context context, String iface) {
             final String lockName = TAG + "." + iface;
@@ -168,6 +170,11 @@ public class IpReachabilityMonitor {
             return new Dependencies() {
                 public void acquireWakeLock(long durationMs) {
                     lock.acquire(durationMs);
+                }
+
+                public IpNeighborMonitor makeIpNeighborMonitor(Handler h, SharedLog log,
+                        NeighborEventConsumer cb) {
+                    return new IpNeighborMonitor(h, log, cb);
                 }
             };
         }
@@ -180,7 +187,7 @@ public class IpReachabilityMonitor {
     private final Dependencies mDependencies;
     private final boolean mUsingMultinetworkPolicyTracker;
     private final ConnectivityManager mCm;
-    private final IpConnectivityLog mMetricsLog = new IpConnectivityLog();
+    private final IpConnectivityLog mMetricsLog;
     private final Context mContext;
     private final INetd mNetd;
     private LinkProperties mLinkProperties = new LinkProperties();
@@ -194,13 +201,13 @@ public class IpReachabilityMonitor {
             Context context, InterfaceParams ifParams, Handler h, SharedLog log, Callback callback,
             boolean usingMultinetworkPolicyTracker, final INetd netd) {
         this(context, ifParams, h, log, callback, usingMultinetworkPolicyTracker,
-                Dependencies.makeDefault(context, ifParams.name), netd);
+                Dependencies.makeDefault(context, ifParams.name), new IpConnectivityLog(), netd);
     }
 
     @VisibleForTesting
     IpReachabilityMonitor(Context context, InterfaceParams ifParams, Handler h, SharedLog log,
             Callback callback, boolean usingMultinetworkPolicyTracker, Dependencies dependencies,
-            final INetd netd) {
+            final IpConnectivityLog metricsLog, final INetd netd) {
         if (ifParams == null) throw new IllegalArgumentException("null InterfaceParams");
 
         mContext = context;
@@ -210,6 +217,7 @@ public class IpReachabilityMonitor {
         mUsingMultinetworkPolicyTracker = usingMultinetworkPolicyTracker;
         mCm = context.getSystemService(ConnectivityManager.class);
         mDependencies = dependencies;
+        mMetricsLog = metricsLog;
         mNetd = netd;
         Preconditions.checkNotNull(mNetd);
         Preconditions.checkArgument(!TextUtils.isEmpty(mInterfaceParams.name));
@@ -223,7 +231,7 @@ public class IpReachabilityMonitor {
         }
         setNeighbourParametersForSteadyState();
 
-        mIpNeighborMonitor = new IpNeighborMonitor(h, mLog,
+        mIpNeighborMonitor = mDependencies.makeIpNeighborMonitor(h, mLog,
                 (NeighborEvent event) -> {
                     if (mInterfaceParams.index != event.ifindex) return;
                     if (!mNeighborWatchList.containsKey(event.ip)) return;
