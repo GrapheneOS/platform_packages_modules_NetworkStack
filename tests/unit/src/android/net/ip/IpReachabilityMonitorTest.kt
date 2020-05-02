@@ -49,7 +49,6 @@ import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.doReturn
 import org.mockito.Mockito.mock
-import org.mockito.Mockito.never
 import org.mockito.Mockito.timeout
 import org.mockito.Mockito.verify
 import java.io.FileDescriptor
@@ -200,23 +199,12 @@ class IpReachabilityMonitorTest {
         handlerThread.quitSafely()
     }
 
-    // TODO: fix this bug
     @Test
-    fun testLoseProvisioning_CrashIfFirstProbeIsFailed() {
+    fun testLoseProvisioning_FirstProbeIsFailed() {
         reachabilityMonitor.updateLinkProperties(TEST_LINK_PROPERTIES)
 
-        doAnswer {
-            // Set the fd as invalid when the event listener is removed, to avoid a crash when the
-            // reader tries to close the mock fd.
-            // This does not exactly reflect behavior on close, but this test is only demonstrating
-            // a bug that causes the close, and it will be removed when the bug fixed.
-            doReturn(false).`when`(fd).valid()
-        }.`when`(neighborMonitor.msgQueue).removeOnFileDescriptorEventListener(any())
-
         neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV4_DNS, NUD_FAILED))
-        verify(neighborMonitor.msgQueue, timeout(TEST_TIMEOUT_MS))
-                .removeOnFileDescriptorEventListener(any())
-        verify(callback, never()).notifyLost(eq(TEST_IPV4_DNS), anyString())
+        verify(callback, timeout(TEST_TIMEOUT_MS)).notifyLost(eq(TEST_IPV4_DNS), anyString())
     }
 
     private fun runLoseProvisioningTest(lostNeighbor: InetAddress) {

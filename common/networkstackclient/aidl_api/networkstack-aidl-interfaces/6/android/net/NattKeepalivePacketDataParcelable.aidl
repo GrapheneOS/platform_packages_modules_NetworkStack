@@ -16,12 +16,9 @@
 // later when a module using the interface is updated, e.g., Mainline modules.
 
 package android.net;
-parcelable DhcpResultsParcelable {
-  android.net.StaticIpConfiguration baseConfiguration;
-  int leaseDuration;
-  int mtu;
-  String serverAddress;
-  String vendorInfo;
-  @nullable String serverHostName;
-  @nullable String captivePortalApiUrl;
+parcelable NattKeepalivePacketDataParcelable {
+  byte[] srcAddress;
+  int srcPort;
+  byte[] dstAddress;
+  int dstPort;
 }

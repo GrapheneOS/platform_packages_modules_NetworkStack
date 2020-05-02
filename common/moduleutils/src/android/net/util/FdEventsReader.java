@@ -24,6 +24,7 @@ import android.os.Looper;
 import android.os.MessageQueue;
 import android.system.ErrnoException;
 import android.system.OsConstants;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -244,7 +245,7 @@ public abstract class FdEventsReader<BufferType> {
                 handlePacket(mBuffer, bytesRead);
             } catch (Exception e) {
                 logError("handlePacket error: ", e);
-                break;
+                Log.wtf(FdEventsReader.class.getSimpleName(), "Error handling packet", e);
             }
         }
 
