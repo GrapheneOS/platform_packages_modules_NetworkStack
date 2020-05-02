@@ -38,6 +38,6 @@ parcelable ProvisioningConfigurationParcelable {
     Network network;
     String displayName;
     boolean enablePreconnection;
-    ScanResultInfoParcelable scanResultInfo;
-    Layer2InformationParcelable layer2Info;
+    @nullable ScanResultInfoParcelable scanResultInfo;
+    @nullable Layer2InformationParcelable layer2Info;
 }

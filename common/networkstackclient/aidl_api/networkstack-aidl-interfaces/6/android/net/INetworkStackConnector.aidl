@@ -16,12 +16,10 @@
 // later when a module using the interface is updated, e.g., Mainline modules.
 
 package android.net;
-parcelable DhcpResultsParcelable {
-  android.net.StaticIpConfiguration baseConfiguration;
-  int leaseDuration;
-  int mtu;
-  String serverAddress;
-  String vendorInfo;
-  @nullable String serverHostName;
-  @nullable String captivePortalApiUrl;
+/* @hide */
+interface INetworkStackConnector {
+  oneway void makeDhcpServer(in String ifName, in android.net.dhcp.DhcpServingParamsParcel params, in android.net.dhcp.IDhcpServerCallbacks cb);
+  oneway void makeNetworkMonitor(in android.net.Network network, String name, in android.net.INetworkMonitorCallbacks cb);
+  oneway void makeIpClient(in String ifName, in android.net.ip.IIpClientCallbacks callbacks);
+  oneway void fetchIpMemoryStore(in android.net.IIpMemoryStoreCallbacks cb);
 }
