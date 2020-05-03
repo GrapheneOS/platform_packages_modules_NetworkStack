@@ -15,13 +15,21 @@
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
 
-package android.net;
-parcelable DhcpResultsParcelable {
-  android.net.StaticIpConfiguration baseConfiguration;
-  int leaseDuration;
-  int mtu;
-  String serverAddress;
-  String vendorInfo;
-  @nullable String serverHostName;
-  @nullable String captivePortalApiUrl;
+package android.net.ip;
+/* @hide */
+interface IIpClientCallbacks {
+  oneway void onIpClientCreated(in android.net.ip.IIpClient ipClient);
+  oneway void onPreDhcpAction();
+  oneway void onPostDhcpAction();
+  oneway void onNewDhcpResults(in android.net.DhcpResultsParcelable dhcpResults);
+  oneway void onProvisioningSuccess(in android.net.LinkProperties newLp);
+  oneway void onProvisioningFailure(in android.net.LinkProperties newLp);
+  oneway void onLinkPropertiesChange(in android.net.LinkProperties newLp);
+  oneway void onReachabilityLost(in String logMsg);
+  oneway void onQuit();
+  oneway void installPacketFilter(in byte[] filter);
+  oneway void startReadPacketFilter();
+  oneway void setFallbackMulticastFilter(boolean enabled);
+  oneway void setNeighborDiscoveryOffload(boolean enable);
+  oneway void onPreconnectionStart(in List<android.net.Layer2PacketParcelable> packets);
 }

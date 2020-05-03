@@ -15,13 +15,15 @@
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
 
-package android.net;
-parcelable DhcpResultsParcelable {
-  android.net.StaticIpConfiguration baseConfiguration;
-  int leaseDuration;
-  int mtu;
-  String serverAddress;
-  String vendorInfo;
-  @nullable String serverHostName;
-  @nullable String captivePortalApiUrl;
+package android.net.dhcp;
+/* @hide */
+interface IDhcpServer {
+  oneway void start(in android.net.INetworkStackStatusCallback cb) = 0;
+  oneway void startWithCallbacks(in android.net.INetworkStackStatusCallback statusCb, in android.net.dhcp.IDhcpEventCallbacks eventCb) = 3;
+  oneway void updateParams(in android.net.dhcp.DhcpServingParamsParcel params, in android.net.INetworkStackStatusCallback cb) = 1;
+  oneway void stop(in android.net.INetworkStackStatusCallback cb) = 2;
+  const int STATUS_UNKNOWN = 0;
+  const int STATUS_SUCCESS = 1;
+  const int STATUS_INVALID_ARGUMENT = 2;
+  const int STATUS_UNKNOWN_ERROR = 3;
 }
