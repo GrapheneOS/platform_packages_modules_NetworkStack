@@ -238,6 +238,7 @@ public class IpClientLinkObserver implements NetworkObserver {
         // while interfaceDnsServerInfo() is being called, we'll end up with no DNS servers in
         // mLinkProperties, as desired.
         mDnsServerRepository = new DnsServerRepository(mConfig.minRdnssLifetime);
+        mNetlinkMonitor.clearAlarms();
         mLinkProperties.clear();
         mLinkProperties.setInterfaceName(mInterfaceName);
     }
@@ -281,18 +282,27 @@ public class IpClientLinkObserver implements NetworkObserver {
             mIfindex = ifindex;
         }
 
+        void clearAlarms() {
+            cancelPref64Alarm();
+        }
+
         private final AlarmManager.OnAlarmListener mExpirePref64Alarm = () -> {
+            // Ignore the alarm if cancelPref64Alarm has already been called.
+            //
             // TODO: in the rare case where the alarm fires and posts the lambda to the handler
             // thread while we are processing an RA that changes the lifetime of the same prefix,
             // this code will run anyway even if the alarm is rescheduled or cancelled. If the
-            // lifetime in the RA is zero this doesn't matter (we just harmlessly cancel the alarm
-            // one extra time) but if the lifetime is nonzero then the prefix will be added and
-            // immediately removed by this code.
+            // lifetime in the RA is zero this code will correctly do nothing, but if the lifetime
+            // is nonzero then the prefix will be added and immediately removed by this code.
+            if (mNat64PrefixExpiry == 0) return;
             updatePref64(mShim.getNat64Prefix(mLinkProperties),
                     mNat64PrefixExpiry, mNat64PrefixExpiry);
         };
 
         private void cancelPref64Alarm() {
+            // Clear the expiry in case the alarm just fired and has not been processed yet.
+            if (mNat64PrefixExpiry == 0) return;
+            mNat64PrefixExpiry = 0;
             mAlarmManager.cancel(mExpirePref64Alarm);
         }
 
@@ -342,7 +352,6 @@ public class IpClientLinkObserver implements NetworkObserver {
                 schedulePref64Alarm();
             } else {
                 mShim.setNat64Prefix(mLinkProperties, null);
-                mNat64PrefixExpiry = 0;
                 cancelPref64Alarm();
             }
 
