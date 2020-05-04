@@ -82,6 +82,12 @@ aidl_interface {
         "src/android/net/ip/IIpClientCallbacks.aidl",
     ],
     backend: {
+        java: {
+            apex_available: [
+                "//apex_available:platform",
+                "com.android.bluetooth.updatable",
+            ],
+        },
         ndk: {
             enabled: false,
         },
