@@ -1527,6 +1527,25 @@ public class IpClientIntegrationTest {
         mIpc.getHandler().post(() -> lastAlarm.onAlarm());
         expectAlarmCancelled(inOrder, pref64Alarm);
         expectNat64PrefixUpdate(inOrder, null);
+
+        // Re-announce the prefix.
+        pref64 = new StructNdOptPref64(prefix, 600).toByteBuffer();
+        ra = buildRaPacket(pio, rdnss, pref64);
+        mPacketReader.sendResponse(ra);
+        final OnAlarmListener clearAlarm = expectAlarmSet(inOrder, "PREF64", 600);
+        expectNat64PrefixUpdate(inOrder, prefix);
+        reset(mCb, mAlarm);
+
+        // Check that the alarm is cancelled when IpClient is stopped.
+        mIpc.stop();
+        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+        expectAlarmCancelled(inOrder, clearAlarm);
+        expectNat64PrefixUpdate(inOrder, null);
+
+        // Check that even if the alarm was already in the message queue while it was cancelled, it
+        // is safely ignored.
+        mIpc.getHandler().post(() -> clearAlarm.onAlarm());
+        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
     }
 
     private void addIpAddressAndWaitForIt(final String iface) throws Exception {
