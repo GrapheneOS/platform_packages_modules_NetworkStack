@@ -85,4 +85,16 @@
          failed. -->
     <string name="config_network_validation_failed_content_regexp" translatable="false"></string>
     <string name="config_network_validation_success_content_regexp" translatable="false"></string>
+
+    <!-- URL for evaluating bandwidth. If the download cannot be finished before the timeout, then
+         it means the bandwidth check is failed. If the download can be finished before the timeout,
+         then it means the bandwidth check is passed. So the OEMs should set this URL appropriately.
+         -->
+    <string name="config_evaluating_bandwidth_url" translatable="false"></string>
+    <!-- A timeout for evaluating bandwidth. -->
+    <integer name="config_evaluating_bandwidth_timeout_ms"></integer>
+    <!-- The retry timer will start from config_min_retry_timer, and the timer will be exponential
+         increased until reaching the config_max_retry_timer. -->
+    <integer name="config_evaluating_bandwidth_min_retry_timer_ms"></integer>
+    <integer name="config_evaluating_bandwidth_max_retry_timer_ms"></integer>
 </resources>
