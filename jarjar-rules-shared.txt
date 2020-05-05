@@ -8,3 +8,5 @@ rule android.net.shared.InetAddressUtils* android.net.networkstack.shared.InetAd
 rule android.net.DhcpResultsParcelable* @0
 rule android.net.DhcpResults* android.net.networkstack.DhcpResults@1
 rule android.net.LocalLog* android.net.networkstack.LocalLog@1
+
+rule android.util.IndentingPrintWriter* android.net.networkstack.util.AndroidUtilIndentingPrintWriter@1
