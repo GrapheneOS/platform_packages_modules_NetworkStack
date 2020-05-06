@@ -1528,6 +1528,13 @@ public class IpClientIntegrationTest {
         expectAlarmCancelled(inOrder, pref64Alarm);
         expectNat64PrefixUpdate(inOrder, null);
 
+        // Announce a non-/96 prefix and expect it to be ignored.
+        IpPrefix invalidPrefix = new IpPrefix("64:ff9b::/64");
+        pref64 = new StructNdOptPref64(invalidPrefix, 1200).toByteBuffer();
+        ra = buildRaPacket(pio, rdnss, pref64);
+        mPacketReader.sendResponse(ra);
+        expectNoNat64PrefixUpdate(inOrder, invalidPrefix);
+
         // Re-announce the prefix.
         pref64 = new StructNdOptPref64(prefix, 600).toByteBuffer();
         ra = buildRaPacket(pio, rdnss, pref64);
