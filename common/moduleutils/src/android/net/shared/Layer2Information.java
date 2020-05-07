@@ -16,6 +16,7 @@
 
 package android.net.shared;
 
+import android.annotation.Nullable;
 import android.net.Layer2InformationParcelable;
 import android.net.MacAddress;
 
@@ -23,14 +24,18 @@ import java.util.Objects;
 
 /** @hide */
 public class Layer2Information {
+    @Nullable
     public final String mL2Key;
+    @Nullable
     public final String mGroupHint;
+    @Nullable
     public final MacAddress mBssid;
 
     /**
      * Create a Layer2Information with the specified configuration.
      */
-    public Layer2Information(String l2Key, String groupHint, MacAddress bssid) {
+    public Layer2Information(@Nullable final String l2Key, @Nullable final String groupHint,
+            @Nullable final MacAddress bssid) {
         mL2Key = l2Key;
         mGroupHint = groupHint;
         mBssid = bssid;
@@ -41,7 +46,7 @@ public class Layer2Information {
         StringBuffer str = new StringBuffer();
         str.append("L2Key: ").append(mL2Key);
         str.append(", GroupHint: ").append(mGroupHint);
-        str.append(", bssid: ").append(mBssid.toString());
+        str.append(", bssid: ").append(mBssid);
         return str.toString();
     }
 
