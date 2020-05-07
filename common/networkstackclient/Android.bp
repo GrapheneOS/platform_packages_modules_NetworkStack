@@ -122,7 +122,7 @@ java_library {
     ],
     static_libs: [
         "ipmemorystore-aidl-interfaces-V5-java",
-        "networkstack-aidl-interfaces-unstable-java",
+        "networkstack-aidl-interfaces-java",
     ],
     visibility: [
         "//frameworks/base/packages/Tethering",
