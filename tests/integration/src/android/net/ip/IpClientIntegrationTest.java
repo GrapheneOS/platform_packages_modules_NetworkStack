@@ -831,27 +831,32 @@ public class IpClientIntegrationTest {
         }
     }
 
+    private DhcpPacket assertDiscoverPacketOnPreconnectionStart() throws Exception {
+        final ArgumentCaptor<List<Layer2PacketParcelable>> l2PacketList =
+                ArgumentCaptor.forClass(List.class);
+
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onPreconnectionStart(l2PacketList.capture());
+        final byte[] payload = l2PacketList.getValue().get(0).payload;
+        DhcpPacket packet = DhcpPacket.decodeFullPacket(payload, payload.length, ENCAP_L2);
+        assertTrue(packet instanceof DhcpDiscoverPacket);
+        assertArrayEquals(INADDR_BROADCAST.getAddress(),
+                Arrays.copyOfRange(payload, IPV4_DST_ADDR_OFFSET, IPV4_DST_ADDR_OFFSET + 4));
+        return packet;
+    }
+
     private void doIpClientProvisioningWithPreconnectionTest(
             final boolean shouldReplyRapidCommitAck, final boolean shouldAbortPreconnection,
             final boolean shouldFirePreconnectionTimeout,
             final boolean timeoutBeforePreconnectionComplete) throws Exception {
         final long currentTime = System.currentTimeMillis();
-        final ArgumentCaptor<List<Layer2PacketParcelable>> l2PacketList =
-                ArgumentCaptor.forClass(List.class);
         final ArgumentCaptor<InterfaceConfigurationParcel> ifConfig =
                 ArgumentCaptor.forClass(InterfaceConfigurationParcel.class);
 
         startIpClientProvisioning(true /* isDhcpLeaseCacheEnabled */,
                 shouldReplyRapidCommitAck, true /* isDhcpPreConnectionEnabled */,
                 false /* isDhcpIpConflictDetectEnabled */);
-        verify(mCb, timeout(TEST_TIMEOUT_MS).times(1))
-                .onPreconnectionStart(l2PacketList.capture());
-        final byte[] payload = l2PacketList.getValue().get(0).payload;
-        DhcpPacket packet = DhcpPacket.decodeFullPacket(payload, payload.length, ENCAP_L2);
+        DhcpPacket packet = assertDiscoverPacketOnPreconnectionStart();
         final int preconnDiscoverTransId = packet.getTransactionId();
-        assertTrue(packet instanceof DhcpDiscoverPacket);
-        assertArrayEquals(INADDR_BROADCAST.getAddress(),
-                Arrays.copyOfRange(payload, IPV4_DST_ADDR_OFFSET, IPV4_DST_ADDR_OFFSET + 4));
 
         if (shouldAbortPreconnection) {
             if (shouldFirePreconnectionTimeout && timeoutBeforePreconnectionComplete) {
@@ -1713,6 +1718,28 @@ public class IpClientIntegrationTest {
         doIpClientProvisioningWithPreconnectionTest(false /* shouldReplyRapidCommitAck */,
                 false /* shouldAbortPreconnection */, true /* shouldFirePreconnectionTimeout */,
                 false /* timeoutBeforePreconnectionComplete */);
+    }
+
+    @Test
+    public void testDhcpClientPreconnection_WithoutLayer2InfoWhenStartingProv() throws Exception {
+        // For FILS connection, current bssid (also l2key and grouphint) is still null when
+        // starting provisioning since the L2 link hasn't been established yet. Ensure that
+        // IpClient won't crash even if initializing an Layer2Info class with null members.
+        ProvisioningConfiguration.Builder prov = new ProvisioningConfiguration.Builder()
+                .withoutIpReachabilityMonitor()
+                .withoutIPv6()
+                .withPreconnection()
+                .withLayer2Information(new Layer2Information(null /* l2key */, null /* grouphint */,
+                        null /* bssid */));
+
+        mIpc.startProvisioning(prov.build());
+        assertDiscoverPacketOnPreconnectionStart();
+        verify(mCb).setNeighborDiscoveryOffload(true);
+
+        // Force IpClient transition to RunningState from PreconnectionState.
+        mIpc.notifyPreconnectionComplete(false /* success */);
+        HandlerUtilsKt.waitForIdle(mDependencies.mDhcpClient.getHandler(), TEST_TIMEOUT_MS);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
     }
 
     @Test
