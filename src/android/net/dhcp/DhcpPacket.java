@@ -1182,8 +1182,8 @@ public abstract class DhcpPacket {
                             vendorId = readAsciiString(packet, optionLen, true);
                             break;
                         case DHCP_CLIENT_IDENTIFIER: { // Client identifier
-                            byte[] id = new byte[optionLen];
-                            packet.get(id);
+                            clientId = new byte[optionLen];
+                            packet.get(clientId);
                             expectedLen = optionLen;
                         } break;
                         case DHCP_VENDOR_INFO:
