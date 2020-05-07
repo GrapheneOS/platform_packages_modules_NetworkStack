@@ -24,6 +24,7 @@ java_defaults {
         // For NetworkStackUtils included in NetworkStackBase
         "libnetworkstackutilsjni",
     ],
+    jni_uses_sdk_apis: true,
     visibility: ["//visibility:private"],
 }
 
