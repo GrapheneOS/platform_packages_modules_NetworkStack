@@ -42,6 +42,7 @@ import static android.net.util.DataStallUtils.DATA_STALL_EVALUATION_TYPE_TCP;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_FALLBACK_PROBE_SPECS;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_OTHER_FALLBACK_URLS;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USE_HTTPS;
+import static android.net.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT;
 import static android.net.util.NetworkStackUtils.DISMISS_PORTAL_IN_VALIDATED_NETWORK;
 import static android.net.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION;
 import static android.net.util.NetworkStackUtils.TEST_CAPTIVE_PORTAL_HTTPS_URL;
@@ -802,6 +803,28 @@ public class NetworkMonitorTest {
     }
 
     @Test
+    public void testGetHttpProbeUrl() {
+        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        // If config_captive_portal_http_url is set and the global setting is set, the config is
+        // used.
+        doReturn(TEST_HTTP_URL).when(mResources).getString(R.string.config_captive_portal_http_url);
+        doReturn(TEST_HTTP_OTHER_URL2).when(mResources).getString(
+                R.string.default_captive_portal_http_url);
+        when(mDependencies.getSetting(any(), eq(Settings.Global.CAPTIVE_PORTAL_HTTP_URL), any()))
+                .thenReturn(TEST_HTTP_OTHER_URL1);
+        assertEquals(TEST_HTTP_URL, wnm.getCaptivePortalServerHttpUrl());
+        // If config_captive_portal_http_url is unset and the global setting is set, the global
+        // setting is used.
+        doReturn(null).when(mResources).getString(R.string.config_captive_portal_http_url);
+        assertEquals(TEST_HTTP_OTHER_URL1, wnm.getCaptivePortalServerHttpUrl());
+        // If both config_captive_portal_http_url and global setting are unset,
+        // default_captive_portal_http_url is used.
+        when(mDependencies.getSetting(any(), eq(Settings.Global.CAPTIVE_PORTAL_HTTP_URL), any()))
+                .thenReturn(null);
+        assertEquals(TEST_HTTP_OTHER_URL2, wnm.getCaptivePortalServerHttpUrl());
+    }
+
+    @Test
     public void testGetLocationMcc() throws Exception {
         final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
         doReturn(PackageManager.PERMISSION_DENIED).when(mContext).checkPermission(
@@ -951,12 +974,10 @@ public class NetworkMonitorTest {
         }).when(mDependencies).getDeviceConfigPropertyInt(any(),
                 eq(NetworkMonitor.CONFIG_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT),
                 anyInt());
-        when(mResources.getInteger(eq(R.integer.default_captive_portal_dns_probe_timeout)))
-                .thenReturn(42);
-        assertEquals(42, wnm.getIntSetting(mContext,
+        assertEquals(DEFAULT_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT, wnm.getIntSetting(mContext,
                 R.integer.config_captive_portal_dns_probe_timeout,
                 NetworkMonitor.CONFIG_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT,
-                R.integer.default_captive_portal_dns_probe_timeout));
+                DEFAULT_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT));
 
         // Set device config. Expect to get device config.
         when(mDependencies.getDeviceConfigPropertyInt(any(),
@@ -965,7 +986,7 @@ public class NetworkMonitorTest {
         assertEquals(1234, wnm.getIntSetting(mContext,
                 R.integer.config_captive_portal_dns_probe_timeout,
                 NetworkMonitor.CONFIG_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT,
-                R.integer.default_captive_portal_dns_probe_timeout));
+                DEFAULT_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT));
 
         // Set config resource. Expect to get config resource.
         when(mResources.getInteger(eq(R.integer.config_captive_portal_dns_probe_timeout)))
@@ -973,7 +994,7 @@ public class NetworkMonitorTest {
         assertEquals(5678, wnm.getIntSetting(mContext,
                 R.integer.config_captive_portal_dns_probe_timeout,
                 NetworkMonitor.CONFIG_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT,
-                R.integer.default_captive_portal_dns_probe_timeout));
+                DEFAULT_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT));
     }
 
     @Test
