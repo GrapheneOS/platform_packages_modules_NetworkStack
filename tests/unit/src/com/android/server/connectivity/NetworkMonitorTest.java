@@ -27,6 +27,10 @@ import static android.net.INetworkMonitor.NETWORK_VALIDATION_PROBE_PRIVDNS;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_PARTIAL;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_VALID;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET;
+import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED;
+import static android.net.NetworkCapabilities.TRANSPORT_CELLULAR;
+import static android.net.NetworkCapabilities.TRANSPORT_VPN;
+import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
 import static android.net.metrics.ValidationProbeEvent.PROBE_HTTP;
 import static android.net.util.DataStallUtils.CONFIG_DATA_STALL_CONSECUTIVE_DNS_TIMEOUT_THRESHOLD;
 import static android.net.util.DataStallUtils.CONFIG_DATA_STALL_EVALUATION_TYPE;
@@ -38,6 +42,7 @@ import static android.net.util.DataStallUtils.DATA_STALL_EVALUATION_TYPE_TCP;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_FALLBACK_PROBE_SPECS;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_OTHER_FALLBACK_URLS;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USE_HTTPS;
+import static android.net.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT;
 import static android.net.util.NetworkStackUtils.DISMISS_PORTAL_IN_VALIDATED_NETWORK;
 import static android.net.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION;
 import static android.net.util.NetworkStackUtils.TEST_CAPTIVE_PORTAL_HTTPS_URL;
@@ -210,6 +215,7 @@ public class NetworkMonitorTest {
     private @Mock HttpURLConnection mOtherFallbackConnection;
     private @Mock HttpURLConnection mTestOverriddenUrlConnection;
     private @Mock HttpURLConnection mCapportApiConnection;
+    private @Mock HttpURLConnection mSpeedTestConnection;
     private @Mock Random mRandom;
     private @Mock NetworkMonitor.Dependencies mDependencies;
     // Mockito can't create a mock of INetworkMonitorCallbacks on Q because it can't find
@@ -242,6 +248,7 @@ public class NetworkMonitorTest {
     private static final String TEST_CAPPORT_API_URL = "https://capport.example.com/api";
     private static final String TEST_LOGIN_URL = "https://testportal.example.com/login";
     private static final String TEST_VENUE_INFO_URL = "https://venue.example.com/info";
+    private static final String TEST_SPEED_TEST_URL = "https://speedtest.example.com";
     private static final String TEST_MCCMNC = "123456";
 
     private static final String[] TEST_HTTP_URLS = {TEST_HTTP_OTHER_URL1, TEST_HTTP_OTHER_URL2};
@@ -475,6 +482,8 @@ public class NetworkMonitorTest {
                     return mTestOverriddenUrlConnection;
                 case TEST_CAPPORT_API_URL:
                     return mCapportApiConnection;
+                case TEST_SPEED_TEST_URL:
+                    return mSpeedTestConnection;
                 default:
                     fail("URL not mocked: " + url.toString());
                     return null;
@@ -616,6 +625,101 @@ public class NetworkMonitorTest {
     }
 
     @Test
+    public void testOnlyWifiTransport() {
+        final WrappedNetworkMonitor wnm = makeMeteredNetworkMonitor();
+        final NetworkCapabilities nc = new NetworkCapabilities()
+                .addTransportType(TRANSPORT_WIFI)
+                .addTransportType(TRANSPORT_VPN);
+        setNetworkCapabilities(wnm, nc);
+        assertFalse(wnm.onlyWifiTransport());
+        nc.removeTransportType(TRANSPORT_VPN);
+        setNetworkCapabilities(wnm, nc);
+        assertTrue(wnm.onlyWifiTransport());
+    }
+
+    @Test
+    public void testNeedEvaluatingBandwidth() throws Exception {
+        // Make metered network first, the transport type is TRANSPORT_CELLULAR. That means the
+        // test cannot pass the condition check in needEvaluatingBandwidth().
+        final WrappedNetworkMonitor wnm1 = makeMeteredNetworkMonitor();
+        // Don't set the config_evaluating_bandwidth_url to make
+        // the condition check fail in needEvaluatingBandwidth().
+        assertFalse(wnm1.needEvaluatingBandwidth());
+        // Make the NetworkCapabilities to have the TRANSPORT_WIFI but it still cannot meet the
+        // condition check.
+        final NetworkCapabilities nc = new NetworkCapabilities()
+                .addTransportType(TRANSPORT_WIFI);
+        setNetworkCapabilities(wnm1, nc);
+        assertFalse(wnm1.needEvaluatingBandwidth());
+        // Make the network to be non-metered wifi but it still cannot meet the condition check
+        // since the config_evaluating_bandwidth_url is not set.
+        nc.addCapability(NET_CAPABILITY_NOT_METERED);
+        setNetworkCapabilities(wnm1, nc);
+        assertFalse(wnm1.needEvaluatingBandwidth());
+        // All configurations are set correctly.
+        doReturn(TEST_SPEED_TEST_URL).when(mResources).getString(
+                R.string.config_evaluating_bandwidth_url);
+        final WrappedNetworkMonitor wnm2 = makeMeteredNetworkMonitor();
+        setNetworkCapabilities(wnm2, nc);
+        assertTrue(wnm2.needEvaluatingBandwidth());
+        // Set mIsBandwidthCheckPassedOrIgnored to true and expect needEvaluatingBandwidth() will
+        // return false.
+        wnm2.mIsBandwidthCheckPassedOrIgnored = true;
+        assertFalse(wnm2.needEvaluatingBandwidth());
+        // Reset mIsBandwidthCheckPassedOrIgnored back to false.
+        wnm2.mIsBandwidthCheckPassedOrIgnored = false;
+        // Shouldn't evaluate network bandwidth on the metered wifi.
+        nc.removeCapability(NET_CAPABILITY_NOT_METERED);
+        setNetworkCapabilities(wnm2, nc);
+        assertFalse(wnm2.needEvaluatingBandwidth());
+        // Shouldn't evaluate network bandwidth on the unmetered cellular.
+        nc.addCapability(NET_CAPABILITY_NOT_METERED);
+        nc.removeTransportType(TRANSPORT_WIFI);
+        nc.addTransportType(TRANSPORT_CELLULAR);
+        assertFalse(wnm2.needEvaluatingBandwidth());
+    }
+
+    @Test
+    public void testEvaluatingBandwidthState_meteredNetwork() throws Exception {
+        setStatus(mHttpsConnection, 204);
+        setStatus(mHttpConnection, 204);
+        final NetworkCapabilities meteredCap = new NetworkCapabilities()
+                .addTransportType(TRANSPORT_WIFI)
+                .addCapability(NET_CAPABILITY_INTERNET);
+        doReturn(TEST_SPEED_TEST_URL).when(mResources).getString(
+                R.string.config_evaluating_bandwidth_url);
+        final NetworkMonitor nm = runNetworkTest(TEST_LINK_PROPERTIES, meteredCap,
+                NETWORK_VALIDATION_RESULT_VALID, NETWORK_VALIDATION_PROBE_DNS
+                | NETWORK_VALIDATION_PROBE_HTTPS, null /* redirectUrl */);
+        // Evaluating bandwidth process won't be executed when the network is metered wifi.
+        // Check that the connection hasn't been opened and the state should transition to validated
+        // state directly.
+        verify(mCleartextDnsNetwork, never()).openConnection(new URL(TEST_SPEED_TEST_URL));
+        assertEquals(NETWORK_VALIDATION_RESULT_VALID,
+                nm.getEvaluationState().getEvaluationResult());
+    }
+
+    @Test
+    public void testEvaluatingBandwidthState_nonMeteredNetworkWithWrongConfig() throws Exception {
+        setStatus(mHttpsConnection, 204);
+        setStatus(mHttpConnection, 204);
+        final NetworkCapabilities nonMeteredCap = new NetworkCapabilities()
+                .addTransportType(TRANSPORT_WIFI)
+                .addCapability(NET_CAPABILITY_INTERNET)
+                .addCapability(NET_CAPABILITY_NOT_METERED);
+        doReturn("").when(mResources).getString(R.string.config_evaluating_bandwidth_url);
+        final NetworkMonitor nm = runNetworkTest(TEST_LINK_PROPERTIES, nonMeteredCap,
+                NETWORK_VALIDATION_RESULT_VALID, NETWORK_VALIDATION_PROBE_DNS
+                | NETWORK_VALIDATION_PROBE_HTTPS, null /* redirectUrl */);
+        // Non-metered network with wrong configuration(the config_evaluating_bandwidth_url is
+        // empty). Check that the connection hasn't been opened and the state should transition to
+        // validated state directly.
+        verify(mCleartextDnsNetwork, never()).openConnection(new URL(TEST_SPEED_TEST_URL));
+        assertEquals(NETWORK_VALIDATION_RESULT_VALID,
+                nm.getEvaluationState().getEvaluationResult());
+    }
+
+    @Test
     public void testMatchesHttpContent() throws Exception {
         final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
         doReturn("[\\s\\S]*line2[\\s\\S]*").when(mResources).getString(
@@ -696,6 +800,28 @@ public class NetworkMonitorTest {
                 R.integer.config_min_matches_http_content_length, Integer.MAX_VALUE));
         assertEquals(0, wnm.getResIntConfig(mContext,
                 R.integer.config_max_matches_http_content_length, 0));
+    }
+
+    @Test
+    public void testGetHttpProbeUrl() {
+        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        // If config_captive_portal_http_url is set and the global setting is set, the config is
+        // used.
+        doReturn(TEST_HTTP_URL).when(mResources).getString(R.string.config_captive_portal_http_url);
+        doReturn(TEST_HTTP_OTHER_URL2).when(mResources).getString(
+                R.string.default_captive_portal_http_url);
+        when(mDependencies.getSetting(any(), eq(Settings.Global.CAPTIVE_PORTAL_HTTP_URL), any()))
+                .thenReturn(TEST_HTTP_OTHER_URL1);
+        assertEquals(TEST_HTTP_URL, wnm.getCaptivePortalServerHttpUrl());
+        // If config_captive_portal_http_url is unset and the global setting is set, the global
+        // setting is used.
+        doReturn(null).when(mResources).getString(R.string.config_captive_portal_http_url);
+        assertEquals(TEST_HTTP_OTHER_URL1, wnm.getCaptivePortalServerHttpUrl());
+        // If both config_captive_portal_http_url and global setting are unset,
+        // default_captive_portal_http_url is used.
+        when(mDependencies.getSetting(any(), eq(Settings.Global.CAPTIVE_PORTAL_HTTP_URL), any()))
+                .thenReturn(null);
+        assertEquals(TEST_HTTP_OTHER_URL2, wnm.getCaptivePortalServerHttpUrl());
     }
 
     @Test
@@ -848,12 +974,10 @@ public class NetworkMonitorTest {
         }).when(mDependencies).getDeviceConfigPropertyInt(any(),
                 eq(NetworkMonitor.CONFIG_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT),
                 anyInt());
-        when(mResources.getInteger(eq(R.integer.default_captive_portal_dns_probe_timeout)))
-                .thenReturn(42);
-        assertEquals(42, wnm.getIntSetting(mContext,
+        assertEquals(DEFAULT_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT, wnm.getIntSetting(mContext,
                 R.integer.config_captive_portal_dns_probe_timeout,
                 NetworkMonitor.CONFIG_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT,
-                R.integer.default_captive_portal_dns_probe_timeout));
+                DEFAULT_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT));
 
         // Set device config. Expect to get device config.
         when(mDependencies.getDeviceConfigPropertyInt(any(),
@@ -862,7 +986,7 @@ public class NetworkMonitorTest {
         assertEquals(1234, wnm.getIntSetting(mContext,
                 R.integer.config_captive_portal_dns_probe_timeout,
                 NetworkMonitor.CONFIG_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT,
-                R.integer.default_captive_portal_dns_probe_timeout));
+                DEFAULT_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT));
 
         // Set config resource. Expect to get config resource.
         when(mResources.getInteger(eq(R.integer.config_captive_portal_dns_probe_timeout)))
@@ -870,7 +994,7 @@ public class NetworkMonitorTest {
         assertEquals(5678, wnm.getIntSetting(mContext,
                 R.integer.config_captive_portal_dns_probe_timeout,
                 NetworkMonitor.CONFIG_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT,
-                R.integer.default_captive_portal_dns_probe_timeout));
+                DEFAULT_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT));
     }
 
     @Test

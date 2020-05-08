@@ -83,6 +83,13 @@ aidl_interface {
         "src/android/net/ip/IIpClientCallbacks.aidl",
     ],
     backend: {
+        java: {
+            apex_available: [
+                "//apex_available:platform",
+                "com.android.bluetooth.updatable",
+                "com.android.wifi",
+            ],
+        },
         ndk: {
             enabled: false,
         },
@@ -117,7 +124,7 @@ java_library {
     ],
     static_libs: [
         "ipmemorystore-aidl-interfaces-V5-java",
-        "networkstack-aidl-interfaces-unstable-java",
+        "networkstack-aidl-interfaces-java",
     ],
     visibility: [
         "//frameworks/base/packages/Tethering",
