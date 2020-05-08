@@ -155,16 +155,30 @@ public class NetworkStackUtils {
     public static final int CAPTIVE_PORTAL_MODE_AVOID = 2;
 
     /**
+     * DNS probe timeout for network validation. Enough for 3 DNS queries 5 seconds apart.
+     */
+    public static final int DEFAULT_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT = 12500;
+
+    /**
+     * List of fallback probe specs to use for detecting captive portals. This is an alternative to
+     * fallback URLs that provides more flexibility on detection rules. Empty, so unused by default.
+     */
+    public static final String[] DEFAULT_CAPTIVE_PORTAL_FALLBACK_PROBE_SPECS =
+            new String[] {};
+
+    /**
      * The default list of HTTP URLs to use for detecting captive portals.
      */
     public static final String[] DEFAULT_CAPTIVE_PORTAL_HTTP_URLS =
             new String [] {"http://connectivitycheck.gstatic.com/generate_204"};
+
     /**
      * The default list of HTTPS URLs for network validation, to use for confirming internet
      * connectivity.
      */
     public static final String[] DEFAULT_CAPTIVE_PORTAL_HTTPS_URLS =
             new String [] {"https://www.google.com/generate_204"};
+
     /**
      * @deprecated Considering boolean experiment flag is likely to cause misconfiguration
      *             particularly when NetworkStack module rolls back to previous version. It's
