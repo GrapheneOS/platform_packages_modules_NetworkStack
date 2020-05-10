@@ -728,6 +728,41 @@ public class DhcpPacketTest {
     }
 
     @Test
+    public void testExplicitClientId() throws Exception {
+        final byte[] clientId = new byte[] {
+                0x01 /* CLIENT_ID_ETH */, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 };
+
+        // CHECKSTYLE:OFF Generated code
+        final byte[] packet = HexDump.hexStringToByteArray(
+                // IP header.
+                "450001518d0600004011144dc0a82b01c0a82bf7" +
+                // UDP header
+                "00430044013d9ac7" +
+                // BOOTP header
+                "02010600dfc23d1f0002000000000000c0a82bf7c0a82b0100000000" +
+                // MAC address.
+                "30766ff2a90c00000000000000000000" +
+                // Server name ("dhcp.android.com" plus invalid "AAAA" after null terminator).
+                "646863702e616e64726f69642e636f6d00000000000000000000000000000000" +
+                "0000000000004141414100000000000000000000000000000000000000000000" +
+                // File.
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                // Options
+                "638253633501013d0701010203040506390205dc3c0e616e64726f69642d6468" +
+                "63702d52370a0103060f1a1c333a3b2bff00");
+        // CHECKSTYLE:ON Generated code
+
+        final DhcpPacket discoverPacket = DhcpPacket.decodeFullPacket(packet,
+                packet.length, ENCAP_L3);
+        assertTrue(discoverPacket instanceof DhcpDiscoverPacket);
+        assertTrue(discoverPacket.hasExplicitClientId());
+        assertTrue(Arrays.equals(discoverPacket.mClientId, clientId));
+    }
+
+    @Test
     public void testBadHwaddrLength() throws Exception {
         // CHECKSTYLE:OFF Generated code
         final ByteBuffer packet = ByteBuffer.wrap(HexDump.hexStringToByteArray(

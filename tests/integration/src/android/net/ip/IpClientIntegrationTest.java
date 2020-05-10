@@ -29,6 +29,7 @@ import static android.net.shared.Inet4AddressUtils.getBroadcastAddress;
 import static android.net.shared.Inet4AddressUtils.getPrefixMaskAsInet4Address;
 import static android.net.shared.IpConfigurationParcelableUtil.fromStableParcelable;
 import static android.system.OsConstants.ETH_P_IPV6;
+import static android.system.OsConstants.IFA_F_TEMPORARY;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
 import static android.system.OsConstants.IPPROTO_TCP;
 
@@ -171,6 +172,8 @@ import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 
 /**
  * Tests for IpClient.
@@ -471,6 +474,14 @@ public class IpClientIntegrationTest {
         disableIpv6ProvisioningDelays();
     }
 
+    private <T> T verifyWithTimeout(InOrder inOrder, T t) {
+        if (inOrder != null) {
+            return inOrder.verify(t, timeout(TEST_TIMEOUT_MS));
+        } else {
+            return verify(t, timeout(TEST_TIMEOUT_MS));
+        }
+    }
+
     private void expectAlarmCancelled(InOrder inOrder, OnAlarmListener listener) {
         inOrder.verify(mAlarm, timeout(TEST_TIMEOUT_MS)).cancel(eq(listener));
     }
@@ -481,15 +492,9 @@ public class IpClientIntegrationTest {
         final long min = when - 3 * 1000;
         final long max = when + 3 * 1000;
         ArgumentCaptor<OnAlarmListener> captor = ArgumentCaptor.forClass(OnAlarmListener.class);
-        if (inOrder != null) {
-            inOrder.verify(mAlarm, timeout(TEST_TIMEOUT_MS)).setExact(
-                    anyInt(), longThat(x -> x >= min && x <= max),
-                    contains(tagMatch), captor.capture(), eq(mIpc.getHandler()));
-        } else {
-            verify(mAlarm, timeout(TEST_TIMEOUT_MS)).setExact(
-                    anyInt(), longThat(x -> x >= min && x <= max),
-                    contains(tagMatch), captor.capture(), eq(mIpc.getHandler()));
-        }
+        verifyWithTimeout(inOrder, mAlarm).setExact(
+                anyInt(), longThat(x -> x >= min && x <= max),
+                contains(tagMatch), captor.capture(), eq(mIpc.getHandler()));
         return captor.getValue();
     }
 
@@ -1361,6 +1366,62 @@ public class IpClientIntegrationTest {
         mNetd.setProcSysNet(INetd.IPV6, INetd.CONF, mIfaceName, "dad_transmits", "0");
     }
 
+    private void assertHasAddressThat(String msg, LinkProperties lp,
+            Predicate<LinkAddress> condition) {
+        for (LinkAddress addr : lp.getLinkAddresses()) {
+            if (condition.test(addr)) {
+                return;
+            }
+        }
+        fail(msg + " not found in: " + lp);
+    }
+
+    private boolean hasFlag(LinkAddress addr, int flag) {
+        return (addr.getFlags() & flag) == flag;
+    }
+
+    private boolean isPrivacyAddress(LinkAddress addr) {
+        return addr.isGlobalPreferred() && hasFlag(addr, IFA_F_TEMPORARY);
+    }
+
+    private boolean isStablePrivacyAddress(LinkAddress addr) {
+        // TODO: this is incorrect. Fix netd to report IFA_F_STABLE_PRIVACY on R onwards, and then
+        // move away from getting addresses from netd altogether.
+        return addr.isGlobalPreferred();
+    }
+
+    private LinkProperties doIpv6OnlyProvisioning(InOrder inOrder, ByteBuffer ra) throws Exception {
+        waitForRouterSolicitation();
+        mPacketReader.sendResponse(ra);
+
+        // The lambda below needs to write a LinkProperties to a local variable, but lambdas cannot
+        // write to non-final local variables. So declare a final variable to write to.
+        final AtomicReference<LinkProperties> lpRef = new AtomicReference<>();
+
+        ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verifyWithTimeout(inOrder, mCb).onProvisioningSuccess(captor.capture());
+        lpRef.set(captor.getValue());
+
+        // Sometimes provisioning completes as soon as the link-local and the stable address appear,
+        // before the privacy address appears. If so, wait here for the LinkProperties update that
+        // contains all three address. Otherwise, future calls to verify() might get confused.
+        if (captor.getValue().getLinkAddresses().size() == 2) {
+            verifyWithTimeout(inOrder, mCb).onLinkPropertiesChange(argThat(lp -> {
+                lpRef.set(lp);
+                return lp.getLinkAddresses().size() == 3;
+            }));
+        }
+
+        LinkProperties lp = lpRef.get();
+        assertEquals("Should have 3 IPv6 addresses after provisioning: " + lp,
+                3, lp.getLinkAddresses().size());
+        assertHasAddressThat("link-local address", lp, x -> x.getAddress().isLinkLocalAddress());
+        assertHasAddressThat("privacy address", lp, this::isPrivacyAddress);
+        assertHasAddressThat("stable privacy address", lp, this::isStablePrivacyAddress);
+
+        return lp;
+    }
+
     @Test
     public void testRaRdnss() throws Exception {
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
@@ -1368,6 +1429,9 @@ public class IpClientIntegrationTest {
                 .withoutIPv4()
                 .build();
         mIpc.startProvisioning(config);
+
+        InOrder inOrder = inOrder(mCb);
+        ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
 
         final String dnsServer = "2001:4860:4860::64";
         final String lowlifeDnsServer = "2001:4860:4860::6464";
@@ -1377,24 +1441,7 @@ public class IpClientIntegrationTest {
         ByteBuffer rdnss2 = buildRdnssOption(600, dnsServer);
         ByteBuffer ra = buildRaPacket(pio, rdnss1, rdnss2);
 
-        waitForRouterSolicitation();
-        mPacketReader.sendResponse(ra);
-
-        InOrder inOrder = inOrder(mCb);
-
-        ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
-        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
-        LinkProperties lp = captor.getValue();
-
-        // Sometimes provisioning completes as soon as the link-local and the stable address appear,
-        // before the privacy address appears. If so, wait here for the LinkProperties update that
-        // contains the privacy address. Otherwise, future calls to verify() might get confused.
-        // TODO: move this code to a more general startIpv6Provisioning method so we can write more
-        // IPv6 tests without duplicating this complexity.
-        if (lp.getLinkAddresses().size() == 2) {
-            inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(
-                    argThat(x -> x.getLinkAddresses().size() == 3));
-        }
+        LinkProperties lp = doIpv6OnlyProvisioning(inOrder, ra);
 
         // Expect that DNS servers with lifetimes below CONFIG_MIN_RDNSS_LIFETIME are not accepted.
         assertNotNull(lp);
@@ -1462,7 +1509,7 @@ public class IpClientIntegrationTest {
         // The NAT64 prefix might be detected before or after provisioning success.
         // Don't test order between these two events.
         ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        verifyWithTimeout(null /*inOrder*/, mCb).onProvisioningSuccess(captor.capture());
         expectAlarmSet(null /*inOrder*/, "PREF64", 600);
         reset(mCb, mAlarm);
 
