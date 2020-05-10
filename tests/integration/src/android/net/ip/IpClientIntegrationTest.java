@@ -1503,20 +1503,13 @@ public class IpClientIntegrationTest {
         ByteBuffer pref64 = new StructNdOptPref64(prefix, 600).toByteBuffer();
         ByteBuffer ra = buildRaPacket(pio, rdnss, pref64);
 
-        waitForRouterSolicitation();
-        mPacketReader.sendResponse(ra);
-
         // The NAT64 prefix might be detected before or after provisioning success.
         // Don't test order between these two events.
-        ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
-        verifyWithTimeout(null /*inOrder*/, mCb).onProvisioningSuccess(captor.capture());
+        LinkProperties lp = doIpv6OnlyProvisioning(null /*inOrder*/, ra);
         expectAlarmSet(null /*inOrder*/, "PREF64", 600);
-        reset(mCb, mAlarm);
 
         // From now on expect events in order.
         InOrder inOrder = inOrder(mCb, mAlarm);
-
-        LinkProperties lp = captor.getValue();
         if (lp.getNat64Prefix() != null) {
             assertEquals(prefix, lp.getNat64Prefix());
         } else {
