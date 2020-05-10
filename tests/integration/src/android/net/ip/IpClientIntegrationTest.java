@@ -188,6 +188,9 @@ public class IpClientIntegrationTest {
     private static final String TEST_GROUPHINT = "some grouphint";
     private static final int TEST_LEASE_DURATION_S = 3_600; // 1 hour
 
+    // TODO: move to NetlinkConstants, NetworkStackConstants, or OsConstants.
+    private static final int IFA_F_STABLE_PRIVACY = 0x800;
+
     @Rule
     public final DevSdkIgnoreRule mIgnoreRule = new DevSdkIgnoreRule();
 
@@ -1385,9 +1388,9 @@ public class IpClientIntegrationTest {
     }
 
     private boolean isStablePrivacyAddress(LinkAddress addr) {
-        // TODO: this is incorrect. Fix netd to report IFA_F_STABLE_PRIVACY on R onwards, and then
-        // move away from getting addresses from netd altogether.
-        return addr.isGlobalPreferred();
+        // TODO: move away from getting address updates from netd and make this work on Q as well.
+        final int flag = ShimUtils.isAtLeastR() ? IFA_F_STABLE_PRIVACY : 0;
+        return addr.isGlobalPreferred() && hasFlag(addr, flag);
     }
 
     private LinkProperties doIpv6OnlyProvisioning(InOrder inOrder, ByteBuffer ra) throws Exception {
