@@ -15,22 +15,8 @@
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
 
-package android.net.ip;
+package android.net.ipmemorystore;
 /* @hide */
-interface IIpClient {
-  oneway void completedPreDhcpAction();
-  oneway void confirmConfiguration();
-  oneway void readPacketFilterComplete(in byte[] data);
-  oneway void shutdown();
-  oneway void startProvisioning(in android.net.ProvisioningConfigurationParcelable req);
-  oneway void stop();
-  oneway void setTcpBufferSizes(in String tcpBufferSizes);
-  oneway void setHttpProxy(in android.net.ProxyInfo proxyInfo);
-  oneway void setMulticastFilter(boolean enabled);
-  oneway void addKeepalivePacketFilter(int slot, in android.net.TcpKeepalivePacketDataParcelable pkt);
-  oneway void removeKeepalivePacketFilter(int slot);
-  oneway void setL2KeyAndGroupHint(in String l2Key, in String cluster);
-  oneway void addNattKeepalivePacketFilter(int slot, in android.net.NattKeepalivePacketDataParcelable pkt);
-  oneway void notifyPreconnectionComplete(boolean success);
-  oneway void updateLayer2Information(in android.net.Layer2InformationParcelable info);
+interface IOnSameL3NetworkResponseListener {
+  oneway void onSameL3NetworkResponse(in android.net.ipmemorystore.StatusParcelable status, in android.net.ipmemorystore.SameL3NetworkResponseParcelable response);
 }
