@@ -95,15 +95,17 @@ class ModuleNetworkStackClientTest {
         // Force NetworkStack.getService() to return null: this cannot be done with
         // setServiceForTest, as passing null just restores default behavior.
         val session = mockitoSession().spyStatic(NetworkStack::class.java).startMocking()
-        doReturn(null).`when` { NetworkStack.getService() }
-        ModuleNetworkStackClient.getInstance(mContext).makeIpClient(TEST_IFNAME, mIpClientCb)
+        try {
+            doReturn(null).`when` { NetworkStack.getService() }
+            ModuleNetworkStackClient.getInstance(mContext).makeIpClient(TEST_IFNAME, mIpClientCb)
 
-        Thread.sleep(TEST_TIMEOUT_MS)
-        verify(mConnector, never()).makeIpClient(any(), any())
-        NetworkStack.setServiceForTest(mConnectorBinder)
-
-        // Restore behavior of NetworkStack to return what was set in setServiceForTest
-        session.finishMocking()
+            Thread.sleep(TEST_TIMEOUT_MS)
+            verify(mConnector, never()).makeIpClient(any(), any())
+            NetworkStack.setServiceForTest(mConnectorBinder)
+        } finally {
+            // Restore behavior of NetworkStack to return what was set in setServiceForTest
+            session.finishMocking()
+        }
 
         // Use a longer timeout as polling can cause larger delays
         verify(mConnector, timeout(TEST_TIMEOUT_MS * 4)).makeIpClient(TEST_IFNAME, mIpClientCb)
