@@ -31,7 +31,7 @@ import android.text.TextUtils;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
-import com.android.networkstack.apishim.ShimUtils;
+import com.android.networkstack.apishim.common.ShimUtils;
 
 import java.io.UnsupportedEncodingException;
 import java.net.Inet4Address;

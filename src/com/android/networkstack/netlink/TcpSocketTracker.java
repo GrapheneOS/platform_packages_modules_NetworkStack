@@ -65,7 +65,7 @@ import androidx.annotation.Nullable;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.networkstack.apishim.NetworkShimImpl;
-import com.android.networkstack.apishim.UnsupportedApiLevelException;
+import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 
 import java.io.FileDescriptor;
 import java.io.InterruptedIOException;

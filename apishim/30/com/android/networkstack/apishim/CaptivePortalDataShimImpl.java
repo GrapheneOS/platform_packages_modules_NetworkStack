@@ -24,6 +24,10 @@ import android.os.RemoteException;
 
 import androidx.annotation.NonNull;
 
+import com.android.networkstack.apishim.common.CaptivePortalDataShim;
+import com.android.networkstack.apishim.common.ShimUtils;
+import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 

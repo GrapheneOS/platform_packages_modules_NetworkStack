@@ -14,21 +14,24 @@
  * limitations under the License.
  */
 
-package com.android.networkstack.apishim;
+package com.android.networkstack.apishim.common;
+
+import androidx.annotation.NonNull;
+
+import java.net.SocketAddress;
 
 /**
- * Interface used to access API methods in {@link android.net.Network}, with appropriate fallbacks
- * if the methods are not yet part of the released API.
+ * Interface used to access API methods in {@link android.net.util.SocketUtils}, with appropriate
+ * fallbacks if the methods are not yet part of the released API.
  *
- * <p>This interface makes it easier for callers to use NetworkShimImpl, as it's more obvious what
- * methods must be implemented on each API level, and it abstracts from callers the need to
+ * <p>This interface makes it easier for callers to use SocketUtilsShimImpl, as it's more obvious
+ * what methods must be implemented on each API level, and it abstracts from callers the need to
  * reference classes that have different implementations (which also does not work well with IDEs).
  */
-public interface NetworkShim {
+public interface SocketUtilsShim {
     /**
-     * @see android.net.Network.netId.
-     *
-     * @throws UnsupportedApiLevelException if API is not available in the API level.
+     * @see android.net.util.SocketUtils#makePacketSocketAddress(int, int, byte[])
      */
-    int getNetId() throws UnsupportedApiLevelException;
+    @NonNull
+    SocketAddress makePacketSocketAddress(int protocol, int ifIndex, @NonNull byte[] hwAddr);
 }
