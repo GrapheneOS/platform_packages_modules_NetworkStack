@@ -220,7 +220,8 @@ cc_library_shared {
     srcs: [
         "jni/network_stack_utils_jni.cpp"
     ],
-    sdk_version: "current",
+    sdk_version: "29",
+    min_sdk_version: "29",
     shared_libs: [
         "liblog",
         "libnativehelper_compat_libc++",
