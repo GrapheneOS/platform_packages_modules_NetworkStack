@@ -73,7 +73,7 @@ public final class PermissionUtil {
      */
     public static void checkDumpPermission() {
         final int caller = getCallingUid();
-        if (caller != Process.SYSTEM_UID && caller != Process.ROOT_UID
+        if (caller != Process.myUid() && caller != Process.SYSTEM_UID && caller != Process.ROOT_UID
                 && caller != Process.SHELL_UID) {
             throw new SecurityException("No dump permissions for caller: " + caller);
         }
