@@ -77,9 +77,9 @@ import com.android.internal.util.MessageUtils;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.internal.util.WakeupMessage;
-import com.android.networkstack.apishim.NetworkInformationShim;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
-import com.android.networkstack.apishim.ShimUtils;
+import com.android.networkstack.apishim.common.NetworkInformationShim;
+import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
 
