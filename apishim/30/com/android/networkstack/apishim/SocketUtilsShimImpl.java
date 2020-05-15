@@ -21,6 +21,9 @@ import android.os.Build;
 
 import androidx.annotation.NonNull;
 
+import com.android.networkstack.apishim.common.ShimUtils;
+import com.android.networkstack.apishim.common.SocketUtilsShim;
+
 import java.net.SocketAddress;
 
 /**
