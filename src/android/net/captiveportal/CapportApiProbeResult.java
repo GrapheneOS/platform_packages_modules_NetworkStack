@@ -18,7 +18,7 @@ package android.net.captiveportal;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.android.networkstack.apishim.CaptivePortalDataShim;
+import com.android.networkstack.apishim.common.CaptivePortalDataShim;
 
 /**
  * Captive portal probe detection result including capport API detection result.

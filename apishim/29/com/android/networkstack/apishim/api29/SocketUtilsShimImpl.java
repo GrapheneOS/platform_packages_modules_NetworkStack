@@ -20,7 +20,7 @@ import android.net.util.SocketUtils;
 
 import androidx.annotation.NonNull;
 
-import com.android.networkstack.apishim.SocketUtilsShim;
+import com.android.networkstack.apishim.common.SocketUtilsShim;
 
 import java.net.SocketAddress;
 
