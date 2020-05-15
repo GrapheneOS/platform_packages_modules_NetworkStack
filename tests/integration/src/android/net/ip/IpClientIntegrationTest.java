@@ -134,7 +134,7 @@ import androidx.test.runner.AndroidJUnit4;
 import com.android.internal.util.StateMachine;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.apishim.ConstantsShim;
-import com.android.networkstack.apishim.ShimUtils;
+import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.arp.ArpPacket;
 import com.android.server.NetworkObserver;
 import com.android.server.NetworkObserverRegistry;

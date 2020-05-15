@@ -44,8 +44,8 @@ import android.util.Log.TerribleFailureHandler;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
-import com.android.networkstack.apishim.NetworkShim;
 import com.android.networkstack.apishim.NetworkShimImpl;
+import com.android.networkstack.apishim.common.NetworkShim;
 
 import libcore.util.HexEncoding;
 

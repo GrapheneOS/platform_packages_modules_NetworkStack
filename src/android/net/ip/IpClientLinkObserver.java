@@ -37,8 +37,8 @@ import android.os.Handler;
 import android.system.OsConstants;
 import android.util.Log;
 
-import com.android.networkstack.apishim.NetworkInformationShim;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
+import com.android.networkstack.apishim.common.NetworkInformationShim;
 import com.android.server.NetworkObserver;
 
 import java.net.InetAddress;
