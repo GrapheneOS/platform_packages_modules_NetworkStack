@@ -3374,8 +3374,7 @@ public class NetworkMonitor extends StateMachine {
                 CONFIG_DATA_STALL_EVALUATION_TYPE,
                 DEFAULT_DATA_STALL_EVALUATION_TYPES)
                 & DATA_STALL_EVALUATION_TYPE_TCP) != 0)
-                    ? new TcpSocketTracker(new TcpSocketTracker.Dependencies(context,
-                        ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)), network)
+                    ? new TcpSocketTracker(new TcpSocketTracker.Dependencies(context), network)
                     : null;
     }
 
