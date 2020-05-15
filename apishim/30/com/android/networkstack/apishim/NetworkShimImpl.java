@@ -21,6 +21,9 @@ import android.os.Build;
 
 import androidx.annotation.NonNull;
 
+import com.android.networkstack.apishim.common.NetworkShim;
+import com.android.networkstack.apishim.common.ShimUtils;
+
 /**
  * Implementation of {@link NetworkShim} for API 30.
  */

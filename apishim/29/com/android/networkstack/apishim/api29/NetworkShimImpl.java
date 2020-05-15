@@ -20,8 +20,8 @@ import android.net.Network;
 
 import androidx.annotation.NonNull;
 
-import com.android.networkstack.apishim.NetworkShim;
-import com.android.networkstack.apishim.UnsupportedApiLevelException;
+import com.android.networkstack.apishim.common.NetworkShim;
+import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 /**
  * Implementation of NetworkShim for API 29.
  */

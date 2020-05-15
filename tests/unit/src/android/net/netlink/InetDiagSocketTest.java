@@ -36,7 +36,6 @@ import static org.junit.Assume.assumeTrue;
 import android.app.Instrumentation;
 import android.content.Context;
 import android.net.ConnectivityManager;
-import android.net.netlink.StructNlMsgHdr;
 import android.os.Process;
 import android.system.Os;
 
@@ -44,7 +43,7 @@ import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
-import com.android.networkstack.apishim.ShimUtils;
+import com.android.networkstack.apishim.common.ShimUtils;
 
 import libcore.util.HexEncoding;
 
