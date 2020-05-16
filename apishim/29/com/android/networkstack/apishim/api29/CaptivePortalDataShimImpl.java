@@ -19,8 +19,8 @@ package com.android.networkstack.apishim.api29;
 import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 
-import com.android.networkstack.apishim.CaptivePortalDataShim;
-import com.android.networkstack.apishim.UnsupportedApiLevelException;
+import com.android.networkstack.apishim.common.CaptivePortalDataShim;
+import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 
 import org.json.JSONException;
 import org.json.JSONObject;

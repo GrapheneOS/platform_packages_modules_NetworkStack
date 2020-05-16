@@ -58,7 +58,7 @@ import androidx.annotation.VisibleForTesting;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.IndentingPrintWriter;
 import com.android.networkstack.NetworkStackNotifier;
-import com.android.networkstack.apishim.ShimUtils;
+import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.server.connectivity.NetworkMonitor;
 import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
 import com.android.server.util.PermissionUtil;
@@ -503,6 +503,7 @@ public class NetworkStackService extends Service {
             synchronized (mAidlVersions) {
                 for (AidlVersion version : mAidlVersions) {
                     switch (version.mKey) {
+                        case AIDL_KEY_IPMEMORYSTORE:
                         case AIDL_KEY_NETWORKSTACK:
                             systemServerVersions.add(version.mVersion);
                             break;

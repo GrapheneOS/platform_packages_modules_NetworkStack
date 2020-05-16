@@ -49,6 +49,7 @@ import android.net.netlink.StructNlMsgHdr;
 import android.net.util.NetworkStackUtils;
 import android.net.util.SocketUtils;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.IBinder;
 import android.os.RemoteException;
 import android.os.SystemClock;
@@ -65,7 +66,8 @@ import androidx.annotation.Nullable;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.networkstack.apishim.NetworkShimImpl;
-import com.android.networkstack.apishim.UnsupportedApiLevelException;
+import com.android.networkstack.apishim.common.ShimUtils;
+import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 
 import java.io.FileDescriptor;
 import java.io.InterruptedIOException;
@@ -523,11 +525,9 @@ public class TcpSocketTracker {
     @VisibleForTesting
     public static class Dependencies {
         private final Context mContext;
-        private final boolean mIsTcpInfoParsingSupported;
 
-        public Dependencies(final Context context, final boolean tcpSupport) {
+        public Dependencies(final Context context) {
             mContext = context;
-            mIsTcpInfoParsingSupported = tcpSupport;
         }
 
         /**
@@ -578,7 +578,7 @@ public class TcpSocketTracker {
         public boolean isTcpInfoParsingSupported() {
             // Request tcp info from NetworkStack directly needs extra SELinux permission added
             // after Q release.
-            return mIsTcpInfoParsingSupported;
+            return ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q);
         }
 
         /**
