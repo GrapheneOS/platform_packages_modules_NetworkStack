@@ -40,6 +40,7 @@ import com.android.server.NetworkStackService.PermissionChecker
 import com.android.server.connectivity.NetworkMonitor
 import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService
 import com.android.testutils.DevSdkIgnoreRule
+import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo
 import org.junit.Rule
 import org.junit.Test
@@ -61,9 +62,6 @@ import kotlin.test.assertEquals
 
 private val TEST_NETD_VERSION = 9991001
 private val TEST_NETD_HASH = "test_netd_hash"
-
-private val TEST_IPMEMORYSTORE_VERSION = 9991002
-private val TEST_IPMEMORYSTORE_HASH = "test_ipmemorystore_hash"
 
 private val TEST_IFACE = "test_iface"
 
@@ -98,7 +96,7 @@ class NetworkStackServiceTest {
 
     private val connector = NetworkStackConnector(context, permChecker, deps)
 
-    @Test
+    @Test @IgnoreAfter(Build.VERSION_CODES.Q)
     fun testDumpVersion_Q() {
         prepareDumpVersionTest()
 
@@ -115,16 +113,36 @@ class NetworkStackServiceTest {
 
     @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
     fun testDumpVersion() {
-        // TODO: log interface hash on R+ and test it
+        prepareDumpVersionTest()
+
+        val connectorVersion = INetworkStackConnector.VERSION
+        val connectorHash = INetworkStackConnector.HASH
+
+        val dumpsysOut = StringWriter()
+        connector.dump(FileDescriptor(), PrintWriter(dumpsysOut, true /* autoFlush */),
+                arrayOf("version") /* args */)
+
+        assertEquals("NetworkStack version:\n" +
+                "LocalInterface:$connectorVersion:$connectorHash\n" +
+                "ipmemorystore:9990001:ipmemorystore_hash\n" +
+                "netd:$TEST_NETD_VERSION:$TEST_NETD_HASH\n" +
+                "networkstack:9990002:dhcp_server_hash\n" +
+                "networkstack:9990003:networkmonitor_hash\n" +
+                "networkstack:9990004:ipclient_hash\n" +
+                "networkstack:9990005:multiple_use_hash\n\n",
+                dumpsysOut.toString())
     }
 
     fun prepareDumpVersionTest() {
         // Call each method on INetworkStackConnector and verify that it notes down the version of
-        // the remote.
+        // the remote. This is usually a component in the system server that implements one of the
+        // NetworkStack AIDL callback interfaces (e.g., IIpClientCallbacks). On a device there may
+        // be different versions of the generated AIDL classes for different components, even within
+        // the same process (e.g., system_server).
         // Call fetchIpMemoryStore
         val mockIpMemoryStoreCb = mock(IIpMemoryStoreCallbacks::class.java)
         doReturn(9990001).`when`(mockIpMemoryStoreCb).interfaceVersion
-        doReturn("fetch_ipmemorystore_hash").`when`(mockIpMemoryStoreCb).interfaceHash
+        doReturn("ipmemorystore_hash").`when`(mockIpMemoryStoreCb).interfaceHash
 
         connector.fetchIpMemoryStore(mockIpMemoryStoreCb)
         // IpMemoryStore was created at initialization time
@@ -174,10 +192,10 @@ class NetworkStackServiceTest {
 
         // Call some methods one more time with a shared version number and hash to verify no
         // duplicates are reported
-        doReturn(9990005).`when`(mockIpMemoryStoreCb).interfaceVersion
-        doReturn("multiple_use_hash").`when`(mockIpMemoryStoreCb).interfaceHash
-        connector.fetchIpMemoryStore(mockIpMemoryStoreCb)
-        verify(mockIpMemoryStoreCb, times(2)).onIpMemoryStoreFetched(any())
+        doReturn(9990005).`when`(mockIpClientCb).interfaceVersion
+        doReturn("multiple_use_hash").`when`(mockIpClientCb).interfaceHash
+        connector.makeIpClient(TEST_IFACE, mockIpClientCb)
+        verify(mockIpClientCb, times(2)).onIpClientCreated(any())
 
         doReturn(9990005).`when`(mockDhcpCb).interfaceVersion
         doReturn("multiple_use_hash").`when`(mockDhcpCb).interfaceHash
