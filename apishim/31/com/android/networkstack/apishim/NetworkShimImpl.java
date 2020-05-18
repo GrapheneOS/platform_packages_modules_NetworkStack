@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 The Android Open Source Project
+ * Copyright (C) 2020 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,36 +17,15 @@
 package com.android.networkstack.apishim;
 
 import android.net.Network;
-import android.os.Build;
 
 import androidx.annotation.NonNull;
-
-import com.android.networkstack.apishim.common.NetworkShim;
-import com.android.networkstack.apishim.common.ShimUtils;
 
 /**
  * Implementation of {@link NetworkShim} for API 30.
  */
-public class NetworkShimImpl extends com.android.networkstack.apishim.api29.NetworkShimImpl {
+public class NetworkShimImpl extends com.android.networkstack.apishim.api30.NetworkShimImpl {
+    // Currently, this is the same as the API 30 shim, so inherit everything from that.
     protected NetworkShimImpl(@NonNull Network network) {
         super(network);
-    }
-
-    /**
-     * Get a new instance of {@link NetworkShim}.
-     */
-    public static NetworkShim newInstance(@NonNull Network network) {
-        if (!ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
-            return com.android.networkstack.apishim.api29.NetworkShimImpl.newInstance(network);
-        }
-        return new NetworkShimImpl(network);
-    }
-
-    /**
-     * Get the netId of the network.
-     */
-    @Override
-    public int getNetId() {
-        return mNetwork.getNetId();
     }
 }
