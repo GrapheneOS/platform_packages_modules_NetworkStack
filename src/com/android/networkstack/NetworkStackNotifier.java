@@ -40,9 +40,9 @@ import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 import androidx.annotation.VisibleForTesting;
 
-import com.android.networkstack.apishim.CaptivePortalDataShim;
-import com.android.networkstack.apishim.NetworkInformationShim;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
+import com.android.networkstack.apishim.common.CaptivePortalDataShim;
+import com.android.networkstack.apishim.common.NetworkInformationShim;
 
 import java.util.Hashtable;
 import java.util.function.Consumer;

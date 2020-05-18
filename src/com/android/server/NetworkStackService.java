@@ -57,7 +57,7 @@ import androidx.annotation.VisibleForTesting;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.IndentingPrintWriter;
 import com.android.networkstack.NetworkStackNotifier;
-import com.android.networkstack.apishim.ShimUtils;
+import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.server.connectivity.NetworkMonitor;
 import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
 import com.android.server.util.PermissionUtil;

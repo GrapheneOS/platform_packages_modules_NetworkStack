@@ -25,8 +25,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
-import com.android.networkstack.apishim.CaptivePortalDataShim;
-import com.android.networkstack.apishim.NetworkInformationShim;
+import com.android.networkstack.apishim.common.CaptivePortalDataShim;
+import com.android.networkstack.apishim.common.NetworkInformationShim;
 
 import java.net.Inet4Address;
 
