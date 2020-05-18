@@ -503,6 +503,7 @@ public class NetworkStackService extends Service {
             synchronized (mAidlVersions) {
                 for (AidlVersion version : mAidlVersions) {
                     switch (version.mKey) {
+                        case AIDL_KEY_IPMEMORYSTORE:
                         case AIDL_KEY_NETWORKSTACK:
                             systemServerVersions.add(version.mVersion);
                             break;
