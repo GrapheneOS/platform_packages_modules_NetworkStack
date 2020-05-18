@@ -16,14 +16,12 @@
 
 package com.android.networkstack.apishim;
 
-import static android.net.ConnectivityDiagnosticsManager.DataStallReport;
-
 import androidx.annotation.VisibleForTesting;
 
 /**
  * Utility class for defining and importing constants from the Android platform.
  */
-public class ConstantsShim extends com.android.networkstack.apishim.api29.ConstantsShim {
+public class ConstantsShim extends com.android.networkstack.apishim.api30.ConstantsShim {
     /**
      * Constant that callers can use to determine what version of the shim they are using.
      * Must be the same as the version of the shims.
@@ -31,10 +29,5 @@ public class ConstantsShim extends com.android.networkstack.apishim.api29.Consta
      * the shimmed objects and methods themselves.
      */
     @VisibleForTesting
-    public static final int VERSION = 30;
-
-    public static final int DETECTION_METHOD_DNS_EVENTS =
-            DataStallReport.DETECTION_METHOD_DNS_EVENTS;
-    public static final int DETECTION_METHOD_TCP_METRICS =
-            DataStallReport.DETECTION_METHOD_TCP_METRICS;
+    public static final int VERSION = 31;
 }
