@@ -69,6 +69,8 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -1894,7 +1896,6 @@ public class NetworkMonitorTest {
         setStatus(mHttpConnection, 500);
         setStatus(mFallbackConnection, 204);
         nm.forceReevaluation(Process.myUid());
-        final ArgumentCaptor<Integer> intCaptor = ArgumentCaptor.forClass(Integer.class);
         // Expect to send HTTP, HTTPs, FALLBACK and evaluation results.
         verifyNetworkTested(NETWORK_VALIDATION_RESULT_PARTIAL,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_FALLBACK);
@@ -2084,8 +2085,11 @@ public class NetworkMonitorTest {
         setPortal302(mOtherHttpConnection1);
         runPortalNetworkTest();
         // Get conclusive result from one of the HTTP probe. Expect to create 2 HTTP and 2 HTTPS
-        // probes as resource configuration.
-        verify(mCleartextDnsNetwork, times(4)).openConnection(any());
+        // probes as resource configuration, but the portal can be detected before other probes
+        // start.
+        verify(mCleartextDnsNetwork, atMost(4)).openConnection(any());
+        verify(mCleartextDnsNetwork, atLeastOnce()).openConnection(any());
+        verify(mOtherHttpConnection1).getResponseCode();
     }
 
     @Test
@@ -2095,12 +2099,15 @@ public class NetworkMonitorTest {
         setStatus(mOtherHttpsConnection2, 204);
         runValidatedNetworkTest();
         // Get conclusive result from one of the HTTPS probe. Expect to create 2 HTTP and 2 HTTPS
-        // probes as resource configuration.
-        verify(mCleartextDnsNetwork, times(4)).openConnection(any());
+        // probes as resource configuration, but the network may validate from the HTTPS probe
+        // before other probes start.
+        verify(mCleartextDnsNetwork, atMost(4)).openConnection(any());
+        verify(mCleartextDnsNetwork, atLeastOnce()).openConnection(any());
+        verify(mOtherHttpsConnection2).getResponseCode();
     }
 
     @Test
-    public void testMultipleProbesOnInValiadNetworkForPrioritizedResource() throws Exception {
+    public void testMultipleProbesOnInValidNetworkForPrioritizedResource() throws Exception {
         setupResourceForMultipleProbes();
         // The configuration resource is prioritized. Only use configurations from resource.(i.e
         // Only configuration for mOtherHttpsConnection2, mOtherHttpsConnection2,
@@ -2109,8 +2116,11 @@ public class NetworkMonitorTest {
         setStatus(mHttpsConnection, 204);
         runFailedNetworkTest();
         // No conclusive result from both HTTP and HTTPS probes. Expect to create 2 HTTP and 2 HTTPS
-        // probes as resource configuration.
+        // probes as resource configuration. All probes are expected to have been run because this
+        // network is set to never validate (no probe has a success or portal result), so NM tests
+        // all probes to completion.
         verify(mCleartextDnsNetwork, times(4)).openConnection(any());
+        verify(mHttpsConnection, never()).getResponseCode();
     }
 
     @Test
