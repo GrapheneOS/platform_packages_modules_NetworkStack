@@ -147,7 +147,7 @@ public class DnsUtils {
         } catch (TimeoutException | InterruptedException e) {
             errorMsg = "Timeout";
         } finally {
-            logDnsResult(result, watch.stop() /* latency */, logger, type, errorMsg);
+            logDnsResult(result, watch.stop() / 1000 /* latencyMs */, logger, type, errorMsg);
         }
 
         if (null != errorMsg) throw new UnknownHostException(host);
@@ -155,8 +155,9 @@ public class DnsUtils {
         return result.toArray(new InetAddress[0]);
     }
 
-    private static void logDnsResult(@Nullable final List<InetAddress> results, final long latency,
-            @Nullable final DnsLogFunc logger, int type, @NonNull final String errorMsg) {
+    private static void logDnsResult(@Nullable final List<InetAddress> results,
+            final long latencyMs, @Nullable final DnsLogFunc logger, int type,
+            @NonNull final String errorMsg) {
         if (logger == null) {
             return;
         }
@@ -166,9 +167,9 @@ public class DnsUtils {
             for (InetAddress address : results) {
                 builder.append(',').append(address.getHostAddress());
             }
-            logger.log(String.format("%dms OK %s", latency, builder.substring(1)));
+            logger.log(String.format("%dms OK %s", latencyMs, builder.substring(1)));
         } else {
-            logger.log(String.format("%dms FAIL in type %s %s", latency, dnsTypeToStr(type),
+            logger.log(String.format("%dms FAIL in type %s %s", latencyMs, dnsTypeToStr(type),
                     errorMsg));
         }
     }

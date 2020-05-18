@@ -1398,11 +1398,11 @@ public class NetworkMonitor extends StateMachine {
                 time = watch.stop();
                 final String strIps = Arrays.toString(ips);
                 success = (ips != null && ips.length > 0);
-                validationLog(PROBE_PRIVDNS, host, String.format("%dms: %s", time, strIps));
+                validationLog(PROBE_PRIVDNS, host, String.format("%dus: %s", time, strIps));
             } catch (UnknownHostException uhe) {
                 time = watch.stop();
                 validationLog(PROBE_PRIVDNS, host,
-                        String.format("%dms - Error: %s", time, uhe.getMessage()));
+                        String.format("%dus - Error: %s", time, uhe.getMessage()));
             }
             logValidationProbe(time, PROBE_PRIVDNS, success ? DNS_SUCCESS : DNS_FAILURE);
             return success;
@@ -2930,18 +2930,18 @@ public class NetworkMonitor extends StateMachine {
         if (mEvaluationTimer.isRunning()) {
             int[] transports = mNetworkCapabilities.getTransportTypes();
             mMetricsLog.log(mCleartextDnsNetwork, transports,
-                    new NetworkEvent(evtype, mEvaluationTimer.stop()));
+                    new NetworkEvent(evtype, mEvaluationTimer.stop() / 1000));
             mEvaluationTimer.reset();
         }
     }
 
-    private void logValidationProbe(long durationMs, int probeType, int probeResult) {
+    private void logValidationProbe(long durationUs, int probeType, int probeResult) {
         int[] transports = mNetworkCapabilities.getTransportTypes();
         boolean isFirstValidation = validationStage().mIsFirstValidation;
         ValidationProbeEvent ev = new ValidationProbeEvent.Builder()
                 .setProbeType(probeType, isFirstValidation)
                 .setReturnCode(probeResult)
-                .setDurationMs(durationMs)
+                .setDurationMs(durationUs / 1000)
                 .build();
         mMetricsLog.log(mCleartextDnsNetwork, transports, ev);
     }
