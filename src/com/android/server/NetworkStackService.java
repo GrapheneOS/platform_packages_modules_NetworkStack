@@ -48,6 +48,7 @@ import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.RemoteException;
+import android.text.TextUtils;
 import android.util.ArraySet;
 
 import androidx.annotation.NonNull;
@@ -57,7 +58,7 @@ import androidx.annotation.VisibleForTesting;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.IndentingPrintWriter;
 import com.android.networkstack.NetworkStackNotifier;
-import com.android.networkstack.apishim.ShimUtils;
+import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.server.connectivity.NetworkMonitor;
 import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
 import com.android.server.util.PermissionUtil;
@@ -67,8 +68,15 @@ import java.io.PrintWriter;
 import java.lang.ref.WeakReference;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 /**
  * Android service used to start the network stack when bound to via an intent.
@@ -190,10 +198,66 @@ public class NetworkStackService extends Service {
 
         private static final String DUMPSYS_ARG_VERSION = "version";
 
-        /** Version of the framework AIDL interfaces observed. Should hold only one value. */
+        private static final String AIDL_KEY_NETWORKSTACK = "networkstack";
+        private static final String AIDL_KEY_IPMEMORYSTORE = "ipmemorystore";
+        private static final String AIDL_KEY_NETD = "netd";
+
+        private static final int VERSION_UNKNOWN = -1;
+        private static final String HASH_UNKNOWN = "unknown";
+
+        /**
+         * Versions of the AIDL interfaces observed by the network stack, in other words versions
+         * that the framework and other modules communicating with the network stack are using.
+         * The map may hold multiple values as the interface is used by modules with different
+         * versions.
+         */
         @GuardedBy("mFrameworkAidlVersions")
-        private final ArraySet<Integer> mFrameworkAidlVersions = new ArraySet<>(1);
-        private final int mNetdAidlVersion;
+        private final ArraySet<AidlVersion> mAidlVersions = new ArraySet<>();
+
+        private static final class AidlVersion implements Comparable<AidlVersion> {
+            @NonNull
+            final String mKey;
+            final int mVersion;
+            @NonNull
+            final String mHash;
+
+            private static final Comparator<AidlVersion> COMPARATOR =
+                    Comparator.comparing((AidlVersion v) -> v.mKey)
+                            .thenComparingInt(v -> v.mVersion)
+                            .thenComparing(v -> v.mHash, String::compareTo);
+
+            AidlVersion(@NonNull String key, int version, @NonNull String hash) {
+                mKey = key;
+                mVersion = version;
+                mHash = hash;
+            }
+
+            @Override
+            public int hashCode() {
+                return Objects.hash(mVersion, mHash);
+            }
+
+            @Override
+            public boolean equals(@Nullable Object obj) {
+                if (!(obj instanceof AidlVersion)) return false;
+                final AidlVersion other = (AidlVersion) obj;
+                return Objects.equals(mKey, other.mKey)
+                        && Objects.equals(mVersion, other.mVersion)
+                        && Objects.equals(mHash, other.mHash);
+            }
+
+            @NonNull
+            @Override
+            public String toString() {
+                // Use a format that can be easily parsed by tests for the version
+                return String.format("%s:%s:%s", mKey, mVersion, mHash);
+            }
+
+            @Override
+            public int compareTo(AidlVersion o) {
+                return COMPARATOR.compare(this, o);
+            }
+        }
 
         private SharedLog addValidationLogs(Network network, String name) {
             final SharedLog log = new SharedLog(NUM_VALIDATION_LOG_LINES, network + " - " + name);
@@ -232,13 +296,16 @@ public class NetworkStackService extends Service {
             }
 
             int netdVersion;
+            String netdHash;
             try {
                 netdVersion = mNetd.getInterfaceVersion();
+                netdHash = mNetd.getInterfaceHash();
             } catch (RemoteException e) {
                 mLog.e("Error obtaining INetd version", e);
-                netdVersion = -1;
+                netdVersion = VERSION_UNKNOWN;
+                netdHash = HASH_UNKNOWN;
             }
-            mNetdAidlVersion = netdVersion;
+            updateNetdAidlVersion(netdVersion, netdHash);
 
             try {
                 mObserverRegistry.register(mNetd);
@@ -247,9 +314,21 @@ public class NetworkStackService extends Service {
             }
         }
 
-        private void updateSystemAidlVersion(final int version) {
-            synchronized (mFrameworkAidlVersions) {
-                mFrameworkAidlVersions.add(version);
+        private void updateNetdAidlVersion(final int version, final String hash) {
+            synchronized (mAidlVersions) {
+                mAidlVersions.add(new AidlVersion(AIDL_KEY_NETD, version, hash));
+            }
+        }
+
+        private void updateNetworkStackAidlVersion(final int version, final String hash) {
+            synchronized (mAidlVersions) {
+                mAidlVersions.add(new AidlVersion(AIDL_KEY_NETWORKSTACK, version, hash));
+            }
+        }
+
+        private void updateIpMemoryStoreAidlVersion(final int version, final String hash) {
+            synchronized (mAidlVersions) {
+                mAidlVersions.add(new AidlVersion(AIDL_KEY_IPMEMORYSTORE, version, hash));
             }
         }
 
@@ -260,7 +339,7 @@ public class NetworkStackService extends Service {
         public void makeDhcpServer(@NonNull String ifName, @NonNull DhcpServingParamsParcel params,
                 @NonNull IDhcpServerCallbacks cb) throws RemoteException {
             mPermChecker.enforceNetworkStackCallingPermission();
-            updateSystemAidlVersion(cb.getInterfaceVersion());
+            updateNetworkStackAidlVersion(cb.getInterfaceVersion(), cb.getInterfaceHash());
             final DhcpServer server;
             try {
                 server = mDeps.makeDhcpServer(
@@ -284,7 +363,7 @@ public class NetworkStackService extends Service {
         public void makeNetworkMonitor(Network network, String name, INetworkMonitorCallbacks cb)
                 throws RemoteException {
             mPermChecker.enforceNetworkStackCallingPermission();
-            updateSystemAidlVersion(cb.getInterfaceVersion());
+            updateNetworkStackAidlVersion(cb.getInterfaceVersion(), cb.getInterfaceHash());
             final SharedLog log = addValidationLogs(network, name);
             final NetworkMonitor nm = mDeps.makeNetworkMonitor(mContext, cb, network, log, this);
             cb.onNetworkMonitorCreated(new NetworkMonitorConnector(nm, mPermChecker));
@@ -293,7 +372,7 @@ public class NetworkStackService extends Service {
         @Override
         public void makeIpClient(String ifName, IIpClientCallbacks cb) throws RemoteException {
             mPermChecker.enforceNetworkStackCallingPermission();
-            updateSystemAidlVersion(cb.getInterfaceVersion());
+            updateNetworkStackAidlVersion(cb.getInterfaceVersion(), cb.getInterfaceHash());
             final IpClient ipClient = mDeps.makeIpClient(
                     mContext, ifName, cb, mObserverRegistry, this);
 
@@ -325,7 +404,7 @@ public class NetworkStackService extends Service {
         public void fetchIpMemoryStore(@NonNull final IIpMemoryStoreCallbacks cb)
                 throws RemoteException {
             mPermChecker.enforceNetworkStackCallingPermission();
-            updateSystemAidlVersion(cb.getInterfaceVersion());
+            updateIpMemoryStoreAidlVersion(cb.getInterfaceVersion(), cb.getInterfaceHash());
             cb.onIpMemoryStoreFetched(mIpMemoryStoreService);
         }
 
@@ -389,11 +468,59 @@ public class NetworkStackService extends Service {
          * Dump version information of the module and detected system version.
          */
         private void dumpVersion(@NonNull PrintWriter fout) {
-            fout.println("NetworkStackConnector: " + this.VERSION);
-            synchronized (mFrameworkAidlVersions) {
-                fout.println("SystemServer: " + mFrameworkAidlVersions);
+            if (!ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
+                dumpVersionNumberOnly(fout);
+                return;
             }
-            fout.println("Netd: " + mNetdAidlVersion);
+
+            fout.println("LocalInterface:" + this.VERSION + ":" + this.HASH);
+            synchronized (mAidlVersions) {
+                // Sort versions for deterministic order in output
+                for (AidlVersion version : sortVersions(mAidlVersions)) {
+                    fout.println(version);
+                }
+            }
+        }
+
+        private List<AidlVersion> sortVersions(Collection<AidlVersion> versions) {
+            final List<AidlVersion> sorted = new ArrayList<>(versions);
+            Collections.sort(sorted);
+            return sorted;
+        }
+
+        /**
+         * Legacy version of dumpVersion, only used for Q, as only the interface version number
+         * was used in Q.
+         *
+         * <p>Q behavior needs to be preserved as conformance tests for Q still expect this format.
+         * Once all conformance test suites are updated to expect the new format even on Q devices,
+         * this can be removed.
+         */
+        private void dumpVersionNumberOnly(@NonNull PrintWriter fout) {
+            fout.println("NetworkStackConnector: " + this.VERSION);
+            final SortedSet<Integer> systemServerVersions = new TreeSet<>();
+            int netdVersion = VERSION_UNKNOWN;
+            synchronized (mAidlVersions) {
+                for (AidlVersion version : mAidlVersions) {
+                    switch (version.mKey) {
+                        case AIDL_KEY_IPMEMORYSTORE:
+                        case AIDL_KEY_NETWORKSTACK:
+                            systemServerVersions.add(version.mVersion);
+                            break;
+                        case AIDL_KEY_NETD:
+                            netdVersion = version.mVersion;
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }
+            // TreeSet.toString is formatted as [a, b], but Q used ArraySet.toString formatted as
+            // {a, b}. ArraySet does not have guaranteed ordering, which was not a problem in Q
+            // when only one interface number was expected (and there was no unit test relying on
+            // the ordering).
+            fout.println("SystemServer: {" + TextUtils.join(", ", systemServerVersions) + "}");
+            fout.println("Netd: " + netdVersion);
         }
 
         /**
