@@ -356,7 +356,7 @@ public class NetworkStackService extends Service {
                 cb.onDhcpServerCreated(STATUS_UNKNOWN_ERROR, null);
                 return;
             }
-            cb.onDhcpServerCreated(STATUS_SUCCESS, server);
+            cb.onDhcpServerCreated(STATUS_SUCCESS, server.makeConnector());
         }
 
         @Override
