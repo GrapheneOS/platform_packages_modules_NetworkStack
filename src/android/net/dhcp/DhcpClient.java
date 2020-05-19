@@ -149,8 +149,8 @@ public class DhcpClient extends StateMachine {
 
     // Timers and timeouts.
     private static final int SECONDS = 1000;
-    private static final int FIRST_TIMEOUT_MS         =   2 * SECONDS;
-    private static final int MAX_TIMEOUT_MS           = 128 * SECONDS;
+    private static final int FIRST_TIMEOUT_MS         =   1 * SECONDS;
+    private static final int MAX_TIMEOUT_MS           = 512 * SECONDS;
     private static final int IPMEMORYSTORE_TIMEOUT_MS =   1 * SECONDS;
 
     // The waiting time to restart the DHCP configuration process after broadcasting a
@@ -198,8 +198,8 @@ public class DhcpClient extends StateMachine {
 
     // This is not strictly needed, since the client is asynchronous and implements exponential
     // backoff. It's maintained for backwards compatibility with the previous DHCP code, which was
-    // a blocking operation with a 30-second timeout. We pick 36 seconds so we can send packets at
-    // t=0, t=2, t=6, t=14, t=30, allowing for 10% jitter.
+    // a blocking operation with a 30-second timeout. We pick 18 seconds so we can send packets at
+    // t=0, t=1, t=3, t=7, t=16, allowing for 10% jitter.
     private static final int DHCP_TIMEOUT_MS    =  36 * SECONDS;
 
     // DhcpClient uses IpClient's handler.
