@@ -14,36 +14,39 @@
  * limitations under the License.
  */
 
-package com.android.networkstack.apishim;
+package com.android.networkstack.apishim.api30;
 
-import android.net.util.SocketUtils;
+import android.net.Network;
 import android.os.Build;
 
 import androidx.annotation.NonNull;
 
-import java.net.SocketAddress;
+import com.android.networkstack.apishim.common.NetworkShim;
+import com.android.networkstack.apishim.common.ShimUtils;
 
 /**
- * Implementation of {@link SocketUtilsShim} for API 30.
+ * Implementation of {@link NetworkShim} for API 30.
  */
-public class SocketUtilsShimImpl
-        extends com.android.networkstack.apishim.api29.SocketUtilsShimImpl {
-    protected SocketUtilsShimImpl() {}
-
-    /**
-     * Get a new instance of {@link SocketUtilsShim}.
-     */
-    public static SocketUtilsShim newInstance() {
-        if (!ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
-            return com.android.networkstack.apishim.api29.SocketUtilsShimImpl.newInstance();
-        }
-        return new SocketUtilsShimImpl();
+public class NetworkShimImpl extends com.android.networkstack.apishim.api29.NetworkShimImpl {
+    protected NetworkShimImpl(@NonNull Network network) {
+        super(network);
     }
 
-    @NonNull
+    /**
+     * Get a new instance of {@link NetworkShim}.
+     */
+    public static NetworkShim newInstance(@NonNull Network network) {
+        if (!ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
+            return com.android.networkstack.apishim.api29.NetworkShimImpl.newInstance(network);
+        }
+        return new NetworkShimImpl(network);
+    }
+
+    /**
+     * Get the netId of the network.
+     */
     @Override
-    public SocketAddress makePacketSocketAddress(
-            int protocol, int ifIndex, @NonNull byte[] hwAddr) {
-        return SocketUtils.makePacketSocketAddress(protocol, ifIndex, hwAddr);
+    public int getNetId() {
+        return mNetwork.getNetId();
     }
 }

@@ -48,9 +48,9 @@ java_defaults {
 
 java_defaults {
     name: "NetworkStackReleaseApiLevel",
-    sdk_version: "system_29",
+    sdk_version: "system_30",
     min_sdk_version: "29",
-    target_sdk_version: "29",
+    target_sdk_version: "30",
 }
 
 // Filegroups for the API shims
@@ -60,6 +60,7 @@ filegroup {
         "apishim/common/**/*.java",
         "apishim/29/**/*.java",
         "apishim/30/**/*.java",
+        "apishim/31/**/*.java",
         ":networkstack-module-utils-srcs",
     ],
 }
@@ -71,6 +72,7 @@ filegroup {
     srcs: [
         "apishim/common/**/*.java",
         "apishim/29/**/*.java",
+        "apishim/30/**/*.java",
         ":networkstack-module-utils-srcs",
     ],
 }

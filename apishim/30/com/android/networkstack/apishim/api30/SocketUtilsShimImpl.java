@@ -14,29 +14,32 @@
  * limitations under the License.
  */
 
-package com.android.networkstack.apishim.api29;
+package com.android.networkstack.apishim.api30;
 
 import android.net.util.SocketUtils;
+import android.os.Build;
 
 import androidx.annotation.NonNull;
 
+import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.apishim.common.SocketUtilsShim;
 
 import java.net.SocketAddress;
 
 /**
- * Implementation of SocketUtilsShim for API 29.
+ * Implementation of {@link SocketUtilsShim} for API 30.
  */
-public class SocketUtilsShimImpl implements SocketUtilsShim {
+public class SocketUtilsShimImpl
+        extends com.android.networkstack.apishim.api29.SocketUtilsShimImpl {
     protected SocketUtilsShimImpl() {}
 
     /**
      * Get a new instance of {@link SocketUtilsShim}.
-     *
-     * Use com.android.networkstack.apishim.SocketUtilsShim#newInstance()
-     * (non-API29 version) instead, to use the correct shims depending on build SDK.
      */
     public static SocketUtilsShim newInstance() {
+        if (!ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
+            return com.android.networkstack.apishim.api29.SocketUtilsShimImpl.newInstance();
+        }
         return new SocketUtilsShimImpl();
     }
 
@@ -44,7 +47,6 @@ public class SocketUtilsShimImpl implements SocketUtilsShim {
     @Override
     public SocketAddress makePacketSocketAddress(
             int protocol, int ifIndex, @NonNull byte[] hwAddr) {
-        // Not available for API <= 29: fallback to older behavior.
-        return SocketUtils.makePacketSocketAddress(ifIndex, hwAddr);
+        return SocketUtils.makePacketSocketAddress(protocol, ifIndex, hwAddr);
     }
 }

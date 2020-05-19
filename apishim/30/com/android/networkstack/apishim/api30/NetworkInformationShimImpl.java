@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.networkstack.apishim;
+package com.android.networkstack.apishim.api30;
 
 import android.net.IpPrefix;
 import android.net.LinkProperties;
@@ -25,6 +25,10 @@ import android.os.Build;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
+
+import com.android.networkstack.apishim.common.CaptivePortalDataShim;
+import com.android.networkstack.apishim.common.NetworkInformationShim;
+import com.android.networkstack.apishim.common.ShimUtils;
 
 import java.net.Inet4Address;
 

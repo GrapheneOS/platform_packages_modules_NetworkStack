@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.networkstack.apishim;
+package com.android.networkstack.apishim.api30;
 
 import android.net.CaptivePortalData;
 import android.net.INetworkMonitorCallbacks;
@@ -23,6 +23,10 @@ import android.os.Build;
 import android.os.RemoteException;
 
 import androidx.annotation.NonNull;
+
+import com.android.networkstack.apishim.common.CaptivePortalDataShim;
+import com.android.networkstack.apishim.common.ShimUtils;
+import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 
 import org.json.JSONException;
 import org.json.JSONObject;

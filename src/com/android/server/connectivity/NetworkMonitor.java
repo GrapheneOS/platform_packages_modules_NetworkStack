@@ -158,11 +158,11 @@ import com.android.internal.util.StateMachine;
 import com.android.internal.util.TrafficStatsConstants;
 import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
-import com.android.networkstack.apishim.CaptivePortalDataShim;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
-import com.android.networkstack.apishim.ShimUtils;
-import com.android.networkstack.apishim.UnsupportedApiLevelException;
+import com.android.networkstack.apishim.common.CaptivePortalDataShim;
+import com.android.networkstack.apishim.common.ShimUtils;
+import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 import com.android.networkstack.metrics.DataStallDetectionStats;
 import com.android.networkstack.metrics.DataStallStatsUtils;
 import com.android.networkstack.netlink.TcpSocketTracker;
@@ -3374,8 +3374,7 @@ public class NetworkMonitor extends StateMachine {
                 CONFIG_DATA_STALL_EVALUATION_TYPE,
                 DEFAULT_DATA_STALL_EVALUATION_TYPES)
                 & DATA_STALL_EVALUATION_TYPE_TCP) != 0)
-                    ? new TcpSocketTracker(new TcpSocketTracker.Dependencies(context,
-                        ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)), network)
+                    ? new TcpSocketTracker(new TcpSocketTracker.Dependencies(context), network)
                     : null;
     }
 
