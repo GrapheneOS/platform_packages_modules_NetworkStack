@@ -1225,7 +1225,7 @@ public class NetworkMonitorTest {
     @Test
     public void testIsCaptivePortal_CapportApiInvalidContent() throws Exception {
         assumeTrue(CaptivePortalDataShimImpl.isSupported());
-        setStatus(mHttpsConnection, 204);
+        setSslException(mHttpsConnection);
         setPortal302(mHttpConnection);
         setApiContent(mCapportApiConnection, "{SomeInvalidText");
         runNetworkTest(makeCapportLPs(), CELL_METERED_CAPABILITIES,
@@ -1234,6 +1234,36 @@ public class NetworkMonitorTest {
 
         verify(mCallbacks, never()).notifyCaptivePortalDataChanged(any());
         verify(mHttpConnection).getResponseCode();
+    }
+
+    private void runCapportApiInvalidUrlTest(String url) throws Exception {
+        assumeTrue(CaptivePortalDataShimImpl.isSupported());
+        setSslException(mHttpsConnection);
+        setPortal302(mHttpConnection);
+        final LinkProperties lp = new LinkProperties(TEST_LINK_PROPERTIES);
+        lp.setCaptivePortalApiUrl(Uri.parse(url));
+        runNetworkTest(makeCapportLPs(), CELL_METERED_CAPABILITIES,
+                VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */,
+                TEST_LOGIN_URL);
+
+        verify(mCallbacks, never()).notifyCaptivePortalDataChanged(any());
+        verify(mCapportApiConnection, never()).getInputStream();
+        verify(mHttpConnection).getResponseCode();
+    }
+
+    @Test
+    public void testIsCaptivePortal_HttpIsInvalidCapportApiScheme() throws Exception {
+        runCapportApiInvalidUrlTest("http://capport.example.com");
+    }
+
+    @Test
+    public void testIsCaptivePortal_FileIsInvalidCapportApiScheme() throws Exception {
+        runCapportApiInvalidUrlTest("file://localhost/myfile");
+    }
+
+    @Test
+    public void testIsCaptivePortal_InvalidUrlFormat() throws Exception {
+        runCapportApiInvalidUrlTest("ThisIsNotAValidUrl");
     }
 
     @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
