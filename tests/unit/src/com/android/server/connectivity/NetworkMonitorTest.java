@@ -629,7 +629,8 @@ public class NetworkMonitorTest {
 
     @Test
     public void testOnlyWifiTransport() {
-        final WrappedNetworkMonitor wnm = makeCellMeteredNetworkMonitor();
+        final WrappedNetworkMonitor wnm = makeMonitor(CELL_METERED_CAPABILITIES);
+        assertFalse(wnm.onlyWifiTransport());
         final NetworkCapabilities nc = new NetworkCapabilities()
                 .addTransportType(TRANSPORT_WIFI)
                 .addTransportType(TRANSPORT_VPN);
