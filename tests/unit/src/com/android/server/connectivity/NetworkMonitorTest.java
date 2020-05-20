@@ -278,17 +278,18 @@ public class NetworkMonitorTest {
         return lp;
     }
 
-    private static final NetworkCapabilities METERED_CAPABILITIES = new NetworkCapabilities()
+    private static final NetworkCapabilities CELL_METERED_CAPABILITIES = new NetworkCapabilities()
             .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
             .addCapability(NET_CAPABILITY_INTERNET);
 
-    private static final NetworkCapabilities NOT_METERED_CAPABILITIES = new NetworkCapabilities()
-            .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
-            .addCapability(NET_CAPABILITY_INTERNET)
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED);
+    private static final NetworkCapabilities CELL_NOT_METERED_CAPABILITIES =
+            new NetworkCapabilities()
+                .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
+                .addCapability(NET_CAPABILITY_INTERNET)
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED);
 
-    private static final NetworkCapabilities NO_INTERNET_CAPABILITIES = new NetworkCapabilities()
-            .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR);
+    private static final NetworkCapabilities CELL_NO_INTERNET_CAPABILITIES =
+            new NetworkCapabilities().addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR);
 
     /**
      * Fakes DNS responses.
@@ -611,13 +612,13 @@ public class NetworkMonitorTest {
         return nm;
     }
 
-    private WrappedNetworkMonitor makeMeteredNetworkMonitor() {
-        final WrappedNetworkMonitor nm = makeMonitor(METERED_CAPABILITIES);
+    private WrappedNetworkMonitor makeCellMeteredNetworkMonitor() {
+        final WrappedNetworkMonitor nm = makeMonitor(CELL_METERED_CAPABILITIES);
         return nm;
     }
 
-    private WrappedNetworkMonitor makeNotMeteredNetworkMonitor() {
-        final WrappedNetworkMonitor nm = makeMonitor(NOT_METERED_CAPABILITIES);
+    private WrappedNetworkMonitor makeCellNotMeteredNetworkMonitor() {
+        final WrappedNetworkMonitor nm = makeMonitor(CELL_NOT_METERED_CAPABILITIES);
         return nm;
     }
 
@@ -628,7 +629,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testOnlyWifiTransport() {
-        final WrappedNetworkMonitor wnm = makeMeteredNetworkMonitor();
+        final WrappedNetworkMonitor wnm = makeCellMeteredNetworkMonitor();
         final NetworkCapabilities nc = new NetworkCapabilities()
                 .addTransportType(TRANSPORT_WIFI)
                 .addTransportType(TRANSPORT_VPN);
@@ -643,7 +644,7 @@ public class NetworkMonitorTest {
     public void testNeedEvaluatingBandwidth() throws Exception {
         // Make metered network first, the transport type is TRANSPORT_CELLULAR. That means the
         // test cannot pass the condition check in needEvaluatingBandwidth().
-        final WrappedNetworkMonitor wnm1 = makeMeteredNetworkMonitor();
+        final WrappedNetworkMonitor wnm1 = makeCellMeteredNetworkMonitor();
         // Don't set the config_evaluating_bandwidth_url to make
         // the condition check fail in needEvaluatingBandwidth().
         assertFalse(wnm1.needEvaluatingBandwidth());
@@ -661,7 +662,7 @@ public class NetworkMonitorTest {
         // All configurations are set correctly.
         doReturn(TEST_SPEED_TEST_URL).when(mResources).getString(
                 R.string.config_evaluating_bandwidth_url);
-        final WrappedNetworkMonitor wnm2 = makeMeteredNetworkMonitor();
+        final WrappedNetworkMonitor wnm2 = makeCellMeteredNetworkMonitor();
         setNetworkCapabilities(wnm2, nc);
         assertTrue(wnm2.needEvaluatingBandwidth());
         // Set mIsBandwidthCheckPassedOrIgnored to true and expect needEvaluatingBandwidth() will
@@ -723,7 +724,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testMatchesHttpContent() throws Exception {
-        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        final WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         doReturn("[\\s\\S]*line2[\\s\\S]*").when(mResources).getString(
                 R.string.config_network_validation_failed_content_regexp);
         assertTrue(wnm.matchesHttpContent("This is line1\nThis is line2\nThis is line3",
@@ -740,7 +741,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testMatchesHttpContentLength() throws Exception {
-        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        final WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         // Set the range of content length.
         doReturn(100).when(mResources).getInteger(R.integer.config_min_matches_http_content_length);
         doReturn(1000).when(mResources).getInteger(
@@ -767,7 +768,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testGetResStringConfig() throws Exception {
-        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        final WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         // Set the config and expect to get the customized value.
         final String regExp = ".*HTTP.*200.*not a captive portal.*";
         doReturn(regExp).when(mResources).getString(
@@ -783,7 +784,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testGetResIntConfig() throws Exception {
-        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        final WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         // Set the config and expect to get the customized value.
         doReturn(100).when(mResources).getInteger(R.integer.config_min_matches_http_content_length);
         doReturn(1000).when(mResources).getInteger(
@@ -806,7 +807,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testGetHttpProbeUrl() {
-        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        final WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         // If config_captive_portal_http_url is set and the global setting is set, the config is
         // used.
         doReturn(TEST_HTTP_URL).when(mResources).getString(R.string.config_captive_portal_http_url);
@@ -828,7 +829,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testGetLocationMcc() throws Exception {
-        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        final WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         doReturn(PackageManager.PERMISSION_DENIED).when(mContext).checkPermission(
                 eq(android.Manifest.permission.ACCESS_FINE_LOCATION),  anyInt(), anyInt());
         assertNull(wnm.getLocationMcc());
@@ -856,7 +857,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testGetMccMncOverrideInfo() {
-        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        final WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         doReturn(new ContextWrapper(mContext)).when(mContext).createConfigurationContext(any());
         // 1839 is VZW's carrier id.
         doReturn(1839).when(mTelephony).getSimCarrierId();
@@ -893,7 +894,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testMakeFallbackUrls() throws Exception {
-        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        final WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         // Value exist in setting provider.
         URL[] urls = wnm.makeCaptivePortalFallbackUrls();
         assertEquals(urls[0].toString(), TEST_FALLBACK_URL);
@@ -965,7 +966,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testGetIntSetting() throws Exception {
-        WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
 
         // No config resource, no device config. Expect to get default resource.
         doThrow(new Resources.NotFoundException())
@@ -1126,7 +1127,7 @@ public class NetworkMonitorTest {
                 + "'bytes-remaining': " + bytesRemaining + ","
                 + "'seconds-remaining': " + secondsRemaining + "}");
 
-        runNetworkTest(makeCapportLPs(), METERED_CAPABILITIES, VALIDATION_RESULT_PORTAL,
+        runNetworkTest(makeCapportLPs(), CELL_METERED_CAPABILITIES, VALIDATION_RESULT_PORTAL,
                 0 /* probesSucceeded*/, TEST_LOGIN_URL);
 
         verify(mHttpConnection, never()).getResponseCode();
@@ -1175,7 +1176,7 @@ public class NetworkMonitorTest {
         setStatus(mHttpConnection, 500);
         setApiContent(mCapportApiConnection, "{'captive': false,"
                 + "'venue-info-url': '" + TEST_VENUE_INFO_URL + "'}");
-        runNetworkTest(makeCapportLPs(), METERED_CAPABILITIES, VALIDATION_RESULT_INVALID,
+        runNetworkTest(makeCapportLPs(), CELL_METERED_CAPABILITIES, VALIDATION_RESULT_INVALID,
                 0 /* probesSucceeded */, null /* redirectUrl */);
 
         final ArgumentCaptor<CaptivePortalData> capportCaptor = ArgumentCaptor.forClass(
@@ -1191,7 +1192,7 @@ public class NetworkMonitorTest {
         setStatus(mHttpConnection, 204);
         setApiContent(mCapportApiConnection, "{'captive': false,"
                 + "'venue-info-url': '" + TEST_VENUE_INFO_URL + "'}");
-        runNetworkTest(makeCapportLPs(), METERED_CAPABILITIES,
+        runNetworkTest(makeCapportLPs(), CELL_METERED_CAPABILITIES,
                 NETWORK_VALIDATION_RESULT_PARTIAL,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTP,
                 null /* redirectUrl */);
@@ -1209,7 +1210,7 @@ public class NetworkMonitorTest {
         setStatus(mHttpConnection, 204);
         setApiContent(mCapportApiConnection, "{'captive': false,"
                 + "'venue-info-url': '" + TEST_VENUE_INFO_URL + "'}");
-        runNetworkTest(makeCapportLPs(), METERED_CAPABILITIES,
+        runNetworkTest(makeCapportLPs(), CELL_METERED_CAPABILITIES,
                 NETWORK_VALIDATION_RESULT_VALID,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTP
                         | NETWORK_VALIDATION_PROBE_HTTPS,
@@ -1227,7 +1228,7 @@ public class NetworkMonitorTest {
         setStatus(mHttpsConnection, 204);
         setPortal302(mHttpConnection);
         setApiContent(mCapportApiConnection, "{SomeInvalidText");
-        runNetworkTest(makeCapportLPs(), METERED_CAPABILITIES,
+        runNetworkTest(makeCapportLPs(), CELL_METERED_CAPABILITIES,
                 VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */,
                 TEST_LOGIN_URL);
 
@@ -1244,7 +1245,7 @@ public class NetworkMonitorTest {
         setPortal302(mHttpConnection);
         setApiContent(mCapportApiConnection, "{'captive': false,"
                 + "'venue-info-url': '" + TEST_VENUE_INFO_URL + "'}");
-        runNetworkTest(makeCapportLPs(), METERED_CAPABILITIES, VALIDATION_RESULT_PORTAL,
+        runNetworkTest(makeCapportLPs(), CELL_METERED_CAPABILITIES, VALIDATION_RESULT_PORTAL,
                 0 /* probesSucceeded */,
                 TEST_LOGIN_URL);
 
@@ -1406,14 +1407,14 @@ public class NetworkMonitorTest {
     @Test
     public void testIsDataStall_EvaluationDisabled() {
         setDataStallEvaluationType(0);
-        WrappedNetworkMonitor wrappedMonitor = makeMeteredNetworkMonitor();
+        WrappedNetworkMonitor wrappedMonitor = makeCellMeteredNetworkMonitor();
         wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 100);
         assertFalse(wrappedMonitor.isDataStall());
     }
 
     @Test
     public void testIsDataStall_EvaluationDnsOnNotMeteredNetwork() throws Exception {
-        WrappedNetworkMonitor wrappedMonitor = makeNotMeteredNetworkMonitor();
+        WrappedNetworkMonitor wrappedMonitor = makeCellNotMeteredNetworkMonitor();
         wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 100);
         makeDnsTimeoutEvent(wrappedMonitor, DEFAULT_DNS_TIMEOUT_THRESHOLD);
         assertTrue(wrappedMonitor.isDataStall());
@@ -1423,7 +1424,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testIsDataStall_EvaluationDnsOnMeteredNetwork() throws Exception {
-        WrappedNetworkMonitor wrappedMonitor = makeMeteredNetworkMonitor();
+        WrappedNetworkMonitor wrappedMonitor = makeCellMeteredNetworkMonitor();
         wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 100);
         assertFalse(wrappedMonitor.isDataStall());
 
@@ -1436,7 +1437,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testIsDataStall_EvaluationDnsWithDnsTimeoutCount() throws Exception {
-        WrappedNetworkMonitor wrappedMonitor = makeMeteredNetworkMonitor();
+        WrappedNetworkMonitor wrappedMonitor = makeCellMeteredNetworkMonitor();
         wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
         makeDnsTimeoutEvent(wrappedMonitor, 3);
         assertFalse(wrappedMonitor.isDataStall());
@@ -1454,7 +1455,7 @@ public class NetworkMonitorTest {
 
         // Set the value to larger than the default dns log size.
         setConsecutiveDnsTimeoutThreshold(51);
-        wrappedMonitor = makeMeteredNetworkMonitor();
+        wrappedMonitor = makeCellMeteredNetworkMonitor();
         wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
         makeDnsTimeoutEvent(wrappedMonitor, 50);
         assertFalse(wrappedMonitor.isDataStall());
@@ -1474,7 +1475,7 @@ public class NetworkMonitorTest {
         when(mTstDependencies.isTcpInfoParsingSupported()).thenReturn(true);
         when(mTst.getLatestReceivedCount()).thenReturn(0);
         when(mTst.isDataStallSuspected()).thenReturn(true);
-        final WrappedNetworkMonitor nm = makeMonitor(NO_INTERNET_CAPABILITIES);
+        final WrappedNetworkMonitor nm = makeMonitor(CELL_NO_INTERNET_CAPABILITIES);
         nm.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
         makeDnsTimeoutEvent(nm, DEFAULT_DNS_TIMEOUT_THRESHOLD);
         assertFalse(nm.isDataStall());
@@ -1483,7 +1484,7 @@ public class NetworkMonitorTest {
     @Test
     public void testIsDataStall_EvaluationDnsWithDnsTimeThreshold() throws Exception {
         // Test dns events happened in valid dns time threshold.
-        WrappedNetworkMonitor wrappedMonitor = makeMeteredNetworkMonitor();
+        WrappedNetworkMonitor wrappedMonitor = makeCellMeteredNetworkMonitor();
         wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 100);
         makeDnsTimeoutEvent(wrappedMonitor, DEFAULT_DNS_TIMEOUT_THRESHOLD);
         assertFalse(wrappedMonitor.isDataStall());
@@ -1494,7 +1495,7 @@ public class NetworkMonitorTest {
 
         // Test dns events happened before valid dns time threshold.
         setValidDataStallDnsTimeThreshold(0);
-        wrappedMonitor = makeMeteredNetworkMonitor();
+        wrappedMonitor = makeCellMeteredNetworkMonitor();
         wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 100);
         makeDnsTimeoutEvent(wrappedMonitor, DEFAULT_DNS_TIMEOUT_THRESHOLD);
         assertFalse(wrappedMonitor.isDataStall());
@@ -1506,7 +1507,7 @@ public class NetworkMonitorTest {
     public void testIsDataStall_EvaluationTcp() throws Exception {
         // Evaluate TCP only. Expect ignoring DNS signal.
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
-        WrappedNetworkMonitor wrappedMonitor = makeMonitor(METERED_CAPABILITIES);
+        WrappedNetworkMonitor wrappedMonitor = makeMonitor(CELL_METERED_CAPABILITIES);
         assertFalse(wrappedMonitor.isDataStall());
         // Packet received.
         when(mTstDependencies.isTcpInfoParsingSupported()).thenReturn(true);
@@ -1531,7 +1532,7 @@ public class NetworkMonitorTest {
     public void testIsDataStall_DisableTcp() {
         // Disable tcp detection with only DNS detect. keep the tcp signal but set to no DNS signal.
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_DNS);
-        WrappedNetworkMonitor wrappedMonitor = makeMonitor(METERED_CAPABILITIES);
+        WrappedNetworkMonitor wrappedMonitor = makeMonitor(CELL_METERED_CAPABILITIES);
         makeDnsSuccessEvent(wrappedMonitor, 1);
         wrappedMonitor.sendTcpPollingEvent();
         HandlerUtilsKt.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
@@ -1551,7 +1552,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testNoInternetCapabilityValidated() throws Exception {
-        runNetworkTest(TEST_LINK_PROPERTIES, NO_INTERNET_CAPABILITIES,
+        runNetworkTest(TEST_LINK_PROPERTIES, CELL_NO_INTERNET_CAPABILITIES,
                 NETWORK_VALIDATION_RESULT_VALID, 0 /* probesSucceeded */, null /* redirectUrl */);
         verify(mCleartextDnsNetwork, never()).openConnection(any());
     }
@@ -1561,8 +1562,8 @@ public class NetworkMonitorTest {
         setSslException(mHttpsConnection);
         setPortal302(mHttpConnection);
         when(mHttpConnection.getHeaderField(eq("location"))).thenReturn(TEST_LOGIN_URL);
-        final NetworkMonitor nm = makeMonitor(METERED_CAPABILITIES);
-        notifyNetworkConnected(nm, METERED_CAPABILITIES);
+        final NetworkMonitor nm = makeMonitor(CELL_METERED_CAPABILITIES);
+        notifyNetworkConnected(nm, CELL_METERED_CAPABILITIES);
 
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1))
                 .showProvisioningNotification(any(), any());
@@ -1608,10 +1609,10 @@ public class NetworkMonitorTest {
 
         // Verify dns query only get v6 address.
         mFakeDns.setAnswer("dns6.google", new String[]{"2001:db8::53"}, TYPE_AAAA);
-        WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig("dns6.google",
                 new InetAddress[0]));
-        notifyNetworkConnected(wnm, NOT_METERED_CAPABILITIES);
+        notifyNetworkConnected(wnm, CELL_NOT_METERED_CAPABILITIES);
         verifyNetworkTested(NETWORK_VALIDATION_RESULT_VALID, PROBES_PRIVDNS_VALID);
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1)).notifyProbeStatusChanged(
                 eq(PROBES_PRIVDNS_VALID), eq(PROBES_PRIVDNS_VALID));
@@ -1643,9 +1644,9 @@ public class NetworkMonitorTest {
         setStatus(mHttpsConnection, 204);
         setStatus(mHttpConnection, 204);
 
-        WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig("dns.google", new InetAddress[0]));
-        wnm.notifyNetworkConnected(TEST_LINK_PROPERTIES, NOT_METERED_CAPABILITIES);
+        wnm.notifyNetworkConnected(TEST_LINK_PROPERTIES, CELL_NOT_METERED_CAPABILITIES);
         verifyNetworkTested(VALIDATION_RESULT_INVALID,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS);
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS)).notifyProbeStatusChanged(
@@ -1670,9 +1671,9 @@ public class NetworkMonitorTest {
         setStatus(mHttpsConnection, 204);
         setStatus(mHttpConnection, 204);
 
-        WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig("dns.google", new InetAddress[0]));
-        wnm.notifyNetworkConnected(TEST_LINK_PROPERTIES, NOT_METERED_CAPABILITIES);
+        wnm.notifyNetworkConnected(TEST_LINK_PROPERTIES, CELL_NOT_METERED_CAPABILITIES);
         verifyNetworkTested(VALIDATION_RESULT_INVALID,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS);
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1)).notifyProbeStatusChanged(
@@ -1731,8 +1732,8 @@ public class NetworkMonitorTest {
         // Connect a VALID network to simulate the data stall detection because data stall
         // evaluation will only start from validated state.
         setStatus(mHttpsConnection, 204);
-        WrappedNetworkMonitor wrappedMonitor = makeNotMeteredNetworkMonitor();
-        wrappedMonitor.notifyNetworkConnected(TEST_LINK_PROPERTIES, METERED_CAPABILITIES);
+        WrappedNetworkMonitor wrappedMonitor = makeCellNotMeteredNetworkMonitor();
+        wrappedMonitor.notifyNetworkConnected(TEST_LINK_PROPERTIES, CELL_METERED_CAPABILITIES);
         verifyNetworkTested(NETWORK_VALIDATION_RESULT_VALID,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS);
         // Setup dns data stall signal.
@@ -1760,8 +1761,8 @@ public class NetworkMonitorTest {
         // Connect a VALID network to simulate the data stall detection because data stall
         // evaluation will only start from validated state.
         setStatus(mHttpsConnection, 204);
-        WrappedNetworkMonitor wrappedMonitor = makeNotMeteredNetworkMonitor();
-        wrappedMonitor.notifyNetworkConnected(TEST_LINK_PROPERTIES, METERED_CAPABILITIES);
+        WrappedNetworkMonitor wrappedMonitor = makeCellNotMeteredNetworkMonitor();
+        wrappedMonitor.notifyNetworkConnected(TEST_LINK_PROPERTIES, CELL_METERED_CAPABILITIES);
         verifyNetworkTested(NETWORK_VALIDATION_RESULT_VALID,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS);
         // Setup no data stall dns signal.
@@ -1775,7 +1776,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testCollectDataStallMetrics() {
-        WrappedNetworkMonitor wrappedMonitor = makeNotMeteredNetworkMonitor();
+        WrappedNetworkMonitor wrappedMonitor = makeCellNotMeteredNetworkMonitor();
 
         when(mTelephony.getDataNetworkType()).thenReturn(TelephonyManager.NETWORK_TYPE_LTE);
         when(mTelephony.getNetworkOperator()).thenReturn(TEST_MCCMNC);
@@ -1850,7 +1851,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testSendDnsProbeWithTimeout() throws Exception {
-        WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         final int shortTimeoutMs = 200;
         // v6 only.
         String[] expected = new String[]{"2001:db8::"};
@@ -1910,8 +1911,8 @@ public class NetworkMonitorTest {
         // Trigger Network validation
         setStatus(mHttpsConnection, 204);
         setStatus(mHttpConnection, 204);
-        final NetworkMonitor nm = makeMonitor(METERED_CAPABILITIES);
-        nm.notifyNetworkConnected(TEST_LINK_PROPERTIES, METERED_CAPABILITIES);
+        final NetworkMonitor nm = makeMonitor(CELL_METERED_CAPABILITIES);
+        nm.notifyNetworkConnected(TEST_LINK_PROPERTIES, CELL_METERED_CAPABILITIES);
 
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS))
                 .notifyNetworkTested(eq(NETWORK_VALIDATION_RESULT_VALID
@@ -1936,8 +1937,8 @@ public class NetworkMonitorTest {
         setSslException(mHttpsConnection);
         setPortal302(mHttpConnection);
         when(mHttpConnection.getHeaderField(eq("location"))).thenReturn(TEST_LOGIN_URL);
-        final NetworkMonitor nm = makeMonitor(METERED_CAPABILITIES);
-        notifyNetworkConnected(nm, METERED_CAPABILITIES);
+        final NetworkMonitor nm = makeMonitor(CELL_METERED_CAPABILITIES);
+        notifyNetworkConnected(nm, CELL_METERED_CAPABILITIES);
 
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1))
             .showProvisioningNotification(any(), any());
@@ -2068,7 +2069,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testReadAsString_StreamShorterThanLimit() throws Exception {
-        final WrappedNetworkMonitor wnm = makeNotMeteredNetworkMonitor();
+        final WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         final byte[] content = "The HTTP response code is 200 but it is not a captive portal."
                 .getBytes(StandardCharsets.UTF_8);
         assertEquals(new String(content), wnm.readAsString(new ByteArrayInputStream(content),
@@ -2251,7 +2252,7 @@ public class NetworkMonitorTest {
 
     private NetworkMonitor runNetworkTest(int testResult, int probesSucceeded, String redirectUrl)
             throws RemoteException {
-        return runNetworkTest(TEST_LINK_PROPERTIES, METERED_CAPABILITIES, testResult,
+        return runNetworkTest(TEST_LINK_PROPERTIES, CELL_METERED_CAPABILITIES, testResult,
                 probesSucceeded, redirectUrl);
     }
 
