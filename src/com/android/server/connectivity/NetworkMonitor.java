@@ -2535,7 +2535,12 @@ public class NetworkMonitor extends StateMachine {
             final String apiContent;
             try {
                 final URL url = new URL(mCaptivePortalApiUrl.toString());
-                if (!"https".equals(url.getProtocol())) {
+                // Protocol must be HTTPS
+                // (as per https://www.ietf.org/id/draft-ietf-capport-api-07.txt, #4).
+                // Only allow HTTP on localhost, for testing.
+                final boolean isLocalhostHttp =
+                        "localhost".equals(url.getHost()) && "http".equals(url.getProtocol());
+                if (!"https".equals(url.getProtocol()) && !isLocalhostHttp) {
                     validationLog("Invalid captive portal API protocol: " + url.getProtocol());
                     return null;
                 }
