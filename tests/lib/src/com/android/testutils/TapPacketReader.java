@@ -19,6 +19,7 @@ package com.android.testutils;
 import android.net.util.PacketReader;
 import android.os.Handler;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import java.io.FileDescriptor;
@@ -26,12 +27,16 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
+
+import kotlin.Lazy;
+import kotlin.LazyKt;
 
 public class TapPacketReader extends PacketReader {
     private final FileDescriptor mTapFd;
-    private final LinkedBlockingQueue<byte[]> mReceivedPackets = new LinkedBlockingQueue<byte[]>();
+    private final ArrayTrackRecord<byte[]> mReceivedPackets = new ArrayTrackRecord<>();
+    private final Lazy<ArrayTrackRecord<byte[]>.ReadHead> mReadHead =
+            LazyKt.lazy(mReceivedPackets::newReadHead);
 
     public TapPacketReader(Handler h, FileDescriptor tapFd, int maxPacketSize) {
         super(h, maxPacketSize);
@@ -46,23 +51,25 @@ public class TapPacketReader extends PacketReader {
     @Override
     protected void handlePacket(byte[] recvbuf, int length) {
         final byte[] newPacket = Arrays.copyOf(recvbuf, length);
-        if (!mReceivedPackets.offer(newPacket)) {
+        if (!mReceivedPackets.add(newPacket)) {
             throw new AssertionError("More than " + Integer.MAX_VALUE + " packets outstanding!");
         }
     }
 
     /**
      * Get the next packet that was received on the interface.
-     *
      */
     @Nullable
     public byte[] popPacket(long timeoutMs) {
-        try {
-            return mReceivedPackets.poll(timeoutMs, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            // Fall through
-        }
-        return null;
+        return mReadHead.getValue().poll(timeoutMs, packet -> true);
+    }
+
+    /**
+     * Get the next packet that was received on the interface and matches the specified filter.
+     */
+    @Nullable
+    public byte[] popPacket(long timeoutMs, @NonNull Predicate<byte[]> filter) {
+        return mReadHead.getValue().poll(timeoutMs, filter::test);
     }
 
     public void sendResponse(final ByteBuffer packet) throws IOException {
