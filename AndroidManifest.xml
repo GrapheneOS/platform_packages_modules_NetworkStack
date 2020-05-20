@@ -44,6 +44,7 @@
         android:persistent="true"
         android:process="com.android.networkstack.process">
         <service android:name="com.android.server.NetworkStackService"
+                 android:exported="true"
                  android:permission="android.permission.MAINLINE_NETWORK_STACK">
             <intent-filter>
                 <action android:name="android.net.INetworkStackConnector"/>
