@@ -1823,18 +1823,16 @@ public class NetworkMonitorTest {
 
     @Test
     public void testDataStall_StallTcpSuspectedAndSendMetricsOnCell() throws Exception {
-        testDataStall_StallTcpSuspectedAndSendMetrics(NetworkCapabilities.TRANSPORT_CELLULAR,
-                CELL_METERED_CAPABILITIES);
+        testDataStall_StallTcpSuspectedAndSendMetrics(CELL_METERED_CAPABILITIES);
     }
 
     @Test
     public void testDataStall_StallTcpSuspectedAndSendMetricsOnWifi() throws Exception {
-        testDataStall_StallTcpSuspectedAndSendMetrics(NetworkCapabilities.TRANSPORT_WIFI,
-                WIFI_NOT_METERED_CAPABILITIES);
+        testDataStall_StallTcpSuspectedAndSendMetrics(WIFI_NOT_METERED_CAPABILITIES);
     }
 
-    private void testDataStall_StallTcpSuspectedAndSendMetrics(int transport,
-            NetworkCapabilities nc) throws Exception {
+    private void testDataStall_StallTcpSuspectedAndSendMetrics(NetworkCapabilities nc)
+            throws Exception {
         assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
         // NM suspects data stall from TCP signal and sends data stall metrics.
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
@@ -1843,7 +1841,10 @@ public class NetworkMonitorTest {
         // Trigger a tcp event immediately.
         setTcpPollingInterval(0);
         nm.sendTcpPollingEvent();
-        verifySendDataStallDetectionStats(nm, DATA_STALL_EVALUATION_TYPE_TCP, transport);
+        // Allow only one transport type in the context of this test for simplification.
+        final int[] transports = nc.getTransportTypes();
+        assertEquals(1, transports.length);
+        verifySendDataStallDetectionStats(nm, DATA_STALL_EVALUATION_TYPE_TCP, transports[0]);
     }
 
     private WrappedNetworkMonitor prepareNetworkMonitorForVerifyDataStall(NetworkCapabilities nc)
@@ -1852,20 +1853,15 @@ public class NetworkMonitorTest {
         // evaluation will only start from validated state.
         setStatus(mHttpsConnection, 204);
         final WrappedNetworkMonitor nm;
-        final int[] transports = nc.getTransportTypes();
-        // Though multiple transport types are allowed, use the first transport type for
-        // simplification.
-        switch (transports[0]) {
-            case NetworkCapabilities.TRANSPORT_CELLULAR:
-                nm = makeCellMeteredNetworkMonitor();
-                break;
-            case NetworkCapabilities.TRANSPORT_WIFI:
-                nm = makeWifiNotMeteredNetworkMonitor();
-                setupTestWifiInfo();
-                break;
-            default:
-                nm = null;
-                fail("Undefined transport type");
+        // Allow only one transport type in the context of this test for simplification.
+        if (nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+            nm = makeCellMeteredNetworkMonitor();
+        } else if (nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+            nm = makeWifiNotMeteredNetworkMonitor();
+            setupTestWifiInfo();
+        } else {
+            nm = null;
+            fail("Undefined transport type");
         }
         nm.notifyNetworkConnected(TEST_LINK_PROPERTIES, nc);
         verifyNetworkTested(NETWORK_VALIDATION_RESULT_VALID,
