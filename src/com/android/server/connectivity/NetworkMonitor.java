@@ -48,6 +48,7 @@ import static android.net.util.DataStallUtils.CONFIG_DATA_STALL_MIN_EVALUATE_INT
 import static android.net.util.DataStallUtils.CONFIG_DATA_STALL_TCP_POLLING_INTERVAL;
 import static android.net.util.DataStallUtils.CONFIG_DATA_STALL_VALID_DNS_TIME_THRESHOLD;
 import static android.net.util.DataStallUtils.DATA_STALL_EVALUATION_TYPE_DNS;
+import static android.net.util.DataStallUtils.DATA_STALL_EVALUATION_TYPE_NONE;
 import static android.net.util.DataStallUtils.DATA_STALL_EVALUATION_TYPE_TCP;
 import static android.net.util.DataStallUtils.DEFAULT_CONSECUTIVE_DNS_TIMEOUT_THRESHOLD;
 import static android.net.util.DataStallUtils.DEFAULT_DATA_STALL_EVALUATION_TYPES;
@@ -112,6 +113,7 @@ import android.net.metrics.NetworkEvent;
 import android.net.metrics.ValidationProbeEvent;
 import android.net.shared.NetworkMonitorUtils;
 import android.net.shared.PrivateDnsConfig;
+import android.net.util.DataStallUtils.EvaluationType;
 import android.net.util.NetworkStackUtils;
 import android.net.util.SharedLog;
 import android.net.util.Stopwatch;
@@ -489,8 +491,8 @@ public class NetworkMonitor extends StateMachine {
     @Nullable
     private final DnsStallDetector mDnsStallDetector;
     private long mLastProbeTime;
-    // Set to true if data stall is suspected and reset to false after metrics are sent to statsd.
-    private boolean mCollectDataStallMetrics;
+    // The signal causing a data stall to be suspected. Reset to 0 after metrics are sent to statsd.
+    private @EvaluationType int mDataStallTypeToCollect;
     private boolean mAcceptPartialConnectivity = false;
     private final EvaluationState mEvaluationState = new EvaluationState();
 
@@ -977,8 +979,6 @@ public class NetworkMonitor extends StateMachine {
 
         boolean evaluateDataStall() {
             if (isDataStall()) {
-                // TODO: Add tcp info into metrics.
-                mCollectDataStallMetrics = true;
                 validationLog("Suspecting data stall, reevaluate");
                 return true;
             }
@@ -999,7 +999,8 @@ public class NetworkMonitor extends StateMachine {
         }
     }
 
-    private void writeDataStallStats(@NonNull final CaptivePortalProbeResult result) {
+    private void maybeWriteDataStallStats(@NonNull final CaptivePortalProbeResult result) {
+        if (mDataStallTypeToCollect == DATA_STALL_EVALUATION_TYPE_NONE) return;
         /*
          * Collect data stall detection level information for each transport type. Collect type
          * specific information for cellular and wifi only currently. Generate
@@ -1007,19 +1008,22 @@ public class NetworkMonitor extends StateMachine {
          * TRANSPORT_WIFI and TRANSPORT_VPN, two DataStallDetectionStats will be generated.
          */
         final int[] transports = mNetworkCapabilities.getTransportTypes();
-
         for (int i = 0; i < transports.length; i++) {
-            final DataStallDetectionStats stats = buildDataStallDetectionStats(transports[i]);
+            final DataStallDetectionStats stats =
+                    buildDataStallDetectionStats(transports[i], mDataStallTypeToCollect);
             mDependencies.writeDataStallDetectionStats(stats, result);
         }
-        mCollectDataStallMetrics = false;
+        mDataStallTypeToCollect = DATA_STALL_EVALUATION_TYPE_NONE;
     }
 
     @VisibleForTesting
-    protected DataStallDetectionStats buildDataStallDetectionStats(int transport) {
+    protected DataStallDetectionStats buildDataStallDetectionStats(int transport,
+            @EvaluationType int evaluationType) {
         final DataStallDetectionStats.Builder stats = new DataStallDetectionStats.Builder();
-        if (VDBG_STALL) log("collectDataStallMetrics: type=" + transport);
-        stats.setEvaluationType(DATA_STALL_EVALUATION_TYPE_DNS);
+        if (VDBG_STALL) {
+            log("collectDataStallMetrics: type=" + transport + ", evaluation=" + evaluationType);
+        }
+        stats.setEvaluationType(evaluationType);
         stats.setNetworkType(transport);
         switch (transport) {
             case NetworkCapabilities.TRANSPORT_WIFI:
@@ -1044,9 +1048,19 @@ public class NetworkMonitor extends StateMachine {
                 // No transport type specific information for the other types.
                 break;
         }
+
         addDnsEvents(stats);
+        addTcpStats(stats);
 
         return stats.build();
+    }
+
+    private void addTcpStats(@NonNull final DataStallDetectionStats.Builder stats) {
+        final TcpSocketTracker tst = getTcpSocketTracker();
+        if (tst == null) return;
+
+        stats.setTcpSentSinceLastRecv(tst.getSentSinceLastRecv());
+        stats.setTcpFailRate(tst.getLatestPacketFailPercentage());
     }
 
     @VisibleForTesting
@@ -1438,9 +1452,7 @@ public class NetworkMonitor extends StateMachine {
                             (CaptivePortalProbeResult) message.obj;
                     mLastProbeTime = SystemClock.elapsedRealtime();
 
-                    if (mCollectDataStallMetrics) {
-                        writeDataStallStats(probeResult);
-                    }
+                    maybeWriteDataStallStats(probeResult);
 
                     if (probeResult.isSuccessful()) {
                         // Transit EvaluatingPrivateDnsState to get to Validated
@@ -1919,7 +1931,8 @@ public class NetworkMonitor extends StateMachine {
                 DEFAULT_DATA_STALL_VALID_DNS_TIME_THRESHOLD_MS);
     }
 
-    private int getDataStallEvaluationType() {
+    @VisibleForTesting
+    int getDataStallEvaluationType() {
         return mDependencies.getDeviceConfigPropertyInt(NAMESPACE_CONNECTIVITY,
                 CONFIG_DATA_STALL_EVALUATION_TYPE,
                 DEFAULT_DATA_STALL_EVALUATION_TYPES);
@@ -3145,9 +3158,8 @@ public class NetworkMonitor extends StateMachine {
         return mDnsStallDetector;
     }
 
-    @VisibleForTesting
     @Nullable
-    protected TcpSocketTracker getTcpSocketTracker() {
+    private TcpSocketTracker getTcpSocketTracker() {
         return mTcpTracker;
     }
 
@@ -3184,6 +3196,7 @@ public class NetworkMonitor extends StateMachine {
                 result = false;
             } else if (tst.isDataStallSuspected()) {
                 result = true;
+                mDataStallTypeToCollect = DATA_STALL_EVALUATION_TYPE_TCP;
 
                 final DataStallReportParcelable p = new DataStallReportParcelable();
                 p.detectionMethod = DETECTION_METHOD_TCP_METRICS;
@@ -3208,6 +3221,7 @@ public class NetworkMonitor extends StateMachine {
             if (dsd.isDataStallSuspected(mConsecutiveDnsTimeoutThreshold,
                     mDataStallValidDnsTimeThreshold)) {
                 result = true;
+                mDataStallTypeToCollect = DATA_STALL_EVALUATION_TYPE_DNS;
                 logNetworkEvent(NetworkEvent.NETWORK_CONSECUTIVE_DNS_TIMEOUT_FOUND);
 
                 final DataStallReportParcelable p = new DataStallReportParcelable();
