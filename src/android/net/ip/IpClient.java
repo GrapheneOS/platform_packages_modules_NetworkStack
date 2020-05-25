@@ -458,7 +458,7 @@ public class IpClient extends StateMachine {
     private final SharedLog mLog;
     private final LocalLog mConnectivityPacketLog;
     private final MessageHandlingLogger mMsgStateLogger;
-    private final IpConnectivityLog mMetricsLog = new IpConnectivityLog();
+    private final IpConnectivityLog mMetricsLog;
     private final InterfaceController mInterfaceCtrl;
 
     // Ignore nonzero RDNSS option lifetimes below this value. 0 = disabled.
@@ -537,6 +537,13 @@ public class IpClient extends StateMachine {
             return NetworkStackUtils.getDeviceConfigPropertyInt(NAMESPACE_CONNECTIVITY, name,
                     defaultValue);
         }
+
+        /**
+         * Get a IpConnectivityLog instance.
+         */
+        public IpConnectivityLog getIpConnectivityLog() {
+            return new IpConnectivityLog();
+        }
     }
 
     public IpClient(Context context, String ifName, IIpClientCallbacks callback,
@@ -558,6 +565,7 @@ public class IpClient extends StateMachine {
         mInterfaceName = ifName;
         mClatInterfaceName = CLAT_PREFIX + ifName;
         mDependencies = deps;
+        mMetricsLog = deps.getIpConnectivityLog();
         mShutdownLatch = new CountDownLatch(1);
         mCm = mContext.getSystemService(ConnectivityManager.class);
         mObserverRegistry = observerRegistry;
