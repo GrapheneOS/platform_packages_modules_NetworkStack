@@ -355,9 +355,7 @@ public class NetworkStackUtils {
      */
     public static boolean isFeatureEnabled(@NonNull Context context, @NonNull String namespace,
             @NonNull String name) {
-        final int propertyVersion = getDeviceConfigPropertyInt(namespace, name,
-                0 /* default value */);
-        return isFeatureEnabled(context, namespace, name, false);
+        return isFeatureEnabled(context, namespace, name, false /* defaultEnabled */);
     }
 
     /**
