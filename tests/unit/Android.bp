@@ -16,7 +16,7 @@
 
 java_defaults {
     name: "NetworkStackTestsDefaults",
-    certificate: "platform",
+    platform_apis: true,
     srcs: ["src/**/*.java", "src/**/*.kt"],
     resource_dirs: ["res"],
     static_libs: [
