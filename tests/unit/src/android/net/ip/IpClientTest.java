@@ -49,6 +49,7 @@ import android.net.MacAddress;
 import android.net.NetworkStackIpMemoryStore;
 import android.net.RouteInfo;
 import android.net.ipmemorystore.NetworkAttributes;
+import android.net.metrics.IpConnectivityLog;
 import android.net.shared.InitialConfiguration;
 import android.net.shared.ProvisioningConfiguration;
 import android.net.util.InterfaceParams;
@@ -120,6 +121,7 @@ public class IpClientTest {
     @Mock private NetworkStackIpMemoryStore mIpMemoryStore;
     @Mock private IpMemoryStoreService mIpMemoryStoreService;
     @Mock private InterfaceParams mInterfaceParams;
+    @Mock private IpConnectivityLog mMetricsLog;
 
     private NetworkObserver mObserver;
     private InterfaceParams mIfParams;
@@ -139,6 +141,7 @@ public class IpClientTest {
         when(mDependencies.getInterfaceParams(any())).thenReturn(mInterfaceParams);
         when(mDependencies.getIpMemoryStore(mContext, mNetworkStackServiceManager))
                 .thenReturn(mIpMemoryStore);
+        when(mDependencies.getIpConnectivityLog()).thenReturn(mMetricsLog);
 
         mIfParams = null;
     }

@@ -17,12 +17,13 @@
 package android.net.dhcp;
 
 import static android.net.InetAddresses.parseNumericAddress;
-import static android.net.dhcp.DhcpPacket.DHCP_CLIENT;
 import static android.net.dhcp.DhcpPacket.DHCP_HOST_NAME;
 import static android.net.dhcp.DhcpPacket.ENCAP_BOOTP;
 import static android.net.dhcp.DhcpPacket.INADDR_ANY;
 import static android.net.dhcp.DhcpPacket.INADDR_BROADCAST;
+import static android.net.dhcp.DhcpServer.CMD_RECEIVE_PACKET;
 import static android.net.dhcp.IDhcpServer.STATUS_SUCCESS;
+import static android.net.shared.Inet4AddressUtils.inet4AddressToIntHTH;
 import static android.net.util.NetworkStackUtils.DHCP_RAPID_COMMIT_VERSION;
 
 import static junit.framework.Assert.assertEquals;
@@ -31,7 +32,6 @@ import static junit.framework.Assert.assertNotNull;
 import static junit.framework.Assert.assertTrue;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doNothing;
@@ -44,12 +44,14 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.content.Context;
 import android.net.INetworkStackStatusCallback;
+import android.net.IpPrefix;
 import android.net.LinkAddress;
 import android.net.MacAddress;
 import android.net.dhcp.DhcpLeaseRepository.InvalidAddressException;
 import android.net.dhcp.DhcpLeaseRepository.OutOfAddressesException;
 import android.net.dhcp.DhcpServer.Clock;
 import android.net.dhcp.DhcpServer.Dependencies;
+import android.net.shared.Inet4AddressUtils;
 import android.net.util.SharedLog;
 import android.testing.AndroidTestingRunner;
 
@@ -69,6 +71,8 @@ import org.mockito.MockitoAnnotations;
 import java.net.Inet4Address;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -156,6 +160,7 @@ public class DhcpServerTest {
                 .setServerAddr(TEST_SERVER_LINKADDR)
                 .setLinkMtu(TEST_MTU)
                 .setExcludedAddrs(TEST_EXCLUDED_ADDRS)
+                .setChangePrefixOnDecline(false)
                 .build();
     }
 
@@ -215,7 +220,8 @@ public class DhcpServerTest {
         final DhcpDiscoverPacket discover = new DhcpDiscoverPacket(TEST_TRANSACTION_ID,
                 (short) 0 /* secs */, INADDR_ANY /* relayIp */, TEST_CLIENT_MAC_BYTES,
                 false /* broadcast */, INADDR_ANY /* srcIp */, false /* rapidCommit */);
-        mServer.processPacket(discover, DHCP_CLIENT);
+        mServer.sendMessage(CMD_RECEIVE_PACKET, discover);
+        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
 
         assertResponseSentTo(TEST_CLIENT_ADDR);
         final DhcpOfferPacket packet = assertOffer(getPacket());
@@ -233,7 +239,8 @@ public class DhcpServerTest {
         final DhcpDiscoverPacket discover = new DhcpDiscoverPacket(TEST_TRANSACTION_ID,
                 (short) 0 /* secs */, INADDR_ANY /* relayIp */, TEST_CLIENT_MAC_BYTES,
                 false /* broadcast */, INADDR_ANY /* srcIp */, true /* rapidCommit */);
-        mServer.processPacket(discover, DHCP_CLIENT);
+        mServer.sendMessage(CMD_RECEIVE_PACKET, discover);
+        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
 
         assertResponseSentTo(TEST_CLIENT_ADDR);
         final DhcpAckPacket packet = assertAck(getPacket());
@@ -251,7 +258,8 @@ public class DhcpServerTest {
         final DhcpDiscoverPacket discover = new DhcpDiscoverPacket(TEST_TRANSACTION_ID,
                 (short) 0 /* secs */, INADDR_ANY /* relayIp */, TEST_CLIENT_MAC_BYTES,
                 false /* broadcast */, INADDR_ANY /* srcIp */, false /* rapidCommit */);
-        mServer.processPacket(discover, DHCP_CLIENT);
+        mServer.sendMessage(CMD_RECEIVE_PACKET, discover);
+        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
 
         assertResponseSentTo(INADDR_BROADCAST);
         final DhcpNakPacket packet = assertNak(getPacket());
@@ -279,7 +287,8 @@ public class DhcpServerTest {
         final DhcpRequestPacket request = makeRequestSelectingPacket();
         request.mHostName = TEST_HOSTNAME;
         request.mRequestedParams = new byte[] { DHCP_HOST_NAME };
-        mServer.processPacket(request, DHCP_CLIENT);
+        mServer.sendMessage(CMD_RECEIVE_PACKET, request);
+        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
 
         assertResponseSentTo(TEST_CLIENT_ADDR);
         final DhcpAckPacket packet = assertAck(getPacket());
@@ -296,23 +305,12 @@ public class DhcpServerTest {
                 .thenThrow(new InvalidAddressException("Test error"));
 
         final DhcpRequestPacket request = makeRequestSelectingPacket();
-        mServer.processPacket(request, DHCP_CLIENT);
+        mServer.sendMessage(CMD_RECEIVE_PACKET, request);
+        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
 
         assertResponseSentTo(INADDR_BROADCAST);
         final DhcpNakPacket packet = assertNak(getPacket());
         assertMatchesClient(packet);
-    }
-
-    @Test
-    public void testRequest_Selecting_WrongClientPort() throws Exception {
-        startServer();
-
-        final DhcpRequestPacket request = makeRequestSelectingPacket();
-        mServer.processPacket(request, 50000);
-
-        verify(mRepository, never())
-                .requestLease(any(), any(), any(), any(), any(), anyBoolean(), any());
-        verify(mDeps, never()).sendPacket(any(), any(), any());
     }
 
     @Test
@@ -322,10 +320,105 @@ public class DhcpServerTest {
         final DhcpReleasePacket release = new DhcpReleasePacket(TEST_TRANSACTION_ID,
                 TEST_SERVER_ADDR, TEST_CLIENT_ADDR,
                 INADDR_ANY /* relayIp */, TEST_CLIENT_MAC_BYTES);
-        mServer.processPacket(release, DHCP_CLIENT);
+        mServer.sendMessage(CMD_RECEIVE_PACKET, release);
+        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
 
         verify(mRepository, times(1))
                 .releaseLease(isNull(), eq(TEST_CLIENT_MAC), eq(TEST_CLIENT_ADDR));
+    }
+
+    @Test
+    public void testDecline_LeaseDoesNotExist() throws Exception {
+        when(mRepository.markAndReleaseDeclinedLease(isNull(), eq(TEST_CLIENT_MAC),
+                eq(TEST_CLIENT_ADDR))).thenReturn(false);
+
+        startServer();
+        runOnReceivedDeclinePacket();
+        verify(mEventCallbacks, never()).onNewPrefixRequest(any());
+    }
+
+    private void runOnReceivedDeclinePacket() throws Exception {
+        when(mRepository.getCommittedLeases()).thenReturn(
+                Arrays.asList(new DhcpLease(null, TEST_CLIENT_MAC, TEST_CLIENT_ADDR,
+                        TEST_PREFIX_LENGTH, TEST_LEASE_EXPTIME_SECS * 1000L + TEST_CLOCK_TIME,
+                        TEST_HOSTNAME)));
+        final DhcpDeclinePacket decline = new DhcpDeclinePacket(TEST_TRANSACTION_ID,
+                (short) 0 /* secs */, INADDR_ANY /* clientIp */, INADDR_ANY /* yourIp */,
+                INADDR_ANY /* nextIp */, INADDR_ANY /* relayIp */, TEST_CLIENT_MAC_BYTES,
+                TEST_CLIENT_ADDR /* requestedIp */, TEST_SERVER_ADDR /* serverIdentifier */);
+        mServer.sendMessage(CMD_RECEIVE_PACKET, decline);
+        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
+
+        verify(mRepository).markAndReleaseDeclinedLease(isNull(), eq(TEST_CLIENT_MAC),
+                eq(TEST_CLIENT_ADDR));
+    }
+
+    private int[] toIntArray(@NonNull Collection<Inet4Address> addrs) {
+        return addrs.stream().mapToInt(Inet4AddressUtils::inet4AddressToIntHTH).toArray();
+    }
+
+    private void updateServingParams(Set<Inet4Address> defaultRouters,
+            Set<Inet4Address> dnsServers, Set<Inet4Address> excludedAddrs, LinkAddress serverAddr,
+            boolean changePrefixOnDecline) throws Exception {
+        final DhcpServingParamsParcel params = new DhcpServingParamsParcel();
+        params.serverAddr = inet4AddressToIntHTH((Inet4Address) serverAddr.getAddress());
+        params.serverAddrPrefixLength = serverAddr.getPrefixLength();
+        params.defaultRouters = toIntArray(defaultRouters);
+        params.dnsServers = toIntArray(dnsServers);
+        params.excludedAddrs = toIntArray(excludedAddrs);
+        params.dhcpLeaseTimeSecs = TEST_LEASE_EXPTIME_SECS;
+        params.linkMtu = TEST_MTU;
+        params.metered = true;
+        params.changePrefixOnDecline = changePrefixOnDecline;
+
+        mServer.updateParams(params, mAssertSuccessCallback);
+        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
+    }
+
+    @Test
+    public void testChangePrefixOnDecline() throws Exception {
+        when(mRepository.markAndReleaseDeclinedLease(isNull(), eq(TEST_CLIENT_MAC),
+                eq(TEST_CLIENT_ADDR))).thenReturn(true);
+
+        mServer.start(mAssertSuccessCallback, mEventCallbacks);
+        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
+        verify(mRepository).addLeaseCallbacks(eq(mEventCallbacks));
+
+        // Enable changePrefixOnDecline
+        updateServingParams(TEST_DEFAULT_ROUTERS, TEST_DNS_SERVERS, TEST_EXCLUDED_ADDRS,
+                TEST_SERVER_LINKADDR, true /* changePrefixOnDecline */);
+
+        runOnReceivedDeclinePacket();
+        final IpPrefix servingPrefix = DhcpServingParams.makeIpPrefix(TEST_SERVER_LINKADDR);
+        verify(mEventCallbacks).onNewPrefixRequest(eq(servingPrefix));
+
+        final Inet4Address serverAddr = parseAddr("192.168.51.129");
+        final LinkAddress srvLinkAddr = new LinkAddress(serverAddr, 24);
+        final Set<Inet4Address> srvAddr = new HashSet<>(Collections.singletonList(serverAddr));
+        final Set<Inet4Address> excludedAddrs = new HashSet<>(
+                Arrays.asList(parseAddr("192.168.51.200"), parseAddr("192.168.51.201")));
+
+        // Simulate IpServer updates the serving params with a new prefix.
+        updateServingParams(srvAddr, srvAddr, excludedAddrs, srvLinkAddr,
+                true /* changePrefixOnDecline */);
+
+        final Inet4Address clientAddr = parseAddr("192.168.51.42");
+        final DhcpLease lease = new DhcpLease(null, TEST_CLIENT_MAC,
+                clientAddr, 24 /*prefixLen*/, TEST_LEASE_EXPTIME_SECS * 1000L + TEST_CLOCK_TIME,
+                null /* hostname */);
+        when(mRepository.getOffer(isNull() /* clientId */, eq(TEST_CLIENT_MAC),
+                eq(INADDR_ANY) /* relayAddr */, isNull() /* reqAddr */, isNull() /* hostname */))
+                .thenReturn(lease);
+
+        // Test discover packet
+        final DhcpDiscoverPacket discover = new DhcpDiscoverPacket(TEST_TRANSACTION_ID,
+                (short) 0 /* secs */, INADDR_ANY /* relayIp */, TEST_CLIENT_MAC_BYTES,
+                false /* broadcast */, INADDR_ANY /* srcIp */, false /* rapidCommit */);
+        mServer.sendMessage(CMD_RECEIVE_PACKET, discover);
+        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
+        assertResponseSentTo(clientAddr);
+        final DhcpOfferPacket packet = assertOffer(getPacket());
+        assertMatchesLease(packet, serverAddr, clientAddr, null);
     }
 
     /* TODO: add more tests once packet construction is refactored, including:
@@ -334,14 +427,19 @@ public class DhcpServerTest {
      *  - other request states (init-reboot/renewing/rebinding)
      */
 
-    private void assertMatchesTestLease(@NonNull DhcpPacket packet, @Nullable String hostname) {
+    private void assertMatchesLease(@NonNull DhcpPacket packet, @NonNull Inet4Address srvAddr,
+            @NonNull Inet4Address clientAddr, @Nullable String hostname) {
         assertMatchesClient(packet);
         assertFalse(packet.hasExplicitClientId());
-        assertEquals(TEST_SERVER_ADDR, packet.mServerIdentifier);
-        assertEquals(TEST_CLIENT_ADDR, packet.mYourIp);
+        assertEquals(srvAddr, packet.mServerIdentifier);
+        assertEquals(clientAddr, packet.mYourIp);
         assertNotNull(packet.mLeaseTime);
         assertEquals(TEST_LEASE_EXPTIME_SECS, (int) packet.mLeaseTime);
         assertEquals(hostname, packet.mHostName);
+    }
+
+    private void assertMatchesTestLease(@NonNull DhcpPacket packet, @Nullable String hostname) {
+        assertMatchesLease(packet, TEST_SERVER_ADDR, TEST_CLIENT_ADDR, hostname);
     }
 
     private void assertMatchesTestLease(@NonNull DhcpPacket packet) {

@@ -37,6 +37,7 @@ import android.util.ArrayMap;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 
 import java.net.Inet4Address;
 import java.util.ArrayList;
@@ -158,7 +159,7 @@ class DhcpLeaseRepository {
     /**
      * From a map keyed by {@link Inet4Address}, remove entries where the key is invalid (as
      * specified by {@link #isValidAddress(Inet4Address)}), or is a reserved address.
-     * @return true iff at least one entry was removed.
+     * @return true if and only if at least one entry was removed.
      */
     private <T> boolean cleanMap(Map<Inet4Address, T> map) {
         final Iterator<Entry<Inet4Address, T>> it = map.entrySet().iterator();
@@ -397,7 +398,8 @@ class DhcpLeaseRepository {
         mEventCallbacks.finishBroadcast();
     }
 
-    public void markLeaseDeclined(@NonNull Inet4Address addr) {
+    @VisibleForTesting
+    void markLeaseDeclined(@NonNull Inet4Address addr) {
         if (mDeclinedAddrs.containsKey(addr) || !isValidAddress(addr)) {
             mLog.logf("Not marking %s as declined: already declined or not assignable",
                     inet4AddrToString(addr));
@@ -407,6 +409,22 @@ class DhcpLeaseRepository {
         mDeclinedAddrs.put(addr, expTime);
         mLog.logf("Marked %s as declined expiring %d", inet4AddrToString(addr), expTime);
         maybeUpdateEarliestExpiration(expTime);
+    }
+
+    /**
+     * Mark a committed lease matching the passed in clientId and hardware address parameters to be
+     * declined, and delete it from the repository.
+     *
+     * @param clientId Client identifier option if specified, or {@link #CLIENTID_UNSPEC}
+     * @param hwAddr client's mac address
+     * @param Addr IPv4 address to be declined
+     * @return true if a lease matching parameters was removed from committed repository.
+     */
+    public boolean markAndReleaseDeclinedLease(@Nullable byte[] clientId,
+            @NonNull MacAddress hwAddr, @NonNull Inet4Address addr) {
+        if (!releaseLease(clientId, hwAddr, addr)) return false;
+        markLeaseDeclined(addr);
+        return true;
     }
 
     /**
