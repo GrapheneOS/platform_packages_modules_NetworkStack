@@ -32,6 +32,7 @@ import com.android.testutils.RecorderCallback.CallbackEntry.Suspended
 import com.android.testutils.RecorderCallback.CallbackEntry.Unavailable
 import kotlin.reflect.KClass
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -194,7 +195,16 @@ open class TestableNetworkCallback private constructor(
         timeoutMs: Long = defaultTimeoutMs,
         from: Int = mark,
         crossinline predicate: (T) -> Boolean = { true }
-    ) = history.poll(timeoutMs, from) { it is T && predicate(it) } as T
+    ): T = eventuallyExpectOrNull(timeoutMs, from, predicate).also {
+        assertNotNull(it, "Callback ${T::class} not received within ${timeoutMs}ms")
+    } as T
+
+    // TODO (b/157405399) straighten and unify the method names
+    inline fun <reified T : CallbackEntry> eventuallyExpectOrNull(
+        timeoutMs: Long = defaultTimeoutMs,
+        from: Int = mark,
+        crossinline predicate: (T) -> Boolean = { true }
+    ) = history.poll(timeoutMs, from) { it is T && predicate(it) } as T?
 
     fun expectCallbackThat(
         timeoutMs: Long = defaultTimeoutMs,
