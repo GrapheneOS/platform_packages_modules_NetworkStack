@@ -74,6 +74,8 @@ public class DataStallStatsUtils {
                 stats.mNetworkType,
                 stats.mWifiInfo,
                 stats.mCellularInfo,
-                stats.mDns);
+                stats.mDns,
+                stats.mTcpFailRate,
+                stats.mTcpSentSinceLastRecv);
     }
 }
