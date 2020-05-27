@@ -39,6 +39,7 @@ import static android.net.util.DataStallUtils.CONFIG_DATA_STALL_TCP_POLLING_INTE
 import static android.net.util.DataStallUtils.CONFIG_DATA_STALL_VALID_DNS_TIME_THRESHOLD;
 import static android.net.util.DataStallUtils.DATA_STALL_EVALUATION_TYPE_DNS;
 import static android.net.util.DataStallUtils.DATA_STALL_EVALUATION_TYPE_TCP;
+import static android.net.util.DataStallUtils.DEFAULT_DATA_STALL_EVALUATION_TYPES;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_FALLBACK_PROBE_SPECS;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_OTHER_FALLBACK_URLS;
 import static android.net.util.NetworkStackUtils.CAPTIVE_PORTAL_USE_HTTPS;
@@ -144,9 +145,14 @@ import com.android.networkstack.metrics.DataStallDetectionStats;
 import com.android.networkstack.metrics.DataStallStatsUtils;
 import com.android.networkstack.netlink.TcpSocketTracker;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
+import com.android.server.connectivity.nano.CellularData;
+import com.android.server.connectivity.nano.DnsEvent;
+import com.android.server.connectivity.nano.WifiData;
 import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
 import com.android.testutils.HandlerUtilsKt;
+
+import com.google.protobuf.nano.MessageNano;
 
 import junit.framework.AssertionFailedError;
 
@@ -227,7 +233,6 @@ public class NetworkMonitorTest {
     private @Spy Network mCleartextDnsNetwork = new Network(TEST_NETID);
     private @Mock Network mNetwork;
     private @Mock DataStallStatsUtils mDataStallStatsUtils;
-    private @Mock WifiInfo mWifiInfo;
     private @Mock TcpSocketTracker.Dependencies mTstDependencies;
     private @Mock INetd mNetd;
     private @Mock TcpSocketTracker mTst;
@@ -235,6 +240,7 @@ public class NetworkMonitorTest {
     private HashSet<BroadcastReceiver> mRegisteredReceivers;
     private @Mock Context mMccContext;
     private @Mock Resources mMccResource;
+    private @Mock WifiInfo mWifiInfo;
 
     private static final int TEST_NETID = 4242;
     private static final String TEST_HTTP_URL = "http://www.google.com/gen_204";
@@ -252,10 +258,12 @@ public class NetworkMonitorTest {
     private static final String TEST_VENUE_INFO_URL = "https://venue.example.com/info";
     private static final String TEST_SPEED_TEST_URL = "https://speedtest.example.com";
     private static final String TEST_MCCMNC = "123456";
-
     private static final String[] TEST_HTTP_URLS = {TEST_HTTP_OTHER_URL1, TEST_HTTP_OTHER_URL2};
     private static final String[] TEST_HTTPS_URLS = {TEST_HTTPS_OTHER_URL1, TEST_HTTPS_OTHER_URL2};
-
+    private static final int TEST_TCP_FAIL_RATE = 99;
+    private static final int TEST_TCP_PACKET_COUNT = 50;
+    private static final long TEST_ELAPSED_TIME_MS = 123456789L;
+    private static final int TEST_SIGNAL_STRENGTH = -100;
     private static final int VALIDATION_RESULT_INVALID = 0;
     private static final int VALIDATION_RESULT_PORTAL = 0;
     private static final String TEST_REDIRECT_URL = "android.com";
@@ -285,6 +293,12 @@ public class NetworkMonitorTest {
     private static final NetworkCapabilities CELL_NOT_METERED_CAPABILITIES =
             new NetworkCapabilities()
                 .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
+                .addCapability(NET_CAPABILITY_INTERNET)
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED);
+
+    private static final NetworkCapabilities WIFI_NOT_METERED_CAPABILITIES =
+            new NetworkCapabilities()
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
                 .addCapability(NET_CAPABILITY_INTERNET)
                 .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED);
 
@@ -445,6 +459,10 @@ public class NetworkMonitorTest {
 
         when(mServiceManager.getNotifier()).thenReturn(mNotifier);
 
+        when(mTelephony.getDataNetworkType()).thenReturn(TelephonyManager.NETWORK_TYPE_LTE);
+        when(mTelephony.getNetworkOperator()).thenReturn(TEST_MCCMNC);
+        when(mTelephony.getSimOperator()).thenReturn(TEST_MCCMNC);
+
         when(mResources.getString(anyInt())).thenReturn("");
         when(mResources.getStringArray(anyInt())).thenReturn(new String[0]);
         doReturn(mConfiguration).when(mResources).getConfiguration();
@@ -557,13 +575,21 @@ public class NetworkMonitorTest {
         }
     }
 
+    private TcpSocketTracker getTcpSocketTrackerOrNull(NetworkMonitor.Dependencies dp) {
+        return ((dp.getDeviceConfigPropertyInt(
+                NAMESPACE_CONNECTIVITY,
+                CONFIG_DATA_STALL_EVALUATION_TYPE,
+                DEFAULT_DATA_STALL_EVALUATION_TYPES)
+                & DATA_STALL_EVALUATION_TYPE_TCP) != 0) ? mTst : null;
+    }
+
     private class WrappedNetworkMonitor extends NetworkMonitor {
         private long mProbeTime = 0;
         private final ConditionVariable mQuitCv = new ConditionVariable(false);
 
         WrappedNetworkMonitor() {
             super(mContext, mCallbacks, mNetwork, mLogger, mValidationLogger, mServiceManager,
-                    mDependencies, mTst);
+                    mDependencies, getTcpSocketTrackerOrNull(mDependencies));
         }
 
         @Override
@@ -576,13 +602,10 @@ public class NetworkMonitorTest {
         }
 
         @Override
-        protected TcpSocketTracker getTcpSocketTracker() {
-            return mTst;
-        }
-
-        @Override
         protected void addDnsEvents(@NonNull final DataStallDetectionStats.Builder stats) {
-            generateTimeoutDnsEvent(stats, DEFAULT_DNS_TIMEOUT_THRESHOLD);
+            if ((getDataStallEvaluationType() & DATA_STALL_EVALUATION_TYPE_DNS) != 0) {
+                generateTimeoutDnsEvent(stats, DEFAULT_DNS_TIMEOUT_THRESHOLD);
+            }
         }
 
         @Override
@@ -619,6 +642,11 @@ public class NetworkMonitorTest {
 
     private WrappedNetworkMonitor makeCellNotMeteredNetworkMonitor() {
         final WrappedNetworkMonitor nm = makeMonitor(CELL_NOT_METERED_CAPABILITIES);
+        return nm;
+    }
+
+    private WrappedNetworkMonitor makeWifiNotMeteredNetworkMonitor() {
+        final WrappedNetworkMonitor nm = makeMonitor(WIFI_NOT_METERED_CAPABILITIES);
         return nm;
     }
 
@@ -1728,85 +1756,284 @@ public class NetworkMonitorTest {
     }
 
     @Test
-    public void testDataStall_StallDnsSuspectedAndSendMetrics() throws Exception {
-        // Connect a VALID network to simulate the data stall detection because data stall
-        // evaluation will only start from validated state.
-        setStatus(mHttpsConnection, 204);
-        WrappedNetworkMonitor wrappedMonitor = makeCellNotMeteredNetworkMonitor();
-        wrappedMonitor.notifyNetworkConnected(TEST_LINK_PROPERTIES, CELL_METERED_CAPABILITIES);
-        verifyNetworkTested(NETWORK_VALIDATION_RESULT_VALID,
-                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS);
-        // Setup dns data stall signal.
-        wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
-        makeDnsTimeoutEvent(wrappedMonitor, 5);
-        assertTrue(wrappedMonitor.isDataStall());
+    public void testDataStall_StallDnsSuspectedAndSendMetricsOnCell() throws Exception {
+        testDataStall_StallDnsSuspectedAndSendMetrics(NetworkCapabilities.TRANSPORT_CELLULAR,
+                CELL_METERED_CAPABILITIES);
+    }
+
+    @Test
+    public void testDataStall_StallDnsSuspectedAndSendMetricsOnWifi() throws Exception {
+        testDataStall_StallDnsSuspectedAndSendMetrics(NetworkCapabilities.TRANSPORT_WIFI,
+                WIFI_NOT_METERED_CAPABILITIES);
+    }
+
+    private void testDataStall_StallDnsSuspectedAndSendMetrics(int transport,
+            NetworkCapabilities nc) throws Exception {
+        // NM suspects data stall from DNS signal and sends data stall metrics.
+        final WrappedNetworkMonitor nm = prepareNetworkMonitorForVerifyDataStall(nc);
+        makeDnsTimeoutEvent(nm, 5);
         // Trigger a dns signal to start evaluate data stall and upload metrics.
-        wrappedMonitor.notifyDnsResponse(RETURN_CODE_DNS_TIMEOUT);
-        // Setup information to prevent null data and cause NPE during testing.
-        when(mTelephony.getDataNetworkType()).thenReturn(TelephonyManager.NETWORK_TYPE_LTE);
-        when(mTelephony.getNetworkOperator()).thenReturn(TEST_MCCMNC);
-        when(mTelephony.getSimOperator()).thenReturn(TEST_MCCMNC);
-        // Verify data sent as expectation.
-        final DataStallDetectionStats stats = wrappedMonitor.buildDataStallDetectionStats(
-                NetworkCapabilities.TRANSPORT_CELLULAR);
-        final ArgumentCaptor<CaptivePortalProbeResult> probeResultCaptor =
-                ArgumentCaptor.forClass(CaptivePortalProbeResult.class);
-        verify(mDependencies, timeout(HANDLER_TIMEOUT_MS).times(1))
-                .writeDataStallDetectionStats(eq(stats), probeResultCaptor.capture());
-        assertTrue(probeResultCaptor.getValue().isSuccessful());
+        nm.notifyDnsResponse(RETURN_CODE_DNS_TIMEOUT);
+        // Verify data sent as expected.
+        verifySendDataStallDetectionStats(nm, DATA_STALL_EVALUATION_TYPE_DNS, transport);
     }
 
     @Test
     public void testDataStall_NoStallSuspectedAndSendMetrics() throws Exception {
-        // Connect a VALID network to simulate the data stall detection because data stall
-        // evaluation will only start from validated state.
-        setStatus(mHttpsConnection, 204);
-        WrappedNetworkMonitor wrappedMonitor = makeCellNotMeteredNetworkMonitor();
-        wrappedMonitor.notifyNetworkConnected(TEST_LINK_PROPERTIES, CELL_METERED_CAPABILITIES);
-        verifyNetworkTested(NETWORK_VALIDATION_RESULT_VALID,
-                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS);
+        final WrappedNetworkMonitor nm = prepareNetworkMonitorForVerifyDataStall(
+                CELL_METERED_CAPABILITIES);
         // Setup no data stall dns signal.
-        wrappedMonitor.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
-        makeDnsTimeoutEvent(wrappedMonitor, 3);
-        assertFalse(wrappedMonitor.isDataStall());
+        makeDnsTimeoutEvent(nm, 3);
+        assertFalse(nm.isDataStall());
         // Trigger a dns signal to start evaluate data stall.
-        wrappedMonitor.notifyDnsResponse(RETURN_CODE_DNS_SUCCESS);
+        nm.notifyDnsResponse(RETURN_CODE_DNS_SUCCESS);
         verify(mDependencies, never()).writeDataStallDetectionStats(any(), any());
     }
 
     @Test
-    public void testCollectDataStallMetrics() {
-        WrappedNetworkMonitor wrappedMonitor = makeCellNotMeteredNetworkMonitor();
+    public void testDataStall_StallTcpSuspectedAndSendMetricsOnCell() throws Exception {
+        testDataStall_StallTcpSuspectedAndSendMetrics(NetworkCapabilities.TRANSPORT_CELLULAR,
+                CELL_METERED_CAPABILITIES);
+    }
 
-        when(mTelephony.getDataNetworkType()).thenReturn(TelephonyManager.NETWORK_TYPE_LTE);
-        when(mTelephony.getNetworkOperator()).thenReturn(TEST_MCCMNC);
-        when(mTelephony.getSimOperator()).thenReturn(TEST_MCCMNC);
+    @Test
+    public void testDataStall_StallTcpSuspectedAndSendMetricsOnWifi() throws Exception {
+        testDataStall_StallTcpSuspectedAndSendMetrics(NetworkCapabilities.TRANSPORT_WIFI,
+                WIFI_NOT_METERED_CAPABILITIES);
+    }
 
-        DataStallDetectionStats.Builder stats =
-                new DataStallDetectionStats.Builder()
-                .setEvaluationType(DATA_STALL_EVALUATION_TYPE_DNS)
-                .setNetworkType(NetworkCapabilities.TRANSPORT_CELLULAR)
-                .setCellData(TelephonyManager.NETWORK_TYPE_LTE /* radioType */,
+    private void testDataStall_StallTcpSuspectedAndSendMetrics(int transport,
+            NetworkCapabilities nc) throws Exception {
+        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
+        // NM suspects data stall from TCP signal and sends data stall metrics.
+        setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
+        final WrappedNetworkMonitor nm = prepareNetworkMonitorForVerifyDataStall(nc);
+        setupTcpDataStall();
+        // Trigger a tcp event immediately.
+        setTcpPollingInterval(0);
+        nm.sendTcpPollingEvent();
+        verifySendDataStallDetectionStats(nm, DATA_STALL_EVALUATION_TYPE_TCP, transport);
+    }
+
+    private WrappedNetworkMonitor prepareNetworkMonitorForVerifyDataStall(NetworkCapabilities nc)
+            throws Exception {
+        // Connect a VALID network to simulate the data stall detection because data stall
+        // evaluation will only start from validated state.
+        setStatus(mHttpsConnection, 204);
+        final WrappedNetworkMonitor nm;
+        final int[] transports = nc.getTransportTypes();
+        // Though multiple transport types are allowed, use the first transport type for
+        // simplification.
+        switch (transports[0]) {
+            case NetworkCapabilities.TRANSPORT_CELLULAR:
+                nm = makeCellMeteredNetworkMonitor();
+                break;
+            case NetworkCapabilities.TRANSPORT_WIFI:
+                nm = makeWifiNotMeteredNetworkMonitor();
+                setupTestWifiInfo();
+                break;
+            default:
+                nm = null;
+                fail("Undefined transport type");
+        }
+        nm.notifyNetworkConnected(TEST_LINK_PROPERTIES, nc);
+        verifyNetworkTested(NETWORK_VALIDATION_RESULT_VALID,
+                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS);
+        nm.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
+        return nm;
+    }
+
+    private void setupTcpDataStall() {
+        when(mTstDependencies.isTcpInfoParsingSupported()).thenReturn(true);
+        when(mTst.getLatestReceivedCount()).thenReturn(0);
+        when(mTst.getLatestPacketFailPercentage()).thenReturn(TEST_TCP_FAIL_RATE);
+        when(mTst.getSentSinceLastRecv()).thenReturn(TEST_TCP_PACKET_COUNT);
+        when(mTst.isDataStallSuspected()).thenReturn(true);
+        when(mTst.pollSocketsInfo()).thenReturn(true);
+    }
+
+    private void verifySendDataStallDetectionStats(WrappedNetworkMonitor nm, int evalType,
+            int transport) {
+        // Verify data sent as expectated.
+        final ArgumentCaptor<CaptivePortalProbeResult> probeResultCaptor =
+                ArgumentCaptor.forClass(CaptivePortalProbeResult.class);
+        final ArgumentCaptor<DataStallDetectionStats> statsCaptor =
+                ArgumentCaptor.forClass(DataStallDetectionStats.class);
+        verify(mDependencies, timeout(HANDLER_TIMEOUT_MS).times(1))
+                .writeDataStallDetectionStats(statsCaptor.capture(), probeResultCaptor.capture());
+        assertTrue(nm.isDataStall());
+        assertTrue(probeResultCaptor.getValue().isSuccessful());
+        verifyTestDataStallDetectionStats(evalType, transport, statsCaptor.getValue());
+    }
+
+    private void verifyTestDataStallDetectionStats(int evalType, int transport,
+            DataStallDetectionStats stats) {
+        assertEquals(transport, stats.mNetworkType);
+        switch (transport) {
+            case NetworkCapabilities.TRANSPORT_WIFI:
+                assertArrayEquals(makeTestWifiDataNano(), stats.mWifiInfo);
+                // Expedient way to check stats.mCellularInfo contains the neutral byte array that
+                // is sent to represent a lack of data, as stats.mCellularInfo is not supposed to
+                // contain null.
+                assertArrayEquals(DataStallDetectionStats.emptyCellDataIfNull(null),
+                        stats.mCellularInfo);
+                break;
+            case NetworkCapabilities.TRANSPORT_CELLULAR:
+                // Expedient way to check stats.mWifiInfo contains the neutral byte array that is
+                // sent to represent a lack of data, as stats.mWifiInfo is not supposed to contain
+                // null.
+                assertArrayEquals(DataStallDetectionStats.emptyWifiInfoIfNull(null),
+                        stats.mWifiInfo);
+                assertArrayEquals(makeTestCellDataNano(), stats.mCellularInfo);
+                break;
+            default:
+                // Add other cases.
+                fail("Unexpected transport type");
+        }
+
+        assertEquals(evalType, stats.mEvaluationType);
+        if ((evalType & DATA_STALL_EVALUATION_TYPE_TCP) != 0) {
+            assertEquals(TEST_TCP_FAIL_RATE, stats.mTcpFailRate);
+            assertEquals(TEST_TCP_PACKET_COUNT, stats.mTcpSentSinceLastRecv);
+        } else {
+            assertEquals(DataStallDetectionStats.UNSPECIFIED_TCP_FAIL_RATE, stats.mTcpFailRate);
+            assertEquals(DataStallDetectionStats.UNSPECIFIED_TCP_PACKETS_COUNT,
+                    stats.mTcpSentSinceLastRecv);
+        }
+
+        if ((evalType & DATA_STALL_EVALUATION_TYPE_DNS) != 0) {
+            assertArrayEquals(stats.mDns, makeTestDnsTimeoutNano(DEFAULT_DNS_TIMEOUT_THRESHOLD));
+        } else {
+            assertArrayEquals(stats.mDns, makeTestDnsTimeoutNano(0 /* times */));
+        }
+    }
+
+    private DataStallDetectionStats makeTestDataStallDetectionStats(int evaluationType,
+            int transportType) {
+        final DataStallDetectionStats.Builder stats = new DataStallDetectionStats.Builder()
+                .setEvaluationType(evaluationType)
+                .setNetworkType(transportType);
+        switch (transportType) {
+            case NetworkCapabilities.TRANSPORT_CELLULAR:
+                stats.setCellData(TelephonyManager.NETWORK_TYPE_LTE /* radioType */,
                         true /* roaming */,
                         TEST_MCCMNC /* networkMccmnc */,
                         TEST_MCCMNC /* simMccmnc */,
                         CellSignalStrength.SIGNAL_STRENGTH_NONE_OR_UNKNOWN /* signalStrength */);
-        generateTimeoutDnsEvent(stats, DEFAULT_DNS_TIMEOUT_THRESHOLD);
+                break;
+            case NetworkCapabilities.TRANSPORT_WIFI:
+                setupTestWifiInfo();
+                stats.setWiFiData(mWifiInfo);
+                break;
+            default:
+                break;
+        }
 
-        assertEquals(wrappedMonitor.buildDataStallDetectionStats(
-                 NetworkCapabilities.TRANSPORT_CELLULAR), stats.build());
+        if ((evaluationType & DATA_STALL_EVALUATION_TYPE_TCP) != 0) {
+            generateTestTcpStats(stats);
+        }
 
+        if ((evaluationType & DATA_STALL_EVALUATION_TYPE_DNS) != 0) {
+            generateTimeoutDnsEvent(stats, DEFAULT_DNS_TIMEOUT_THRESHOLD);
+        }
+
+        return stats.build();
+    }
+
+    private byte[] makeTestDnsTimeoutNano(int timeoutCount) {
+        // Make a expected nano dns message.
+        final DnsEvent event = new DnsEvent();
+        event.dnsReturnCode = new int[timeoutCount];
+        event.dnsTime = new long[timeoutCount];
+        Arrays.fill(event.dnsReturnCode, RETURN_CODE_DNS_TIMEOUT);
+        Arrays.fill(event.dnsTime, TEST_ELAPSED_TIME_MS);
+        return MessageNano.toByteArray(event);
+    }
+
+    private byte[] makeTestCellDataNano() {
+        final CellularData data = new CellularData();
+        data.ratType = DataStallEventProto.RADIO_TECHNOLOGY_LTE;
+        data.networkMccmnc = TEST_MCCMNC;
+        data.simMccmnc = TEST_MCCMNC;
+        data.isRoaming = true;
+        data.signalStrength = 0;
+        return MessageNano.toByteArray(data);
+    }
+
+    private byte[] makeTestWifiDataNano() {
+        final WifiData data = new WifiData();
+        data.wifiBand = DataStallEventProto.AP_BAND_2GHZ;
+        data.signalStrength = TEST_SIGNAL_STRENGTH;
+        return MessageNano.toByteArray(data);
+    }
+
+    private void setupTestWifiInfo() {
         when(mWifi.getConnectionInfo()).thenReturn(mWifiInfo);
+        when(mWifiInfo.getRssi()).thenReturn(TEST_SIGNAL_STRENGTH);
+        // Set to 2.4G band. Map to DataStallEventProto.AP_BAND_2GHZ proto definition.
+        when(mWifiInfo.getFrequency()).thenReturn(2450);
+    }
 
-        stats = new DataStallDetectionStats.Builder()
-                .setEvaluationType(DATA_STALL_EVALUATION_TYPE_DNS)
-                .setNetworkType(NetworkCapabilities.TRANSPORT_WIFI)
-                .setWiFiData(mWifiInfo);
-        generateTimeoutDnsEvent(stats, DEFAULT_DNS_TIMEOUT_THRESHOLD);
+    private void testDataStallMetricsWithCellular(int evalType) {
+        testDataStallMetrics(evalType, NetworkCapabilities.TRANSPORT_CELLULAR);
+    }
 
-        assertEquals(
-                wrappedMonitor.buildDataStallDetectionStats(NetworkCapabilities.TRANSPORT_WIFI),
-                stats.build());
+    private void testDataStallMetricsWithWiFi(int evalType) {
+        testDataStallMetrics(evalType, NetworkCapabilities.TRANSPORT_WIFI);
+    }
+
+    private void testDataStallMetrics(int evalType, int transportType) {
+        setDataStallEvaluationType(evalType);
+        final NetworkCapabilities nc = new NetworkCapabilities()
+                .addTransportType(transportType)
+                .addCapability(NET_CAPABILITY_INTERNET);
+        final WrappedNetworkMonitor wrappedMonitor = makeMonitor(nc);
+        setupTestWifiInfo();
+        final DataStallDetectionStats stats =
+                makeTestDataStallDetectionStats(evalType, transportType);
+        assertEquals(wrappedMonitor.buildDataStallDetectionStats(transportType, evalType), stats);
+
+        if ((evalType & DATA_STALL_EVALUATION_TYPE_TCP) != 0) {
+            verify(mTst, timeout(HANDLER_TIMEOUT_MS).atLeastOnce()).getLatestPacketFailPercentage();
+        } else {
+            verify(mTst, never()).getLatestPacketFailPercentage();
+        }
+    }
+
+    @Test
+    public void testCollectDataStallMetrics_DnsWithCellular() {
+        testDataStallMetricsWithCellular(DATA_STALL_EVALUATION_TYPE_DNS);
+    }
+
+    @Test
+    public void testCollectDataStallMetrics_DnsWithWiFi() {
+        testDataStallMetricsWithWiFi(DATA_STALL_EVALUATION_TYPE_DNS);
+    }
+
+    @Test
+    public void testCollectDataStallMetrics_TcpWithCellular() {
+        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
+        testDataStallMetricsWithCellular(DATA_STALL_EVALUATION_TYPE_TCP);
+    }
+
+    @Test
+    public void testCollectDataStallMetrics_TcpWithWiFi() {
+        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
+        testDataStallMetricsWithWiFi(DATA_STALL_EVALUATION_TYPE_TCP);
+    }
+
+    @Test
+    public void testCollectDataStallMetrics_TcpAndDnsWithWifi() {
+        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
+        testDataStallMetricsWithWiFi(
+                DATA_STALL_EVALUATION_TYPE_TCP | DATA_STALL_EVALUATION_TYPE_DNS);
+    }
+
+    @Test
+    public void testCollectDataStallMetrics_TcpAndDnsWithCellular() {
+        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
+        testDataStallMetricsWithCellular(
+                DATA_STALL_EVALUATION_TYPE_TCP | DATA_STALL_EVALUATION_TYPE_DNS);
     }
 
     @Test
@@ -2334,8 +2561,14 @@ public class NetworkMonitorTest {
 
     private void generateTimeoutDnsEvent(DataStallDetectionStats.Builder stats, int num) {
         for (int i = 0; i < num; i++) {
-            stats.addDnsEvent(RETURN_CODE_DNS_TIMEOUT, 123456789 /* timeMs */);
+            stats.addDnsEvent(RETURN_CODE_DNS_TIMEOUT, TEST_ELAPSED_TIME_MS /* timeMs */);
         }
+    }
+
+    private void generateTestTcpStats(DataStallDetectionStats.Builder stats) {
+        when(mTst.getLatestPacketFailPercentage()).thenReturn(TEST_TCP_FAIL_RATE);
+        when(mTst.getSentSinceLastRecv()).thenReturn(TEST_TCP_PACKET_COUNT);
+        stats.setTcpFailRate(TEST_TCP_FAIL_RATE).setTcpSentSinceLastRecv(TEST_TCP_PACKET_COUNT);
     }
 
     private NetworkTestResultParcelable matchNetworkTestResultParcelable(final int result,
