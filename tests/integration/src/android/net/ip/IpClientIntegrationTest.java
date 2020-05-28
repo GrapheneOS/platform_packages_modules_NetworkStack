@@ -186,7 +186,7 @@ public class IpClientIntegrationTest {
     private static final int PACKET_TIMEOUT_MS = 5_000;
     private static final int TEST_TIMEOUT_MS = 400;
     private static final String TEST_L2KEY = "some l2key";
-    private static final String TEST_GROUPHINT = "some grouphint";
+    private static final String TEST_CLUSTER = "some cluster";
     private static final int TEST_LEASE_DURATION_S = 3_600; // 1 hour
 
     // TODO: move to NetlinkConstants, NetworkStackConstants, or OsConstants.
@@ -267,7 +267,7 @@ public class IpClientIntegrationTest {
     private static final String TEST_DHCP_ROAM_SSID = "0001docomo";
     private static final String TEST_DHCP_ROAM_BSSID = "00:4e:35:17:98:55";
     private static final String TEST_DHCP_ROAM_L2KEY = "roaming_l2key";
-    private static final String TEST_DHCP_ROAM_GROUPHINT = "roaming_group_hint";
+    private static final String TEST_DHCP_ROAM_CLUSTER = "roaming_cluster";
     private static final byte[] TEST_AP_OUI = new byte[] { 0x00, 0x1A, 0x11 };
 
     private class Dependencies extends IpClient.Dependencies {
@@ -600,7 +600,7 @@ public class IpClientIntegrationTest {
             throws RemoteException {
         ProvisioningConfiguration.Builder prov = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
-                .withLayer2Information(new Layer2Information(TEST_L2KEY, TEST_GROUPHINT,
+                .withLayer2Information(new Layer2Information(TEST_L2KEY, TEST_CLUSTER,
                         MacAddress.fromString(TEST_DEFAULT_BSSID)))
                 .withoutIPv6();
         if (isPreconnectionEnabled) prov.withPreconnection();
@@ -1092,7 +1092,7 @@ public class IpClientIntegrationTest {
                     .setAssignedV4Address(CLIENT_ADDR)
                     .setAssignedV4AddressExpiry(Long.MAX_VALUE) // lease is always valid
                     .setMtu(new Integer(TEST_DEFAULT_MTU))
-                    .setGroupHint(TEST_GROUPHINT)
+                    .setCluster(TEST_CLUSTER)
                     .setDnsAddresses(Collections.singletonList(SERVER_ADDR))
                     .build(), false /* timeout */);
         assertTrue(packet instanceof DhcpRequestPacket);
@@ -1105,7 +1105,7 @@ public class IpClientIntegrationTest {
                     .setAssignedV4Address(CLIENT_ADDR)
                     .setAssignedV4AddressExpiry(EXPIRED_LEASE)
                     .setMtu(new Integer(TEST_DEFAULT_MTU))
-                    .setGroupHint(TEST_GROUPHINT)
+                    .setCluster(TEST_CLUSTER)
                     .setDnsAddresses(Collections.singletonList(SERVER_ADDR))
                     .build(), false /* timeout */);
         assertTrue(packet instanceof DhcpDiscoverPacket);
@@ -1124,7 +1124,7 @@ public class IpClientIntegrationTest {
                     .setAssignedV4Address(CLIENT_ADDR)
                     .setAssignedV4AddressExpiry(System.currentTimeMillis() + 3_600_000)
                     .setMtu(new Integer(TEST_DEFAULT_MTU))
-                    .setGroupHint(TEST_GROUPHINT)
+                    .setCluster(TEST_CLUSTER)
                     .setDnsAddresses(Collections.singletonList(SERVER_ADDR))
                     .build(), true /* timeout */);
         assertTrue(packet instanceof DhcpDiscoverPacket);
@@ -1135,7 +1135,7 @@ public class IpClientIntegrationTest {
         final DhcpPacket packet = getReplyFromDhcpLease(
                 new NetworkAttributes.Builder()
                     .setMtu(new Integer(TEST_DEFAULT_MTU))
-                    .setGroupHint(TEST_GROUPHINT)
+                    .setCluster(TEST_CLUSTER)
                     .setDnsAddresses(Collections.singletonList(SERVER_ADDR))
                     .build(), false /* timeout */);
         assertTrue(packet instanceof DhcpDiscoverPacket);
@@ -1772,14 +1772,14 @@ public class IpClientIntegrationTest {
 
     @Test
     public void testDhcpClientPreconnection_WithoutLayer2InfoWhenStartingProv() throws Exception {
-        // For FILS connection, current bssid (also l2key and grouphint) is still null when
+        // For FILS connection, current bssid (also l2key and cluster) is still null when
         // starting provisioning since the L2 link hasn't been established yet. Ensure that
         // IpClient won't crash even if initializing an Layer2Info class with null members.
         ProvisioningConfiguration.Builder prov = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
                 .withoutIPv6()
                 .withPreconnection()
-                .withLayer2Information(new Layer2Information(null /* l2key */, null /* grouphint */,
+                .withLayer2Information(new Layer2Information(null /* l2key */, null /* cluster */,
                         null /* bssid */));
 
         mIpc.startProvisioning(prov.build());
@@ -2076,7 +2076,7 @@ public class IpClientIntegrationTest {
         final Layer2InformationParcelable roamingInfo = new Layer2InformationParcelable();
         roamingInfo.bssid = MacAddress.fromString(TEST_DHCP_ROAM_BSSID);
         roamingInfo.l2Key = TEST_DHCP_ROAM_L2KEY;
-        roamingInfo.groupHint = TEST_DHCP_ROAM_GROUPHINT;
+        roamingInfo.cluster = TEST_DHCP_ROAM_CLUSTER;
         mIpc.updateLayer2Information(roamingInfo);
 
         currentTime = System.currentTimeMillis();
