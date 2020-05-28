@@ -152,7 +152,7 @@ public class IpMemoryStoreServiceTest {
 
     /** Helper method to build test network attributes */
     private static NetworkAttributes.Builder buildTestNetworkAttributes(
-            final Inet4Address ipAddress, final long expiry, final String hint,
+            final Inet4Address ipAddress, final long expiry, final String cluster,
             final List<InetAddress> dnsServers, final int mtu) {
         final NetworkAttributes.Builder na = new NetworkAttributes.Builder();
         if (null != ipAddress) {
@@ -161,8 +161,8 @@ public class IpMemoryStoreServiceTest {
         if (LEASE_EXPIRY_NULL != expiry) {
             na.setAssignedV4AddressExpiry(expiry);
         }
-        if (null != hint) {
-            na.setGroupHint(hint);
+        if (null != cluster) {
+            na.setCluster(cluster);
         }
         if (null != dnsServers) {
             na.setDnsAddresses(dnsServers);
@@ -384,7 +384,7 @@ public class IpMemoryStoreServiceTest {
         try {
             final NetworkAttributes.Builder na = buildTestNetworkAttributes(
                     (Inet4Address) Inet4Address.getByName("1.2.3.4"), LEASE_EXPIRY_NULL,
-                    "hint1", Arrays.asList(Inet6Address.getByName("0A1C:2E40:480A::1CA6")),
+                    "cluster1", Arrays.asList(Inet6Address.getByName("0A1C:2E40:480A::1CA6")),
                     219);
             final long time = System.currentTimeMillis() - 1;
             for (int i = 0; i < fakeDataCount; i++) {
@@ -423,7 +423,7 @@ public class IpMemoryStoreServiceTest {
         final String l2Key = FAKE_KEYS[0];
         final NetworkAttributes.Builder na = buildTestNetworkAttributes(
                 (Inet4Address) Inet4Address.getByName("1.2.3.4"),
-                System.currentTimeMillis() + 7_200_000, "hint1", null, 219);
+                System.currentTimeMillis() + 7_200_000, "cluster1", null, 219);
         NetworkAttributes attributes = na.build();
         storeAttributes(l2Key, attributes);
 
@@ -452,7 +452,7 @@ public class IpMemoryStoreServiceTest {
                             assertEquals(attributes.assignedV4Address, attr.assignedV4Address);
                             assertEquals(attributes.assignedV4AddressExpiry,
                                     attr.assignedV4AddressExpiry);
-                            assertEquals(attributes.groupHint, attr.groupHint);
+                            assertEquals(attributes.cluster, attr.cluster);
                             assertEquals(attributes.mtu, attr.mtu);
                             assertEquals(attributes2.dnsAddresses, attr.dnsAddresses);
                             latch.countDown();
@@ -549,7 +549,7 @@ public class IpMemoryStoreServiceTest {
     @Test
     public void testFindL2Key() throws UnknownHostException {
         final NetworkAttributes.Builder na = new NetworkAttributes.Builder();
-        na.setGroupHint("hint0");
+        na.setCluster("cluster0");
         storeAttributes(FAKE_KEYS[0], na.build());
 
         na.setDnsAddresses(Arrays.asList(
@@ -560,7 +560,7 @@ public class IpMemoryStoreServiceTest {
         na.setAssignedV4Address((Inet4Address) Inet4Address.getByName("1.2.3.4"));
         na.setDnsAddresses(Arrays.asList(
                 new InetAddress[] {Inet6Address.getByName("0A1C:2E40:480A::1CA6")}));
-        na.setGroupHint("hint1");
+        na.setCluster("cluster1");
         storeAttributes(FAKE_KEYS[2], na.build());
         na.setMtu(219);
         storeAttributes(FAKE_KEYS[3], na.build());
@@ -599,8 +599,8 @@ public class IpMemoryStoreServiceTest {
                     latch.countDown();
                 })));
 
-        // Group hint alone must not be strong enough to override the rest
-        na.setGroupHint("hint0");
+        // Cluster alone must not be strong enough to override the rest
+        na.setCluster("cluster0");
         doLatched("Did not finish finding L2Key", latch ->
                 mService.findL2Key(na.build().toParcelable(), onL2KeyResponse((status, key) -> {
                     assertTrue("Retrieve network sameness not successful : " + status.resultCode,
@@ -610,7 +610,7 @@ public class IpMemoryStoreServiceTest {
                 })));
 
         // Still closest to key 3, though confidence is lower
-        na.setGroupHint("hint1");
+        na.setCluster("cluster1");
         na.setDnsAddresses(null);
         doLatched("Did not finish finding L2Key", latch ->
                 mService.findL2Key(na.build().toParcelable(), onL2KeyResponse((status, key) -> {
@@ -631,7 +631,7 @@ public class IpMemoryStoreServiceTest {
                 })));
 
         // MTU alone not strong enough to make this group-close
-        na.setGroupHint(null);
+        na.setCluster(null);
         na.setDnsAddresses(null);
         na.setAssignedV4Address(null);
         doLatched("Did not finish finding L2Key", latch ->
@@ -657,7 +657,7 @@ public class IpMemoryStoreServiceTest {
     public void testIsSameNetwork() throws UnknownHostException {
         final NetworkAttributes.Builder na = buildTestNetworkAttributes(
                 (Inet4Address) Inet4Address.getByName("1.2.3.4"), LEASE_EXPIRY_NULL,
-                "hint1", Arrays.asList(Inet6Address.getByName("0A1C:2E40:480A::1CA6")),
+                "cluster1", Arrays.asList(Inet6Address.getByName("0A1C:2E40:480A::1CA6")),
                 219);
 
         storeAttributes(FAKE_KEYS[0], na.build());
@@ -668,10 +668,10 @@ public class IpMemoryStoreServiceTest {
         na.setMtu(200);
         storeAttributes(FAKE_KEYS[2], na.build());
 
-        // Hopefully different MTU, assigned V4 address and grouphint make a different network,
+        // Hopefully different MTU, assigned V4 address and cluster make a different network,
         // even with identical DNS addresses
         na.setAssignedV4Address(null);
-        na.setGroupHint("hint2");
+        na.setCluster("cluster2");
         storeAttributes(FAKE_KEYS[3], na.build());
 
         assertNetworksSameness(FAKE_KEYS[0], FAKE_KEYS[1], SameL3NetworkResponse.NETWORK_SAME);
@@ -761,7 +761,7 @@ public class IpMemoryStoreServiceTest {
         // store network attributes
         final NetworkAttributes.Builder na = buildTestNetworkAttributes(
                 (Inet4Address) Inet4Address.getByName("1.2.3.4"),
-                System.currentTimeMillis() + 7_200_000, "hint1", null, 219);
+                System.currentTimeMillis() + 7_200_000, "cluster1", null, 219);
         storeAttributes(l2Key, na.build());
 
         // store private data blob
