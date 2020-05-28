@@ -17,20 +17,19 @@
 
 package android.net.ip;
 /* @hide */
-interface IIpClient {
-  oneway void completedPreDhcpAction();
-  oneway void confirmConfiguration();
-  oneway void readPacketFilterComplete(in byte[] data);
-  oneway void shutdown();
-  oneway void startProvisioning(in android.net.ProvisioningConfigurationParcelable req);
-  oneway void stop();
-  oneway void setTcpBufferSizes(in String tcpBufferSizes);
-  oneway void setHttpProxy(in android.net.ProxyInfo proxyInfo);
-  oneway void setMulticastFilter(boolean enabled);
-  oneway void addKeepalivePacketFilter(int slot, in android.net.TcpKeepalivePacketDataParcelable pkt);
-  oneway void removeKeepalivePacketFilter(int slot);
-  oneway void setL2KeyAndGroupHint(in String l2Key, in String cluster);
-  oneway void addNattKeepalivePacketFilter(int slot, in android.net.NattKeepalivePacketDataParcelable pkt);
-  oneway void notifyPreconnectionComplete(boolean success);
-  oneway void updateLayer2Information(in android.net.Layer2InformationParcelable info);
+interface IIpClientCallbacks {
+  oneway void onIpClientCreated(in android.net.ip.IIpClient ipClient);
+  oneway void onPreDhcpAction();
+  oneway void onPostDhcpAction();
+  oneway void onNewDhcpResults(in android.net.DhcpResultsParcelable dhcpResults);
+  oneway void onProvisioningSuccess(in android.net.LinkProperties newLp);
+  oneway void onProvisioningFailure(in android.net.LinkProperties newLp);
+  oneway void onLinkPropertiesChange(in android.net.LinkProperties newLp);
+  oneway void onReachabilityLost(in String logMsg);
+  oneway void onQuit();
+  oneway void installPacketFilter(in byte[] filter);
+  oneway void startReadPacketFilter();
+  oneway void setFallbackMulticastFilter(boolean enabled);
+  oneway void setNeighborDiscoveryOffload(boolean enable);
+  oneway void onPreconnectionStart(in List<android.net.Layer2PacketParcelable> packets);
 }
