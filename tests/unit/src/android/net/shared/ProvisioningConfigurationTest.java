@@ -84,7 +84,7 @@ public class ProvisioningConfigurationTest {
         mConfig.mDisplayName = "test_config";
         mConfig.mEnablePreconnection = false;
         mConfig.mScanResultInfo = makeScanResultInfo("ssid");
-        mConfig.mLayer2Info = new Layer2Information("some l2key", "some groupHint",
+        mConfig.mLayer2Info = new Layer2Information("some l2key", "some cluster",
                 MacAddress.fromString("00:01:02:03:04:05"));
         // Any added field must be included in equals() to be tested properly
         assertFieldCountEquals(15, ProvisioningConfiguration.class);
@@ -164,11 +164,11 @@ public class ProvisioningConfigurationTest {
         assertNotEqualsAfterChange(c -> c.mScanResultInfo = null);
         assertNotEqualsAfterChange(c -> c.mScanResultInfo = makeScanResultInfo("another ssid"));
         assertNotEqualsAfterChange(c -> c.mLayer2Info = new Layer2Information("another l2key",
-                "some groupHint", MacAddress.fromString("00:01:02:03:04:05")));
+                "some cluster", MacAddress.fromString("00:01:02:03:04:05")));
         assertNotEqualsAfterChange(c -> c.mLayer2Info = new Layer2Information("some l2key",
-                "another groupHint", MacAddress.fromString("00:01:02:03:04:05")));
+                "another cluster", MacAddress.fromString("00:01:02:03:04:05")));
         assertNotEqualsAfterChange(c -> c.mLayer2Info = new Layer2Information("some l2key",
-                "some groupHint", MacAddress.fromString("01:02:03:04:05:06")));
+                "some cluster", MacAddress.fromString("01:02:03:04:05:06")));
         assertNotEqualsAfterChange(c -> c.mLayer2Info = null);
         assertFieldCountEquals(15, ProvisioningConfiguration.class);
     }
