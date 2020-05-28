@@ -20,6 +20,6 @@ import android.net.MacAddress;
 
 parcelable Layer2InformationParcelable {
     String l2Key;
-    String groupHint;
+    String cluster;
     MacAddress bssid;
 }
