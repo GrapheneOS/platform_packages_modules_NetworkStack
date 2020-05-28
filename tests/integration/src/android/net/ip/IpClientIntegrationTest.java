@@ -689,13 +689,12 @@ public class IpClientIntegrationTest {
                 false /* isPreconnectionEnabled */, isDhcpIpConflictDetectEnabled,
                 isHostnameConfigurationEnabled, hostname, displayName, scanResultInfo);
         return handleDhcpPackets(isSuccessLease, leaseTimeSec, shouldReplyRapidCommitAck, mtu,
-                isDhcpIpConflictDetectEnabled, captivePortalApiUrl);
+                captivePortalApiUrl);
     }
 
     private List<DhcpPacket> handleDhcpPackets(final boolean isSuccessLease,
             final Integer leaseTimeSec, final boolean shouldReplyRapidCommitAck, final int mtu,
-            final boolean isDhcpIpConflictDetectEnabled, final String captivePortalApiUrl)
-            throws Exception {
+            final String captivePortalApiUrl) throws Exception {
         final List<DhcpPacket> packetList = new ArrayList<>();
         DhcpPacket packet;
         while ((packet = getNextDhcpPacket()) != null) {
@@ -720,15 +719,6 @@ public class IpClientIntegrationTest {
 
             // wait for reply to DHCPOFFER packet if disabling rapid commit option
             if (shouldReplyRapidCommitAck || !(packet instanceof DhcpDiscoverPacket)) {
-                if (!isDhcpIpConflictDetectEnabled && isSuccessLease) {
-                    // verify IPv4-only provisioning success before exiting loop.
-                    // 1. if it's a failure lease, onProvisioningSuccess() won't be called;
-                    // 2. if duplicated IPv4 address detection is enabled, verify TIMEOUT
-                    //    will affect ARP packet capture running in other test cases.
-                    ArgumentCaptor<LinkProperties> captor =
-                            ArgumentCaptor.forClass(LinkProperties.class);
-                    verifyProvisioningSuccess(captor, Collections.singletonList(CLIENT_ADDR));
-                }
                 return packetList;
             }
         }
@@ -790,8 +780,15 @@ public class IpClientIntegrationTest {
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(emptyLp);
     }
 
-    private void verifyProvisioningSuccess(ArgumentCaptor<LinkProperties> captor,
-            final Collection<InetAddress> addresses) throws Exception {
+    // Verify IPv4-only provisioning success. No need to verify IPv4 provisioning when below cases
+    // happen:
+    // 1. if there's a failure lease, onProvisioningSuccess() won't be called;
+    // 2. if duplicated IPv4 address detection is enabled, verify TIMEOUT will affect ARP packets
+    //    capture running in other test cases.
+    // 3. if IPv6 is enabled, e.g. withoutIPv6() isn't called when starting provisioning.
+    private void verifyIPv4OnlyProvisioningSuccess(final Collection<InetAddress> addresses)
+            throws Exception {
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
         LinkProperties lp = captor.getValue();
         assertNotNull(lp);
@@ -809,6 +806,7 @@ public class IpClientIntegrationTest {
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 mtu, false /* isDhcpIpConflictDetectEnabled */);
+        verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, mtu);
 
         if (shouldChangeMtu) {
@@ -997,8 +995,7 @@ public class IpClientIntegrationTest {
             assertArpProbe(packetList.get(0));
             assertArpAnnounce(packetList.get(3));
 
-            ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
-            verifyProvisioningSuccess(captor, Collections.singletonList(CLIENT_ADDR));
+            verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
             assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime,
                     TEST_DEFAULT_MTU);
         }
@@ -1037,6 +1034,7 @@ public class IpClientIntegrationTest {
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
+        verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
     }
 
@@ -1056,6 +1054,7 @@ public class IpClientIntegrationTest {
         performDhcpHandshake(true /* isSuccessLease */, INFINITE_LEASE,
                 true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
+        verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
         assertIpMemoryStoreNetworkAttributes(INFINITE_LEASE, currentTime, TEST_DEFAULT_MTU);
     }
 
@@ -1065,6 +1064,7 @@ public class IpClientIntegrationTest {
         performDhcpHandshake(true /* isSuccessLease */, null /* no lease time */,
                 true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
+        verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
         assertIpMemoryStoreNetworkAttributes(null, currentTime, TEST_DEFAULT_MTU);
     }
 
@@ -1073,6 +1073,7 @@ public class IpClientIntegrationTest {
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 false /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
+        verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
         assertIpMemoryNeverStoreNetworkAttributes();
     }
 
@@ -1082,6 +1083,7 @@ public class IpClientIntegrationTest {
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* isDhcpLeaseCacheEnabled */, true /* shouldReplyRapidCommitAck */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
+        verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
     }
 
@@ -1205,6 +1207,7 @@ public class IpClientIntegrationTest {
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 TEST_MIN_MTU, false /* isDhcpIpConflictDetectEnabled */);
+        verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_MIN_MTU);
 
         // Pretend that ConnectivityService set the MTU.
@@ -1221,6 +1224,7 @@ public class IpClientIntegrationTest {
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 0 /* mtu */, false /* isDhcpIpConflictDetectEnabled */);
+        verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, 0 /* mtu */);
         assertEquals(NetworkInterface.getByName(mIfaceName).getMTU(), TEST_DEFAULT_MTU);
     }
@@ -1646,6 +1650,7 @@ public class IpClientIntegrationTest {
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
+        verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
 
         // Stop IpClient and expect a final LinkProperties callback with an empty LP.
@@ -1858,6 +1863,7 @@ public class IpClientIntegrationTest {
                 true /* isHostnameConfigurationEnabled */, TEST_HOST_NAME /* hostname */,
                 null /* captivePortalApiUrl */, null /* displayName */, null /* scanResultInfo */);
         assertEquals(2, sentPackets.size());
+        verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
         assertHostname(true, TEST_HOST_NAME, TEST_HOST_NAME_TRANSLITERATION, sentPackets);
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
     }
@@ -1872,6 +1878,7 @@ public class IpClientIntegrationTest {
                 false /* isHostnameConfigurationEnabled */, TEST_HOST_NAME,
                 null /* captivePortalApiUrl */, null /* displayName */, null /* scanResultInfo */);
         assertEquals(2, sentPackets.size());
+        verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
         assertHostname(false, TEST_HOST_NAME, TEST_HOST_NAME_TRANSLITERATION, sentPackets);
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
     }
@@ -1886,6 +1893,7 @@ public class IpClientIntegrationTest {
                 true /* isHostnameConfigurationEnabled */, null /* hostname */,
                 null /* captivePortalApiUrl */, null /* displayName */, null /* scanResultInfo */);
         assertEquals(2, sentPackets.size());
+        verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
         assertHostname(true, null /* hostname */, null /* hostnameAfterTransliteration */,
                 sentPackets);
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
@@ -1906,8 +1914,7 @@ public class IpClientIntegrationTest {
                 (short) TEST_DEFAULT_MTU, serverSentUrl));
         final int testMtu = 1345;
         handleDhcpPackets(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
-                false /* isDhcpRapidCommitEnabled */, testMtu,
-                false /* isDhcpIpConflictDetectEnabled */, serverSentUrl);
+                false /* shouldReplyRapidCommitAck */, testMtu, serverSentUrl);
 
         final Uri expectedUrl = featureEnabled && serverSendsOption
                 ? Uri.parse(TEST_CAPTIVE_PORTAL_URL) : null;
@@ -1976,6 +1983,7 @@ public class IpClientIntegrationTest {
                 false /* isHostnameConfigurationEnabled */, null /* hostname */,
                 null /* captivePortalApiUrl */, displayName, info /* scanResultInfo */);
         assertEquals(2, sentPackets.size());
+        verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
 
         ArgumentCaptor<DhcpResultsParcelable> captor =
                 ArgumentCaptor.forClass(DhcpResultsParcelable.class);
@@ -2070,6 +2078,7 @@ public class IpClientIntegrationTest {
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */,
                 true /* isHostnameConfigurationEnabled */, null /* hostname */,
                 null /* captivePortalApiUrl */, displayName, scanResultInfo);
+        verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
 
         // simulate the roaming by updating bssid.
