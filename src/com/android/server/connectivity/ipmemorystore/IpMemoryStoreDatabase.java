@@ -602,6 +602,64 @@ public class IpMemoryStoreDatabase {
         return bestKey;
     }
 
+    /**
+     * Delete a single entry by key.
+     *
+     * If |needWipe| is true, the data will be wiped from disk immediately. Otherwise, it will
+     * only be marked deleted, and overwritten by subsequent writes or reclaimed during the next
+     * maintenance window.
+     * Note that wiping data is a very expensive operation. This is meant for clients that need
+     * this data gone from disk immediately for security reasons. Functionally it makes no
+     * difference at all.
+     */
+    static StatusAndCount delete(@NonNull final SQLiteDatabase db, @NonNull final String l2key,
+            final boolean needWipe) {
+        return deleteEntriesWithColumn(db,
+                NetworkAttributesContract.COLNAME_L2KEY, l2key, needWipe);
+    }
+
+    /**
+     * Delete all entries that have a particular cluster value.
+     *
+     * If |needWipe| is true, the data will be wiped from disk immediately. Otherwise, it will
+     * only be marked deleted, and overwritten by subsequent writes or reclaimed during the next
+     * maintenance window.
+     * Note that wiping data is a very expensive operation. This is meant for clients that need
+     * this data gone from disk immediately for security reasons. Functionally it makes no
+     * difference at all.
+     */
+    static StatusAndCount deleteCluster(@NonNull final SQLiteDatabase db,
+            @NonNull final String cluster, final boolean needWipe) {
+        return deleteEntriesWithColumn(db,
+                NetworkAttributesContract.COLNAME_CLUSTER, cluster, needWipe);
+    }
+
+    // Delete all entries where the given column has the given value.
+    private static StatusAndCount deleteEntriesWithColumn(@NonNull final SQLiteDatabase db,
+            @NonNull final String column, @NonNull final String value, final boolean needWipe) {
+        db.beginTransaction();
+        int deleted = 0;
+        try {
+            deleted = db.delete(NetworkAttributesContract.TABLENAME,
+                    column + "= ?", new String[] { value });
+            db.setTransactionSuccessful();
+        } catch (SQLiteException e) {
+            Log.e(TAG, "Could not delete from the memory store", e);
+            // Unclear what might have happened ; deleting records is not supposed to be able
+            // to fail barring a syntax error in the SQL query.
+            return new StatusAndCount(Status.ERROR_UNKNOWN, 0);
+        } finally {
+            db.endTransaction();
+        }
+
+        if (needWipe) {
+            final int vacuumStatus = vacuum(db);
+            // This is a problem for the client : return the failure
+            if (Status.SUCCESS != vacuumStatus) return new StatusAndCount(vacuumStatus, deleted);
+        }
+        return new StatusAndCount(Status.SUCCESS, deleted);
+    }
+
     // Drops all records that are expired. Relevance has decayed to zero of these records. Returns
     // an int out of Status.{SUCCESS, ERROR_*}
     static int dropAllExpiredRecords(@NonNull final SQLiteDatabase db) {
@@ -707,5 +765,14 @@ public class IpMemoryStoreDatabase {
             final long defaultValue) {
         final int columnIndex = cursor.getColumnIndex(columnName);
         return (columnIndex >= 0) ? cursor.getLong(columnIndex) : defaultValue;
+    }
+    private static int vacuum(@NonNull final SQLiteDatabase db) {
+        try {
+            db.execSQL("VACUUM");
+            return Status.SUCCESS;
+        } catch (SQLiteException e) {
+            // Vacuuming may fail from lack of storage, because it makes a copy of the database.
+            return Status.ERROR_STORAGE;
+        }
     }
 }
