@@ -382,7 +382,7 @@ public class IpClient extends StateMachine {
     private static final int EVENT_READ_PACKET_FILTER_COMPLETE    = 12;
     private static final int CMD_ADD_KEEPALIVE_PACKET_FILTER_TO_APF = 13;
     private static final int CMD_REMOVE_KEEPALIVE_PACKET_FILTER_FROM_APF = 14;
-    private static final int CMD_UPDATE_L2KEY_GROUPHINT = 15;
+    private static final int CMD_UPDATE_L2KEY_CLUSTER = 15;
     private static final int CMD_COMPLETE_PRECONNECTION = 16;
     private static final int CMD_UPDATE_L2INFORMATION = 17;
 
@@ -478,7 +478,7 @@ public class IpClient extends StateMachine {
     private ProxyInfo mHttpProxy;
     private ApfFilter mApfFilter;
     private String mL2Key; // The L2 key for this network, for writing into the memory store
-    private String mGroupHint; // The group hint for this network, for writing into the memory store
+    private String mCluster; // The cluster for this network, for writing into the memory store
     private boolean mMulticastFiltering;
     private long mStartTimeMillis;
     private MacAddress mCurrentBssid;
@@ -687,9 +687,9 @@ public class IpClient extends StateMachine {
             IpClient.this.stop();
         }
         @Override
-        public void setL2KeyAndGroupHint(String l2Key, String groupHint) {
+        public void setL2KeyAndGroupHint(String l2Key, String cluster) {
             enforceNetworkStackCallingPermission();
-            IpClient.this.setL2KeyAndGroupHint(l2Key, groupHint);
+            IpClient.this.setL2KeyAndCluster(l2Key, cluster);
         }
         @Override
         public void setTcpBufferSizes(String tcpBufferSizes) {
@@ -806,7 +806,7 @@ public class IpClient extends StateMachine {
 
         if (req.mLayer2Info != null) {
             mL2Key = req.mLayer2Info.mL2Key;
-            mGroupHint = req.mLayer2Info.mGroupHint;
+            mCluster = req.mLayer2Info.mCluster;
         }
         sendMessage(CMD_START, new android.net.shared.ProvisioningConfiguration(req));
     }
@@ -854,14 +854,14 @@ public class IpClient extends StateMachine {
     }
 
     /**
-     * Set the L2 key and group hint for storing info into the memory store.
+     * Set the L2 key and cluster for storing info into the memory store.
      *
      * This method is only supported on Q devices. For R or above releases,
      * caller should call #updateLayer2Information() instead.
      */
-    public void setL2KeyAndGroupHint(String l2Key, String groupHint) {
+    public void setL2KeyAndCluster(String l2Key, String cluster) {
         if (!ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
-            sendMessage(CMD_UPDATE_L2KEY_GROUPHINT, new Pair<>(l2Key, groupHint));
+            sendMessage(CMD_UPDATE_L2KEY_CLUSTER, new Pair<>(l2Key, cluster));
         }
     }
 
@@ -918,7 +918,7 @@ public class IpClient extends StateMachine {
     }
 
     /**
-     * Update the network bssid, L2Key and GroupHint on L2 roaming happened.
+     * Update the network bssid, L2Key and cluster on L2 roaming happened.
      */
     public void updateLayer2Information(@NonNull Layer2InformationParcelable info) {
         sendMessage(CMD_UPDATE_L2INFORMATION, info);
@@ -1559,7 +1559,7 @@ public class IpClient extends StateMachine {
 
     private void handleUpdateL2Information(@NonNull Layer2InformationParcelable info) {
         mL2Key = info.l2Key;
-        mGroupHint = info.groupHint;
+        mCluster = info.cluster;
 
         if (info.bssid == null || mCurrentBssid == null) {
             Log.wtf(mTag, "bssid in the parcelable or current tracked bssid should be non-null");
@@ -1633,10 +1633,10 @@ public class IpClient extends StateMachine {
                     handleLinkPropertiesUpdate(NO_CALLBACKS);
                     break;
 
-                case CMD_UPDATE_L2KEY_GROUPHINT: {
+                case CMD_UPDATE_L2KEY_CLUSTER: {
                     final Pair<String, String> args = (Pair<String, String>) msg.obj;
                     mL2Key = args.first;
-                    mGroupHint = args.second;
+                    mCluster = args.second;
                     break;
                 }
 
@@ -1838,10 +1838,10 @@ public class IpClient extends StateMachine {
                     transitionTo(mStoppingState);
                     break;
 
-                case CMD_UPDATE_L2KEY_GROUPHINT: {
+                case CMD_UPDATE_L2KEY_CLUSTER: {
                     final Pair<String, String> args = (Pair<String, String>) msg.obj;
                     mL2Key = args.first;
-                    mGroupHint = args.second;
+                    mCluster = args.second;
                     // TODO : attributes should be saved to the memory store with
                     // these new values if they differ from the previous ones.
                     // If the state machine is in pure StartedState, then the values to input
