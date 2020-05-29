@@ -219,7 +219,7 @@ public class ProvisioningConfiguration {
         }
 
         /**
-         * Specify the L2 information(bssid, l2key and groupHint) that the IpClient should use.
+         * Specify the L2 information(bssid, l2key and cluster) that the IpClient should use.
          */
         public Builder withLayer2Information(Layer2Information layer2Info) {
             mConfig.mLayer2Info = layer2Info;
