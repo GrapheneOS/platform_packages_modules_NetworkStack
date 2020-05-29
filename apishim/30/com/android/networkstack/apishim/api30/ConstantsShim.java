@@ -37,4 +37,9 @@ public class ConstantsShim extends com.android.networkstack.apishim.api29.Consta
             DataStallReport.DETECTION_METHOD_DNS_EVENTS;
     public static final int DETECTION_METHOD_TCP_METRICS =
             DataStallReport.DETECTION_METHOD_TCP_METRICS;
+
+    /**
+     * @see android.net.NetworkCapabilities
+     */
+    public static final int TRANSPORT_TEST = 7;
 }
