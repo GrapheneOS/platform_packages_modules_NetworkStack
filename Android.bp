@@ -214,7 +214,10 @@ android_library {
     defaults: ["NetworkStackAppDefaults", "NetworkStackReleaseApiLevel"],
     static_libs: ["NetworkStackApiStableLib"],
     manifest: "AndroidManifestBase.xml",
-    visibility: ["//frameworks/base/tests/net/integration"],
+    visibility: [
+        "//frameworks/base/tests/net/integration",
+        "//cts/tests/tests/net",
+    ],
 }
 
 cc_library_shared {
