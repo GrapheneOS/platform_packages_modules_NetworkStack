@@ -1834,10 +1834,11 @@ public class NetworkMonitorTest {
     private void testDataStall_StallTcpSuspectedAndSendMetrics(NetworkCapabilities nc)
             throws Exception {
         assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
+        setupTcpDataStall();
         // NM suspects data stall from TCP signal and sends data stall metrics.
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
         final WrappedNetworkMonitor nm = prepareNetworkMonitorForVerifyDataStall(nc);
-        setupTcpDataStall();
+
         // Trigger a tcp event immediately.
         setTcpPollingInterval(0);
         nm.sendTcpPollingEvent();
