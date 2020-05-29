@@ -141,6 +141,7 @@ import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
 import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
 import com.android.testutils.DevSdkIgnoreRule;
+import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
 import com.android.testutils.HandlerUtilsKt;
 import com.android.testutils.TapPacketReader;
@@ -319,7 +320,8 @@ public class IpClientIntegrationTest {
                 NetworkStackIpMemoryStore ipMemoryStore) {
             return new DhcpClient.Dependencies(ipMemoryStore) {
                 @Override
-                public boolean isFeatureEnabled(final Context context, final String name) {
+                public boolean isFeatureEnabled(final Context context, final String name,
+                        final boolean defaultEnabled) {
                     switch (name) {
                         case NetworkStackUtils.DHCP_RAPID_COMMIT_VERSION:
                             return mIsDhcpRapidCommitEnabled;
@@ -1066,7 +1068,7 @@ public class IpClientIntegrationTest {
         assertIpMemoryStoreNetworkAttributes(null, currentTime, TEST_DEFAULT_MTU);
     }
 
-    @Test
+    @Test @IgnoreAfter(Build.VERSION_CODES.Q) // INIT-REBOOT is enabled on R.
     public void testHandleDisableInitRebootState() throws Exception {
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 false /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
