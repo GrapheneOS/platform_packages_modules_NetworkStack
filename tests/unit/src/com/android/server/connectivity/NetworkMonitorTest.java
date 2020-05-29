@@ -257,6 +257,7 @@ public class NetworkMonitorTest {
     private static final String TEST_LOGIN_URL = "https://testportal.example.com/login";
     private static final String TEST_VENUE_INFO_URL = "https://venue.example.com/info";
     private static final String TEST_SPEED_TEST_URL = "https://speedtest.example.com";
+    private static final String TEST_RELATIVE_URL = "/test/relative/gen_204";
     private static final String TEST_MCCMNC = "123456";
     private static final String[] TEST_HTTP_URLS = {TEST_HTTP_OTHER_URL1, TEST_HTTP_OTHER_URL2};
     private static final String[] TEST_HTTPS_URLS = {TEST_HTTPS_OTHER_URL1, TEST_HTTPS_OTHER_URL2};
@@ -2150,20 +2151,35 @@ public class NetworkMonitorTest {
     @Test
     public void testDismissPortalInValidatedNetworkEnabledOsSupported() throws Exception {
         assumeTrue(ShimUtils.isAtLeastR());
-        testDismissPortalInValidatedNetworkEnabled(TEST_LOGIN_URL);
+        testDismissPortalInValidatedNetworkEnabled(TEST_LOGIN_URL, TEST_LOGIN_URL);
+    }
+
+    @Test
+    public void testDismissPortalInValidatedNetworkEnabledOsSupported_NullLocationUrl()
+            throws Exception {
+        assumeTrue(ShimUtils.isAtLeastR());
+        testDismissPortalInValidatedNetworkEnabled(TEST_HTTP_URL, null /* locationUrl */);
+    }
+
+    @Test
+    public void testDismissPortalInValidatedNetworkEnabledOsSupported_InvalidLocationUrl()
+            throws Exception {
+        assumeTrue(ShimUtils.isAtLeastR());
+        testDismissPortalInValidatedNetworkEnabled(TEST_HTTP_URL, TEST_RELATIVE_URL);
     }
 
     @Test
     public void testDismissPortalInValidatedNetworkEnabledOsNotSupported() throws Exception {
         assumeFalse(ShimUtils.isAtLeastR());
-        testDismissPortalInValidatedNetworkEnabled(TEST_HTTP_URL);
+        testDismissPortalInValidatedNetworkEnabled(TEST_HTTP_URL, TEST_LOGIN_URL);
     }
 
-    private void testDismissPortalInValidatedNetworkEnabled(String portalUrl) throws Exception {
+    private void testDismissPortalInValidatedNetworkEnabled(String expectedUrl, String locationUrl)
+            throws Exception {
         setDismissPortalInValidatedNetwork(true);
         setSslException(mHttpsConnection);
         setPortal302(mHttpConnection);
-        when(mHttpConnection.getHeaderField(eq("location"))).thenReturn(TEST_LOGIN_URL);
+        when(mHttpConnection.getHeaderField(eq("location"))).thenReturn(locationUrl);
         final NetworkMonitor nm = makeMonitor(CELL_METERED_CAPABILITIES);
         notifyNetworkConnected(nm, CELL_METERED_CAPABILITIES);
 
@@ -2188,7 +2204,7 @@ public class NetworkMonitorTest {
         assertEquals(TEST_NETID, networkCaptor.getValue().netId);
         // Portal URL should be redirect URL.
         final String redirectUrl = bundle.getString(ConnectivityManager.EXTRA_CAPTIVE_PORTAL_URL);
-        assertEquals(portalUrl, redirectUrl);
+        assertEquals(expectedUrl, redirectUrl);
     }
 
     @Test

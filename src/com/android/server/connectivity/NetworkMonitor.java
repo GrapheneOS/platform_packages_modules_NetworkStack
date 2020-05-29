@@ -1090,7 +1090,7 @@ public class NetworkMonitor extends StateMachine {
                     final CaptivePortalProbeResult probeRes = mLastPortalProbeResult;
                     // Use redirect URL from AP if exists.
                     final String portalUrl =
-                            (useRedirectUrlForPortal() && probeRes.redirectUrl != null)
+                            (useRedirectUrlForPortal() && makeURL(probeRes.redirectUrl) != null)
                             ? probeRes.redirectUrl : probeRes.detectUrl;
                     appExtras.putString(EXTRA_CAPTIVE_PORTAL_URL, portalUrl);
                     if (probeRes.probeSpec != null) {
