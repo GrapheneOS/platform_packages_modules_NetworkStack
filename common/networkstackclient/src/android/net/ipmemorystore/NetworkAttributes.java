@@ -218,6 +218,22 @@ public class NetworkAttributes {
         private Integer mMtu;
 
         /**
+         * Constructs a new Builder.
+         */
+        public Builder() {}
+
+        /**
+         * Constructs a Builder from the passed NetworkAttributes.
+         */
+        public Builder(@NonNull final NetworkAttributes attributes) {
+            mAssignedAddress = attributes.assignedV4Address;
+            mAssignedAddressExpiry = attributes.assignedV4AddressExpiry;
+            mCluster = attributes.cluster;
+            mDnsAddresses = new ArrayList<>(attributes.dnsAddresses);
+            mMtu = attributes.mtu;
+        }
+
+        /**
          * Set the assigned address.
          * @param assignedV4Address The assigned address.
          * @return This builder.
