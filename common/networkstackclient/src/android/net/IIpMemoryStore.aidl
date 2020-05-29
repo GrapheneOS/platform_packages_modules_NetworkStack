@@ -22,6 +22,7 @@ import android.net.ipmemorystore.IOnBlobRetrievedListener;
 import android.net.ipmemorystore.IOnL2KeyResponseListener;
 import android.net.ipmemorystore.IOnNetworkAttributesRetrievedListener;
 import android.net.ipmemorystore.IOnSameL3NetworkResponseListener;
+import android.net.ipmemorystore.IOnStatusAndCountListener;
 import android.net.ipmemorystore.IOnStatusListener;
 
 /** {@hide} */
@@ -39,8 +40,7 @@ oneway interface IIpMemoryStore {
      * @param attributes The attributes for this network.
      * @param listener A listener that will be invoked to inform of the completion of this call,
      *                 or null if the client is not interested in learning about success/failure.
-     * @return (through the listener) The L2 key. This is useful if the L2 key was not specified.
-     *         If the call failed, the L2 key will be null.
+     * @return (through the listener) A status to indicate success or failure.
      */
     void storeNetworkAttributes(String l2Key, in NetworkAttributesParcelable attributes,
             IOnStatusListener listener);
@@ -115,4 +115,41 @@ oneway interface IIpMemoryStore {
      * Delete all data because a factory reset operation is in progress.
      */
     void factoryReset();
+
+    /**
+     * Delete a single entry.
+     *
+     * @param l2key The L2 key of the entry to delete.
+     * @param needWipe Whether the data must be wiped from disk immediately. This makes the
+     *                 operation vastly more expensive as the database files will have to be copied
+     *                 and created again from the old files (see sqlite3 VACUUM operation for
+     *                 details) and makes no functional difference; only pass true if security or
+     *                 privacy demands this data must be removed from disk immediately.
+     *                 Note that this can fail for storage reasons. The passed listener will then
+     *                 receive an appropriate error status with the number of deleted rows.
+     * @param listener A listener that will be invoked to inform of the completion of this call,
+     *                 or null if the client is not interested in learning about success/failure.
+     * @return (through the listener) A status to indicate success and the number of deleted records
+     */
+    void delete(String l2Key, boolean needWipe, IOnStatusAndCountListener listener);
+
+    /**
+     * Delete all entries in a cluster.
+     *
+     * This method will delete all entries in the memory store that have the cluster attribute
+     * passed as an argument.
+     *
+     * @param cluster The cluster to delete.
+     * @param needWipe Whether the data must be wiped from disk immediately. This makes the
+     *                 operation vastly more expensive as the database files will have to be copied
+     *                 and created again from the old files (see sqlite3 VACUUM operation for
+     *                 details) and makes no functional difference; only pass true if security or
+     *                 privacy demands this data must be removed from disk immediately.
+     *                 Note that this can fail for storage reasons. The passed listener will then
+     *                 receive an appropriate error status with the number of deleted rows.
+     * @param listener A listener that will be invoked to inform of the completion of this call,
+     *                 or null if the client is not interested in learning about success/failure.
+     * @return (through the listener) A status to indicate success and the number of deleted records
+     */
+    void deleteCluster(String cluster, boolean needWipe, IOnStatusAndCountListener listener);
 }
