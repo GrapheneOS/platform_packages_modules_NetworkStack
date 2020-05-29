@@ -34,7 +34,8 @@ oneway interface IIpClient {
     void setMulticastFilter(boolean enabled);
     void addKeepalivePacketFilter(int slot, in TcpKeepalivePacketDataParcelable pkt);
     void removeKeepalivePacketFilter(int slot);
-    void setL2KeyAndGroupHint(in String l2Key, in String groupHint);
+    /* Group hint is the old name for cluster */
+    void setL2KeyAndGroupHint(in String l2Key, in String cluster);
     void addNattKeepalivePacketFilter(int slot, in NattKeepalivePacketDataParcelable pkt);
     void notifyPreconnectionComplete(boolean success);
     void updateLayer2Information(in Layer2InformationParcelable info);
