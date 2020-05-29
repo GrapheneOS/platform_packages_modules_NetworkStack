@@ -52,6 +52,7 @@ import static android.net.util.NetworkStackUtils.TEST_URL_EXPIRATION_TIME;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
+import static com.android.server.connectivity.NetworkMonitor.INITIAL_REEVALUATE_DELAY_MS;
 import static com.android.server.connectivity.NetworkMonitor.extractCharset;
 
 import static junit.framework.Assert.assertEquals;
@@ -1113,10 +1114,13 @@ public class NetworkMonitorTest {
         verify(mFallbackConnection, times(1)).getResponseCode();
         verify(mOtherFallbackConnection, never()).getResponseCode();
 
-        // Second check uses the URL chosen by Random
-        final CaptivePortalProbeResult result = monitor.isCaptivePortal();
-        assertTrue(result.isPortal());
-        verify(mOtherFallbackConnection, times(1)).getResponseCode();
+        // Second check should be triggered automatically after the reevaluate delay, and uses the
+        // URL chosen by mRandom
+        // This test is appropriate to cover reevaluate behavior as long as the timeout is short
+        assertTrue(INITIAL_REEVALUATE_DELAY_MS < 2000);
+        verify(mOtherFallbackConnection, timeout(INITIAL_REEVALUATE_DELAY_MS + HANDLER_TIMEOUT_MS))
+                .getResponseCode();
+        verifyNetworkTested(VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */, TEST_LOGIN_URL);
     }
 
     @Test
