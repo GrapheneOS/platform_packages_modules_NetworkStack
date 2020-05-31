@@ -78,11 +78,17 @@ public class IpMemoryStoreDatabase {
         // is used to represent "infinite lease".
         public static final String COLTYPE_ASSIGNEDV4ADDRESSEXPIRY = "BIGINT";
 
-        // Please note that the group hint is only a *hint*, hence its name. The client can offer
-        // this information to nudge the grouping in the decision it thinks is right, but it can't
-        // decide for the memory store what is the same L3 network.
-        public static final String COLNAME_GROUPHINT = "groupHint";
-        public static final String COLTYPE_GROUPHINT = "TEXT";
+        // An optional cluster representing a notion of group owned by the client. The memory
+        // store uses this as a hint for grouping, but not as an overriding factor. The client
+        // can then use this to find networks belonging to a cluster. An example of this could
+        // be the SSID for WiFi, where same SSID-networks may not be the same L3 networks but
+        // it's still useful for managing networks.
+        // Note that "groupHint" is the legacy name of the column. The column should be renamed
+        // in the database – ALTER TABLE ${NetworkAttributesContract.TABLENAME RENAME} COLUMN
+        // groupHint TO cluster – but this has been postponed to reduce risk as the Mainline
+        // release winter imposes a lot of changes be pushed at the same time in the next release.
+        public static final String COLNAME_CLUSTER = "groupHint";
+        public static final String COLTYPE_CLUSTER = "TEXT";
 
         public static final String COLNAME_DNSADDRESSES = "dnsAddresses";
         // Stored in marshalled form as is
@@ -97,7 +103,7 @@ public class IpMemoryStoreDatabase {
                 + COLNAME_EXPIRYDATE              + " " + COLTYPE_EXPIRYDATE              + ", "
                 + COLNAME_ASSIGNEDV4ADDRESS       + " " + COLTYPE_ASSIGNEDV4ADDRESS       + ", "
                 + COLNAME_ASSIGNEDV4ADDRESSEXPIRY + " " + COLTYPE_ASSIGNEDV4ADDRESSEXPIRY + ", "
-                + COLNAME_GROUPHINT               + " " + COLTYPE_GROUPHINT               + ", "
+                + COLNAME_CLUSTER                 + " " + COLTYPE_CLUSTER                 + ", "
                 + COLNAME_DNSADDRESSES            + " " + COLTYPE_DNSADDRESSES            + ", "
                 + COLNAME_MTU                     + " " + COLTYPE_MTU                     + ")";
         public static final String DROP_TABLE = "DROP TABLE IF EXISTS " + TABLENAME;
@@ -165,7 +171,7 @@ public class IpMemoryStoreDatabase {
             try {
                 if (oldVersion < 2) {
                     // upgrade from version 1 to version 2
-                    // since we starts from version 2, do nothing here
+                    // since we start from version 2, do nothing here
                 }
 
                 if (oldVersion < 3) {
@@ -250,8 +256,8 @@ public class IpMemoryStoreDatabase {
             values.put(NetworkAttributesContract.COLNAME_ASSIGNEDV4ADDRESSEXPIRY,
                     attributes.assignedV4AddressExpiry);
         }
-        if (null != attributes.groupHint) {
-            values.put(NetworkAttributesContract.COLNAME_GROUPHINT, attributes.groupHint);
+        if (null != attributes.cluster) {
+            values.put(NetworkAttributesContract.COLNAME_CLUSTER, attributes.cluster);
         }
         if (null != attributes.dnsAddresses) {
             values.put(NetworkAttributesContract.COLNAME_DNSADDRESSES,
@@ -299,7 +305,7 @@ public class IpMemoryStoreDatabase {
                 NetworkAttributesContract.COLNAME_ASSIGNEDV4ADDRESS, 0);
         final long assignedV4AddressExpiry = getLong(cursor,
                 NetworkAttributesContract.COLNAME_ASSIGNEDV4ADDRESSEXPIRY, 0);
-        final String groupHint = getString(cursor, NetworkAttributesContract.COLNAME_GROUPHINT);
+        final String cluster = getString(cursor, NetworkAttributesContract.COLNAME_CLUSTER);
         final byte[] dnsAddressesBlob =
                 getBlob(cursor, NetworkAttributesContract.COLNAME_DNSADDRESSES);
         final int mtu = getInt(cursor, NetworkAttributesContract.COLNAME_MTU, -1);
@@ -309,7 +315,7 @@ public class IpMemoryStoreDatabase {
         if (0 != assignedV4AddressExpiry) {
             builder.setAssignedV4AddressExpiry(assignedV4AddressExpiry);
         }
-        builder.setGroupHint(groupHint);
+        builder.setCluster(cluster);
         if (null != dnsAddressesBlob) {
             builder.setDnsAddresses(decodeAddressList(dnsAddressesBlob));
         }
@@ -596,6 +602,64 @@ public class IpMemoryStoreDatabase {
         return bestKey;
     }
 
+    /**
+     * Delete a single entry by key.
+     *
+     * If |needWipe| is true, the data will be wiped from disk immediately. Otherwise, it will
+     * only be marked deleted, and overwritten by subsequent writes or reclaimed during the next
+     * maintenance window.
+     * Note that wiping data is a very expensive operation. This is meant for clients that need
+     * this data gone from disk immediately for security reasons. Functionally it makes no
+     * difference at all.
+     */
+    static StatusAndCount delete(@NonNull final SQLiteDatabase db, @NonNull final String l2key,
+            final boolean needWipe) {
+        return deleteEntriesWithColumn(db,
+                NetworkAttributesContract.COLNAME_L2KEY, l2key, needWipe);
+    }
+
+    /**
+     * Delete all entries that have a particular cluster value.
+     *
+     * If |needWipe| is true, the data will be wiped from disk immediately. Otherwise, it will
+     * only be marked deleted, and overwritten by subsequent writes or reclaimed during the next
+     * maintenance window.
+     * Note that wiping data is a very expensive operation. This is meant for clients that need
+     * this data gone from disk immediately for security reasons. Functionally it makes no
+     * difference at all.
+     */
+    static StatusAndCount deleteCluster(@NonNull final SQLiteDatabase db,
+            @NonNull final String cluster, final boolean needWipe) {
+        return deleteEntriesWithColumn(db,
+                NetworkAttributesContract.COLNAME_CLUSTER, cluster, needWipe);
+    }
+
+    // Delete all entries where the given column has the given value.
+    private static StatusAndCount deleteEntriesWithColumn(@NonNull final SQLiteDatabase db,
+            @NonNull final String column, @NonNull final String value, final boolean needWipe) {
+        db.beginTransaction();
+        int deleted = 0;
+        try {
+            deleted = db.delete(NetworkAttributesContract.TABLENAME,
+                    column + "= ?", new String[] { value });
+            db.setTransactionSuccessful();
+        } catch (SQLiteException e) {
+            Log.e(TAG, "Could not delete from the memory store", e);
+            // Unclear what might have happened ; deleting records is not supposed to be able
+            // to fail barring a syntax error in the SQL query.
+            return new StatusAndCount(Status.ERROR_UNKNOWN, 0);
+        } finally {
+            db.endTransaction();
+        }
+
+        if (needWipe) {
+            final int vacuumStatus = vacuum(db);
+            // This is a problem for the client : return the failure
+            if (Status.SUCCESS != vacuumStatus) return new StatusAndCount(vacuumStatus, deleted);
+        }
+        return new StatusAndCount(Status.SUCCESS, deleted);
+    }
+
     // Drops all records that are expired. Relevance has decayed to zero of these records. Returns
     // an int out of Status.{SUCCESS, ERROR_*}
     static int dropAllExpiredRecords(@NonNull final SQLiteDatabase db) {
@@ -701,5 +765,14 @@ public class IpMemoryStoreDatabase {
             final long defaultValue) {
         final int columnIndex = cursor.getColumnIndex(columnName);
         return (columnIndex >= 0) ? cursor.getLong(columnIndex) : defaultValue;
+    }
+    private static int vacuum(@NonNull final SQLiteDatabase db) {
+        try {
+            db.execSQL("VACUUM");
+            return Status.SUCCESS;
+        } catch (SQLiteException e) {
+            // Vacuuming may fail from lack of storage, because it makes a copy of the database.
+            return Status.ERROR_STORAGE;
+        }
     }
 }

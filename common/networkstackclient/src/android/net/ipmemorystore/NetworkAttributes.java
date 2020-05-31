@@ -67,11 +67,11 @@ public class NetworkAttributes {
     // same L3 network".
     private static final float WEIGHT_ASSIGNEDV4ADDREXPIRY = 0.0f;
 
-    // Optionally supplied by the client if it has an opinion on L3 network. For example, this
-    // could be a hash of the SSID + security type on WiFi.
+    // Optionally supplied by the client to signify belonging to a notion of a group owned by
+    // the client. For example, this could be a hash of the SSID on WiFi.
     @Nullable
-    public final String groupHint;
-    private static final float WEIGHT_GROUPHINT = 300.0f;
+    public final String cluster;
+    private static final float WEIGHT_CLUSTER = 300.0f;
 
     // The list of DNS server addresses.
     @Nullable
@@ -89,7 +89,7 @@ public class NetworkAttributes {
     @VisibleForTesting
     public static final float TOTAL_WEIGHT = WEIGHT_ASSIGNEDV4ADDR
             + WEIGHT_ASSIGNEDV4ADDREXPIRY
-            + WEIGHT_GROUPHINT
+            + WEIGHT_CLUSTER
             + WEIGHT_DNSADDRESSES
             + WEIGHT_MTU;
 
@@ -98,7 +98,7 @@ public class NetworkAttributes {
     public NetworkAttributes(
             @Nullable final Inet4Address assignedV4Address,
             @Nullable final Long assignedV4AddressExpiry,
-            @Nullable final String groupHint,
+            @Nullable final String cluster,
             @Nullable final List<InetAddress> dnsAddresses,
             @Nullable final Integer mtu) {
         if (mtu != null && mtu < 0) throw new IllegalArgumentException("MTU can't be negative");
@@ -107,7 +107,7 @@ public class NetworkAttributes {
         }
         this.assignedV4Address = assignedV4Address;
         this.assignedV4AddressExpiry = assignedV4AddressExpiry;
-        this.groupHint = groupHint;
+        this.cluster = cluster;
         this.dnsAddresses = null == dnsAddresses ? null :
                 Collections.unmodifiableList(new ArrayList<>(dnsAddresses));
         this.mtu = mtu;
@@ -120,7 +120,7 @@ public class NetworkAttributes {
         this((Inet4Address) getByAddressOrNull(parcelable.assignedV4Address),
                 parcelable.assignedV4AddressExpiry > 0
                         ? parcelable.assignedV4AddressExpiry : null,
-                parcelable.groupHint,
+                parcelable.cluster,
                 blobArrayToInetAddressList(parcelable.dnsAddresses),
                 parcelable.mtu >= 0 ? parcelable.mtu : null);
     }
@@ -168,7 +168,7 @@ public class NetworkAttributes {
                 (null == assignedV4Address) ? null : assignedV4Address.getAddress();
         parcelable.assignedV4AddressExpiry =
                 (null == assignedV4AddressExpiry) ? 0 : assignedV4AddressExpiry;
-        parcelable.groupHint = groupHint;
+        parcelable.cluster = cluster;
         parcelable.dnsAddresses = inetAddressListToBlobArray(dnsAddresses);
         parcelable.mtu = (null == mtu) ? -1 : mtu;
         return parcelable;
@@ -188,7 +188,7 @@ public class NetworkAttributes {
                 samenessContribution(WEIGHT_ASSIGNEDV4ADDR, assignedV4Address, o.assignedV4Address)
                 + samenessContribution(WEIGHT_ASSIGNEDV4ADDREXPIRY, assignedV4AddressExpiry,
                       o.assignedV4AddressExpiry)
-                + samenessContribution(WEIGHT_GROUPHINT, groupHint, o.groupHint)
+                + samenessContribution(WEIGHT_CLUSTER, cluster, o.cluster)
                 + samenessContribution(WEIGHT_DNSADDRESSES, dnsAddresses, o.dnsAddresses)
                 + samenessContribution(WEIGHT_MTU, mtu, o.mtu);
         // The minimum is 0, the max is TOTAL_WEIGHT and should be represented by 1.0, and
@@ -211,11 +211,27 @@ public class NetworkAttributes {
         @Nullable
         private Long mAssignedAddressExpiry;
         @Nullable
-        private String mGroupHint;
+        private String mCluster;
         @Nullable
         private List<InetAddress> mDnsAddresses;
         @Nullable
         private Integer mMtu;
+
+        /**
+         * Constructs a new Builder.
+         */
+        public Builder() {}
+
+        /**
+         * Constructs a Builder from the passed NetworkAttributes.
+         */
+        public Builder(@NonNull final NetworkAttributes attributes) {
+            mAssignedAddress = attributes.assignedV4Address;
+            mAssignedAddressExpiry = attributes.assignedV4AddressExpiry;
+            mCluster = attributes.cluster;
+            mDnsAddresses = new ArrayList<>(attributes.dnsAddresses);
+            mMtu = attributes.mtu;
+        }
 
         /**
          * Set the assigned address.
@@ -244,12 +260,12 @@ public class NetworkAttributes {
         }
 
         /**
-         * Set the group hint.
-         * @param groupHint The group hint.
+         * Set the cluster.
+         * @param cluster The cluster.
          * @return This builder.
          */
-        public Builder setGroupHint(@Nullable final String groupHint) {
-            mGroupHint = groupHint;
+        public Builder setCluster(@Nullable final String cluster) {
+            mCluster = cluster;
             return this;
         }
 
@@ -287,14 +303,14 @@ public class NetworkAttributes {
          */
         public NetworkAttributes build() {
             return new NetworkAttributes(mAssignedAddress, mAssignedAddressExpiry,
-                  mGroupHint, mDnsAddresses, mMtu);
+                    mCluster, mDnsAddresses, mMtu);
         }
     }
 
     /** @hide */
     public boolean isEmpty() {
         return (null == assignedV4Address) && (null == assignedV4AddressExpiry)
-                && (null == groupHint) && (null == dnsAddresses) && (null == mtu);
+                && (null == cluster) && (null == dnsAddresses) && (null == mtu);
     }
 
     @Override
@@ -303,7 +319,7 @@ public class NetworkAttributes {
         final NetworkAttributes other = (NetworkAttributes) o;
         return Objects.equals(assignedV4Address, other.assignedV4Address)
                 && Objects.equals(assignedV4AddressExpiry, other.assignedV4AddressExpiry)
-                && Objects.equals(groupHint, other.groupHint)
+                && Objects.equals(cluster, other.cluster)
                 && Objects.equals(dnsAddresses, other.dnsAddresses)
                 && Objects.equals(mtu, other.mtu);
     }
@@ -311,7 +327,7 @@ public class NetworkAttributes {
     @Override
     public int hashCode() {
         return Objects.hash(assignedV4Address, assignedV4AddressExpiry,
-                groupHint, dnsAddresses, mtu);
+                cluster, dnsAddresses, mtu);
     }
 
     /** Pretty print */
@@ -334,11 +350,11 @@ public class NetworkAttributes {
             nullFields.add("assignedV4AddressExpiry");
         }
 
-        if (null != groupHint) {
-            resultJoiner.add("groupHint :");
-            resultJoiner.add(groupHint);
+        if (null != cluster) {
+            resultJoiner.add("cluster :");
+            resultJoiner.add(cluster);
         } else {
-            nullFields.add("groupHint");
+            nullFields.add("cluster");
         }
 
         if (null != dnsAddresses) {
