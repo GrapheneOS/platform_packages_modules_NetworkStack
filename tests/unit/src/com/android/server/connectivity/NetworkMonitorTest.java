@@ -1117,7 +1117,8 @@ public class NetworkMonitorTest {
 
         // Second check should be triggered automatically after the reevaluate delay, and uses the
         // URL chosen by mRandom
-        // This test is appropriate to cover reevaluate behavior as long as the timeout is short
+        // Ensure that the reevaluate delay is not changed to a large value, otherwise this test
+        // would block for too long and a different test strategy should be used.
         assertTrue(INITIAL_REEVALUATE_DELAY_MS < 2000);
         verify(mOtherFallbackConnection, timeout(INITIAL_REEVALUATE_DELAY_MS + HANDLER_TIMEOUT_MS))
                 .getResponseCode();
