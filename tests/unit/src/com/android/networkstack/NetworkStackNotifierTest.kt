@@ -20,6 +20,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.NotificationManager.IMPORTANCE_DEFAULT
+import android.app.NotificationManager.IMPORTANCE_NONE
 import android.app.PendingIntent
 import android.app.PendingIntent.FLAG_UPDATE_CURRENT
 import android.content.Context
@@ -79,6 +80,8 @@ class NetworkStackNotifierTest {
     private lateinit var mDependencies: Dependencies
     @Mock
     private lateinit var mNm: NotificationManager
+    @Mock
+    private lateinit var mNotificationChannelsNm: NotificationManager
     @Mock
     private lateinit var mCm: ConnectivityManager
     @Mock
@@ -141,10 +144,12 @@ class NetworkStackNotifierTest {
                 realContext.packageName, 0, UserHandle.ALL)
 
         mAllUserContext.mockService(Context.NOTIFICATION_SERVICE, NotificationManager::class, mNm)
+        mContext.mockService(Context.NOTIFICATION_SERVICE, NotificationManager::class,
+                mNotificationChannelsNm)
         mContext.mockService(Context.CONNECTIVITY_SERVICE, ConnectivityManager::class, mCm)
 
         doReturn(NotificationChannel(CHANNEL_VENUE_INFO, "TestChannel", IMPORTANCE_DEFAULT))
-                .`when`(mNm).getNotificationChannel(CHANNEL_VENUE_INFO)
+                .`when`(mNotificationChannelsNm).getNotificationChannel(CHANNEL_VENUE_INFO)
 
         doReturn(mPendingIntent).`when`(mDependencies).getActivityPendingIntent(
                 any(), any(), anyInt())
@@ -247,7 +252,8 @@ class NetworkStackNotifierTest {
     fun testConnectedVenueInfoNotification_VenueInfoDisabled() {
         // Venue info (CaptivePortalData) is not available for API <= Q
         assumeTrue(NetworkInformationShimImpl.useApiAboveQ())
-        doReturn(null).`when`(mNm).getNotificationChannel(CHANNEL_VENUE_INFO)
+        val channel = NotificationChannel(CHANNEL_VENUE_INFO, "test channel", IMPORTANCE_NONE)
+        doReturn(channel).`when`(mNotificationChannelsNm).getNotificationChannel(CHANNEL_VENUE_INFO)
         mNotifier.notifyCaptivePortalValidationPending(TEST_NETWORK)
         onLinkPropertiesChanged(mTestCapportLp)
         onDefaultNetworkAvailable(TEST_NETWORK)
