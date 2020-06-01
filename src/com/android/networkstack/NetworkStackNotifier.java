@@ -16,6 +16,8 @@
 
 package com.android.networkstack;
 
+import static android.app.NotificationManager.IMPORTANCE_NONE;
+
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -142,7 +144,19 @@ public class NetworkStackNotifier {
                 resources.getString(title),
                 importance);
         channel.setDescription(resources.getString(description));
-        mNotificationManager.createNotificationChannel(channel);
+        getNotificationManagerForChannels().createNotificationChannel(channel);
+    }
+
+    /**
+     * Get the NotificationManager to use to query channels, as opposed to posting notifications.
+     *
+     * Although notifications are posted as USER_ALL, notification channels are always created
+     * based on the UID calling NotificationManager, regardless of the context UserHandle.
+     * When querying notification channels, using a USER_ALL context would return no channel: the
+     * default context (as UserHandle 0 for NetworkStack) must be used.
+     */
+    private NotificationManager getNotificationManagerForChannels() {
+        return mContext.getSystemService(NotificationManager.class);
     }
 
     /**
@@ -284,7 +298,11 @@ public class NetworkStackNotifier {
     }
 
     private boolean isVenueInfoNotificationEnabled() {
-        return mNotificationManager.getNotificationChannel(CHANNEL_VENUE_INFO) != null;
+        final NotificationChannel channel = getNotificationManagerForChannels()
+                .getNotificationChannel(CHANNEL_VENUE_INFO);
+        if (channel == null) return false;
+
+        return channel.getImportance() != IMPORTANCE_NONE;
     }
 
     private static String getNotificationTag(@NonNull Network network) {
