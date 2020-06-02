@@ -1731,6 +1731,7 @@ public class NetworkMonitor extends StateMachine {
         }
         try {
             final List<CellInfo> cells = mTelephonyManager.getAllCellInfo();
+            if (cells == null) return null;
             final Map<String, Integer> countryCodeMap = new HashMap<>();
             int maxCount = 0;
             for (final CellInfo cell : cells) {
