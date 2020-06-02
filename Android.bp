@@ -87,7 +87,7 @@ java_defaults {
     libs: ["unsupportedappusage"],
     static_libs: [
         "androidx.annotation_annotation",
-        "netd_aidl_interface-V3-java",
+        "netd_aidl_interface-unstable-java",
         "netlink-client",
         "networkstack-client",
         "datastallprotosnano",
