@@ -154,6 +154,7 @@ public class DhcpClient extends StateMachine {
     private static final int FIRST_TIMEOUT_MS         =   1 * SECONDS;
     private static final int MAX_TIMEOUT_MS           = 512 * SECONDS;
     private static final int IPMEMORYSTORE_TIMEOUT_MS =   1 * SECONDS;
+    private static final int DHCP_INITREBOOT_TIMEOUT_MS = 5 * SECONDS;
 
     // The waiting time to restart the DHCP configuration process after broadcasting a
     // DHCPDECLINE message, (RFC2131 3.1.5 describes client SHOULD wait a minimum of 10
@@ -1814,6 +1815,7 @@ public class DhcpClient extends StateMachine {
     class DhcpInitRebootState extends DhcpRequestingState {
         @Override
         public void enter() {
+            mTimeout = DHCP_INITREBOOT_TIMEOUT_MS;
             super.enter();
             startNewTransaction();
         }
