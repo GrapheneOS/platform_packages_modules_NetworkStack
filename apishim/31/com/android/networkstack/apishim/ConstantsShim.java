@@ -30,4 +30,7 @@ public class ConstantsShim extends com.android.networkstack.apishim.api30.Consta
      */
     @VisibleForTesting
     public static final int VERSION = 31;
+
+    // TODO: add TRANSPORT_TEST to system API in API 31 (it is only a test API as of R)
+    public static final int TRANSPORT_TEST = 7;
 }
