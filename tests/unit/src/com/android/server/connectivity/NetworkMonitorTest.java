@@ -52,6 +52,7 @@ import static android.net.util.NetworkStackUtils.TEST_URL_EXPIRATION_TIME;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
+import static com.android.server.connectivity.NetworkMonitor.INITIAL_REEVALUATE_DELAY_MS;
 import static com.android.server.connectivity.NetworkMonitor.extractCharset;
 
 import static junit.framework.Assert.assertEquals;
@@ -257,6 +258,7 @@ public class NetworkMonitorTest {
     private static final String TEST_LOGIN_URL = "https://testportal.example.com/login";
     private static final String TEST_VENUE_INFO_URL = "https://venue.example.com/info";
     private static final String TEST_SPEED_TEST_URL = "https://speedtest.example.com";
+    private static final String TEST_RELATIVE_URL = "/test/relative/gen_204";
     private static final String TEST_MCCMNC = "123456";
     private static final String[] TEST_HTTP_URLS = {TEST_HTTP_OTHER_URL1, TEST_HTTP_OTHER_URL2};
     private static final String[] TEST_HTTPS_URLS = {TEST_HTTPS_OTHER_URL1, TEST_HTTPS_OTHER_URL2};
@@ -1112,10 +1114,13 @@ public class NetworkMonitorTest {
         verify(mFallbackConnection, times(1)).getResponseCode();
         verify(mOtherFallbackConnection, never()).getResponseCode();
 
-        // Second check uses the URL chosen by Random
-        final CaptivePortalProbeResult result = monitor.isCaptivePortal();
-        assertTrue(result.isPortal());
-        verify(mOtherFallbackConnection, times(1)).getResponseCode();
+        // Second check should be triggered automatically after the reevaluate delay, and uses the
+        // URL chosen by mRandom
+        // This test is appropriate to cover reevaluate behavior as long as the timeout is short
+        assertTrue(INITIAL_REEVALUATE_DELAY_MS < 2000);
+        verify(mOtherFallbackConnection, timeout(INITIAL_REEVALUATE_DELAY_MS + HANDLER_TIMEOUT_MS))
+                .getResponseCode();
+        verifyNetworkTested(VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */, TEST_LOGIN_URL);
     }
 
     @Test
@@ -1253,7 +1258,7 @@ public class NetworkMonitorTest {
     @Test
     public void testIsCaptivePortal_CapportApiInvalidContent() throws Exception {
         assumeTrue(CaptivePortalDataShimImpl.isSupported());
-        setStatus(mHttpsConnection, 204);
+        setSslException(mHttpsConnection);
         setPortal302(mHttpConnection);
         setApiContent(mCapportApiConnection, "{SomeInvalidText");
         runNetworkTest(makeCapportLPs(), CELL_METERED_CAPABILITIES,
@@ -1262,6 +1267,36 @@ public class NetworkMonitorTest {
 
         verify(mCallbacks, never()).notifyCaptivePortalDataChanged(any());
         verify(mHttpConnection).getResponseCode();
+    }
+
+    private void runCapportApiInvalidUrlTest(String url) throws Exception {
+        assumeTrue(CaptivePortalDataShimImpl.isSupported());
+        setSslException(mHttpsConnection);
+        setPortal302(mHttpConnection);
+        final LinkProperties lp = new LinkProperties(TEST_LINK_PROPERTIES);
+        lp.setCaptivePortalApiUrl(Uri.parse(url));
+        runNetworkTest(makeCapportLPs(), CELL_METERED_CAPABILITIES,
+                VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */,
+                TEST_LOGIN_URL);
+
+        verify(mCallbacks, never()).notifyCaptivePortalDataChanged(any());
+        verify(mCapportApiConnection, never()).getInputStream();
+        verify(mHttpConnection).getResponseCode();
+    }
+
+    @Test
+    public void testIsCaptivePortal_HttpIsInvalidCapportApiScheme() throws Exception {
+        runCapportApiInvalidUrlTest("http://capport.example.com");
+    }
+
+    @Test
+    public void testIsCaptivePortal_FileIsInvalidCapportApiScheme() throws Exception {
+        runCapportApiInvalidUrlTest("file://localhost/myfile");
+    }
+
+    @Test
+    public void testIsCaptivePortal_InvalidUrlFormat() throws Exception {
+        runCapportApiInvalidUrlTest("ThisIsNotAValidUrl");
     }
 
     @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
@@ -1805,10 +1840,11 @@ public class NetworkMonitorTest {
     private void testDataStall_StallTcpSuspectedAndSendMetrics(int transport,
             NetworkCapabilities nc) throws Exception {
         assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
+        setupTcpDataStall();
         // NM suspects data stall from TCP signal and sends data stall metrics.
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
         final WrappedNetworkMonitor nm = prepareNetworkMonitorForVerifyDataStall(nc);
-        setupTcpDataStall();
+
         // Trigger a tcp event immediately.
         setTcpPollingInterval(0);
         nm.sendTcpPollingEvent();
@@ -2150,20 +2186,35 @@ public class NetworkMonitorTest {
     @Test
     public void testDismissPortalInValidatedNetworkEnabledOsSupported() throws Exception {
         assumeTrue(ShimUtils.isAtLeastR());
-        testDismissPortalInValidatedNetworkEnabled(TEST_LOGIN_URL);
+        testDismissPortalInValidatedNetworkEnabled(TEST_LOGIN_URL, TEST_LOGIN_URL);
+    }
+
+    @Test
+    public void testDismissPortalInValidatedNetworkEnabledOsSupported_NullLocationUrl()
+            throws Exception {
+        assumeTrue(ShimUtils.isAtLeastR());
+        testDismissPortalInValidatedNetworkEnabled(TEST_HTTP_URL, null /* locationUrl */);
+    }
+
+    @Test
+    public void testDismissPortalInValidatedNetworkEnabledOsSupported_InvalidLocationUrl()
+            throws Exception {
+        assumeTrue(ShimUtils.isAtLeastR());
+        testDismissPortalInValidatedNetworkEnabled(TEST_HTTP_URL, TEST_RELATIVE_URL);
     }
 
     @Test
     public void testDismissPortalInValidatedNetworkEnabledOsNotSupported() throws Exception {
         assumeFalse(ShimUtils.isAtLeastR());
-        testDismissPortalInValidatedNetworkEnabled(TEST_HTTP_URL);
+        testDismissPortalInValidatedNetworkEnabled(TEST_HTTP_URL, TEST_LOGIN_URL);
     }
 
-    private void testDismissPortalInValidatedNetworkEnabled(String portalUrl) throws Exception {
+    private void testDismissPortalInValidatedNetworkEnabled(String expectedUrl, String locationUrl)
+            throws Exception {
         setDismissPortalInValidatedNetwork(true);
         setSslException(mHttpsConnection);
         setPortal302(mHttpConnection);
-        when(mHttpConnection.getHeaderField(eq("location"))).thenReturn(TEST_LOGIN_URL);
+        when(mHttpConnection.getHeaderField(eq("location"))).thenReturn(locationUrl);
         final NetworkMonitor nm = makeMonitor(CELL_METERED_CAPABILITIES);
         notifyNetworkConnected(nm, CELL_METERED_CAPABILITIES);
 
@@ -2188,7 +2239,7 @@ public class NetworkMonitorTest {
         assertEquals(TEST_NETID, networkCaptor.getValue().netId);
         // Portal URL should be redirect URL.
         final String redirectUrl = bundle.getString(ConnectivityManager.EXTRA_CAPTIVE_PORTAL_URL);
-        assertEquals(portalUrl, redirectUrl);
+        assertEquals(expectedUrl, redirectUrl);
     }
 
     @Test
