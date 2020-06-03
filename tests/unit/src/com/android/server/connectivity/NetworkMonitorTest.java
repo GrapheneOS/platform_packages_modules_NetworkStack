@@ -866,12 +866,15 @@ public class NetworkMonitorTest {
         doReturn(PackageManager.PERMISSION_GRANTED).when(mContext).checkPermission(
                 eq(android.Manifest.permission.ACCESS_FINE_LOCATION),  anyInt(), anyInt());
         doReturn(new ContextWrapper(mContext)).when(mContext).createConfigurationContext(any());
+        doReturn(null).when(mTelephony).getAllCellInfo();
+        assertNull(wnm.getLocationMcc());
         // Prepare CellInfo and check if the vote mechanism is working or not.
         final List<CellInfo> cellList = new ArrayList<CellInfo>();
+        doReturn(cellList).when(mTelephony).getAllCellInfo();
+        assertNull(wnm.getLocationMcc());
         cellList.add(makeTestCellInfoGsm("460"));
         cellList.add(makeTestCellInfoGsm("460"));
         cellList.add(makeTestCellInfoLte("466"));
-        doReturn(cellList).when(mTelephony).getAllCellInfo();
         // The count of 460 is 2 and the count of 466 is 1, so the getLocationMcc() should return
         // 460.
         assertEquals("460", wnm.getLocationMcc());
