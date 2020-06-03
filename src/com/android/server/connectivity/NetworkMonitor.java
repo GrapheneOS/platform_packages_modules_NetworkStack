@@ -83,6 +83,7 @@ import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DNS_EVENTS;
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_TCP_METRICS;
+import static com.android.networkstack.apishim.ConstantsShim.TRANSPORT_TEST;
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
 import static com.android.networkstack.util.DnsUtils.TYPE_ADDRCONFIG;
 
@@ -387,7 +388,8 @@ public class NetworkMonitor extends StateMachine {
     private static final int CMD_BANDWIDTH_CHECK_TIMEOUT = 24;
 
     // Start mReevaluateDelayMs at this value and double.
-    private static final int INITIAL_REEVALUATE_DELAY_MS = 1000;
+    @VisibleForTesting
+    static final int INITIAL_REEVALUATE_DELAY_MS = 1000;
     private static final int MAX_REEVALUATE_DELAY_MS = 10 * 60 * 1000;
     // Default timeout of evaluating network bandwidth.
     private static final int DEFAULT_EVALUATING_BANDWIDTH_TIMEOUT_MS = 10_000;
@@ -1090,7 +1092,7 @@ public class NetworkMonitor extends StateMachine {
                     final CaptivePortalProbeResult probeRes = mLastPortalProbeResult;
                     // Use redirect URL from AP if exists.
                     final String portalUrl =
-                            (useRedirectUrlForPortal() && probeRes.redirectUrl != null)
+                            (useRedirectUrlForPortal() && makeURL(probeRes.redirectUrl) != null)
                             ? probeRes.redirectUrl : probeRes.detectUrl;
                     appExtras.putString(EXTRA_CAPTIVE_PORTAL_URL, portalUrl);
                     if (probeRes.probeSpec != null) {
@@ -1434,8 +1436,9 @@ public class NetworkMonitor extends StateMachine {
             }
 
             final int token = ++mProbeToken;
+            final EvaluationThreadDeps deps = new EvaluationThreadDeps(mNetworkCapabilities);
             mThread = new Thread(() -> sendMessage(obtainMessage(CMD_PROBE_COMPLETE, token, 0,
-                    isCaptivePortal())));
+                    isCaptivePortal(deps))));
             mThread.start();
         }
 
@@ -2147,8 +2150,25 @@ public class NetworkMonitor extends StateMachine {
         return mCaptivePortalFallbackSpecs[idx];
     }
 
-    @VisibleForTesting
-    protected CaptivePortalProbeResult isCaptivePortal() {
+    /**
+     * Parameters that can be accessed by the evaluation thread in a thread-safe way.
+     *
+     * Parameters such as LinkProperties and NetworkCapabilities cannot be accessed by the
+     * evaluation thread directly, as they are managed in the state machine thread and not
+     * synchronized. This class provides a copy of the required data that is not modified and can be
+     * used safely by the evaluation thread.
+     */
+    private static class EvaluationThreadDeps {
+        // TODO: add parameters that are accessed in a non-thread-safe way from the evaluation
+        // thread (read from LinkProperties, NetworkCapabilities, useHttps, validationStage)
+        private final boolean mIsTestNetwork;
+
+        EvaluationThreadDeps(NetworkCapabilities nc) {
+            this.mIsTestNetwork = nc.hasTransport(TRANSPORT_TEST);
+        }
+    }
+
+    private CaptivePortalProbeResult isCaptivePortal(EvaluationThreadDeps deps) {
         if (!mIsCaptivePortalCheckEnabled) {
             validationLog("Validation disabled.");
             return CaptivePortalProbeResult.success(CaptivePortalProbeResult.PROBE_UNKNOWN);
@@ -2196,11 +2216,11 @@ public class NetworkMonitor extends StateMachine {
             reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP, result);
         } else if (mUseHttps && httpsUrls.length == 1 && httpUrls.length == 1) {
             // Probe results are reported inside sendHttpAndHttpsParallelWithFallbackProbes.
-            result = sendHttpAndHttpsParallelWithFallbackProbes(
-                    proxyInfo, httpsUrls[0], httpUrls[0]);
+            result = sendHttpAndHttpsParallelWithFallbackProbes(deps, proxyInfo,
+                    httpsUrls[0], httpUrls[0]);
         } else if (mUseHttps) {
             // Support result aggregation from multiple Urls.
-            result = sendMultiParallelHttpAndHttpsProbes(proxyInfo, httpsUrls, httpUrls);
+            result = sendMultiParallelHttpAndHttpsProbes(deps, proxyInfo, httpsUrls, httpUrls);
         } else {
             result = sendDnsAndHttpProbes(proxyInfo, httpUrls[0], ValidationProbeEvent.PROBE_HTTP);
             reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP, result);
@@ -2482,12 +2502,12 @@ public class NetworkMonitor extends StateMachine {
         private final CountDownLatch mLatch;
         private final Probe mProbe;
 
-        ProbeThread(CountDownLatch latch, ProxyInfo proxy, URL url, int probeType,
-                Uri captivePortalApiUrl) {
+        ProbeThread(CountDownLatch latch, EvaluationThreadDeps deps, ProxyInfo proxy, URL url,
+                int probeType, Uri captivePortalApiUrl) {
             mLatch = latch;
             mProbe = (probeType == ValidationProbeEvent.PROBE_HTTPS)
-                    ? new HttpsProbe(proxy, url, captivePortalApiUrl)
-                    : new HttpProbe(proxy, url, captivePortalApiUrl);
+                    ? new HttpsProbe(deps, proxy, url, captivePortalApiUrl)
+                    : new HttpProbe(deps, proxy, url, captivePortalApiUrl);
             mResult = CaptivePortalProbeResult.failed(probeType);
         }
 
@@ -2512,11 +2532,14 @@ public class NetworkMonitor extends StateMachine {
     }
 
     private abstract static class Probe {
+        protected final EvaluationThreadDeps mDeps;
         protected final ProxyInfo mProxy;
         protected final URL mUrl;
         protected final Uri mCaptivePortalApiUrl;
 
-        protected Probe(ProxyInfo proxy, URL url, Uri captivePortalApiUrl) {
+        protected Probe(EvaluationThreadDeps deps, ProxyInfo proxy, URL url,
+                Uri captivePortalApiUrl) {
+            mDeps = deps;
             mProxy = proxy;
             mUrl = url;
             mCaptivePortalApiUrl = captivePortalApiUrl;
@@ -2526,8 +2549,8 @@ public class NetworkMonitor extends StateMachine {
     }
 
     final class HttpsProbe extends Probe {
-        HttpsProbe(ProxyInfo proxy, URL url, Uri captivePortalApiUrl) {
-            super(proxy, url, captivePortalApiUrl);
+        HttpsProbe(EvaluationThreadDeps deps, ProxyInfo proxy, URL url, Uri captivePortalApiUrl) {
+            super(deps, proxy, url, captivePortalApiUrl);
         }
 
         @Override
@@ -2537,8 +2560,8 @@ public class NetworkMonitor extends StateMachine {
     }
 
     final class HttpProbe extends Probe {
-        HttpProbe(ProxyInfo proxy, URL url, Uri captivePortalApiUrl) {
-            super(proxy, url, captivePortalApiUrl);
+        HttpProbe(EvaluationThreadDeps deps, ProxyInfo proxy, URL url, Uri captivePortalApiUrl) {
+            super(deps, proxy, url, captivePortalApiUrl);
         }
 
         private CaptivePortalDataShim tryCapportApiProbe() {
@@ -2548,7 +2571,12 @@ public class NetworkMonitor extends StateMachine {
             final String apiContent;
             try {
                 final URL url = new URL(mCaptivePortalApiUrl.toString());
-                if (!"https".equals(url.getProtocol())) {
+                // Protocol must be HTTPS
+                // (as per https://www.ietf.org/id/draft-ietf-capport-api-07.txt, #4).
+                // Only allow HTTP on localhost, for testing.
+                final boolean isTestLocalhostHttp = mDeps.mIsTestNetwork
+                        && "localhost".equals(url.getHost()) && "http".equals(url.getProtocol());
+                if (!"https".equals(url.getProtocol()) && !isTestLocalhostHttp) {
                     validationLog("Invalid captive portal API protocol: " + url.getProtocol());
                     return null;
                 }
@@ -2631,8 +2659,9 @@ public class NetworkMonitor extends StateMachine {
                         && captivePortalApiUrl == null);
     }
 
-    private CaptivePortalProbeResult sendMultiParallelHttpAndHttpsProbes(@NonNull ProxyInfo proxy,
-            @NonNull URL[] httpsUrls, @NonNull URL[] httpUrls) {
+    private CaptivePortalProbeResult sendMultiParallelHttpAndHttpsProbes(
+            @NonNull EvaluationThreadDeps deps, @Nullable ProxyInfo proxy, @NonNull URL[] httpsUrls,
+            @NonNull URL[] httpUrls) {
         // If multiple URLs are required to ensure the correctness of validation, send parallel
         // probes to explore the result in separate probe threads and aggregate those results into
         // one as the final result for either HTTP or HTTPS.
@@ -2657,13 +2686,13 @@ public class NetworkMonitor extends StateMachine {
             // TODO: Have the capport probe as a different probe for cleanliness.
             final URL urlMaybeWithCapport = httpUrls[0];
             for (final URL url : httpUrls) {
-                futures.add(ecs.submit(() -> new HttpProbe(proxy, url,
+                futures.add(ecs.submit(() -> new HttpProbe(deps, proxy, url,
                         url.equals(urlMaybeWithCapport) ? capportApiUrl : null).sendProbe()));
             }
 
             for (final URL url : httpsUrls) {
-                futures.add(
-                        ecs.submit(() -> new HttpsProbe(proxy, url, capportApiUrl).sendProbe()));
+                futures.add(ecs.submit(() -> new HttpsProbe(deps, proxy, url, capportApiUrl)
+                        .sendProbe()));
             }
 
             final ArrayList<CaptivePortalProbeResult> completedProbes = new ArrayList<>();
@@ -2759,15 +2788,15 @@ public class NetworkMonitor extends StateMachine {
     }
 
     private CaptivePortalProbeResult sendHttpAndHttpsParallelWithFallbackProbes(
-            ProxyInfo proxy, URL httpsUrl, URL httpUrl) {
+            EvaluationThreadDeps deps, ProxyInfo proxy, URL httpsUrl, URL httpUrl) {
         // Number of probes to wait for. If a probe completes with a conclusive answer
         // it shortcuts the latch immediately by forcing the count to 0.
         final CountDownLatch latch = new CountDownLatch(2);
 
         final Uri capportApiUrl = getCaptivePortalApiUrl(mLinkProperties);
-        final ProbeThread httpsProbe = new ProbeThread(latch, proxy, httpsUrl,
+        final ProbeThread httpsProbe = new ProbeThread(latch, deps, proxy, httpsUrl,
                 ValidationProbeEvent.PROBE_HTTPS, capportApiUrl);
-        final ProbeThread httpProbe = new ProbeThread(latch, proxy, httpUrl,
+        final ProbeThread httpProbe = new ProbeThread(latch, deps, proxy, httpUrl,
                 ValidationProbeEvent.PROBE_HTTP, capportApiUrl);
 
         try {
