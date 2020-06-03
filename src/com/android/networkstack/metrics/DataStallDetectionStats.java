@@ -261,11 +261,13 @@ public final class DataStallDetectionStats {
             if (info == null) return DataStallEventProto.AP_BAND_UNKNOWN;
 
             int freq = info.getFrequency();
-            // Refer to ScanResult.is5GHz() and ScanResult.is24GHz().
-            if (freq > 4900 && freq < 5900) {
+            // Refer to ScanResult.is5GHz(), ScanResult.is24GHz() and ScanResult.is6GHz().
+            if (freq >= 5160 && freq <= 5865) {
                 return DataStallEventProto.AP_BAND_5GHZ;
-            } else if (freq > 2400 && freq < 2500) {
+            } else if (freq >= 2412 && freq <= 2484) {
                 return DataStallEventProto.AP_BAND_2GHZ;
+            } else if (freq >= 5945 && freq <= 7105) {
+                return DataStallEventProto.AP_BAND_6GHZ;
             } else {
                 return DataStallEventProto.AP_BAND_UNKNOWN;
             }
