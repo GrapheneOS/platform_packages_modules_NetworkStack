@@ -68,12 +68,12 @@ public class ProvisioningConfiguration {
     // TODO: Delete this default timeout once those callers that care are
     // fixed to pass in their preferred timeout.
     //
-    // We pick 36 seconds so we can send DHCP requests at
+    // We pick 18 seconds so we can send DHCP requests at
     //
-    //     t=0, t=2, t=6, t=14, t=30
+    //     t=0, t=1, t=3, t=7, t=16
     //
     // allowing for 10% jitter.
-    private static final int DEFAULT_TIMEOUT_MS = 36 * 1000;
+    private static final int DEFAULT_TIMEOUT_MS = 18 * 1000;
 
     /**
      * Builder to create a {@link ProvisioningConfiguration}.
