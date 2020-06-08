@@ -1152,7 +1152,29 @@ public class NetworkMonitorTest {
     }
 
     @Test
-    public void testIsCaptivePortal_CapportApiIsPortal() throws Exception {
+    public void testIsCaptivePortal_CapportApiIsPortalWithNullPortalUrl() throws Exception {
+        assumeTrue(CaptivePortalDataShimImpl.isSupported());
+        setSslException(mHttpsConnection);
+        final long bytesRemaining = 10_000L;
+        final long secondsRemaining = 500L;
+        // Set content without partal url.
+        setApiContent(mCapportApiConnection, "{'captive': true,"
+                + "'venue-info-url': '" + TEST_VENUE_INFO_URL + "',"
+                + "'bytes-remaining': " + bytesRemaining + ","
+                + "'seconds-remaining': " + secondsRemaining + "}");
+        setPortal302(mHttpConnection);
+
+        runNetworkTest(makeCapportLPs(), CELL_METERED_CAPABILITIES, VALIDATION_RESULT_PORTAL,
+                0 /* probesSucceeded*/, TEST_LOGIN_URL);
+
+        verify(mCapportApiConnection).getResponseCode();
+
+        verify(mHttpConnection, times(1)).getResponseCode();
+        verify(mCallbacks, never()).notifyCaptivePortalDataChanged(any());
+    }
+
+    @Test
+    public void testIsCaptivePortal_CapportApiIsPortalWithValidPortalUrl() throws Exception {
         assumeTrue(CaptivePortalDataShimImpl.isSupported());
         setSslException(mHttpsConnection);
         final long bytesRemaining = 10_000L;
