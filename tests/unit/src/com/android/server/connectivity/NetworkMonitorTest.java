@@ -1619,6 +1619,25 @@ public class NetworkMonitorTest {
     }
 
     @Test
+    public void testIsDataStall_EvaluationDnsAndTcp() throws Exception {
+        setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_DNS | DATA_STALL_EVALUATION_TYPE_TCP);
+        setupTcpDataStall();
+        final WrappedNetworkMonitor nm = makeMonitor(CELL_METERED_CAPABILITIES);
+        nm.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
+        makeDnsTimeoutEvent(nm, DEFAULT_DNS_TIMEOUT_THRESHOLD);
+        assertTrue(nm.isDataStall());
+        verify(mCallbacks).notifyDataStallSuspected(
+                matchDnsAndTcpDataStallParcelable(DEFAULT_DNS_TIMEOUT_THRESHOLD));
+
+        when(mTst.getLatestReceivedCount()).thenReturn(5);
+        // Trigger a tcp event immediately.
+        setTcpPollingInterval(0);
+        nm.sendTcpPollingEvent();
+        HandlerUtilsKt.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
+        assertFalse(nm.isDataStall());
+    }
+
+    @Test
     public void testIsDataStall_DisableTcp() {
         // Disable tcp detection with only DNS detect. keep the tcp signal but set to no DNS signal.
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_DNS);
@@ -2657,13 +2676,20 @@ public class NetworkMonitorTest {
                 && Objects.equals(p.redirectUrl, redirectUrl));
     }
 
+    private DataStallReportParcelable matchDnsAndTcpDataStallParcelable(final int timeoutCount) {
+        return argThat(p ->
+                (p.detectionMethod & ConstantsShim.DETECTION_METHOD_DNS_EVENTS) != 0
+                && (p.detectionMethod & ConstantsShim.DETECTION_METHOD_TCP_METRICS) != 0
+                && p.dnsConsecutiveTimeouts == timeoutCount);
+    }
+
     private DataStallReportParcelable matchDnsDataStallParcelable(final int timeoutCount) {
-        return argThat(p -> p.detectionMethod == ConstantsShim.DETECTION_METHOD_DNS_EVENTS
+        return argThat(p -> (p.detectionMethod & ConstantsShim.DETECTION_METHOD_DNS_EVENTS) != 0
                 && p.dnsConsecutiveTimeouts == timeoutCount);
     }
 
     private DataStallReportParcelable matchTcpDataStallParcelable() {
-        return argThat(p -> p.detectionMethod == ConstantsShim.DETECTION_METHOD_TCP_METRICS);
+        return argThat(p -> (p.detectionMethod & ConstantsShim.DETECTION_METHOD_TCP_METRICS) != 0);
     }
 }
 
