@@ -29,11 +29,11 @@ import android.net.dhcp.IDhcpServer
 import android.net.dhcp.IDhcpServerCallbacks
 import android.net.ip.IIpClientCallbacks
 import android.net.ip.IpClient
-import android.net.shared.Inet4AddressUtils.inet4AddressToIntHTH
 import android.os.Build
 import android.os.IBinder
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
+import com.android.net.module.util.Inet4AddressUtils.inet4AddressToIntHTH
 import com.android.server.NetworkStackService.Dependencies
 import com.android.server.NetworkStackService.NetworkStackConnector
 import com.android.server.NetworkStackService.PermissionChecker

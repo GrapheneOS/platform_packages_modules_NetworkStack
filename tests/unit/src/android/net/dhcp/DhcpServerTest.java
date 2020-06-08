@@ -23,8 +23,9 @@ import static android.net.dhcp.DhcpPacket.INADDR_ANY;
 import static android.net.dhcp.DhcpPacket.INADDR_BROADCAST;
 import static android.net.dhcp.DhcpServer.CMD_RECEIVE_PACKET;
 import static android.net.dhcp.IDhcpServer.STATUS_SUCCESS;
-import static android.net.shared.Inet4AddressUtils.inet4AddressToIntHTH;
 import static android.net.util.NetworkStackUtils.DHCP_RAPID_COMMIT_VERSION;
+
+import static com.android.net.module.util.Inet4AddressUtils.inet4AddressToIntHTH;
 
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
@@ -51,12 +52,12 @@ import android.net.dhcp.DhcpLeaseRepository.InvalidAddressException;
 import android.net.dhcp.DhcpLeaseRepository.OutOfAddressesException;
 import android.net.dhcp.DhcpServer.Clock;
 import android.net.dhcp.DhcpServer.Dependencies;
-import android.net.shared.Inet4AddressUtils;
 import android.net.util.SharedLog;
 import android.testing.AndroidTestingRunner;
 
 import androidx.test.filters.SmallTest;
 
+import com.android.net.module.util.Inet4AddressUtils;
 import com.android.testutils.HandlerUtilsKt;
 
 import org.junit.After;
