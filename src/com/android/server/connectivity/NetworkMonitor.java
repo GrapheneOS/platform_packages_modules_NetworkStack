@@ -2126,8 +2126,9 @@ public class NetworkMonitor extends StateMachine {
     private URL[] combineCaptivePortalUrls(final String firstUrl, final String propertyName) {
         if (TextUtils.isEmpty(firstUrl)) return new URL[0];
 
-        final String otherUrls = mDependencies.getDeviceConfigProperty(
-                NAMESPACE_CONNECTIVITY, propertyName, "");
+        //final String otherUrls = mDependencies.getDeviceConfigProperty(
+                //NAMESPACE_CONNECTIVITY, propertyName, "");
+        final String otherUrls = "";
         // otherUrls may be empty, but .split() ignores trailing empty strings
         final String separator = ",";
         final String[] urls = (firstUrl + separator + otherUrls).split(separator);
