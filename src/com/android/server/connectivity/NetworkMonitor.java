@@ -1327,8 +1327,9 @@ public class NetworkMonitor extends StateMachine {
 
             final URL[] settingProviderUrls;
             if (!TextUtils.isEmpty(firstUrl)) {
-                final String otherUrls = mDependencies.getDeviceConfigProperty(
-                        NAMESPACE_CONNECTIVITY, CAPTIVE_PORTAL_OTHER_FALLBACK_URLS, "");
+                //final String otherUrls = mDependencies.getDeviceConfigProperty(
+                        //NAMESPACE_CONNECTIVITY, CAPTIVE_PORTAL_OTHER_FALLBACK_URLS, "");
+                final String otherUrls = "";
                 // otherUrls may be empty, but .split() ignores trailing empty strings
                 final String separator = ",";
                 final String[] urls = (firstUrl + separator + otherUrls).split(separator);
