@@ -1153,7 +1153,29 @@ public class NetworkMonitorTest {
     }
 
     @Test
-    public void testIsCaptivePortal_CapportApiIsPortal() throws Exception {
+    public void testIsCaptivePortal_CapportApiIsPortalWithNullPortalUrl() throws Exception {
+        assumeTrue(CaptivePortalDataShimImpl.isSupported());
+        setSslException(mHttpsConnection);
+        final long bytesRemaining = 10_000L;
+        final long secondsRemaining = 500L;
+        // Set content without partal url.
+        setApiContent(mCapportApiConnection, "{'captive': true,"
+                + "'venue-info-url': '" + TEST_VENUE_INFO_URL + "',"
+                + "'bytes-remaining': " + bytesRemaining + ","
+                + "'seconds-remaining': " + secondsRemaining + "}");
+        setPortal302(mHttpConnection);
+
+        runNetworkTest(makeCapportLPs(), CELL_METERED_CAPABILITIES, VALIDATION_RESULT_PORTAL,
+                0 /* probesSucceeded*/, TEST_LOGIN_URL);
+
+        verify(mCapportApiConnection).getResponseCode();
+
+        verify(mHttpConnection, times(1)).getResponseCode();
+        verify(mCallbacks, never()).notifyCaptivePortalDataChanged(any());
+    }
+
+    @Test
+    public void testIsCaptivePortal_CapportApiIsPortalWithValidPortalUrl() throws Exception {
         assumeTrue(CaptivePortalDataShimImpl.isSupported());
         setSslException(mHttpsConnection);
         final long bytesRemaining = 10_000L;
@@ -1594,6 +1616,25 @@ public class NetworkMonitorTest {
         HandlerUtilsKt.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
         assertTrue(wrappedMonitor.isDataStall());
         verify(mCallbacks).notifyDataStallSuspected(matchTcpDataStallParcelable());
+    }
+
+    @Test
+    public void testIsDataStall_EvaluationDnsAndTcp() throws Exception {
+        setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_DNS | DATA_STALL_EVALUATION_TYPE_TCP);
+        setupTcpDataStall();
+        final WrappedNetworkMonitor nm = makeMonitor(CELL_METERED_CAPABILITIES);
+        nm.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
+        makeDnsTimeoutEvent(nm, DEFAULT_DNS_TIMEOUT_THRESHOLD);
+        assertTrue(nm.isDataStall());
+        verify(mCallbacks).notifyDataStallSuspected(
+                matchDnsAndTcpDataStallParcelable(DEFAULT_DNS_TIMEOUT_THRESHOLD));
+
+        when(mTst.getLatestReceivedCount()).thenReturn(5);
+        // Trigger a tcp event immediately.
+        setTcpPollingInterval(0);
+        nm.sendTcpPollingEvent();
+        HandlerUtilsKt.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
+        assertFalse(nm.isDataStall());
     }
 
     @Test
@@ -2635,13 +2676,20 @@ public class NetworkMonitorTest {
                 && Objects.equals(p.redirectUrl, redirectUrl));
     }
 
+    private DataStallReportParcelable matchDnsAndTcpDataStallParcelable(final int timeoutCount) {
+        return argThat(p ->
+                (p.detectionMethod & ConstantsShim.DETECTION_METHOD_DNS_EVENTS) != 0
+                && (p.detectionMethod & ConstantsShim.DETECTION_METHOD_TCP_METRICS) != 0
+                && p.dnsConsecutiveTimeouts == timeoutCount);
+    }
+
     private DataStallReportParcelable matchDnsDataStallParcelable(final int timeoutCount) {
-        return argThat(p -> p.detectionMethod == ConstantsShim.DETECTION_METHOD_DNS_EVENTS
+        return argThat(p -> (p.detectionMethod & ConstantsShim.DETECTION_METHOD_DNS_EVENTS) != 0
                 && p.dnsConsecutiveTimeouts == timeoutCount);
     }
 
     private DataStallReportParcelable matchTcpDataStallParcelable() {
-        return argThat(p -> p.detectionMethod == ConstantsShim.DETECTION_METHOD_TCP_METRICS);
+        return argThat(p -> (p.detectionMethod & ConstantsShim.DETECTION_METHOD_TCP_METRICS) != 0);
     }
 }
 

@@ -493,7 +493,8 @@ public class NetworkMonitor extends StateMachine {
     @Nullable
     private final DnsStallDetector mDnsStallDetector;
     private long mLastProbeTime;
-    // The signal causing a data stall to be suspected. Reset to 0 after metrics are sent to statsd.
+    // A bitmask of signals causing a data stall to be suspected. Reset to
+    // {@link DataStallUtils#DATA_STALL_EVALUATION_TYPE_NONE} after metrics are sent to statsd.
     private @EvaluationType int mDataStallTypeToCollect;
     private boolean mAcceptPartialConnectivity = false;
     private final EvaluationState mEvaluationState = new EvaluationState();
@@ -2626,7 +2627,7 @@ public class NetworkMonitor extends StateMachine {
                     validationLog("Missing user-portal-url from capport response");
                     return new CapportApiProbeResult(
                             sendDnsAndHttpProbes(mProxy, mUrl, ValidationProbeEvent.PROBE_HTTP),
-                            capportData);
+                            null /* capportData */);
                 }
                 final String loginUrlString = capportData.getUserPortalUrl().toString();
                 // Starting from R (where CaptivePortalData was introduced), the captive portal app
@@ -3206,7 +3207,8 @@ public class NetworkMonitor extends StateMachine {
             return false;
         }
 
-        Boolean result = null;
+        int typeToCollect = 0;
+        final int notStall = -1;
         final StringJoiner msg = (DBG || VDBG_STALL) ? new StringJoiner(", ") : null;
         // Reevaluation will generate traffic. Thus, set a minimal reevaluation timer to limit the
         // possible traffic cost in metered network.
@@ -3221,18 +3223,9 @@ public class NetworkMonitor extends StateMachine {
         final TcpSocketTracker tst = getTcpSocketTracker();
         if (dataStallEvaluateTypeEnabled(DATA_STALL_EVALUATION_TYPE_TCP) && tst != null) {
             if (tst.getLatestReceivedCount() > 0) {
-                result = false;
+                typeToCollect = notStall;
             } else if (tst.isDataStallSuspected()) {
-                result = true;
-                mDataStallTypeToCollect = DATA_STALL_EVALUATION_TYPE_TCP;
-
-                final DataStallReportParcelable p = new DataStallReportParcelable();
-                p.detectionMethod = DETECTION_METHOD_TCP_METRICS;
-                p.timestampMillis = SystemClock.elapsedRealtime();
-                p.tcpPacketFailRate = tst.getLatestPacketFailPercentage();
-                p.tcpMetricsCollectionPeriodMillis = getTcpPollingInterval();
-
-                notifyDataStallSuspected(p);
+                typeToCollect |= DATA_STALL_EVALUATION_TYPE_TCP;
             }
             if (DBG || VDBG_STALL) {
                 msg.add("tcp packets received=" + tst.getLatestReceivedCount())
@@ -3244,32 +3237,48 @@ public class NetworkMonitor extends StateMachine {
         // 1. The number of consecutive DNS query timeouts >= mConsecutiveDnsTimeoutThreshold.
         // 2. Those consecutive DNS queries happened in the last mValidDataStallDnsTimeThreshold ms.
         final DnsStallDetector dsd = getDnsStallDetector();
-        if ((result == null) && (dsd != null)
+        if ((typeToCollect != notStall) && (dsd != null)
                 && dataStallEvaluateTypeEnabled(DATA_STALL_EVALUATION_TYPE_DNS)) {
-            if (dsd.isDataStallSuspected(mConsecutiveDnsTimeoutThreshold,
-                    mDataStallValidDnsTimeThreshold)) {
-                result = true;
-                mDataStallTypeToCollect = DATA_STALL_EVALUATION_TYPE_DNS;
+            if (dsd.isDataStallSuspected(
+                    mConsecutiveDnsTimeoutThreshold, mDataStallValidDnsTimeThreshold)) {
+                typeToCollect |= DATA_STALL_EVALUATION_TYPE_DNS;
                 logNetworkEvent(NetworkEvent.NETWORK_CONSECUTIVE_DNS_TIMEOUT_FOUND);
-
-                final DataStallReportParcelable p = new DataStallReportParcelable();
-                p.detectionMethod = DETECTION_METHOD_DNS_EVENTS;
-                p.timestampMillis = SystemClock.elapsedRealtime();
-                p.dnsConsecutiveTimeouts = mDnsStallDetector.getConsecutiveTimeoutCount();
-                notifyDataStallSuspected(p);
             }
             if (DBG || VDBG_STALL) {
                 msg.add("consecutive dns timeout count=" + dsd.getConsecutiveTimeoutCount());
             }
         }
-        // log only data stall suspected.
-        if ((DBG && Boolean.TRUE.equals(result)) || VDBG_STALL) {
-            log("isDataStall: result=" + result + ", " + msg);
+
+        if (typeToCollect > 0) {
+            mDataStallTypeToCollect = typeToCollect;
+            final DataStallReportParcelable p = new DataStallReportParcelable();
+            int detectionMethod = 0;
+            p.timestampMillis = SystemClock.elapsedRealtime();
+            if (isDataStallTypeDetected(typeToCollect, DATA_STALL_EVALUATION_TYPE_DNS)) {
+                detectionMethod |= DETECTION_METHOD_DNS_EVENTS;
+                p.dnsConsecutiveTimeouts = mDnsStallDetector.getConsecutiveTimeoutCount();
+            }
+
+            if (isDataStallTypeDetected(typeToCollect, DATA_STALL_EVALUATION_TYPE_TCP)) {
+                detectionMethod |= DETECTION_METHOD_TCP_METRICS;
+                p.tcpPacketFailRate = tst.getLatestPacketFailPercentage();
+                p.tcpMetricsCollectionPeriodMillis = getTcpPollingInterval();
+            }
+            p.detectionMethod = detectionMethod;
+            notifyDataStallSuspected(p);
         }
 
-        return (result == null) ? false : result;
+        // log only data stall suspected.
+        if ((DBG && (typeToCollect > 0)) || VDBG_STALL) {
+            log("isDataStall: result=" + typeToCollect + ", " + msg);
+        }
+
+        return typeToCollect > 0;
     }
 
+    private static boolean isDataStallTypeDetected(int typeToCollect, int evaluationType) {
+        return (typeToCollect & evaluationType) != 0;
+    }
     // Class to keep state of evaluation results and probe results.
     //
     // The main purpose was to ensure NetworkMonitor can notify ConnectivityService of probe results
