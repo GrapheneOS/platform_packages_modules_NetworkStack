@@ -793,6 +793,11 @@ public class NetworkMonitor extends StateMachine {
                     return HANDLED;
                 case CMD_FORCE_REEVALUATION:
                 case CMD_CAPTIVE_PORTAL_RECHECK:
+                    if (getCurrentState() == mDefaultState) {
+                        // Before receiving CMD_NETWORK_CONNECTED (when still in mDefaultState),
+                        // requests to reevaluate are not valid: drop them.
+                        return HANDLED;
+                    }
                     String msg = "Forcing reevaluation for UID " + message.arg1;
                     final DnsStallDetector dsd = getDnsStallDetector();
                     if (dsd != null) {
