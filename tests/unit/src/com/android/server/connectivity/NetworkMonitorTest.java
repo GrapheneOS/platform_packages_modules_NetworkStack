@@ -69,6 +69,7 @@ import static org.junit.Assume.assumeTrue;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.atLeastOnce;
@@ -1203,6 +1204,32 @@ public class NetworkMonitorTest {
         // HTTP probe was sent on first validation but not re-sent when there was a portal URL.
         verify(mHttpConnection, times(1)).getResponseCode();
         verify(mCapportApiConnection, times(1)).getResponseCode();
+    }
+
+    @Test
+    public void testIsCaptivePortal_NoRevalidationBeforeNetworkConnected() throws Exception {
+        assumeTrue(CaptivePortalDataShimImpl.isSupported());
+
+        final NetworkMonitor nm = makeCellMeteredNetworkMonitor();
+
+        final LinkProperties lp = makeCapportLPs();
+
+        // LinkProperties changed, but NM should not revalidate before notifyNetworkConnected
+        nm.notifyLinkPropertiesChanged(lp);
+        verify(mHttpConnection, after(100).never()).getResponseCode();
+        verify(mHttpsConnection, never()).getResponseCode();
+        verify(mCapportApiConnection, never()).getResponseCode();
+
+        setValidProbes();
+        setApiContent(mCapportApiConnection, "{'captive': true, "
+                + "'user-portal-url': '" + TEST_LOGIN_URL + "'}");
+
+        // After notifyNetworkConnected, validation uses the capport API contents
+        nm.notifyNetworkConnected(lp, CELL_METERED_CAPABILITIES);
+        verifyNetworkTested(VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */, TEST_LOGIN_URL);
+
+        verify(mHttpConnection, never()).getResponseCode();
+        verify(mCapportApiConnection).getResponseCode();
     }
 
     @Test
