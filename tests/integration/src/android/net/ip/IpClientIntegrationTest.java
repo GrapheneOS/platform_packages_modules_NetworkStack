@@ -171,6 +171,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -994,7 +995,7 @@ public class IpClientIntegrationTest {
             assertEquals(5, packetList.size());
             assertArpProbe(packetList.get(0));
             assertArpAnnounce(packetList.get(3));
-
+        } else {
             verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
             assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime,
                     TEST_DEFAULT_MTU);
@@ -1245,17 +1246,25 @@ public class IpClientIntegrationTest {
         fail("No router solicitation received on interface within timeout");
     }
 
-    private void sendBasicRouterAdvertisement(boolean waitForRs) throws Exception {
+    private void sendRouterAdvertisement(boolean waitForRs, short lifetime) throws Exception {
         final String dnsServer = "2001:4860:4860::64";
         final ByteBuffer pio = buildPioOption(3600, 1800, "2001:db8:1::/64");
         ByteBuffer rdnss = buildRdnssOption(3600, dnsServer);
-        ByteBuffer ra = buildRaPacket(pio, rdnss);
+        ByteBuffer ra = buildRaPacket(lifetime, pio, rdnss);
 
         if (waitForRs) {
             waitForRouterSolicitation();
         }
 
         mPacketReader.sendResponse(ra);
+    }
+
+    private void sendBasicRouterAdvertisement(boolean waitForRs) throws Exception {
+        sendRouterAdvertisement(waitForRs, (short) 1800);
+    }
+
+    private void sendRouterAdvertisementWithZeroLifetime() throws Exception {
+        sendRouterAdvertisement(false /* waitForRs */, (short) 0);
     }
 
     // TODO: move this and the following method to a common location and use them in ApfTest.
@@ -1319,7 +1328,8 @@ public class IpClientIntegrationTest {
         return checksumAdjust(checksum, (short) IPPROTO_TCP, (short) IPPROTO_ICMPV6);
     }
 
-    private static ByteBuffer buildRaPacket(ByteBuffer... options) throws Exception {
+    private static ByteBuffer buildRaPacket(short lifetime, ByteBuffer... options)
+            throws Exception {
         final MacAddress srcMac = MacAddress.fromString("33:33:00:00:00:01");
         final MacAddress dstMac = MacAddress.fromString("01:02:03:04:05:06");
         final byte[] routerLinkLocal = InetAddresses.parseNumericAddress("fe80::1").getAddress();
@@ -1347,7 +1357,7 @@ public class IpClientIntegrationTest {
         packet.putShort((short) 0);                      // Checksum, TBD
         packet.put((byte) 0);                            // Hop limit, unspecified
         packet.put((byte) 0);                            // M=0, O=0
-        packet.putShort((short) 1800);                   // Router lifetime
+        packet.putShort(lifetime);                       // Router lifetime
         packet.putInt(0);                                // Reachable time, unspecified
         packet.putInt(100);                              // Retrans time 100ms.
 
@@ -1365,6 +1375,10 @@ public class IpClientIntegrationTest {
 
         packet.flip();
         return packet;
+    }
+
+    private static ByteBuffer buildRaPacket(ByteBuffer... options) throws Exception {
+        return buildRaPacket((short) 1800, options);
     }
 
     private void disableIpv6ProvisioningDelays() throws Exception {
@@ -2152,5 +2166,74 @@ public class IpClientIntegrationTest {
     public void testDhcpRoaming_mismatchedLeasedIpAddress() throws Exception {
         doDhcpRoamingTest(true /* hasMismatchedIpAddress */, "\"0001docomo\"" /* display name */,
                 TEST_DHCP_ROAM_SSID, TEST_DEFAULT_BSSID, true /* expectRoaming */);
+    }
+
+    private void doDualStackProvisioning() throws Exception {
+        when(mCm.shouldAvoidBadWifi()).thenReturn(true);
+
+        final ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIpReachabilityMonitor()
+                .build();
+        // Accelerate DHCP handshake to shorten test duration, not strictly necessary.
+        mDependencies.setDhcpRapidCommitEnabled(true);
+        mIpc.startProvisioning(config);
+
+        final InOrder inOrder = inOrder(mCb);
+        final CompletableFuture<LinkProperties> lpFuture = new CompletableFuture<>();
+        final String dnsServer = "2001:4860:4860::64";
+        final ByteBuffer pio = buildPioOption(3600, 1800, "2001:db8:1::/64");
+        final ByteBuffer rdnss = buildRdnssOption(3600, dnsServer);
+        final ByteBuffer ra = buildRaPacket(pio, rdnss);
+
+        doIpv6OnlyProvisioning(inOrder, ra);
+
+        // Start IPv4 provisioning and wait until entire provisioning completes.
+        handleDhcpPackets(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
+                true /* shouldReplyRapidCommitAck */, TEST_DEFAULT_MTU, null /* serverSentUrl */);
+        verify(mCb, timeout(TEST_TIMEOUT_MS).atLeastOnce()).onLinkPropertiesChange(argThat(x -> {
+            if (!x.isIpv4Provisioned() || !x.isIpv6Provisioned()) return false;
+            lpFuture.complete(x);
+            return true;
+        }));
+
+        final LinkProperties lp = lpFuture.get(TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        assertNotNull(lp);
+        assertTrue(lp.getDnsServers().contains(InetAddress.getByName(dnsServer)));
+        assertTrue(lp.getDnsServers().contains(SERVER_ADDR));
+
+        reset(mCb);
+    }
+
+    @Test
+    public void testIgnoreIpv6ProvisioningLoss() throws Exception {
+        doDualStackProvisioning();
+
+        final CompletableFuture<LinkProperties> lpFuture = new CompletableFuture<>();
+
+        // Send RA with 0-lifetime and wait until all IPv6-related default route and DNS servers
+        // have been removed, then verify if there is IPv4-only info left in the LinkProperties.
+        sendRouterAdvertisementWithZeroLifetime();
+        verify(mCb, timeout(TEST_TIMEOUT_MS).atLeastOnce()).onLinkPropertiesChange(
+                argThat(x -> {
+                    final boolean isOnlyIPv4Provisioned = (x.getLinkAddresses().size() == 1
+                            && x.getDnsServers().size() == 1
+                            && x.getAddresses().get(0) instanceof Inet4Address
+                            && x.getDnsServers().get(0) instanceof Inet4Address);
+
+                    if (!isOnlyIPv4Provisioned) return false;
+                    lpFuture.complete(x);
+                    return true;
+                }));
+        final LinkProperties lp = lpFuture.get(TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        assertNotNull(lp);
+        assertEquals(lp.getAddresses().get(0), CLIENT_ADDR);
+        assertEquals(lp.getDnsServers().get(0), SERVER_ADDR);
+    }
+
+    @Test
+    public void testDualStackProvisioning() throws Exception {
+        doDualStackProvisioning();
+
+        verify(mCb, never()).onProvisioningFailure(any());
     }
 }
