@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 The Android Open Source Project
+ * Copyright (C) 2020 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-package android.net.shared;
+package android.net.dhcp;
 
 import static android.net.InetAddresses.parseNumericAddress;
-import static android.net.shared.IpConfigurationParcelableUtil.fromStableParcelable;
-import static android.net.shared.IpConfigurationParcelableUtil.toStableParcelable;
+import static android.net.dhcp.DhcpResultsParcelableUtil.fromStableParcelable;
+import static android.net.dhcp.DhcpResultsParcelableUtil.toStableParcelable;
 
 import static com.android.testutils.MiscAssertsKt.assertFieldCountEquals;
 
@@ -26,6 +26,7 @@ import static org.junit.Assert.assertEquals;
 
 import android.net.DhcpResults;
 import android.net.LinkAddress;
+import android.net.shared.IpConfigurationParcelableUtil;
 
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
@@ -41,7 +42,7 @@ import java.net.Inet4Address;
  */
 @RunWith(AndroidJUnit4.class)
 @SmallTest
-public class IpConfigurationParcelableUtilTest {
+public class DhcpResultsParcelableUtilTest {
     private DhcpResults mDhcpResults;
 
     @Before
