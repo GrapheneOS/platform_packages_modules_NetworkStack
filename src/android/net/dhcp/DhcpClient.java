@@ -503,9 +503,9 @@ public class DhcpClient extends StateMachine {
      * check whether or not to support caching the last lease info and INIT-REBOOT state.
      *
      * INIT-REBOOT state is supported on Android R by default if there is no experiment flag set to
-     * disable this feature explicitly, meanwhile we still hope to be able to control this feature
-     * on/off by pushing experiment flag for A/B testing and metrics collection on both of Android
-     * Q and R version, however it's disbled on Android Q by default.
+     * disable this feature explicitly, meanwhile turning this feature on/off by pushing experiment
+     * flag makes it possible to do A/B test and metrics collection on both of Android Q and R, but
+     * it's disabled on Android Q by default.
      */
     public boolean isDhcpLeaseCacheEnabled() {
         final boolean defaultEnabled =
