@@ -96,7 +96,7 @@ public class DataStallUtils {
     /**
      * Default polling interval to observe the tcp health.
      */
-    public static int DEFAULT_TCP_POLLING_INTERVAL_MS = 10_000;
+    public static int DEFAULT_TCP_POLLING_INTERVAL_MS = 20_000;
 
     /**
      * Default tcp packets fail rate to suspect as a data stall.
