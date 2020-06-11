@@ -482,6 +482,7 @@ public class IpClient extends StateMachine {
     private boolean mMulticastFiltering;
     private long mStartTimeMillis;
     private MacAddress mCurrentBssid;
+    private boolean mHasDisabledIPv6OnProvLoss;
 
     /**
      * Reading the snapshot is an asynchronous operation initiated by invoking
@@ -1137,9 +1138,9 @@ public class IpClient extends StateMachine {
         // Note that we can still be disconnected by IpReachabilityMonitor
         // if the IPv6 default gateway (but not the IPv6 DNS servers; see
         // accompanying code in IpReachabilityMonitor) is unreachable.
-        final boolean ignoreIPv6ProvisioningLoss =
-                mConfiguration != null && mConfiguration.mUsingMultinetworkPolicyTracker
-                && !mCm.shouldAvoidBadWifi();
+        final boolean ignoreIPv6ProvisioningLoss = mHasDisabledIPv6OnProvLoss
+                || (mConfiguration != null && mConfiguration.mUsingMultinetworkPolicyTracker
+                        && !mCm.shouldAvoidBadWifi());
 
         // Additionally:
         //
@@ -1163,7 +1164,23 @@ public class IpClient extends StateMachine {
         // IPv6 default route then also consider the loss of that default route
         // to be a loss of provisioning. See b/27962810.
         if (oldLp.hasGlobalIpv6Address() && (lostIPv6Router && !ignoreIPv6ProvisioningLoss)) {
-            delta = PROV_CHANGE_LOST_PROVISIONING;
+            // Although link properties have lost IPv6 default route in this case, if IPv4 is still
+            // working with appropriate routes and DNS servers, we can keep the current connection
+            // without disconnecting from the network, just disable IPv6 on that given network until
+            // to the next provisioning. Disabling IPv6 will result in all IPv6 connectivity torn
+            // down and all IPv6 sockets being closed, the non-routable IPv6 DNS servers will be
+            // stripped out, so applications will be able to reconnect immediately over IPv4. See
+            // b/131781810.
+            if (newLp.isIpv4Provisioned()) {
+                mInterfaceCtrl.disableIPv6();
+                mHasDisabledIPv6OnProvLoss = true;
+                delta = PROV_CHANGE_STILL_PROVISIONED;
+                if (DBG) {
+                    mLog.log("Disable IPv6 stack completely when the default router has gone");
+                }
+            } else {
+                delta = PROV_CHANGE_LOST_PROVISIONING;
+            }
         }
 
         return delta;
@@ -1591,6 +1608,7 @@ public class IpClient extends StateMachine {
         @Override
         public void enter() {
             stopAllIP();
+            mHasDisabledIPv6OnProvLoss = false;
 
             mLinkObserver.clearInterfaceParams();
             resetLinkProperties();
