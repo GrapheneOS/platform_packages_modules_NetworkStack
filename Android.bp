@@ -91,7 +91,7 @@ java_defaults {
         "netlink-client",
         "networkstack-client",
         "datastallprotosnano",
-        "networkstackprotosnano",
+        "statsprotos",
         "captiveportal-lib",
     ],
     plugins: ["java_api_finder"],
@@ -290,4 +290,18 @@ android_app {
     manifest: ":NetworkStackTestAndroidManifest",
     // The permission configuration *must* be included to ensure security of the device
     required: ["NetworkPermissionConfig"],
+}
+
+java_library_static {
+    name: "statsprotos",
+    proto: {
+        type: "lite",
+    },
+    srcs: [
+        "src/com/android/networkstack/metrics/stats.proto",
+    ],
+    static_libs: [
+        "networkstackprotos",
+    ],
+    defaults: ["NetworkStackReleaseApiLevel"],
 }
