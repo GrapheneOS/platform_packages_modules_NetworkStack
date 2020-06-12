@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 The Android Open Source Project
+ * Copyright (C) 2020 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,22 @@
  * limitations under the License.
  */
 
-package android.net.shared;
+package android.net.dhcp;
 
-import android.annotation.Nullable;
+import static android.net.shared.IpConfigurationParcelableUtil.parcelAddress;
+import static android.net.shared.IpConfigurationParcelableUtil.unparcelAddress;
+
 import android.net.DhcpResults;
 import android.net.DhcpResultsParcelable;
-import android.net.InetAddresses;
+
+import androidx.annotation.Nullable;
 
 import java.net.Inet4Address;
-import java.net.InetAddress;
 
 /**
- * Collection of utility methods to convert to and from stable AIDL parcelables for IpClient
- * configuration classes.
- * @hide
+ * A utility class to convert DhcpResults to DhcpResultsParcelable.
  */
-public final class IpConfigurationParcelableUtil {
+public final class DhcpResultsParcelableUtil {
     /**
      * Convert DhcpResults to a DhcpResultsParcelable.
      */
@@ -59,23 +59,5 @@ public final class IpConfigurationParcelableUtil {
         results.serverHostName = p.serverHostName;
         results.captivePortalApiUrl = p.captivePortalApiUrl;
         return results;
-    }
-
-    /**
-     * Convert InetAddress to String.
-     * TODO: have an InetAddressParcelable
-     */
-    public static String parcelAddress(@Nullable InetAddress addr) {
-        if (addr == null) return null;
-        return addr.getHostAddress();
-    }
-
-    /**
-     * Convert String to InetAddress.
-     * TODO: have an InetAddressParcelable
-     */
-    public static InetAddress unparcelAddress(@Nullable String addr) {
-        if (addr == null) return null;
-        return InetAddresses.parseNumericAddress(addr);
     }
 }
