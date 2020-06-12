@@ -124,6 +124,7 @@ java_library {
         "src/android/net/IpMemoryStoreClient.java",
         "src/android/net/ipmemorystore/**/*.java",
         "src/android/net/networkstack/**/*.java",
+        "src/android/net/shared/**/*.java",
     ],
     static_libs: [
         "ipmemorystore-aidl-interfaces-java",
