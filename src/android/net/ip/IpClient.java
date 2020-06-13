@@ -17,7 +17,7 @@
 package android.net.ip;
 
 import static android.net.RouteInfo.RTN_UNICAST;
-import static android.net.shared.IpConfigurationParcelableUtil.toStableParcelable;
+import static android.net.dhcp.DhcpResultsParcelableUtil.toStableParcelable;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
 import static com.android.server.util.NetworkStackConstants.VENDOR_SPECIFIC_IE_ID;
