@@ -1772,7 +1772,7 @@ public class IpClient extends StateMachine {
                 case EVENT_NETLINK_LINKPROPERTIES_CHANGED:
                     handleLinkPropertiesUpdate(NO_CALLBACKS);
                     if (readyToProceed()) {
-                        transitionTo(mRunningState);
+                        transitionTo(isUsingPreconnection() ? mPreconnectingState : mRunningState);
                     }
                     break;
 
