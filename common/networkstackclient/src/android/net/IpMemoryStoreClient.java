@@ -92,6 +92,7 @@ public abstract class IpMemoryStoreClient {
                     () -> service.storeNetworkAttributes(l2Key, attributes.toParcelable(),
                             OnStatusListener.toAIDL(listener))));
         } catch (ExecutionException m) {
+            if (null == listener) return;
             ignoringRemoteException("Error storing network attributes",
                     () -> listener.onComplete(new Status(Status.ERROR_UNKNOWN)));
         }
@@ -116,6 +117,7 @@ public abstract class IpMemoryStoreClient {
                     () -> service.storeBlob(l2Key, clientId, name, data,
                             OnStatusListener.toAIDL(listener))));
         } catch (ExecutionException m) {
+            if (null == listener) return;
             ignoringRemoteException("Error storing blob",
                     () -> listener.onComplete(new Status(Status.ERROR_UNKNOWN)));
         }
@@ -143,7 +145,8 @@ public abstract class IpMemoryStoreClient {
                             OnL2KeyResponseListener.toAIDL(listener))));
         } catch (ExecutionException m) {
             ignoringRemoteException("Error finding L2 Key",
-                    () -> listener.onL2KeyResponse(new Status(Status.ERROR_UNKNOWN), null));
+                    () -> listener.onL2KeyResponse(new Status(Status.ERROR_UNKNOWN),
+                            null /* l2Key */));
         }
     }
 
@@ -164,7 +167,8 @@ public abstract class IpMemoryStoreClient {
                             OnSameL3NetworkResponseListener.toAIDL(listener))));
         } catch (ExecutionException m) {
             ignoringRemoteException("Error checking for network sameness",
-                    () -> listener.onSameL3NetworkResponse(new Status(Status.ERROR_UNKNOWN), null));
+                    () -> listener.onSameL3NetworkResponse(new Status(Status.ERROR_UNKNOWN),
+                            null /* response */));
         }
     }
 
@@ -186,7 +190,7 @@ public abstract class IpMemoryStoreClient {
         } catch (ExecutionException m) {
             ignoringRemoteException("Error retrieving network attributes",
                     () -> listener.onNetworkAttributesRetrieved(new Status(Status.ERROR_UNKNOWN),
-                            null, null));
+                            null /* l2Key */, null /* attributes */));
         }
     }
 
@@ -210,7 +214,7 @@ public abstract class IpMemoryStoreClient {
         } catch (ExecutionException m) {
             ignoringRemoteException("Error retrieving blob",
                     () -> listener.onBlobRetrieved(new Status(Status.ERROR_UNKNOWN),
-                            null, null, null));
+                            null /* l2Key */, null /* name */, null /* blob */));
         }
     }
 
@@ -235,6 +239,7 @@ public abstract class IpMemoryStoreClient {
             runWhenServiceReady(service -> ignoringRemoteException(() ->
                     service.delete(l2Key, needWipe, OnDeleteStatusListener.toAIDL(listener))));
         } catch (ExecutionException m) {
+            if (null == listener) return;
             ignoringRemoteException("Error deleting from the memory store",
                     () -> listener.onComplete(new Status(Status.ERROR_UNKNOWN),
                             0 /* deletedRecords */));
@@ -266,6 +271,7 @@ public abstract class IpMemoryStoreClient {
                     () -> service.deleteCluster(cluster, needWipe,
                             OnDeleteStatusListener.toAIDL(listener))));
         } catch (ExecutionException m) {
+            if (null == listener) return;
             ignoringRemoteException("Error deleting from the memory store",
                     () -> listener.onComplete(new Status(Status.ERROR_UNKNOWN),
                             0 /* deletedRecords */));
