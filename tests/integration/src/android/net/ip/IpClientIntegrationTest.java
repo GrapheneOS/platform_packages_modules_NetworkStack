@@ -136,6 +136,7 @@ import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.apishim.ConstantsShim;
 import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.arp.ArpPacket;
+import com.android.networkstack.metrics.IpProvisioningMetrics;
 import com.android.server.NetworkObserver;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
@@ -318,8 +319,8 @@ public class IpClientIntegrationTest {
 
         @Override
         public DhcpClient.Dependencies getDhcpClientDependencies(
-                NetworkStackIpMemoryStore ipMemoryStore) {
-            return new DhcpClient.Dependencies(ipMemoryStore) {
+                NetworkStackIpMemoryStore ipMemoryStore, IpProvisioningMetrics metrics) {
+            return new DhcpClient.Dependencies(ipMemoryStore, metrics) {
                 @Override
                 public boolean isFeatureEnabled(final Context context, final String name,
                         final boolean defaultEnabled) {
