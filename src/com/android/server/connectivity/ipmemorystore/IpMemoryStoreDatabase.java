@@ -335,21 +335,19 @@ public class IpMemoryStoreDatabase {
     // Returns the expiry date of the specified row, or one of the error codes above if the
     // row is not found or some other error
     static long getExpiry(@NonNull final SQLiteDatabase db, @NonNull final String key) {
-        final Cursor cursor = db.query(NetworkAttributesContract.TABLENAME,
+        try (Cursor cursor = db.query(NetworkAttributesContract.TABLENAME,
                 EXPIRY_COLUMN, // columns
                 SELECT_L2KEY, // selection
                 new String[] { key }, // selectionArgs
                 null, // groupBy
                 null, // having
-                null // orderBy
-        );
-        // L2KEY is the primary key ; it should not be possible to get more than one
-        // result here. 0 results means the key was not found.
-        if (cursor.getCount() != 1) return EXPIRY_ERROR;
-        cursor.moveToFirst();
-        final long result = cursor.getLong(0); // index in the EXPIRY_COLUMN array
-        cursor.close();
-        return result;
+                null)) { // orderBy
+            // L2KEY is the primary key ; it should not be possible to get more than one
+            // result here. 0 results means the key was not found.
+            if (cursor.getCount() != 1) return EXPIRY_ERROR;
+            cursor.moveToFirst();
+            return cursor.getLong(0); // index in the EXPIRY_COLUMN array
+        }
     }
 
     static final int RELEVANCE_ERROR = -1; // Legal values for relevance are positive
@@ -399,20 +397,19 @@ public class IpMemoryStoreDatabase {
     @Nullable
     static NetworkAttributes retrieveNetworkAttributes(@NonNull final SQLiteDatabase db,
             @NonNull final String key) {
-        final Cursor cursor = db.query(NetworkAttributesContract.TABLENAME,
+        try (Cursor cursor = db.query(NetworkAttributesContract.TABLENAME,
                 null, // columns, null means everything
                 NetworkAttributesContract.COLNAME_L2KEY + " = ?", // selection
                 new String[] { key }, // selectionArgs
                 null, // groupBy
                 null, // having
-                null); // orderBy
-        // L2KEY is the primary key ; it should not be possible to get more than one
-        // result here. 0 results means the key was not found.
-        if (cursor.getCount() != 1) return null;
-        cursor.moveToFirst();
-        final NetworkAttributes attributes = readNetworkAttributesLine(cursor);
-        cursor.close();
-        return attributes;
+                null)) { // orderBy
+            // L2KEY is the primary key ; it should not be possible to get more than one
+            // result here. 0 results means the key was not found.
+            if (cursor.getCount() != 1) return null;
+            cursor.moveToFirst();
+            return readNetworkAttributesLine(cursor);
+        }
     }
 
     private static final String[] DATA_COLUMN = new String[] {
@@ -422,7 +419,7 @@ public class IpMemoryStoreDatabase {
     @Nullable
     static byte[] retrieveBlob(@NonNull final SQLiteDatabase db, @NonNull final String key,
             @NonNull final String clientId, @NonNull final String name) {
-        final Cursor cursor = db.query(PrivateDataContract.TABLENAME,
+        try (Cursor cursor = db.query(PrivateDataContract.TABLENAME,
                 DATA_COLUMN, // columns
                 PrivateDataContract.COLNAME_L2KEY + " = ? AND " // selection
                 + PrivateDataContract.COLNAME_CLIENT + " = ? AND "
@@ -430,14 +427,13 @@ public class IpMemoryStoreDatabase {
                 new String[] { key, clientId, name }, // selectionArgs
                 null, // groupBy
                 null, // having
-                null); // orderBy
-        // The query above is querying by (composite) primary key, so it should not be possible to
-        // get more than one result here. 0 results means the key was not found.
-        if (cursor.getCount() != 1) return null;
-        cursor.moveToFirst();
-        final byte[] result = cursor.getBlob(0); // index in the DATA_COLUMN array
-        cursor.close();
-        return result;
+                null)) { // orderBy
+            // The query above is querying by (composite) primary key, so it should not be possible
+            // to get more than one result here. 0 results means the key was not found.
+            if (cursor.getCount() != 1) return null;
+            cursor.moveToFirst();
+            return cursor.getBlob(0); // index in the DATA_COLUMN array
+        }
     }
 
     /**
@@ -449,7 +445,7 @@ public class IpMemoryStoreDatabase {
             try {
                 db.delete(NetworkAttributesContract.TABLENAME, null, null);
                 db.delete(PrivateDataContract.TABLENAME, null, null);
-                final Cursor cursorNetworkAttributes = db.query(
+                try (Cursor cursorNetworkAttributes = db.query(
                         // table name
                         NetworkAttributesContract.TABLENAME,
                         // column name
@@ -459,13 +455,10 @@ public class IpMemoryStoreDatabase {
                         null, // groupBy
                         null, // having
                         null, // orderBy
-                        "1"); // limit
-                if (0 != cursorNetworkAttributes.getCount()) {
-                    cursorNetworkAttributes.close();
-                    continue;
+                        "1")) { // limit
+                    if (0 != cursorNetworkAttributes.getCount()) continue;
                 }
-                cursorNetworkAttributes.close();
-                final Cursor cursorPrivateData = db.query(
+                try (Cursor cursorPrivateData = db.query(
                         // table name
                         PrivateDataContract.TABLENAME,
                         // column name
@@ -475,14 +468,10 @@ public class IpMemoryStoreDatabase {
                         null, // groupBy
                         null, // having
                         null, // orderBy
-                        "1"); // limit
-                if (0 != cursorPrivateData.getCount()) {
-                    cursorPrivateData.close();
-                    continue;
+                        "1")) { // limit
+                    if (0 != cursorPrivateData.getCount()) continue;
                 }
-                cursorPrivateData.close();
                 db.setTransactionSuccessful();
-                return;
             } catch (SQLiteException e) {
                 Log.e(TAG, "Could not wipe the data in database", e);
             } finally {
@@ -575,7 +564,7 @@ public class IpMemoryStoreDatabase {
 
         final String selection = NetworkAttributesContract.COLNAME_EXPIRYDATE + " > ? AND ("
                 + sj.toString() + ")";
-        final Cursor cursor = db.queryWithFactory(new CustomCursorFactory(args),
+        try (Cursor cursor = db.queryWithFactory(new CustomCursorFactory(args),
                 false, // distinct
                 NetworkAttributesContract.TABLENAME,
                 null, // columns, null means everything
@@ -584,22 +573,23 @@ public class IpMemoryStoreDatabase {
                 null, // groupBy
                 null, // having
                 null, // orderBy
-                null); // limit
-        if (cursor.getCount() <= 0) return null;
-        cursor.moveToFirst();
-        String bestKey = null;
-        float bestMatchConfidence = GROUPCLOSE_CONFIDENCE; // Never return a match worse than this.
-        while (!cursor.isAfterLast()) {
-            final NetworkAttributes read = readNetworkAttributesLine(cursor);
-            final float confidence = read.getNetworkGroupSamenessConfidence(attr);
-            if (confidence > bestMatchConfidence) {
-                bestKey = getString(cursor, NetworkAttributesContract.COLNAME_L2KEY);
-                bestMatchConfidence = confidence;
+                null)) { // limit
+            if (cursor.getCount() <= 0) return null;
+            cursor.moveToFirst();
+            String bestKey = null;
+            float bestMatchConfidence =
+                    GROUPCLOSE_CONFIDENCE; // Never return a match worse than this.
+            while (!cursor.isAfterLast()) {
+                final NetworkAttributes read = readNetworkAttributesLine(cursor);
+                final float confidence = read.getNetworkGroupSamenessConfidence(attr);
+                if (confidence > bestMatchConfidence) {
+                    bestKey = getString(cursor, NetworkAttributesContract.COLNAME_L2KEY);
+                    bestMatchConfidence = confidence;
+                }
+                cursor.moveToNext();
             }
-            cursor.moveToNext();
+            return bestKey;
         }
-        cursor.close();
-        return bestKey;
     }
 
     /**
@@ -695,20 +685,21 @@ public class IpMemoryStoreDatabase {
         }
 
         // Queries number of NetworkAttributes that start from the lowest expiryDate.
-        final Cursor cursor = db.query(NetworkAttributesContract.TABLENAME,
+        final long expiryDate;
+        try (Cursor cursor = db.query(NetworkAttributesContract.TABLENAME,
                 new String[] {NetworkAttributesContract.COLNAME_EXPIRYDATE}, // columns
                 null, // selection
                 null, // selectionArgs
                 null, // groupBy
                 null, // having
                 NetworkAttributesContract.COLNAME_EXPIRYDATE, // orderBy
-                Integer.toString(number)); // limit
-        if (cursor == null || cursor.getCount() <= 0) return Status.ERROR_GENERIC;
-        cursor.moveToLast();
+                Integer.toString(number))) { // limit
+            if (cursor == null || cursor.getCount() <= 0) return Status.ERROR_GENERIC;
+            cursor.moveToLast();
 
-        //Get the expiryDate from last record.
-        final long expiryDate = getLong(cursor, NetworkAttributesContract.COLNAME_EXPIRYDATE, 0);
-        cursor.close();
+            // Get the expiryDate from last record.
+            expiryDate = getLong(cursor, NetworkAttributesContract.COLNAME_EXPIRYDATE, 0);
+        }
 
         db.beginTransaction();
         try {
@@ -736,15 +727,16 @@ public class IpMemoryStoreDatabase {
 
     static int getTotalRecordNumber(@NonNull final SQLiteDatabase db) {
         // Query the total number of NetworkAttributes
-        final Cursor cursor = db.query(NetworkAttributesContract.TABLENAME,
+        try (Cursor cursor = db.query(NetworkAttributesContract.TABLENAME,
                 new String[] {"COUNT(*)"}, // columns
                 null, // selection
                 null, // selectionArgs
                 null, // groupBy
                 null, // having
-                null); // orderBy
-        cursor.moveToFirst();
-        return cursor == null ? 0 : cursor.getInt(0);
+                null)) { // orderBy
+            cursor.moveToFirst();
+            return cursor == null ? 0 : cursor.getInt(0);
+        }
     }
 
     // Helper methods
