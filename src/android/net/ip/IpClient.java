@@ -819,11 +819,11 @@ public class IpClient extends StateMachine {
      * Stop this IpClient.
      *
      * <p>This does not shut down the StateMachine itself, which is handled by {@link #shutdown()}.
+     *    The message "arg1" parameter is used to record the disconnect code metrics.
+     *    Usually this method is called by the peer (e.g. wifi) intentionally to stop IpClient,
+     *    consider that's the normal user termination.
      */
     public void stop() {
-        // The message "arg1" parameter is used to record the disconnect code metrics.
-        // Usually this method is called by the peer (e.g. wifi) intentionally to stop IpClient,
-        // consider that's the normal user termination.
         sendMessage(CMD_STOP, DisconnectCode.DC_NORMAL_TERMINATION.getNumber());
     }
 
@@ -1079,8 +1079,6 @@ public class IpClient extends StateMachine {
     }
 
     // Record the DisconnectCode and transition to StoppingState.
-    // When jumping to mStoppingState This function will ensure
-    // that you will not forget to fill in DisconnectCode.
     private void transitionToStoppingState(final DisconnectCode code) {
         mIpProvisioningMetrics.setDisconnectCode(code);
         transitionTo(mStoppingState);
