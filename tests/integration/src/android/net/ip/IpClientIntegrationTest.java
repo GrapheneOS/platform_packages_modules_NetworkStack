@@ -26,13 +26,13 @@ import static android.net.dhcp.DhcpPacket.INADDR_BROADCAST;
 import static android.net.dhcp.DhcpPacket.INFINITE_LEASE;
 import static android.net.dhcp.DhcpResultsParcelableUtil.fromStableParcelable;
 import static android.net.ipmemorystore.Status.SUCCESS;
-import static android.net.shared.Inet4AddressUtils.getBroadcastAddress;
-import static android.net.shared.Inet4AddressUtils.getPrefixMaskAsInet4Address;
 import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.IFA_F_TEMPORARY;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
 import static android.system.OsConstants.IPPROTO_TCP;
 
+import static com.android.net.module.util.Inet4AddressUtils.getBroadcastAddress;
+import static com.android.net.module.util.Inet4AddressUtils.getPrefixMaskAsInet4Address;
 import static com.android.server.util.NetworkStackConstants.ARP_REPLY;
 import static com.android.server.util.NetworkStackConstants.ARP_REQUEST;
 import static com.android.server.util.NetworkStackConstants.ETHER_ADDR_LEN;
