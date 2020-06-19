@@ -18,7 +18,7 @@ package android.net.dhcp
 
 import android.net.InetAddresses.parseNumericAddress
 import android.net.MacAddress
-import android.net.shared.Inet4AddressUtils.intToInet4AddressHTH
+import com.android.net.module.util.Inet4AddressUtils.intToInet4AddressHTH
 import androidx.test.filters.SmallTest
 import androidx.test.runner.AndroidJUnit4
 import com.android.testutils.assertFieldCountEquals
