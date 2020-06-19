@@ -90,6 +90,7 @@ java_defaults {
         "netd_aidl_interface-unstable-java",
         "netlink-client",
         "networkstack-client",
+        "net-utils-framework-common",
         "datastallprotosnano",
         "statsprotos",
         "captiveportal-lib",

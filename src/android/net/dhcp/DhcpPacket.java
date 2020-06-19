@@ -22,7 +22,6 @@ import static com.android.server.util.NetworkStackConstants.IPV4_ADDR_ANY;
 import android.net.DhcpResults;
 import android.net.LinkAddress;
 import android.net.metrics.DhcpErrorEvent;
-import android.net.shared.Inet4AddressUtils;
 import android.os.Build;
 import android.os.SystemProperties;
 import android.system.OsConstants;
@@ -31,6 +30,7 @@ import android.text.TextUtils;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
+import com.android.net.module.util.Inet4AddressUtils;
 import com.android.networkstack.apishim.common.ShimUtils;
 
 import java.io.UnsupportedEncodingException;
