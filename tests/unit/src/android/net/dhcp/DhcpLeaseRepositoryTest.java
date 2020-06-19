@@ -20,8 +20,8 @@ import static android.net.InetAddresses.parseNumericAddress;
 import static android.net.dhcp.DhcpLease.HOSTNAME_NONE;
 import static android.net.dhcp.DhcpLeaseRepository.CLIENTID_UNSPEC;
 import static android.net.dhcp.DhcpLeaseRepository.INETADDR_UNSPEC;
-import static android.net.shared.Inet4AddressUtils.intToInet4AddressHTH;
 
+import static com.android.net.module.util.Inet4AddressUtils.intToInet4AddressHTH;
 import static com.android.server.util.NetworkStackConstants.IPV4_ADDR_ANY;
 
 import static org.junit.Assert.assertEquals;
