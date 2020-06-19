@@ -136,6 +136,7 @@ import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.apishim.ConstantsShim;
 import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.arp.ArpPacket;
+import com.android.networkstack.metrics.IpProvisioningMetrics;
 import com.android.server.NetworkObserver;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
@@ -318,8 +319,8 @@ public class IpClientIntegrationTest {
 
         @Override
         public DhcpClient.Dependencies getDhcpClientDependencies(
-                NetworkStackIpMemoryStore ipMemoryStore) {
-            return new DhcpClient.Dependencies(ipMemoryStore) {
+                NetworkStackIpMemoryStore ipMemoryStore, IpProvisioningMetrics metrics) {
+            return new DhcpClient.Dependencies(ipMemoryStore, metrics) {
                 @Override
                 public boolean isFeatureEnabled(final Context context, final String name,
                         final boolean defaultEnabled) {
@@ -1658,8 +1659,7 @@ public class IpClientIntegrationTest {
         HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
     }
 
-    @Test
-    public void testIpClientClearingIpAddressState() throws Exception {
+    private void doIPv4OnlyProvisioningAndExitWithLeftAddress() throws Exception {
         final long currentTime = System.currentTimeMillis();
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
@@ -1684,6 +1684,11 @@ public class IpClientIntegrationTest {
         // TODO: once IpClient gets IP addresses directly from netlink instead of from netd, it
         // may be sufficient to call waitForIdle to see if IpClient has seen the address.
         addIpAddressAndWaitForIt(mIfaceName);
+    }
+
+    @Test
+    public void testIpClientClearingIpAddressState() throws Exception {
+        doIPv4OnlyProvisioningAndExitWithLeftAddress();
 
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
@@ -1700,6 +1705,22 @@ public class IpClientIntegrationTest {
         // ... or configured on the interface.
         InterfaceConfigurationParcel cfg = mNetd.interfaceGetCfg(mIfaceName);
         assertEquals("0.0.0.0", cfg.ipv4Addr);
+    }
+
+    @Test
+    public void testIpClientClearingIpAddressState_enablePreconnection() throws Exception {
+        doIPv4OnlyProvisioningAndExitWithLeftAddress();
+
+        // Enter ClearingIpAddressesState to clear the remaining IPv4 addresses and transition to
+        // PreconnectionState instead of RunningState.
+        startIpClientProvisioning(false /* isDhcpLeaseCacheEnabled */,
+                false /* shouldReplyRapidCommitAck */, true /* isDhcpPreConnectionEnabled */,
+                false /* isDhcpIpConflictDetectEnabled */);
+        assertDiscoverPacketOnPreconnectionStart();
+
+        // Force to enter RunningState.
+        mIpc.notifyPreconnectionComplete(false /* abort */);
+        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
     }
 
     @Test
