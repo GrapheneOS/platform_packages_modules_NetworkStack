@@ -3,8 +3,8 @@ rule com.android.net.module.util.** com.android.networkstack.util.@1
 
 rule com.android.internal.util.** android.net.networkstack.util.@1
 
-rule android.net.shared.Inet4AddressUtils* android.net.networkstack.shared.Inet4AddressUtils@1
-rule android.net.shared.InetAddressUtils* android.net.networkstack.shared.InetAddressUtils@1
+# Classes from net-utils-framework-common
+rule com.android.net.module.util.** com.android.networkstack.util.@1
 
 # Ignore DhcpResultsParcelable, but jarjar DhcpResults
 # TODO: move DhcpResults into services.net and delete from here
