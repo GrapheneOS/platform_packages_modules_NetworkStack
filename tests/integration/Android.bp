@@ -92,7 +92,11 @@ android_test {
     test_suites: ["device-tests", "mts"],
     test_config: "AndroidTest_Coverage.xml",
     defaults: ["NetworkStackIntegrationTestsJniDefaults"],
-    static_libs: ["NetworkStackTestsLib", "NetworkStackIntegrationTestsLib"],
+    static_libs: [
+        "NetworkStackTestsLib",
+        "NetworkStackIntegrationTestsLib",
+        "NetworkStaticLibTestsLib",
+    ],
     compile_multilib: "both",
     manifest: "AndroidManifest_coverage.xml",
 }

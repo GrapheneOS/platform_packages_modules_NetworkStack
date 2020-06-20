@@ -34,8 +34,9 @@ import static android.net.dhcp.DhcpPacket.ENCAP_L3;
 import static android.net.dhcp.DhcpPacket.INADDR_ANY;
 import static android.net.dhcp.DhcpPacket.INFINITE_LEASE;
 import static android.net.dhcp.DhcpPacket.ParseException;
-import static android.net.shared.Inet4AddressUtils.getBroadcastAddress;
-import static android.net.shared.Inet4AddressUtils.getPrefixMaskAsInet4Address;
+
+import static com.android.net.module.util.Inet4AddressUtils.getBroadcastAddress;
+import static com.android.net.module.util.Inet4AddressUtils.getPrefixMaskAsInet4Address;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;

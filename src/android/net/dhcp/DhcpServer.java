@@ -23,8 +23,6 @@ import static android.net.dhcp.DhcpPacket.ENCAP_BOOTP;
 import static android.net.dhcp.IDhcpServer.STATUS_INVALID_ARGUMENT;
 import static android.net.dhcp.IDhcpServer.STATUS_SUCCESS;
 import static android.net.dhcp.IDhcpServer.STATUS_UNKNOWN_ERROR;
-import static android.net.shared.Inet4AddressUtils.getBroadcastAddress;
-import static android.net.shared.Inet4AddressUtils.getPrefixMaskAsInet4Address;
 import static android.net.util.NetworkStackUtils.DHCP_RAPID_COMMIT_VERSION;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_INET;
@@ -36,6 +34,8 @@ import static android.system.OsConstants.SO_BROADCAST;
 import static android.system.OsConstants.SO_REUSEADDR;
 
 import static com.android.internal.util.TrafficStatsConstants.TAG_SYSTEM_DHCP_SERVER;
+import static com.android.net.module.util.Inet4AddressUtils.getBroadcastAddress;
+import static com.android.net.module.util.Inet4AddressUtils.getPrefixMaskAsInet4Address;
 import static com.android.server.util.NetworkStackConstants.INFINITE_LEASE;
 import static com.android.server.util.NetworkStackConstants.IPV4_ADDR_ALL;
 import static com.android.server.util.NetworkStackConstants.IPV4_ADDR_ANY;
