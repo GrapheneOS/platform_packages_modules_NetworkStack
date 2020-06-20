@@ -411,6 +411,7 @@ public class NetworkMonitor extends StateMachine {
     private String mPrivateDnsProviderHostname = "";
 
     private final Context mContext;
+    private final Context mCustomizedContext;
     private final INetworkMonitorCallbacks mCallback;
     private final int mCallbackVersion;
     private final Network mCleartextDnsNetwork;
@@ -548,6 +549,7 @@ public class NetworkMonitor extends StateMachine {
         mWifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
         mCm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         mNotifier = serviceManager.getNotifier();
+        mCustomizedContext = getCustomizedContextOrDefault();
 
         // CHECKSTYLE:OFF IndentationCheck
         addState(mDefaultState);
@@ -1824,10 +1826,10 @@ public class NetworkMonitor extends StateMachine {
     private String getCaptivePortalServerHttpsUrl() {
         final String testUrl = getTestUrl(TEST_CAPTIVE_PORTAL_HTTPS_URL);
         if (isValidTestUrl(testUrl)) return testUrl;
-        final Context targetContext = getCustomizedContextOrDefault();
-        return getSettingFromResource(targetContext,
+        return getSettingFromResource(mCustomizedContext,
                 R.string.config_captive_portal_https_url, CAPTIVE_PORTAL_HTTPS_URL,
-                targetContext.getResources().getString(R.string.default_captive_portal_https_url));
+                mCustomizedContext.getResources().getString(
+                R.string.default_captive_portal_https_url));
     }
 
     private static boolean isValidTestUrl(@Nullable String url) {
@@ -1917,10 +1919,10 @@ public class NetworkMonitor extends StateMachine {
     public String getCaptivePortalServerHttpUrl() {
         final String testUrl = getTestUrl(TEST_CAPTIVE_PORTAL_HTTP_URL);
         if (isValidTestUrl(testUrl)) return testUrl;
-        final Context targetContext = getCustomizedContextOrDefault();
-        return getSettingFromResource(targetContext,
+        return getSettingFromResource(mCustomizedContext,
                 R.string.config_captive_portal_http_url, CAPTIVE_PORTAL_HTTP_URL,
-                targetContext.getResources().getString(R.string.default_captive_portal_http_url));
+                mCustomizedContext.getResources().getString(
+                R.string.default_captive_portal_http_url));
     }
 
     private int getConsecutiveDnsTimeoutThreshold() {
@@ -2078,7 +2080,7 @@ public class NetworkMonitor extends StateMachine {
      */
     private <T> T[] getProbeUrlArrayConfig(@NonNull T[] providerValue, @ArrayRes int configResId,
             @ArrayRes int defaultResId, @NonNull Function<String, T> resourceConverter) {
-        final Resources res = getCustomizedContextOrDefault().getResources();
+        final Resources res = mCustomizedContext.getResources();
         return getProbeUrlArrayConfig(providerValue, configResId, res.getStringArray(defaultResId),
                 resourceConverter);
     }
@@ -2096,7 +2098,7 @@ public class NetworkMonitor extends StateMachine {
      */
     private <T> T[] getProbeUrlArrayConfig(@NonNull T[] providerValue, @ArrayRes int configResId,
             String[] defaultConfig, @NonNull Function<String, T> resourceConverter) {
-        final Resources res = getCustomizedContextOrDefault().getResources();
+        final Resources res = mCustomizedContext.getResources();
         String[] configValue = res.getStringArray(configResId);
 
         if (configValue.length == 0) {

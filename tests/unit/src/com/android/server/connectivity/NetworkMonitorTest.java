@@ -927,6 +927,18 @@ public class NetworkMonitorTest {
         return info;
     }
 
+    private void setupNoSimCardNeighborMcc() throws Exception {
+        // Enable using neighbor resource by camping mcc feature.
+        doReturn(true).when(mResources).getBoolean(R.bool.config_no_sim_card_uses_neighbor_mcc);
+        final List<CellInfo> cellList = new ArrayList<CellInfo>();
+        final int testMcc = 460;
+        cellList.add(makeTestCellInfoGsm(Integer.toString(testMcc)));
+        doReturn(cellList).when(mTelephony).getAllCellInfo();
+        final Configuration config = mResources.getConfiguration();
+        config.mcc = testMcc;
+        doReturn(mMccContext).when(mContext).createConfigurationContext(eq(config));
+    }
+
     @Test
     public void testMakeFallbackUrls() throws Exception {
         final WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
@@ -950,21 +962,28 @@ public class NetworkMonitorTest {
         assertEquals("http://testUrl1.com", urls[0].toString());
         assertEquals("http://testUrl2.com", urls[1].toString());
 
-        // Value is expected to be replaced by location resource.
-        doReturn(true).when(mResources).getBoolean(R.bool.config_no_sim_card_uses_neighbor_mcc);
-
-        final List<CellInfo> cellList = new ArrayList<CellInfo>();
-        final int testMcc = 460;
-        cellList.add(makeTestCellInfoGsm(Integer.toString(testMcc)));
-        doReturn(cellList).when(mTelephony).getAllCellInfo();
-        final Configuration config = mResources.getConfiguration();
-        config.mcc = testMcc;
-        doReturn(mMccContext).when(mContext).createConfigurationContext(eq(config));
+        // Even though the using neighbor resource by camping mcc feature is enabled, the
+        // customized context has been assigned and won't change. So calling
+        // makeCaptivePortalFallbackUrls() still gets the original value.
+        setupNoSimCardNeighborMcc();
         doReturn(new String[] {"http://testUrl3.com"}).when(mMccResource)
                 .getStringArray(R.array.config_captive_portal_fallback_urls);
         urls = wnm.makeCaptivePortalFallbackUrls();
+        assertEquals(urls.length, 2);
+        assertEquals("http://testUrl1.com", urls[0].toString());
+        assertEquals("http://testUrl2.com", urls[1].toString());
+    }
+
+    @Test
+    public void testMakeFallbackUrlsWithCustomizedContext() throws Exception {
+        // Value is expected to be replaced by location resource.
+        setupNoSimCardNeighborMcc();
+        doReturn(new String[] {"http://testUrl.com"}).when(mMccResource)
+                .getStringArray(R.array.config_captive_portal_fallback_urls);
+        final WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
+        final URL[] urls = wnm.makeCaptivePortalFallbackUrls();
         assertEquals(urls.length, 1);
-        assertEquals("http://testUrl3.com", urls[0].toString());
+        assertEquals("http://testUrl.com", urls[0].toString());
     }
 
     private static CellIdentityGsm makeCellIdentityGsm(int lac, int cid, int arfcn, int bsic,
