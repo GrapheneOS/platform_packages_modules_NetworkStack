@@ -129,6 +129,8 @@ import android.os.SystemClock;
 import android.os.UserHandle;
 import android.provider.DeviceConfig;
 import android.provider.Settings;
+import android.stats.connectivity.ProbeResult;
+import android.stats.connectivity.ProbeType;
 import android.telephony.AccessNetworkConstants;
 import android.telephony.CellIdentityNr;
 import android.telephony.CellInfo;
@@ -155,6 +157,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 import androidx.annotation.VisibleForTesting;
 
+import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.RingBufferIndices;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
@@ -168,6 +171,7 @@ import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 import com.android.networkstack.metrics.DataStallDetectionStats;
 import com.android.networkstack.metrics.DataStallStatsUtils;
+import com.android.networkstack.metrics.NetworkValidationMetrics;
 import com.android.networkstack.netlink.TcpSocketTracker;
 import com.android.networkstack.util.DnsUtils;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
@@ -502,6 +506,10 @@ public class NetworkMonitor extends StateMachine {
 
     private final boolean mPrivateIpNoInternetEnabled;
 
+    @GuardedBy("mNetworkValidationMetrics")
+    private final NetworkValidationMetrics mNetworkValidationMetrics =
+            new NetworkValidationMetrics();
+
     private int getCallbackVersion(INetworkMonitorCallbacks cb) {
         int version;
         try {
@@ -778,6 +786,31 @@ public class NetworkMonitor extends StateMachine {
         }
     }
 
+    private void recordMetricsReset(@Nullable NetworkCapabilities nc) {
+        synchronized (mNetworkValidationMetrics) {
+            mNetworkValidationMetrics.reset(nc);
+        }
+    }
+
+    private void recordMetricsProbeEvent(ProbeType type, long latencyMicros, ProbeResult result,
+            CaptivePortalDataShim capportData) {
+        synchronized (mNetworkValidationMetrics) {
+            mNetworkValidationMetrics.setProbeEvent(type, latencyMicros, result, capportData);
+        }
+    }
+
+    private void recordMetricsValidationResult(int result, String redirectUrl) {
+        synchronized (mNetworkValidationMetrics) {
+            mNetworkValidationMetrics.setValidationResult(result, redirectUrl);
+        }
+    }
+
+    private void recordMetricsValidationStats() {
+        synchronized (mNetworkValidationMetrics) {
+            mNetworkValidationMetrics.sendValidationStats();
+        }
+    }
+
     // DefaultState is the parent of all States.  It exists only to handle CMD_* messages but
     // does not entail any real state (hence no enter() or exit() routines).
     private class DefaultState extends State {
@@ -790,6 +823,7 @@ public class NetworkMonitor extends StateMachine {
                     transitionTo(mEvaluatingState);
                     return HANDLED;
                 case CMD_NETWORK_DISCONNECTED:
+                    recordMetricsValidationStats();
                     logNetworkEvent(NetworkEvent.NETWORK_DISCONNECTED);
                     quit();
                     return HANDLED;
@@ -941,6 +975,7 @@ public class NetworkMonitor extends StateMachine {
             initSocketTrackingIfRequired();
             // start periodical polling.
             sendTcpPollingEvent();
+            recordMetricsValidationStats();
         }
 
         private void initSocketTrackingIfRequired() {
@@ -960,6 +995,9 @@ public class NetworkMonitor extends StateMachine {
                     transitionTo(mValidatedState);
                     break;
                 case CMD_EVALUATE_PRIVATE_DNS:
+                    // TODO: this causes reevaluation of a single probe that is not counted in
+                    // metrics. Add support for such reevaluation probes in metrics, and log them
+                    // separately.
                     transitionTo(mEvaluatingPrivateDnsState);
                     break;
                 case EVENT_DNS_NOTIFICATION:
@@ -1288,6 +1326,7 @@ public class NetworkMonitor extends StateMachine {
             sendMessageDelayed(CMD_CAPTIVE_PORTAL_RECHECK, 0 /* no UID */,
                     CAPTIVE_PORTAL_REEVALUATE_DELAY_MS);
             mValidations++;
+            recordMetricsValidationStats();
         }
 
         @Override
@@ -1319,6 +1358,10 @@ public class NetworkMonitor extends StateMachine {
                                 notifyPrivateDnsConfigResolved();
                             } else {
                                 handlePrivateDnsEvaluationFailure();
+                                // The private DNS probe fails-fast if the server hostname cannot
+                                // be resolved. Record it as a failure with zero latency.
+                                recordMetricsProbeEvent(ProbeType.PT_PRIVDNS, 0 /* latency */,
+                                        ProbeResult.PR_FAILURE, null /* capportData */);
                                 break;
                             }
                         }
@@ -1428,6 +1471,8 @@ public class NetworkMonitor extends StateMachine {
                 validationLog(PROBE_PRIVDNS, host,
                         String.format("%dus - Error: %s", time, uhe.getMessage()));
             }
+            recordMetricsProbeEvent(ProbeType.PT_PRIVDNS, time, success ? ProbeResult.PR_SUCCESS :
+                    ProbeResult.PR_FAILURE, null /* capportData */);
             logValidationProbe(time, PROBE_PRIVDNS, success ? DNS_SUCCESS : DNS_FAILURE);
             return success;
         }
@@ -1438,6 +1483,8 @@ public class NetworkMonitor extends StateMachine {
 
         @Override
         public void enter() {
+            recordMetricsValidationStats();
+            recordMetricsReset(mNetworkCapabilities);
             if (mEvaluateAttempts >= BLAME_FOR_EVALUATION_ATTEMPTS) {
                 //Don't continue to blame UID forever.
                 TrafficStats.clearThreadStatsUid();
@@ -1519,6 +1566,7 @@ public class NetworkMonitor extends StateMachine {
     private class WaitingForNextProbeState extends State {
         @Override
         public void enter() {
+            recordMetricsValidationStats();
             scheduleNextProbe();
         }
 
@@ -2269,6 +2317,8 @@ public class NetworkMonitor extends StateMachine {
         // network validation (the HTTPS probe, which would likely fail anyway) or the PAC probe.
         if (mPrivateIpNoInternetEnabled && probeType == ValidationProbeEvent.PROBE_HTTP
                 && (proxy == null) && hasPrivateIpAddress(resolvedAddr)) {
+            recordMetricsProbeEvent(NetworkValidationMetrics.probeTypeToEnum(probeType),
+                    0 /* latency */, ProbeResult.PR_PRIVATE_IP_DNS, null /* capportData */);
             return CaptivePortalProbeResult.PRIVATE_IP;
         }
         return sendHttpProbe(url, probeType, null);
@@ -2300,6 +2350,9 @@ public class NetworkMonitor extends StateMachine {
             result = ValidationProbeEvent.DNS_FAILURE;
         }
         final long latency = watch.stop();
+        recordMetricsProbeEvent(ProbeType.PT_DNS, latency,
+                (result == ValidationProbeEvent.DNS_SUCCESS) ? ProbeResult.PR_SUCCESS :
+                ProbeResult.PR_FAILURE, null /* capportData */);
         logValidationProbe(latency, ValidationProbeEvent.PROBE_DNS, result);
         return addresses;
     }
@@ -2417,12 +2470,17 @@ public class NetworkMonitor extends StateMachine {
         }
         logValidationProbe(probeTimer.stop(), probeType, httpResponseCode);
 
+        final CaptivePortalProbeResult probeResult;
         if (probeSpec == null) {
-            return new CaptivePortalProbeResult(httpResponseCode, redirectUrl, url.toString(),
-                    1 << probeType);
+            probeResult = new CaptivePortalProbeResult(httpResponseCode, redirectUrl,
+                    url.toString(),   1 << probeType);
         } else {
-            return probeSpec.getResult(httpResponseCode, redirectUrl);
+            probeResult = probeSpec.getResult(httpResponseCode, redirectUrl);
         }
+        recordMetricsProbeEvent(NetworkValidationMetrics.probeTypeToEnum(probeType),
+                probeTimer.stop(), NetworkValidationMetrics.httpProbeResultToEnum(probeResult),
+                null /* capportData */);
+        return probeResult;
     }
 
     @VisibleForTesting
@@ -2576,8 +2634,7 @@ public class NetworkMonitor extends StateMachine {
             super(properties, proxy, url, captivePortalApiUrl);
         }
 
-        private CaptivePortalDataShim tryCapportApiProbe() {
-            if (mCaptivePortalApiUrl == null) return null;
+        private CaptivePortalDataShim sendCapportApiProbe() {
             validationLog("Fetching captive portal data from " + mCaptivePortalApiUrl);
 
             final String apiContent;
@@ -2616,26 +2673,38 @@ public class NetworkMonitor extends StateMachine {
 
             try {
                 final JSONObject info = new JSONObject(apiContent);
-                return CaptivePortalDataShimImpl.fromJson(info);
+                final CaptivePortalDataShim capportData = CaptivePortalDataShimImpl.fromJson(info);
+                if (capportData != null && capportData.isCaptive()
+                        && capportData.getUserPortalUrl() == null) {
+                    validationLog("Missing user-portal-url from capport response");
+                    return null;
+                }
+                return capportData;
             } catch (JSONException e) {
                 validationLog("Could not parse capport API JSON: " + e.getMessage());
                 return null;
             } catch (UnsupportedApiLevelException e) {
+                // This should never happen because LinkProperties would not have a capport URL
+                // before R.
                 validationLog("Platform API too low to support capport API");
                 return null;
             }
+        }
+
+        private CaptivePortalDataShim tryCapportApiProbe() {
+            if (mCaptivePortalApiUrl == null) return null;
+            final Stopwatch capportApiWatch = new Stopwatch().start();
+            final CaptivePortalDataShim capportData = sendCapportApiProbe();
+            recordMetricsProbeEvent(ProbeType.PT_CAPPORT_API, capportApiWatch.stop(),
+                    capportData == null ? ProbeResult.PR_FAILURE : ProbeResult.PR_SUCCESS,
+                    capportData);
+            return capportData;
         }
 
         @Override
         protected CaptivePortalProbeResult sendProbe() {
             final CaptivePortalDataShim capportData = tryCapportApiProbe();
             if (capportData != null && capportData.isCaptive()) {
-                if (capportData.getUserPortalUrl() == null) {
-                    validationLog("Missing user-portal-url from capport response");
-                    return new CapportApiProbeResult(
-                            sendDnsAndHttpProbes(mProxy, mUrl, ValidationProbeEvent.PROBE_HTTP),
-                            null /* capportData */);
-                }
                 final String loginUrlString = capportData.getUserPortalUrl().toString();
                 // Starting from R (where CaptivePortalData was introduced), the captive portal app
                 // delegates to NetworkMonitor for verifying when the network validates instead of
@@ -3357,6 +3426,7 @@ public class NetworkMonitor extends StateMachine {
             p.redirectUrl = redirectUrl;
             p.timestampMillis = SystemClock.elapsedRealtime();
             notifyNetworkTested(p);
+            recordMetricsValidationResult(result, redirectUrl);
         }
 
         @VisibleForTesting
