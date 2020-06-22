@@ -30,6 +30,16 @@ public interface CaptivePortalDataShim {
     boolean isCaptive();
 
     /**
+     * @see android.net.CaptivePortalData#getByteLimit()
+     */
+    long getByteLimit();
+
+    /**
+     * @see android.net.CaptivePortalData#getExpiryTimeMillis()
+     */
+    long getExpiryTimeMillis();
+
+    /**
      * @see android.net.CaptivePortalData#getUserPortalUrl()
      */
     Uri getUserPortalUrl();
