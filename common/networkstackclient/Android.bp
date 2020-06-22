@@ -28,6 +28,7 @@ aidl_interface {
             apex_available: [
                 "//apex_available:platform",
                 "com.android.wifi",
+                "com.android.bluetooth.updatable",
             ],
             // this is part of updatable modules(NetworkStack) which targets 29(Q)
             min_sdk_version: "29",
@@ -92,6 +93,7 @@ aidl_interface {
                 "//apex_available:platform",
                 "com.android.bluetooth.updatable",
                 "com.android.wifi",
+                "com.android.tethering",
             ],
             // this is part of updatable modules(NetworkStack) which targets 29(Q)
             min_sdk_version: "29",
@@ -133,8 +135,8 @@ java_library {
         "src/android/net/shared/**/*.java",
     ],
     static_libs: [
-        "ipmemorystore-aidl-interfaces-java",
-        "networkstack-aidl-interfaces-java",
+        "ipmemorystore-aidl-interfaces-unstable-java",
+        "networkstack-aidl-interfaces-unstable-java",
     ],
     visibility: [
         "//frameworks/base/packages/Tethering",
