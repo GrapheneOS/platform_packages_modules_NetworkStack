@@ -49,10 +49,11 @@ public class Stopwatch {
     }
 
     /**
-     * Retart the Stopwatch.
+     * Restart the Stopwatch.
      */
     public Stopwatch restart() {
         mStartTimeNs = SystemClock.elapsedRealtimeNanos();
+        mStopTimeNs = 0;
         return this;
     }
 

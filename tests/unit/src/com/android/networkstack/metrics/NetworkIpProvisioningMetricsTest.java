@@ -23,6 +23,7 @@ import android.stats.connectivity.DisconnectCode;
 import android.stats.connectivity.HostnameTransResult;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
@@ -122,6 +123,9 @@ public class NetworkIpProvisioningMetricsTest {
         mMetrics.setDisconnectCode(DisconnectCode.DC_PROVISIONING_TIMEOUT);
         mMetrics.setDisconnectCode(DisconnectCode.DC_ERROR_STARTING_IPV4);
 
+        mMetrics.setIPv4ProvisionedLatencyOnFirstTime(true);
+        mMetrics.setIPv6ProvisionedLatencyOnFirstTime(true);
+
         // Writing the metrics into statsd
         mStats = mMetrics.statsWrite();
 
@@ -133,5 +137,25 @@ public class NetworkIpProvisioningMetricsTest {
         assertEquals(6, mStats.getDhcpSession().getErrorCodeCount());
         assertEquals(HostnameTransResult.HTR_SUCCESS, mStats.getDhcpSession().getHtResult());
         assertEquals(DisconnectCode.DC_PROVISIONING_TIMEOUT, mStats.getDisconnectCode());
+        assertTrue(mStats.getIpv4LatencyMicros() >= 0);
+        assertTrue(mStats.getIpv6LatencyMicros() >= 0);
+        assertTrue(mStats.getProvisioningDurationMicros() >= 0);
+    }
+
+    @Test
+    public void testIpProvisioningMetrics_VerifyConsecutiveMetricsLatency() throws Exception {
+        final IpProvisioningMetrics metrics = new IpProvisioningMetrics();
+        for (int i = 0; i < 2; i++) {
+            metrics.reset();
+            // delay 1 msec.
+            Thread.sleep(1);
+            metrics.setIPv4ProvisionedLatencyOnFirstTime(true);
+            metrics.setIPv6ProvisionedLatencyOnFirstTime(true);
+            NetworkIpProvisioningReported mStats = metrics.statsWrite();
+            // Each timer should be greater than 1000.
+            assertTrue(mStats.getIpv4LatencyMicros() >= 1000);
+            assertTrue(mStats.getIpv6LatencyMicros() >= 1000);
+            assertTrue(mStats.getProvisioningDurationMicros() >= 1000);
+        }
     }
 }
