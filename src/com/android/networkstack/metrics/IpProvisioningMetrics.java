@@ -120,12 +120,21 @@ public class IpProvisioningMetrics {
                 transSuccess ? HostnameTransResult.HTR_SUCCESS : HostnameTransResult.HTR_FAILURE);
     }
 
+    private static DhcpErrorCode dhcpErrorFromNumberSafe(int number) {
+        // See DhcpErrorCode.errorCodeWithOption
+        // TODO: add a DhcpErrorCode method to extract the code;
+        //       or replace legacy error codes with the new metrics.
+        final DhcpErrorCode error = DhcpErrorCode.forNumber(number & 0xFFFF0000);
+        if (error == null) return DhcpErrorCode.ET_UNKNOWN;
+        return error;
+    }
+
     /**
      * write the DHCP error code into DhcpSession.
      */
     public void addDhcpErrorCode(final int errorCode) {
         if (mDhcpSessionBuilder.getErrorCodeCount() >= MAX_DHCP_ERROR_COUNT) return;
-        mDhcpSessionBuilder.addErrorCode(DhcpErrorCode.forNumber(errorCode));
+        mDhcpSessionBuilder.addErrorCode(dhcpErrorFromNumberSafe(errorCode));
     }
 
     /**

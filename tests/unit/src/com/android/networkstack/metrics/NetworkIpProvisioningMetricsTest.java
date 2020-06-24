@@ -16,6 +16,7 @@
 
 package com.android.networkstack.metrics;
 
+import android.net.dhcp.DhcpPacket;
 import android.net.metrics.DhcpErrorEvent;
 import android.stats.connectivity.DhcpErrorCode;
 import android.stats.connectivity.DhcpFeature;
@@ -64,25 +65,24 @@ public class NetworkIpProvisioningMetricsTest {
         final NetworkIpProvisioningReported mStats;
         final IpProvisioningMetrics mMetrics = new IpProvisioningMetrics();
         mMetrics.reset();
-        mMetrics.addDhcpErrorCode(DhcpErrorEvent.DHCP_ERROR);
-        mMetrics.addDhcpErrorCode(DhcpErrorEvent.L2_WRONG_ETH_TYPE);
-        mMetrics.addDhcpErrorCode(DhcpErrorEvent.L3_INVALID_IP);
-        mMetrics.addDhcpErrorCode(DhcpErrorEvent.L4_WRONG_PORT);
         mMetrics.addDhcpErrorCode(DhcpErrorEvent.BOOTP_TOO_SHORT);
-        mMetrics.addDhcpErrorCode(DhcpErrorEvent.DHCP_NO_COOKIE);
+        mMetrics.addDhcpErrorCode(DhcpErrorEvent.errorCodeWithOption(
+                DhcpErrorEvent.BUFFER_UNDERFLOW, DhcpPacket.DHCP_HOST_NAME));
+        // Write the incorrect input number 50000 as DHCP error number
+        int incorrectErrorCodeNumber = 50000;
+        mMetrics.addDhcpErrorCode(incorrectErrorCodeNumber);
         for (int i = 0; i < mMetrics.MAX_DHCP_ERROR_COUNT; i++) {
             mMetrics.addDhcpErrorCode(DhcpErrorEvent.PARSING_ERROR);
         }
         mStats = mMetrics.statsWrite();
-        assertEquals(DhcpErrorCode.ET_DHCP_ERROR, mStats.getDhcpSession().getErrorCode(0));
-        assertEquals(DhcpErrorCode.ET_L2_WRONG_ETH_TYPE, mStats.getDhcpSession().getErrorCode(1));
-        assertEquals(DhcpErrorCode.ET_L3_INVALID_IP, mStats.getDhcpSession().getErrorCode(2));
-        assertEquals(DhcpErrorCode.ET_L4_WRONG_PORT, mStats.getDhcpSession().getErrorCode(3));
-        assertEquals(DhcpErrorCode.ET_BOOTP_TOO_SHORT, mStats.getDhcpSession().getErrorCode(4));
-        assertEquals(DhcpErrorCode.ET_DHCP_NO_COOKIE, mStats.getDhcpSession().getErrorCode(5));
-        // Check can record the same error code
-        assertEquals(DhcpErrorCode.ET_PARSING_ERROR, mStats.getDhcpSession().getErrorCode(6));
-        assertEquals(DhcpErrorCode.ET_PARSING_ERROR, mStats.getDhcpSession().getErrorCode(6));
+        assertEquals(DhcpErrorCode.ET_BOOTP_TOO_SHORT, mStats.getDhcpSession().getErrorCode(0));
+        assertEquals(DhcpErrorCode.ET_BUFFER_UNDERFLOW, mStats.getDhcpSession().getErrorCode(1));
+        // When the input is an invalid integer value (such as incorrectErrorCodeNumber),
+        // the DhcpErrorCode will be ET_UNKNOWN
+        assertEquals(DhcpErrorCode.ET_UNKNOWN, mStats.getDhcpSession().getErrorCode(2));
+        // If the same error code appears, it must be recorded
+        assertEquals(DhcpErrorCode.ET_PARSING_ERROR, mStats.getDhcpSession().getErrorCode(3));
+        assertEquals(DhcpErrorCode.ET_PARSING_ERROR, mStats.getDhcpSession().getErrorCode(4));
         // The maximum number of DHCP error code counts is MAX_DHCP_ERROR_COUNT
         assertEquals(mMetrics.MAX_DHCP_ERROR_COUNT, mStats.getDhcpSession().getErrorCodeCount());
     }
