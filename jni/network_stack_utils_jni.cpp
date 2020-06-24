@@ -31,6 +31,8 @@
 #include <string>
 
 #include <nativehelper/JNIHelp.h>
+#include <nativehelper/JNIHelpCompat.h>
+
 #include <android/log.h>
 
 namespace android {
