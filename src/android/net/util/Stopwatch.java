@@ -49,6 +49,15 @@ public class Stopwatch {
     }
 
     /**
+     * Restart the Stopwatch.
+     */
+    public Stopwatch restart() {
+        mStartTimeNs = SystemClock.elapsedRealtimeNanos();
+        mStopTimeNs = 0;
+        return this;
+    }
+
+    /**
      * Stop the Stopwatch.
      * @return the total time recorded, in microseconds, or 0 if not started.
      */
