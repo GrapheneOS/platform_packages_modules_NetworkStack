@@ -89,8 +89,13 @@ public class IpClientLinkObserver implements NetworkObserver {
     public interface Callback {
         /**
          * Called when some properties of the link were updated.
+         *
+         * @param linkState Whether the interface link state is up as per the latest
+         *                  {@link #onInterfaceLinkStateChanged(String, boolean)} callback. This
+         *                  should only be used for metrics purposes, as it could be inconsistent
+         *                  with {@link #getLinkProperties()} in particular.
          */
-        void update();
+        void update(boolean linkState);
     }
 
     /** Configuration parameters for IpClientLinkObserver. */
@@ -105,6 +110,7 @@ public class IpClientLinkObserver implements NetworkObserver {
     private final String mInterfaceName;
     private final Callback mCallback;
     private final LinkProperties mLinkProperties;
+    private boolean mInterfaceLinkState;
     private DnsServerRepository mDnsServerRepository;
     private final AlarmManager mAlarmManager;
     private final Configuration mConfig;
@@ -121,6 +127,7 @@ public class IpClientLinkObserver implements NetworkObserver {
         mLinkProperties = new LinkProperties();
         mLinkProperties.setInterfaceName(mInterfaceName);
         mConfig = config;
+        mInterfaceLinkState = true; // Assume up by default
         mDnsServerRepository = new DnsServerRepository(config.minRdnssLifetime);
         mAlarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         mNetlinkMonitor = new MyNetlinkMonitor(h, log, mTag);
@@ -149,7 +156,15 @@ public class IpClientLinkObserver implements NetworkObserver {
             // interface-specific messages (e.g., RTM_DELADDR) will not reach us, because the netd
             // code that parses them will not be able to resolve the ifindex to an interface name.
             clearLinkProperties();
-            mCallback.update();
+            mCallback.update(getInterfaceLinkState());
+        }
+    }
+
+    @Override
+    public void onInterfaceLinkStateChanged(String iface, boolean state) {
+        if (mInterfaceName.equals(iface)) {
+            maybeLog("interfaceLinkStateChanged", iface + (state ? " up" : " down"));
+            setInterfaceLinkState(state);
         }
     }
 
@@ -162,7 +177,7 @@ public class IpClientLinkObserver implements NetworkObserver {
                 changed = mLinkProperties.addLinkAddress(address);
             }
             if (changed) {
-                mCallback.update();
+                mCallback.update(getInterfaceLinkState());
             }
         }
     }
@@ -176,7 +191,7 @@ public class IpClientLinkObserver implements NetworkObserver {
                 changed = mLinkProperties.removeLinkAddress(address);
             }
             if (changed) {
-                mCallback.update();
+                mCallback.update(getInterfaceLinkState());
             }
         }
     }
@@ -190,7 +205,7 @@ public class IpClientLinkObserver implements NetworkObserver {
                 changed = mLinkProperties.addRoute(route);
             }
             if (changed) {
-                mCallback.update();
+                mCallback.update(getInterfaceLinkState());
             }
         }
     }
@@ -204,7 +219,7 @@ public class IpClientLinkObserver implements NetworkObserver {
                 changed = mLinkProperties.removeRoute(route);
             }
             if (changed) {
-                mCallback.update();
+                mCallback.update(getInterfaceLinkState());
             }
         }
     }
@@ -218,7 +233,7 @@ public class IpClientLinkObserver implements NetworkObserver {
                 synchronized (this) {
                     mDnsServerRepository.setDnsServersOn(mLinkProperties);
                 }
-                mCallback.update();
+                mCallback.update(getInterfaceLinkState());
             }
         }
     }
@@ -241,6 +256,14 @@ public class IpClientLinkObserver implements NetworkObserver {
         mNetlinkMonitor.clearAlarms();
         mLinkProperties.clear();
         mLinkProperties.setInterfaceName(mInterfaceName);
+    }
+
+    private synchronized boolean getInterfaceLinkState() {
+        return mInterfaceLinkState;
+    }
+
+    private synchronized void setInterfaceLinkState(boolean state) {
+        mInterfaceLinkState = state;
     }
 
     /** Notifies this object of new interface parameters. */
@@ -355,7 +378,7 @@ public class IpClientLinkObserver implements NetworkObserver {
                 cancelPref64Alarm();
             }
 
-            mCallback.update();
+            mCallback.update(getInterfaceLinkState());
         }
 
         private void processPref64Option(StructNdOptPref64 opt, final long now) {
