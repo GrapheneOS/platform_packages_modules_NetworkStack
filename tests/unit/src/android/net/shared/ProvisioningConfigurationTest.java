@@ -19,7 +19,7 @@ package android.net.shared;
 import static android.net.InetAddresses.parseNumericAddress;
 import static android.net.shared.ProvisioningConfiguration.fromStableParcelable;
 
-import static com.android.testutils.MiscAssertsKt.assertFieldCountEquals;
+import static com.android.testutils.MiscAsserts.assertFieldCountEquals;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;

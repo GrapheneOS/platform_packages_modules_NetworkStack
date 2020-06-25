@@ -16,8 +16,8 @@
 
 package android.net.netlink;
 
-import static android.net.netlink.NetlinkTestUtilsKt.makeDelNeighMessage;
-import static android.net.netlink.NetlinkTestUtilsKt.makeNewNeighMessage;
+import static android.net.netlink.NetlinkTestUtils.makeDelNeighMessage;
+import static android.net.netlink.NetlinkTestUtils.makeNewNeighMessage;
 import static android.net.netlink.StructNdMsg.NUD_STALE;
 
 import static org.junit.Assert.assertEquals;
