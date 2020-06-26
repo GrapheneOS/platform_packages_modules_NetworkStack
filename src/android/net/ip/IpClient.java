@@ -389,6 +389,9 @@ public class IpClient extends StateMachine {
     private static final int CMD_COMPLETE_PRECONNECTION = 16;
     private static final int CMD_UPDATE_L2INFORMATION = 17;
 
+    private static final int ARG_LINKPROP_CHANGED_LINKSTATE_DOWN = 0;
+    private static final int ARG_LINKPROP_CHANGED_LINKSTATE_UP = 1;
+
     // Internal commands to use instead of trying to call transitionTo() inside
     // a given State's enter() method. Calling transitionTo() from enter/exit
     // encounters a Log.wtf() that can cause trouble on eng builds.
@@ -596,7 +599,9 @@ public class IpClient extends StateMachine {
         mLinkObserver = new IpClientLinkObserver(
                 mContext, getHandler(),
                 mInterfaceName,
-                () -> sendMessage(EVENT_NETLINK_LINKPROPERTIES_CHANGED),
+                (ifaceUp) -> sendMessage(EVENT_NETLINK_LINKPROPERTIES_CHANGED, ifaceUp
+                        ? ARG_LINKPROP_CHANGED_LINKSTATE_UP
+                        : ARG_LINKPROP_CHANGED_LINKSTATE_DOWN),
                 config, mLog) {
             @Override
             public void onInterfaceAdded(String iface) {
@@ -2053,12 +2058,14 @@ public class IpClient extends StateMachine {
 
                 case EVENT_NETLINK_LINKPROPERTIES_CHANGED:
                     // EVENT_NETLINK_LINKPROPERTIES_CHANGED message will be received in both of
-                    // provisioning loss and normal user termination case (e.g. turn off wifi or
-                    // switch to another wifi ssid), hence, checking current interface change
-                    // status (down or up) would help distinguish.
-                    final boolean ifUp = (msg.arg1 != 0);
+                    // provisioning loss and normal user termination cases (e.g. turn off wifi or
+                    // switch to another wifi ssid), hence, checking the current interface link
+                    // state (down or up) helps distinguish the two cases: if the link state is
+                    // down, provisioning is only lost because the link is being torn down (for
+                    // example when turning off wifi), so treat it as a normal termination.
                     if (!handleLinkPropertiesUpdate(SEND_CALLBACKS)) {
-                        transitionToStoppingState(ifUp ? DisconnectCode.DC_PROVISIONING_FAIL
+                        final boolean linkStateUp = (msg.arg1 == ARG_LINKPROP_CHANGED_LINKSTATE_UP);
+                        transitionToStoppingState(linkStateUp ? DisconnectCode.DC_PROVISIONING_FAIL
                                 : DisconnectCode.DC_NORMAL_TERMINATION);
                     }
                     break;
