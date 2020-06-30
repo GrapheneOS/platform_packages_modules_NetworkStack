@@ -77,6 +77,7 @@ import static android.net.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNE
 import static android.net.util.NetworkStackUtils.TEST_CAPTIVE_PORTAL_HTTPS_URL;
 import static android.net.util.NetworkStackUtils.TEST_CAPTIVE_PORTAL_HTTP_URL;
 import static android.net.util.NetworkStackUtils.TEST_URL_EXPIRATION_TIME;
+import static android.net.util.NetworkStackUtils.getResBooleanConfig;
 import static android.net.util.NetworkStackUtils.isEmpty;
 import static android.net.util.NetworkStackUtils.isIPv6ULA;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
@@ -150,7 +151,6 @@ import android.util.Pair;
 import android.util.SparseArray;
 
 import androidx.annotation.ArrayRes;
-import androidx.annotation.BoolRes;
 import androidx.annotation.IntegerRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -1787,7 +1787,10 @@ public class NetworkMonitor extends StateMachine {
         }
         try {
             final List<CellInfo> cells = mTelephonyManager.getAllCellInfo();
-            if (cells == null) return null;
+            if (cells == null) {
+                log("CellInfo is null");
+                return null;
+            }
             final Map<String, Integer> countryCodeMap = new HashMap<>();
             int maxCount = 0;
             for (final CellInfo cell : cells) {
@@ -1830,6 +1833,7 @@ public class NetworkMonitor extends StateMachine {
         // Return customized context if carrier id can match a record in sCarrierIdToMccMnc.
         final MccMncOverrideInfo overrideInfo = getMccMncOverrideInfo();
         if (overrideInfo != null) {
+            log("Return customized context by MccMncOverrideInfo.");
             return getContextByMccMnc(overrideInfo.mcc, overrideInfo.mnc);
         }
 
@@ -1839,11 +1843,13 @@ public class NetworkMonitor extends StateMachine {
                 getResBooleanConfig(mContext, R.bool.config_no_sim_card_uses_neighbor_mcc, false);
         if (!useNeighborResource
                 || TelephonyManager.SIM_STATE_READY == mTelephonyManager.getSimState()) {
+            if (useNeighborResource) log("Sim state is ready, return original context.");
             return mContext;
         }
 
         final String mcc = getLocationMcc();
         if (TextUtils.isEmpty(mcc)) {
+            log("Return original context due to getting mcc failed.");
             return mContext;
         }
 
@@ -1915,17 +1921,6 @@ public class NetworkMonitor extends StateMachine {
         } catch (Resources.NotFoundException e) {
             return mDependencies.getDeviceConfigPropertyInt(NAMESPACE_CONNECTIVITY,
                     symbol, defaultValue);
-        }
-    }
-
-    @VisibleForTesting
-    boolean getResBooleanConfig(@NonNull final Context context,
-            @BoolRes int configResource, final boolean defaultValue) {
-        final Resources res = context.getResources();
-        try {
-            return res.getBoolean(configResource);
-        } catch (Resources.NotFoundException e) {
-            return defaultValue;
         }
     }
 
