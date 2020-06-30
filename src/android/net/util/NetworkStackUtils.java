@@ -18,10 +18,12 @@ package android.net.util;
 
 import android.content.Context;
 import android.content.pm.PackageManager.NameNotFoundException;
+import android.content.res.Resources;
 import android.provider.DeviceConfig;
 import android.util.Log;
 import android.util.SparseArray;
 
+import androidx.annotation.BoolRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
@@ -468,5 +470,18 @@ public class NetworkStackUtils {
             return Integer.MIN_VALUE;
         }
         return (int) value;
+    }
+
+    /**
+     * Gets boolean config from resources.
+     */
+    public static boolean getResBooleanConfig(@NonNull final Context context,
+            @BoolRes int configResource, final boolean defaultValue) {
+        final Resources res = context.getResources();
+        try {
+            return res.getBoolean(configResource);
+        } catch (Resources.NotFoundException e) {
+            return defaultValue;
+        }
     }
 }
