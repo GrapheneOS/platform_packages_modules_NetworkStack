@@ -34,10 +34,13 @@ import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
+import android.content.res.Resources;
 import android.provider.DeviceConfig;
 
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
+
+import com.android.networkstack.R;
 
 import org.junit.After;
 import org.junit.Before;
@@ -69,6 +72,7 @@ public class NetworkStackUtilsTest {
     @Mock private Context mContext;
     @Mock private PackageManager mPm;
     @Mock private PackageInfo mPi;
+    @Mock private Resources mResources;
 
     @Before
     public void setUp() throws Exception {
@@ -81,6 +85,7 @@ public class NetworkStackUtilsTest {
         doReturn(mPm).when(mContext).getPackageManager();
         doReturn(TEST_PACKAGE_NAME).when(mContext).getPackageName();
         doReturn(pi).when(mPm).getPackageInfo(anyString(), anyInt());
+        doReturn(mResources).when(mContext).getResources();
     }
 
     @After
@@ -198,5 +203,19 @@ public class NetworkStackUtilsTest {
 
         assertFalse(isIPv6ULA(parseNumericAddress("fe00::")));
         assertFalse(isIPv6ULA(parseNumericAddress("2480:1248::123:456")));
+    }
+
+    @Test
+    public void testGetResBooleanConfig() {
+        doReturn(true).when(mResources).getBoolean(R.bool.config_no_sim_card_uses_neighbor_mcc);
+        assertTrue(NetworkStackUtils.getResBooleanConfig(mContext,
+                R.bool.config_no_sim_card_uses_neighbor_mcc, false));
+        doReturn(false).when(mResources).getBoolean(R.bool.config_no_sim_card_uses_neighbor_mcc);
+        assertFalse(NetworkStackUtils.getResBooleanConfig(mContext,
+                R.bool.config_no_sim_card_uses_neighbor_mcc, false));
+        doThrow(new Resources.NotFoundException())
+                .when(mResources).getBoolean(eq(R.bool.config_no_sim_card_uses_neighbor_mcc));
+        assertFalse(NetworkStackUtils.getResBooleanConfig(mContext,
+                R.bool.config_no_sim_card_uses_neighbor_mcc, false));
     }
 }
