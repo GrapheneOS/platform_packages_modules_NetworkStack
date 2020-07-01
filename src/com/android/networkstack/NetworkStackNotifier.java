@@ -239,7 +239,7 @@ public class NetworkStackNotifier {
                     .setContentText(res.getString(R.string.tap_for_info))
                     .setContentIntent(mDependencies.getActivityPendingIntent(
                             getContextAsUser(mContext, UserHandle.CURRENT),
-                            infoIntent, PendingIntent.FLAG_UPDATE_CURRENT));
+                            infoIntent, PendingIntent.FLAG_IMMUTABLE));
 
             networkStatus.mShownNotification = NOTE_VENUE_INFO;
         } else if (showValidated) {
@@ -252,7 +252,7 @@ public class NetworkStackNotifier {
                     .setContentIntent(mDependencies.getActivityPendingIntent(
                             getContextAsUser(mContext, UserHandle.CURRENT),
                             new Intent(Settings.ACTION_WIFI_SETTINGS),
-                            PendingIntent.FLAG_UPDATE_CURRENT));
+                            PendingIntent.FLAG_IMMUTABLE));
 
             networkStatus.mShownNotification = NOTE_CONNECTED;
         } else {
