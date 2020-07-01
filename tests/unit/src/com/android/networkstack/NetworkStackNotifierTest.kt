@@ -22,7 +22,7 @@ import android.app.NotificationManager
 import android.app.NotificationManager.IMPORTANCE_DEFAULT
 import android.app.NotificationManager.IMPORTANCE_NONE
 import android.app.PendingIntent
-import android.app.PendingIntent.FLAG_UPDATE_CURRENT
+import android.app.PendingIntent.FLAG_IMMUTABLE
 import android.content.Context
 import android.content.Intent
 import android.content.res.Resources
@@ -57,6 +57,7 @@ import org.junit.runner.RunWith
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.ArgumentMatchers.eq
+import org.mockito.ArgumentMatchers.intThat
 import org.mockito.Captor
 import org.mockito.Mock
 import org.mockito.Mockito.any
@@ -188,7 +189,8 @@ class NetworkStackNotifierTest {
         assertEquals(CHANNEL_CONNECTED, note.channelId)
         assertEquals(timeout, note.timeoutAfter)
         verify(mDependencies).getActivityPendingIntent(
-                eq(mCurrentUserContext), mIntentCaptor.capture(), eq(FLAG_UPDATE_CURRENT))
+                eq(mCurrentUserContext), mIntentCaptor.capture(),
+                intThat { it or FLAG_IMMUTABLE != 0 })
     }
 
     private fun verifyCanceledNotificationAfterNetworkLost() {
@@ -279,7 +281,8 @@ class NetworkStackNotifierTest {
 
         verify(mNm).notify(eq(TEST_NETWORK_TAG), mNoteIdCaptor.capture(), mNoteCaptor.capture())
         verify(mDependencies).getActivityPendingIntent(
-                eq(mCurrentUserContext), mIntentCaptor.capture(), eq(FLAG_UPDATE_CURRENT))
+                eq(mCurrentUserContext), mIntentCaptor.capture(),
+                intThat { it or FLAG_IMMUTABLE != 0 })
         verifyVenueInfoIntent(mIntentCaptor.value)
         verifyCanceledNotificationAfterDefaultNetworkLost()
     }
