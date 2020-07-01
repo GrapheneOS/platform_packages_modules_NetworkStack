@@ -19,6 +19,7 @@ package com.android.server;
 import static android.net.dhcp.IDhcpServer.STATUS_INVALID_ARGUMENT;
 import static android.net.dhcp.IDhcpServer.STATUS_SUCCESS;
 import static android.net.dhcp.IDhcpServer.STATUS_UNKNOWN_ERROR;
+import static android.net.util.NetworkStackUtils.getResBooleanConfig;
 
 import static com.android.server.util.PermissionUtil.checkDumpPermission;
 
@@ -58,6 +59,7 @@ import androidx.annotation.VisibleForTesting;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.IndentingPrintWriter;
 import com.android.networkstack.NetworkStackNotifier;
+import com.android.networkstack.R;
 import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.server.connectivity.NetworkMonitor;
 import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
@@ -462,6 +464,11 @@ public class NetworkStackService extends Service {
                     pw.decreaseIndent();
                 }
             }
+
+            pw.println();
+            pw.print("useNeighborResource: ");
+            pw.println(getResBooleanConfig(mContext,
+                    R.bool.config_no_sim_card_uses_neighbor_mcc, false));
         }
 
         /**
