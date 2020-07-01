@@ -11,4 +11,4 @@ rule com.android.net.module.util.** com.android.networkstack.util.@1
 # TODO: move DhcpResults into services.net and delete from here
 rule android.net.DhcpResultsParcelable* @0
 rule android.net.DhcpResults* android.net.networkstack.DhcpResults@1
-rule android.net.LocalLog* android.net.networkstack.LocalLog@1
+rule android.util.LocalLog* android.net.networkstack.util.LocalLog@1
