@@ -25,11 +25,12 @@ import com.android.networkstack.apishim.common.CaptivePortalDataShim;
  * @hide
  */
 public class CapportApiProbeResult extends CaptivePortalProbeResult {
-    @NonNull
+    // CaptivePortalData may be null if the capport API does not send any valid reply.
+    @Nullable
     private final CaptivePortalDataShim mCapportData;
 
     public CapportApiProbeResult(@NonNull CaptivePortalProbeResult result,
-            @NonNull CaptivePortalDataShim capportData) {
+            @Nullable CaptivePortalDataShim capportData) {
         this(result.mHttpResponseCode, result.redirectUrl, result.detectUrl, capportData,
                 result.probeType);
     }
