@@ -2628,7 +2628,7 @@ public class NetworkMonitor extends StateMachine {
                     validationLog("Missing user-portal-url from capport response");
                     return new CapportApiProbeResult(
                             sendDnsAndHttpProbes(mProxy, mUrl, ValidationProbeEvent.PROBE_HTTP),
-                            capportData);
+                            null /* capportData */);
                 }
                 final String loginUrlString = capportData.getUserPortalUrl().toString();
                 // Starting from R (where CaptivePortalData was introduced), the captive portal app
