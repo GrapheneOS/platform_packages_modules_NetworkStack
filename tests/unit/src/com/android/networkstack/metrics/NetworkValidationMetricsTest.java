@@ -26,7 +26,6 @@ import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
 
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assume.assumeTrue;
 
 import android.net.INetworkMonitor;
 import android.net.NetworkCapabilities;
@@ -54,7 +53,7 @@ public class NetworkValidationMetricsTest {
     private static final String TEST_VENUE_INFO_URL = "https://venue.example.com/info";
     private static final int TTL_TOLERANCE_SECS = 10;
 
-    private static final NetworkCapabilities WIFI_NOT_METERED_CAPABILITIES =
+    private static final NetworkCapabilities WIFI_CAPABILITIES =
             new NetworkCapabilities()
                 .addTransportType(NetworkCapabilities.TRANSPORT_WIFI);
 
@@ -136,17 +135,17 @@ public class NetworkValidationMetricsTest {
 
     @Test
     public void testNetworkValidationMetrics_VerifyConsecutiveProbeFailure() throws Exception {
-        final NetworkValidationMetrics Metrics = new NetworkValidationMetrics();
-        Metrics.reset(WIFI_NOT_METERED_CAPABILITIES);
+        final NetworkValidationMetrics metrics = new NetworkValidationMetrics();
+        metrics.startCollection(WIFI_CAPABILITIES);
         // 1. PT_DNS probe
-        Metrics.setProbeEvent(ProbeType.PT_DNS, 1234, ProbeResult.PR_SUCCESS, null);
+        metrics.addProbeEvent(ProbeType.PT_DNS, 1234, ProbeResult.PR_SUCCESS, null);
         // 2. Consecutive PT_HTTP probe failure
         for (int i = 0; i < 30; i++) {
-            Metrics.setProbeEvent(ProbeType.PT_HTTP, 1234, ProbeResult.PR_FAILURE, null);
+            metrics.addProbeEvent(ProbeType.PT_HTTP, 1234, ProbeResult.PR_FAILURE, null);
         }
 
         // Write metric into statsd
-        final NetworkValidationReported stats = Metrics.sendValidationStats();
+        final NetworkValidationReported stats = metrics.maybeStopCollectionAndSend();
 
         // The maximum number of probe records should be the same as MAX_PROBE_EVENTS_COUNT
         final ProbeEvents probeEvents = stats.getProbeEvents();
@@ -156,40 +155,39 @@ public class NetworkValidationMetricsTest {
 
     @Test
     public void testNetworkValidationMetrics_VerifyCollectMetrics() throws Exception {
-        assumeTrue(CaptivePortalDataShimImpl.isSupported());
-        final long bytesRemaining = 10L;
+        final long bytesRemaining = 12_345L;
         final long secondsRemaining = 3000L;
         String apiContent = "{'captive': true,"
                 + "'user-portal-url': '" + TEST_LOGIN_URL + "',"
                 + "'venue-info-url': '" + TEST_VENUE_INFO_URL + "',"
                 + "'bytes-remaining': " + bytesRemaining + ","
                 + "'seconds-remaining': " + secondsRemaining + "}";
-        final NetworkValidationMetrics Metrics = new NetworkValidationMetrics();
+        final NetworkValidationMetrics metrics = new NetworkValidationMetrics();
         final int validationIndex = 1;
-        final long longlatency = 2147483649L;
-        Metrics.reset(WIFI_NOT_METERED_CAPABILITIES);
+        final long longlatency = Integer.MAX_VALUE + 12344567L;
+        metrics.startCollection(WIFI_CAPABILITIES);
 
         final JSONObject info = new JSONObject(apiContent);
-        final CaptivePortalDataShim captivePortalData =
-                CaptivePortalDataShimImpl.fromJson(info);
+        final CaptivePortalDataShim captivePortalData = CaptivePortalDataShimImpl.isSupported()
+                ? CaptivePortalDataShimImpl.fromJson(info) : null;
 
         // 1. PT_CAPPORT_API probe w CapportApiData info
-        Metrics.setProbeEvent(ProbeType.PT_CAPPORT_API, 1234, ProbeResult.PR_SUCCESS,
+        metrics.addProbeEvent(ProbeType.PT_CAPPORT_API, 1234, ProbeResult.PR_SUCCESS,
                 captivePortalData);
         // 2. PT_CAPPORT_API probe w/o CapportApiData info
-        Metrics.setProbeEvent(ProbeType.PT_CAPPORT_API, 1234, ProbeResult.PR_FAILURE, null);
+        metrics.addProbeEvent(ProbeType.PT_CAPPORT_API, 1234, ProbeResult.PR_FAILURE, null);
 
         // 3. PT_DNS probe
-        Metrics.setProbeEvent(ProbeType.PT_DNS, 5678, ProbeResult.PR_FAILURE, null);
+        metrics.addProbeEvent(ProbeType.PT_DNS, 5678, ProbeResult.PR_FAILURE, null);
 
         // 4. PT_HTTP probe
-        Metrics.setProbeEvent(ProbeType.PT_HTTP, longlatency, ProbeResult.PR_PORTAL, null);
+        metrics.addProbeEvent(ProbeType.PT_HTTP, longlatency, ProbeResult.PR_PORTAL, null);
 
         // add Validation result
-        Metrics.setValidationResult(INetworkMonitor.NETWORK_VALIDATION_RESULT_PARTIAL, null);
+        metrics.setValidationResult(INetworkMonitor.NETWORK_VALIDATION_RESULT_PARTIAL, null);
 
         // Write metric into statsd
-        final NetworkValidationReported stats = Metrics.sendValidationStats();
+        final NetworkValidationReported stats = metrics.maybeStopCollectionAndSend();
 
         // Verify: TransportType: WIFI
         assertEquals(TransportType.TT_WIFI, stats.getTransportType());
@@ -207,13 +205,13 @@ public class NetworkValidationMetricsTest {
         assertEquals(ProbeType.PT_CAPPORT_API, probeEvent.getProbeType());
         assertEquals(1234, probeEvent.getLatencyMicros());
         assertEquals(ProbeResult.PR_SUCCESS, probeEvent.getProbeResult());
-        assertEquals(true, probeEvent.hasCapportApiData());
         if (CaptivePortalDataShimImpl.isSupported()) {
+            assertTrue(probeEvent.hasCapportApiData());
             // Set secondsRemaining to 3000 and check that getRemainingTtlSecs is within 10 seconds
             final CapportApiData capportData = probeEvent.getCapportApiData();
             assertTrue(capportData.getRemainingTtlSecs() <= secondsRemaining);
             assertTrue(capportData.getRemainingTtlSecs() + TTL_TOLERANCE_SECS > secondsRemaining);
-            assertEquals(captivePortalData.getByteLimit(), capportData.getRemainingBytes());
+            assertEquals(captivePortalData.getByteLimit() / 1000, capportData.getRemainingBytes());
         } else {
             assertFalse(probeEvent.hasCapportApiData());
         }
