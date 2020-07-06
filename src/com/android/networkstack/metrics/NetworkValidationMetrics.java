@@ -60,9 +60,11 @@ public class NetworkValidationMetrics {
     public static final int MAX_PROBE_EVENTS_COUNT = 20;
 
     /**
-     *  Reset this NetworkValidationMetrics.
+     * Reset this NetworkValidationMetrics and start collecting timing and metrics.
+     *
+     * <p>This must be called when validation starts.
      */
-    public void reset(@Nullable NetworkCapabilities nc) {
+    public void startCollection(@Nullable NetworkCapabilities nc) {
         mStatsBuilder.clear();
         mProbeEventsBuilder.clear();
         mCapportApiDataBuilder.clear();
@@ -72,16 +74,23 @@ public class NetworkValidationMetrics {
     }
 
     /**
-     * Returns the enum TransportType
+     * Returns the enum TransportType.
      *
-     * @param NetworkCapabilities
+     * <p>This method only supports a limited set of common transport type combinations that can be
+     * measured through metrics, and will return {@link TransportType#TT_UNKNOWN} for others. This
+     * ensures that, for example, metrics for a TRANSPORT_NEW_UNKNOWN | TRANSPORT_ETHERNET network
+     * cannot get aggregated with / compared with a "normal" TRANSPORT_ETHERNET network without
+     * noticing.
+     *
+     * @param nc Capabilities to extract transport type from.
      * @return the TransportType which is defined in
      * core/proto/android/stats/connectivity/network_stack.proto
      */
     @VisibleForTesting
-    public static TransportType getTransportTypeFromNC(
-            @Nullable NetworkCapabilities nc) {
+    public static TransportType getTransportTypeFromNC(@Nullable NetworkCapabilities nc) {
         if (nc == null) return TransportType.TT_UNKNOWN;
+
+        final int trCount = nc.getTransportTypes().length;
         boolean hasCellular = nc.hasTransport(TRANSPORT_CELLULAR);
         boolean hasWifi = nc.hasTransport(TRANSPORT_WIFI);
         boolean hasBT = nc.hasTransport(TRANSPORT_BLUETOOTH);
@@ -90,13 +99,29 @@ public class NetworkValidationMetrics {
         boolean hasWifiAware = nc.hasTransport(TRANSPORT_WIFI_AWARE);
         boolean hasLopan = nc.hasTransport(TRANSPORT_LOWPAN);
 
-        if (hasCellular && hasWifi && hasVpn) return TransportType.TT_WIFI_CELLULAR_VPN;
-        if (hasWifi) return hasVpn ? TransportType.TT_WIFI_VPN : TransportType.TT_WIFI;
-        if (hasCellular) return hasVpn ? TransportType.TT_CELLULAR_VPN : TransportType.TT_CELLULAR;
-        if (hasBT) return hasVpn ? TransportType.TT_BLUETOOTH_VPN : TransportType.TT_BLUETOOTH;
-        if (hasEthernet) return hasVpn ? TransportType.TT_ETHERNET_VPN : TransportType.TT_ETHERNET;
-        if (hasWifiAware) return TransportType.TT_WIFI_AWARE;
-        if (hasLopan) return TransportType.TT_LOWPAN;
+        // VPN networks are not subject to validation and should not see validation stats, but
+        // metrics could be added to measure private DNS probes only.
+        if (trCount == 3 && hasCellular && hasWifi && hasVpn) {
+            return TransportType.TT_WIFI_CELLULAR_VPN;
+        }
+
+        if (trCount == 2 && hasVpn) {
+            if (hasWifi) return TransportType.TT_WIFI_VPN;
+            if (hasCellular) return TransportType.TT_CELLULAR_VPN;
+            if (hasBT) return TransportType.TT_BLUETOOTH_VPN;
+            if (hasEthernet) return TransportType.TT_ETHERNET_VPN;
+        }
+
+        if (trCount == 1) {
+            if (hasWifi) return TransportType.TT_WIFI;
+            if (hasCellular) return TransportType.TT_CELLULAR;
+            if (hasBT) return TransportType.TT_BLUETOOTH;
+            if (hasEthernet) return TransportType.TT_ETHERNET;
+            if (hasWifiAware) return TransportType.TT_WIFI_AWARE;
+            if (hasLopan) return TransportType.TT_LOWPAN;
+            // TODO: consider having a TT_VPN for VPN-only transport
+        }
+
         return TransportType.TT_UNKNOWN;
     }
 
@@ -146,6 +171,8 @@ public class NetworkValidationMetrics {
      */
     @VisibleForTesting
     public static ValidationResult validationResultToEnum(int result, String redirectUrl) {
+        // TODO: consider adding a VR_PARTIAL_SUCCESS field to track cases where users accepted
+        // partial connectivity
         if ((result & INetworkMonitor.NETWORK_VALIDATION_RESULT_VALID) != 0) {
             return ValidationResult.VR_SUCCESS;
         } else if (redirectUrl != null) {
@@ -158,12 +185,14 @@ public class NetworkValidationMetrics {
     }
 
     /**
-     * Write each network probe event to mProbeEventsBuilder.
+     * Add a network probe event to the metrics builder.
      */
-    public void setProbeEvent(final ProbeType type, final long durationUs, final ProbeResult result,
+    public void addProbeEvent(final ProbeType type, final long durationUs, final ProbeResult result,
             @Nullable final CaptivePortalDataShim capportData) {
         // When the number of ProbeEvents of mProbeEventsBuilder exceeds
         // MAX_PROBE_EVENTS_COUNT, stop adding ProbeEvent.
+        // TODO: consider recording the total number of probes in a separate field to know how
+        // many probes are skipped.
         if (mProbeEventsBuilder.getProbeEventCount() >= MAX_PROBE_EVENTS_COUNT) return;
 
         int latencyUs = NetworkStackUtils.saturatedCast(durationUs);
@@ -178,7 +207,9 @@ public class NetworkValidationMetrics {
                     (capportData.getExpiryTimeMillis() - currentTimeMillis()) / 1000;
             mCapportApiDataBuilder
                 .setRemainingTtlSecs(NetworkStackUtils.saturatedCast(secondsRemaining))
-                .setRemainingBytes(NetworkStackUtils.saturatedCast(capportData.getByteLimit()))
+                // TODO: rename this field to setRemainingKBytes, or use a long
+                .setRemainingBytes(
+                        NetworkStackUtils.saturatedCast(capportData.getByteLimit() / 1000))
                 .setHasPortalUrl((capportData.getUserPortalUrl() != null))
                 .setHasVenueInfo((capportData.getVenueInfoUrl() != null));
             probeEventBuilder.setCapportApiData(mCapportApiDataBuilder);
@@ -196,25 +227,28 @@ public class NetworkValidationMetrics {
 
     /**
      * Write the NetworkValidationReported proto to statsd.
+     *
+     * <p>This is a no-op if {@link #startCollection(NetworkCapabilities)} was not called since the
+     * last call to this method.
      */
-    public NetworkValidationReported sendValidationStats() {
+    public NetworkValidationReported maybeStopCollectionAndSend() {
         if (!mWatch.isStarted()) return null;
         mStatsBuilder.setProbeEvents(mProbeEventsBuilder);
         mStatsBuilder.setLatencyMicros(NetworkStackUtils.saturatedCast(mWatch.stop()));
         mStatsBuilder.setValidationIndex(mValidationIndex);
         // write a random value(0 ~ 999) for sampling.
         mStatsBuilder.setRandomNumber((int) (Math.random() * 1000));
-        final NetworkValidationReported mStats = mStatsBuilder.build();
-        final byte[] probeEvents = mStats.getProbeEvents().toByteArray();
+        final NetworkValidationReported stats = mStatsBuilder.build();
+        final byte[] probeEvents = stats.getProbeEvents().toByteArray();
 
         NetworkStackStatsLog.write(NetworkStackStatsLog.NETWORK_VALIDATION_REPORTED,
-                mStats.getTransportType().getNumber(),
+                stats.getTransportType().getNumber(),
                 probeEvents,
-                mStats.getValidationResult().getNumber(),
-                mStats.getLatencyMicros(),
-                mStats.getValidationIndex(),
-                mStats.getRandomNumber());
+                stats.getValidationResult().getNumber(),
+                stats.getLatencyMicros(),
+                stats.getValidationIndex(),
+                stats.getRandomNumber());
         mWatch.reset();
-        return mStats;
+        return stats;
     }
 }
