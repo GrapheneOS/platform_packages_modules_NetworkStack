@@ -93,6 +93,16 @@ public class CaptivePortalDataShimImpl
     }
 
     @Override
+    public long getByteLimit() {
+        return mData.getByteLimit();
+    }
+
+    @Override
+    public long getExpiryTimeMillis() {
+        return mData.getExpiryTimeMillis();
+    }
+
+    @Override
     public Uri getUserPortalUrl() {
         return mData.getUserPortalUrl();
     }

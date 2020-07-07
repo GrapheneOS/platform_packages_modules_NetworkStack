@@ -226,6 +226,15 @@ public class NetworkStackUtils {
     public static final String DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION =
             "dns_probe_private_ip_no_internet";
 
+    /**
+     * Experiment flag to enable validation metrics sent by NetworkMonitor.
+     *
+     * Metrics are sent by default. They can be disabled by setting the flag to a number greater
+     * than the APK version (for example 999999999).
+     * @see #isFeatureEnabled(Context, String, String, boolean)
+     */
+    public static final String VALIDATION_METRICS_VERSION = "validation_metrics_version";
+
     static {
         System.loadLibrary("networkstackutilsjni");
     }
@@ -348,6 +357,9 @@ public class NetworkStackUtils {
      * {@link DeviceConfig} is enabled by comparing NetworkStack module version {@link NetworkStack}
      * with current version of property. If this property version is valid, the corresponding
      * experimental feature would be enabled, otherwise disabled.
+     *
+     * This is useful to ensure that if a module install is rolled back, flags are not left fully
+     * rolled out on a version where they have not been well tested.
      * @param context The global context information about an app environment.
      * @param namespace The namespace containing the property to look up.
      * @param name The name of the property to look up.
@@ -363,6 +375,9 @@ public class NetworkStackUtils {
      * {@link DeviceConfig} is enabled by comparing NetworkStack module version {@link NetworkStack}
      * with current version of property. If this property version is valid, the corresponding
      * experimental feature would be enabled, otherwise disabled.
+     *
+     * This is useful to ensure that if a module install is rolled back, flags are not left fully
+     * rolled out on a version where they have not been well tested.
      * @param context The global context information about an app environment.
      * @param namespace The namespace containing the property to look up.
      * @param name The name of the property to look up.
