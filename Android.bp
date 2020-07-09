@@ -128,7 +128,7 @@ android_library {
     defaults: ["NetworkStackReleaseApiLevel"],
     srcs: [
         "src/**/*.java",
-        ":statslog-networkstack-java-gen-q",
+        ":statslog-networkstack-java-gen",
     ],
     // API stable uses a jarjared version of the shims
     static_libs: [
@@ -251,15 +251,6 @@ cc_library_shared {
         "-Werror",
         "-Wno-unused-parameter",
     ],
-}
-
-genrule {
-    name: "statslog-networkstack-java-gen-q",
-    tools: ["stats-log-api-gen"],
-    cmd: "$(location stats-log-api-gen) --java $(out) --module network_stack" +
-         " --javaPackage com.android.networkstack.metrics --javaClass NetworkStackStatsLog" +
-         " --compileQ",
-    out: ["com/android/networkstack/metrics/NetworkStackStatsLog.java"],
 }
 
 genrule {
