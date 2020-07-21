@@ -777,6 +777,7 @@ public class IpClient extends StateMachine {
 
     private void stopStateMachineUpdaters() {
         mObserverRegistry.unregisterObserver(mLinkObserver);
+        mLinkObserver.shutdown();
     }
 
     @Override
