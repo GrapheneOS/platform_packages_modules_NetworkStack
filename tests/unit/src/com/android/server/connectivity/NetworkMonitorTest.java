@@ -1931,12 +1931,11 @@ public class NetworkMonitorTest {
             throws Exception {
         assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
         setupTcpDataStall();
+        setTcpPollingInterval(0);
         // NM suspects data stall from TCP signal and sends data stall metrics.
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
         final WrappedNetworkMonitor nm = prepareNetworkMonitorForVerifyDataStall(nc);
-
         // Trigger a tcp event immediately.
-        setTcpPollingInterval(0);
         nm.sendTcpPollingEvent();
         // Allow only one transport type in the context of this test for simplification.
         final int[] transports = nc.getTransportTypes();
@@ -2546,8 +2545,8 @@ public class NetworkMonitorTest {
     }
 
     private void setTcpPollingInterval(int time) {
-        when(mDependencies.getDeviceConfigPropertyInt(any(),
-                eq(CONFIG_DATA_STALL_TCP_POLLING_INTERVAL), anyInt())).thenReturn(time);
+        doReturn(time).when(mDependencies).getDeviceConfigPropertyInt(any(),
+                eq(CONFIG_DATA_STALL_TCP_POLLING_INTERVAL), anyInt());
     }
 
     private void setFallbackUrl(String url) {
