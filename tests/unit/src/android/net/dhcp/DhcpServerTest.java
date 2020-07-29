@@ -53,6 +53,7 @@ import android.net.dhcp.DhcpLeaseRepository.OutOfAddressesException;
 import android.net.dhcp.DhcpServer.Clock;
 import android.net.dhcp.DhcpServer.Dependencies;
 import android.net.util.SharedLog;
+import android.os.ConditionVariable;
 import android.testing.AndroidTestingRunner;
 
 import androidx.test.filters.SmallTest;
@@ -130,10 +131,29 @@ public class DhcpServerTest {
     private ArgumentCaptor<Inet4Address> mResponseDstAddrCaptor;
 
     @NonNull
-    private DhcpServer mServer;
+    private MyDhcpServer mServer;
 
     @Nullable
     private String mPrevShareClassloaderProp;
+
+    private class MyDhcpServer extends DhcpServer {
+        private final ConditionVariable mCv = new ConditionVariable(false);
+
+        MyDhcpServer(Context context, String ifName, DhcpServingParams params, SharedLog log,
+                Dependencies deps) {
+            super(context, ifName, params, log, deps);
+        }
+
+        @Override
+        protected void onQuitting() {
+            super.onQuitting();
+            mCv.open();
+        }
+
+        public void waitForShutdown() {
+            assertTrue(mCv.block(TEST_TIMEOUT_MS));
+        }
+    }
 
     private final INetworkStackStatusCallback mAssertSuccessCallback =
             new INetworkStackStatusCallback.Stub() {
@@ -183,7 +203,7 @@ public class DhcpServerTest {
         when(mClock.elapsedRealtime()).thenReturn(TEST_CLOCK_TIME);
         when(mPacketListener.start()).thenReturn(true);
 
-        mServer = new DhcpServer(mContext, TEST_IFACE, makeServingParams(),
+        mServer = new MyDhcpServer(mContext, TEST_IFACE, makeServingParams(),
                 new SharedLog(DhcpServerTest.class.getSimpleName()), mDeps);
     }
 
@@ -191,7 +211,7 @@ public class DhcpServerTest {
     public void tearDown() throws Exception {
         verify(mRepository, never()).addLeaseCallbacks(eq(null));
         mServer.stop(mAssertSuccessCallback);
-        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
+        mServer.waitForShutdown();
         verify(mPacketListener, times(1)).stop();
     }
 
