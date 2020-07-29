@@ -25,7 +25,7 @@
     <!-- Permissions must be defined here, and not in the base manifest, as the network stack
          running in the system server process does not need any permission, and having privileged
          permissions added would cause crashes on startup unless they are also added to the
-         privileged permissions whitelist for that package. -->
+         privileged permissions allowlist for that package. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />

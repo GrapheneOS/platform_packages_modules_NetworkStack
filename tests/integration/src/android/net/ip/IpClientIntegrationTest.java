@@ -1013,7 +1013,7 @@ public class IpClientIntegrationTest {
         assertNotNull(params.macAddr);
         assertTrue(params.hasMacAddress);
 
-        // Sanity check.
+        //  Check interface "lo".
         params = InterfaceParams.getByName("lo");
         assertNotNull(params);
         assertEquals("lo", params.name);
