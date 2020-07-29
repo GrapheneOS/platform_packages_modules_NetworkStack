@@ -72,6 +72,14 @@ public class TapPacketReader extends PacketReader {
         return mReadHead.getValue().poll(timeoutMs, filter::test);
     }
 
+    /**
+     * Get the {@link ArrayTrackRecord} that records all packets received by the reader since its
+     * creation.
+     */
+    public ArrayTrackRecord<byte[]> getReceivedPackets() {
+        return mReceivedPackets;
+    }
+
     public void sendResponse(final ByteBuffer packet) throws IOException {
         try (FileOutputStream out = new FileOutputStream(mTapFd)) {
             byte[] packetBytes = new byte[packet.limit()];
