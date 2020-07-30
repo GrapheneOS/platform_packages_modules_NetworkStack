@@ -1012,7 +1012,7 @@ public class IpClientIntegrationTest {
         assertNotNull(params.macAddr);
         assertTrue(params.hasMacAddress);
 
-        // Sanity check.
+        //  Check interface "lo".
         params = InterfaceParams.getByName("lo");
         assertNotNull(params);
         assertEquals("lo", params.name);
@@ -1239,12 +1239,16 @@ public class IpClientIntegrationTest {
                         == (byte) ICMPV6_ROUTER_SOLICITATION;
     }
 
-    private void waitForRouterSolicitation() throws ParseException {
-        byte[] packet;
-        while ((packet = mPacketReader.popPacket(PACKET_TIMEOUT_MS)) != null) {
-            if (isRouterSolicitation(packet)) return;
-        }
-        fail("No router solicitation received on interface within timeout");
+    /**
+     * Wait for any router solicitation to have arrived since the packet reader was received.
+     *
+     * This method does not affect packets obtained via mPacketReader.popPacket. After any router
+     * solicitation has been received, calls to this method will just return immediately.
+     */
+    private void waitForRouterSolicitation() {
+        assertNotNull("No router solicitation received on interface within timeout",
+                mPacketReader.getReceivedPackets().poll(
+                        PACKET_TIMEOUT_MS, 0 /* pos */, this::isRouterSolicitation));
     }
 
     private void sendRouterAdvertisement(boolean waitForRs, short lifetime) throws Exception {
