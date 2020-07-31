@@ -56,22 +56,8 @@ filegroup {
         "src/android/net/netlink/*.java",
         "src/android/net/shared/NetdUtils.java",
         "src/android/net/shared/RouteUtils.java",
-        "src/android/net/util/FdEventsReader.java",
         "src/android/net/util/InterfaceParams.java",
-        "src/android/net/util/PacketReader.java",
-        "src/android/net/util/SharedLog.java"
+        "src/android/net/util/SharedLog.java",
     ],
     visibility: ["//frameworks/base/packages/Tethering"],
-}
-
-// Utility sources used by test libraries.
-// This is its own group to limit indiscriminate dependency of test code on production code.
-// TODO: move these classes and NetworkStack/tests/lib to frameworks/libs/net, and remove this.
-filegroup {
-    name: "net-module-utils-srcs-for-tests",
-    visibility: ["//packages/modules/NetworkStack/tests/lib"],
-    srcs: [
-        "src/android/net/util/FdEventsReader.java",
-        "src/android/net/util/PacketReader.java",
-    ],
 }
