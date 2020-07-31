@@ -22,7 +22,7 @@
          to the network stack app. Otherwise, the test APK will install, but when the device is
          rebooted, it will bootloop with something like:
 
-         05-14 00:41:02.723 18330 18330 E AndroidRuntime: java.lang.IllegalStateException: Signature|privileged permissions not in privapp-permissions whitelist: {com.android.server.networkstack.integrationtests: android.permission.CONNECTIVITY_INTERNAL}
+         05-14 00:41:02.723 18330 18330 E AndroidRuntime: java.lang.IllegalStateException: Signature|privileged permissions not in privapp-permissions allowlist: {com.android.server.networkstack.integrationtests: android.permission.CONNECTIVITY_INTERNAL}
     -->
     <uses-permission android:name="android.permission.MAINLINE_NETWORK_STACK" />
 
