@@ -95,6 +95,7 @@ java_defaults {
         "datastallprotosnano",
         "statsprotos",
         "captiveportal-lib",
+        "net-utils-device-common",
     ],
     plugins: ["java_api_finder"],
 }
