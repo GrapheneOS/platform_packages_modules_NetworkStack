@@ -14,14 +14,12 @@
  * limitations under the License.
  */
 
-package android.net.testutils
+package com.android.net.module.util
 
-import com.android.testutils.ArrayTrackRecord
-import com.android.testutils.ConcurrentIntepreter
+import com.android.testutils.ConcurrentInterpreter
 import com.android.testutils.InterpretException
 import com.android.testutils.InterpretMatcher
 import com.android.testutils.SyntaxException
-import com.android.testutils.TrackRecord
 import com.android.testutils.__FILE__
 import com.android.testutils.__LINE__
 import com.android.testutils.intArg
@@ -350,7 +348,7 @@ class TrackRecordTest {
     }
 }
 
-private object TRTInterpreter : ConcurrentIntepreter<TrackRecord<Int>>(interpretTable) {
+private object TRTInterpreter : ConcurrentInterpreter<TrackRecord<Int>>(interpretTable) {
     fun interpretTestSpec(spec: String, useReadHeads: Boolean) = if (useReadHeads) {
         interpretTestSpec(spec, initial = ArrayTrackRecord(),
                 threadTransform = { (it as ArrayTrackRecord).newReadHead() })
