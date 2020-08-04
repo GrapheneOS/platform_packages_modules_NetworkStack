@@ -1602,8 +1602,16 @@ public class IpClient extends StateMachine {
         mL2Key = info.l2Key;
         mCluster = info.cluster;
 
+        // Sometimes the wifi code passes in a null BSSID. Don't use Log.wtf in R because
+        // it's a known bug that will not be fixed in R.
         if (info.bssid == null || mCurrentBssid == null) {
-            Log.wtf(mTag, "bssid in the parcelable or current tracked bssid should be non-null");
+            final String msg = "bssid in the parcelable: " + info.bssid + " or "
+                    + "current tracked bssid: " + mCurrentBssid + " is null";
+            if (ShimUtils.isAtLeastS()) {
+                Log.wtf(mTag, msg);
+            } else {
+                Log.w(mTag, msg);
+            }
             return;
         }
 
