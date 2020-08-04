@@ -2097,7 +2097,8 @@ public class IpClientIntegrationTest {
     private void doDhcpRoamingTest(final boolean hasMismatchedIpAddress, final String displayName,
             final String ssid, final String bssid, final boolean expectRoaming) throws Exception {
         long currentTime = System.currentTimeMillis();
-        final ScanResultInfo scanResultInfo = makeScanResultInfo(ssid, bssid);
+        final ScanResultInfo scanResultInfo = (ssid == null || bssid == null)
+                ? null : makeScanResultInfo(ssid, bssid);
 
         doAnswer(invocation -> {
             // we don't rely on the Init-Reboot state to renew previous cached IP lease.
@@ -2169,6 +2170,12 @@ public class IpClientIntegrationTest {
     public void testDhcpRoaming_invalidBssid() throws Exception {
         doDhcpRoamingTest(false /* hasMismatchedIpAddress */, "\"0001docomo\"" /* display name */,
                 TEST_DHCP_ROAM_SSID, TEST_DHCP_ROAM_BSSID, false /* expectRoaming */);
+    }
+
+    @Test
+    public void testDhcpRoaming_nullScanResultInfo() throws Exception {
+        doDhcpRoamingTest(false /* hasMismatchedIpAddress */, "\"0001docomo\"" /* display name */,
+                null /* SSID */, null /* BSSID */, false /* expectRoaming */);
     }
 
     @Test
