@@ -20,7 +20,7 @@ import static android.net.InetAddresses.parseNumericAddress;
 import static android.net.dhcp.DhcpResultsParcelableUtil.fromStableParcelable;
 import static android.net.dhcp.DhcpResultsParcelableUtil.toStableParcelable;
 
-import static com.android.testutils.MiscAssertsKt.assertFieldCountEquals;
+import static com.android.testutils.MiscAsserts.assertFieldCountEquals;
 
 import static org.junit.Assert.assertEquals;
 

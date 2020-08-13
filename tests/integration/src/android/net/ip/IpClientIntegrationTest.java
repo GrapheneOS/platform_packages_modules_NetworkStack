@@ -144,7 +144,7 @@ import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
 import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
-import com.android.testutils.HandlerUtilsKt;
+import com.android.testutils.HandlerUtils;
 import com.android.testutils.TapPacketReader;
 
 import org.junit.After;
@@ -463,7 +463,7 @@ public class IpClientIntegrationTest {
         // that mock IpClient's dependencies might interact with those mocks while IpClient is
         // starting. This would cause UnfinishedStubbingExceptions as mocks cannot be interacted
         // with while they are being stubbed.
-        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
 
         // Tell the IpMemoryStore immediately to answer any question about network attributes with a
         // null response. Otherwise, the DHCP client will wait for two seconds before starting,
@@ -873,7 +873,7 @@ public class IpClientIntegrationTest {
             }
 
             mIpc.notifyPreconnectionComplete(false /* abort */);
-            HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+            HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
 
             if (shouldFirePreconnectionTimeout && !timeoutBeforePreconnectionComplete) {
                 mDependencies.mDhcpClient.sendMessage(DhcpClient.CMD_TIMEOUT);
@@ -906,7 +906,7 @@ public class IpClientIntegrationTest {
 
         if (!shouldAbortPreconnection) {
             mIpc.notifyPreconnectionComplete(true /* success */);
-            HandlerUtilsKt.waitForIdle(mDependencies.mDhcpClient.getHandler(), TEST_TIMEOUT_MS);
+            HandlerUtils.waitForIdle(mDependencies.mDhcpClient.getHandler(), TEST_TIMEOUT_MS);
 
             // If timeout fires after successful preconnection, right now DhcpClient will have
             // already entered BOUND state, the delayed CMD_TIMEOUT command would be ignored. So
@@ -1618,14 +1618,14 @@ public class IpClientIntegrationTest {
 
         // Check that the alarm is cancelled when IpClient is stopped.
         mIpc.stop();
-        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
         expectAlarmCancelled(inOrder, clearAlarm);
         expectNat64PrefixUpdate(inOrder, null);
 
         // Check that even if the alarm was already in the message queue while it was cancelled, it
         // is safely ignored.
         mIpc.getHandler().post(() -> clearAlarm.onAlarm());
-        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
     }
 
     private void addIpAddressAndWaitForIt(final String iface) throws Exception {
@@ -1660,7 +1660,7 @@ public class IpClientIntegrationTest {
         }
 
         // Wait for IpClient to process the addition of the address.
-        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
     }
 
     private void doIPv4OnlyProvisioningAndExitWithLeftAddress() throws Exception {
@@ -1724,7 +1724,7 @@ public class IpClientIntegrationTest {
 
         // Force to enter RunningState.
         mIpc.notifyPreconnectionComplete(false /* abort */);
-        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
     }
 
     @Test
@@ -1832,7 +1832,7 @@ public class IpClientIntegrationTest {
 
         // Force IpClient transition to RunningState from PreconnectionState.
         mIpc.notifyPreconnectionComplete(false /* success */);
-        HandlerUtilsKt.waitForIdle(mDependencies.mDhcpClient.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mDependencies.mDhcpClient.getHandler(), TEST_TIMEOUT_MS);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
     }
 
@@ -2146,7 +2146,7 @@ public class IpClientIntegrationTest {
         mPacketReader.sendResponse(buildDhcpAckPacket(packet,
                 hasMismatchedIpAddress ? CLIENT_ADDR_NEW : CLIENT_ADDR, TEST_LEASE_DURATION_S,
                 (short) TEST_DEFAULT_MTU, false /* rapidcommit */, null /* captivePortalUrl */));
-        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
         if (hasMismatchedIpAddress) {
             // notifyFailure
             ArgumentCaptor<DhcpResultsParcelable> captor =

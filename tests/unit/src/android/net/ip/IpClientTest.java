@@ -61,7 +61,7 @@ import com.android.server.NetworkObserver;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService;
 import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
-import com.android.testutils.HandlerUtilsKt;
+import com.android.testutils.HandlerUtils;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -262,7 +262,7 @@ public class IpClientTest {
                 lp.getDnsServers().stream().map(InetAddress::getHostAddress)
                         .toArray(String[]::new));
 
-        HandlerUtilsKt.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
         verify(mCb, never()).onProvisioningFailure(any());
         verify(mIpMemoryStore, never()).storeNetworkAttributes(any(), any(), any());
 
@@ -301,7 +301,7 @@ public class IpClientTest {
 
         reset(mCb);
         doIPv6ProvisioningLoss(lp);
-        HandlerUtilsKt.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
         verify(mCb).onProvisioningFailure(lp);
         verify(mCb).onLinkPropertiesChange(makeEmptyLinkProperties(TEST_IFNAME));
 
@@ -326,11 +326,11 @@ public class IpClientTest {
         final IpClient ipc = doProvisioningWithDefaultConfiguration();
         final LinkProperties lp = makeIPv6ProvisionedLinkProperties();
         addIPv4Provisioning(lp);
-        HandlerUtilsKt.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
 
         reset(mCb);
         doIPv6ProvisioningLoss(lp);
-        HandlerUtilsKt.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
         if (avoidBadWifi) { // Provisioning failure is expected only when avoidBadWifi is true
             verify(mCb).onProvisioningFailure(lp);
             verify(mCb).onLinkPropertiesChange(makeEmptyLinkProperties(TEST_IFNAME));
