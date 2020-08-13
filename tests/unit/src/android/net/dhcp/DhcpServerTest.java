@@ -59,7 +59,7 @@ import android.testing.AndroidTestingRunner;
 import androidx.test.filters.SmallTest;
 
 import com.android.net.module.util.Inet4AddressUtils;
-import com.android.testutils.HandlerUtilsKt;
+import com.android.testutils.HandlerUtils;
 
 import org.junit.After;
 import org.junit.Before;
@@ -187,7 +187,7 @@ public class DhcpServerTest {
 
     private void startServer() throws Exception {
         mServer.start(mAssertSuccessCallback);
-        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
     }
 
     @Before
@@ -225,7 +225,7 @@ public class DhcpServerTest {
     @Test
     public void testStartWithCallbacks() throws Exception {
         mServer.start(mAssertSuccessCallback, mEventCallbacks);
-        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
         verify(mRepository).addLeaseCallbacks(eq(mEventCallbacks));
     }
 
@@ -242,7 +242,7 @@ public class DhcpServerTest {
                 (short) 0 /* secs */, INADDR_ANY /* relayIp */, TEST_CLIENT_MAC_BYTES,
                 false /* broadcast */, INADDR_ANY /* srcIp */, false /* rapidCommit */);
         mServer.sendMessage(CMD_RECEIVE_PACKET, discover);
-        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
 
         assertResponseSentTo(TEST_CLIENT_ADDR);
         final DhcpOfferPacket packet = assertOffer(getPacket());
@@ -261,7 +261,7 @@ public class DhcpServerTest {
                 (short) 0 /* secs */, INADDR_ANY /* relayIp */, TEST_CLIENT_MAC_BYTES,
                 false /* broadcast */, INADDR_ANY /* srcIp */, true /* rapidCommit */);
         mServer.sendMessage(CMD_RECEIVE_PACKET, discover);
-        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
 
         assertResponseSentTo(TEST_CLIENT_ADDR);
         final DhcpAckPacket packet = assertAck(getPacket());
@@ -280,7 +280,7 @@ public class DhcpServerTest {
                 (short) 0 /* secs */, INADDR_ANY /* relayIp */, TEST_CLIENT_MAC_BYTES,
                 false /* broadcast */, INADDR_ANY /* srcIp */, false /* rapidCommit */);
         mServer.sendMessage(CMD_RECEIVE_PACKET, discover);
-        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
 
         assertResponseSentTo(INADDR_BROADCAST);
         final DhcpNakPacket packet = assertNak(getPacket());
@@ -309,7 +309,7 @@ public class DhcpServerTest {
         request.mHostName = TEST_HOSTNAME;
         request.mRequestedParams = new byte[] { DHCP_HOST_NAME };
         mServer.sendMessage(CMD_RECEIVE_PACKET, request);
-        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
 
         assertResponseSentTo(TEST_CLIENT_ADDR);
         final DhcpAckPacket packet = assertAck(getPacket());
@@ -327,7 +327,7 @@ public class DhcpServerTest {
 
         final DhcpRequestPacket request = makeRequestSelectingPacket();
         mServer.sendMessage(CMD_RECEIVE_PACKET, request);
-        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
 
         assertResponseSentTo(INADDR_BROADCAST);
         final DhcpNakPacket packet = assertNak(getPacket());
@@ -342,7 +342,7 @@ public class DhcpServerTest {
                 TEST_SERVER_ADDR, TEST_CLIENT_ADDR,
                 INADDR_ANY /* relayIp */, TEST_CLIENT_MAC_BYTES);
         mServer.sendMessage(CMD_RECEIVE_PACKET, release);
-        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
 
         verify(mRepository, times(1))
                 .releaseLease(isNull(), eq(TEST_CLIENT_MAC), eq(TEST_CLIENT_ADDR));
@@ -368,7 +368,7 @@ public class DhcpServerTest {
                 INADDR_ANY /* nextIp */, INADDR_ANY /* relayIp */, TEST_CLIENT_MAC_BYTES,
                 TEST_CLIENT_ADDR /* requestedIp */, TEST_SERVER_ADDR /* serverIdentifier */);
         mServer.sendMessage(CMD_RECEIVE_PACKET, decline);
-        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
 
         verify(mRepository).markAndReleaseDeclinedLease(isNull(), eq(TEST_CLIENT_MAC),
                 eq(TEST_CLIENT_ADDR));
@@ -393,7 +393,7 @@ public class DhcpServerTest {
         params.changePrefixOnDecline = changePrefixOnDecline;
 
         mServer.updateParams(params, mAssertSuccessCallback);
-        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
     }
 
     @Test
@@ -402,7 +402,7 @@ public class DhcpServerTest {
                 eq(TEST_CLIENT_ADDR))).thenReturn(true);
 
         mServer.start(mAssertSuccessCallback, mEventCallbacks);
-        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
         verify(mRepository).addLeaseCallbacks(eq(mEventCallbacks));
 
         // Enable changePrefixOnDecline
@@ -436,7 +436,7 @@ public class DhcpServerTest {
                 (short) 0 /* secs */, INADDR_ANY /* relayIp */, TEST_CLIENT_MAC_BYTES,
                 false /* broadcast */, INADDR_ANY /* srcIp */, false /* rapidCommit */);
         mServer.sendMessage(CMD_RECEIVE_PACKET, discover);
-        HandlerUtilsKt.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mServer.getHandler(), TEST_TIMEOUT_MS);
         assertResponseSentTo(clientAddr);
         final DhcpOfferPacket packet = assertOffer(getPacket());
         assertMatchesLease(packet, serverAddr, clientAddr, null);
