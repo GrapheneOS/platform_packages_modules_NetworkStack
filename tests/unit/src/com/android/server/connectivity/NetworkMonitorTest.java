@@ -152,7 +152,7 @@ import com.android.server.connectivity.nano.DnsEvent;
 import com.android.server.connectivity.nano.WifiData;
 import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
-import com.android.testutils.HandlerUtilsKt;
+import com.android.testutils.HandlerUtils;
 
 import com.google.protobuf.nano.MessageNano;
 
@@ -631,7 +631,7 @@ public class NetworkMonitorTest {
         final WrappedNetworkMonitor nm = new WrappedNetworkMonitor();
         nm.start();
         setNetworkCapabilities(nm, nc);
-        HandlerUtilsKt.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
         mCreatedNetworkMonitors.add(nm);
         when(mTstDependencies.isTcpInfoParsingSupported()).thenReturn(false);
 
@@ -655,7 +655,7 @@ public class NetworkMonitorTest {
 
     private void setNetworkCapabilities(NetworkMonitor nm, NetworkCapabilities nc) {
         nm.notifyNetworkCapabilitiesChanged(nc);
-        HandlerUtilsKt.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
     }
 
     @Test
@@ -1651,7 +1651,7 @@ public class NetworkMonitorTest {
         // Trigger a tcp event immediately.
         setTcpPollingInterval(0);
         wrappedMonitor.sendTcpPollingEvent();
-        HandlerUtilsKt.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
         assertFalse(wrappedMonitor.isDataStall());
 
         when(mTst.getLatestReceivedCount()).thenReturn(0);
@@ -1659,7 +1659,7 @@ public class NetworkMonitorTest {
         // Trigger a tcp event immediately.
         setTcpPollingInterval(0);
         wrappedMonitor.sendTcpPollingEvent();
-        HandlerUtilsKt.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
         assertTrue(wrappedMonitor.isDataStall());
         verify(mCallbacks).notifyDataStallSuspected(matchTcpDataStallParcelable());
     }
@@ -1679,7 +1679,7 @@ public class NetworkMonitorTest {
         // Trigger a tcp event immediately.
         setTcpPollingInterval(0);
         nm.sendTcpPollingEvent();
-        HandlerUtilsKt.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
         assertFalse(nm.isDataStall());
     }
 
@@ -1690,7 +1690,7 @@ public class NetworkMonitorTest {
         WrappedNetworkMonitor wrappedMonitor = makeMonitor(CELL_METERED_CAPABILITIES);
         makeDnsSuccessEvent(wrappedMonitor, 1);
         wrappedMonitor.sendTcpPollingEvent();
-        HandlerUtilsKt.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
         assertFalse(wrappedMonitor.isDataStall());
         verify(mTst, never()).isDataStallSuspected();
         verify(mTst, never()).pollSocketsInfo();
@@ -1813,7 +1813,7 @@ public class NetworkMonitorTest {
 
         wnm.forceReevaluation(Process.myUid());
         // ProbeCompleted should be reset to 0
-        HandlerUtilsKt.waitForIdle(wnm.getHandler(), HANDLER_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(wnm.getHandler(), HANDLER_TIMEOUT_MS);
         assertEquals(wnm.getEvaluationState().getProbeCompletedResult(), 0);
         verifyNetworkTested(NETWORK_VALIDATION_RESULT_VALID, PROBES_PRIVDNS_VALID);
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS)).notifyProbeStatusChanged(
@@ -2626,7 +2626,7 @@ public class NetworkMonitorTest {
         final NetworkMonitor monitor = makeMonitor(nc);
         monitor.notifyNetworkConnected(lp, nc);
         verifyNetworkTested(testResult, probesSucceeded, redirectUrl);
-        HandlerUtilsKt.waitForIdle(monitor.getHandler(), HANDLER_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(monitor.getHandler(), HANDLER_TIMEOUT_MS);
 
         return monitor;
     }
