@@ -29,6 +29,7 @@ aidl_interface {
                 "//apex_available:platform",
                 "com.android.wifi",
                 "com.android.bluetooth.updatable",
+                "com.android.tethering",
             ],
             // this is part of updatable modules(NetworkStack) which targets 29(Q)
             min_sdk_version: "29",
