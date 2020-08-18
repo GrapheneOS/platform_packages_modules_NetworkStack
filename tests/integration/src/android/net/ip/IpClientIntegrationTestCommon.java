@@ -169,6 +169,7 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileReader;
 import java.io.IOException;
@@ -2653,5 +2654,39 @@ public abstract class IpClientIntegrationTestCommon {
         // Client processes DHCPACK packet normally and transits to the ConfiguringInterfaceState
         // due to the null V6ONLY_WAIT.
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
+    }
+
+    private static int getNumOpenFds() {
+        return new File("/proc/" + Os.getpid() + "/fd").listFiles().length;
+    }
+
+    private void shutdownAndRecreateIpClient() throws Exception {
+        mIpc.shutdown();
+        awaitIpClientShutdown();
+        mIpc = makeIpClient();
+    }
+
+    @Test
+    public void testNoFdLeaks() throws Exception {
+        // Shut down and restart IpClient once to ensure that any fds that are opened the first
+        // time it runs do not cause the test to fail.
+        doDualStackProvisioning();
+        shutdownAndRecreateIpClient();
+
+        // Unfortunately we cannot use a large number of iterations as it would make the test run
+        // too slowly. On crosshatch-eng each iteration takes ~250ms.
+        final int iterations = 10;
+        final int before = getNumOpenFds();
+        for (int i = 0; i < iterations; i++) {
+            doDualStackProvisioning();
+            shutdownAndRecreateIpClient();
+            // The last time this loop runs, mIpc will be shut down in tearDown.
+        }
+        final int after = getNumOpenFds();
+
+        // Check that the number of open fds is the same as before.
+        // If this exact match becomes flaky, we could add some tolerance here (e.g., allow 2-3
+        // extra fds), since it's likely that any leak would at least leak one FD per loop.
+        assertEquals("Fd leak after " + iterations + " iterations: ", before, after);
     }
 }
