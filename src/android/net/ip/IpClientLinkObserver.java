@@ -161,8 +161,12 @@ public class IpClientLinkObserver implements NetworkObserver {
             // now empty. Note that from the moment that the interface is removed, any further
             // interface-specific messages (e.g., RTM_DELADDR) will not reach us, because the netd
             // code that parses them will not be able to resolve the ifindex to an interface name.
-            clearLinkProperties();
-            mCallback.update(getInterfaceLinkState());
+            final boolean linkState;
+            synchronized (this) {
+                clearLinkProperties();
+                linkState = getInterfaceLinkStateLocked();
+            }
+            mCallback.update(linkState);
         }
     }
 
@@ -170,7 +174,9 @@ public class IpClientLinkObserver implements NetworkObserver {
     public void onInterfaceLinkStateChanged(String iface, boolean state) {
         if (mInterfaceName.equals(iface)) {
             maybeLog("interfaceLinkStateChanged", iface + (state ? " up" : " down"));
-            setInterfaceLinkState(state);
+            synchronized (this) {
+                setInterfaceLinkStateLocked(state);
+            }
         }
     }
 
@@ -178,12 +184,14 @@ public class IpClientLinkObserver implements NetworkObserver {
     public void onInterfaceAddressUpdated(LinkAddress address, String iface) {
         if (mInterfaceName.equals(iface)) {
             maybeLog("addressUpdated", iface, address);
-            boolean changed;
+            final boolean changed;
+            final boolean linkState;
             synchronized (this) {
                 changed = mLinkProperties.addLinkAddress(address);
+                linkState = getInterfaceLinkStateLocked();
             }
             if (changed) {
-                mCallback.update(getInterfaceLinkState());
+                mCallback.update(linkState);
             }
         }
     }
@@ -192,12 +200,14 @@ public class IpClientLinkObserver implements NetworkObserver {
     public void onInterfaceAddressRemoved(LinkAddress address, String iface) {
         if (mInterfaceName.equals(iface)) {
             maybeLog("addressRemoved", iface, address);
-            boolean changed;
+            final boolean changed;
+            final boolean linkState;
             synchronized (this) {
                 changed = mLinkProperties.removeLinkAddress(address);
+                linkState = getInterfaceLinkStateLocked();
             }
             if (changed) {
-                mCallback.update(getInterfaceLinkState());
+                mCallback.update(linkState);
             }
         }
     }
@@ -206,12 +216,14 @@ public class IpClientLinkObserver implements NetworkObserver {
     public void onRouteUpdated(RouteInfo route) {
         if (mInterfaceName.equals(route.getInterface())) {
             maybeLog("routeUpdated", route);
-            boolean changed;
+            final boolean changed;
+            final boolean linkState;
             synchronized (this) {
                 changed = mLinkProperties.addRoute(route);
+                linkState = getInterfaceLinkStateLocked();
             }
             if (changed) {
-                mCallback.update(getInterfaceLinkState());
+                mCallback.update(linkState);
             }
         }
     }
@@ -220,12 +232,14 @@ public class IpClientLinkObserver implements NetworkObserver {
     public void onRouteRemoved(RouteInfo route) {
         if (mInterfaceName.equals(route.getInterface())) {
             maybeLog("routeRemoved", route);
-            boolean changed;
+            final boolean changed;
+            final boolean linkState;
             synchronized (this) {
                 changed = mLinkProperties.removeRoute(route);
+                linkState = getInterfaceLinkStateLocked();
             }
             if (changed) {
-                mCallback.update(getInterfaceLinkState());
+                mCallback.update(linkState);
             }
         }
     }
@@ -234,12 +248,14 @@ public class IpClientLinkObserver implements NetworkObserver {
     public void onInterfaceDnsServerInfo(String iface, long lifetime, String[] addresses) {
         if (mInterfaceName.equals(iface)) {
             maybeLog("interfaceDnsServerInfo", Arrays.toString(addresses));
-            boolean changed = mDnsServerRepository.addServers(lifetime, addresses);
+            final boolean changed = mDnsServerRepository.addServers(lifetime, addresses);
+            final boolean linkState;
             if (changed) {
                 synchronized (this) {
                     mDnsServerRepository.setDnsServersOn(mLinkProperties);
+                    linkState = getInterfaceLinkStateLocked();
                 }
-                mCallback.update(getInterfaceLinkState());
+                mCallback.update(linkState);
             }
         }
     }
@@ -264,11 +280,11 @@ public class IpClientLinkObserver implements NetworkObserver {
         mLinkProperties.setInterfaceName(mInterfaceName);
     }
 
-    private synchronized boolean getInterfaceLinkState() {
+    private boolean getInterfaceLinkStateLocked() {
         return mInterfaceLinkState;
     }
 
-    private synchronized void setInterfaceLinkState(boolean state) {
+    private void setInterfaceLinkStateLocked(boolean state) {
         mInterfaceLinkState = state;
     }
 
@@ -384,7 +400,7 @@ public class IpClientLinkObserver implements NetworkObserver {
                 cancelPref64Alarm();
             }
 
-            mCallback.update(getInterfaceLinkState());
+            mCallback.update(getInterfaceLinkStateLocked());
         }
 
         private void processPref64Option(StructNdOptPref64 opt, final long now) {
