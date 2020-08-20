@@ -1583,7 +1583,11 @@ public class IpClient extends StateMachine {
             return;
         }
 
-        if (params.index != mInterfaceParams.index) {
+        // Check whether "mInterfaceParams" is null or not to prevent the potential NPE
+        // introduced if the interface was initially not found, but came back before this
+        // method was called. See b/162808916 for more details. TODO: query the new interface
+        // parameters by the interface index instead and check that the index has not changed.
+        if (mInterfaceParams == null || params.index != mInterfaceParams.index) {
             Log.w(mTag, "interface: " + mInterfaceName + " has a different index: " + params.index);
             return;
         }

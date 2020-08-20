@@ -281,6 +281,7 @@ public class IpClientIntegrationTest {
         private DhcpClient mDhcpClient;
         private boolean mIsHostnameConfigurationEnabled;
         private String mHostname;
+        private boolean mIsInterfaceRecovered;
 
         public void setDhcpLeaseCacheEnabled(final boolean enable) {
             mIsDhcpLeaseCacheEnabled = enable;
@@ -297,6 +298,23 @@ public class IpClientIntegrationTest {
         public void setHostnameConfiguration(final boolean enable, final String hostname) {
             mIsHostnameConfigurationEnabled = enable;
             mHostname = hostname;
+        }
+
+        // Enable this flag to simulate the interface has been added back after removing
+        // on the provisioning start. However, the actual tap interface has been removed,
+        // interface parameters query will get null when attempting to restore Interface
+        // MTU. Create a new InterfaceParams instance and return instead just for interface
+        // toggling test case.
+        public void simulateInterfaceRecover() {
+            mIsInterfaceRecovered = true;
+        }
+
+        @Override
+        public InterfaceParams getInterfaceParams(String ifname) {
+            return mIsInterfaceRecovered
+                    ? new InterfaceParams(ifname, 1 /* index */,
+                            MacAddress.fromString("00:11:22:33:44:55"))
+                    : super.getInterfaceParams(ifname);
         }
 
         @Override
@@ -1229,6 +1247,36 @@ public class IpClientIntegrationTest {
         verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, 0 /* mtu */);
         assertEquals(NetworkInterface.getByName(mIfaceName).getMTU(), TEST_DEFAULT_MTU);
+    }
+
+    @Test
+    public void testRestoreInitialInterfaceMtu_removeInterfaceAndAddback() throws Exception {
+        doAnswer(invocation -> {
+            final LinkProperties lp = invocation.getArgument(0);
+            assertEquals(lp.getInterfaceName(), mIfaceName);
+            assertEquals(0, lp.getLinkAddresses().size());
+            assertEquals(0, lp.getDnsServers().size());
+
+            mDependencies.simulateInterfaceRecover();
+            return null;
+        }).when(mCb).onProvisioningFailure(any());
+
+        final ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIpReachabilityMonitor()
+                .withoutIPv6()
+                .build();
+
+        // Intend to remove the tap interface and force IpClient throw provisioning failure
+        // due to that interface is not found.
+        removeTapInterface(mTapFd);
+        assertNull(InterfaceParams.getByName(mIfaceName));
+
+        mIpc.startProvisioning(config);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(any());
+
+        // Make sure everything queued by this test was processed (e.g. transition to StoppingState
+        // from ClearingIpAddressState) and tearDown will check if IpClient exits normally or crash.
+        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
     }
 
     private boolean isRouterSolicitation(final byte[] packetBytes) {
