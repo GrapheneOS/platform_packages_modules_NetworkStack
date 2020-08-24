@@ -1541,6 +1541,32 @@ public class NetworkMonitorTest {
     }
 
     @Test
+    public void testIsCaptivePortal_TestUrlsWithUrlOverlays() throws Exception {
+        setupResourceForMultipleProbes();
+        doReturn(TEST_HTTPS_URL).when(mResources)
+                .getString(R.string.config_captive_portal_https_url);
+        doReturn(TEST_HTTP_URL).when(mResources)
+                .getString(R.string.config_captive_portal_http_url);
+
+        setDeviceConfig(TEST_URL_EXPIRATION_TIME,
+                String.valueOf(currentTimeMillis() + TimeUnit.MINUTES.toMillis(9)));
+        setDeviceConfig(TEST_CAPTIVE_PORTAL_HTTPS_URL, TEST_OVERRIDE_URL);
+        setDeviceConfig(TEST_CAPTIVE_PORTAL_HTTP_URL, TEST_OVERRIDE_URL);
+        setStatus(mTestOverriddenUrlConnection, 204);
+
+        runValidatedNetworkTest();
+        verify(mHttpsConnection, never()).getResponseCode();
+        verify(mHttpConnection, never()).getResponseCode();
+        verify(mOtherHttpsConnection1, never()).getResponseCode();
+        verify(mOtherHttpsConnection2, never()).getResponseCode();
+        verify(mOtherHttpConnection1, never()).getResponseCode();
+        verify(mOtherHttpConnection2, never()).getResponseCode();
+
+        // Used for both HTTP and HTTPS: can be called once (if HTTPS validates first) or twice
+        verify(mTestOverriddenUrlConnection, atLeastOnce()).getResponseCode();
+    }
+
+    @Test
     public void testIsDataStall_EvaluationDisabled() {
         setDataStallEvaluationType(0);
         WrappedNetworkMonitor wrappedMonitor = makeCellMeteredNetworkMonitor();
