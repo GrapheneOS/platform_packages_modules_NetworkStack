@@ -22,4 +22,5 @@ interface INetworkStackConnector {
   oneway void makeNetworkMonitor(in android.net.Network network, String name, in android.net.INetworkMonitorCallbacks cb);
   oneway void makeIpClient(in String ifName, in android.net.ip.IIpClientCallbacks callbacks);
   oneway void fetchIpMemoryStore(in android.net.IIpMemoryStoreCallbacks cb);
+  oneway void allowTestUid(int uid, in android.net.INetworkStackStatusCallback cb);
 }

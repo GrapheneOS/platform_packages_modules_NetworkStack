@@ -50,6 +50,17 @@
                 <action android:name="android.net.INetworkStackConnector"/>
             </intent-filter>
         </service>
+        <!-- Test instrumentation service, only usable on debuggable builds.
+             The service is protected by NETWORK_SETTINGS permissions as there is no better
+             networking-related permission that exists on Q, is sufficiently protected (signature),
+             and can be obtained via shell permissions. -->
+        <service android:name="com.android.server.TestNetworkStackService"
+                 android:permission="android.permission.NETWORK_SETTINGS"
+                 android:exported="true">
+            <intent-filter>
+                <action android:name="android.net.INetworkStackConnector.Test"/>
+            </intent-filter>
+        </service>
         <service android:name="com.android.server.connectivity.ipmemorystore.RegularMaintenanceJobService"
                  android:permission="android.permission.BIND_JOB_SERVICE" >
         </service>
