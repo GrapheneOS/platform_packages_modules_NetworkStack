@@ -1904,7 +1904,7 @@ public class NetworkMonitor extends StateMachine {
     }
 
     @Nullable
-    private String getTestUrl(@NonNull String key) {
+    private URL getTestUrl(@NonNull String key) {
         final String strExpiration = mDependencies.getDeviceConfigProperty(NAMESPACE_CONNECTIVITY,
                 TEST_URL_EXPIRATION_TIME, null);
         if (strExpiration == null) return null;
@@ -1920,13 +1920,13 @@ public class NetworkMonitor extends StateMachine {
         final long now = System.currentTimeMillis();
         if (expTime < now || (expTime - now) > TEST_URL_EXPIRATION_MS) return null;
 
-        return mDependencies.getDeviceConfigProperty(NAMESPACE_CONNECTIVITY,
+        final String strUrl = mDependencies.getDeviceConfigProperty(NAMESPACE_CONNECTIVITY,
                 key, null /* defaultValue */);
+        if (!isValidTestUrl(strUrl)) return null;
+        return makeURL(strUrl);
     }
 
     private String getCaptivePortalServerHttpsUrl() {
-        final String testUrl = getTestUrl(TEST_CAPTIVE_PORTAL_HTTPS_URL);
-        if (isValidTestUrl(testUrl)) return testUrl;
         return getSettingFromResource(mCustomizedContext,
                 R.string.config_captive_portal_https_url, CAPTIVE_PORTAL_HTTPS_URL,
                 mCustomizedContext.getResources().getString(
@@ -2007,8 +2007,6 @@ public class NetworkMonitor extends StateMachine {
      * on one URL that can be used, while NetworkMonitor may implement more complex logic.
      */
     public String getCaptivePortalServerHttpUrl() {
-        final String testUrl = getTestUrl(TEST_CAPTIVE_PORTAL_HTTP_URL);
-        if (isValidTestUrl(testUrl)) return testUrl;
         return getSettingFromResource(mCustomizedContext,
                 R.string.config_captive_portal_http_url, CAPTIVE_PORTAL_HTTP_URL,
                 mCustomizedContext.getResources().getString(
@@ -2086,6 +2084,9 @@ public class NetworkMonitor extends StateMachine {
     }
 
     private URL[] makeCaptivePortalHttpsUrls() {
+        final URL testUrl = getTestUrl(TEST_CAPTIVE_PORTAL_HTTPS_URL);
+        if (testUrl != null) return new URL[] { testUrl };
+
         final String firstUrl = getCaptivePortalServerHttpsUrl();
         try {
             final URL[] settingProviderUrls =
@@ -2104,6 +2105,9 @@ public class NetworkMonitor extends StateMachine {
     }
 
     private URL[] makeCaptivePortalHttpUrls() {
+        final URL testUrl = getTestUrl(TEST_CAPTIVE_PORTAL_HTTP_URL);
+        if (testUrl != null) return new URL[] { testUrl };
+
         final String firstUrl = getCaptivePortalServerHttpUrl();
         try {
             final URL[] settingProviderUrls =
