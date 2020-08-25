@@ -32,6 +32,7 @@ import android.net.INetd;
 import android.net.INetworkMonitor;
 import android.net.INetworkMonitorCallbacks;
 import android.net.INetworkStackConnector;
+import android.net.INetworkStackStatusCallback;
 import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -408,6 +409,15 @@ public class NetworkStackService extends Service {
             mPermChecker.enforceNetworkStackCallingPermission();
             updateIpMemoryStoreAidlVersion(cb.getInterfaceVersion(), cb.getInterfaceHash());
             cb.onIpMemoryStoreFetched(mIpMemoryStoreService);
+        }
+
+        @Override
+        public void allowTestUid(int uid, @Nullable INetworkStackStatusCallback cb)
+                throws RemoteException {
+            // setTestUid does its own permission checks
+            PermissionUtil.setTestUid(mContext, uid);
+            mLog.i("Allowing test uid " + uid);
+            if (cb != null) cb.onStatusAvailable(0);
         }
 
         @Override

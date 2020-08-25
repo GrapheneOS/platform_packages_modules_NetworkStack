@@ -87,6 +87,8 @@ aidl_interface {
         "src/android/net/dhcp/IDhcpServerCallbacks.aidl",
         "src/android/net/ip/IIpClient.aidl",
         "src/android/net/ip/IIpClientCallbacks.aidl",
+        // New AIDL classes should go into android.net.networkstack.aidl so they can be clearly
+        // identified
     ],
     backend: {
         java: {
