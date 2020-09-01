@@ -48,8 +48,7 @@ java_defaults {
 
 java_defaults {
     name: "NetworkStackReleaseApiLevel",
-    // TODO: use system_30 once a prebuilt SDK is available for R
-    sdk_version: "system_current",
+    sdk_version: "system_30",
     min_sdk_version: "29",
     target_sdk_version: "30",
 }
@@ -130,7 +129,7 @@ android_library {
     defaults: ["NetworkStackReleaseApiLevel"],
     srcs: [
         "src/**/*.java",
-        ":statslog-networkstack-java-gen-q",
+        ":statslog-networkstack-java-gen",
     ],
     // API stable uses a jarjared version of the shims
     static_libs: [
@@ -253,15 +252,6 @@ cc_library_shared {
         "-Werror",
         "-Wno-unused-parameter",
     ],
-}
-
-genrule {
-    name: "statslog-networkstack-java-gen-q",
-    tools: ["stats-log-api-gen"],
-    cmd: "$(location stats-log-api-gen) --java $(out) --module network_stack" +
-         " --javaPackage com.android.networkstack.metrics --javaClass NetworkStackStatsLog" +
-         " --compileQ",
-    out: ["com/android/networkstack/metrics/NetworkStackStatsLog.java"],
 }
 
 genrule {
