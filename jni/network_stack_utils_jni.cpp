@@ -58,9 +58,35 @@ static bool checkLenAndCopy(JNIEnv* env, const jbyteArray& addr, int len, void* 
     return true;
 }
 
+static bool isAtLeastS() {
+    static bool atLeastS = false;
+    static bool doProbe = true;
+
+    if (!doProbe) {
+        return atLeastS;
+    }
+
+    atLeastS = (android_get_device_api_level() > __ANDROID_API_R__);
+    if (!atLeastS) {
+        // Check if this is a device with Android S dogfood build.
+        static constexpr const char* kCodenameProperty = "ro.build.version.codename";
+        char codename[PROP_VALUE_MAX] = { 0 };
+        // SDK may be 30 (R) with codename T if S SDK was finalized but not yet merged in the
+        // branch, and T development started.
+        atLeastS = (__system_property_get(kCodenameProperty, codename) > 0 &&
+                    (strncmp(codename, "S", 2) == 0 || strncmp(codename, "T", 2) == 0));
+    }
+    doProbe = false;
+
+    return atLeastS;
+}
+
 static int getNativeFileDescriptorWithoutNdk(JNIEnv* env, jobject javaFd) {
     // Prior to Android S, we need to find the descriptor field in the FileDescriptor class. The
     // symbol name has been stable in libcore, but is a private implementation detail.
+    // Older libnativehelper_compat_c++ versions had a jniGetFdFromFileDescriptor method, but this
+    // was removed in S to replace it with the NDK API in libnativehelper.
+    // The code is copied here instead. This code can be removed once R is not supported anymore.
     static jfieldID descriptorFieldID = nullptr;
     if (descriptorFieldID == nullptr) {
         jclass fileDescriptorClass = env->FindClass("java/io/FileDescriptor");
@@ -94,23 +120,8 @@ static int getNativeFileDescriptorWithNdk(JNIEnv* env, jobject javaFd) {
 }
 
 static int getNativeFileDescriptor(JNIEnv* env, jobject javaFd) {
-    static bool preferNdkFileDescriptorApi = false;
-    static bool probeNdkFileDescriptorApi = true;
-
-    if (probeNdkFileDescriptorApi) {
-        // Check if we should use the NDK File Descriptor API introduced in S.
-        preferNdkFileDescriptorApi = (android_get_device_api_level() >= __ANDROID_API_S__);
-        if (!preferNdkFileDescriptorApi) {
-            // Check if this is a device with Android S dogfood build.
-            static constexpr const char* kCodenameProperty = "ro.build.version.codename";
-            char codename[PROP_VALUE_MAX] = { 0 };
-            preferNdkFileDescriptorApi = (__system_property_get(kCodenameProperty, codename) > 0 &&
-                                          strncmp(codename, "S", 2) == 0);
-        }
-        probeNdkFileDescriptorApi = false;
-    }
-
-    if (preferNdkFileDescriptorApi) {
+    // Check if we should use the NDK File Descriptor API introduced in S.
+    if (isAtLeastS()) {
         return getNativeFileDescriptorWithNdk(env, javaFd);
     } else {
         return getNativeFileDescriptorWithoutNdk(env, javaFd);
