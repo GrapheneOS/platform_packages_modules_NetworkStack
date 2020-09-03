@@ -28,7 +28,11 @@ aidl_interface {
             apex_available: [
                 "//apex_available:platform",
                 "com.android.wifi",
+                "com.android.bluetooth.updatable",
+                "com.android.tethering",
             ],
+            // this is part of updatable modules(NetworkStack) which targets 29(Q)
+            min_sdk_version: "29",
         },
         ndk: {
             enabled: false,
@@ -45,6 +49,7 @@ aidl_interface {
         "5",
         "6",
         "7",
+        "8",
     ],
     visibility: [
         "//system/tools/aidl/build",
@@ -56,7 +61,7 @@ aidl_interface {
     local_include_dir: "src",
     include_dirs: [
         "frameworks/base/core/java", // For framework parcelables.
-        "frameworks/native/aidl/binder/android/os", // For PersistableBundle.aidl
+        "frameworks/native/aidl/binder", // For PersistableBundle.aidl
         "frameworks/base/wifi/aidl-export", // For wifi parcelables.
     ],
     srcs: [
@@ -83,6 +88,8 @@ aidl_interface {
         "src/android/net/dhcp/IDhcpServerCallbacks.aidl",
         "src/android/net/ip/IIpClient.aidl",
         "src/android/net/ip/IIpClientCallbacks.aidl",
+        // New AIDL classes should go into android.net.networkstack.aidl so they can be clearly
+        // identified
     ],
     backend: {
         java: {
@@ -90,7 +97,10 @@ aidl_interface {
                 "//apex_available:platform",
                 "com.android.bluetooth.updatable",
                 "com.android.wifi",
+                "com.android.tethering",
             ],
+            // this is part of updatable modules(NetworkStack) which targets 29(Q)
+            min_sdk_version: "29",
         },
         ndk: {
             enabled: false,
@@ -108,6 +118,7 @@ aidl_interface {
         "5",
         "6",
         "7",
+        "8",
     ],
     // TODO: have tethering depend on networkstack-client and set visibility to private
     visibility: [
@@ -119,6 +130,8 @@ aidl_interface {
 java_library {
     name: "networkstack-client",
     sdk_version: "system_current",
+    // this is part of updatable modules(NetworkStack) which targets 29(Q)
+    min_sdk_version: "29",
     srcs: [
         ":framework-annotations",
         "src/android/net/IpMemoryStoreClient.java",
@@ -127,8 +140,8 @@ java_library {
         "src/android/net/shared/**/*.java",
     ],
     static_libs: [
-        "ipmemorystore-aidl-interfaces-java",
-        "networkstack-aidl-interfaces-java",
+        "ipmemorystore-aidl-interfaces-unstable-java",
+        "networkstack-aidl-interfaces-unstable-java",
     ],
     visibility: [
         "//frameworks/base/packages/Tethering",

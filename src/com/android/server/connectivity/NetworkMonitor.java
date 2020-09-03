@@ -505,7 +505,8 @@ public class NetworkMonitor extends StateMachine {
     @Nullable
     private final DnsStallDetector mDnsStallDetector;
     private long mLastProbeTime;
-    // The signal causing a data stall to be suspected. Reset to 0 after metrics are sent to statsd.
+    // A bitmask of signals causing a data stall to be suspected. Reset to
+    // {@link DataStallUtils#DATA_STALL_EVALUATION_TYPE_NONE} after metrics are sent to statsd.
     private @EvaluationType int mDataStallTypeToCollect;
     private boolean mAcceptPartialConnectivity = false;
     private final EvaluationState mEvaluationState = new EvaluationState();
@@ -1535,7 +1536,7 @@ public class NetworkMonitor extends StateMachine {
             }
 
             final int token = ++mProbeToken;
-            final EvaluationThreadDeps deps = new EvaluationThreadDeps(mNetworkCapabilities);
+            final ValidationProperties deps = new ValidationProperties(mNetworkCapabilities);
             mThread = new Thread(() -> sendMessage(obtainMessage(CMD_PROBE_COMPLETE, token, 0,
                     isCaptivePortal(deps))));
             mThread.start();
@@ -2253,24 +2254,24 @@ public class NetworkMonitor extends StateMachine {
     }
 
     /**
-     * Parameters that can be accessed by the evaluation thread in a thread-safe way.
+     * Validation properties that can be accessed by the evaluation thread in a thread-safe way.
      *
      * Parameters such as LinkProperties and NetworkCapabilities cannot be accessed by the
      * evaluation thread directly, as they are managed in the state machine thread and not
      * synchronized. This class provides a copy of the required data that is not modified and can be
      * used safely by the evaluation thread.
      */
-    private static class EvaluationThreadDeps {
-        // TODO: add parameters that are accessed in a non-thread-safe way from the evaluation
-        // thread (read from LinkProperties, NetworkCapabilities, useHttps, validationStage)
+    private static class ValidationProperties {
+        // TODO: add other properties that are needed for evaluation and currently extracted in a
+        // non-thread-safe way from LinkProperties, NetworkCapabilities, etc.
         private final boolean mIsTestNetwork;
 
-        EvaluationThreadDeps(NetworkCapabilities nc) {
+        ValidationProperties(NetworkCapabilities nc) {
             this.mIsTestNetwork = nc.hasTransport(TRANSPORT_TEST);
         }
     }
 
-    private CaptivePortalProbeResult isCaptivePortal(EvaluationThreadDeps deps) {
+    private CaptivePortalProbeResult isCaptivePortal(ValidationProperties properties) {
         if (!mIsCaptivePortalCheckEnabled) {
             validationLog("Validation disabled.");
             return CaptivePortalProbeResult.success(CaptivePortalProbeResult.PROBE_UNKNOWN);
@@ -2318,11 +2319,12 @@ public class NetworkMonitor extends StateMachine {
             reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP, result);
         } else if (mUseHttps && httpsUrls.length == 1 && httpUrls.length == 1) {
             // Probe results are reported inside sendHttpAndHttpsParallelWithFallbackProbes.
-            result = sendHttpAndHttpsParallelWithFallbackProbes(deps, proxyInfo,
+            result = sendHttpAndHttpsParallelWithFallbackProbes(properties, proxyInfo,
                     httpsUrls[0], httpUrls[0]);
         } else if (mUseHttps) {
             // Support result aggregation from multiple Urls.
-            result = sendMultiParallelHttpAndHttpsProbes(deps, proxyInfo, httpsUrls, httpUrls);
+            result = sendMultiParallelHttpAndHttpsProbes(properties, proxyInfo, httpsUrls,
+                    httpUrls);
         } else {
             result = sendDnsAndHttpProbes(proxyInfo, httpUrls[0], ValidationProbeEvent.PROBE_HTTP);
             reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP, result);
@@ -2614,12 +2616,12 @@ public class NetworkMonitor extends StateMachine {
         private final CountDownLatch mLatch;
         private final Probe mProbe;
 
-        ProbeThread(CountDownLatch latch, EvaluationThreadDeps deps, ProxyInfo proxy, URL url,
+        ProbeThread(CountDownLatch latch, ValidationProperties properties, ProxyInfo proxy, URL url,
                 int probeType, Uri captivePortalApiUrl) {
             mLatch = latch;
             mProbe = (probeType == ValidationProbeEvent.PROBE_HTTPS)
-                    ? new HttpsProbe(deps, proxy, url, captivePortalApiUrl)
-                    : new HttpProbe(deps, proxy, url, captivePortalApiUrl);
+                    ? new HttpsProbe(properties, proxy, url, captivePortalApiUrl)
+                    : new HttpProbe(properties, proxy, url, captivePortalApiUrl);
             mResult = CaptivePortalProbeResult.failed(probeType);
         }
 
@@ -2644,14 +2646,14 @@ public class NetworkMonitor extends StateMachine {
     }
 
     private abstract static class Probe {
-        protected final EvaluationThreadDeps mDeps;
+        protected final ValidationProperties mProperties;
         protected final ProxyInfo mProxy;
         protected final URL mUrl;
         protected final Uri mCaptivePortalApiUrl;
 
-        protected Probe(EvaluationThreadDeps deps, ProxyInfo proxy, URL url,
+        protected Probe(ValidationProperties properties, ProxyInfo proxy, URL url,
                 Uri captivePortalApiUrl) {
-            mDeps = deps;
+            mProperties = properties;
             mProxy = proxy;
             mUrl = url;
             mCaptivePortalApiUrl = captivePortalApiUrl;
@@ -2661,8 +2663,9 @@ public class NetworkMonitor extends StateMachine {
     }
 
     final class HttpsProbe extends Probe {
-        HttpsProbe(EvaluationThreadDeps deps, ProxyInfo proxy, URL url, Uri captivePortalApiUrl) {
-            super(deps, proxy, url, captivePortalApiUrl);
+        HttpsProbe(ValidationProperties properties, ProxyInfo proxy, URL url,
+                Uri captivePortalApiUrl) {
+            super(properties, proxy, url, captivePortalApiUrl);
         }
 
         @Override
@@ -2672,8 +2675,9 @@ public class NetworkMonitor extends StateMachine {
     }
 
     final class HttpProbe extends Probe {
-        HttpProbe(EvaluationThreadDeps deps, ProxyInfo proxy, URL url, Uri captivePortalApiUrl) {
-            super(deps, proxy, url, captivePortalApiUrl);
+        HttpProbe(ValidationProperties properties, ProxyInfo proxy, URL url,
+                Uri captivePortalApiUrl) {
+            super(properties, proxy, url, captivePortalApiUrl);
         }
 
         private CaptivePortalDataShim sendCapportApiProbe() {
@@ -2687,7 +2691,7 @@ public class NetworkMonitor extends StateMachine {
                 // Protocol must be HTTPS
                 // (as per https://www.ietf.org/id/draft-ietf-capport-api-07.txt, #4).
                 // Only allow HTTP on localhost, for testing.
-                final boolean isTestLocalhostHttp = mDeps.mIsTestNetwork
+                final boolean isTestLocalhostHttp = mProperties.mIsTestNetwork
                         && "localhost".equals(url.getHost()) && "http".equals(url.getProtocol());
                 if (!"https".equals(url.getProtocol()) && !isTestLocalhostHttp) {
                     validationLog("Invalid captive portal API protocol: " + url.getProtocol());
@@ -2785,8 +2789,8 @@ public class NetworkMonitor extends StateMachine {
     }
 
     private CaptivePortalProbeResult sendMultiParallelHttpAndHttpsProbes(
-            @NonNull EvaluationThreadDeps deps, @Nullable ProxyInfo proxy, @NonNull URL[] httpsUrls,
-            @NonNull URL[] httpUrls) {
+            @NonNull ValidationProperties properties, @Nullable ProxyInfo proxy,
+            @NonNull URL[] httpsUrls, @NonNull URL[] httpUrls) {
         // If multiple URLs are required to ensure the correctness of validation, send parallel
         // probes to explore the result in separate probe threads and aggregate those results into
         // one as the final result for either HTTP or HTTPS.
@@ -2811,12 +2815,12 @@ public class NetworkMonitor extends StateMachine {
             // TODO: Have the capport probe as a different probe for cleanliness.
             final URL urlMaybeWithCapport = httpUrls[0];
             for (final URL url : httpUrls) {
-                futures.add(ecs.submit(() -> new HttpProbe(deps, proxy, url,
+                futures.add(ecs.submit(() -> new HttpProbe(properties, proxy, url,
                         url.equals(urlMaybeWithCapport) ? capportApiUrl : null).sendProbe()));
             }
 
             for (final URL url : httpsUrls) {
-                futures.add(ecs.submit(() -> new HttpsProbe(deps, proxy, url, capportApiUrl)
+                futures.add(ecs.submit(() -> new HttpsProbe(properties, proxy, url, capportApiUrl)
                         .sendProbe()));
             }
 
@@ -2913,15 +2917,15 @@ public class NetworkMonitor extends StateMachine {
     }
 
     private CaptivePortalProbeResult sendHttpAndHttpsParallelWithFallbackProbes(
-            EvaluationThreadDeps deps, ProxyInfo proxy, URL httpsUrl, URL httpUrl) {
+            ValidationProperties properties, ProxyInfo proxy, URL httpsUrl, URL httpUrl) {
         // Number of probes to wait for. If a probe completes with a conclusive answer
         // it shortcuts the latch immediately by forcing the count to 0.
         final CountDownLatch latch = new CountDownLatch(2);
 
         final Uri capportApiUrl = getCaptivePortalApiUrl(mLinkProperties);
-        final ProbeThread httpsProbe = new ProbeThread(latch, deps, proxy, httpsUrl,
+        final ProbeThread httpsProbe = new ProbeThread(latch, properties, proxy, httpsUrl,
                 ValidationProbeEvent.PROBE_HTTPS, capportApiUrl);
-        final ProbeThread httpProbe = new ProbeThread(latch, deps, proxy, httpUrl,
+        final ProbeThread httpProbe = new ProbeThread(latch, properties, proxy, httpUrl,
                 ValidationProbeEvent.PROBE_HTTP, capportApiUrl);
 
         try {
@@ -3327,7 +3331,8 @@ public class NetworkMonitor extends StateMachine {
             return false;
         }
 
-        Boolean result = null;
+        int typeToCollect = 0;
+        final int notStall = -1;
         final StringJoiner msg = (DBG || VDBG_STALL) ? new StringJoiner(", ") : null;
         // Reevaluation will generate traffic. Thus, set a minimal reevaluation timer to limit the
         // possible traffic cost in metered network.
@@ -3342,18 +3347,9 @@ public class NetworkMonitor extends StateMachine {
         final TcpSocketTracker tst = getTcpSocketTracker();
         if (dataStallEvaluateTypeEnabled(DATA_STALL_EVALUATION_TYPE_TCP) && tst != null) {
             if (tst.getLatestReceivedCount() > 0) {
-                result = false;
+                typeToCollect = notStall;
             } else if (tst.isDataStallSuspected()) {
-                result = true;
-                mDataStallTypeToCollect = DATA_STALL_EVALUATION_TYPE_TCP;
-
-                final DataStallReportParcelable p = new DataStallReportParcelable();
-                p.detectionMethod = DETECTION_METHOD_TCP_METRICS;
-                p.timestampMillis = SystemClock.elapsedRealtime();
-                p.tcpPacketFailRate = tst.getLatestPacketFailPercentage();
-                p.tcpMetricsCollectionPeriodMillis = getTcpPollingInterval();
-
-                notifyDataStallSuspected(p);
+                typeToCollect |= DATA_STALL_EVALUATION_TYPE_TCP;
             }
             if (DBG || VDBG_STALL) {
                 msg.add("tcp packets received=" + tst.getLatestReceivedCount())
@@ -3365,32 +3361,48 @@ public class NetworkMonitor extends StateMachine {
         // 1. The number of consecutive DNS query timeouts >= mConsecutiveDnsTimeoutThreshold.
         // 2. Those consecutive DNS queries happened in the last mValidDataStallDnsTimeThreshold ms.
         final DnsStallDetector dsd = getDnsStallDetector();
-        if ((result == null) && (dsd != null)
+        if ((typeToCollect != notStall) && (dsd != null)
                 && dataStallEvaluateTypeEnabled(DATA_STALL_EVALUATION_TYPE_DNS)) {
-            if (dsd.isDataStallSuspected(mConsecutiveDnsTimeoutThreshold,
-                    mDataStallValidDnsTimeThreshold)) {
-                result = true;
-                mDataStallTypeToCollect = DATA_STALL_EVALUATION_TYPE_DNS;
+            if (dsd.isDataStallSuspected(
+                    mConsecutiveDnsTimeoutThreshold, mDataStallValidDnsTimeThreshold)) {
+                typeToCollect |= DATA_STALL_EVALUATION_TYPE_DNS;
                 logNetworkEvent(NetworkEvent.NETWORK_CONSECUTIVE_DNS_TIMEOUT_FOUND);
-
-                final DataStallReportParcelable p = new DataStallReportParcelable();
-                p.detectionMethod = DETECTION_METHOD_DNS_EVENTS;
-                p.timestampMillis = SystemClock.elapsedRealtime();
-                p.dnsConsecutiveTimeouts = mDnsStallDetector.getConsecutiveTimeoutCount();
-                notifyDataStallSuspected(p);
             }
             if (DBG || VDBG_STALL) {
                 msg.add("consecutive dns timeout count=" + dsd.getConsecutiveTimeoutCount());
             }
         }
-        // log only data stall suspected.
-        if ((DBG && Boolean.TRUE.equals(result)) || VDBG_STALL) {
-            log("isDataStall: result=" + result + ", " + msg);
+
+        if (typeToCollect > 0) {
+            mDataStallTypeToCollect = typeToCollect;
+            final DataStallReportParcelable p = new DataStallReportParcelable();
+            int detectionMethod = 0;
+            p.timestampMillis = SystemClock.elapsedRealtime();
+            if (isDataStallTypeDetected(typeToCollect, DATA_STALL_EVALUATION_TYPE_DNS)) {
+                detectionMethod |= DETECTION_METHOD_DNS_EVENTS;
+                p.dnsConsecutiveTimeouts = mDnsStallDetector.getConsecutiveTimeoutCount();
+            }
+
+            if (isDataStallTypeDetected(typeToCollect, DATA_STALL_EVALUATION_TYPE_TCP)) {
+                detectionMethod |= DETECTION_METHOD_TCP_METRICS;
+                p.tcpPacketFailRate = tst.getLatestPacketFailPercentage();
+                p.tcpMetricsCollectionPeriodMillis = getTcpPollingInterval();
+            }
+            p.detectionMethod = detectionMethod;
+            notifyDataStallSuspected(p);
         }
 
-        return (result == null) ? false : result;
+        // log only data stall suspected.
+        if ((DBG && (typeToCollect > 0)) || VDBG_STALL) {
+            log("isDataStall: result=" + typeToCollect + ", " + msg);
+        }
+
+        return typeToCollect > 0;
     }
 
+    private static boolean isDataStallTypeDetected(int typeToCollect, int evaluationType) {
+        return (typeToCollect & evaluationType) != 0;
+    }
     // Class to keep state of evaluation results and probe results.
     //
     // The main purpose was to ensure NetworkMonitor can notify ConnectivityService of probe results

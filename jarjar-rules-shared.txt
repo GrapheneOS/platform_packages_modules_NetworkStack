@@ -12,3 +12,5 @@ rule com.android.net.module.util.** com.android.networkstack.util.@1
 rule android.net.DhcpResultsParcelable* @0
 rule android.net.DhcpResults* android.net.networkstack.DhcpResults@1
 rule android.util.LocalLog* android.net.networkstack.util.LocalLog@1
+
+rule android.util.IndentingPrintWriter* android.net.networkstack.util.AndroidUtilIndentingPrintWriter@1

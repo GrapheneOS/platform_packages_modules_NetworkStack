@@ -194,9 +194,9 @@ public final class DataStallDetectionStats {
         }
 
         /**
-         * Set the dns evaluation type into Builder.
+         * Set the data stall evaluation type into Builder.
          *
-         * @param type the return code of the dns event.
+         * @param type the signal type causing a data stall to be suspected.
          * @return {@code this} {@link Builder} instance.
          */
         public Builder setEvaluationType(int type) {

@@ -132,6 +132,7 @@ import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.internal.util.StateMachine;
+import com.android.net.module.util.ArrayTrackRecord;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.apishim.ConstantsShim;
 import com.android.networkstack.apishim.common.ShimUtils;
@@ -144,7 +145,7 @@ import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
 import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
-import com.android.testutils.HandlerUtilsKt;
+import com.android.testutils.HandlerUtils;
 import com.android.testutils.TapPacketReader;
 
 import org.junit.After;
@@ -178,6 +179,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 
+import kotlin.Lazy;
+import kotlin.LazyKt;
+
 /**
  * Tests for IpClient.
  */
@@ -186,7 +190,7 @@ import java.util.function.Predicate;
 public class IpClientIntegrationTest {
     private static final int DATA_BUFFER_LEN = 4096;
     private static final int PACKET_TIMEOUT_MS = 5_000;
-    private static final int TEST_TIMEOUT_MS = 400;
+    private static final int TEST_TIMEOUT_MS = 2_000;
     private static final String TEST_L2KEY = "some l2key";
     private static final String TEST_CLUSTER = "some cluster";
     private static final int TEST_LEASE_DURATION_S = 3_600; // 1 hour
@@ -219,6 +223,15 @@ public class IpClientIntegrationTest {
     private IpClient mIpc;
     private Dependencies mDependencies;
     private byte[] mClientMac;
+
+    // ReadHeads for various packet streams. Cannot be initialized in @Before because ReadHead is
+    // single-thread-only, and AndroidJUnitRunner runs @Before and @Test on different threads.
+    // While it looks like these are created only once per test, they are actually created once per
+    // test method because JUnit recreates a fresh test class instance before every test method.
+    private Lazy<ArrayTrackRecord<byte[]>.ReadHead> mDhcpPacketReadHead =
+            LazyKt.lazy(() -> mPacketReader.getReceivedPackets().newReadHead());
+    private Lazy<ArrayTrackRecord<byte[]>.ReadHead> mArpPacketReadHead =
+            LazyKt.lazy(() -> mPacketReader.getReceivedPackets().newReadHead());
 
     // Ethernet header
     private static final int ETH_HEADER_LEN = 14;
@@ -281,6 +294,7 @@ public class IpClientIntegrationTest {
         private DhcpClient mDhcpClient;
         private boolean mIsHostnameConfigurationEnabled;
         private String mHostname;
+        private boolean mIsInterfaceRecovered;
 
         public void setDhcpLeaseCacheEnabled(final boolean enable) {
             mIsDhcpLeaseCacheEnabled = enable;
@@ -297,6 +311,23 @@ public class IpClientIntegrationTest {
         public void setHostnameConfiguration(final boolean enable, final String hostname) {
             mIsHostnameConfigurationEnabled = enable;
             mHostname = hostname;
+        }
+
+        // Enable this flag to simulate the interface has been added back after removing
+        // on the provisioning start. However, the actual tap interface has been removed,
+        // interface parameters query will get null when attempting to restore Interface
+        // MTU. Create a new InterfaceParams instance and return instead just for interface
+        // toggling test case.
+        public void simulateInterfaceRecover() {
+            mIsInterfaceRecovered = true;
+        }
+
+        @Override
+        public InterfaceParams getInterfaceParams(String ifname) {
+            return mIsInterfaceRecovered
+                    ? new InterfaceParams(ifname, 1 /* index */,
+                            MacAddress.fromString("00:11:22:33:44:55"))
+                    : super.getInterfaceParams(ifname);
         }
 
         @Override
@@ -447,6 +478,17 @@ public class IpClientIntegrationTest {
         mHandler.post(() -> mPacketReader.start());
     }
 
+    private IpClient makeIpClient() throws Exception {
+        IpClient ipc = new IpClient(mContext, mIfaceName, mCb, mNetworkObserverRegistry,
+                mNetworkStackServiceManager, mDependencies);
+        // Wait for IpClient to enter its initial state. Otherwise, additional setup steps or tests
+        // that mock IpClient's dependencies might interact with those mocks while IpClient is
+        // starting. This would cause UnfinishedStubbingExceptions as mocks cannot be interacted
+        // with while they are being stubbed.
+        HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
+        return ipc;
+    }
+
     private void setUpIpClient() throws Exception {
         final Instrumentation inst = InstrumentationRegistry.getInstrumentation();
         final IBinder netdIBinder =
@@ -457,13 +499,7 @@ public class IpClientIntegrationTest {
 
         mNetworkObserverRegistry = new NetworkObserverRegistry();
         mNetworkObserverRegistry.register(mNetd);
-        mIpc = new IpClient(mContext, mIfaceName, mCb, mNetworkObserverRegistry,
-                mNetworkStackServiceManager, mDependencies);
-        // Wait for IpClient to enter its initial state. Otherwise, additional setup steps or tests
-        // that mock IpClient's dependencies might interact with those mocks while IpClient is
-        // starting. This would cause UnfinishedStubbingExceptions as mocks cannot be interacted
-        // with while they are being stubbed.
-        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+        mIpc = makeIpClient();
 
         // Tell the IpMemoryStore immediately to answer any question about network attributes with a
         // null response. Otherwise, the DHCP client will wait for two seconds before starting,
@@ -594,12 +630,15 @@ public class IpClientIntegrationTest {
         mPacketReader.sendResponse(packet);
     }
 
+    private void startIpClientProvisioning(final ProvisioningConfiguration cfg) throws Exception {
+        mIpc.startProvisioning(cfg);
+    }
+
     private void startIpClientProvisioning(final boolean isDhcpLeaseCacheEnabled,
             final boolean shouldReplyRapidCommitAck, final boolean isPreconnectionEnabled,
             final boolean isDhcpIpConflictDetectEnabled,
             final boolean isHostnameConfigurationEnabled, final String hostname,
-            final String displayName, final ScanResultInfo scanResultInfo)
-            throws RemoteException {
+            final String displayName, final ScanResultInfo scanResultInfo) throws Exception {
         ProvisioningConfiguration.Builder prov = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
                 .withLayer2Information(new Layer2Information(TEST_L2KEY, TEST_CLUSTER,
@@ -613,7 +652,7 @@ public class IpClientIntegrationTest {
         mDependencies.setDhcpRapidCommitEnabled(shouldReplyRapidCommitAck);
         mDependencies.setDhcpIpConflictDetectEnabled(isDhcpIpConflictDetectEnabled);
         mDependencies.setHostnameConfiguration(isHostnameConfigurationEnabled, hostname);
-        mIpc.startProvisioning(prov.build());
+        startIpClientProvisioning(prov.build());
         if (!isPreconnectionEnabled) {
             verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
         }
@@ -622,8 +661,7 @@ public class IpClientIntegrationTest {
 
     private void startIpClientProvisioning(final boolean isDhcpLeaseCacheEnabled,
             final boolean isDhcpRapidCommitEnabled, final boolean isPreconnectionEnabled,
-            final boolean isDhcpIpConflictDetectEnabled)
-            throws RemoteException {
+            final boolean isDhcpIpConflictDetectEnabled)  throws Exception {
         startIpClientProvisioning(isDhcpLeaseCacheEnabled, isDhcpRapidCommitEnabled,
                 isPreconnectionEnabled, isDhcpIpConflictDetectEnabled,
                 false /* isHostnameConfigurationEnabled */, null /* hostname */,
@@ -745,13 +783,9 @@ public class IpClientIntegrationTest {
     }
 
     private DhcpPacket getNextDhcpPacket() throws ParseException {
-        byte[] packet;
-        while ((packet = mPacketReader.popPacket(PACKET_TIMEOUT_MS)) != null) {
-            if (!isDhcpPacket(packet)) continue;
-            return DhcpPacket.decodeFullPacket(packet, packet.length, ENCAP_L2);
-        }
-        fail("No expected DHCP packet received on interface within timeout");
-        return null;
+        byte[] packet = mDhcpPacketReadHead.getValue().poll(PACKET_TIMEOUT_MS, this::isDhcpPacket);
+        assertNotNull("No expected DHCP packet received on interface within timeout", packet);
+        return DhcpPacket.decodeFullPacket(packet, packet.length, ENCAP_L2);
     }
 
     private DhcpPacket getReplyFromDhcpLease(final NetworkAttributes na, boolean timeout)
@@ -873,7 +907,7 @@ public class IpClientIntegrationTest {
             }
 
             mIpc.notifyPreconnectionComplete(false /* abort */);
-            HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+            HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
 
             if (shouldFirePreconnectionTimeout && !timeoutBeforePreconnectionComplete) {
                 mDependencies.mDhcpClient.sendMessage(DhcpClient.CMD_TIMEOUT);
@@ -906,7 +940,7 @@ public class IpClientIntegrationTest {
 
         if (!shouldAbortPreconnection) {
             mIpc.notifyPreconnectionComplete(true /* success */);
-            HandlerUtilsKt.waitForIdle(mDependencies.mDhcpClient.getHandler(), TEST_TIMEOUT_MS);
+            HandlerUtils.waitForIdle(mDependencies.mDhcpClient.getHandler(), TEST_TIMEOUT_MS);
 
             // If timeout fires after successful preconnection, right now DhcpClient will have
             // already entered BOUND state, the delayed CMD_TIMEOUT command would be ignored. So
@@ -928,7 +962,7 @@ public class IpClientIntegrationTest {
 
     private ArpPacket getNextArpPacket(final int timeout) throws Exception {
         byte[] packet;
-        while ((packet = mPacketReader.popPacket(timeout)) != null) {
+        while ((packet = mArpPacketReadHead.getValue().poll(timeout, p -> true)) != null) {
             final ArpPacket arpPacket = parseArpPacketOrNull(packet);
             if (arpPacket != null) return arpPacket;
         }
@@ -1012,7 +1046,7 @@ public class IpClientIntegrationTest {
         assertNotNull(params.macAddr);
         assertTrue(params.hasMacAddress);
 
-        // Sanity check.
+        //  Check interface "lo".
         params = InterfaceParams.getByName("lo");
         assertNotNull(params);
         assertEquals("lo", params.name);
@@ -1231,6 +1265,36 @@ public class IpClientIntegrationTest {
         assertEquals(NetworkInterface.getByName(mIfaceName).getMTU(), TEST_DEFAULT_MTU);
     }
 
+    @Test
+    public void testRestoreInitialInterfaceMtu_removeInterfaceAndAddback() throws Exception {
+        doAnswer(invocation -> {
+            final LinkProperties lp = invocation.getArgument(0);
+            assertEquals(lp.getInterfaceName(), mIfaceName);
+            assertEquals(0, lp.getLinkAddresses().size());
+            assertEquals(0, lp.getDnsServers().size());
+
+            mDependencies.simulateInterfaceRecover();
+            return null;
+        }).when(mCb).onProvisioningFailure(any());
+
+        final ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIpReachabilityMonitor()
+                .withoutIPv6()
+                .build();
+
+        // Intend to remove the tap interface and force IpClient throw provisioning failure
+        // due to that interface is not found.
+        removeTapInterface(mTapFd);
+        assertNull(InterfaceParams.getByName(mIfaceName));
+
+        mIpc.startProvisioning(config);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(any());
+
+        // Make sure everything queued by this test was processed (e.g. transition to StoppingState
+        // from ClearingIpAddressState) and tearDown will check if IpClient exits normally or crash.
+        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+    }
+
     private boolean isRouterSolicitation(final byte[] packetBytes) {
         ByteBuffer packet = ByteBuffer.wrap(packetBytes);
         return packet.getShort(ETHER_TYPE_OFFSET) == (short) ETH_P_IPV6
@@ -1240,11 +1304,8 @@ public class IpClientIntegrationTest {
     }
 
     private void waitForRouterSolicitation() throws ParseException {
-        byte[] packet;
-        while ((packet = mPacketReader.popPacket(PACKET_TIMEOUT_MS)) != null) {
-            if (isRouterSolicitation(packet)) return;
-        }
-        fail("No router solicitation received on interface within timeout");
+        assertNotNull("No router solicitation received on interface within timeout",
+                mPacketReader.popPacket(PACKET_TIMEOUT_MS, this::isRouterSolicitation));
     }
 
     private void sendRouterAdvertisement(boolean waitForRs, short lifetime) throws Exception {
@@ -1614,14 +1675,14 @@ public class IpClientIntegrationTest {
 
         // Check that the alarm is cancelled when IpClient is stopped.
         mIpc.stop();
-        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
         expectAlarmCancelled(inOrder, clearAlarm);
         expectNat64PrefixUpdate(inOrder, null);
 
         // Check that even if the alarm was already in the message queue while it was cancelled, it
         // is safely ignored.
         mIpc.getHandler().post(() -> clearAlarm.onAlarm());
-        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
     }
 
     private void addIpAddressAndWaitForIt(final String iface) throws Exception {
@@ -1656,7 +1717,7 @@ public class IpClientIntegrationTest {
         }
 
         // Wait for IpClient to process the addition of the address.
-        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
     }
 
     private void doIPv4OnlyProvisioningAndExitWithLeftAddress() throws Exception {
@@ -1720,7 +1781,7 @@ public class IpClientIntegrationTest {
 
         // Force to enter RunningState.
         mIpc.notifyPreconnectionComplete(false /* abort */);
-        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
     }
 
     @Test
@@ -1828,7 +1889,7 @@ public class IpClientIntegrationTest {
 
         // Force IpClient transition to RunningState from PreconnectionState.
         mIpc.notifyPreconnectionComplete(false /* success */);
-        HandlerUtilsKt.waitForIdle(mDependencies.mDhcpClient.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mDependencies.mDhcpClient.getHandler(), TEST_TIMEOUT_MS);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
     }
 
@@ -2142,7 +2203,7 @@ public class IpClientIntegrationTest {
         mPacketReader.sendResponse(buildDhcpAckPacket(packet,
                 hasMismatchedIpAddress ? CLIENT_ADDR_NEW : CLIENT_ADDR, TEST_LEASE_DURATION_S,
                 (short) TEST_DEFAULT_MTU, false /* rapidcommit */, null /* captivePortalUrl */));
-        HandlerUtilsKt.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
         if (hasMismatchedIpAddress) {
             // notifyFailure
             ArgumentCaptor<DhcpResultsParcelable> captor =

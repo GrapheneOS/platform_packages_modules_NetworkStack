@@ -152,7 +152,7 @@ import com.android.server.connectivity.nano.DnsEvent;
 import com.android.server.connectivity.nano.WifiData;
 import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
-import com.android.testutils.HandlerUtilsKt;
+import com.android.testutils.HandlerUtils;
 
 import com.google.protobuf.nano.MessageNano;
 
@@ -631,7 +631,7 @@ public class NetworkMonitorTest {
         final WrappedNetworkMonitor nm = new WrappedNetworkMonitor();
         nm.start();
         setNetworkCapabilities(nm, nc);
-        HandlerUtilsKt.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
         mCreatedNetworkMonitors.add(nm);
         when(mTstDependencies.isTcpInfoParsingSupported()).thenReturn(false);
 
@@ -655,12 +655,13 @@ public class NetworkMonitorTest {
 
     private void setNetworkCapabilities(NetworkMonitor nm, NetworkCapabilities nc) {
         nm.notifyNetworkCapabilitiesChanged(nc);
-        HandlerUtilsKt.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
     }
 
     @Test
     public void testOnlyWifiTransport() {
-        final WrappedNetworkMonitor wnm = makeCellMeteredNetworkMonitor();
+        final WrappedNetworkMonitor wnm = makeMonitor(CELL_METERED_CAPABILITIES);
+        assertFalse(wnm.onlyWifiTransport());
         final NetworkCapabilities nc = new NetworkCapabilities()
                 .addTransportType(TRANSPORT_WIFI)
                 .addTransportType(TRANSPORT_VPN);
@@ -1139,7 +1140,8 @@ public class NetworkMonitorTest {
 
         // Second check should be triggered automatically after the reevaluate delay, and uses the
         // URL chosen by mRandom
-        // This test is appropriate to cover reevaluate behavior as long as the timeout is short
+        // Ensure that the reevaluate delay is not changed to a large value, otherwise this test
+        // would block for too long and a different test strategy should be used.
         assertTrue(INITIAL_REEVALUATE_DELAY_MS < 2000);
         verify(mOtherFallbackConnection, timeout(INITIAL_REEVALUATE_DELAY_MS + HANDLER_TIMEOUT_MS))
                 .getResponseCode();
@@ -1675,7 +1677,7 @@ public class NetworkMonitorTest {
         // Trigger a tcp event immediately.
         setTcpPollingInterval(0);
         wrappedMonitor.sendTcpPollingEvent();
-        HandlerUtilsKt.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
         assertFalse(wrappedMonitor.isDataStall());
 
         when(mTst.getLatestReceivedCount()).thenReturn(0);
@@ -1683,9 +1685,28 @@ public class NetworkMonitorTest {
         // Trigger a tcp event immediately.
         setTcpPollingInterval(0);
         wrappedMonitor.sendTcpPollingEvent();
-        HandlerUtilsKt.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
         assertTrue(wrappedMonitor.isDataStall());
         verify(mCallbacks).notifyDataStallSuspected(matchTcpDataStallParcelable());
+    }
+
+    @Test
+    public void testIsDataStall_EvaluationDnsAndTcp() throws Exception {
+        setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_DNS | DATA_STALL_EVALUATION_TYPE_TCP);
+        setupTcpDataStall();
+        final WrappedNetworkMonitor nm = makeMonitor(CELL_METERED_CAPABILITIES);
+        nm.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
+        makeDnsTimeoutEvent(nm, DEFAULT_DNS_TIMEOUT_THRESHOLD);
+        assertTrue(nm.isDataStall());
+        verify(mCallbacks).notifyDataStallSuspected(
+                matchDnsAndTcpDataStallParcelable(DEFAULT_DNS_TIMEOUT_THRESHOLD));
+
+        when(mTst.getLatestReceivedCount()).thenReturn(5);
+        // Trigger a tcp event immediately.
+        setTcpPollingInterval(0);
+        nm.sendTcpPollingEvent();
+        HandlerUtils.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
+        assertFalse(nm.isDataStall());
     }
 
     @Test
@@ -1695,7 +1716,7 @@ public class NetworkMonitorTest {
         WrappedNetworkMonitor wrappedMonitor = makeMonitor(CELL_METERED_CAPABILITIES);
         makeDnsSuccessEvent(wrappedMonitor, 1);
         wrappedMonitor.sendTcpPollingEvent();
-        HandlerUtilsKt.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(wrappedMonitor.getHandler(), HANDLER_TIMEOUT_MS);
         assertFalse(wrappedMonitor.isDataStall());
         verify(mTst, never()).isDataStallSuspected();
         verify(mTst, never()).pollSocketsInfo();
@@ -1818,7 +1839,7 @@ public class NetworkMonitorTest {
 
         wnm.forceReevaluation(Process.myUid());
         // ProbeCompleted should be reset to 0
-        HandlerUtilsKt.waitForIdle(wnm.getHandler(), HANDLER_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(wnm.getHandler(), HANDLER_TIMEOUT_MS);
         assertEquals(wnm.getEvaluationState().getProbeCompletedResult(), 0);
         verifyNetworkTested(NETWORK_VALIDATION_RESULT_VALID, PROBES_PRIVDNS_VALID);
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS)).notifyProbeStatusChanged(
@@ -1924,28 +1945,28 @@ public class NetworkMonitorTest {
 
     @Test
     public void testDataStall_StallTcpSuspectedAndSendMetricsOnCell() throws Exception {
-        testDataStall_StallTcpSuspectedAndSendMetrics(NetworkCapabilities.TRANSPORT_CELLULAR,
-                CELL_METERED_CAPABILITIES);
+        testDataStall_StallTcpSuspectedAndSendMetrics(CELL_METERED_CAPABILITIES);
     }
 
     @Test
     public void testDataStall_StallTcpSuspectedAndSendMetricsOnWifi() throws Exception {
-        testDataStall_StallTcpSuspectedAndSendMetrics(NetworkCapabilities.TRANSPORT_WIFI,
-                WIFI_NOT_METERED_CAPABILITIES);
+        testDataStall_StallTcpSuspectedAndSendMetrics(WIFI_NOT_METERED_CAPABILITIES);
     }
 
-    private void testDataStall_StallTcpSuspectedAndSendMetrics(int transport,
-            NetworkCapabilities nc) throws Exception {
+    private void testDataStall_StallTcpSuspectedAndSendMetrics(NetworkCapabilities nc)
+            throws Exception {
         assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
         setupTcpDataStall();
+        setTcpPollingInterval(0);
         // NM suspects data stall from TCP signal and sends data stall metrics.
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
         final WrappedNetworkMonitor nm = prepareNetworkMonitorForVerifyDataStall(nc);
-
         // Trigger a tcp event immediately.
-        setTcpPollingInterval(0);
         nm.sendTcpPollingEvent();
-        verifySendDataStallDetectionStats(nm, DATA_STALL_EVALUATION_TYPE_TCP, transport);
+        // Allow only one transport type in the context of this test for simplification.
+        final int[] transports = nc.getTransportTypes();
+        assertEquals(1, transports.length);
+        verifySendDataStallDetectionStats(nm, DATA_STALL_EVALUATION_TYPE_TCP, transports[0]);
     }
 
     private WrappedNetworkMonitor prepareNetworkMonitorForVerifyDataStall(NetworkCapabilities nc)
@@ -1954,20 +1975,15 @@ public class NetworkMonitorTest {
         // evaluation will only start from validated state.
         setStatus(mHttpsConnection, 204);
         final WrappedNetworkMonitor nm;
-        final int[] transports = nc.getTransportTypes();
-        // Though multiple transport types are allowed, use the first transport type for
-        // simplification.
-        switch (transports[0]) {
-            case NetworkCapabilities.TRANSPORT_CELLULAR:
-                nm = makeCellMeteredNetworkMonitor();
-                break;
-            case NetworkCapabilities.TRANSPORT_WIFI:
-                nm = makeWifiNotMeteredNetworkMonitor();
-                setupTestWifiInfo();
-                break;
-            default:
-                nm = null;
-                fail("Undefined transport type");
+        // Allow only one transport type in the context of this test for simplification.
+        if (nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+            nm = makeCellMeteredNetworkMonitor();
+        } else if (nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+            nm = makeWifiNotMeteredNetworkMonitor();
+            setupTestWifiInfo();
+        } else {
+            nm = null;
+            fail("Undefined transport type");
         }
         nm.notifyNetworkConnected(TEST_LINK_PROPERTIES, nc);
         verifyNetworkTested(NETWORK_VALIDATION_RESULT_VALID,
@@ -2555,8 +2571,8 @@ public class NetworkMonitorTest {
     }
 
     private void setTcpPollingInterval(int time) {
-        when(mDependencies.getDeviceConfigPropertyInt(any(),
-                eq(CONFIG_DATA_STALL_TCP_POLLING_INTERVAL), anyInt())).thenReturn(time);
+        doReturn(time).when(mDependencies).getDeviceConfigPropertyInt(any(),
+                eq(CONFIG_DATA_STALL_TCP_POLLING_INTERVAL), anyInt());
     }
 
     private void setFallbackUrl(String url) {
@@ -2636,7 +2652,7 @@ public class NetworkMonitorTest {
         final NetworkMonitor monitor = makeMonitor(nc);
         monitor.notifyNetworkConnected(lp, nc);
         verifyNetworkTested(testResult, probesSucceeded, redirectUrl);
-        HandlerUtilsKt.waitForIdle(monitor.getHandler(), HANDLER_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(monitor.getHandler(), HANDLER_TIMEOUT_MS);
 
         return monitor;
     }
@@ -2731,13 +2747,20 @@ public class NetworkMonitorTest {
                 && Objects.equals(p.redirectUrl, redirectUrl));
     }
 
+    private DataStallReportParcelable matchDnsAndTcpDataStallParcelable(final int timeoutCount) {
+        return argThat(p ->
+                (p.detectionMethod & ConstantsShim.DETECTION_METHOD_DNS_EVENTS) != 0
+                && (p.detectionMethod & ConstantsShim.DETECTION_METHOD_TCP_METRICS) != 0
+                && p.dnsConsecutiveTimeouts == timeoutCount);
+    }
+
     private DataStallReportParcelable matchDnsDataStallParcelable(final int timeoutCount) {
-        return argThat(p -> p.detectionMethod == ConstantsShim.DETECTION_METHOD_DNS_EVENTS
+        return argThat(p -> (p.detectionMethod & ConstantsShim.DETECTION_METHOD_DNS_EVENTS) != 0
                 && p.dnsConsecutiveTimeouts == timeoutCount);
     }
 
     private DataStallReportParcelable matchTcpDataStallParcelable() {
-        return argThat(p -> p.detectionMethod == ConstantsShim.DETECTION_METHOD_TCP_METRICS);
+        return argThat(p -> (p.detectionMethod & ConstantsShim.DETECTION_METHOD_TCP_METRICS) != 0);
     }
 }
 
