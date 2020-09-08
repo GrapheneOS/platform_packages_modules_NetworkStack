@@ -66,6 +66,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.longThat;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.argThat;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
@@ -2014,15 +2015,16 @@ public class IpClientIntegrationTest {
 
         final Uri expectedUrl = featureEnabled && serverSendsOption
                 ? Uri.parse(TEST_CAPTIVE_PORTAL_URL) : null;
-        // Wait for LinkProperties containing DHCP-obtained info, such as MTU
+        // LinkProperties will be updated multiple times. Wait for it to contain DHCP-obtained info,
+        // such as MTU.
         final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(
+        verify(mCb, timeout(TEST_TIMEOUT_MS).atLeastOnce()).onLinkPropertiesChange(
                 argThat(lp -> lp.getMtu() == testMtu));
 
         // Ensure that the URL was set as expected in the callbacks.
         // Can't verify the URL up to Q as there is no such attribute in LinkProperties.
         if (!ShimUtils.isAtLeastR()) return;
-        verify(mCb).onLinkPropertiesChange(captor.capture());
+        verify(mCb, atLeastOnce()).onLinkPropertiesChange(captor.capture());
         assertTrue(captor.getAllValues().stream().anyMatch(
                 lp -> Objects.equals(expectedUrl, lp.getCaptivePortalApiUrl())));
     }
