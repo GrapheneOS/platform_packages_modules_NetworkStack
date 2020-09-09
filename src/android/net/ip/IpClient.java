@@ -2169,7 +2169,8 @@ public class IpClient extends StateMachine {
                 //     a) initial address acquisition succeeds,
                 //     b) renew succeeds or is NAK'd,
                 //     c) rebind succeeds or is NAK'd, or
-                //     c) the lease expires,
+                //     d) the lease expires, or
+                //     e) the IPv6-only preferred option is enabled and entering Ipv6OnlyWaitState.
                 //
                 // but never when initial address acquisition fails. The latter
                 // condition is now governed by the provisioning timeout.
@@ -2182,6 +2183,8 @@ public class IpClient extends StateMachine {
                             break;
                         case DhcpClient.DHCP_FAILURE:
                             handleIPv4Failure();
+                            break;
+                        case DhcpClient.DHCP_IPV6_ONLY:
                             break;
                         default:
                             logError("Unknown CMD_POST_DHCP_ACTION status: %s", msg.arg1);
