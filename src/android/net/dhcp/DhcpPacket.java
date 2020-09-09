@@ -88,6 +88,10 @@ public abstract class DhcpPacket {
     public static final int HWADDR_LEN = 16;
     public static final int MAX_OPTION_LEN = 255;
 
+    // The lower boundary for V6ONLY_WAIT.
+    public static final long MIN_V6ONLY_WAIT_MS = 300_000;
+    public static final long V6ONLY_PREFERRED_ABSENCE = -1L;
+
     /**
      * The minimum and maximum MTU that we are prepared to use. We set the minimum to the minimum
      * IPv6 MTU because the IPv6 stack enters unusual codepaths when the link MTU drops below 1280,
@@ -306,6 +310,16 @@ public abstract class DhcpPacket {
      */
     public static final byte DHCP_RAPID_COMMIT = 80;
     protected boolean mRapidCommit;
+
+    /**
+     * DHCP IPv6-Only Preferred Option(draft-ietf-dhc-v6only).
+     * Indicate that a host supports an IPv6-only mode and willing to forgo obtaining an IPv4
+     * address for V6ONLY_WAIT period if the network provides IPv6 connectivity. V6ONLY_WAIT
+     * is 32-bit unsigned integer, so the Integer value cannot be used as-is.
+     */
+    public static final byte DHCP_IPV6_ONLY_PREFERRED = (byte) 108;
+    @VisibleForTesting(otherwise = VisibleForTesting.PROTECTED)
+    public Integer mIpv6OnlyWaitTime;
 
     public static final byte DHCP_CAPTIVE_PORTAL = (byte) 114;
     protected String mCaptivePortalUrl;
@@ -789,6 +803,9 @@ public abstract class DhcpPacket {
         if (mMtu != null && Short.toUnsignedInt(mMtu) >= IPV4_MIN_MTU) {
             addTlv(buf, DHCP_MTU, mMtu);
         }
+        if (mIpv6OnlyWaitTime != null) {
+            addTlv(buf, DHCP_IPV6_ONLY_PREFERRED, (int) Integer.toUnsignedLong(mIpv6OnlyWaitTime));
+        }
         addTlv(buf, DHCP_CAPTIVE_PORTAL, mCaptivePortalUrl);
     }
 
@@ -942,6 +959,7 @@ public abstract class DhcpPacket {
         Integer leaseTime = null;
         Integer T1 = null;
         Integer T2 = null;
+        Integer ipv6OnlyWaitTime = null;
 
         // dhcp options
         byte dhcpType = (byte) 0xFF;
@@ -1204,6 +1222,10 @@ public abstract class DhcpPacket {
                             expectedLen = optionLen;
                             captivePortalUrl = readAsciiString(packet, optionLen, true);
                             break;
+                        case DHCP_IPV6_ONLY_PREFERRED:
+                            expectedLen = 4;
+                            ipv6OnlyWaitTime = Integer.valueOf(packet.getInt());
+                            break;
                         default:
                             expectedLen = skipOption(packet, optionLen);
                     }
@@ -1292,6 +1314,7 @@ public abstract class DhcpPacket {
         newPacket.mVendorId = vendorId;
         newPacket.mVendorInfo = vendorInfo;
         newPacket.mCaptivePortalUrl = captivePortalUrl;
+        newPacket.mIpv6OnlyWaitTime = ipv6OnlyWaitTime;
         if ((optionOverload & OPTION_OVERLOAD_SNAME) == 0) {
             newPacket.mServerHostName = serverHostName;
         } else {
@@ -1385,6 +1408,14 @@ public abstract class DhcpPacket {
     }
 
     /**
+     * Returns the IPv6-only wait time, in milliseconds, or -1 if the option is not present.
+     */
+    public long getIpv6OnlyWaitTimeMillis() {
+        if (mIpv6OnlyWaitTime == null) return V6ONLY_PREFERRED_ABSENCE;
+        return Math.max(MIN_V6ONLY_WAIT_MS, Integer.toUnsignedLong(mIpv6OnlyWaitTime) * 1000);
+    }
+
+    /**
      * Builds a DHCP-DISCOVER packet from the required specified
      * parameters.
      */
@@ -1399,15 +1430,14 @@ public abstract class DhcpPacket {
     }
 
     /**
-     * Builds a DHCP-OFFER packet from the required specified
-     * parameters.
+     * Builds a DHCP-OFFER packet from the required specified parameters.
      */
     public static ByteBuffer buildOfferPacket(int encap, int transactionId,
             boolean broadcast, Inet4Address serverIpAddr, Inet4Address relayIp,
             Inet4Address yourIp, byte[] mac, Integer timeout, Inet4Address netMask,
             Inet4Address bcAddr, List<Inet4Address> gateways, List<Inet4Address> dnsServers,
             Inet4Address dhcpServerIdentifier, String domainName, String hostname, boolean metered,
-            short mtu, String captivePortalUrl) {
+            short mtu, String captivePortalUrl, Integer ipv6OnlyWaitTime) {
         DhcpPacket pkt = new DhcpOfferPacket(
                 transactionId, (short) 0, broadcast, serverIpAddr, relayIp,
                 INADDR_ANY /* clientIp */, yourIp, mac);
@@ -1424,7 +1454,24 @@ public abstract class DhcpPacket {
         if (metered) {
             pkt.mVendorInfo = VENDOR_INFO_ANDROID_METERED;
         }
+        if (ipv6OnlyWaitTime != null) {
+            pkt.mIpv6OnlyWaitTime = ipv6OnlyWaitTime;
+        }
         return pkt.buildPacket(encap, DHCP_CLIENT, DHCP_SERVER);
+    }
+
+    /**
+     * Builds a DHCP-OFFER packet from the required specified parameters.
+     */
+    public static ByteBuffer buildOfferPacket(int encap, int transactionId,
+            boolean broadcast, Inet4Address serverIpAddr, Inet4Address relayIp,
+            Inet4Address yourIp, byte[] mac, Integer timeout, Inet4Address netMask,
+            Inet4Address bcAddr, List<Inet4Address> gateways, List<Inet4Address> dnsServers,
+            Inet4Address dhcpServerIdentifier, String domainName, String hostname, boolean metered,
+            short mtu, String captivePortalUrl) {
+        return buildOfferPacket(encap, transactionId, broadcast, serverIpAddr, relayIp, yourIp,
+                mac, timeout, netMask, bcAddr, gateways, dnsServers, dhcpServerIdentifier,
+                domainName, hostname, metered, mtu, captivePortalUrl, null /* V6ONLY_WAIT */);
     }
 
     /**
@@ -1435,7 +1482,7 @@ public abstract class DhcpPacket {
             Inet4Address requestClientIp, byte[] mac, Integer timeout, Inet4Address netMask,
             Inet4Address bcAddr, List<Inet4Address> gateways, List<Inet4Address> dnsServers,
             Inet4Address dhcpServerIdentifier, String domainName, String hostname, boolean metered,
-            short mtu, boolean rapidCommit, String captivePortalUrl) {
+            short mtu, boolean rapidCommit, String captivePortalUrl, Integer ipv6OnlyWaitTime) {
         DhcpPacket pkt = new DhcpAckPacket(
                 transactionId, (short) 0, broadcast, serverIpAddr, relayIp, requestClientIp, yourIp,
                 mac, rapidCommit);
@@ -1452,7 +1499,25 @@ public abstract class DhcpPacket {
         if (metered) {
             pkt.mVendorInfo = VENDOR_INFO_ANDROID_METERED;
         }
+        if (ipv6OnlyWaitTime != null) {
+            pkt.mIpv6OnlyWaitTime = ipv6OnlyWaitTime;
+        }
         return pkt.buildPacket(encap, DHCP_CLIENT, DHCP_SERVER);
+    }
+
+    /**
+     * Builds a DHCP-ACK packet from the required specified parameters.
+     */
+    public static ByteBuffer buildAckPacket(int encap, int transactionId,
+            boolean broadcast, Inet4Address serverIpAddr, Inet4Address relayIp, Inet4Address yourIp,
+            Inet4Address requestClientIp, byte[] mac, Integer timeout, Inet4Address netMask,
+            Inet4Address bcAddr, List<Inet4Address> gateways, List<Inet4Address> dnsServers,
+            Inet4Address dhcpServerIdentifier, String domainName, String hostname, boolean metered,
+            short mtu, boolean rapidCommit, String captivePortalUrl) {
+        return buildAckPacket(encap, transactionId, broadcast, serverIpAddr, relayIp, yourIp,
+                requestClientIp, mac, timeout, netMask, bcAddr, gateways, dnsServers,
+                dhcpServerIdentifier, domainName, hostname, metered, mtu, rapidCommit,
+                captivePortalUrl, null /* V6ONLY_WAIT */);
     }
 
     /**
