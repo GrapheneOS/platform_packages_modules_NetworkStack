@@ -19,11 +19,13 @@ package android.net.ip;
 import static android.net.dhcp.DhcpClient.EXPIRED_LEASE;
 import static android.net.dhcp.DhcpPacket.DHCP_BOOTREQUEST;
 import static android.net.dhcp.DhcpPacket.DHCP_CLIENT;
+import static android.net.dhcp.DhcpPacket.DHCP_IPV6_ONLY_PREFERRED;
 import static android.net.dhcp.DhcpPacket.DHCP_MAGIC_COOKIE;
 import static android.net.dhcp.DhcpPacket.DHCP_SERVER;
 import static android.net.dhcp.DhcpPacket.ENCAP_L2;
 import static android.net.dhcp.DhcpPacket.INADDR_BROADCAST;
 import static android.net.dhcp.DhcpPacket.INFINITE_LEASE;
+import static android.net.dhcp.DhcpPacket.MIN_V6ONLY_WAIT_MS;
 import static android.net.dhcp.DhcpResultsParcelableUtil.fromStableParcelable;
 import static android.net.ipmemorystore.Status.SUCCESS;
 import static android.system.OsConstants.ETH_P_IPV6;
@@ -46,6 +48,7 @@ import static com.android.server.util.NetworkStackConstants.ICMPV6_ND_OPTION_RDN
 import static com.android.server.util.NetworkStackConstants.ICMPV6_RA_HEADER_LEN;
 import static com.android.server.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
 import static com.android.server.util.NetworkStackConstants.ICMPV6_ROUTER_SOLICITATION;
+import static com.android.server.util.NetworkStackConstants.IPV4_ADDR_ANY;
 import static com.android.server.util.NetworkStackConstants.IPV6_HEADER_LEN;
 import static com.android.server.util.NetworkStackConstants.IPV6_LEN_OFFSET;
 import static com.android.server.util.NetworkStackConstants.IPV6_PROTOCOL_OFFSET;
@@ -195,6 +198,10 @@ public class IpClientIntegrationTest {
     private static final String TEST_L2KEY = "some l2key";
     private static final String TEST_CLUSTER = "some cluster";
     private static final int TEST_LEASE_DURATION_S = 3_600; // 1 hour
+    private static final int TEST_IPV6_ONLY_WAIT_S = 1_800; // 30 min
+    private static final int TEST_LOWER_IPV6_ONLY_WAIT_S = (int) (MIN_V6ONLY_WAIT_MS / 1000 - 1);
+    private static final int TEST_ZERO_IPV6_ONLY_WAIT_S = 0;
+    private static final long TEST_MAX_IPV6_ONLY_WAIT_S = 0xffffffffL;
 
     // TODO: move to NetlinkConstants, NetworkStackConstants, or OsConstants.
     private static final int IFA_F_STABLE_PRIVACY = 0x800;
@@ -296,6 +303,7 @@ public class IpClientIntegrationTest {
         private boolean mIsHostnameConfigurationEnabled;
         private String mHostname;
         private boolean mIsInterfaceRecovered;
+        private boolean mIsIPv6OnlyPreferredEnabled;
 
         public void setDhcpLeaseCacheEnabled(final boolean enable) {
             mIsDhcpLeaseCacheEnabled = enable;
@@ -307,6 +315,10 @@ public class IpClientIntegrationTest {
 
         public void setDhcpIpConflictDetectEnabled(final boolean enable) {
             mIsDhcpIpConflictDetectEnabled = enable;
+        }
+
+        public void setIPv6OnlyPreferredEnabled(final boolean enable) {
+            mIsIPv6OnlyPreferredEnabled = enable;
         }
 
         public void setHostnameConfiguration(final boolean enable, final String hostname) {
@@ -363,6 +375,8 @@ public class IpClientIntegrationTest {
                             return mIsDhcpLeaseCacheEnabled;
                         case NetworkStackUtils.DHCP_IP_CONFLICT_DETECT_VERSION:
                             return mIsDhcpIpConflictDetectEnabled;
+                        case NetworkStackUtils.DHCP_IPV6_ONLY_PREFERRED_VERSION:
+                            return mIsIPv6OnlyPreferredEnabled;
                         default:
                             fail("Invalid experiment flag: " + name);
                             return false;
@@ -530,7 +544,8 @@ public class IpClientIntegrationTest {
         inOrder.verify(mAlarm, timeout(TEST_TIMEOUT_MS)).cancel(eq(listener));
     }
 
-    private OnAlarmListener expectAlarmSet(InOrder inOrder, String tagMatch, int afterSeconds) {
+    private OnAlarmListener expectAlarmSet(InOrder inOrder, String tagMatch, long afterSeconds,
+            Handler handler) {
         // Allow +/- 3 seconds to prevent flaky tests.
         final long when = SystemClock.elapsedRealtime() + afterSeconds * 1000;
         final long min = when - 3 * 1000;
@@ -538,8 +553,12 @@ public class IpClientIntegrationTest {
         ArgumentCaptor<OnAlarmListener> captor = ArgumentCaptor.forClass(OnAlarmListener.class);
         verifyWithTimeout(inOrder, mAlarm).setExact(
                 anyInt(), longThat(x -> x >= min && x <= max),
-                contains(tagMatch), captor.capture(), eq(mIpc.getHandler()));
+                contains(tagMatch), captor.capture(), eq(handler));
         return captor.getValue();
+    }
+
+    private OnAlarmListener expectAlarmSet(InOrder inOrder, String tagMatch, int afterSeconds) {
+        return expectAlarmSet(inOrder, tagMatch, (long) afterSeconds, mIpc.getHandler());
     }
 
     private boolean packetContainsExpectedField(final byte[] packet, final int offset,
@@ -585,20 +604,29 @@ public class IpClientIntegrationTest {
     }
 
     private static ByteBuffer buildDhcpOfferPacket(final DhcpPacket packet,
-            final Integer leaseTimeSec, final short mtu, final String captivePortalUrl) {
+            final Inet4Address clientAddress, final Integer leaseTimeSec, final short mtu,
+            final String captivePortalUrl, final Integer ipv6OnlyWaitTime) {
         return DhcpPacket.buildOfferPacket(DhcpPacket.ENCAP_L2, packet.getTransactionId(),
                 false /* broadcast */, SERVER_ADDR, INADDR_ANY /* relayIp */,
-                CLIENT_ADDR /* yourIp */, packet.getClientMac(), leaseTimeSec,
+                clientAddress /* yourIp */, packet.getClientMac(), leaseTimeSec,
                 NETMASK /* netMask */, BROADCAST_ADDR /* bcAddr */,
                 Collections.singletonList(SERVER_ADDR) /* gateways */,
                 Collections.singletonList(SERVER_ADDR) /* dnsServers */,
                 SERVER_ADDR /* dhcpServerIdentifier */, null /* domainName */, HOSTNAME,
-                false /* metered */, mtu, captivePortalUrl);
+                false /* metered */, mtu, captivePortalUrl, ipv6OnlyWaitTime);
+    }
+
+    private static ByteBuffer buildDhcpOfferPacket(final DhcpPacket packet,
+            final Inet4Address clientAddress, final Integer leaseTimeSec, final short mtu,
+            final String captivePortalUrl) {
+        return buildDhcpOfferPacket(packet, clientAddress, leaseTimeSec, mtu, captivePortalUrl,
+                null /* ipv6OnlyWaitTime */);
     }
 
     private static ByteBuffer buildDhcpAckPacket(final DhcpPacket packet,
             final Inet4Address clientAddress, final Integer leaseTimeSec, final short mtu,
-            final boolean rapidCommit, final String captivePortalApiUrl) {
+            final boolean rapidCommit, final String captivePortalApiUrl,
+            final Integer ipv6OnlyWaitTime) {
         return DhcpPacket.buildAckPacket(DhcpPacket.ENCAP_L2, packet.getTransactionId(),
                 false /* broadcast */, SERVER_ADDR, INADDR_ANY /* relayIp */,
                 clientAddress /* yourIp */, CLIENT_ADDR /* requestIp */, packet.getClientMac(),
@@ -606,7 +634,14 @@ public class IpClientIntegrationTest {
                 Collections.singletonList(SERVER_ADDR) /* gateways */,
                 Collections.singletonList(SERVER_ADDR) /* dnsServers */,
                 SERVER_ADDR /* dhcpServerIdentifier */, null /* domainName */, HOSTNAME,
-                false /* metered */, mtu, rapidCommit, captivePortalApiUrl);
+                false /* metered */, mtu, rapidCommit, captivePortalApiUrl, ipv6OnlyWaitTime);
+    }
+
+    private static ByteBuffer buildDhcpAckPacket(final DhcpPacket packet,
+            final Inet4Address clientAddress, final Integer leaseTimeSec, final short mtu,
+            final boolean rapidCommit, final String captivePortalApiUrl) {
+        return buildDhcpAckPacket(packet, clientAddress, leaseTimeSec, mtu, rapidCommit,
+                captivePortalApiUrl, null /* ipv6OnlyWaitTime */);
     }
 
     private static ByteBuffer buildDhcpNakPacket(final DhcpPacket packet) {
@@ -745,8 +780,8 @@ public class IpClientIntegrationTest {
                     mPacketReader.sendResponse(buildDhcpAckPacket(packet, CLIENT_ADDR, leaseTimeSec,
                               (short) mtu, true /* rapidCommit */, captivePortalApiUrl));
                 } else {
-                    mPacketReader.sendResponse(buildDhcpOfferPacket(packet, leaseTimeSec,
-                            (short) mtu, captivePortalApiUrl));
+                    mPacketReader.sendResponse(buildDhcpOfferPacket(packet, CLIENT_ADDR,
+                            leaseTimeSec, (short) mtu, captivePortalApiUrl));
                 }
             } else if (packet instanceof DhcpRequestPacket) {
                 final ByteBuffer byteBuffer = isSuccessLease
@@ -931,8 +966,8 @@ public class IpClientIntegrationTest {
 
         final short mtu = (short) TEST_DEFAULT_MTU;
         if (!shouldReplyRapidCommitAck) {
-            mPacketReader.sendResponse(buildDhcpOfferPacket(packet, TEST_LEASE_DURATION_S, mtu,
-                    null /* captivePortalUrl */));
+            mPacketReader.sendResponse(buildDhcpOfferPacket(packet, CLIENT_ADDR,
+                    TEST_LEASE_DURATION_S, mtu, null /* captivePortalUrl */));
             packet = getNextDhcpPacket();
             assertTrue(packet instanceof DhcpRequestPacket);
         }
@@ -2007,8 +2042,8 @@ public class IpClientIntegrationTest {
 
         // Send Offer and handle Request -> Ack
         final String serverSentUrl = serverSendsOption ? TEST_CAPTIVE_PORTAL_URL : null;
-        mPacketReader.sendResponse(buildDhcpOfferPacket(discover, TEST_LEASE_DURATION_S,
-                (short) TEST_DEFAULT_MTU, serverSentUrl));
+        mPacketReader.sendResponse(buildDhcpOfferPacket(discover, CLIENT_ADDR,
+                TEST_LEASE_DURATION_S, (short) TEST_DEFAULT_MTU, serverSentUrl));
         final int testMtu = 1345;
         handleDhcpPackets(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 false /* shouldReplyRapidCommitAck */, testMtu, serverSentUrl);
@@ -2326,5 +2361,205 @@ public class IpClientIntegrationTest {
         doDualStackProvisioning();
 
         verify(mCb, never()).onProvisioningFailure(any());
+    }
+
+    private DhcpPacket verifyDhcpPacketRequestsIPv6OnlyPreferredOption(
+            Class<? extends DhcpPacket> packetType) throws Exception {
+        final DhcpPacket packet = getNextDhcpPacket();
+        assertTrue(packetType.isInstance(packet));
+        assertTrue(packet.hasRequestedParam(DHCP_IPV6_ONLY_PREFERRED));
+        return packet;
+    }
+
+    private void doIPv6OnlyPreferredOptionTest(final Integer ipv6OnlyWaitTime,
+            final Inet4Address clientAddress) throws Exception {
+        final ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIpReachabilityMonitor()
+                .build();
+        mDependencies.setIPv6OnlyPreferredEnabled(true);
+        mIpc.startProvisioning(config);
+
+        final DhcpPacket packet =
+                verifyDhcpPacketRequestsIPv6OnlyPreferredOption(DhcpDiscoverPacket.class);
+
+        // Respond DHCPOFFER with IPv6-Only preferred option and offered address.
+        mPacketReader.sendResponse(buildDhcpOfferPacket(packet, clientAddress,
+                TEST_LEASE_DURATION_S, (short) TEST_DEFAULT_MTU, null /* captivePortalUrl */,
+                ipv6OnlyWaitTime));
+    }
+
+    private void doDiscoverIPv6OnlyPreferredOptionTest(final int optionSecs,
+            final long expectedWaitSecs) throws Exception {
+        doIPv6OnlyPreferredOptionTest(optionSecs, CLIENT_ADDR);
+        final OnAlarmListener alarm = expectAlarmSet(null /* inOrder */, "TIMEOUT",
+                expectedWaitSecs, mDependencies.mDhcpClient.getHandler());
+        mDependencies.mDhcpClient.getHandler().post(() -> alarm.onAlarm());
+        // Implicitly check that the client never sent a DHCPREQUEST to request the offered address.
+        verifyDhcpPacketRequestsIPv6OnlyPreferredOption(DhcpDiscoverPacket.class);
+    }
+
+    @Test
+    public void testDiscoverIPv6OnlyPreferredOption() throws Exception {
+        doDiscoverIPv6OnlyPreferredOptionTest(TEST_IPV6_ONLY_WAIT_S, TEST_IPV6_ONLY_WAIT_S);
+    }
+
+    @Test
+    public void testDiscoverIPv6OnlyPreferredOption_LowerIPv6OnlyWait() throws Exception {
+        doDiscoverIPv6OnlyPreferredOptionTest(TEST_LOWER_IPV6_ONLY_WAIT_S,
+                TEST_LOWER_IPV6_ONLY_WAIT_S);
+    }
+
+    @Test
+    public void testDiscoverIPv6OnlyPreferredOption_ZeroIPv6OnlyWait() throws Exception {
+        doDiscoverIPv6OnlyPreferredOptionTest(TEST_ZERO_IPV6_ONLY_WAIT_S,
+                TEST_LOWER_IPV6_ONLY_WAIT_S);
+    }
+
+    @Test
+    public void testDiscoverIPv6OnlyPreferredOption_MaxIPv6OnlyWait() throws Exception {
+        doDiscoverIPv6OnlyPreferredOptionTest((int) TEST_MAX_IPV6_ONLY_WAIT_S, 0xffffffffL);
+    }
+
+    @Test
+    public void testDiscoverIPv6OnlyPreferredOption_ZeroIPv6OnlyWaitWithOfferedAnyAddress()
+            throws Exception {
+        doIPv6OnlyPreferredOptionTest(TEST_ZERO_IPV6_ONLY_WAIT_S, IPV4_ADDR_ANY);
+
+        final OnAlarmListener alarm = expectAlarmSet(null /* inOrder */, "TIMEOUT", 300,
+                mDependencies.mDhcpClient.getHandler());
+        mDependencies.mDhcpClient.getHandler().post(() -> alarm.onAlarm());
+
+        verifyDhcpPacketRequestsIPv6OnlyPreferredOption(DhcpDiscoverPacket.class);
+    }
+
+    @Test
+    public void testDiscoverIPv6OnlyPreferredOption_enabledPreconnection() throws Exception {
+        final ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIpReachabilityMonitor()
+                .withPreconnection()
+                .build();
+
+        mDependencies.setDhcpRapidCommitEnabled(true);
+        mDependencies.setIPv6OnlyPreferredEnabled(true);
+        mIpc.startProvisioning(config);
+
+        final DhcpPacket packet = assertDiscoverPacketOnPreconnectionStart();
+        verify(mCb).setNeighborDiscoveryOffload(true);
+
+        // Force IpClient transition to RunningState from PreconnectionState.
+        mIpc.notifyPreconnectionComplete(true /* success */);
+        HandlerUtils.waitForIdle(mDependencies.mDhcpClient.getHandler(), TEST_TIMEOUT_MS);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
+
+        // DHCP server SHOULD NOT honor the Rapid-Commit option if the response would
+        // contain the IPv6-only Preferred option to the client, instead respond with
+        // a DHCPOFFER.
+        mPacketReader.sendResponse(buildDhcpOfferPacket(packet, CLIENT_ADDR, TEST_LEASE_DURATION_S,
+                (short) TEST_DEFAULT_MTU, null /* captivePortalUrl */, TEST_IPV6_ONLY_WAIT_S));
+
+        final OnAlarmListener alarm = expectAlarmSet(null /* inOrder */, "TIMEOUT", 1800,
+                mDependencies.mDhcpClient.getHandler());
+        mDependencies.mDhcpClient.getHandler().post(() -> alarm.onAlarm());
+
+        verifyDhcpPacketRequestsIPv6OnlyPreferredOption(DhcpDiscoverPacket.class);
+    }
+
+    @Test
+    public void testDiscoverIPv6OnlyPreferredOption_NoIPv6OnlyPreferredOption() throws Exception {
+        doIPv6OnlyPreferredOptionTest(null /* ipv6OnlyWaitTime */, CLIENT_ADDR);
+
+        // The IPv6-only Preferred option SHOULD be included in the Parameter Request List option
+        // in DHCPREQUEST messages after receiving a DHCPOFFER without this option.
+        verifyDhcpPacketRequestsIPv6OnlyPreferredOption(DhcpRequestPacket.class);
+    }
+
+    private void startFromInitRebootStateWithIPv6OnlyPreferredOption(final Integer ipv6OnlyWaitTime,
+            final long expectedWaitSecs) throws Exception {
+        doAnswer(invocation -> {
+            ((OnNetworkAttributesRetrievedListener) invocation.getArgument(1))
+                    .onNetworkAttributesRetrieved(new Status(SUCCESS), TEST_L2KEY,
+                            new NetworkAttributes.Builder()
+                                .setAssignedV4Address(CLIENT_ADDR)
+                                .setAssignedV4AddressExpiry(Long.MAX_VALUE) // lease is always valid
+                                .setMtu(new Integer(TEST_DEFAULT_MTU))
+                                .setCluster(TEST_CLUSTER)
+                                .setDnsAddresses(Collections.singletonList(SERVER_ADDR))
+                                .build());
+            return null;
+        }).when(mIpMemoryStore).retrieveNetworkAttributes(eq(TEST_L2KEY), any());
+
+        final ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIpReachabilityMonitor()
+                .withLayer2Information(new Layer2Information(TEST_L2KEY, TEST_CLUSTER,
+                          MacAddress.fromString(TEST_DEFAULT_BSSID)))
+                .build();
+
+        mDependencies.setDhcpLeaseCacheEnabled(true);
+        mDependencies.setIPv6OnlyPreferredEnabled(true);
+        mIpc.startProvisioning(config);
+
+        final DhcpPacket packet =
+                verifyDhcpPacketRequestsIPv6OnlyPreferredOption(DhcpRequestPacket.class);
+
+        // Respond DHCPACK with IPv6-Only preferred option.
+        mPacketReader.sendResponse(buildDhcpAckPacket(packet, CLIENT_ADDR,
+                TEST_LEASE_DURATION_S, (short) TEST_DEFAULT_MTU, false /* rapidcommit */,
+                null /* captivePortalUrl */, ipv6OnlyWaitTime));
+
+        if (ipv6OnlyWaitTime != null) {
+            expectAlarmSet(null /* inOrder */, "TIMEOUT", expectedWaitSecs,
+                    mDependencies.mDhcpClient.getHandler());
+        }
+    }
+
+    @Test
+    public void testRequestIPv6OnlyPreferredOption() throws Exception {
+        startFromInitRebootStateWithIPv6OnlyPreferredOption(TEST_IPV6_ONLY_WAIT_S,
+                TEST_IPV6_ONLY_WAIT_S);
+
+        // Client transits to IPv6OnlyPreferredState from INIT-REBOOT state when receiving valid
+        // IPv6-Only preferred option(default value) in the DHCPACK packet.
+        assertIpMemoryNeverStoreNetworkAttributes();
+    }
+
+    @Test
+    public void testRequestIPv6OnlyPreferredOption_LowerIPv6OnlyWait() throws Exception {
+        startFromInitRebootStateWithIPv6OnlyPreferredOption(TEST_LOWER_IPV6_ONLY_WAIT_S,
+                TEST_LOWER_IPV6_ONLY_WAIT_S);
+
+        // Client transits to IPv6OnlyPreferredState from INIT-REBOOT state when receiving valid
+        // IPv6-Only preferred option(less than MIN_V6ONLY_WAIT_MS) in the DHCPACK packet.
+        assertIpMemoryNeverStoreNetworkAttributes();
+    }
+
+    @Test
+    public void testRequestIPv6OnlyPreferredOption_ZeroIPv6OnlyWait() throws Exception {
+        startFromInitRebootStateWithIPv6OnlyPreferredOption(TEST_ZERO_IPV6_ONLY_WAIT_S,
+                TEST_LOWER_IPV6_ONLY_WAIT_S);
+
+        // Client transits to IPv6OnlyPreferredState from INIT-REBOOT state when receiving valid
+        // IPv6-Only preferred option(0) in the DHCPACK packet.
+        assertIpMemoryNeverStoreNetworkAttributes();
+    }
+
+    @Test
+    public void testRequestIPv6OnlyPreferredOption_MaxIPv6OnlyWait() throws Exception {
+        startFromInitRebootStateWithIPv6OnlyPreferredOption((int) TEST_MAX_IPV6_ONLY_WAIT_S,
+                0xffffffffL);
+
+        // Client transits to IPv6OnlyPreferredState from INIT-REBOOT state when receiving valid
+        // IPv6-Only preferred option(MAX_UNSIGNED_INTEGER: 0xFFFFFFFF) in the DHCPACK packet.
+        assertIpMemoryNeverStoreNetworkAttributes();
+    }
+
+    @Test
+    public void testRequestIPv6OnlyPreferredOption_NoIPv6OnlyPreferredOption() throws Exception {
+        final long currentTime = System.currentTimeMillis();
+        startFromInitRebootStateWithIPv6OnlyPreferredOption(null /* ipv6OnlyWaitTime */,
+                0 /* expectedWaitSecs */);
+
+        // Client processes DHCPACK packet normally and transits to the ConfiguringInterfaceState
+        // due to the null V6ONLY_WAIT.
+        assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
     }
 }
