@@ -27,6 +27,7 @@ aidl_interface {
         java: {
             apex_available: [
                 "//apex_available:platform",
+                "com.android.wifi",
                 "com.android.bluetooth.updatable",
                 "com.android.tethering",
             ],
@@ -95,6 +96,7 @@ aidl_interface {
             apex_available: [
                 "//apex_available:platform",
                 "com.android.bluetooth.updatable",
+                "com.android.wifi",
                 "com.android.tethering",
             ],
             // this is part of updatable modules(NetworkStack) which targets 29(Q)
