@@ -212,6 +212,12 @@ public class NetworkStackUtils {
     public static final String DHCP_IP_CONFLICT_DETECT_VERSION = "dhcp_ip_conflict_detect_version";
 
     /**
+     * Minimum module version at which to enable the IPv6-Only preferred option.
+     */
+    public static final String DHCP_IPV6_ONLY_PREFERRED_VERSION =
+            "dhcp_ipv6_only_preferred_version";
+
+    /**
      * Minimum module version at which to enable dismissal CaptivePortalLogin app in validated
      * network feature. CaptivePortalLogin app will also use validation facilities in
      * {@link NetworkMonitor} to perform portal validation if feature is enabled.
