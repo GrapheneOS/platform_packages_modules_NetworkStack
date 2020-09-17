@@ -30,7 +30,10 @@ java_defaults {
 
 java_defaults {
     name: "NetworkStackIntegrationTestsDefaults",
-    srcs: ["src/**/*.java"],
+    srcs: [
+        "src/**/*.java",
+        "src/**/*.kt",
+    ],
     static_libs: [
         "androidx.annotation_annotation",
         "androidx.test.rules",
