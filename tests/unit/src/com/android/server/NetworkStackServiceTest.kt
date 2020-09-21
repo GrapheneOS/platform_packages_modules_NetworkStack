@@ -175,6 +175,7 @@ class NetworkStackServiceTest {
                 mock(IBinder::class.java)))
         doReturn(9990003).`when`(mockNetworkMonitorCb).interfaceVersion
         doReturn("networkmonitor_hash").`when`(mockNetworkMonitorCb).interfaceHash
+        INetworkMonitorCallbacks.Stub.setDefaultImpl(INetworkMonitorCallbacks.Default())
 
         connector.makeNetworkMonitor(Network(123), "test_nm", mockNetworkMonitorCb)
 
