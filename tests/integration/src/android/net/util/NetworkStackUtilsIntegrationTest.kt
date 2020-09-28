@@ -30,8 +30,8 @@ import android.system.OsConstants.IPPROTO_UDP
 import android.system.OsConstants.SOCK_DGRAM
 import android.system.OsConstants.SOCK_NONBLOCK
 import androidx.test.platform.app.InstrumentationRegistry
-import com.android.server.util.NetworkStackConstants.ETHER_ADDR_LEN
-import com.android.server.util.NetworkStackConstants.IPV4_ADDR_ANY
+import com.android.net.module.util.NetworkStackConstants.ETHER_ADDR_LEN
+import com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ANY
 import com.android.testutils.ArpRequestFilter
 import com.android.testutils.ETHER_HEADER_LENGTH
 import com.android.testutils.IPV4_HEADER_LENGTH
