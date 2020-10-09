@@ -120,7 +120,6 @@ import android.net.shared.Layer2Information;
 import android.net.shared.ProvisioningConfiguration;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
 import android.net.util.InterfaceParams;
-import android.net.util.IpUtils;
 import android.net.util.NetworkStackUtils;
 import android.os.Build;
 import android.os.Handler;
@@ -141,6 +140,7 @@ import androidx.test.runner.AndroidJUnit4;
 
 import com.android.internal.util.StateMachine;
 import com.android.net.module.util.ArrayTrackRecord;
+import com.android.net.module.util.IpUtils;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.apishim.ConstantsShim;
 import com.android.networkstack.apishim.common.ShimUtils;
