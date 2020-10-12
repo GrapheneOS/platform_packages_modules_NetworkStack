@@ -562,14 +562,12 @@ public class DhcpClient extends StateMachine {
     /**
      * check whether or not to support IPv6-only preferred option.
      *
-     * IPv6-only preferred option is supported on Android S by default if there is no experiment
-     * flag set to disable this feature explicitly.
+     * IPv6-only preferred option is enabled by default if there is no experiment flag set to
+     * disable this feature explicitly.
      */
     public boolean isIPv6OnlyPreferredModeEnabled() {
-        final boolean defaultEnabled =
-                ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.R);
         return mDependencies.isFeatureEnabled(mContext, DHCP_IPV6_ONLY_PREFERRED_VERSION,
-                defaultEnabled);
+                true /* defaultEnabled */);
     }
 
     private void recordMetricEnabledFeatures() {
