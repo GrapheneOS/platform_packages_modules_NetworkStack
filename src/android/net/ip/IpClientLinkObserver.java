@@ -18,7 +18,7 @@ package android.net.ip;
 
 import static android.system.OsConstants.AF_INET6;
 
-import static com.android.server.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
+import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
 
 import android.app.AlarmManager;
 import android.content.Context;
