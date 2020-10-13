@@ -16,8 +16,8 @@
 
 package com.android.networkstack.arp;
 
-import static com.android.server.util.NetworkStackConstants.ARP_REQUEST;
-import static com.android.server.util.NetworkStackConstants.ETHER_ADDR_LEN;
+import static com.android.net.module.util.NetworkStackConstants.ARP_REQUEST;
+import static com.android.net.module.util.NetworkStackConstants.ETHER_ADDR_LEN;
 import static com.android.testutils.MiscAsserts.assertThrows;
 
 import static org.junit.Assert.assertArrayEquals;

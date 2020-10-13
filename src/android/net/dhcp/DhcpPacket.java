@@ -16,8 +16,8 @@
 
 package android.net.dhcp;
 
-import static com.android.server.util.NetworkStackConstants.IPV4_ADDR_ALL;
-import static com.android.server.util.NetworkStackConstants.IPV4_ADDR_ANY;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ALL;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ANY;
 
 import android.net.DhcpResults;
 import android.net.LinkAddress;
