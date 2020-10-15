@@ -50,6 +50,7 @@ filegroup {
 filegroup {
     name: "tethering-module-utils-srcs",
     srcs: [
+        "src/android/net/ip/ConntrackMonitor.java",
         "src/android/net/ip/InterfaceController.java",
         "src/android/net/ip/IpNeighborMonitor.java",
         "src/android/net/ip/NetlinkMonitor.java",
