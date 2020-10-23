@@ -22,7 +22,9 @@ aidl_interface {
         "src/android/net/IIpMemoryStore.aidl",
         "src/android/net/IIpMemoryStoreCallbacks.aidl",
         "src/android/net/ipmemorystore/**/*.aidl",
-        "src/android/net/quirks/IPv6ProvisioningLossQuirkParcelable.aidl",
+        // New AIDL classes should go into android.net.networkstack.aidl so they can be clearly
+        // identified
+        "src/android/net/networkstack/aidl/quirks/IPv6ProvisioningLossQuirkParcelable.aidl",
     ],
     backend: {
         java: {
@@ -138,7 +140,7 @@ java_library {
         "src/android/net/IpMemoryStoreClient.java",
         "src/android/net/ipmemorystore/**/*.java",
         "src/android/net/networkstack/**/*.java",
-        "src/android/net/quirks/**/*.java",
+        "src/android/net/networkstack/aidl/quirks/**/*.java",
         "src/android/net/shared/**/*.java",
     ],
     static_libs: [

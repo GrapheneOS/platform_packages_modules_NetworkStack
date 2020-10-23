@@ -23,5 +23,5 @@ parcelable NetworkAttributesParcelable {
   String cluster;
   android.net.ipmemorystore.Blob[] dnsAddresses;
   int mtu;
-  @nullable android.net.quirks.IPv6ProvisioningLossQuirkParcelable ipv6ProvLossQuirk;
+  @nullable android.net.networkstack.aidl.quirks.IPv6ProvisioningLossQuirkParcelable ipv6ProvisioningLossQuirk;
 }

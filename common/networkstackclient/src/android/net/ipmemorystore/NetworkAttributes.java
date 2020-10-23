@@ -18,7 +18,7 @@ package android.net.ipmemorystore;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
-import android.net.quirks.IPv6ProvisioningLossQuirk;
+import android.net.networkstack.aidl.quirks.IPv6ProvisioningLossQuirk;
 
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -86,7 +86,7 @@ public class NetworkAttributes {
 
     // IPv6 provisioning quirk info about this network, if applicable.
     @Nullable
-    public final IPv6ProvisioningLossQuirk ipv6ProvLossQuirk;
+    public final IPv6ProvisioningLossQuirk ipv6ProvisioningLossQuirk;
     // quirk information doesn't imply any correlation between "the same quirk detection count and
     // expiry" and "the same L3 network".
     private static final float WEIGHT_V6PROVLOSSQUIRK = 0.0f;
@@ -110,7 +110,7 @@ public class NetworkAttributes {
             @Nullable final String cluster,
             @Nullable final List<InetAddress> dnsAddresses,
             @Nullable final Integer mtu,
-            @Nullable final IPv6ProvisioningLossQuirk ipv6ProvLossQuirk) {
+            @Nullable final IPv6ProvisioningLossQuirk ipv6ProvisioningLossQuirk) {
         if (mtu != null && mtu < 0) throw new IllegalArgumentException("MTU can't be negative");
         if (assignedV4AddressExpiry != null && assignedV4AddressExpiry <= 0) {
             throw new IllegalArgumentException("lease expiry can't be negative or zero");
@@ -121,7 +121,7 @@ public class NetworkAttributes {
         this.dnsAddresses = null == dnsAddresses ? null :
                 Collections.unmodifiableList(new ArrayList<>(dnsAddresses));
         this.mtu = mtu;
-        this.ipv6ProvLossQuirk = ipv6ProvLossQuirk;
+        this.ipv6ProvisioningLossQuirk = ipv6ProvisioningLossQuirk;
     }
 
     @VisibleForTesting
@@ -134,7 +134,8 @@ public class NetworkAttributes {
                 parcelable.cluster,
                 blobArrayToInetAddressList(parcelable.dnsAddresses),
                 parcelable.mtu >= 0 ? parcelable.mtu : null,
-                IPv6ProvisioningLossQuirk.fromStableParcelable(parcelable.ipv6ProvLossQuirk));
+                IPv6ProvisioningLossQuirk.fromStableParcelable(
+                        parcelable.ipv6ProvisioningLossQuirk));
     }
 
     @Nullable
@@ -183,8 +184,8 @@ public class NetworkAttributes {
         parcelable.cluster = cluster;
         parcelable.dnsAddresses = inetAddressListToBlobArray(dnsAddresses);
         parcelable.mtu = (null == mtu) ? -1 : mtu;
-        parcelable.ipv6ProvLossQuirk =
-                (null == ipv6ProvLossQuirk) ? null : ipv6ProvLossQuirk.toStableParcelable();
+        parcelable.ipv6ProvisioningLossQuirk = (null == ipv6ProvisioningLossQuirk)
+                ? null : ipv6ProvisioningLossQuirk.toStableParcelable();
         return parcelable;
     }
 
@@ -206,8 +207,8 @@ public class NetworkAttributes {
                 + samenessContribution(WEIGHT_CLUSTER, cluster, o.cluster)
                 + samenessContribution(WEIGHT_DNSADDRESSES, dnsAddresses, o.dnsAddresses)
                 + samenessContribution(WEIGHT_MTU, mtu, o.mtu)
-                + samenessContribution(WEIGHT_V6PROVLOSSQUIRK, ipv6ProvLossQuirk,
-                      o.ipv6ProvLossQuirk);
+                + samenessContribution(WEIGHT_V6PROVLOSSQUIRK, ipv6ProvisioningLossQuirk,
+                      o.ipv6ProvisioningLossQuirk);
         // The minimum is 0, the max is TOTAL_WEIGHT and should be represented by 1.0, and
         // TOTAL_WEIGHT_CUTOFF should represent 0.5, but there is no requirement that
         // TOTAL_WEIGHT_CUTOFF would be half of TOTAL_WEIGHT (indeed, it should not be).
@@ -250,7 +251,7 @@ public class NetworkAttributes {
             mCluster = attributes.cluster;
             mDnsAddresses = new ArrayList<>(attributes.dnsAddresses);
             mMtu = attributes.mtu;
-            mIpv6ProvLossQuirk = attributes.ipv6ProvLossQuirk;
+            mIpv6ProvLossQuirk = attributes.ipv6ProvisioningLossQuirk;
         }
 
         /**
@@ -341,7 +342,7 @@ public class NetworkAttributes {
     public boolean isEmpty() {
         return (null == assignedV4Address) && (null == assignedV4AddressExpiry)
                 && (null == cluster) && (null == dnsAddresses) && (null == mtu)
-                && (null == ipv6ProvLossQuirk);
+                && (null == ipv6ProvisioningLossQuirk);
     }
 
     @Override
@@ -353,13 +354,13 @@ public class NetworkAttributes {
                 && Objects.equals(cluster, other.cluster)
                 && Objects.equals(dnsAddresses, other.dnsAddresses)
                 && Objects.equals(mtu, other.mtu)
-                && Objects.equals(ipv6ProvLossQuirk, other.ipv6ProvLossQuirk);
+                && Objects.equals(ipv6ProvisioningLossQuirk, other.ipv6ProvisioningLossQuirk);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(assignedV4Address, assignedV4AddressExpiry,
-                cluster, dnsAddresses, mtu, ipv6ProvLossQuirk);
+                cluster, dnsAddresses, mtu, ipv6ProvisioningLossQuirk);
     }
 
     /** Pretty print */
@@ -406,12 +407,12 @@ public class NetworkAttributes {
             nullFields.add("mtu");
         }
 
-        if (null != ipv6ProvLossQuirk) {
-            resultJoiner.add("ipv6ProvLossQuirk : [");
-            resultJoiner.add(ipv6ProvLossQuirk.toString());
+        if (null != ipv6ProvisioningLossQuirk) {
+            resultJoiner.add("ipv6ProvisioningLossQuirk : [");
+            resultJoiner.add(ipv6ProvisioningLossQuirk.toString());
             resultJoiner.add("]");
         } else {
-            nullFields.add("ipv6ProvLossQuirk");
+            nullFields.add("ipv6ProvisioningLossQuirk");
         }
 
         if (!nullFields.isEmpty()) {

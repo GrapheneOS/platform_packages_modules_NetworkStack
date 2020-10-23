@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package android.net.quirks;
+package android.net.networkstack.aidl.quirks;
 
 parcelable IPv6ProvisioningLossQuirkParcelable {
     int detectionCount;

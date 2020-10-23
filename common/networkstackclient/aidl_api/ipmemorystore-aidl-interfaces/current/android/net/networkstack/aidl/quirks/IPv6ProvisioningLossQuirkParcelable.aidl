@@ -15,7 +15,7 @@
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
 
-package android.net.quirks;
+package android.net.networkstack.aidl.quirks;
 parcelable IPv6ProvisioningLossQuirkParcelable {
   int detectionCount;
   long quirkExpiry;
