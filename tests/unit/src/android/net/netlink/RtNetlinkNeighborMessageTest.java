@@ -19,6 +19,7 @@ package android.net.netlink;
 import static android.net.netlink.NetlinkTestUtils.makeDelNeighMessage;
 import static android.net.netlink.NetlinkTestUtils.makeNewNeighMessage;
 import static android.net.netlink.StructNdMsg.NUD_STALE;
+import static android.system.OsConstants.NETLINK_ROUTE;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -81,7 +82,7 @@ public class RtNetlinkNeighborMessageTest {
     public void testParseRtmDelNeigh() {
         final ByteBuffer byteBuffer = ByteBuffer.wrap(RTM_DELNEIGH);
         byteBuffer.order(ByteOrder.LITTLE_ENDIAN);  // For testing.
-        final NetlinkMessage msg = NetlinkMessage.parse(byteBuffer);
+        final NetlinkMessage msg = NetlinkMessage.parse(byteBuffer, NETLINK_ROUTE);
         assertNotNull(msg);
         assertTrue(msg instanceof RtNetlinkNeighborMessage);
         final RtNetlinkNeighborMessage neighMsg = (RtNetlinkNeighborMessage) msg;
@@ -108,7 +109,7 @@ public class RtNetlinkNeighborMessageTest {
     public void testParseRtmNewNeigh() {
         final ByteBuffer byteBuffer = ByteBuffer.wrap(RTM_NEWNEIGH);
         byteBuffer.order(ByteOrder.LITTLE_ENDIAN);  // For testing.
-        final NetlinkMessage msg = NetlinkMessage.parse(byteBuffer);
+        final NetlinkMessage msg = NetlinkMessage.parse(byteBuffer, NETLINK_ROUTE);
         assertNotNull(msg);
         assertTrue(msg instanceof RtNetlinkNeighborMessage);
         final RtNetlinkNeighborMessage neighMsg = (RtNetlinkNeighborMessage) msg;
@@ -138,7 +139,7 @@ public class RtNetlinkNeighborMessageTest {
 
         int messageCount = 0;
         while (byteBuffer.remaining() > 0) {
-            final NetlinkMessage msg = NetlinkMessage.parse(byteBuffer);
+            final NetlinkMessage msg = NetlinkMessage.parse(byteBuffer, NETLINK_ROUTE);
             assertNotNull(msg);
             assertTrue(msg instanceof RtNetlinkNeighborMessage);
             final RtNetlinkNeighborMessage neighMsg = (RtNetlinkNeighborMessage) msg;
