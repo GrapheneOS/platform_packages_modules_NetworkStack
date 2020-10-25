@@ -90,6 +90,11 @@ public class NetlinkMessage {
 
     @Override
     public String toString() {
+        // The netlink family is not provided to StructNlMsgHdr#toString because NetlinkMessage
+        // doesn't store the information. So the netlink message type can't be transformed into
+        // a string by StructNlMsgHdr#toString and just keep as an integer. The specific message
+        // which inherits NetlinkMessage could override NetlinkMessage#toString and provide the
+        // specific netlink family to StructNlMsgHdr#toString.
         return "NetlinkMessage{" + (mHeader == null ? "" : mHeader.toString()) + "}";
     }
 

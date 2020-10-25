@@ -213,7 +213,8 @@ public class InetDiagMessage extends NetlinkMessage {
     @Override
     public String toString() {
         return "InetDiagMessage{ "
-                + "nlmsghdr{" + (mHeader == null ? "" : mHeader.toString()) + "}, "
+                + "nlmsghdr{"
+                + (mHeader == null ? "" : mHeader.toString(NETLINK_INET_DIAG)) + "}, "
                 + "inet_diag_msg{"
                 + (mStructInetDiagMsg == null ? "" : mStructInetDiagMsg.toString()) + "} "
                 + "}";
