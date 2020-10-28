@@ -23,8 +23,8 @@ import static android.net.netlink.StructNlMsgHdr.NLM_F_REQUEST;
 
 import android.system.OsConstants;
 
-import java.net.InetAddress;
 import java.net.Inet6Address;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -234,7 +234,8 @@ public class RtNetlinkNeighborMessage extends NetlinkMessage {
     public String toString() {
         final String ipLiteral = (mDestination == null) ? "" : mDestination.getHostAddress();
         return "RtNetlinkNeighborMessage{ "
-                + "nlmsghdr{" + (mHeader == null ? "" : mHeader.toString()) + "}, "
+                + "nlmsghdr{"
+                + (mHeader == null ? "" : mHeader.toString(OsConstants.NETLINK_ROUTE)) + "}, "
                 + "ndmsg{" + (mNdmsg == null ? "" : mNdmsg.toString()) + "}, "
                 + "destination{" + ipLiteral + "} "
                 + "linklayeraddr{" + NetlinkConstants.hexify(mLinkLayerAddr) + "} "
