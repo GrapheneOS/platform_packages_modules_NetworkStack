@@ -16,6 +16,9 @@
 
 package android.net.netlink;
 
+import android.annotation.NonNull;
+import android.annotation.Nullable;
+
 import java.nio.ByteBuffer;
 
 
@@ -124,8 +127,21 @@ public class StructNlMsgHdr {
 
     @Override
     public String toString() {
+        return toString(null /* unknown netlink family */);
+    }
+
+    /**
+     * Transform a netlink header into a string. The netlink family is required for transforming
+     * a netlink type integer into a string.
+     * @param nlFamily netlink family.
+     * @return A list of header elements.
+     */
+    @NonNull
+    public String toString(@Nullable Integer nlFamily) {
         final String typeStr = "" + nlmsg_type
-                + "(" + NetlinkConstants.stringForNlMsgType(nlmsg_type) + ")";
+                + "(" + (nlFamily == null
+                ? "" : NetlinkConstants.stringForNlMsgType(nlmsg_type, nlFamily))
+                + ")";
         final String flagsStr = "" + nlmsg_flags
                 + "(" + stringForNlMsgFlags(nlmsg_flags) + ")";
         return "StructNlMsgHdr{ "

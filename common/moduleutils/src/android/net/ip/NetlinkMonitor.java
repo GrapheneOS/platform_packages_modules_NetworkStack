@@ -108,7 +108,7 @@ public class NetlinkMonitor extends PacketReader {
         while (byteBuffer.remaining() > 0) {
             try {
                 final int position = byteBuffer.position();
-                final NetlinkMessage nlMsg = NetlinkMessage.parse(byteBuffer);
+                final NetlinkMessage nlMsg = NetlinkMessage.parse(byteBuffer, mFamily);
                 if (nlMsg == null || nlMsg.getHeader() == null) {
                     byteBuffer.position(position);
                     mLog.e("unparsable netlink msg: " + hexify(byteBuffer));
