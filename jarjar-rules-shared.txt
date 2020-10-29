@@ -1,6 +1,3 @@
-# Classes from net-utils-framework-common
-rule com.android.net.module.util.** com.android.networkstack.util.@1
-
 rule com.android.internal.util.** android.net.networkstack.util.@1
 rule com.google.protobuf.** com.android.networkstack.protobuf.@1
 
