@@ -59,5 +59,8 @@ filegroup {
         "src/android/net/util/InterfaceParams.java",
         "src/android/net/util/SharedLog.java",
     ],
-    visibility: ["//frameworks/base/packages/Tethering"],
+    visibility: [
+        "//frameworks/base/packages/Tethering",
+        "//packages/modules/Connectivity/Tethering"
+    ],
 }

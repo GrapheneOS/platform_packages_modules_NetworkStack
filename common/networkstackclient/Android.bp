@@ -124,6 +124,7 @@ aidl_interface {
     visibility: [
         "//system/tools/aidl/build",
         "//frameworks/base/packages/Tethering",
+        "//packages/modules/Connectivity/Tethering",
     ],
 }
 
@@ -145,6 +146,7 @@ java_library {
     ],
     visibility: [
         "//frameworks/base/packages/Tethering",
+        "//packages/modules/Connectivity/Tethering",
         "//frameworks/base/services/net",
         "//frameworks/opt/net/wifi/service",
         "//packages/modules/NetworkStack",
