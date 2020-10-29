@@ -63,6 +63,7 @@ android_library {
     visibility: [
         "//packages/modules/NetworkStack/tests/integration",
         "//frameworks/base/packages/Tethering/tests/integration",
+        "//packages/modules/Connectivity/Tethering/tests/integration",
     ]
 }
 
