@@ -17,11 +17,6 @@
 
 package android.net.ipmemorystore;
 /* @hide */
-parcelable NetworkAttributesParcelable {
-  byte[] assignedV4Address;
-  long assignedV4AddressExpiry;
-  String cluster;
-  android.net.ipmemorystore.Blob[] dnsAddresses;
-  int mtu;
-  @nullable android.net.networkstack.aidl.quirks.IPv6ProvisioningLossQuirkParcelable ipv6ProvisioningLossQuirk;
+interface IOnSameL3NetworkResponseListener {
+  oneway void onSameL3NetworkResponse(in android.net.ipmemorystore.StatusParcelable status, in android.net.ipmemorystore.SameL3NetworkResponseParcelable response);
 }
