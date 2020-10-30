@@ -22,6 +22,9 @@ aidl_interface {
         "src/android/net/IIpMemoryStore.aidl",
         "src/android/net/IIpMemoryStoreCallbacks.aidl",
         "src/android/net/ipmemorystore/**/*.aidl",
+        // New AIDL classes should go into android.net.networkstack.aidl so they can be clearly
+        // identified
+        "src/android/net/networkstack/aidl/quirks/IPv6ProvisioningLossQuirkParcelable.aidl",
     ],
     backend: {
         java: {
@@ -50,6 +53,7 @@ aidl_interface {
         "6",
         "7",
         "8",
+        "9",
     ],
     visibility: [
         "//system/tools/aidl/build",
@@ -124,6 +128,7 @@ aidl_interface {
     visibility: [
         "//system/tools/aidl/build",
         "//frameworks/base/packages/Tethering",
+        "//packages/modules/Connectivity/Tethering",
     ],
 }
 
@@ -137,6 +142,7 @@ java_library {
         "src/android/net/IpMemoryStoreClient.java",
         "src/android/net/ipmemorystore/**/*.java",
         "src/android/net/networkstack/**/*.java",
+        "src/android/net/networkstack/aidl/quirks/**/*.java",
         "src/android/net/shared/**/*.java",
     ],
     static_libs: [
@@ -145,6 +151,7 @@ java_library {
     ],
     visibility: [
         "//frameworks/base/packages/Tethering",
+        "//packages/modules/Connectivity/Tethering",
         "//frameworks/base/services/net",
         "//frameworks/opt/net/wifi/service",
         "//packages/modules/NetworkStack",
