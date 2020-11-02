@@ -221,6 +221,7 @@ android_library {
     visibility: [
         "//frameworks/base/tests/net/integration",
         "//cts/tests/tests/net",
+        "//packages/modules/Connectivity/tests/cts/net",
     ],
 }
 
