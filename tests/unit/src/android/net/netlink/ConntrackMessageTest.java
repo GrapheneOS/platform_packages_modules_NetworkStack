@@ -82,6 +82,14 @@ public class ConntrackMessageTest {
     public static final byte[] CT_V4UPDATE_TCP_BYTES =
             HexEncoding.decode(CT_V4UPDATE_TCP_HEX.replaceAll(" ", "").toCharArray(), false);
 
+    private byte[] makeIPv4TimeoutUpdateRequestTcp() throws Exception {
+        return ConntrackMessage.newIPv4TimeoutUpdateRequest(
+                OsConstants.IPPROTO_TCP,
+                (Inet4Address) InetAddress.getByName("192.168.43.209"), 44333,
+                (Inet4Address) InetAddress.getByName("23.211.13.26"), 443,
+                432000);
+    }
+
     // Example 2: UDP (100.96.167.146, 37069) -> (216.58.197.10, 443)
     public static final String CT_V4UPDATE_UDP_HEX =
             // struct nlmsghdr
@@ -115,17 +123,27 @@ public class ConntrackMessageTest {
     public static final byte[] CT_V4UPDATE_UDP_BYTES =
             HexEncoding.decode(CT_V4UPDATE_UDP_HEX.replaceAll(" ", "").toCharArray(), false);
 
+    private byte[] makeIPv4TimeoutUpdateRequestUdp() throws Exception {
+        return ConntrackMessage.newIPv4TimeoutUpdateRequest(
+                OsConstants.IPPROTO_UDP,
+                (Inet4Address) InetAddress.getByName("100.96.167.146"), 37069,
+                (Inet4Address) InetAddress.getByName("216.58.197.10"), 443,
+                180);
+    }
+
     @Test
-    public void testConntrackIPv4TcpTimeoutUpdate() throws Exception {
+    public void testConntrackMakeIPv4TcpTimeoutUpdate() throws Exception {
         assumeTrue(USING_LE);
 
-        final byte[] tcp = ConntrackMessage.newIPv4TimeoutUpdateRequest(
-                OsConstants.IPPROTO_TCP,
-                (Inet4Address) InetAddress.getByName("192.168.43.209"), 44333,
-                (Inet4Address) InetAddress.getByName("23.211.13.26"), 443,
-                432000);
+        final byte[] tcp = makeIPv4TimeoutUpdateRequestTcp();
         assertArrayEquals(CT_V4UPDATE_TCP_BYTES, tcp);
+    }
 
+    @Test
+    public void testConntrackParseIPv4TcpTimeoutUpdate() throws Exception {
+        assumeTrue(USING_LE);
+
+        final byte[] tcp = makeIPv4TimeoutUpdateRequestTcp();
         final ByteBuffer byteBuffer = ByteBuffer.wrap(tcp);
         byteBuffer.order(ByteOrder.nativeOrder());
         final NetlinkMessage msg = NetlinkMessage.parse(byteBuffer, OsConstants.NETLINK_NETFILTER);
@@ -142,26 +160,30 @@ public class ConntrackMessageTest {
         assertEquals(1, hdr.nlmsg_seq);
         assertEquals(0, hdr.nlmsg_pid);
 
-        final StructNfGenMsg nfmsgHdr = conntrackMessage.getNfHeader();
+        final StructNfGenMsg nfmsgHdr = conntrackMessage.nfGenMsg;
         assertNotNull(nfmsgHdr);
         assertEquals((byte) OsConstants.AF_INET, nfmsgHdr.nfgen_family);
         assertEquals((byte) StructNfGenMsg.NFNETLINK_V0, nfmsgHdr.version);
         assertEquals((short) 0, nfmsgHdr.res_id);
 
-        // TODO: Parse the CTA_TUPLE_ORIG and CTA_TIMEOUT.
+        // TODO: Parse the CTA_TUPLE_ORIG.
+        assertEquals(0 /* absent */, conntrackMessage.status);
+        assertEquals(432000, conntrackMessage.timeoutSec);
     }
 
     @Test
-    public void testConntrackIPv4UdpTimeoutUpdate() throws Exception {
+    public void testConntrackMakeIPv4UdpTimeoutUpdate() throws Exception {
         assumeTrue(USING_LE);
 
-        final byte[] udp = ConntrackMessage.newIPv4TimeoutUpdateRequest(
-                OsConstants.IPPROTO_UDP,
-                (Inet4Address) InetAddress.getByName("100.96.167.146"), 37069,
-                (Inet4Address) InetAddress.getByName("216.58.197.10"), 443,
-                180);
+        final byte[] udp = makeIPv4TimeoutUpdateRequestUdp();
         assertArrayEquals(CT_V4UPDATE_UDP_BYTES, udp);
+    }
 
+    @Test
+    public void testConntrackParseIPv4UdpTimeoutUpdate() throws Exception {
+        assumeTrue(USING_LE);
+
+        final byte[] udp = makeIPv4TimeoutUpdateRequestUdp();
         final ByteBuffer byteBuffer = ByteBuffer.wrap(udp);
         byteBuffer.order(ByteOrder.nativeOrder());
         final NetlinkMessage msg = NetlinkMessage.parse(byteBuffer, OsConstants.NETLINK_NETFILTER);
@@ -178,20 +200,22 @@ public class ConntrackMessageTest {
         assertEquals(1, hdr.nlmsg_seq);
         assertEquals(0, hdr.nlmsg_pid);
 
-        final StructNfGenMsg nfmsgHdr = conntrackMessage.getNfHeader();
+        final StructNfGenMsg nfmsgHdr = conntrackMessage.nfGenMsg;
         assertNotNull(nfmsgHdr);
         assertEquals((byte) OsConstants.AF_INET, nfmsgHdr.nfgen_family);
         assertEquals((byte) StructNfGenMsg.NFNETLINK_V0, nfmsgHdr.version);
         assertEquals((short) 0, nfmsgHdr.res_id);
 
-        // TODO: Parse the CTA_TUPLE_ORIG and CTA_TIMEOUT.
+        // TODO: Parse the CTA_TUPLE_ORIG.
+        assertEquals(0 /* absent */, conntrackMessage.status);
+        assertEquals(180, conntrackMessage.timeoutSec);
     }
 
     // TODO: Add conntrack message attributes to have further verification.
     public static final String CT_V4NEW_HEX =
             // CHECKSTYLE:OFF IndentationCheck
             // struct nlmsghdr
-            "14000000" +      // length = 20
+            "24000000" +      // length = 36
             "0001" +          // type = NFNL_SUBSYS_CTNETLINK (1) << 8 | IPCTNL_MSG_CT_NEW (0)
             "0006" +          // flags = NLM_F_CREATE | NLM_F_EXCL
             "00000000" +      // seqno = 0
@@ -199,7 +223,17 @@ public class ConntrackMessageTest {
             // struct nfgenmsg
             "02" +            // nfgen_family = AF_INET
             "00" +            // version = NFNETLINK_V0
-            "1234";           // res_id = 0x1234 (big endian)
+            "1234" +          // res_id = 0x1234 (big endian)
+            // struct nlattr
+            "0800" +          // nla_len = 8
+            "0300" +          // nla_type = CTA_STATUS
+            "00000198" +      // nla_value = 0b110011000 (big endian)
+                              // IPS_CONFIRMED (1 << 3) | IPS_SRC_NAT (1 << 4) |
+                              // IPS_SRC_NAT_DONE (1 << 7) | IPS_DST_NAT_DONE (1 << 8)
+            // struct nlattr
+            "0800" +          // nla_len = 8
+            "0700" +          // nla_type = CTA_TIMEOUT
+            "00000078";       // nla_value = 120 (big endian)
             // CHECKSTYLE:ON IndentationCheck
     public static final byte[] CT_V4NEW_BYTES =
             HexEncoding.decode(CT_V4NEW_HEX.replaceAll(" ", "").toCharArray(), false);
@@ -217,17 +251,20 @@ public class ConntrackMessageTest {
 
         final StructNlMsgHdr hdr = conntrackMessage.getHeader();
         assertNotNull(hdr);
-        assertEquals(20, hdr.nlmsg_len);
+        assertEquals(36, hdr.nlmsg_len);
         assertEquals(makeCtType(IPCTNL_MSG_CT_NEW), hdr.nlmsg_type);
         assertEquals((short) (StructNlMsgHdr.NLM_F_CREATE | StructNlMsgHdr.NLM_F_EXCL),
                 hdr.nlmsg_flags);
         assertEquals(0, hdr.nlmsg_seq);
         assertEquals(0, hdr.nlmsg_pid);
 
-        final StructNfGenMsg nfmsgHdr = conntrackMessage.getNfHeader();
+        final StructNfGenMsg nfmsgHdr = conntrackMessage.nfGenMsg;
         assertNotNull(nfmsgHdr);
         assertEquals((byte) OsConstants.AF_INET, nfmsgHdr.nfgen_family);
         assertEquals((byte) StructNfGenMsg.NFNETLINK_V0, nfmsgHdr.version);
         assertEquals((short) 0x1234, nfmsgHdr.res_id);
+
+        assertEquals(0x198, conntrackMessage.status);
+        assertEquals(120, conntrackMessage.timeoutSec);
     }
 }
