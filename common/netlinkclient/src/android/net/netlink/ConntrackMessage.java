@@ -39,9 +39,6 @@ import java.nio.ByteOrder;
 public class ConntrackMessage extends NetlinkMessage {
     public static final int STRUCT_SIZE = StructNlMsgHdr.STRUCT_SIZE + StructNfGenMsg.STRUCT_SIZE;
 
-    public static final short NFNL_SUBSYS_CTNETLINK = 1;
-    public static final short IPCTNL_MSG_CT_NEW = 0;
-
     // enum ctattr_type
     public static final short CTA_TUPLE_ORIG  = 1;
     public static final short CTA_TUPLE_REPLY = 2;
@@ -84,7 +81,8 @@ public class ConntrackMessage extends NetlinkMessage {
 
         final ConntrackMessage ctmsg = new ConntrackMessage();
         ctmsg.mHeader.nlmsg_len = bytes.length;
-        ctmsg.mHeader.nlmsg_type = (NFNL_SUBSYS_CTNETLINK << 8) | IPCTNL_MSG_CT_NEW;
+        ctmsg.mHeader.nlmsg_type = (NetlinkConstants.NFNL_SUBSYS_CTNETLINK << 8)
+                | NetlinkConstants.IPCTNL_MSG_CT_NEW;
         ctmsg.mHeader.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_REPLACE;
         ctmsg.mHeader.nlmsg_seq = 1;
         ctmsg.pack(byteBuffer);
@@ -95,11 +93,32 @@ public class ConntrackMessage extends NetlinkMessage {
         return bytes;
     }
 
+    /**
+     * Parses a netfilter conntrack message from a {@link ByteBuffer}.
+     *
+     * @param header the netlink message header.
+     * @param byteBuffer The buffer from which to parse the netfilter conntrack message.
+     * @return the parsed netfilter conntrack message, or {@code null} if the netfilter conntrack
+     *         message could not be parsed successfully (for example, if it was truncated).
+     */
+    public static ConntrackMessage parse(StructNlMsgHdr header, ByteBuffer byteBuffer) {
+        // Just build the netlink header for now and pretend the whole message was consumed.
+        // TODO: Parse the netfilter message header and conntrack attributes.
+        final ConntrackMessage conntrackMsg = new ConntrackMessage(header);
+        byteBuffer.position(byteBuffer.limit());
+        return conntrackMsg;
+    }
+
     protected StructNfGenMsg mNfGenMsg;
 
     private ConntrackMessage() {
         super(new StructNlMsgHdr());
         mNfGenMsg = new StructNfGenMsg((byte) OsConstants.AF_INET);
+    }
+
+    private ConntrackMessage(StructNlMsgHdr header) {
+        super(header);
+        mNfGenMsg = null;
     }
 
     public void pack(ByteBuffer byteBuffer) {
