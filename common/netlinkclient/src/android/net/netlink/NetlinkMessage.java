@@ -74,6 +74,9 @@ public class NetlinkMessage {
         if (nlFamily == OsConstants.NETLINK_INET_DIAG) {
             return parseInetDiagMessage(nlmsghdr, byteBuffer);
         }
+        if (nlFamily == OsConstants.NETLINK_NETFILTER) {
+            return parseNfMessage(nlmsghdr, byteBuffer);
+        }
 
         return null;
     }
@@ -133,6 +136,19 @@ public class NetlinkMessage {
         switch (nlmsghdr.nlmsg_type) {
             case NetlinkConstants.SOCK_DIAG_BY_FAMILY:
                 return (NetlinkMessage) InetDiagMessage.parse(nlmsghdr, byteBuffer);
+            default: return null;
+        }
+    }
+
+    @Nullable
+    private static NetlinkMessage parseNfMessage(@NonNull StructNlMsgHdr nlmsghdr,
+            @NonNull ByteBuffer byteBuffer) {
+        switch (nlmsghdr.nlmsg_type) {
+            case NetlinkConstants.NFNL_SUBSYS_CTNETLINK << 8
+                    | NetlinkConstants.IPCTNL_MSG_CT_NEW:
+            case NetlinkConstants.NFNL_SUBSYS_CTNETLINK << 8
+                    | NetlinkConstants.IPCTNL_MSG_CT_DELETE:
+                return (NetlinkMessage) ConntrackMessage.parse(nlmsghdr, byteBuffer);
             default: return null;
         }
     }
