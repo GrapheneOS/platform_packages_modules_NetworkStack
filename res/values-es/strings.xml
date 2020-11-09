@@ -20,7 +20,7 @@
     <string name="notification_channel_description_connected" msgid="7239184168268014518">"Notificaciones que se muestran cuando el dispositivo se autentica correctamente en la red de un portal cautivo"</string>
     <string name="notification_channel_name_network_venue_info" msgid="6526543187249265733">"Información sobre el lugar de la red"</string>
     <string name="notification_channel_description_network_venue_info" msgid="5131499595382733605">"Notificaciones que se muestran para indicar que la red tiene una página de información sobre el lugar"</string>
-    <string name="connected" msgid="4563643884927480998">"Conectada"</string>
+    <string name="connected" msgid="4563643884927480998">"Conectado"</string>
     <string name="tap_for_info" msgid="6849746325626883711">"Conectado: toca para ver el sitio web"</string>
-    <string name="application_label" msgid="8095087899576605955">"Administrador de conectividad"</string>
+    <string name="application_label" msgid="1322847171305285454">"Administrador de redes"</string>
 </resources>
