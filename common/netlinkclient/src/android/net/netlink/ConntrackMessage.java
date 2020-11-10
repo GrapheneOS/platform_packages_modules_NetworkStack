@@ -21,6 +21,8 @@ import static android.net.netlink.StructNlAttr.makeNestedType;
 import static android.net.netlink.StructNlMsgHdr.NLM_F_ACK;
 import static android.net.netlink.StructNlMsgHdr.NLM_F_REPLACE;
 import static android.net.netlink.StructNlMsgHdr.NLM_F_REQUEST;
+import static android.system.OsConstants.IPPROTO_TCP;
+import static android.system.OsConstants.IPPROTO_UDP;
 
 import static java.nio.ByteOrder.BIG_ENDIAN;
 
@@ -71,11 +73,20 @@ public class ConntrackMessage extends NetlinkMessage {
     public static class Tuple {
         public final Inet4Address srcIp;
         public final Inet4Address dstIp;
-        // TODO: tuple proto for CTA_TUPLE_PROTO.
 
-        public Tuple(TupleIpv4 ip) {
+        // Both port and protocol number are unsigned numbers stored in signed integers, and that
+        // callers that want to compare them to integers should either cast those integers, or
+        // convert them to unsigned using Byte.toUnsignedInt() and Short.toUnsignedInt().
+        public final short srcPort;
+        public final short dstPort;
+        public final byte protoNum;
+
+        public Tuple(TupleIpv4 ip, TupleProto proto) {
             this.srcIp = ip.src;
             this.dstIp = ip.dst;
+            this.srcPort = proto.srcPort;
+            this.dstPort = proto.dstPort;
+            this.protoNum = proto.protoNum;
         }
     }
 
@@ -91,6 +102,23 @@ public class ConntrackMessage extends NetlinkMessage {
         public TupleIpv4(Inet4Address src, Inet4Address dst) {
             this.src = src;
             this.dst = dst;
+        }
+    }
+
+    /**
+     * A tuple for the conntrack connection protocol.
+     *
+     * see also CTA_TUPLE_PROTO.
+     */
+    public static class TupleProto {
+        public final byte protoNum;
+        public final short srcPort;
+        public final short dstPort;
+
+        public TupleProto(byte protoNum, short srcPort, short dstPort) {
+            this.protoNum = protoNum;
+            this.srcPort = srcPort;
+            this.dstPort = dstPort;
         }
     }
 
@@ -226,6 +254,7 @@ public class ConntrackMessage extends NetlinkMessage {
         if (byteBuffer == null) return null;
 
         TupleIpv4 tupleIpv4 = null;
+        TupleProto tupleProto = null;
 
         final int baseOffset = byteBuffer.position();
         StructNlAttr nlAttr = findNextAttrOfType(makeNestedType(CTA_TUPLE_IP), byteBuffer);
@@ -234,7 +263,14 @@ public class ConntrackMessage extends NetlinkMessage {
         }
         if (tupleIpv4 == null) return null;
 
-        return new Tuple(tupleIpv4);
+        byteBuffer.position(baseOffset);
+        nlAttr = findNextAttrOfType(makeNestedType(CTA_TUPLE_PROTO), byteBuffer);
+        if (nlAttr != null) {
+            tupleProto = parseTupleProto(nlAttr.getValueAsByteBuffer());
+        }
+        if (tupleProto == null) return null;
+
+        return new Tuple(tupleIpv4, tupleProto);
     }
 
     @Nullable
@@ -265,6 +301,38 @@ public class ConntrackMessage extends NetlinkMessage {
         if (dst == null) return null;
 
         return new TupleIpv4(src, dst);
+    }
+
+    @Nullable
+    private static TupleProto parseTupleProto(@Nullable ByteBuffer byteBuffer) {
+        if (byteBuffer == null) return null;
+
+        byte protoNum = 0;
+        short srcPort = 0;
+        short dstPort = 0;
+
+        final int baseOffset = byteBuffer.position();
+        StructNlAttr nlAttr = findNextAttrOfType(CTA_PROTO_NUM, byteBuffer);
+        if (nlAttr != null) {
+            protoNum = nlAttr.getValueAsByte((byte) 0);
+        }
+        if (!(protoNum == IPPROTO_TCP || protoNum == IPPROTO_UDP)) return null;
+
+        byteBuffer.position(baseOffset);
+        nlAttr = StructNlAttr.findNextAttrOfType(CTA_PROTO_SRC_PORT, byteBuffer);
+        if (nlAttr != null) {
+            srcPort = nlAttr.getValueAsBe16((short) 0);
+        }
+        if (srcPort == 0) return null;
+
+        byteBuffer.position(baseOffset);
+        nlAttr = StructNlAttr.findNextAttrOfType(CTA_PROTO_DST_PORT, byteBuffer);
+        if (nlAttr != null) {
+            dstPort = nlAttr.getValueAsBe16((short) 0);
+        }
+        if (dstPort == 0) return null;
+
+        return new TupleProto(protoNum, srcPort, dstPort);
     }
 
     /**

@@ -172,6 +172,9 @@ public class ConntrackMessageTest {
                 conntrackMessage.tupleOrig.srcIp);
         assertEquals(InetAddress.parseNumericAddress("23.211.13.26"),
                 conntrackMessage.tupleOrig.dstIp);
+        assertEquals((byte) OsConstants.IPPROTO_TCP, conntrackMessage.tupleOrig.protoNum);
+        assertEquals((short) 44333, conntrackMessage.tupleOrig.srcPort);
+        assertEquals((short) 443, conntrackMessage.tupleOrig.dstPort);
 
         assertNull(conntrackMessage.tupleReply);
 
@@ -218,6 +221,9 @@ public class ConntrackMessageTest {
                 conntrackMessage.tupleOrig.srcIp);
         assertEquals(InetAddress.parseNumericAddress("216.58.197.10"),
                 conntrackMessage.tupleOrig.dstIp);
+        assertEquals((byte) OsConstants.IPPROTO_UDP, conntrackMessage.tupleOrig.protoNum);
+        assertEquals((short) 37069, conntrackMessage.tupleOrig.srcPort);
+        assertEquals((short) 443, conntrackMessage.tupleOrig.dstPort);
 
         assertNull(conntrackMessage.tupleReply);
 
@@ -225,7 +231,6 @@ public class ConntrackMessageTest {
         assertEquals(180, conntrackMessage.timeoutSec);
     }
 
-    // TODO: Add conntrack message attributes to have further verification.
     public static final String CT_V4NEW_TCP_HEX =
             // CHECKSTYLE:OFF IndentationCheck
             // struct nlmsghdr
@@ -310,16 +315,20 @@ public class ConntrackMessageTest {
                 conntrackMessage.tupleOrig.srcIp);
         assertEquals(InetAddress.parseNumericAddress("140.112.8.116"),
                 conntrackMessage.tupleOrig.dstIp);
+        assertEquals((byte) OsConstants.IPPROTO_TCP, conntrackMessage.tupleOrig.protoNum);
+        assertEquals((short) 62449, conntrackMessage.tupleOrig.srcPort);
+        assertEquals((short) 443, conntrackMessage.tupleOrig.dstPort);
 
         assertEquals(InetAddress.parseNumericAddress("140.112.8.116"),
                 conntrackMessage.tupleReply.srcIp);
         assertEquals(InetAddress.parseNumericAddress("100.81.179.1"),
                 conntrackMessage.tupleReply.dstIp);
+        assertEquals((byte) OsConstants.IPPROTO_TCP, conntrackMessage.tupleReply.protoNum);
+        assertEquals((short) 443, conntrackMessage.tupleReply.srcPort);
+        assertEquals((short) 62449, conntrackMessage.tupleReply.dstPort);
 
         assertEquals(0x198, conntrackMessage.status);
         assertEquals(120, conntrackMessage.timeoutSec);
-
-        // TODO: parse the attribute CTA_TUPLE_PROTO once ConntrackMessage supports.
     }
 
     @Test
@@ -367,7 +376,12 @@ public class ConntrackMessageTest {
             // nested CTA_TUPLE_IP has no nla_value.
             + "1C000000 0001 0006 00000000 00000000 02 00 0000 0800 0180 0400 0180"
             // nested CTA_IP_V4_SRC has no nla_value.
-            + "20000000 0001 0006 00000000 00000000 02 00 0000 0C00 0180 0800 0180 0400 0100";
+            + "20000000 0001 0006 00000000 00000000 02 00 0000 0C00 0180 0800 0180 0400 0100"
+            // nested CTA_TUPLE_PROTO has no nla_value.
+            // <--           nlmsghr           -->|<-nfgenmsg->|<--    CTA_TUPLE_ORIG
+            + "30000000 0001 0006 00000000 00000000 02 00 0000 1C00 0180 1400 0180 0800 0100"
+            //                                  -->|
+            + "C0A8500C 0800 0200 8C700874 0400 0280";
             // CHECKSTYLE:ON IndentationCheck
     public static final byte[] CT_MALFORMED_BYTES =
             HexEncoding.decode(CT_MALFORMED_HEX.replaceAll(" ", "").toCharArray(), false);
@@ -386,6 +400,6 @@ public class ConntrackMessageTest {
                     OsConstants.NETLINK_NETFILTER);
             messageCount++;
         }
-        assertEquals(3, messageCount);
+        assertEquals(4, messageCount);
     }
 }
