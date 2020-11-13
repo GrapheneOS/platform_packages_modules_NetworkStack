@@ -1110,6 +1110,14 @@ public class NetworkMonitorTest {
     }
 
     @Test
+    public void testIsCaptivePortal_HttpSucceedFallbackProbeIsPortal() throws Exception {
+        setSslException(mHttpsConnection);
+        setStatus(mHttpConnection, 204);
+        setPortal302(mFallbackConnection);
+        runPortalNetworkTest();
+    }
+
+    @Test
     public void testIsCaptivePortal_FallbackProbeIsNotPortal() throws Exception {
         setSslException(mHttpsConnection);
         setStatus(mHttpConnection, 500);
@@ -1435,13 +1443,13 @@ public class NetworkMonitorTest {
     }
 
     @Test
-    public void testIsCaptivePortal_FallbackSpecIsPartial() throws Exception {
+    public void testIsCaptivePortal_FallbackSpecIsFail() throws Exception {
         setupFallbackSpec();
         set302(mOtherFallbackConnection, "https://www.google.com/test?q=3");
 
-        // HTTPS failed, fallback spec went through -> partial connectivity
-        runPartialConnectivityNetworkTest(
-                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_FALLBACK);
+        runNetworkTest(VALIDATION_RESULT_INVALID,
+                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_FALLBACK,
+                null /* redirectUrl */);
         verify(mOtherFallbackConnection, times(1)).getResponseCode();
         verify(mFallbackConnection, never()).getResponseCode();
     }
@@ -2208,13 +2216,16 @@ public class NetworkMonitorTest {
         setStatus(mFallbackConnection, 500);
         runPartialConnectivityNetworkTest(
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTP);
+    }
 
-        resetCallbacks();
+    @Test
+    public void testIsCaptivePortal_OnlyFallbackSucceed() throws Exception {
         setStatus(mHttpsConnection, 500);
         setStatus(mHttpConnection, 500);
         setStatus(mFallbackConnection, 204);
-        runPartialConnectivityNetworkTest(
-                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_FALLBACK);
+        runNetworkTest(VALIDATION_RESULT_INVALID,
+                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_FALLBACK,
+                null /* redirectUrl */);
     }
 
     private void assertIpAddressArrayEquals(String[] expected, InetAddress[] actual) {
@@ -2274,8 +2285,9 @@ public class NetworkMonitorTest {
         setStatus(mFallbackConnection, 204);
         nm.forceReevaluation(Process.myUid());
         // Expect to send HTTP, HTTPs, FALLBACK and evaluation results.
-        verifyNetworkTested(NETWORK_VALIDATION_RESULT_PARTIAL,
-                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_FALLBACK);
+        runNetworkTest(VALIDATION_RESULT_INVALID,
+                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_FALLBACK,
+                null /* redirectUrl */);
     }
 
     @Test
