@@ -70,11 +70,9 @@ public class NetlinkMessage {
         // not constant.
         if (nlFamily == OsConstants.NETLINK_ROUTE) {
             return parseRtMessage(nlmsghdr, byteBuffer);
-        }
-        if (nlFamily == OsConstants.NETLINK_INET_DIAG) {
+        } else if (nlFamily == OsConstants.NETLINK_INET_DIAG) {
             return parseInetDiagMessage(nlmsghdr, byteBuffer);
-        }
-        if (nlFamily == OsConstants.NETLINK_NETFILTER) {
+        } else if (nlFamily == OsConstants.NETLINK_NETFILTER) {
             return parseNfMessage(nlmsghdr, byteBuffer);
         }
 
