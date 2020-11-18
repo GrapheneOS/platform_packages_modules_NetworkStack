@@ -2984,10 +2984,7 @@ public class NetworkMonitor extends StateMachine {
             httpsProbe.join();
             reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTPS, httpsProbe.result());
 
-            final boolean isHttpSuccessful =
-                    (httpProbe.result().isSuccessful()
-                    || (fallbackProbeResult != null && fallbackProbeResult.isSuccessful()));
-            if (httpsProbe.result().isFailed() && isHttpSuccessful) {
+            if (httpsProbe.result().isFailed() && httpProbe.result().isSuccessful()) {
                 return CaptivePortalProbeResult.PARTIAL;
             }
             return httpsProbe.result();
