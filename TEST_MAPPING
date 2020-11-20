@@ -14,5 +14,16 @@
     {
       "name": "NetworkStackIntegrationTests"
     }
+  ],
+  "mainline-presubmit": [
+    // These are unit tests only, so they don't actually require any modules to be installed.
+    // We must specify at least one module here or the tests won't run. Use the same set as CTS
+    // so in theory the infra would not need to reinstall/reboot devices to run both.
+    {
+      "name": "NetworkStackTests[CaptivePortalLoginGoogle.apk+NetworkStackGoogle.apk+com.google.android.resolv.apex+com.google.android.tethering.apex]"
+    },
+    {
+      "name": "NetworkStackNextTests[CaptivePortalLoginGoogle.apk+NetworkStackGoogle.apk+com.google.android.resolv.apex+com.google.android.tethering.apex]"
+    }
   ]
 }
