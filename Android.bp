@@ -43,6 +43,7 @@
 // Common defaults to define SDK level
 java_defaults {
     name: "NetworkStackDevApiLevel",
+    min_sdk_version: "29",
     sdk_version: "system_current",
 }
 
