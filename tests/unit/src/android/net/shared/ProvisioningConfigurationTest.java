@@ -86,32 +86,66 @@ public class ProvisioningConfigurationTest {
         return options;
     }
 
-    @Before
-    public void setUp() {
-        mConfig = new ProvisioningConfiguration();
-        mConfig.mUsingMultinetworkPolicyTracker = true;
-        mConfig.mUsingIpReachabilityMonitor = true;
-        mConfig.mRequestedPreDhcpActionMs = 42;
-        mConfig.mInitialConfig = new InitialConfiguration();
-        mConfig.mInitialConfig.ipAddresses.add(
+    private ProvisioningConfiguration makeTestProvisioningConfiguration() {
+        final ProvisioningConfiguration config = new ProvisioningConfiguration();
+        config.mUsingMultinetworkPolicyTracker = true;
+        config.mUsingIpReachabilityMonitor = true;
+        config.mRequestedPreDhcpActionMs = 42;
+        config.mInitialConfig = new InitialConfiguration();
+        config.mInitialConfig.ipAddresses.add(
                 new LinkAddress(parseNumericAddress("192.168.42.42"), 24));
-        mConfig.mStaticIpConfig = new StaticIpConfiguration();
-        mConfig.mStaticIpConfig.ipAddress =
+        config.mStaticIpConfig = new StaticIpConfiguration();
+        config.mStaticIpConfig.ipAddress =
                 new LinkAddress(parseNumericAddress("2001:db8::42"), 90);
         // Not testing other InitialConfig or StaticIpConfig members: they have their own unit tests
-        mConfig.mApfCapabilities = new ApfCapabilities(1, 2, 3);
-        mConfig.mProvisioningTimeoutMs = 4200;
-        mConfig.mIPv6AddrGenMode = 123;
-        mConfig.mNetwork = new Network(321);
-        mConfig.mDisplayName = "test_config";
-        mConfig.mEnablePreconnection = false;
-        mConfig.mScanResultInfo = makeScanResultInfo("ssid");
-        mConfig.mLayer2Info = new Layer2Information("some l2key", "some cluster",
+        config.mApfCapabilities = new ApfCapabilities(1, 2, 3);
+        config.mProvisioningTimeoutMs = 4200;
+        config.mIPv6AddrGenMode = 123;
+        config.mNetwork = new Network(321);
+        config.mDisplayName = "test_config";
+        config.mEnablePreconnection = false;
+        config.mScanResultInfo = makeScanResultInfo("ssid");
+        config.mLayer2Info = new Layer2Information("some l2key", "some cluster",
                 MacAddress.fromString("00:01:02:03:04:05"));
-        mConfig.mDhcpOptions = makeCustomizedDhcpOptions((byte) 60,
+        config.mDhcpOptions = makeCustomizedDhcpOptions((byte) 60,
                 new String("android-dhcp-11").getBytes());
-        mConfig.mIPv4ProvisioningMode = PROV_IPV4_DHCP;
-        mConfig.mIPv6ProvisioningMode = PROV_IPV6_SLAAC;
+        config.mIPv4ProvisioningMode = PROV_IPV4_DHCP;
+        config.mIPv6ProvisioningMode = PROV_IPV6_SLAAC;
+        return config;
+    }
+
+    private ProvisioningConfigurationParcelable makeTestProvisioningConfigurationParcelable() {
+        final ProvisioningConfigurationParcelable p = new ProvisioningConfigurationParcelable();
+        p.enableIPv4 = true;
+        p.enableIPv6 = true;
+        p.usingMultinetworkPolicyTracker = true;
+        p.usingIpReachabilityMonitor = true;
+        p.requestedPreDhcpActionMs = 42;
+        final InitialConfiguration initialConfig = new InitialConfiguration();
+        initialConfig.ipAddresses.add(
+                new LinkAddress(parseNumericAddress("192.168.42.42"), 24));
+        p.initialConfig = initialConfig.toStableParcelable();
+        p.staticIpConfig = new StaticIpConfiguration();
+        p.staticIpConfig.ipAddress =
+                new LinkAddress(parseNumericAddress("2001:db8::42"), 90);
+        p.apfCapabilities = new ApfCapabilities(1, 2, 3);
+        p.provisioningTimeoutMs = 4200;
+        p.ipv6AddrGenMode = 123;
+        p.network = new Network(321);
+        p.displayName = "test_config";
+        p.enablePreconnection = false;
+        final ScanResultInfo scanResultInfo = makeScanResultInfo("ssid");
+        p.scanResultInfo = scanResultInfo.toStableParcelable();
+        final Layer2Information layer2Info = new Layer2Information("some l2key", "some cluster",
+                MacAddress.fromString("00:01:02:03:04:05"));
+        p.layer2Info = layer2Info.toStableParcelable();
+        p.options = makeCustomizedDhcpOptions((byte) 60, new String("android-dhcp-11").getBytes());
+        return p;
+    }
+
+    @Before
+    public void setUp() {
+        mConfig = makeTestProvisioningConfiguration();
         // Any added field must be included in equals() to be tested properly
         assertFieldCountEquals(16, ProvisioningConfiguration.class);
     }
@@ -183,14 +217,24 @@ public class ProvisioningConfigurationTest {
         assertTrue(mConfig.toStableParcelable().enableIPv6);
     }
 
-    private void doParcelUnparcelTest() {
-        final ProvisioningConfiguration unparceledOnOldPlatform =
-                fromStableParcelable(mConfig.toStableParcelable(), 11);
-        assertEquals(mConfig, unparceledOnOldPlatform);
+    @Test
+    public void testParcelUnparcel_IpProvisioningModefromOldStableParcelable() {
+        final ProvisioningConfigurationParcelable p = makeTestProvisioningConfigurationParcelable();
+        final ProvisioningConfiguration unparceled = fromStableParcelable(p,
+                11 /* interface version */);
+        assertEquals(mConfig, unparceled);
+    }
 
-        final ProvisioningConfiguration unparceledOnNewPlatform =
-                fromStableParcelable(mConfig.toStableParcelable(), 12);
-        assertEquals(mConfig, unparceledOnOldPlatform);
+    @Test
+    public void testParcelUnparcel_WithIpv6LinkLocalOnly() {
+        mConfig.mIPv6ProvisioningMode = PROV_IPV6_LINKLOCAL;
+        doParcelUnparcelTest();
+    }
+
+    private void doParcelUnparcelTest() {
+        final ProvisioningConfiguration unparceled =
+                fromStableParcelable(mConfig.toStableParcelable(), 12 /* interface version */);
+        assertEquals(mConfig, unparceled);
     }
 
     @Test
