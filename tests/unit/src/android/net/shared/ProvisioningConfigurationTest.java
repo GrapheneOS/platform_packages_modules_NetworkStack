@@ -27,6 +27,7 @@ import static org.junit.Assert.assertNotEquals;
 import android.net.LinkAddress;
 import android.net.MacAddress;
 import android.net.Network;
+import android.net.ProvisioningConfigurationParcelable;
 import android.net.StaticIpConfiguration;
 import android.net.apf.ApfCapabilities;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
@@ -177,5 +178,32 @@ public class ProvisioningConfigurationTest {
         final ProvisioningConfiguration newConfig = new ProvisioningConfiguration(mConfig);
         mutator.accept(newConfig);
         assertNotEquals(mConfig, newConfig);
+    }
+
+    private static final String TEMPLATE = ""
+            + "android.net.ProvisioningConfigurationParcelable{enableIPv4: true, enableIPv6: true,"
+            + " usingMultinetworkPolicyTracker: true,"
+            + " usingIpReachabilityMonitor: true, requestedPreDhcpActionMs: 42,"
+            + " initialConfig: android.net.InitialConfigurationParcelable{ipAddresses:"
+            + " [192.168.42.42/24], directlyConnectedRoutes: [], dnsServers: [], gateway: null},"
+            + " staticIpConfig: IP address 2001:db8::42/90 Gateway  DNS servers: [ ] Domains ,"
+            + " apfCapabilities: ApfCapabilities{version: 1, maxSize: 2, format: 3},"
+            + " provisioningTimeoutMs: 4200, ipv6AddrGenMode: 123, network: 321,"
+            + " displayName: test_config, enablePreconnection: false, scanResultInfo:"
+            + " android.net.ScanResultInfoParcelable{ssid: ssid, bssid: 01:02:03:04:05:06,"
+            + " informationElements: [android.net.InformationElementParcelable{id: 221,"
+            + " payload: [0, 23, -14, 6, 1, 1, 3, 1, 0, 0]}]}, layer2Info:"
+            + " android.net.Layer2InformationParcelable{l2Key: some l2key,"
+            + " cluster: some cluster, bssid: %s}}";
+
+    @Test
+    public void testParcelableToString() {
+        String expected = String.format(TEMPLATE, "00:01:02:03:04:05");
+        assertEquals(expected, mConfig.toStableParcelable().toString());
+
+        final ProvisioningConfigurationParcelable parcelWithNull = mConfig.toStableParcelable();
+        parcelWithNull.layer2Info.bssid = null;
+        expected = String.format(TEMPLATE, "null");
+        assertEquals(expected, parcelWithNull.toString());
     }
 }

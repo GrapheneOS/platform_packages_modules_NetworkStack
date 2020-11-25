@@ -16,6 +16,7 @@
 
 package android.net.networkstack.aidl.quirks;
 
+@JavaDerive(toString=true)
 parcelable IPv6ProvisioningLossQuirkParcelable {
     int detectionCount;
     long quirkExpiry;
