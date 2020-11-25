@@ -24,6 +24,7 @@ import android.net.ScanResultInfoParcelable;
 import android.net.StaticIpConfiguration;
 import android.net.apf.ApfCapabilities;
 
+@JavaDerive(toString=true)
 parcelable ProvisioningConfigurationParcelable {
     boolean enableIPv4;
     boolean enableIPv6;
