@@ -46,6 +46,7 @@ java_defaults {
 // Tests for NetworkStackNext.
 android_test {
     name: "NetworkStackNextTests",
+    target_sdk_version: "current",
     srcs: [], // TODO: tests that only apply to the current, non-stable API can be added here
     test_suites: ["general-tests"],
     test_mainline_modules: ["CaptivePortalLoginGoogle.apk+NetworkStackGoogle.apk+com.google.android.resolv.apex+com.google.android.tethering.apex"],
@@ -72,6 +73,7 @@ android_library {
 android_test {
     name: "NetworkStackTests",
     min_sdk_version: "29",
+    target_sdk_version: "30",
     test_suites: ["general-tests", "mts"],
     test_mainline_modules: ["CaptivePortalLoginGoogle.apk+NetworkStackGoogle.apk+com.google.android.resolv.apex+com.google.android.tethering.apex"],
     defaults: ["NetworkStackTestsDefaults"],
