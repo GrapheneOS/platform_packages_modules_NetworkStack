@@ -29,6 +29,7 @@ import android.net.networkstack.aidl.quirks.IPv6ProvisioningLossQuirkParcelable;
  * to convert the richer types to the parcelable types and back.
  * @hide
  */
+@JavaDerive(toString=true)
 parcelable NetworkAttributesParcelable {
     byte[] assignedV4Address;
     long assignedV4AddressExpiry;
