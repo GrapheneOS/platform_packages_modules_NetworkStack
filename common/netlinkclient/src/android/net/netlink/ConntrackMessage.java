@@ -30,10 +30,13 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.system.OsConstants;
 
+import com.android.internal.annotations.VisibleForTesting;
+
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Objects;
 
 
 /**
@@ -65,6 +68,32 @@ public class ConntrackMessage extends NetlinkMessage {
     public static final short CTA_PROTO_SRC_PORT = 2;
     public static final short CTA_PROTO_DST_PORT = 3;
 
+    // enum ip_conntrack_status
+    public static final int IPS_EXPECTED      = 0x00000001;
+    public static final int IPS_SEEN_REPLY    = 0x00000002;
+    public static final int IPS_ASSURED       = 0x00000004;
+    public static final int IPS_CONFIRMED     = 0x00000008;
+    public static final int IPS_SRC_NAT       = 0x00000010;
+    public static final int IPS_DST_NAT       = 0x00000020;
+    public static final int IPS_SEQ_ADJUST    = 0x00000040;
+    public static final int IPS_SRC_NAT_DONE  = 0x00000080;
+    public static final int IPS_DST_NAT_DONE  = 0x00000100;
+    public static final int IPS_DYING         = 0x00000200;
+    public static final int IPS_FIXED_TIMEOUT = 0x00000400;
+    public static final int IPS_TEMPLATE      = 0x00000800;
+    public static final int IPS_UNTRACKED     = 0x00001000;
+    public static final int IPS_HELPER        = 0x00002000;
+    public static final int IPS_OFFLOAD       = 0x00004000;
+    public static final int IPS_HW_OFFLOAD    = 0x00008000;
+
+    // ip_conntrack_status mask
+    // Interesting on the NAT conntrack session which has already seen two direction traffic.
+    // TODO: Probably IPS_{SRC, DST}_NAT_DONE are also interesting.
+    public static final int ESTABLISHED_MASK = IPS_CONFIRMED | IPS_ASSURED | IPS_SEEN_REPLY
+            | IPS_SRC_NAT;
+    // Interesting on the established NAT conntrack session which is dying.
+    public static final int DYING_MASK = ESTABLISHED_MASK | IPS_DYING;
+
     /**
      * A tuple for the conntrack connection information.
      *
@@ -87,6 +116,23 @@ public class ConntrackMessage extends NetlinkMessage {
             this.srcPort = proto.srcPort;
             this.dstPort = proto.dstPort;
             this.protoNum = proto.protoNum;
+        }
+
+        @Override
+        @VisibleForTesting
+        public boolean equals(Object o) {
+            if (!(o instanceof Tuple)) return false;
+            Tuple that = (Tuple) o;
+            return Objects.equals(this.srcIp, that.srcIp)
+                    && Objects.equals(this.dstIp, that.dstIp)
+                    && this.srcPort == that.srcPort
+                    && this.dstPort == that.dstPort
+                    && this.protoNum == that.protoNum;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(srcIp, dstIp, srcPort, dstPort, protoNum);
         }
     }
 
@@ -399,5 +445,9 @@ public class ConntrackMessage extends NetlinkMessage {
     public void pack(ByteBuffer byteBuffer) {
         mHeader.pack(byteBuffer);
         nfGenMsg.pack(byteBuffer);
+    }
+
+    public short getMessageType() {
+        return (short) (getHeader().nlmsg_type & ~(NetlinkConstants.NFNL_SUBSYS_CTNETLINK << 8));
     }
 }
