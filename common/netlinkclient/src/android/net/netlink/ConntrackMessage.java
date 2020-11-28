@@ -102,9 +102,16 @@ public class ConntrackMessage extends NetlinkMessage {
      *         message could not be parsed successfully (for example, if it was truncated).
      */
     public static ConntrackMessage parse(StructNlMsgHdr header, ByteBuffer byteBuffer) {
-        // Just build the netlink header for now and pretend the whole message was consumed.
-        // TODO: Parse the netfilter message header and conntrack attributes.
+        // Just build the netlink header and netfilter header for now and pretend the whole message
+        // was consumed.
+        // TODO: Parse the conntrack attributes.
         final ConntrackMessage conntrackMsg = new ConntrackMessage(header);
+
+        conntrackMsg.mNfGenMsg = StructNfGenMsg.parse(byteBuffer);
+        if (conntrackMsg.mNfGenMsg == null) {
+            return null;
+        }
+
         byteBuffer.position(byteBuffer.limit());
         return conntrackMsg;
     }
@@ -119,6 +126,10 @@ public class ConntrackMessage extends NetlinkMessage {
     private ConntrackMessage(StructNlMsgHdr header) {
         super(header);
         mNfGenMsg = null;
+    }
+
+    public StructNfGenMsg getNfHeader() {
+        return mNfGenMsg;
     }
 
     public void pack(ByteBuffer byteBuffer) {
