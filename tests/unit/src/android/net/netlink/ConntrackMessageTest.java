@@ -16,7 +16,13 @@
 
 package android.net.netlink;
 
+import static android.net.netlink.NetlinkConstants.IPCTNL_MSG_CT_NEW;
+import static android.net.netlink.NetlinkConstants.NFNL_SUBSYS_CTNETLINK;
+
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
 import android.system.OsConstants;
@@ -31,12 +37,17 @@ import org.junit.runner.RunWith;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 @RunWith(AndroidJUnit4.class)
 @SmallTest
 public class ConntrackMessageTest {
     private static final boolean USING_LE = (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN);
+
+    private short makeCtType(short msgType) {
+        return (short) (NFNL_SUBSYS_CTNETLINK << 8 | (byte) msgType);
+    }
 
     // Example 1: TCP (192.168.43.209, 44333) -> (23.211.13.26, 443)
     public static final String CT_V4UPDATE_TCP_HEX =
@@ -114,6 +125,30 @@ public class ConntrackMessageTest {
                 (Inet4Address) InetAddress.getByName("23.211.13.26"), 443,
                 432000);
         assertArrayEquals(CT_V4UPDATE_TCP_BYTES, tcp);
+
+        final ByteBuffer byteBuffer = ByteBuffer.wrap(tcp);
+        byteBuffer.order(ByteOrder.nativeOrder());
+        final NetlinkMessage msg = NetlinkMessage.parse(byteBuffer, OsConstants.NETLINK_NETFILTER);
+        assertNotNull(msg);
+        assertTrue(msg instanceof ConntrackMessage);
+        final ConntrackMessage conntrackMessage = (ConntrackMessage) msg;
+
+        final StructNlMsgHdr hdr = conntrackMessage.getHeader();
+        assertNotNull(hdr);
+        assertEquals(80, hdr.nlmsg_len);
+        assertEquals(makeCtType(IPCTNL_MSG_CT_NEW), hdr.nlmsg_type);
+        assertEquals((short) (StructNlMsgHdr.NLM_F_REPLACE | StructNlMsgHdr.NLM_F_REQUEST
+                | StructNlMsgHdr.NLM_F_ACK), hdr.nlmsg_flags);
+        assertEquals(1, hdr.nlmsg_seq);
+        assertEquals(0, hdr.nlmsg_pid);
+
+        final StructNfGenMsg nfmsgHdr = conntrackMessage.getNfHeader();
+        assertNotNull(nfmsgHdr);
+        assertEquals((byte) OsConstants.AF_INET, nfmsgHdr.nfgen_family);
+        assertEquals((byte) StructNfGenMsg.NFNETLINK_V0, nfmsgHdr.version);
+        assertEquals((short) 0, nfmsgHdr.res_id);
+
+        // TODO: Parse the CTA_TUPLE_ORIG and CTA_TIMEOUT.
     }
 
     @Test
@@ -126,5 +161,73 @@ public class ConntrackMessageTest {
                 (Inet4Address) InetAddress.getByName("216.58.197.10"), 443,
                 180);
         assertArrayEquals(CT_V4UPDATE_UDP_BYTES, udp);
+
+        final ByteBuffer byteBuffer = ByteBuffer.wrap(udp);
+        byteBuffer.order(ByteOrder.nativeOrder());
+        final NetlinkMessage msg = NetlinkMessage.parse(byteBuffer, OsConstants.NETLINK_NETFILTER);
+        assertNotNull(msg);
+        assertTrue(msg instanceof ConntrackMessage);
+        final ConntrackMessage conntrackMessage = (ConntrackMessage) msg;
+
+        final StructNlMsgHdr hdr = conntrackMessage.getHeader();
+        assertNotNull(hdr);
+        assertEquals(80, hdr.nlmsg_len);
+        assertEquals(makeCtType(IPCTNL_MSG_CT_NEW), hdr.nlmsg_type);
+        assertEquals((short) (StructNlMsgHdr.NLM_F_REPLACE | StructNlMsgHdr.NLM_F_REQUEST
+                | StructNlMsgHdr.NLM_F_ACK), hdr.nlmsg_flags);
+        assertEquals(1, hdr.nlmsg_seq);
+        assertEquals(0, hdr.nlmsg_pid);
+
+        final StructNfGenMsg nfmsgHdr = conntrackMessage.getNfHeader();
+        assertNotNull(nfmsgHdr);
+        assertEquals((byte) OsConstants.AF_INET, nfmsgHdr.nfgen_family);
+        assertEquals((byte) StructNfGenMsg.NFNETLINK_V0, nfmsgHdr.version);
+        assertEquals((short) 0, nfmsgHdr.res_id);
+
+        // TODO: Parse the CTA_TUPLE_ORIG and CTA_TIMEOUT.
+    }
+
+    // TODO: Add conntrack message attributes to have further verification.
+    public static final String CT_V4NEW_HEX =
+            // CHECKSTYLE:OFF IndentationCheck
+            // struct nlmsghdr
+            "14000000" +      // length = 20
+            "0001" +          // type = NFNL_SUBSYS_CTNETLINK (1) << 8 | IPCTNL_MSG_CT_NEW (0)
+            "0006" +          // flags = NLM_F_CREATE | NLM_F_EXCL
+            "00000000" +      // seqno = 0
+            "00000000" +      // pid = 0
+            // struct nfgenmsg
+            "02" +            // nfgen_family = AF_INET
+            "00" +            // version = NFNETLINK_V0
+            "1234";           // res_id = 0x1234 (big endian)
+            // CHECKSTYLE:ON IndentationCheck
+    public static final byte[] CT_V4NEW_BYTES =
+            HexEncoding.decode(CT_V4NEW_HEX.replaceAll(" ", "").toCharArray(), false);
+
+    @Test
+    public void testParseCtNew() {
+        assumeTrue(USING_LE);
+
+        final ByteBuffer byteBuffer = ByteBuffer.wrap(CT_V4NEW_BYTES);
+        byteBuffer.order(ByteOrder.nativeOrder());
+        final NetlinkMessage msg = NetlinkMessage.parse(byteBuffer, OsConstants.NETLINK_NETFILTER);
+        assertNotNull(msg);
+        assertTrue(msg instanceof ConntrackMessage);
+        final ConntrackMessage conntrackMessage = (ConntrackMessage) msg;
+
+        final StructNlMsgHdr hdr = conntrackMessage.getHeader();
+        assertNotNull(hdr);
+        assertEquals(20, hdr.nlmsg_len);
+        assertEquals(makeCtType(IPCTNL_MSG_CT_NEW), hdr.nlmsg_type);
+        assertEquals((short) (StructNlMsgHdr.NLM_F_CREATE | StructNlMsgHdr.NLM_F_EXCL),
+                hdr.nlmsg_flags);
+        assertEquals(0, hdr.nlmsg_seq);
+        assertEquals(0, hdr.nlmsg_pid);
+
+        final StructNfGenMsg nfmsgHdr = conntrackMessage.getNfHeader();
+        assertNotNull(nfmsgHdr);
+        assertEquals((byte) OsConstants.AF_INET, nfmsgHdr.nfgen_family);
+        assertEquals((byte) StructNfGenMsg.NFNETLINK_V0, nfmsgHdr.version);
+        assertEquals((short) 0x1234, nfmsgHdr.res_id);
     }
 }
