@@ -47,6 +47,7 @@ java_defaults {
 android_test {
     name: "NetworkStackNextTests",
     target_sdk_version: "current",
+    min_sdk_version: "29",
     srcs: [], // TODO: tests that only apply to the current, non-stable API can be added here
     test_suites: ["general-tests"],
     test_mainline_modules: ["CaptivePortalLoginGoogle.apk+NetworkStackGoogle.apk+com.google.android.resolv.apex+com.google.android.tethering.apex"],
