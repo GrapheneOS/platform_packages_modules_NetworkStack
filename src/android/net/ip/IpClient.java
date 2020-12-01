@@ -51,7 +51,6 @@ import android.net.shared.ProvisioningConfiguration;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo.InformationElement;
 import android.net.util.InterfaceParams;
-import android.net.util.NetworkStackUtils;
 import android.net.util.SharedLog;
 import android.os.Build;
 import android.os.ConditionVariable;
@@ -77,6 +76,7 @@ import com.android.internal.util.MessageUtils;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.internal.util.WakeupMessage;
+import com.android.net.module.util.DeviceConfigUtils;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
 import com.android.networkstack.apishim.common.ShimUtils;
@@ -541,7 +541,7 @@ public class IpClient extends StateMachine {
          * Read an integer DeviceConfig property.
          */
         public int getDeviceConfigPropertyInt(String name, int defaultValue) {
-            return NetworkStackUtils.getDeviceConfigPropertyInt(NAMESPACE_CONNECTIVITY, name,
+            return DeviceConfigUtils.getDeviceConfigPropertyInt(NAMESPACE_CONNECTIVITY, name,
                     defaultValue);
         }
 

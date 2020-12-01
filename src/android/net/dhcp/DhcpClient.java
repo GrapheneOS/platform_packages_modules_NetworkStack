@@ -98,6 +98,7 @@ import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.internal.util.TrafficStatsConstants;
 import com.android.internal.util.WakeupMessage;
+import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.PacketReader;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
@@ -435,11 +436,11 @@ public class DhcpClient extends StateMachine {
 
         /**
          * Return whether a feature guarded by a feature flag is enabled.
-         * @see NetworkStackUtils#isFeatureEnabled(Context, String, String)
+         * @see DeviceConfigUtils#isFeatureEnabled(Context, String, String)
          */
         public boolean isFeatureEnabled(final Context context, final String name,
                 boolean defaultEnabled) {
-            return NetworkStackUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name,
+            return DeviceConfigUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name,
                     defaultEnabled);
         }
 
@@ -448,7 +449,7 @@ public class DhcpClient extends StateMachine {
          */
         public int getIntDeviceConfig(final String name, int minimumValue, int maximumValue,
                 int defaultValue) {
-            return NetworkStackUtils.getDeviceConfigPropertyInt(NAMESPACE_CONNECTIVITY,
+            return DeviceConfigUtils.getDeviceConfigPropertyInt(NAMESPACE_CONNECTIVITY,
                     name, minimumValue, maximumValue, defaultValue);
         }
 

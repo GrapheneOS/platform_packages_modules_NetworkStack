@@ -16,7 +16,6 @@
 
 package com.android.networkstack.metrics;
 
-import android.net.util.NetworkStackUtils;
 import android.net.wifi.WifiInfo;
 
 import androidx.annotation.IntRange;
@@ -25,6 +24,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
 import com.android.internal.util.HexDump;
+import com.android.net.module.util.CollectionUtils;
 import com.android.server.connectivity.nano.CellularData;
 import com.android.server.connectivity.nano.DataStallEventProto;
 import com.android.server.connectivity.nano.DnsEvent;
@@ -299,8 +299,8 @@ public final class DataStallDetectionStats {
          */
         public DataStallDetectionStats build() {
             return new DataStallDetectionStats(mCellularInfo, mWifiInfo,
-                    NetworkStackUtils.convertToIntArray(mDnsReturnCode),
-                    NetworkStackUtils.convertToLongArray(mDnsTimeStamp),
+                    CollectionUtils.toIntArray(mDnsReturnCode),
+                    CollectionUtils.toLongArray(mDnsTimeStamp),
                     mEvaluationType, mNetworkType, mTcpFailRate, mTcpSentSinceLastRecv);
         }
     }
