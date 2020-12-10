@@ -111,7 +111,7 @@ android_library {
     srcs: [
         ":NetworkStackApiCurrentShims",
         "src/**/*.java",
-        ":statslog-networkstack-java-gen"
+        ":statslog-networkstack-java-gen-current"
     ],
     manifest: "AndroidManifestBase.xml",
 }
@@ -130,7 +130,7 @@ android_library {
     defaults: ["NetworkStackReleaseApiLevel"],
     srcs: [
         "src/**/*.java",
-        ":statslog-networkstack-java-gen",
+        ":statslog-networkstack-java-gen-stable",
     ],
     // API stable uses a jarjared version of the shims
     static_libs: [
@@ -261,13 +261,23 @@ cc_library_shared {
 }
 
 genrule {
-    name: "statslog-networkstack-java-gen",
+    name: "statslog-networkstack-java-gen-current",
     tools: ["stats-log-api-gen"],
     cmd: "$(location stats-log-api-gen) --java $(out) --module network_stack" +
          " --javaPackage com.android.networkstack.metrics --javaClass NetworkStackStatsLog" +
-         " --supportQ",
+         " --minApiLevel 29",
     out: ["com/android/networkstack/metrics/NetworkStackStatsLog.java"],
 }
+
+genrule {
+    name: "statslog-networkstack-java-gen-stable",
+    tools: ["stats-log-api-gen"],
+    cmd: "$(location stats-log-api-gen) --java $(out) --module network_stack" +
+         " --javaPackage com.android.networkstack.metrics --javaClass NetworkStackStatsLog" +
+         " --minApiLevel 29 --compileApiLevel 30",
+    out: ["com/android/networkstack/metrics/NetworkStackStatsLog.java"],
+}
+
 
 version_code_networkstack_next = "300000000"
 version_code_networkstack_test = "999999999"
