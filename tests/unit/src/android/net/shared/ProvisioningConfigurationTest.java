@@ -30,6 +30,7 @@ import android.net.Network;
 import android.net.ProvisioningConfigurationParcelable;
 import android.net.StaticIpConfiguration;
 import android.net.apf.ApfCapabilities;
+import android.net.networkstack.aidl.dhcp.DhcpOption;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
 
 import androidx.test.filters.SmallTest;
@@ -40,7 +41,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.function.Consumer;
 
 /**
@@ -61,6 +64,16 @@ public class ProvisioningConfigurationTest {
                         ByteBuffer.wrap(payload));
         return new ScanResultInfo(ssid, "01:02:03:04:05:06" /* bssid string */,
                 Collections.singletonList(ie));
+    }
+
+    private List<DhcpOption> makeCustomizedDhcpOptions(byte type, final byte[] value) {
+        final DhcpOption option = new DhcpOption();
+        option.type = type;
+        option.value = value;
+
+        final List<DhcpOption> options = new ArrayList<DhcpOption>();
+        options.add(option);
+        return options;
     }
 
     @Before
@@ -87,8 +100,10 @@ public class ProvisioningConfigurationTest {
         mConfig.mScanResultInfo = makeScanResultInfo("ssid");
         mConfig.mLayer2Info = new Layer2Information("some l2key", "some cluster",
                 MacAddress.fromString("00:01:02:03:04:05"));
+        mConfig.mDhcpOptions = makeCustomizedDhcpOptions((byte) 60,
+                new String("android-dhcp-11").getBytes());
         // Any added field must be included in equals() to be tested properly
-        assertFieldCountEquals(15, ProvisioningConfiguration.class);
+        assertFieldCountEquals(16, ProvisioningConfiguration.class);
     }
 
     @Test
@@ -123,6 +138,12 @@ public class ProvisioningConfigurationTest {
     @Test
     public void testParcelUnparcel_NullScanResultInfo() {
         mConfig.mScanResultInfo = null;
+        doParcelUnparcelTest();
+    }
+
+    @Test
+    public void testParcelUnparcel_NullCustomizedDhcpOptions() {
+        mConfig.mDhcpOptions = null;
         doParcelUnparcelTest();
     }
 
@@ -171,7 +192,13 @@ public class ProvisioningConfigurationTest {
         assertNotEqualsAfterChange(c -> c.mLayer2Info = new Layer2Information("some l2key",
                 "some cluster", MacAddress.fromString("01:02:03:04:05:06")));
         assertNotEqualsAfterChange(c -> c.mLayer2Info = null);
-        assertFieldCountEquals(15, ProvisioningConfiguration.class);
+        assertNotEqualsAfterChange(c -> c.mDhcpOptions = new ArrayList<DhcpOption>());
+        assertNotEqualsAfterChange(c -> c.mDhcpOptions = null);
+        assertNotEqualsAfterChange(c -> c.mDhcpOptions = makeCustomizedDhcpOptions((byte) 60,
+                  new String("vendor-class-identifier").getBytes()));
+        assertNotEqualsAfterChange(c -> c.mDhcpOptions = makeCustomizedDhcpOptions((byte) 77,
+                  new String("vendor-class-identifier").getBytes()));
+        assertFieldCountEquals(16, ProvisioningConfiguration.class);
     }
 
     private void assertNotEqualsAfterChange(Consumer<ProvisioningConfiguration> mutator) {
@@ -194,7 +221,9 @@ public class ProvisioningConfigurationTest {
             + " informationElements: [android.net.InformationElementParcelable{id: 221,"
             + " payload: [0, 23, -14, 6, 1, 1, 3, 1, 0, 0]}]}, layer2Info:"
             + " android.net.Layer2InformationParcelable{l2Key: some l2key,"
-            + " cluster: some cluster, bssid: %s}}";
+            + " cluster: some cluster, bssid: %s},"
+            + " options: [android.net.networkstack.aidl.dhcp.DhcpOption{type: 60,"
+            + " value: [97, 110, 100, 114, 111, 105, 100, 45, 100, 104, 99, 112, 45, 49, 49]}]}";
 
     @Test
     public void testParcelableToString() {
