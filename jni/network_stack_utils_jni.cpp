@@ -33,6 +33,7 @@
 #include <string>
 
 #include <nativehelper/JNIHelp.h>
+#include <netjniutils/netjniutils.h>
 
 #include <android/log.h>
 
@@ -56,76 +57,6 @@ static bool checkLenAndCopy(JNIEnv* env, const jbyteArray& addr, int len, void* 
     }
     env->GetByteArrayRegion(addr, 0, len, reinterpret_cast<jbyte*>(dst));
     return true;
-}
-
-static bool isAtLeastS() {
-    static bool atLeastS = false;
-    static bool doProbe = true;
-
-    if (!doProbe) {
-        return atLeastS;
-    }
-
-    atLeastS = (android_get_device_api_level() > __ANDROID_API_R__);
-    if (!atLeastS) {
-        // Check if this is a device with Android S dogfood build.
-        static constexpr const char* kCodenameProperty = "ro.build.version.codename";
-        char codename[PROP_VALUE_MAX] = { 0 };
-        // SDK may be 30 (R) with codename T if S SDK was finalized but not yet merged in the
-        // branch, and T development started.
-        atLeastS = (__system_property_get(kCodenameProperty, codename) > 0 &&
-                    (strncmp(codename, "S", 2) == 0 || strncmp(codename, "T", 2) == 0));
-    }
-    doProbe = false;
-
-    return atLeastS;
-}
-
-static int getNativeFileDescriptorWithoutNdk(JNIEnv* env, jobject javaFd) {
-    // Prior to Android S, we need to find the descriptor field in the FileDescriptor class. The
-    // symbol name has been stable in libcore, but is a private implementation detail.
-    // Older libnativehelper_compat_c++ versions had a jniGetFdFromFileDescriptor method, but this
-    // was removed in S to replace it with the NDK API in libnativehelper.
-    // The code is copied here instead. This code can be removed once R is not supported anymore.
-    static jfieldID descriptorFieldID = nullptr;
-    if (descriptorFieldID == nullptr) {
-        jclass fileDescriptorClass = env->FindClass("java/io/FileDescriptor");
-        descriptorFieldID = env->GetFieldID(fileDescriptorClass, "descriptor", "I");
-        env->DeleteLocalRef(fileDescriptorClass);
-        if (descriptorFieldID == nullptr) {
-            __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "Failed to get descriptor field.");
-            return -1;
-        }
-    }
-    return javaFd != nullptr ? env->GetIntField(javaFd, descriptorFieldID) : -1;
-}
-
-static int getNativeFileDescriptorWithNdk(JNIEnv* env, jobject javaFd) {
-    // Since Android S, there is an NDK API to get a file descriptor present in libnativehelper.so.
-    // libnativehelper is loaded into all processes by the zygote since the zygote uses it
-    // to load the Android Runtime and is also a public library (because of the NDK API).
-    static int (*ndkGetFD)(JNIEnv*, jobject) = nullptr;
-    if (ndkGetFD == nullptr) {
-        void* handle = dlopen("libnativehelper.so", RTLD_NOLOAD | RTLD_NODELETE);
-        ndkGetFD = reinterpret_cast<decltype(ndkGetFD)>(dlsym(handle, "AFileDescriptor_getFD"));
-        if (ndkGetFD == nullptr) {
-            __android_log_print(ANDROID_LOG_ERROR, LOG_TAG,
-                                "Failed to dlsym(AFileDescriptor_getFD): %s", dlerror());
-            dlclose(handle);
-            return -1;
-        }
-        dlclose(handle);
-    }
-    return javaFd != nullptr ? ndkGetFD(env, javaFd) : -1;
-}
-
-static int getNativeFileDescriptor(JNIEnv* env, jobject javaFd) {
-    // Check if we should use the NDK File Descriptor API introduced in S.
-    if (isAtLeastS()) {
-        return getNativeFileDescriptorWithNdk(env, javaFd);
-    } else {
-        return getNativeFileDescriptorWithoutNdk(env, javaFd);
-    }
 }
 
 static void network_stack_utils_addArpEntry(JNIEnv *env, jobject thiz, jbyteArray ethAddr,
@@ -155,7 +86,7 @@ static void network_stack_utils_addArpEntry(JNIEnv *env, jobject thiz, jbyteArra
     env->GetStringUTFRegion(ifname, 0, ifLen, req.arp_dev);
 
     req.arp_flags = ATF_COM;  // Completed entry (ha valid)
-    int fd = getNativeFileDescriptor(env, javaFd);
+    int fd = netjniutils::GetNativeFileDescriptor(env, javaFd);
     if (fd < 0) {
         jniThrowExceptionFmt(env, "java/io/IOException", "Invalid file descriptor");
         return;
@@ -193,7 +124,7 @@ static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jobject clazz, job
         filter_code,
     };
 
-    int fd = getNativeFileDescriptor(env, javaFd);
+    int fd = netjniutils::GetNativeFileDescriptor(env, javaFd);
     if (setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &filter, sizeof(filter)) != 0) {
         jniThrowExceptionFmt(env, "java/net/SocketException",
                 "setsockopt(SO_ATTACH_FILTER): %s", strerror(errno));
@@ -226,7 +157,7 @@ static void network_stack_utils_attachRaFilter(JNIEnv *env, jobject clazz, jobje
         filter_code,
     };
 
-    int fd = getNativeFileDescriptor(env, javaFd);
+    int fd = netjniutils::GetNativeFileDescriptor(env, javaFd);
     if (setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &filter, sizeof(filter)) != 0) {
         jniThrowExceptionFmt(env, "java/net/SocketException",
                 "setsockopt(SO_ATTACH_FILTER): %s", strerror(errno));
@@ -301,7 +232,7 @@ static void network_stack_utils_attachControlPacketFilter(
         filter_code,
     };
 
-    int fd = getNativeFileDescriptor(env, javaFd);
+    int fd = netjniutils::GetNativeFileDescriptor(env, javaFd);
     if (setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &filter, sizeof(filter)) != 0) {
         jniThrowExceptionFmt(env, "java/net/SocketException",
                 "setsockopt(SO_ATTACH_FILTER): %s", strerror(errno));
