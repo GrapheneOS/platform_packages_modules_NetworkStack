@@ -237,6 +237,9 @@ cc_library_shared {
         "liblog",
         "libnativehelper_compat_libc++",
     ],
+    static_libs: [
+        "libnetjniutils",
+    ],
 
     // We cannot use plain "libc++" here to link libc++ dynamically because it results in:
     //   java.lang.UnsatisfiedLinkError: dlopen failed: library "libc++_shared.so" not found
