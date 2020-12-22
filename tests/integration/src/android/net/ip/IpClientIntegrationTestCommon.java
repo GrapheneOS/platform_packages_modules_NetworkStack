@@ -2666,7 +2666,7 @@ public abstract class IpClientIntegrationTestCommon {
         mIpc = makeIpClient();
     }
 
-    @Test
+    @Test @SignatureRequiredTest(reason = "Only counts FDs from the current process. TODO: fix")
     public void testNoFdLeaks() throws Exception {
         // Shut down and restart IpClient once to ensure that any fds that are opened the first
         // time it runs do not cause the test to fail.
