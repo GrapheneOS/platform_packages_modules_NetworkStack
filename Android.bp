@@ -114,6 +114,7 @@ android_library {
         ":statslog-networkstack-java-gen"
     ],
     manifest: "AndroidManifestBase.xml",
+    enabled: false, // Disabled in mainline-prod
 }
 
 // For API stable, first build the dependencies using jarjar compat rules, then build the sources
@@ -180,6 +181,7 @@ android_app {
     // The InProcessNetworkStack goes together with the PlatformCaptivePortalLogin, which replaces
     // the default CaptivePortalLogin.
     required: ["PlatformNetworkPermissionConfig", "PlatformCaptivePortalLogin"],
+    enabled: false, // Disabled in mainline-prod
 }
 
 // Pre-merge the AndroidManifest for NetworkStackNext, so that its manifest can be merged on top
@@ -187,7 +189,8 @@ android_library {
     name: "NetworkStackNextManifestBase",
     defaults: ["NetworkStackAppDefaults", "NetworkStackDevApiLevel"],
     static_libs: ["NetworkStackApiCurrentLib"],
-    manifest: "AndroidManifest.xml"
+    manifest: "AndroidManifest.xml",
+    enabled: false, // Disabled in mainline-prod
 }
 
 // NetworkStack build targeting the current API release, for testing on in-development SDK

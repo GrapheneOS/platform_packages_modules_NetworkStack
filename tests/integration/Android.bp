@@ -83,6 +83,7 @@ android_test {
     certificate: "networkstack",
     platform_apis: true,
     test_suites: ["device-tests"],
+    enabled: false, // Disabled in mainline-prod
 }
 
 // The static lib needs to be jarjared by each module so they do not conflict with each other
