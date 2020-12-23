@@ -285,8 +285,8 @@ genrule {
 
 android_app {
     name: "TestNetworkStack",
-    defaults: ["NetworkStackAppDefaults", "NetworkStackDevApiLevel"],
-    static_libs: ["NetworkStackApiCurrentLib"],
+    defaults: ["NetworkStackAppDefaults", "NetworkStackReleaseApiLevel"],
+    static_libs: ["NetworkStackApiStableLib"],
     certificate: "networkstack",
     manifest: ":NetworkStackTestAndroidManifest",
     // The permission configuration *must* be included to ensure security of the device
