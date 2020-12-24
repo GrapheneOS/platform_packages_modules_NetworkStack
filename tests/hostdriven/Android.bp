@@ -23,7 +23,7 @@ java_test_host {
     ],
     static_libs: [
         "kotlin-test",
-        "module_test_util",
+        "cts-install-lib-host",
     ],
     test_suites: ["device-tests"],
     data: [":NetworkStack"],
