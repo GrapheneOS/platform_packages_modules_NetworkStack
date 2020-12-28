@@ -19,8 +19,8 @@ package com.android.server;
 import static android.net.dhcp.IDhcpServer.STATUS_INVALID_ARGUMENT;
 import static android.net.dhcp.IDhcpServer.STATUS_SUCCESS;
 import static android.net.dhcp.IDhcpServer.STATUS_UNKNOWN_ERROR;
-import static android.net.util.NetworkStackUtils.getResBooleanConfig;
 
+import static com.android.net.module.util.DeviceConfigUtils.getResBooleanConfig;
 import static com.android.server.util.PermissionUtil.checkDumpPermission;
 
 import android.app.Service;
