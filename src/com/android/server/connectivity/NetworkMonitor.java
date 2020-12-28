@@ -77,11 +77,11 @@ import static android.net.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNE
 import static android.net.util.NetworkStackUtils.TEST_CAPTIVE_PORTAL_HTTPS_URL;
 import static android.net.util.NetworkStackUtils.TEST_CAPTIVE_PORTAL_HTTP_URL;
 import static android.net.util.NetworkStackUtils.TEST_URL_EXPIRATION_TIME;
-import static android.net.util.NetworkStackUtils.getResBooleanConfig;
-import static android.net.util.NetworkStackUtils.isEmpty;
-import static android.net.util.NetworkStackUtils.isIPv6ULA;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
+import static com.android.net.module.util.CollectionUtils.isEmpty;
+import static com.android.net.module.util.ConnectivityUtils.isIPv6ULA;
+import static com.android.net.module.util.DeviceConfigUtils.getResBooleanConfig;
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DNS_EVENTS;
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_TCP_METRICS;
 import static com.android.networkstack.apishim.ConstantsShim.TRANSPORT_TEST;
@@ -162,6 +162,7 @@ import com.android.internal.util.RingBufferIndices;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.internal.util.TrafficStatsConstants;
+import com.android.net.module.util.DeviceConfigUtils;
 import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
@@ -3158,7 +3159,7 @@ public class NetworkMonitor extends StateMachine {
         @Nullable
         public String getDeviceConfigProperty(@NonNull String namespace, @NonNull String name,
                 @Nullable String defaultValue) {
-            return NetworkStackUtils.getDeviceConfigProperty(namespace, name, defaultValue);
+            return DeviceConfigUtils.getDeviceConfigProperty(namespace, name, defaultValue);
         }
 
         /**
@@ -3171,17 +3172,17 @@ public class NetworkMonitor extends StateMachine {
          */
         public int getDeviceConfigPropertyInt(@NonNull String namespace, @NonNull String name,
                 int defaultValue) {
-            return NetworkStackUtils.getDeviceConfigPropertyInt(namespace, name, defaultValue);
+            return DeviceConfigUtils.getDeviceConfigPropertyInt(namespace, name, defaultValue);
         }
 
         /**
          * Check whether or not one experimental feature in the connectivity namespace is
          * enabled.
          * @param name Flag name of the experiment in the connectivity namespace.
-         * @see NetworkStackUtils#isFeatureEnabled(Context, String, String)
+         * @see DeviceConfigUtils#isFeatureEnabled(Context, String, String)
          */
         public boolean isFeatureEnabled(@NonNull Context context, @NonNull String name) {
-            return NetworkStackUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name);
+            return DeviceConfigUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name);
         }
 
         /**
@@ -3207,7 +3208,7 @@ public class NetworkMonitor extends StateMachine {
          */
         public boolean isFeatureEnabled(@NonNull Context context, @NonNull String namespace,
                 @NonNull String name, boolean defaultEnabled) {
-            return NetworkStackUtils.isFeatureEnabled(context, namespace, name, defaultEnabled);
+            return DeviceConfigUtils.isFeatureEnabled(context, namespace, name, defaultEnabled);
         }
 
         /**
