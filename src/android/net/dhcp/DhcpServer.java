@@ -67,6 +67,7 @@ import androidx.annotation.VisibleForTesting;
 import com.android.internal.util.HexDump;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
+import com.android.net.module.util.DeviceConfigUtils;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -231,7 +232,7 @@ public class DhcpServer extends StateMachine {
 
         @Override
         public boolean isFeatureEnabled(@NonNull Context context, @NonNull String name) {
-            return NetworkStackUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name);
+            return DeviceConfigUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name);
         }
     }
 
