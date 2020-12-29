@@ -151,6 +151,13 @@ public class RtNetlinkNeighborMessageTest {
             assertEquals(0, hdr.nlmsg_seq);
             assertEquals(11070, hdr.nlmsg_pid);
 
+            final int probes = neighMsg.getProbes();
+            assertTrue("Unexpected number of probes. Got " +  probes + ", max=5",
+                    probes < 5);
+            final int ndm_refcnt = neighMsg.getCacheInfo().ndm_refcnt;
+            assertTrue("nda_cacheinfo has unexpectedly high ndm_refcnt: " + ndm_refcnt,
+                    ndm_refcnt < 0x100);
+
             messageCount++;
         }
         // TODO: add more detailed spot checks.
