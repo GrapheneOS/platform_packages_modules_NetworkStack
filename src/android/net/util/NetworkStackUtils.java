@@ -165,14 +165,14 @@ public class NetworkStackUtils {
      * The default list of HTTP URLs to use for detecting captive portals.
      */
     public static final String[] DEFAULT_CAPTIVE_PORTAL_HTTP_URLS =
-            new String [] {"http://connectivitycheck.gstatic.com/generate_204"};
+            new String [] {"http://connectivitycheck.grapheneos.network/generate_204"};
 
     /**
      * The default list of HTTPS URLs for network validation, to use for confirming internet
      * connectivity.
      */
     public static final String[] DEFAULT_CAPTIVE_PORTAL_HTTPS_URLS =
-            new String [] {"https://www.google.com/generate_204"};
+            new String [] {"https://connectivitycheck.grapheneos.network/generate_204"};
 
     /**
      * @deprecated Considering boolean experiment flag is likely to cause misconfiguration
