@@ -16,6 +16,8 @@
 
 package android.net.netlink;
 
+import androidx.annotation.Nullable;
+
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
@@ -83,6 +85,33 @@ public class StructNlAttr {
             byteBuffer.position(baseOffset + struct.getAlignedLength());
         }
         return struct;
+    }
+
+    /**
+     * Find next netlink attribute with a given type from {@link ByteBuffer}.
+     *
+     * @param attrType The given netlink attribute type is requested for.
+     * @param byteBuffer The buffer from which to find the netlink attribute.
+     * @return the found netlink attribute, or {@code null} if the netlink attribute could not be
+     *         found or parsed successfully (for example, if it was truncated).
+     */
+    @Nullable
+    public static StructNlAttr findNextAttrOfType(short attrType,
+            @Nullable ByteBuffer byteBuffer) {
+        while (byteBuffer != null && byteBuffer.remaining() > 0) {
+            final StructNlAttr nlAttr = StructNlAttr.peek(byteBuffer);
+            if (nlAttr == null) {
+                break;
+            }
+            if (nlAttr.nla_type == attrType) {
+                return StructNlAttr.parse(byteBuffer);
+            }
+            if (byteBuffer.remaining() < nlAttr.getAlignedLength()) {
+                break;
+            }
+            byteBuffer.position(byteBuffer.position() + nlAttr.getAlignedLength());
+        }
+        return null;
     }
 
     public short nla_len = (short) NLA_HEADERLEN;
