@@ -22,6 +22,7 @@ import static android.net.netlink.StructNlMsgHdr.NLM_F_REQUEST;
 
 import static java.nio.ByteOrder.BIG_ENDIAN;
 
+import android.annotation.NonNull;
 import android.system.OsConstants;
 
 import java.net.Inet4Address;
@@ -42,6 +43,7 @@ public class ConntrackMessage extends NetlinkMessage {
     // enum ctattr_type
     public static final short CTA_TUPLE_ORIG  = 1;
     public static final short CTA_TUPLE_REPLY = 2;
+    public static final short CTA_STATUS      = 3;
     public static final short CTA_TIMEOUT     = 7;
 
     // enum ctattr_tuple
@@ -105,35 +107,78 @@ public class ConntrackMessage extends NetlinkMessage {
         // Just build the netlink header and netfilter header for now and pretend the whole message
         // was consumed.
         // TODO: Parse the conntrack attributes.
-        final ConntrackMessage conntrackMsg = new ConntrackMessage(header);
-
-        conntrackMsg.mNfGenMsg = StructNfGenMsg.parse(byteBuffer);
-        if (conntrackMsg.mNfGenMsg == null) {
+        final StructNfGenMsg nfGenMsg = StructNfGenMsg.parse(byteBuffer);
+        if (nfGenMsg == null) {
             return null;
         }
 
-        byteBuffer.position(byteBuffer.limit());
-        return conntrackMsg;
+        final int baseOffset = byteBuffer.position();
+        StructNlAttr nlAttr = StructNlAttr.findNextAttrOfType(CTA_STATUS, byteBuffer);
+        int status = 0;
+        if (nlAttr != null) {
+            status = nlAttr.getValueAsBe32(0);
+        }
+
+        byteBuffer.position(baseOffset);
+        nlAttr = StructNlAttr.findNextAttrOfType(CTA_TIMEOUT, byteBuffer);
+        int timeoutSec = 0;
+        if (nlAttr != null) {
+            timeoutSec = nlAttr.getValueAsBe32(0);
+        }
+
+        // Advance to the end of the message.
+        byteBuffer.position(baseOffset);
+        final int kMinConsumed = StructNlMsgHdr.STRUCT_SIZE + StructNfGenMsg.STRUCT_SIZE;
+        final int kAdditionalSpace = NetlinkConstants.alignedLengthOf(
+                header.nlmsg_len - kMinConsumed);
+        if (byteBuffer.remaining() < kAdditionalSpace) {
+            return null;
+        }
+        byteBuffer.position(baseOffset + kAdditionalSpace);
+
+        return new ConntrackMessage(header, nfGenMsg, status, timeoutSec);
     }
 
-    protected StructNfGenMsg mNfGenMsg;
+    /**
+     * Netfilter header.
+     */
+    public final StructNfGenMsg nfGenMsg;
+    /**
+     * Connection status. A bitmask of ip_conntrack_status enum flags.
+     *
+     * The status is determined by the parsed attribute value CTA_STATUS, or 0 if the status could
+     * not be parsed successfully (for example, if it was truncated or absent). For the message
+     * from kernel, the valid status is non-zero. For the message from user space, the status may
+     * be 0 (absent).
+     */
+    public final int status;
+    /**
+     * Conntrack timeout.
+     *
+     * The timeout is determined by the parsed attribute value CTA_TIMEOUT, or 0 if the timeout
+     * could not be parsed successfully (for example, if it was truncated or absent). For
+     * IPCTNL_MSG_CT_NEW event, the valid timeout is non-zero. For IPCTNL_MSG_CT_DELETE event, the
+     * timeout is 0 (absent).
+     */
+    public final int timeoutSec;
 
     private ConntrackMessage() {
         super(new StructNlMsgHdr());
-        mNfGenMsg = new StructNfGenMsg((byte) OsConstants.AF_INET);
+        nfGenMsg = new StructNfGenMsg((byte) OsConstants.AF_INET);
+        status = 0;
+        timeoutSec = 0;
     }
 
-    private ConntrackMessage(StructNlMsgHdr header) {
+    private ConntrackMessage(@NonNull StructNlMsgHdr header, @NonNull StructNfGenMsg nfGenMsg,
+            int status, int timeoutSec) {
         super(header);
-        mNfGenMsg = null;
-    }
-
-    public StructNfGenMsg getNfHeader() {
-        return mNfGenMsg;
+        this.nfGenMsg = nfGenMsg;
+        this.status = status;
+        this.timeoutSec = timeoutSec;
     }
 
     public void pack(ByteBuffer byteBuffer) {
         mHeader.pack(byteBuffer);
-        mNfGenMsg.pack(byteBuffer);
+        nfGenMsg.pack(byteBuffer);
     }
 }

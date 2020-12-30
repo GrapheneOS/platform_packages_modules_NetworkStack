@@ -64,6 +64,8 @@ import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.HexDump;
 import com.android.internal.util.IndentingPrintWriter;
+import com.android.net.module.util.CollectionUtils;
+import com.android.net.module.util.ConnectivityUtils;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -1027,9 +1029,9 @@ public class ApfFilter {
         public String toString() {
             try {
                 return String.format("%s -> %s",
-                        NetworkStackUtils.addressAndPortToString(
+                        ConnectivityUtils.addressAndPortToString(
                                 InetAddress.getByAddress(mPacket.srcAddress), mPacket.srcPort),
-                        NetworkStackUtils.addressAndPortToString(
+                        ConnectivityUtils.addressAndPortToString(
                                 InetAddress.getByAddress(mPacket.dstAddress), mPacket.dstPort));
             } catch (UnknownHostException e) {
                 return "Unknown host";
@@ -1082,9 +1084,9 @@ public class ApfFilter {
         public String toString() {
             try {
                 return String.format("%s -> %s , seq=%d, ack=%d",
-                        NetworkStackUtils.addressAndPortToString(
+                        ConnectivityUtils.addressAndPortToString(
                                 InetAddress.getByAddress(mPacket.srcAddress), mPacket.srcPort),
-                        NetworkStackUtils.addressAndPortToString(
+                        ConnectivityUtils.addressAndPortToString(
                                 InetAddress.getByAddress(mPacket.dstAddress), mPacket.dstPort),
                         Integer.toUnsignedLong(mPacket.seq),
                         Integer.toUnsignedLong(mPacket.ack));
@@ -1363,7 +1365,7 @@ public class ApfFilter {
 
     private void generateKeepaliveFilters(ApfGenerator gen, Class<?> filterType, int proto,
             int offset, String label) throws IllegalInstructionException {
-        final boolean haveKeepaliveResponses = NetworkStackUtils.any(mKeepalivePackets,
+        final boolean haveKeepaliveResponses = CollectionUtils.any(mKeepalivePackets,
                 ack -> filterType.isInstance(ack));
 
         // If no keepalive packets of this type

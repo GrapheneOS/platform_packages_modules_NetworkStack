@@ -17,24 +17,13 @@
 package android.net.util;
 
 import android.content.Context;
-import android.content.pm.PackageManager.NameNotFoundException;
-import android.content.res.Resources;
-import android.provider.DeviceConfig;
-import android.util.Log;
-import android.util.SparseArray;
 
-import androidx.annotation.BoolRes;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
+import com.android.net.module.util.DeviceConfigUtils;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.Inet4Address;
-import java.net.Inet6Address;
-import java.net.InetAddress;
 import java.net.SocketException;
-import java.util.List;
-import java.util.function.Predicate;
 
 /**
  * Collection of utilities for the network stack.
@@ -239,19 +228,12 @@ public class NetworkStackUtils {
      *
      * Metrics are sent by default. They can be disabled by setting the flag to a number greater
      * than the APK version (for example 999999999).
-     * @see #isFeatureEnabled(Context, String, String, boolean)
+     * @see DeviceConfigUtils#isFeatureEnabled(Context, String, String, boolean)
      */
     public static final String VALIDATION_METRICS_VERSION = "validation_metrics_version";
 
     static {
         System.loadLibrary("networkstackutilsjni");
-    }
-
-    /**
-     * @return True if the array is null or 0-length.
-     */
-    public static <T> boolean isEmpty(T[] array) {
-        return array == null || array.length == 0;
     }
 
     /**
@@ -261,150 +243,6 @@ public class NetworkStackUtils {
         try {
             SocketUtils.closeSocket(fd);
         } catch (IOException ignored) {
-        }
-    }
-
-    /**
-     * Returns an int array from the given Integer list.
-     */
-    public static int[] convertToIntArray(@NonNull List<Integer> list) {
-        int[] array = new int[list.size()];
-        for (int i = 0; i < list.size(); i++) {
-            array[i] = list.get(i);
-        }
-        return array;
-    }
-
-    /**
-     * Returns a long array from the given long list.
-     */
-    public static long[] convertToLongArray(@NonNull List<Long> list) {
-        long[] array = new long[list.size()];
-        for (int i = 0; i < list.size(); i++) {
-            array[i] = list.get(i);
-        }
-        return array;
-    }
-
-    /**
-     * @return True if there exists at least one element in the sparse array for which
-     * condition {@code predicate}
-     */
-    public static <T> boolean any(SparseArray<T> array, Predicate<T> predicate) {
-        for (int i = 0; i < array.size(); ++i) {
-            if (predicate.test(array.valueAt(i))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Look up the value of a property for a particular namespace from {@link DeviceConfig}.
-     * @param namespace The namespace containing the property to look up.
-     * @param name The name of the property to look up.
-     * @param defaultValue The value to return if the property does not exist or has no valid value.
-     * @return the corresponding value, or defaultValue if none exists.
-     */
-    @Nullable
-    public static String getDeviceConfigProperty(@NonNull String namespace, @NonNull String name,
-            @Nullable String defaultValue) {
-        String value = DeviceConfig.getProperty(namespace, name);
-        return value != null ? value : defaultValue;
-    }
-
-    /**
-     * Look up the value of a property for a particular namespace from {@link DeviceConfig}.
-     * @param namespace The namespace containing the property to look up.
-     * @param name The name of the property to look up.
-     * @param defaultValue The value to return if the property does not exist or its value is null.
-     * @return the corresponding value, or defaultValue if none exists.
-     */
-    public static int getDeviceConfigPropertyInt(@NonNull String namespace, @NonNull String name,
-            int defaultValue) {
-        String value = getDeviceConfigProperty(namespace, name, null /* defaultValue */);
-        try {
-            return (value != null) ? Integer.parseInt(value) : defaultValue;
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
-    }
-
-    /**
-     * Look up the value of a property for a particular namespace from {@link DeviceConfig}.
-     * @param namespace The namespace containing the property to look up.
-     * @param name The name of the property to look up.
-     * @param minimumValue The minimum value of a property.
-     * @param maximumValue The maximum value of a property.
-     * @param defaultValue The value to return if the property does not exist or its value is null.
-     * @return the corresponding value, or defaultValue if none exists or the fetched value is
-     *         greater than maximumValue.
-     */
-    public static int getDeviceConfigPropertyInt(@NonNull String namespace, @NonNull String name,
-            int minimumValue, int maximumValue, int defaultValue) {
-        int value = getDeviceConfigPropertyInt(namespace, name, defaultValue);
-        if (value < minimumValue || value > maximumValue) return defaultValue;
-        return value;
-    }
-
-    /**
-     * Look up the value of a property for a particular namespace from {@link DeviceConfig}.
-     * @param namespace The namespace containing the property to look up.
-     * @param name The name of the property to look up.
-     * @param defaultValue The value to return if the property does not exist or its value is null.
-     * @return the corresponding value, or defaultValue if none exists.
-     */
-    public static boolean getDeviceConfigPropertyBoolean(@NonNull String namespace,
-            @NonNull String name, boolean defaultValue) {
-        String value = getDeviceConfigProperty(namespace, name, null /* defaultValue */);
-        return (value != null) ? Boolean.parseBoolean(value) : defaultValue;
-    }
-
-    /**
-     * Check whether or not one specific experimental feature for a particular namespace from
-     * {@link DeviceConfig} is enabled by comparing NetworkStack module version {@link NetworkStack}
-     * with current version of property. If this property version is valid, the corresponding
-     * experimental feature would be enabled, otherwise disabled.
-     *
-     * This is useful to ensure that if a module install is rolled back, flags are not left fully
-     * rolled out on a version where they have not been well tested.
-     * @param context The global context information about an app environment.
-     * @param namespace The namespace containing the property to look up.
-     * @param name The name of the property to look up.
-     * @return true if this feature is enabled, or false if disabled.
-     */
-    public static boolean isFeatureEnabled(@NonNull Context context, @NonNull String namespace,
-            @NonNull String name) {
-        return isFeatureEnabled(context, namespace, name, false /* defaultEnabled */);
-    }
-
-    /**
-     * Check whether or not one specific experimental feature for a particular namespace from
-     * {@link DeviceConfig} is enabled by comparing NetworkStack module version {@link NetworkStack}
-     * with current version of property. If this property version is valid, the corresponding
-     * experimental feature would be enabled, otherwise disabled.
-     *
-     * This is useful to ensure that if a module install is rolled back, flags are not left fully
-     * rolled out on a version where they have not been well tested.
-     * @param context The global context information about an app environment.
-     * @param namespace The namespace containing the property to look up.
-     * @param name The name of the property to look up.
-     * @param defaultEnabled The value to return if the property does not exist or its value is
-     *                       null.
-     * @return true if this feature is enabled, or false if disabled.
-     */
-    public static boolean isFeatureEnabled(@NonNull Context context, @NonNull String namespace,
-            @NonNull String name, boolean defaultEnabled) {
-        try {
-            final int propertyVersion = getDeviceConfigPropertyInt(namespace, name,
-                    0 /* default value */);
-            final long packageVersion = context.getPackageManager().getPackageInfo(
-                    context.getPackageName(), 0).getLongVersionCode();
-            return (propertyVersion == 0 && defaultEnabled)
-                    || (propertyVersion != 0 && packageVersion >= (long) propertyVersion);
-        } catch (NameNotFoundException e) {
-            Log.e(TAG, "Could not find the package name", e);
-            return false;
         }
     }
 
@@ -443,51 +281,4 @@ public class NetworkStackUtils {
     private static native void addArpEntry(byte[] ethAddr, byte[] netAddr, String ifname,
             FileDescriptor fd) throws IOException;
 
-    /**
-     * Return IP address and port in a string format.
-     */
-    public static String addressAndPortToString(InetAddress address, int port) {
-        return String.format(
-                (address instanceof Inet6Address) ? "[%s]:%d" : "%s:%d",
-                        address.getHostAddress(), port);
-    }
-
-    /**
-     * Return true if the provided address is non-null and an IPv6 Unique Local Address (RFC4193).
-     */
-    public static boolean isIPv6ULA(@Nullable InetAddress addr) {
-        return addr instanceof Inet6Address
-                && ((addr.getAddress()[0] & 0xfe) == 0xfc);
-    }
-
-    /**
-     * Returns the {@code int} nearest in value to {@code value}.
-     *
-     * @param value any {@code long} value
-     * @return the same value cast to {@code int} if it is in the range of the {@code int}
-     * type, {@link Integer#MAX_VALUE} if it is too large, or {@link Integer#MIN_VALUE} if
-     * it is too small
-     */
-    public static int saturatedCast(long value) {
-        if (value > Integer.MAX_VALUE) {
-            return Integer.MAX_VALUE;
-        }
-        if (value < Integer.MIN_VALUE) {
-            return Integer.MIN_VALUE;
-        }
-        return (int) value;
-    }
-
-    /**
-     * Gets boolean config from resources.
-     */
-    public static boolean getResBooleanConfig(@NonNull final Context context,
-            @BoolRes int configResource, final boolean defaultValue) {
-        final Resources res = context.getResources();
-        try {
-            return res.getBoolean(configResource);
-        } catch (Resources.NotFoundException e) {
-            return defaultValue;
-        }
-    }
 }
