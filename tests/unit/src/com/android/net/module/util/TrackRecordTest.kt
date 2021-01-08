@@ -30,6 +30,7 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.system.measureTimeMillis
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -180,6 +181,33 @@ class TrackRecordTest {
         assertTrue(delay >= SHORT_TIMEOUT, "Delay $delay < $SHORT_TIMEOUT")
         delay = measureTimeMillis { assertNull(record.poll(SHORT_TIMEOUT, 0) { it < 10 }) }
         assertTrue(delay >= SHORT_TIMEOUT)
+    }
+
+    @Test
+    fun testConcurrentPollDisallowed() {
+        val failures = AtomicInteger(0)
+        val readHead = ArrayTrackRecord<Int>().newReadHead()
+        val barrier = CyclicBarrier(2)
+        Thread {
+            barrier.await(LONG_TIMEOUT, TimeUnit.MILLISECONDS) // barrier 1
+            try {
+                readHead.poll(LONG_TIMEOUT)
+            } catch (e: ConcurrentModificationException) {
+                failures.incrementAndGet()
+                // Unblock the other thread
+                readHead.add(0)
+            }
+        }.start()
+        barrier.await() // barrier 1
+        try {
+            readHead.poll(LONG_TIMEOUT)
+        } catch (e: ConcurrentModificationException) {
+            failures.incrementAndGet()
+            // Unblock the other thread
+            readHead.add(0)
+        }
+        // One of the threads must have gotten an exception.
+        assertEquals(failures.get(), 1)
     }
 
     @Test
