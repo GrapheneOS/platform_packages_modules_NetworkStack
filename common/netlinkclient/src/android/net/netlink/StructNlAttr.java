@@ -183,6 +183,23 @@ public class StructNlAttr {
         return NetlinkConstants.alignedLengthOf(nla_len);
     }
 
+    /**
+     * Get attribute value as BE16.
+     */
+    public short getValueAsBe16(short defaultValue) {
+        final ByteBuffer byteBuffer = getValueAsByteBuffer();
+        if (byteBuffer == null || byteBuffer.remaining() != Short.BYTES) {
+            return defaultValue;
+        }
+        final ByteOrder originalOrder = byteBuffer.order();
+        try {
+            byteBuffer.order(ByteOrder.BIG_ENDIAN);
+            return byteBuffer.getShort();
+        } finally {
+            byteBuffer.order(originalOrder);
+        }
+    }
+
     public int getValueAsBe32(int defaultValue) {
         final ByteBuffer byteBuffer = getValueAsByteBuffer();
         if (byteBuffer == null || byteBuffer.remaining() != Integer.BYTES) {
@@ -205,6 +222,17 @@ public class StructNlAttr {
         // order accepted by NetlinkMessage.parse.
         byteBuffer.order(ByteOrder.nativeOrder());
         return byteBuffer;
+    }
+
+    /**
+     * Get attribute value as byte.
+     */
+    public byte getValueAsByte(byte defaultValue) {
+        final ByteBuffer byteBuffer = getValueAsByteBuffer();
+        if (byteBuffer == null || byteBuffer.remaining() != Byte.BYTES) {
+            return defaultValue;
+        }
+        return getValueAsByteBuffer().get();
     }
 
     public int getValueAsInt(int defaultValue) {
