@@ -22,6 +22,7 @@ import static android.net.netlink.NetlinkConstants.NFNL_SUBSYS_CTNETLINK;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
@@ -39,6 +40,7 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Arrays;
 
 @RunWith(AndroidJUnit4.class)
 @SmallTest
@@ -166,7 +168,16 @@ public class ConntrackMessageTest {
         assertEquals((byte) StructNfGenMsg.NFNETLINK_V0, nfmsgHdr.version);
         assertEquals((short) 0, nfmsgHdr.res_id);
 
-        // TODO: Parse the CTA_TUPLE_ORIG.
+        assertEquals(InetAddress.parseNumericAddress("192.168.43.209"),
+                conntrackMessage.tupleOrig.srcIp);
+        assertEquals(InetAddress.parseNumericAddress("23.211.13.26"),
+                conntrackMessage.tupleOrig.dstIp);
+        assertEquals((byte) OsConstants.IPPROTO_TCP, conntrackMessage.tupleOrig.protoNum);
+        assertEquals((short) 44333, conntrackMessage.tupleOrig.srcPort);
+        assertEquals((short) 443, conntrackMessage.tupleOrig.dstPort);
+
+        assertNull(conntrackMessage.tupleReply);
+
         assertEquals(0 /* absent */, conntrackMessage.status);
         assertEquals(432000, conntrackMessage.timeoutSec);
     }
@@ -206,24 +217,60 @@ public class ConntrackMessageTest {
         assertEquals((byte) StructNfGenMsg.NFNETLINK_V0, nfmsgHdr.version);
         assertEquals((short) 0, nfmsgHdr.res_id);
 
-        // TODO: Parse the CTA_TUPLE_ORIG.
+        assertEquals(InetAddress.parseNumericAddress("100.96.167.146"),
+                conntrackMessage.tupleOrig.srcIp);
+        assertEquals(InetAddress.parseNumericAddress("216.58.197.10"),
+                conntrackMessage.tupleOrig.dstIp);
+        assertEquals((byte) OsConstants.IPPROTO_UDP, conntrackMessage.tupleOrig.protoNum);
+        assertEquals((short) 37069, conntrackMessage.tupleOrig.srcPort);
+        assertEquals((short) 443, conntrackMessage.tupleOrig.dstPort);
+
+        assertNull(conntrackMessage.tupleReply);
+
         assertEquals(0 /* absent */, conntrackMessage.status);
         assertEquals(180, conntrackMessage.timeoutSec);
     }
 
-    // TODO: Add conntrack message attributes to have further verification.
-    public static final String CT_V4NEW_HEX =
+    public static final String CT_V4NEW_TCP_HEX =
             // CHECKSTYLE:OFF IndentationCheck
             // struct nlmsghdr
-            "24000000" +      // length = 36
+            "8C000000" +      // length = 140
             "0001" +          // type = NFNL_SUBSYS_CTNETLINK (1) << 8 | IPCTNL_MSG_CT_NEW (0)
-            "0006" +          // flags = NLM_F_CREATE | NLM_F_EXCL
+            "0006" +          // flags = NLM_F_CREATE (1 << 10) | NLM_F_EXCL (1 << 9)
             "00000000" +      // seqno = 0
             "00000000" +      // pid = 0
             // struct nfgenmsg
             "02" +            // nfgen_family = AF_INET
             "00" +            // version = NFNETLINK_V0
             "1234" +          // res_id = 0x1234 (big endian)
+             // struct nlattr
+            "3400" +          // nla_len = 52
+            "0180" +          // nla_type = nested CTA_TUPLE_ORIG
+                // struct nlattr
+                "1400" +      // nla_len = 20
+                "0180" +      // nla_type = nested CTA_TUPLE_IP
+                    "0800 0100 C0A8500C" +  // nla_type=CTA_IP_V4_SRC, ip=192.168.80.12
+                    "0800 0200 8C700874" +  // nla_type=CTA_IP_V4_DST, ip=140.112.8.116
+                // struct nlattr
+                "1C00" +      // nla_len = 28
+                "0280" +      // nla_type = nested CTA_TUPLE_PROTO
+                    "0500 0100 06 000000" +  // nla_type=CTA_PROTO_NUM, proto=IPPROTO_TCP (6)
+                    "0600 0200 F3F1 0000" +  // nla_type=CTA_PROTO_SRC_PORT, port=62449 (big endian)
+                    "0600 0300 01BB 0000" +  // nla_type=CTA_PROTO_DST_PORT, port=443 (big endian)
+            // struct nlattr
+            "3400" +          // nla_len = 52
+            "0280" +          // nla_type = nested CTA_TUPLE_REPLY
+                // struct nlattr
+                "1400" +      // nla_len = 20
+                "0180" +      // nla_type = nested CTA_TUPLE_IP
+                    "0800 0100 8C700874" +  // nla_type=CTA_IP_V4_SRC, ip=140.112.8.116
+                    "0800 0200 6451B301" +  // nla_type=CTA_IP_V4_DST, ip=100.81.179.1
+                // struct nlattr
+                "1C00" +      // nla_len = 28
+                "0280" +      // nla_type = nested CTA_TUPLE_PROTO
+                    "0500 0100 06 000000" +  // nla_type=CTA_PROTO_NUM, proto=IPPROTO_TCP (6)
+                    "0600 0200 01BB 0000" +  // nla_type=CTA_PROTO_SRC_PORT, port=443 (big endian)
+                    "0600 0300 F3F1 0000" +  // nla_type=CTA_PROTO_DST_PORT, port=62449 (big endian)
             // struct nlattr
             "0800" +          // nla_len = 8
             "0300" +          // nla_type = CTA_STATUS
@@ -235,14 +282,14 @@ public class ConntrackMessageTest {
             "0700" +          // nla_type = CTA_TIMEOUT
             "00000078";       // nla_value = 120 (big endian)
             // CHECKSTYLE:ON IndentationCheck
-    public static final byte[] CT_V4NEW_BYTES =
-            HexEncoding.decode(CT_V4NEW_HEX.replaceAll(" ", "").toCharArray(), false);
+    public static final byte[] CT_V4NEW_TCP_BYTES =
+            HexEncoding.decode(CT_V4NEW_TCP_HEX.replaceAll(" ", "").toCharArray(), false);
 
     @Test
     public void testParseCtNew() {
         assumeTrue(USING_LE);
 
-        final ByteBuffer byteBuffer = ByteBuffer.wrap(CT_V4NEW_BYTES);
+        final ByteBuffer byteBuffer = ByteBuffer.wrap(CT_V4NEW_TCP_BYTES);
         byteBuffer.order(ByteOrder.nativeOrder());
         final NetlinkMessage msg = NetlinkMessage.parse(byteBuffer, OsConstants.NETLINK_NETFILTER);
         assertNotNull(msg);
@@ -251,7 +298,7 @@ public class ConntrackMessageTest {
 
         final StructNlMsgHdr hdr = conntrackMessage.getHeader();
         assertNotNull(hdr);
-        assertEquals(36, hdr.nlmsg_len);
+        assertEquals(140, hdr.nlmsg_len);
         assertEquals(makeCtType(IPCTNL_MSG_CT_NEW), hdr.nlmsg_type);
         assertEquals((short) (StructNlMsgHdr.NLM_F_CREATE | StructNlMsgHdr.NLM_F_EXCL),
                 hdr.nlmsg_flags);
@@ -264,7 +311,95 @@ public class ConntrackMessageTest {
         assertEquals((byte) StructNfGenMsg.NFNETLINK_V0, nfmsgHdr.version);
         assertEquals((short) 0x1234, nfmsgHdr.res_id);
 
+        assertEquals(InetAddress.parseNumericAddress("192.168.80.12"),
+                conntrackMessage.tupleOrig.srcIp);
+        assertEquals(InetAddress.parseNumericAddress("140.112.8.116"),
+                conntrackMessage.tupleOrig.dstIp);
+        assertEquals((byte) OsConstants.IPPROTO_TCP, conntrackMessage.tupleOrig.protoNum);
+        assertEquals((short) 62449, conntrackMessage.tupleOrig.srcPort);
+        assertEquals((short) 443, conntrackMessage.tupleOrig.dstPort);
+
+        assertEquals(InetAddress.parseNumericAddress("140.112.8.116"),
+                conntrackMessage.tupleReply.srcIp);
+        assertEquals(InetAddress.parseNumericAddress("100.81.179.1"),
+                conntrackMessage.tupleReply.dstIp);
+        assertEquals((byte) OsConstants.IPPROTO_TCP, conntrackMessage.tupleReply.protoNum);
+        assertEquals((short) 443, conntrackMessage.tupleReply.srcPort);
+        assertEquals((short) 62449, conntrackMessage.tupleReply.dstPort);
+
         assertEquals(0x198, conntrackMessage.status);
         assertEquals(120, conntrackMessage.timeoutSec);
+    }
+
+    @Test
+    public void testParseTruncation() {
+        assumeTrue(USING_LE);
+
+        // Expect no crash while parsing the truncated message which has been truncated to every
+        // length between 0 and its full length - 1.
+        for (int len = 0; len < CT_V4NEW_TCP_BYTES.length; len++) {
+            final byte[] truncated = Arrays.copyOfRange(CT_V4NEW_TCP_BYTES, 0, len);
+
+            final ByteBuffer byteBuffer = ByteBuffer.wrap(truncated);
+            byteBuffer.order(ByteOrder.nativeOrder());
+            final NetlinkMessage msg = NetlinkMessage.parse(byteBuffer,
+                    OsConstants.NETLINK_NETFILTER);
+        }
+    }
+
+    @Test
+    public void testParseTruncationWithInvalidByte() {
+        assumeTrue(USING_LE);
+
+        // Expect no crash while parsing the message which is truncated by invalid bytes. The
+        // message has been truncated to every length between 0 and its full length - 1.
+        for (byte invalid : new byte[]{(byte) 0x00, (byte) 0xff}) {
+            for (int len = 0; len < CT_V4NEW_TCP_BYTES.length; len++) {
+                final byte[] truncated = new byte[CT_V4NEW_TCP_BYTES.length];
+                Arrays.fill(truncated, (byte) invalid);
+                System.arraycopy(CT_V4NEW_TCP_BYTES, 0, truncated, 0, len);
+
+                final ByteBuffer byteBuffer = ByteBuffer.wrap(truncated);
+                byteBuffer.order(ByteOrder.nativeOrder());
+                final NetlinkMessage msg = NetlinkMessage.parse(byteBuffer,
+                        OsConstants.NETLINK_NETFILTER);
+            }
+        }
+    }
+
+    // Malformed conntrack messages.
+    public static final String CT_MALFORMED_HEX =
+            // CHECKSTYLE:OFF IndentationCheck
+            // <--           nlmsghr           -->|<-nfgenmsg->|<--    CTA_TUPLE_ORIG     -->|
+            // CTA_TUPLE_ORIG has no nla_value.
+            "18000000 0001 0006 00000000 00000000   02 00 0000 0400 0180"
+            // nested CTA_TUPLE_IP has no nla_value.
+            + "1C000000 0001 0006 00000000 00000000 02 00 0000 0800 0180 0400 0180"
+            // nested CTA_IP_V4_SRC has no nla_value.
+            + "20000000 0001 0006 00000000 00000000 02 00 0000 0C00 0180 0800 0180 0400 0100"
+            // nested CTA_TUPLE_PROTO has no nla_value.
+            // <--           nlmsghr           -->|<-nfgenmsg->|<--    CTA_TUPLE_ORIG
+            + "30000000 0001 0006 00000000 00000000 02 00 0000 1C00 0180 1400 0180 0800 0100"
+            //                                  -->|
+            + "C0A8500C 0800 0200 8C700874 0400 0280";
+            // CHECKSTYLE:ON IndentationCheck
+    public static final byte[] CT_MALFORMED_BYTES =
+            HexEncoding.decode(CT_MALFORMED_HEX.replaceAll(" ", "").toCharArray(), false);
+
+    @Test
+    public void testParseMalformation() {
+        assumeTrue(USING_LE);
+
+        final ByteBuffer byteBuffer = ByteBuffer.wrap(CT_MALFORMED_BYTES);
+        byteBuffer.order(ByteOrder.nativeOrder());
+
+        // Expect no crash while parsing the malformed message.
+        int messageCount = 0;
+        while (byteBuffer.remaining() > 0) {
+            final NetlinkMessage msg = NetlinkMessage.parse(byteBuffer,
+                    OsConstants.NETLINK_NETFILTER);
+            messageCount++;
+        }
+        assertEquals(4, messageCount);
     }
 }
