@@ -16,6 +16,8 @@
 
 package com.android.networkstack.apishim.common;
 
+import android.annotation.NonNull;
+import android.net.CaptivePortalData;
 import android.net.INetworkMonitorCallbacks;
 import android.net.Uri;
 import android.os.RemoteException;
@@ -50,7 +52,20 @@ public interface CaptivePortalDataShim {
     Uri getVenueInfoUrl();
 
     /**
+     * @see CaptivePortalData#getVenueFriendlyName()
+     */
+    String getVenueFriendlyName();
+
+    /**
      * @see INetworkMonitorCallbacks#notifyCaptivePortalDataChanged(android.net.CaptivePortalData)
      */
     void notifyChanged(INetworkMonitorCallbacks cb) throws RemoteException;
+
+    /**
+     * Generate a {@link CaptivePortalData} object with a friendly name set
+     *
+     * @param friendlyName The friendly name to set
+     * @return a {@link CaptivePortalData} object with a friendly name set
+     */
+    CaptivePortalData withVenueFriendlyName(@NonNull String friendlyName);
 }

@@ -20,13 +20,31 @@ import android.net.CaptivePortalData;
 
 import androidx.annotation.NonNull;
 
+import com.android.networkstack.apishim.common.CaptivePortalDataShim;
+
 /**
  * Compatibility implementation of {@link CaptivePortalDataShim}.
  */
 public class CaptivePortalDataShimImpl
         extends com.android.networkstack.apishim.api30.CaptivePortalDataShimImpl {
-    // Currently, this is the same as the API 30 shim, so inherit everything from that.
     protected CaptivePortalDataShimImpl(@NonNull CaptivePortalData data) {
         super(data);
+    }
+
+    @Override
+    public String getVenueFriendlyName() {
+        return mData.getVenueFriendlyName();
+    }
+
+    /**
+     * Generate a {@link CaptivePortalData} object with a friendly name set
+     *
+     * @param friendlyName The friendly name to set
+     * @return a {@link CaptivePortalData} object with a friendly name set
+     */
+    public CaptivePortalData withVenueFriendlyName(String friendlyName) {
+        return new CaptivePortalData.Builder(mData)
+                .setVenueFriendlyName(friendlyName)
+                .build();
     }
 }
