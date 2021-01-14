@@ -16,6 +16,7 @@
 
 package com.android.networkstack.apishim.api29;
 
+import android.net.CaptivePortalData;
 import android.net.IpPrefix;
 import android.net.LinkProperties;
 import android.net.NetworkCapabilities;
@@ -54,6 +55,14 @@ public class NetworkInformationShimImpl implements NetworkInformationShim {
      */
     @VisibleForTesting
     public static boolean useApiAboveQ() {
+        return false;
+    }
+
+    /**
+     * Indicates whether the shim can use APIs above the R SDK.
+     */
+    @VisibleForTesting
+    public static boolean useApiAboveR() {
         return false;
     }
 
@@ -104,5 +113,18 @@ public class NetworkInformationShimImpl implements NetworkInformationShim {
     public void setDhcpServerAddress(@NonNull LinkProperties lp,
             @NonNull Inet4Address serverAddress) {
         // Not supported on this API level: no-op
+    }
+
+    /**
+     * Set captive portal data in {@link LinkProperties}
+     * @param lp Link properties object to be updated
+     * @param captivePortalData Captive portal data to be used
+     */
+    public void setCaptivePortalData(@NonNull LinkProperties lp,
+            @Nullable CaptivePortalData captivePortalData) {
+        if (lp == null) {
+            return;
+        }
+        lp.setCaptivePortalData(captivePortalData);
     }
 }

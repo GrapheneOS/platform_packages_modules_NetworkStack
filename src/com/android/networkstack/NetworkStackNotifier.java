@@ -198,7 +198,6 @@ public class NetworkStackNotifier {
         // Don't show the notification when SSID is unknown to prevent sending something vague to
         // the user.
         final boolean hasSsid = !TextUtils.isEmpty(getSsid(networkStatus));
-
         final CaptivePortalDataShim capportData = getCaptivePortalData(networkStatus);
         final boolean showVenueInfo = capportData != null && capportData.getVenueInfoUrl() != null
                 // Only show venue info on validated networks, to prevent misuse of the notification
@@ -235,7 +234,14 @@ public class NetworkStackNotifier {
             // channel even if the notification contains venue info: the "venue info" notification
             // then doubles as a "connected" notification.
             final String channel = showValidated ? CHANNEL_CONNECTED : CHANNEL_VENUE_INFO;
-            builder = getNotificationBuilder(channel, networkStatus, res, getSsid(networkStatus))
+
+            // If the venue friendly name is available (in Passpoint use-case), display it.
+            // Otherwise, display the SSID.
+            final String friendlyName = capportData.getVenueFriendlyName();
+            final String venueDisplayName = TextUtils.isEmpty(friendlyName)
+                    ? getSsid(networkStatus) : friendlyName;
+
+            builder = getNotificationBuilder(channel, networkStatus, res, venueDisplayName)
                     .setContentText(res.getString(R.string.tap_for_info))
                     .setContentIntent(mDependencies.getActivityPendingIntent(
                             getContextAsUser(mContext, UserHandle.CURRENT),
