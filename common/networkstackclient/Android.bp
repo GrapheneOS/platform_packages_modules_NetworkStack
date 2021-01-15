@@ -65,7 +65,10 @@ aidl_interface {
     name: "networkstack-aidl-interfaces",
     local_include_dir: "src",
     include_dirs: [
-        "frameworks/base/core/java", // For framework parcelables.
+        // For framework parcelables.
+        "frameworks/base/core/java",
+        // For API parcelables in connectivity
+        "frameworks/base/packages/Connectivity/framework/src",
         "frameworks/native/aidl/binder", // For PersistableBundle.aidl
     ],
     srcs: [
