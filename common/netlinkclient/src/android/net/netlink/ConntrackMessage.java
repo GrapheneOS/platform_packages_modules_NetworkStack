@@ -16,18 +16,27 @@
 
 package android.net.netlink;
 
+import static android.net.netlink.StructNlAttr.findNextAttrOfType;
+import static android.net.netlink.StructNlAttr.makeNestedType;
 import static android.net.netlink.StructNlMsgHdr.NLM_F_ACK;
 import static android.net.netlink.StructNlMsgHdr.NLM_F_REPLACE;
 import static android.net.netlink.StructNlMsgHdr.NLM_F_REQUEST;
+import static android.system.OsConstants.IPPROTO_TCP;
+import static android.system.OsConstants.IPPROTO_UDP;
 
 import static java.nio.ByteOrder.BIG_ENDIAN;
 
 import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.system.OsConstants;
 
+import com.android.internal.annotations.VisibleForTesting;
+
 import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Objects;
 
 
 /**
@@ -58,6 +67,106 @@ public class ConntrackMessage extends NetlinkMessage {
     public static final short CTA_PROTO_NUM      = 1;
     public static final short CTA_PROTO_SRC_PORT = 2;
     public static final short CTA_PROTO_DST_PORT = 3;
+
+    // enum ip_conntrack_status
+    public static final int IPS_EXPECTED      = 0x00000001;
+    public static final int IPS_SEEN_REPLY    = 0x00000002;
+    public static final int IPS_ASSURED       = 0x00000004;
+    public static final int IPS_CONFIRMED     = 0x00000008;
+    public static final int IPS_SRC_NAT       = 0x00000010;
+    public static final int IPS_DST_NAT       = 0x00000020;
+    public static final int IPS_SEQ_ADJUST    = 0x00000040;
+    public static final int IPS_SRC_NAT_DONE  = 0x00000080;
+    public static final int IPS_DST_NAT_DONE  = 0x00000100;
+    public static final int IPS_DYING         = 0x00000200;
+    public static final int IPS_FIXED_TIMEOUT = 0x00000400;
+    public static final int IPS_TEMPLATE      = 0x00000800;
+    public static final int IPS_UNTRACKED     = 0x00001000;
+    public static final int IPS_HELPER        = 0x00002000;
+    public static final int IPS_OFFLOAD       = 0x00004000;
+    public static final int IPS_HW_OFFLOAD    = 0x00008000;
+
+    // ip_conntrack_status mask
+    // Interesting on the NAT conntrack session which has already seen two direction traffic.
+    // TODO: Probably IPS_{SRC, DST}_NAT_DONE are also interesting.
+    public static final int ESTABLISHED_MASK = IPS_CONFIRMED | IPS_ASSURED | IPS_SEEN_REPLY
+            | IPS_SRC_NAT;
+    // Interesting on the established NAT conntrack session which is dying.
+    public static final int DYING_MASK = ESTABLISHED_MASK | IPS_DYING;
+
+    /**
+     * A tuple for the conntrack connection information.
+     *
+     * see also CTA_TUPLE_ORIG and CTA_TUPLE_REPLY.
+     */
+    public static class Tuple {
+        public final Inet4Address srcIp;
+        public final Inet4Address dstIp;
+
+        // Both port and protocol number are unsigned numbers stored in signed integers, and that
+        // callers that want to compare them to integers should either cast those integers, or
+        // convert them to unsigned using Byte.toUnsignedInt() and Short.toUnsignedInt().
+        public final short srcPort;
+        public final short dstPort;
+        public final byte protoNum;
+
+        public Tuple(TupleIpv4 ip, TupleProto proto) {
+            this.srcIp = ip.src;
+            this.dstIp = ip.dst;
+            this.srcPort = proto.srcPort;
+            this.dstPort = proto.dstPort;
+            this.protoNum = proto.protoNum;
+        }
+
+        @Override
+        @VisibleForTesting
+        public boolean equals(Object o) {
+            if (!(o instanceof Tuple)) return false;
+            Tuple that = (Tuple) o;
+            return Objects.equals(this.srcIp, that.srcIp)
+                    && Objects.equals(this.dstIp, that.dstIp)
+                    && this.srcPort == that.srcPort
+                    && this.dstPort == that.dstPort
+                    && this.protoNum == that.protoNum;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(srcIp, dstIp, srcPort, dstPort, protoNum);
+        }
+    }
+
+    /**
+     * A tuple for the conntrack connection address.
+     *
+     * see also CTA_TUPLE_IP.
+     */
+    public static class TupleIpv4 {
+        public final Inet4Address src;
+        public final Inet4Address dst;
+
+        public TupleIpv4(Inet4Address src, Inet4Address dst) {
+            this.src = src;
+            this.dst = dst;
+        }
+    }
+
+    /**
+     * A tuple for the conntrack connection protocol.
+     *
+     * see also CTA_TUPLE_PROTO.
+     */
+    public static class TupleProto {
+        public final byte protoNum;
+        public final short srcPort;
+        public final short dstPort;
+
+        public TupleProto(byte protoNum, short srcPort, short dstPort) {
+            this.protoNum = protoNum;
+            this.srcPort = srcPort;
+            this.dstPort = dstPort;
+        }
+    }
 
     public static byte[] newIPv4TimeoutUpdateRequest(
             int proto, Inet4Address src, int sport, Inet4Address dst, int dport, int timeoutSec) {
@@ -113,17 +222,31 @@ public class ConntrackMessage extends NetlinkMessage {
         }
 
         final int baseOffset = byteBuffer.position();
-        StructNlAttr nlAttr = StructNlAttr.findNextAttrOfType(CTA_STATUS, byteBuffer);
+        StructNlAttr nlAttr = findNextAttrOfType(CTA_STATUS, byteBuffer);
         int status = 0;
         if (nlAttr != null) {
             status = nlAttr.getValueAsBe32(0);
         }
 
         byteBuffer.position(baseOffset);
-        nlAttr = StructNlAttr.findNextAttrOfType(CTA_TIMEOUT, byteBuffer);
+        nlAttr = findNextAttrOfType(CTA_TIMEOUT, byteBuffer);
         int timeoutSec = 0;
         if (nlAttr != null) {
             timeoutSec = nlAttr.getValueAsBe32(0);
+        }
+
+        byteBuffer.position(baseOffset);
+        nlAttr = findNextAttrOfType(makeNestedType(CTA_TUPLE_ORIG), byteBuffer);
+        Tuple tupleOrig = null;
+        if (nlAttr != null) {
+            tupleOrig = parseTuple(nlAttr.getValueAsByteBuffer());
+        }
+
+        byteBuffer.position(baseOffset);
+        nlAttr = findNextAttrOfType(makeNestedType(CTA_TUPLE_REPLY), byteBuffer);
+        Tuple tupleReply = null;
+        if (nlAttr != null) {
+            tupleReply = parseTuple(nlAttr.getValueAsByteBuffer());
         }
 
         // Advance to the end of the message.
@@ -136,13 +259,148 @@ public class ConntrackMessage extends NetlinkMessage {
         }
         byteBuffer.position(baseOffset + kAdditionalSpace);
 
-        return new ConntrackMessage(header, nfGenMsg, status, timeoutSec);
+        return new ConntrackMessage(header, nfGenMsg, tupleOrig, tupleReply, status, timeoutSec);
+    }
+
+    /**
+     * Parses a conntrack tuple from a {@link ByteBuffer}.
+     *
+     * The attribute parsing is interesting on:
+     * - CTA_TUPLE_IP
+     *     CTA_IP_V4_SRC
+     *     CTA_IP_V4_DST
+     * - CTA_TUPLE_PROTO
+     *     CTA_PROTO_NUM
+     *     CTA_PROTO_SRC_PORT
+     *     CTA_PROTO_DST_PORT
+     *
+     * Assume that the minimum size is the sum of CTA_TUPLE_IP (size: 20) and CTA_TUPLE_PROTO
+     * (size: 28). Here is an example for an expected CTA_TUPLE_ORIG message in raw data:
+     * +--------------------------------------------------------------------------------------+
+     * | CTA_TUPLE_ORIG                                                                       |
+     * +--------------------------+-----------------------------------------------------------+
+     * | 1400                     | nla_len = 20                                              |
+     * | 0180                     | nla_type = nested CTA_TUPLE_IP                            |
+     * |     0800 0100 C0A8500C   |     nla_type=CTA_IP_V4_SRC, ip=192.168.80.12              |
+     * |     0800 0200 8C700874   |     nla_type=CTA_IP_V4_DST, ip=140.112.8.116              |
+     * | 1C00                     | nla_len = 28                                              |
+     * | 0280                     | nla_type = nested CTA_TUPLE_PROTO                         |
+     * |     0500 0100 06 000000  |     nla_type=CTA_PROTO_NUM, proto=IPPROTO_TCP (6)         |
+     * |     0600 0200 F3F1 0000  |     nla_type=CTA_PROTO_SRC_PORT, port=62449 (big endian)  |
+     * |     0600 0300 01BB 0000  |     nla_type=CTA_PROTO_DST_PORT, port=433 (big endian)    |
+     * +--------------------------+-----------------------------------------------------------+
+     *
+     * The position of the byte buffer doesn't set to the end when the function returns. It is okay
+     * because the caller ConntrackMessage#parse has passed a copy which is used for this parser
+     * only. Moreover, the parser behavior is the same as other existing netlink struct class
+     * parser. Ex: StructInetDiagMsg#parse.
+     */
+    @Nullable
+    private static Tuple parseTuple(@Nullable ByteBuffer byteBuffer) {
+        if (byteBuffer == null) return null;
+
+        TupleIpv4 tupleIpv4 = null;
+        TupleProto tupleProto = null;
+
+        final int baseOffset = byteBuffer.position();
+        StructNlAttr nlAttr = findNextAttrOfType(makeNestedType(CTA_TUPLE_IP), byteBuffer);
+        if (nlAttr != null) {
+            tupleIpv4 = parseTupleIpv4(nlAttr.getValueAsByteBuffer());
+        }
+        if (tupleIpv4 == null) return null;
+
+        byteBuffer.position(baseOffset);
+        nlAttr = findNextAttrOfType(makeNestedType(CTA_TUPLE_PROTO), byteBuffer);
+        if (nlAttr != null) {
+            tupleProto = parseTupleProto(nlAttr.getValueAsByteBuffer());
+        }
+        if (tupleProto == null) return null;
+
+        return new Tuple(tupleIpv4, tupleProto);
+    }
+
+    @Nullable
+    private static Inet4Address castToInet4Address(@Nullable InetAddress address) {
+        if (address == null || !(address instanceof Inet4Address)) return null;
+        return (Inet4Address) address;
+    }
+
+    @Nullable
+    private static TupleIpv4 parseTupleIpv4(@Nullable ByteBuffer byteBuffer) {
+        if (byteBuffer == null) return null;
+
+        Inet4Address src = null;
+        Inet4Address dst = null;
+
+        final int baseOffset = byteBuffer.position();
+        StructNlAttr nlAttr = findNextAttrOfType(CTA_IP_V4_SRC, byteBuffer);
+        if (nlAttr != null) {
+            src = castToInet4Address(nlAttr.getValueAsInetAddress());
+        }
+        if (src == null) return null;
+
+        byteBuffer.position(baseOffset);
+        nlAttr = findNextAttrOfType(CTA_IP_V4_DST, byteBuffer);
+        if (nlAttr != null) {
+            dst = castToInet4Address(nlAttr.getValueAsInetAddress());
+        }
+        if (dst == null) return null;
+
+        return new TupleIpv4(src, dst);
+    }
+
+    @Nullable
+    private static TupleProto parseTupleProto(@Nullable ByteBuffer byteBuffer) {
+        if (byteBuffer == null) return null;
+
+        byte protoNum = 0;
+        short srcPort = 0;
+        short dstPort = 0;
+
+        final int baseOffset = byteBuffer.position();
+        StructNlAttr nlAttr = findNextAttrOfType(CTA_PROTO_NUM, byteBuffer);
+        if (nlAttr != null) {
+            protoNum = nlAttr.getValueAsByte((byte) 0);
+        }
+        if (!(protoNum == IPPROTO_TCP || protoNum == IPPROTO_UDP)) return null;
+
+        byteBuffer.position(baseOffset);
+        nlAttr = StructNlAttr.findNextAttrOfType(CTA_PROTO_SRC_PORT, byteBuffer);
+        if (nlAttr != null) {
+            srcPort = nlAttr.getValueAsBe16((short) 0);
+        }
+        if (srcPort == 0) return null;
+
+        byteBuffer.position(baseOffset);
+        nlAttr = StructNlAttr.findNextAttrOfType(CTA_PROTO_DST_PORT, byteBuffer);
+        if (nlAttr != null) {
+            dstPort = nlAttr.getValueAsBe16((short) 0);
+        }
+        if (dstPort == 0) return null;
+
+        return new TupleProto(protoNum, srcPort, dstPort);
     }
 
     /**
      * Netfilter header.
      */
     public final StructNfGenMsg nfGenMsg;
+    /**
+     * Original direction conntrack tuple.
+     *
+     * The tuple is determined by the parsed attribute value CTA_TUPLE_ORIG, or null if the
+     * tuple could not be parsed successfully (for example, if it was truncated or absent).
+     */
+    @Nullable
+    public final Tuple tupleOrig;
+    /**
+     * Reply direction conntrack tuple.
+     *
+     * The tuple is determined by the parsed attribute value CTA_TUPLE_REPLY, or null if the
+     * tuple could not be parsed successfully (for example, if it was truncated or absent).
+     */
+    @Nullable
+    public final Tuple tupleReply;
     /**
      * Connection status. A bitmask of ip_conntrack_status enum flags.
      *
@@ -165,14 +423,21 @@ public class ConntrackMessage extends NetlinkMessage {
     private ConntrackMessage() {
         super(new StructNlMsgHdr());
         nfGenMsg = new StructNfGenMsg((byte) OsConstants.AF_INET);
+
+        // This constructor is only used by #newIPv4TimeoutUpdateRequest which doesn't use these
+        // data member for packing message. Simply fill them to null or 0.
+        tupleOrig = null;
+        tupleReply = null;
         status = 0;
         timeoutSec = 0;
     }
 
     private ConntrackMessage(@NonNull StructNlMsgHdr header, @NonNull StructNfGenMsg nfGenMsg,
-            int status, int timeoutSec) {
+            @Nullable Tuple tupleOrig, @Nullable Tuple tupleReply, int status, int timeoutSec) {
         super(header);
         this.nfGenMsg = nfGenMsg;
+        this.tupleOrig = tupleOrig;
+        this.tupleReply = tupleReply;
         this.status = status;
         this.timeoutSec = timeoutSec;
     }
@@ -180,5 +445,9 @@ public class ConntrackMessage extends NetlinkMessage {
     public void pack(ByteBuffer byteBuffer) {
         mHeader.pack(byteBuffer);
         nfGenMsg.pack(byteBuffer);
+    }
+
+    public short getMessageType() {
+        return (short) (getHeader().nlmsg_type & ~(NetlinkConstants.NFNL_SUBSYS_CTNETLINK << 8));
     }
 }
