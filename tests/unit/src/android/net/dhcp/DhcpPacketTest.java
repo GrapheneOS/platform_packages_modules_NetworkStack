@@ -55,6 +55,7 @@ import androidx.test.runner.AndroidJUnit4;
 
 import com.android.internal.util.HexDump;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -96,6 +97,11 @@ public class DhcpPacketTest {
     @Before
     public void setUp() {
         DhcpPacket.testOverrideVendorId = "android-dhcp-???";
+    }
+
+    @After
+    public void tearDown() {
+        DhcpPacket.testOverrideVendorId = null;
     }
 
     class TestDhcpPacket extends DhcpPacket {
