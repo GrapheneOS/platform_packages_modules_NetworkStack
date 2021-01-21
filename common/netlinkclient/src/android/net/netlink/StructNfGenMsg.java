@@ -89,4 +89,15 @@ public class StructNfGenMsg {
     private static boolean hasAvailableSpace(@NonNull ByteBuffer byteBuffer) {
         return byteBuffer.remaining() >= STRUCT_SIZE;
     }
+
+    @Override
+    public String toString() {
+        final String familyStr = NetlinkConstants.stringForAddressFamily(nfgen_family);
+
+        return "NfGenMsg{ "
+                + "nfgen_family{" + familyStr + "}, "
+                + "version{" + Byte.toUnsignedInt(version) + "}, "
+                + "res_id{" + Short.toUnsignedInt(res_id) + "} "
+                + "}";
+    }
 }

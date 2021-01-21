@@ -111,6 +111,21 @@ public class ConntrackMonitor extends NetlinkMonitor {
             return Objects.hash(msgType, tupleOrig, tupleReply, status, timeoutSec);
         }
 
+        @Override
+        public String toString() {
+            return "ConntrackEvent{ "
+                    + "msg_type{"
+                    + NetlinkConstants.stringForNlMsgType(msgType, OsConstants.NETLINK_NETFILTER)
+                    + "}, "
+                    + "tuple_orig{" + tupleOrig + "}, "
+                    + "tuple_reply{" + tupleReply + "}, "
+                    + "status{"
+                    + status + "(" + ConntrackMessage.stringForIpConntrackStatus(status) + ")"
+                    + "}, "
+                    + "timeout_sec{" + Integer.toUnsignedLong(timeoutSec) + "} "
+                    + "}";
+        }
+
         /**
          * Check the established NAT session conntrack message.
          *
