@@ -257,6 +257,26 @@ public class ConntrackMonitorTest {
         assertNotEquals(e, timeoutSecNotEqual);
     }
 
+    // TODO: consider moving to a common file for sharing.
+    private static void assertContains(String actualValue, String expectedSubstring) {
+        if (actualValue.contains(expectedSubstring)) return;
+        fail("\"" + actualValue + "\" does not contain \"" + expectedSubstring + "\"");
+    }
+
+    @Test
+    public void testToString() {
+        final ConntrackEvent event = makeTestConntrackEvent(IPCTNL_MSG_CT_NEW,
+                0x198 /* status */, 120 /* timeoutSec */);
+        final String s = event.toString();
+
+        // Verify the converted string of msg_type, tuple_orig, tuple_reply, status and timeout.
+        assertContains(s, "IPCTNL_MSG_CT_NEW");
+        assertContains(s, "IPPROTO_TCP: 192.168.80.12:62449 -> 140.112.8.116:443");
+        assertContains(s, "IPPROTO_TCP: 140.112.8.116:443 -> 100.81.179.1:62449");
+        assertContains(s, "IPS_CONFIRMED|IPS_SRC_NAT|IPS_SRC_NAT_DONE|IPS_DST_NAT_DONE");
+        assertContains(s, "timeout_sec{120}");
+    }
+
     public static final String CT_V4DELETE_TCP_HEX =
             // CHECKSTYLE:OFF IndentationCheck
             // struct nlmsghdr
@@ -317,5 +337,4 @@ public class ConntrackMonitorTest {
         mConntrackMonitor.sendMessage(CT_V4DELETE_TCP_BYTES);
         verify(mConsumer, timeout(TIMEOUT_MS)).accept(eq(expectedEvent));
     }
-
 }

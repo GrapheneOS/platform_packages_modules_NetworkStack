@@ -134,6 +134,19 @@ public class ConntrackMessage extends NetlinkMessage {
         public int hashCode() {
             return Objects.hash(srcIp, dstIp, srcPort, dstPort, protoNum);
         }
+
+        @Override
+        public String toString() {
+            final String srcIpStr = (srcIp == null) ? "null" : srcIp.getHostAddress();
+            final String dstIpStr = (dstIp == null) ? "null" : dstIp.getHostAddress();
+            final String protoStr = NetlinkConstants.stringForProtocol(protoNum);
+
+            return "Tuple{ "
+                    + protoStr + ": "
+                    + srcIpStr + ":" + Short.toUnsignedInt(srcPort) + " -> "
+                    + dstIpStr + ":" + Short.toUnsignedInt(dstPort)
+                    + " }";
+        }
     }
 
     /**
@@ -449,5 +462,91 @@ public class ConntrackMessage extends NetlinkMessage {
 
     public short getMessageType() {
         return (short) (getHeader().nlmsg_type & ~(NetlinkConstants.NFNL_SUBSYS_CTNETLINK << 8));
+    }
+
+    /**
+     * Convert an ip conntrack status to a string.
+     */
+    public static String stringForIpConntrackStatus(int flags) {
+        final StringBuilder sb = new StringBuilder();
+
+        if ((flags & IPS_EXPECTED) != 0) {
+            sb.append("IPS_EXPECTED");
+        }
+        if ((flags & IPS_SEEN_REPLY) != 0) {
+            if (sb.length() > 0) sb.append("|");
+            sb.append("IPS_SEEN_REPLY");
+        }
+        if ((flags & IPS_ASSURED) != 0) {
+            if (sb.length() > 0) sb.append("|");
+            sb.append("IPS_ASSURED");
+        }
+        if ((flags & IPS_CONFIRMED) != 0) {
+            if (sb.length() > 0) sb.append("|");
+            sb.append("IPS_CONFIRMED");
+        }
+        if ((flags & IPS_SRC_NAT) != 0) {
+            if (sb.length() > 0) sb.append("|");
+            sb.append("IPS_SRC_NAT");
+        }
+        if ((flags & IPS_DST_NAT) != 0) {
+            if (sb.length() > 0) sb.append("|");
+            sb.append("IPS_DST_NAT");
+        }
+        if ((flags & IPS_SEQ_ADJUST) != 0) {
+            if (sb.length() > 0) sb.append("|");
+            sb.append("IPS_SEQ_ADJUST");
+        }
+        if ((flags & IPS_SRC_NAT_DONE) != 0) {
+            if (sb.length() > 0) sb.append("|");
+            sb.append("IPS_SRC_NAT_DONE");
+        }
+        if ((flags & IPS_DST_NAT_DONE) != 0) {
+            if (sb.length() > 0) sb.append("|");
+            sb.append("IPS_DST_NAT_DONE");
+        }
+        if ((flags & IPS_DYING) != 0) {
+            if (sb.length() > 0) sb.append("|");
+            sb.append("IPS_DYING");
+        }
+        if ((flags & IPS_FIXED_TIMEOUT) != 0) {
+            if (sb.length() > 0) sb.append("|");
+            sb.append("IPS_FIXED_TIMEOUT");
+        }
+        if ((flags & IPS_TEMPLATE) != 0) {
+            if (sb.length() > 0) sb.append("|");
+            sb.append("IPS_TEMPLATE");
+        }
+        if ((flags & IPS_UNTRACKED) != 0) {
+            if (sb.length() > 0) sb.append("|");
+            sb.append("IPS_UNTRACKED");
+        }
+        if ((flags & IPS_HELPER) != 0) {
+            if (sb.length() > 0) sb.append("|");
+            sb.append("IPS_HELPER");
+        }
+        if ((flags & IPS_OFFLOAD) != 0) {
+            if (sb.length() > 0) sb.append("|");
+            sb.append("IPS_OFFLOAD");
+        }
+        if ((flags & IPS_HW_OFFLOAD) != 0) {
+            if (sb.length() > 0) sb.append("|");
+            sb.append("IPS_HW_OFFLOAD");
+        }
+        return sb.toString();
+    }
+
+    @Override
+    public String toString() {
+        return "ConntrackMessage{ "
+                + "nlmsghdr{"
+                + (mHeader == null ? "" : mHeader.toString(OsConstants.NETLINK_NETFILTER))
+                + "}, "
+                + "nfgenmsg{" + nfGenMsg + "}, "
+                + "tuple_orig{" + tupleOrig + "}, "
+                + "tuple_reply{" + tupleReply + "}, "
+                + "status{" + status + "(" + stringForIpConntrackStatus(status) + ")" + "}, "
+                + "timeout_sec{" + Integer.toUnsignedLong(timeoutSec) + "} "
+                + "}";
     }
 }
