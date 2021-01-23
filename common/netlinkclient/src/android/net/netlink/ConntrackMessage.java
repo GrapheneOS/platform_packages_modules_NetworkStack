@@ -141,11 +141,11 @@ public class ConntrackMessage extends NetlinkMessage {
             final String dstIpStr = (dstIp == null) ? "null" : dstIp.getHostAddress();
             final String protoStr = NetlinkConstants.stringForProtocol(protoNum);
 
-            return "Tuple{ "
+            return "Tuple{"
                     + protoStr + ": "
                     + srcIpStr + ":" + Short.toUnsignedInt(srcPort) + " -> "
                     + dstIpStr + ":" + Short.toUnsignedInt(dstPort)
-                    + " }";
+                    + "}";
         }
     }
 
@@ -538,7 +538,7 @@ public class ConntrackMessage extends NetlinkMessage {
 
     @Override
     public String toString() {
-        return "ConntrackMessage{ "
+        return "ConntrackMessage{"
                 + "nlmsghdr{"
                 + (mHeader == null ? "" : mHeader.toString(OsConstants.NETLINK_NETFILTER))
                 + "}, "
@@ -546,7 +546,7 @@ public class ConntrackMessage extends NetlinkMessage {
                 + "tuple_orig{" + tupleOrig + "}, "
                 + "tuple_reply{" + tupleReply + "}, "
                 + "status{" + status + "(" + stringForIpConntrackStatus(status) + ")" + "}, "
-                + "timeout_sec{" + Integer.toUnsignedLong(timeoutSec) + "} "
+                + "timeout_sec{" + Integer.toUnsignedLong(timeoutSec) + "}"
                 + "}";
     }
 }

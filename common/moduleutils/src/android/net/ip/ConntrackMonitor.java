@@ -113,7 +113,7 @@ public class ConntrackMonitor extends NetlinkMonitor {
 
         @Override
         public String toString() {
-            return "ConntrackEvent{ "
+            return "ConntrackEvent{"
                     + "msg_type{"
                     + NetlinkConstants.stringForNlMsgType(msgType, OsConstants.NETLINK_NETFILTER)
                     + "}, "
@@ -122,7 +122,7 @@ public class ConntrackMonitor extends NetlinkMonitor {
                     + "status{"
                     + status + "(" + ConntrackMessage.stringForIpConntrackStatus(status) + ")"
                     + "}, "
-                    + "timeout_sec{" + Integer.toUnsignedLong(timeoutSec) + "} "
+                    + "timeout_sec{" + Integer.toUnsignedLong(timeoutSec) + "}"
                     + "}";
         }
 
