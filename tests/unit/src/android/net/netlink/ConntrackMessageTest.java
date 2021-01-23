@@ -24,7 +24,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 
 import android.system.OsConstants;
@@ -404,12 +403,6 @@ public class ConntrackMessageTest {
         assertEquals(4, messageCount);
     }
 
-    // TODO: consider moving to a common file for sharing.
-    private static void assertContains(String actualValue, String expectedSubstring) {
-        if (actualValue.contains(expectedSubstring)) return;
-        fail("\"" + actualValue + "\" does not contain \"" + expectedSubstring + "\"");
-    }
-
     @Test
     public void testToString() {
         assumeTrue(USING_LE);
@@ -420,16 +413,21 @@ public class ConntrackMessageTest {
         assertNotNull(msg);
         assertTrue(msg instanceof ConntrackMessage);
         final ConntrackMessage conntrackMessage = (ConntrackMessage) msg;
-        final String s = conntrackMessage.toString();
 
-        // Verify the converted string of nlmsg_type, tuple_orig, tuple_reply, status and timeout.
-        // Note that the "nlmsg_flags" string doesn't verify because the flags which have the same
-        // value is not distinguishable now. See StructNlMsgHdr#stringForNlMsgFlags.
-        // TODO: verify the converted string of nlmsg_flags once it has fixed.
-        assertContains(s, "IPCTNL_MSG_CT_NEW");
-        assertContains(s, "IPPROTO_TCP: 192.168.80.12:62449 -> 140.112.8.116:443");
-        assertContains(s, "IPPROTO_TCP: 140.112.8.116:443 -> 100.81.179.1:62449");
-        assertContains(s, "IPS_CONFIRMED|IPS_SRC_NAT|IPS_SRC_NAT_DONE|IPS_DST_NAT_DONE");
-        assertContains(s, "timeout_sec{120}");
+        // Bug: "nlmsg_flags{1536(NLM_F_MATCH))" is not correct because StructNlMsgHdr
+        // #stringForNlMsgFlags can't convert all flags (ex: NLM_F_CREATE) and can't distinguish
+        // the flags which have the same value (ex: NLM_F_MATCH <0x200> and NLM_F_EXCL <0x200>).
+        // The flags output string should be "NLM_F_CREATE|NLM_F_EXCL" in this case.
+        // TODO: correct the flag converted string once #stringForNlMsgFlags does.
+        final String expected = ""
+                + "ConntrackMessage{"
+                + "nlmsghdr{StructNlMsgHdr{ nlmsg_len{140}, nlmsg_type{256(IPCTNL_MSG_CT_NEW)}, "
+                + "nlmsg_flags{1536(NLM_F_MATCH))}, nlmsg_seq{0}, nlmsg_pid{0} }}, "
+                + "nfgenmsg{NfGenMsg{ nfgen_family{AF_INET}, version{0}, res_id{4660} }}, "
+                + "tuple_orig{Tuple{IPPROTO_TCP: 192.168.80.12:62449 -> 140.112.8.116:443}}, "
+                + "tuple_reply{Tuple{IPPROTO_TCP: 140.112.8.116:443 -> 100.81.179.1:62449}}, "
+                + "status{408(IPS_CONFIRMED|IPS_SRC_NAT|IPS_SRC_NAT_DONE|IPS_DST_NAT_DONE)}, "
+                + "timeout_sec{120}}";
+        assertEquals(expected, conntrackMessage.toString());
     }
 }
