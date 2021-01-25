@@ -16,13 +16,22 @@
 
 package android.net.ip;
 
+import static android.net.netlink.ConntrackMessage.DYING_MASK;
+import static android.net.netlink.ConntrackMessage.ESTABLISHED_MASK;
+
 import android.net.netlink.ConntrackMessage;
+import android.net.netlink.NetlinkConstants;
 import android.net.netlink.NetlinkMessage;
 import android.net.util.SharedLog;
 import android.os.Handler;
 import android.system.OsConstants;
 
 import androidx.annotation.NonNull;
+
+import com.android.internal.annotations.VisibleForTesting;
+
+import java.util.Objects;
+
 
 /**
  * ConntrackMonitor.
@@ -45,7 +54,111 @@ public class ConntrackMonitor extends NetlinkMonitor {
     /**
      * A class for describing parsed netfilter conntrack events.
      */
-    public static class ConntrackEvent { /*TODO*/ }
+    public static class ConntrackEvent {
+        /**
+         * Conntrack event type.
+         */
+        public final short msgType;
+        /**
+         * Original direction conntrack tuple.
+         */
+        public final ConntrackMessage.Tuple tupleOrig;
+        /**
+         * Reply direction conntrack tuple.
+         */
+        public final ConntrackMessage.Tuple tupleReply;
+        /**
+         * Connection status. A bitmask of ip_conntrack_status enum flags.
+         */
+        public final int status;
+        /**
+         * Conntrack timeout.
+         */
+        public final int timeoutSec;
+
+        public ConntrackEvent(ConntrackMessage msg) {
+            this.msgType = msg.getHeader().nlmsg_type;
+            this.tupleOrig = msg.tupleOrig;
+            this.tupleReply = msg.tupleReply;
+            this.status = msg.status;
+            this.timeoutSec = msg.timeoutSec;
+        }
+
+        @VisibleForTesting
+        public ConntrackEvent(short msgType, ConntrackMessage.Tuple tupleOrig,
+                ConntrackMessage.Tuple tupleReply, int status, int timeoutSec) {
+            this.msgType = msgType;
+            this.tupleOrig = tupleOrig;
+            this.tupleReply = tupleReply;
+            this.status = status;
+            this.timeoutSec = timeoutSec;
+        }
+
+        @Override
+        @VisibleForTesting
+        public boolean equals(Object o) {
+            if (!(o instanceof ConntrackEvent)) return false;
+            ConntrackEvent that = (ConntrackEvent) o;
+            return this.msgType == that.msgType
+                    && Objects.equals(this.tupleOrig, that.tupleOrig)
+                    && Objects.equals(this.tupleReply, that.tupleReply)
+                    && this.status == that.status
+                    && this.timeoutSec == that.timeoutSec;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(msgType, tupleOrig, tupleReply, status, timeoutSec);
+        }
+
+        @Override
+        public String toString() {
+            return "ConntrackEvent{"
+                    + "msg_type{"
+                    + NetlinkConstants.stringForNlMsgType(msgType, OsConstants.NETLINK_NETFILTER)
+                    + "}, "
+                    + "tuple_orig{" + tupleOrig + "}, "
+                    + "tuple_reply{" + tupleReply + "}, "
+                    + "status{"
+                    + status + "(" + ConntrackMessage.stringForIpConntrackStatus(status) + ")"
+                    + "}, "
+                    + "timeout_sec{" + Integer.toUnsignedLong(timeoutSec) + "}"
+                    + "}";
+        }
+
+        /**
+         * Check the established NAT session conntrack message.
+         *
+         * @param msg the conntrack message to check.
+         * @return true if an established NAT message, false if not.
+         */
+        public static boolean isEstablishedNatSession(@NonNull ConntrackMessage msg) {
+            if (msg.getMessageType() != NetlinkConstants.IPCTNL_MSG_CT_NEW) return false;
+            if (msg.tupleOrig == null) return false;
+            if (msg.tupleReply == null) return false;
+            if (msg.timeoutSec == 0) return false;
+            if ((msg.status & ESTABLISHED_MASK) != ESTABLISHED_MASK) return false;
+
+            return true;
+        }
+
+        /**
+         * Check the dying NAT session conntrack message.
+         * Note that IPCTNL_MSG_CT_DELETE event has no CTA_TIMEOUT attribute.
+         *
+         * @param msg the conntrack message to check.
+         * @return true if a dying NAT message, false if not.
+         */
+        public static boolean isDyingNatSession(@NonNull ConntrackMessage msg) {
+            if (msg.getMessageType() != NetlinkConstants.IPCTNL_MSG_CT_DELETE) return false;
+            if (msg.tupleOrig == null) return false;
+            if (msg.tupleReply == null) return false;
+            if (msg.timeoutSec != 0) return false;
+            if ((msg.status & DYING_MASK) != DYING_MASK) return false;
+
+            return true;
+        }
+    }
 
     /**
      * A callback to caller for conntrack event.
@@ -74,6 +187,12 @@ public class ConntrackMonitor extends NetlinkMonitor {
             return;
         }
 
-        mConsumer.accept(new ConntrackEvent() /* TODO */);
+        final ConntrackMessage conntrackMsg = (ConntrackMessage) nlMsg;
+        if (!(ConntrackEvent.isEstablishedNatSession(conntrackMsg)
+                || ConntrackEvent.isDyingNatSession(conntrackMsg))) {
+            return;
+        }
+
+        mConsumer.accept(new ConntrackEvent(conntrackMsg));
     }
 }

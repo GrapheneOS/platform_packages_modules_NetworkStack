@@ -37,7 +37,7 @@ import org.json.JSONObject;
 public class CaptivePortalDataShimImpl
         extends com.android.networkstack.apishim.api29.CaptivePortalDataShimImpl {
     @NonNull
-    private final CaptivePortalData mData;
+    protected final CaptivePortalData mData;
 
     protected CaptivePortalDataShimImpl(@NonNull CaptivePortalData data) {
         mData = data;
