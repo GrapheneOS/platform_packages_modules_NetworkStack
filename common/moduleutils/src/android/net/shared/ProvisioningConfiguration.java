@@ -29,6 +29,7 @@ import android.net.ScanResultInfoParcelable;
 import android.net.StaticIpConfiguration;
 import android.net.apf.ApfCapabilities;
 import android.net.ip.IIpClient;
+import android.net.networkstack.aidl.dhcp.DhcpOption;
 import android.util.Log;
 
 import java.nio.BufferUnderflowException;
@@ -223,6 +224,17 @@ public class ProvisioningConfiguration {
          */
         public Builder withLayer2Information(Layer2Information layer2Info) {
             mConfig.mLayer2Info = layer2Info;
+            return this;
+        }
+
+        /**
+         * Specify the customized DHCP options to be put in the PRL or in the DHCP packet. Options
+         * with null value will be put in the PRL.
+         *
+         * @param: options customized DHCP option stable parcelable list.
+         */
+        public Builder withDhcpOptions(List<DhcpOption> options) {
+            mConfig.mDhcpOptions = options;
             return this;
         }
 
@@ -430,6 +442,7 @@ public class ProvisioningConfiguration {
     public String mDisplayName = null;
     public ScanResultInfo mScanResultInfo;
     public Layer2Information mLayer2Info;
+    public List<DhcpOption> mDhcpOptions;
 
     public ProvisioningConfiguration() {} // used by Builder
 
@@ -451,6 +464,7 @@ public class ProvisioningConfiguration {
         mDisplayName = other.mDisplayName;
         mScanResultInfo = other.mScanResultInfo;
         mLayer2Info = other.mLayer2Info;
+        mDhcpOptions = other.mDhcpOptions;
     }
 
     /**
@@ -464,8 +478,8 @@ public class ProvisioningConfiguration {
         p.usingMultinetworkPolicyTracker = mUsingMultinetworkPolicyTracker;
         p.usingIpReachabilityMonitor = mUsingIpReachabilityMonitor;
         p.requestedPreDhcpActionMs = mRequestedPreDhcpActionMs;
-        p.initialConfig = mInitialConfig == null ? null : mInitialConfig.toStableParcelable();
-        p.staticIpConfig = mStaticIpConfig == null
+        p.initialConfig = (mInitialConfig == null) ? null : mInitialConfig.toStableParcelable();
+        p.staticIpConfig = (mStaticIpConfig == null)
                 ? null
                 : new StaticIpConfiguration(mStaticIpConfig);
         p.apfCapabilities = mApfCapabilities; // ApfCapabilities is immutable
@@ -473,8 +487,9 @@ public class ProvisioningConfiguration {
         p.ipv6AddrGenMode = mIPv6AddrGenMode;
         p.network = mNetwork;
         p.displayName = mDisplayName;
-        p.scanResultInfo = mScanResultInfo == null ? null : mScanResultInfo.toStableParcelable();
-        p.layer2Info = mLayer2Info == null ? null : mLayer2Info.toStableParcelable();
+        p.scanResultInfo = (mScanResultInfo == null) ? null : mScanResultInfo.toStableParcelable();
+        p.layer2Info = (mLayer2Info == null) ? null : mLayer2Info.toStableParcelable();
+        p.options = (mDhcpOptions == null) ? null : new ArrayList<>(mDhcpOptions);
         return p;
     }
 
@@ -492,7 +507,7 @@ public class ProvisioningConfiguration {
         config.mUsingIpReachabilityMonitor = p.usingIpReachabilityMonitor;
         config.mRequestedPreDhcpActionMs = p.requestedPreDhcpActionMs;
         config.mInitialConfig = InitialConfiguration.fromStableParcelable(p.initialConfig);
-        config.mStaticIpConfig = p.staticIpConfig == null
+        config.mStaticIpConfig = (p.staticIpConfig == null)
                 ? null
                 : new StaticIpConfiguration(p.staticIpConfig);
         config.mApfCapabilities = p.apfCapabilities; // ApfCapabilities is immutable
@@ -502,6 +517,7 @@ public class ProvisioningConfiguration {
         config.mDisplayName = p.displayName;
         config.mScanResultInfo = ScanResultInfo.fromStableParcelable(p.scanResultInfo);
         config.mLayer2Info = Layer2Information.fromStableParcelable(p.layer2Info);
+        config.mDhcpOptions = (p.options == null) ? null : new ArrayList<>(p.options);
         return config;
     }
 
@@ -523,7 +539,30 @@ public class ProvisioningConfiguration {
                 .add("mDisplayName: " + mDisplayName)
                 .add("mScanResultInfo: " + mScanResultInfo)
                 .add("mLayer2Info: " + mLayer2Info)
+                .add("mDhcpOptions: " + mDhcpOptions)
                 .toString();
+    }
+
+    // TODO: mark DhcpOption stable parcelable with @JavaDerive(equals=true, toString=true)
+    // and @JavaOnlyImmutable.
+    private static boolean dhcpOptionEquals(@Nullable DhcpOption obj1, @Nullable DhcpOption obj2) {
+        if (obj1 == obj2) return true;
+        if (obj1 == null || obj2 == null) return false;
+        return obj1.type == obj2.type && Arrays.equals(obj1.value, obj2.value);
+    }
+
+    // TODO: use Objects.equals(List<DhcpOption>, List<DhcpOption>) method instead once
+    // auto-generated equals() method of stable parcelable is supported in mainline-prod.
+    private static boolean dhcpOptionListEquals(@Nullable List<DhcpOption> l1,
+            @Nullable List<DhcpOption> l2) {
+        if (l1 == l2) return true;
+        if (l1 == null || l2 == null) return false;
+        if (l1.size() != l2.size()) return false;
+
+        for (int i = 0; i < l1.size(); i++) {
+            if (!dhcpOptionEquals(l1.get(i), l2.get(i))) return false;
+        }
+        return true;
     }
 
     @Override
@@ -544,7 +583,8 @@ public class ProvisioningConfiguration {
                 && Objects.equals(mNetwork, other.mNetwork)
                 && Objects.equals(mDisplayName, other.mDisplayName)
                 && Objects.equals(mScanResultInfo, other.mScanResultInfo)
-                && Objects.equals(mLayer2Info, other.mLayer2Info);
+                && Objects.equals(mLayer2Info, other.mLayer2Info)
+                && dhcpOptionListEquals(mDhcpOptions, other.mDhcpOptions);
     }
 
     public boolean isValid() {
