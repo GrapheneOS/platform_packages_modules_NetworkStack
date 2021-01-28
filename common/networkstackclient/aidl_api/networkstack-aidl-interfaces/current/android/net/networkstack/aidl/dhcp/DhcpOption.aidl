@@ -16,17 +16,9 @@
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
 
-package android.net;
+package android.net.networkstack.aidl.dhcp;
 @JavaDerive(toString=true)
-parcelable TcpKeepalivePacketDataParcelable {
-  byte[] srcAddress;
-  int srcPort;
-  byte[] dstAddress;
-  int dstPort;
-  int seq;
-  int ack;
-  int rcvWnd;
-  int rcvWndScale;
-  int tos;
-  int ttl;
+parcelable DhcpOption {
+  byte type;
+  @nullable byte[] value;
 }
