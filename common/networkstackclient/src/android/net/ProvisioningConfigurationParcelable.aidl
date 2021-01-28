@@ -23,6 +23,9 @@ import android.net.Network;
 import android.net.ScanResultInfoParcelable;
 import android.net.StaticIpConfiguration;
 import android.net.apf.ApfCapabilities;
+import android.net.networkstack.aidl.dhcp.DhcpOption;
+
+import java.util.List;
 
 @JavaDerive(toString=true)
 parcelable ProvisioningConfigurationParcelable {
@@ -41,4 +44,5 @@ parcelable ProvisioningConfigurationParcelable {
     boolean enablePreconnection;
     @nullable ScanResultInfoParcelable scanResultInfo;
     @nullable Layer2InformationParcelable layer2Info;
+    @nullable List<DhcpOption> options;
 }
