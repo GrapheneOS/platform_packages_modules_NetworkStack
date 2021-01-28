@@ -1120,7 +1120,7 @@ public class DhcpPacketTest {
         ByteBuffer packet = DhcpPacket.buildDiscoverPacket(
                 DhcpPacket.ENCAP_L2, transactionId, secs, hwaddr,
                 false /* do unicast */, DhcpClient.DEFAULT_REQUESTED_PARAMS,
-                false /* rapid commit */, testHostname);
+                false /* rapid commit */, testHostname, null /* customized DHCP options */);
 
         final byte[] headers = new byte[] {
             // Ethernet header.
