@@ -46,6 +46,7 @@ import android.net.dhcp.DhcpClient;
 import android.net.dhcp.DhcpPacket;
 import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.IpManagerEvent;
+import android.net.networkstack.aidl.dhcp.DhcpOption;
 import android.net.shared.InitialConfiguration;
 import android.net.shared.ProvisioningConfiguration;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
@@ -97,6 +98,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -431,6 +433,17 @@ public class IpClient extends StateMachine {
             Arrays.asList(
                     new byte[] { (byte) 0x00, (byte) 0x17, (byte) 0xf2, (byte) 0x06 }
     ));
+
+    // Allows Wi-Fi to pass in DHCP options when particular vendor-specific IEs are present.
+    // Maps each DHCP option code to a list of IEs, any of which will allow that option.
+    private static final Map<Byte, List<byte[]>> DHCP_OPTIONS_ALLOWED = Map.of(
+            (byte) 60, Arrays.asList(
+                    // KT OUI: 00:17:C3, type: 17. See b/170928882.
+                    new byte[]{ (byte) 0x00, (byte) 0x17, (byte) 0xc3, (byte) 0x17 }),
+            (byte) 77, Arrays.asList(
+                    // KT OUI: 00:17:C3, type: 17. See b/170928882.
+                    new byte[]{ (byte) 0x00, (byte) 0x17, (byte) 0xc3, (byte) 0x17 })
+    );
 
     // Initialize configurable particular SSID set supporting DHCP Roaming feature. See
     // b/131797393 for more details.
@@ -1396,7 +1409,7 @@ public class IpClient extends StateMachine {
         return ssid;
     }
 
-    private List<ByteBuffer> getVendorSpecificIEs(@NonNull ScanResultInfo scanResultInfo) {
+    private static List<ByteBuffer> getVendorSpecificIEs(@NonNull ScanResultInfo scanResultInfo) {
         ArrayList<ByteBuffer> vendorSpecificPayloadList = new ArrayList<>();
         for (InformationElement ie : scanResultInfo.getInformationElements()) {
             if (ie.getId() == VENDOR_SPECIFIC_IE_ID) {
@@ -1406,16 +1419,9 @@ public class IpClient extends StateMachine {
         return vendorSpecificPayloadList;
     }
 
-    private boolean detectUpstreamHotspotFromVendorIe() {
-        if (mConfiguration.mScanResultInfo == null) return false;
-        final ScanResultInfo scanResultInfo = mConfiguration.mScanResultInfo;
-        final String ssid = scanResultInfo.getSsid();
+    private boolean checkIfOuiAndTypeMatched(@NonNull ScanResultInfo scanResultInfo,
+            @NonNull List<byte[]> patternList) {
         final List<ByteBuffer> vendorSpecificPayloadList = getVendorSpecificIEs(scanResultInfo);
-
-        if (mConfiguration.mDisplayName == null
-                || !removeDoubleQuotes(mConfiguration.mDisplayName).equals(ssid)) {
-            return false;
-        }
 
         for (ByteBuffer payload : vendorSpecificPayloadList) {
             byte[] ouiAndType = new byte[4];
@@ -1425,17 +1431,28 @@ public class IpClient extends StateMachine {
                 Log.e(mTag, "Couldn't parse vendor specific IE, buffer underflow");
                 return false;
             }
-            for (byte[] pattern : METERED_IE_PATTERN_LIST) {
+            for (byte[] pattern : patternList) {
                 if (Arrays.equals(pattern, ouiAndType)) {
                     if (DBG) {
-                        Log.d(mTag, "detected upstream hotspot that matches OUI:"
-                                + HexDump.toHexString(ouiAndType));
+                        Log.d(mTag, "match pattern: " + HexDump.toHexString(ouiAndType));
                     }
                     return true;
                 }
             }
         }
         return false;
+    }
+
+    private boolean detectUpstreamHotspotFromVendorIe() {
+        final ScanResultInfo scanResultInfo = mConfiguration.mScanResultInfo;
+        if (scanResultInfo == null) return false;
+        final String ssid = scanResultInfo.getSsid();
+
+        if (mConfiguration.mDisplayName == null
+                || !removeDoubleQuotes(mConfiguration.mDisplayName).equals(ssid)) {
+            return false;
+        }
+        return checkIfOuiAndTypeMatched(scanResultInfo, METERED_IE_PATTERN_LIST);
     }
 
     private void handleIPv4Success(DhcpResults dhcpResults) {
@@ -1756,10 +1773,35 @@ public class IpClient extends StateMachine {
         return mConfiguration.mEnablePreconnection && mConfiguration.mStaticIpConfig == null;
     }
 
+    /**
+     * Check if the customized DHCP client options passed from Wi-Fi are allowed to be put
+     * in PRL or in the DHCP packet.
+     */
+    private List<DhcpOption> maybeFilterCustomizedDhcpOptions() {
+        final List<DhcpOption> options = new ArrayList<DhcpOption>();
+        if (mConfiguration.mDhcpOptions == null
+                || mConfiguration.mScanResultInfo == null) return options; // empty DhcpOption list
+
+        for (DhcpOption option : mConfiguration.mDhcpOptions) {
+            final List<byte[]> patternList = DHCP_OPTIONS_ALLOWED.get(option.type);
+            // requested option won't be added if no vendor-specific IE oui/type allows this option.
+            if (patternList == null) continue;
+            if (checkIfOuiAndTypeMatched(mConfiguration.mScanResultInfo, patternList)) {
+                options.add(option);
+            }
+        }
+        Collections.sort(options, (o1, o2) ->
+                Integer.compare(Byte.toUnsignedInt(o1.type), Byte.toUnsignedInt(o2.type)));
+        return options;
+    }
+
     private void startDhcpClient() {
         // Start DHCPv4.
         mDhcpClient = mDependencies.makeDhcpClient(mContext, IpClient.this, mInterfaceParams,
                 mDependencies.getDhcpClientDependencies(mIpMemoryStore, mIpProvisioningMetrics));
+
+        // Check if the vendor-specific IE oui/type matches and filters the customized DHCP options.
+        final List<DhcpOption> options = maybeFilterCustomizedDhcpOptions();
 
         // If preconnection is enabled, there is no need to ask Wi-Fi to disable powersaving
         // during DHCP, because the DHCP handshake will happen during association. In order to
@@ -1768,7 +1810,7 @@ public class IpClient extends StateMachine {
         // messages.
         if (!isUsingPreconnection()) mDhcpClient.registerForPreDhcpNotification();
         mDhcpClient.sendMessage(DhcpClient.CMD_START_DHCP, new DhcpClient.Configuration(mL2Key,
-                isUsingPreconnection()));
+                isUsingPreconnection(), options));
     }
 
     class ClearingIpAddressesState extends State {
