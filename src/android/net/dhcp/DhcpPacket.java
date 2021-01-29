@@ -22,11 +22,13 @@ import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ANY;
 import android.net.DhcpResults;
 import android.net.LinkAddress;
 import android.net.metrics.DhcpErrorEvent;
+import android.net.networkstack.aidl.dhcp.DhcpOption;
 import android.os.Build;
 import android.os.SystemProperties;
 import android.system.OsConstants;
 import android.text.TextUtils;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
@@ -185,7 +187,8 @@ public abstract class DhcpPacket {
      * DHCP Optional Type: DHCP Host Name
      */
     public static final byte DHCP_HOST_NAME = 12;
-    protected String mHostName;
+    @VisibleForTesting(otherwise = VisibleForTesting.PROTECTED)
+    public String mHostName;
 
     /**
      * DHCP Optional Type: DHCP DOMAIN NAME
@@ -296,13 +299,21 @@ public abstract class DhcpPacket {
      * DHCP Optional Type: Vendor Class Identifier
      */
     public static final byte DHCP_VENDOR_CLASS_ID = 60;
-    protected String mVendorId;
+    @VisibleForTesting(otherwise = VisibleForTesting.PROTECTED)
+    public String mVendorId;
 
     /**
      * DHCP Optional Type: DHCP Client Identifier
      */
     public static final byte DHCP_CLIENT_IDENTIFIER = 61;
     protected byte[] mClientId;
+
+    /**
+     * DHCP Optional Type: DHCP User Class option
+     */
+    public static final byte DHCP_USER_CLASS = 77;
+    @VisibleForTesting(otherwise = VisibleForTesting.PROTECTED)
+    public byte[] mUserClass;
 
     /**
      * DHCP zero-length Optional Type: Rapid Commit. Per RFC4039, both DHCPDISCOVER and DHCPACK
@@ -312,7 +323,7 @@ public abstract class DhcpPacket {
     protected boolean mRapidCommit;
 
     /**
-     * DHCP IPv6-Only Preferred Option(draft-ietf-dhc-v6only).
+     * DHCP IPv6-Only Preferred Option(RFC 8925).
      * Indicate that a host supports an IPv6-only mode and willing to forgo obtaining an IPv4
      * address for V6ONLY_WAIT period if the network provides IPv6 connectivity. V6ONLY_WAIT
      * is 32-bit unsigned integer, so the Integer value cannot be used as-is.
@@ -369,6 +380,12 @@ public abstract class DhcpPacket {
      * The server host name from server.
      */
     protected String mServerHostName;
+
+    /**
+     * The customized DHCP client options to be sent.
+     */
+    @Nullable
+    protected List<DhcpOption> mCustomizedClientOptions;
 
     /**
      * Asks the packet object to create a ByteBuffer serialization of
@@ -754,9 +771,25 @@ public abstract class DhcpPacket {
         buf.put((byte) 0xFF);
     }
 
-    private String getVendorId() {
+    /**
+     * Get the DHCP Vendor Class Identifier.
+     *
+     * By default the vendor Id is "android-dhcp-<version>". The default value will be overwritten
+     * with the customized option value if any.
+     */
+    private static String getVendorId(@Nullable List<DhcpOption> customizedClientOptions) {
         if (testOverrideVendorId != null) return testOverrideVendorId;
-        return "android-dhcp-" + Build.VERSION.RELEASE;
+
+        String vendorId = "android-dhcp-" + Build.VERSION.RELEASE;
+        if (customizedClientOptions != null) {
+            for (DhcpOption option : customizedClientOptions) {
+                if (option.type == DHCP_VENDOR_CLASS_ID) {
+                    vendorId = readAsciiString(option.value, false);
+                    break;
+                }
+            }
+        }
+        return vendorId;
     }
 
     /**
@@ -779,9 +812,23 @@ public abstract class DhcpPacket {
      */
     protected void addCommonClientTlvs(ByteBuffer buf) {
         addTlv(buf, DHCP_MAX_MESSAGE_SIZE, (short) MAX_LENGTH);
-        addTlv(buf, DHCP_VENDOR_CLASS_ID, getVendorId());
+        addTlv(buf, DHCP_VENDOR_CLASS_ID, mVendorId);
         final String hn = getHostname();
         if (!TextUtils.isEmpty(hn)) addTlv(buf, DHCP_HOST_NAME, hn);
+    }
+
+    /**
+     * Adds OEM's customized client TLVs, which will be appended before the End Tlv.
+     */
+    protected void addCustomizedClientTlvs(ByteBuffer buf) {
+        if (mCustomizedClientOptions == null) return;
+        for (DhcpOption option : mCustomizedClientOptions) {
+            // A null value means the option should only be put into the PRL.
+            if (option.value == null) continue;
+            // The vendor class ID was already added by addCommonClientTlvs.
+            if (option.type == DHCP_VENDOR_CLASS_ID) continue;
+            addTlv(buf, option.type, option.value);
+        }
     }
 
     protected void addCommonServerTlvs(ByteBuffer buf) {
@@ -859,9 +906,15 @@ public abstract class DhcpPacket {
     /**
      * Reads a string of specified length from the buffer.
      */
-    private static String readAsciiString(ByteBuffer buf, int byteCount, boolean nullOk) {
-        byte[] bytes = new byte[byteCount];
+    private static String readAsciiString(@NonNull final ByteBuffer buf, int byteCount,
+            boolean nullOk) {
+        final byte[] bytes = new byte[byteCount];
         buf.get(bytes);
+        return readAsciiString(bytes, nullOk);
+    }
+
+    private static String readAsciiString(@NonNull final byte[] payload, boolean nullOk) {
+        final byte[] bytes = payload;
         int length = bytes.length;
         if (!nullOk) {
             // Stop at the first null byte. This is because some DHCP options (e.g., the domain
@@ -949,6 +1002,7 @@ public abstract class DhcpPacket {
         Inet4Address requestedIp = null;
         String serverHostName;
         byte optionOverload = 0;
+        byte[] userClass = null;
 
         // The following are all unsigned integers. Internally we store them as signed integers of
         // the same length because that way we're guaranteed that they can't be out of the range of
@@ -1214,6 +1268,11 @@ public abstract class DhcpPacket {
                             optionOverload = packet.get();
                             optionOverload &= OPTION_OVERLOAD_BOTH;
                             break;
+                        case DHCP_USER_CLASS:
+                            userClass = new byte[optionLen];
+                            packet.get(userClass);
+                            expectedLen = optionLen;
+                            break;
                         case DHCP_RAPID_COMMIT:
                             expectedLen = 0;
                             rapidCommit = true;
@@ -1315,6 +1374,7 @@ public abstract class DhcpPacket {
         newPacket.mVendorInfo = vendorInfo;
         newPacket.mCaptivePortalUrl = captivePortalUrl;
         newPacket.mIpv6OnlyWaitTime = ipv6OnlyWaitTime;
+        newPacket.mUserClass = userClass;
         if ((optionOverload & OPTION_OVERLOAD_SNAME) == 0) {
             newPacket.mServerHostName = serverHostName;
         } else {
@@ -1416,17 +1476,30 @@ public abstract class DhcpPacket {
     }
 
     /**
-     * Builds a DHCP-DISCOVER packet from the required specified
-     * parameters.
+     * Builds a DHCP-DISCOVER packet from the required specified parameters.
      */
     public static ByteBuffer buildDiscoverPacket(int encap, int transactionId,
             short secs, byte[] clientMac, boolean broadcast, byte[] expectedParams,
-            boolean rapidCommit, String hostname) {
+            boolean rapidCommit, String hostname, List<DhcpOption> options) {
         DhcpPacket pkt = new DhcpDiscoverPacket(transactionId, secs, INADDR_ANY /* relayIp */,
                 clientMac, broadcast, INADDR_ANY /* srcIp */, rapidCommit);
         pkt.mRequestedParams = expectedParams;
         pkt.mHostName = hostname;
+        pkt.mCustomizedClientOptions = options;
+        pkt.mVendorId = getVendorId(options);
         return pkt.buildPacket(encap, DHCP_SERVER, DHCP_CLIENT);
+    }
+
+    /**
+     * Builds a DHCP-DISCOVER packet from the required specified parameters.
+     *
+     * TODO: remove this method when automerger to mainline-prod is running.
+     */
+    public static ByteBuffer buildDiscoverPacket(int encap, int transactionId,
+            short secs, byte[] clientMac, boolean broadcast, byte[] expectedParams,
+            boolean rapidCommit, String hostname) {
+        return buildDiscoverPacket(encap, transactionId, secs, clientMac, broadcast,
+                expectedParams, rapidCommit, hostname, new ArrayList<DhcpOption>());
     }
 
     /**
@@ -1538,15 +1611,32 @@ public abstract class DhcpPacket {
     public static ByteBuffer buildRequestPacket(int encap,
             int transactionId, short secs, Inet4Address clientIp, boolean broadcast,
             byte[] clientMac, Inet4Address requestedIpAddress,
-            Inet4Address serverIdentifier, byte[] requestedParams, String hostName) {
+            Inet4Address serverIdentifier, byte[] requestedParams, String hostName,
+            List<DhcpOption> options) {
         DhcpPacket pkt = new DhcpRequestPacket(transactionId, secs, clientIp,
                 INADDR_ANY /* relayIp */, clientMac, broadcast);
         pkt.mRequestedIp = requestedIpAddress;
         pkt.mServerIdentifier = serverIdentifier;
         pkt.mHostName = hostName;
         pkt.mRequestedParams = requestedParams;
+        pkt.mCustomizedClientOptions = options;
+        pkt.mVendorId = getVendorId(options);
         ByteBuffer result = pkt.buildPacket(encap, DHCP_SERVER, DHCP_CLIENT);
         return result;
+    }
+
+    /**
+     * Builds a DHCP-REQUEST packet from the required specified parameters.
+     *
+     * TODO: remove this method when automerger to mainline-prod is running.
+     */
+    public static ByteBuffer buildRequestPacket(int encap,
+            int transactionId, short secs, Inet4Address clientIp, boolean broadcast,
+            byte[] clientMac, Inet4Address requestedIpAddress,
+            Inet4Address serverIdentifier, byte[] requestedParams, String hostName) {
+        return buildRequestPacket(encap, transactionId, secs, clientIp, broadcast, clientMac,
+                requestedIpAddress, serverIdentifier, requestedParams, hostName,
+                new ArrayList<DhcpOption>());
     }
 
     /**
