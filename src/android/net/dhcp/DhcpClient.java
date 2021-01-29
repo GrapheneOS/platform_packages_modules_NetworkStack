@@ -71,6 +71,7 @@ import android.net.ipmemorystore.OnStatusListener;
 import android.net.metrics.DhcpClientEvent;
 import android.net.metrics.DhcpErrorEvent;
 import android.net.metrics.IpConnectivityLog;
+import android.net.networkstack.aidl.dhcp.DhcpOption;
 import android.net.util.HostnameTransliterator;
 import android.net.util.InterfaceParams;
 import android.net.util.NetworkStackUtils;
@@ -115,6 +116,7 @@ import java.net.SocketAddress;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
 
 /**
@@ -302,6 +304,10 @@ public class DhcpClient extends StateMachine {
         }
         if (isIPv6OnlyPreferredModeEnabled()) {
             params.write(DHCP_IPV6_ONLY_PREFERRED);
+        }
+        // Customized DHCP options to be put in PRL.
+        for (DhcpOption option : mConfiguration.options) {
+            if (option.value == null) params.write(option.type);
         }
         return params.toByteArray();
     }
@@ -743,7 +749,8 @@ public class DhcpClient extends StateMachine {
     private boolean sendDiscoverPacket() {
         final ByteBuffer packet = DhcpPacket.buildDiscoverPacket(
                 DhcpPacket.ENCAP_L2, mTransactionId, getSecs(), mHwAddr,
-                DO_UNICAST, getRequestedParams(), isDhcpRapidCommitEnabled(), mHostname);
+                DO_UNICAST, getRequestedParams(), isDhcpRapidCommitEnabled(), mHostname,
+                mConfiguration.options);
         mMetrics.incrementCountForDiscover();
         return transmitPacket(packet, "DHCPDISCOVER", DhcpPacket.ENCAP_L2, INADDR_BROADCAST);
     }
@@ -756,9 +763,9 @@ public class DhcpClient extends StateMachine {
                 ? DhcpPacket.ENCAP_L2 : DhcpPacket.ENCAP_BOOTP;
 
         final ByteBuffer packet = DhcpPacket.buildRequestPacket(
-                encap, mTransactionId, getSecs(), clientAddress,
-                DO_UNICAST, mHwAddr, requestedAddress,
-                serverAddress, getRequestedParams(), mHostname);
+                encap, mTransactionId, getSecs(), clientAddress, DO_UNICAST, mHwAddr,
+                requestedAddress, serverAddress, getRequestedParams(), mHostname,
+                mConfiguration.options);
         String serverStr = (serverAddress != null) ? serverAddress.getHostAddress() : null;
         String description = "DHCPREQUEST ciaddr=" + clientAddress.getHostAddress() +
                              " request=" + requestedAddress.getHostAddress() +
@@ -979,10 +986,14 @@ public class DhcpClient extends StateMachine {
         @Nullable
         public final String l2Key;
         public final boolean isPreconnectionEnabled;
+        @NonNull
+        public final List<DhcpOption> options;
 
-        public Configuration(@Nullable final String l2Key, final boolean isPreconnectionEnabled) {
+        public Configuration(@Nullable final String l2Key, final boolean isPreconnectionEnabled,
+                @NonNull final List<DhcpOption> options) {
             this.l2Key = l2Key;
             this.isPreconnectionEnabled = isPreconnectionEnabled;
+            this.options = options;
         }
     }
 
@@ -1379,7 +1390,8 @@ public class DhcpClient extends StateMachine {
             final Layer2PacketParcelable l2Packet = new Layer2PacketParcelable();
             final ByteBuffer packet = DhcpPacket.buildDiscoverPacket(
                     DhcpPacket.ENCAP_L2, mTransactionId, getSecs(), mHwAddr,
-                    DO_UNICAST, getRequestedParams(), true /* rapid commit */, mHostname);
+                    DO_UNICAST, getRequestedParams(), true /* rapid commit */, mHostname,
+                    mConfiguration.options);
 
             l2Packet.dstMacAddress = MacAddress.fromBytes(DhcpPacket.ETHER_BROADCAST);
             l2Packet.payload = Arrays.copyOf(packet.array(), packet.limit());
