@@ -94,7 +94,10 @@ android_library {
     platform_apis: true,
     min_sdk_version: "29",
     jarjar_rules: ":NetworkStackJarJarRules",
-    static_libs: ["NetworkStaticLibTestsLib"],
+    static_libs: [
+        "NetworkStaticLibTestsLib",
+        "NetdStaticLibTestsLib",
+    ],
 }
 
 // Special version of the network stack tests that includes all tests necessary for code coverage
