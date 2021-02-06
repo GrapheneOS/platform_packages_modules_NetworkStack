@@ -16,6 +16,14 @@
 
 package android.net.ip
 
+import android.net.ipmemorystore.NetworkAttributes
+import org.mockito.Mockito.any
+import org.mockito.ArgumentCaptor
+import org.mockito.Mockito.eq
+import org.mockito.Mockito.never
+import org.mockito.Mockito.timeout
+import org.mockito.Mockito.verify
+
 /**
  * Tests for IpClient, run with signature permissions.
  */
@@ -29,10 +37,24 @@ class IpClientIntegrationTest : IpClientIntegrationTestCommon() {
     override fun setDhcpFeatures(
         isDhcpLeaseCacheEnabled: Boolean,
         isRapidCommitEnabled: Boolean,
-        isDhcpIpConflictDetectEnabled: Boolean
+        isDhcpIpConflictDetectEnabled: Boolean,
+        isIPv6OnlyPreferredEnabled: Boolean
     ) {
         mDependencies.setDhcpLeaseCacheEnabled(isDhcpLeaseCacheEnabled)
         mDependencies.setDhcpRapidCommitEnabled(isRapidCommitEnabled)
         mDependencies.setDhcpIpConflictDetectEnabled(isDhcpIpConflictDetectEnabled)
+        mDependencies.setIPv6OnlyPreferredEnabled(isIPv6OnlyPreferredEnabled)
+    }
+
+    override fun getStoredNetworkAttributes(l2Key: String, timeout: Long): NetworkAttributes {
+        val networkAttributesCaptor = ArgumentCaptor.forClass(NetworkAttributes::class.java)
+
+        verify(mIpMemoryStore, timeout(timeout))
+                .storeNetworkAttributes(eq(l2Key), networkAttributesCaptor.capture(), any())
+        return networkAttributesCaptor.value
+    }
+
+    override fun assertIpMemoryNeverStoreNetworkAttributes(l2Key: String, timeout: Long) {
+        verify(mIpMemoryStore, never()).storeNetworkAttributes(eq(l2Key), any(), any())
     }
 }

@@ -21,6 +21,10 @@ import android.Manifest.permission.READ_DEVICE_CONFIG
 import android.Manifest.permission.WRITE_DEVICE_CONFIG
 import android.net.IIpMemoryStore
 import android.net.IIpMemoryStoreCallbacks
+import android.net.NetworkStackIpMemoryStore
+import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener
+import android.net.ipmemorystore.NetworkAttributes
+import android.net.ipmemorystore.Status
 import android.net.networkstack.TestNetworkStackServiceClient
 import android.net.util.NetworkStackUtils
 import android.os.Process
@@ -28,16 +32,21 @@ import android.provider.DeviceConfig
 import android.util.ArrayMap
 import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
+import java.lang.System.currentTimeMillis
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.test.fail
 import org.junit.After
 import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.mockito.ArgumentCaptor
 import org.mockito.Mockito.timeout
 import org.mockito.Mockito.verify
-import java.lang.System.currentTimeMillis
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
 
 // Stable AIDL method 5 in INetworkStackConnector is allowTestUid
 private const val ALLOW_TEST_UID_INDEX = 5
@@ -55,6 +64,8 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
         private val TAG = IpClientRootTest::class.java.simpleName
         private val automation by lazy { InstrumentationRegistry.getInstrumentation().uiAutomation }
         private lateinit var nsClient: TestNetworkStackServiceClient
+        private lateinit var mStore: NetworkStackIpMemoryStore
+        private val mContext = InstrumentationRegistry.getInstrumentation().getContext()
 
         private class IpMemoryStoreCallbacks(
             private val fetchedFuture: CompletableFuture<IIpMemoryStore>
@@ -83,13 +94,13 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
                 // for a success callback via the service shell command.
                 // TODO: build a small native util that also waits for the success callback, bundle
                 // it in the test APK, and run it as shell command as root instead.
-                waitUntilTestUidAllowed()
+                mStore = getIpMemoryStore()
             } finally {
                 automation.dropShellPermissionIdentity()
             }
         }
 
-        private fun waitUntilTestUidAllowed() {
+        private fun getIpMemoryStore(): NetworkStackIpMemoryStore {
             // Until the test UID is allowed, oneway binder calls will not receive any reply.
             // Call fetchIpMemoryStore (which has limited side-effects) repeatedly until any call
             // gets a callback.
@@ -100,13 +111,14 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
                 try {
                     nsClient.fetchIpMemoryStore(IpMemoryStoreCallbacks(fetchedFuture))
                     // The future may be completed by any previous call to fetchIpMemoryStore.
-                    fetchedFuture.get(20, TimeUnit.MILLISECONDS)
-                    Log.i(TAG, "Obtained IpMemoryStore")
-                    return
+                    val ipMemoryStore = fetchedFuture.get(20, TimeUnit.MILLISECONDS)
+                    Log.i(TAG, "Obtained IpMemoryStore: " + ipMemoryStore)
+                    return NetworkStackIpMemoryStore(mContext, ipMemoryStore)
                 } catch (e: TimeoutException) {
                     // Fall through
                 }
             }
+            fail("fail to get the IpMemoryStore instance within timeout")
         }
 
         @JvmStatic @AfterClass
@@ -155,6 +167,17 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
         }
     }
 
+    @After
+    fun tearDownIpMemoryStore() {
+        if (testSkipped()) return
+        val latch = CountDownLatch(1)
+
+        // Delete the IpMemoryStore entry corresponding to TEST_L2KEY, make sure each test starts
+        // from a clean state.
+        mStore.delete(TEST_L2KEY, true) { _, _ -> latch.countDown() }
+        assertTrue(latch.await(TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS))
+    }
+
     override fun useNetworkStackSignature() = false
 
     override fun makeIIpClient(ifaceName: String, cbMock: IIpClientCallbacks): IIpClient {
@@ -174,7 +197,8 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
     override fun setDhcpFeatures(
         isDhcpLeaseCacheEnabled: Boolean,
         isRapidCommitEnabled: Boolean,
-        isDhcpIpConflictDetectEnabled: Boolean
+        isDhcpIpConflictDetectEnabled: Boolean,
+        isIPv6OnlyPreferredEnabled: Boolean
     ) {
         automation.adoptShellPermissionIdentity(READ_DEVICE_CONFIG, WRITE_DEVICE_CONFIG)
         try {
@@ -182,6 +206,8 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
             setFeatureEnabled(NetworkStackUtils.DHCP_RAPID_COMMIT_VERSION, isRapidCommitEnabled)
             setFeatureEnabled(NetworkStackUtils.DHCP_IP_CONFLICT_DETECT_VERSION,
                     isDhcpIpConflictDetectEnabled)
+            setFeatureEnabled(NetworkStackUtils.DHCP_IPV6_ONLY_PREFERRED_VERSION,
+                    isIPv6OnlyPreferredEnabled)
         } finally {
             automation.dropShellPermissionIdentity()
         }
@@ -199,5 +225,43 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
         // "999999999"
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_CONNECTIVITY, feature,
                 if (enabled) "1" else "999999999", false)
+    }
+
+    private class TestAttributesRetrievedListener : OnNetworkAttributesRetrievedListener {
+        private val future = CompletableFuture<NetworkAttributes?>()
+        override fun onNetworkAttributesRetrieved(
+            status: Status,
+            key: String,
+            attr: NetworkAttributes?
+        ) {
+            // NetworkAttributes associated to specific l2key retrieved from IpMemoryStore might be
+            // null according to testcase context, hence, make sure the callback is triggered with
+            // success and the l2key param return from callback matches, which also prevents the
+            // case that the NetworkAttributes haven't been stored within CompletableFuture polling
+            // timeout.
+            if (key != TEST_L2KEY || status.resultCode != Status.SUCCESS) {
+                fail("retrieved the network attributes associated to L2Key: " + key +
+                        " status: " + status.resultCode + " attributes: " + attr)
+            }
+            future.complete(attr)
+        }
+
+        fun getBlockingNetworkAttributes(timeout: Long): NetworkAttributes? {
+            return future.get(timeout, TimeUnit.MILLISECONDS)
+        }
+    }
+
+    override fun getStoredNetworkAttributes(l2Key: String, timeout: Long): NetworkAttributes {
+        val listener = TestAttributesRetrievedListener()
+        mStore.retrieveNetworkAttributes(l2Key, listener)
+        val na = listener.getBlockingNetworkAttributes(timeout)
+        assertNotNull(na)
+        return na
+    }
+
+    override fun assertIpMemoryNeverStoreNetworkAttributes(l2Key: String, timeout: Long) {
+        val listener = TestAttributesRetrievedListener()
+        mStore.retrieveNetworkAttributes(l2Key, listener)
+        assertNull(listener.getBlockingNetworkAttributes(timeout))
     }
 }
