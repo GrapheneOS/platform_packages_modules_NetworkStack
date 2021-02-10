@@ -17,6 +17,7 @@
 package com.android.networkstack.apishim;
 
 import android.net.CaptivePortalData;
+import android.net.Uri;
 
 import androidx.annotation.NonNull;
 
@@ -37,14 +38,46 @@ public class CaptivePortalDataShimImpl
     }
 
     /**
+     * Get the information source of the User portal
+     * @return The source that the User portal was obtained from
+     */
+    @Override
+    public int getUserPortalUrlSource() {
+        return mData.getUserPortalUrlSource();
+    }
+
+    /**
      * Generate a {@link CaptivePortalData} object with a friendly name set
      *
      * @param friendlyName The friendly name to set
      * @return a {@link CaptivePortalData} object with a friendly name set
      */
+    @Override
     public CaptivePortalData withVenueFriendlyName(String friendlyName) {
         return new CaptivePortalData.Builder(mData)
                 .setVenueFriendlyName(friendlyName)
+                .build();
+    }
+
+    /**
+     * Generate a {@link CaptivePortalData} object with a friendly name and Passpoint external
+     * URLs set
+     *
+     * @param friendlyName The friendly name to set
+     * @param venueInfoUrl Venue information URL
+     * @param termsAndConditionsUrl Terms and conditions URL
+     *
+     * @return a {@link CaptivePortalData} object with friendly name, venue info URL and terms
+     * and conditions URL set
+     */
+    @Override
+    public CaptivePortalData withPasspointInfo(@NonNull String friendlyName,
+            @NonNull Uri venueInfoUrl, @NonNull Uri termsAndConditionsUrl) {
+        return new CaptivePortalData.Builder(mData)
+                .setVenueFriendlyName(friendlyName)
+                .setVenueInfoUrl(venueInfoUrl, ConstantsShim.CAPTIVE_PORTAL_DATA_SOURCE_PASSPOINT)
+                .setUserPortalUrl(termsAndConditionsUrl,
+                        ConstantsShim.CAPTIVE_PORTAL_DATA_SOURCE_PASSPOINT)
                 .build();
     }
 }
