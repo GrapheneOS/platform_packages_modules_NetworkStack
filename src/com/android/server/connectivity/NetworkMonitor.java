@@ -167,7 +167,9 @@ import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
+import com.android.networkstack.apishim.api29.ConstantsShim;
 import com.android.networkstack.apishim.common.CaptivePortalDataShim;
+import com.android.networkstack.apishim.common.NetworkInformationShim;
 import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 import com.android.networkstack.metrics.DataStallDetectionStats;
@@ -515,6 +517,8 @@ public class NetworkMonitor extends StateMachine {
     private final boolean mPrivateIpNoInternetEnabled;
 
     private final boolean mMetricsEnabled;
+    @NonNull
+    private final NetworkInformationShim mInfoShim = NetworkInformationShimImpl.newInstance();
 
     // The validation metrics are accessed by individual probe threads, and by the StateMachine
     // thread. All accesses must be synchronized to make sure the StateMachine thread can see
@@ -1227,6 +1231,22 @@ public class NetworkMonitor extends StateMachine {
             if (!mEvaluationTimer.isStarted()) {
                 mEvaluationTimer.start();
             }
+
+            // Check if the network is captive with Terms & Conditions page. The first network
+            // evaluation for captive networks with T&Cs returns early but NetworkMonitor will then
+            // keep checking for connectivity to determine when the T&Cs are cleared.
+            if (isTermsAndConditionsCaptive(mInfoShim.getCaptivePortalData(mLinkProperties))
+                    && mValidations == 0) {
+                mLastPortalProbeResult = new CaptivePortalProbeResult(
+                        CaptivePortalProbeResult.PORTAL_CODE,
+                        mLinkProperties.getCaptivePortalData().getUserPortalUrl()
+                                .toString(), null,
+                        CaptivePortalProbeResult.PROBE_UNKNOWN);
+                mEvaluationState.reportEvaluationResult(NETWORK_VALIDATION_RESULT_INVALID,
+                        mLastPortalProbeResult.redirectUrl);
+                transitionTo(mCaptivePortalState);
+                return;
+            }
             sendMessage(CMD_REEVALUATE, ++mReevaluateToken, 0);
             if (mUidResponsibleForReeval != INVALID_UID) {
                 TrafficStats.setThreadStatsUid(mUidResponsibleForReeval);
@@ -1562,6 +1582,16 @@ public class NetworkMonitor extends StateMachine {
                         // Transit EvaluatingPrivateDnsState to get to Validated
                         // state (even if no Private DNS validation required).
                         transitionTo(mEvaluatingPrivateDnsState);
+                    } else if (isTermsAndConditionsCaptive(
+                            mInfoShim.getCaptivePortalData(mLinkProperties))) {
+                        mLastPortalProbeResult = new CaptivePortalProbeResult(
+                                CaptivePortalProbeResult.PORTAL_CODE,
+                                mLinkProperties.getCaptivePortalData().getUserPortalUrl()
+                                        .toString(), null,
+                                CaptivePortalProbeResult.PROBE_UNKNOWN);
+                        mEvaluationState.reportEvaluationResult(NETWORK_VALIDATION_RESULT_INVALID,
+                                mLastPortalProbeResult.redirectUrl);
+                        transitionTo(mCaptivePortalState);
                     } else if (probeResult.isPortal()) {
                         mEvaluationState.reportEvaluationResult(NETWORK_VALIDATION_RESULT_INVALID,
                                 probeResult.redirectUrl);
@@ -3565,5 +3595,18 @@ public class NetworkMonitor extends StateMachine {
 
     private static Uri getCaptivePortalApiUrl(LinkProperties lp) {
         return NetworkInformationShimImpl.newInstance().getCaptivePortalApiUrl(lp);
+    }
+
+    /**
+     * Check if the network is captive with terms and conditions page
+     * @return true if network is captive with T&C page, false otherwise
+     */
+    private boolean isTermsAndConditionsCaptive(CaptivePortalDataShim captivePortalDataShim) {
+        return captivePortalDataShim != null
+                && captivePortalDataShim.getUserPortalUrl() != null
+                && !TextUtils.isEmpty(captivePortalDataShim.getUserPortalUrl().toString())
+                && captivePortalDataShim.isCaptive()
+                && captivePortalDataShim.getUserPortalUrlSource()
+                == ConstantsShim.CAPTIVE_PORTAL_DATA_SOURCE_PASSPOINT;
     }
 }
