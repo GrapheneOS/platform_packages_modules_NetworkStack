@@ -142,7 +142,11 @@ import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.apishim.ConstantsShim;
+import com.android.networkstack.apishim.NetworkInformationShimImpl;
+import com.android.networkstack.apishim.common.CaptivePortalDataShim;
+import com.android.networkstack.apishim.common.NetworkInformationShim;
 import com.android.networkstack.apishim.common.ShimUtils;
+import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 import com.android.networkstack.metrics.DataStallDetectionStats;
 import com.android.networkstack.metrics.DataStallStatsUtils;
 import com.android.networkstack.netlink.TcpSocketTracker;
@@ -261,6 +265,7 @@ public class NetworkMonitorTest {
     private static final String TEST_SPEED_TEST_URL = "https://speedtest.example.com";
     private static final String TEST_RELATIVE_URL = "/test/relative/gen_204";
     private static final String TEST_MCCMNC = "123456";
+    private static final String TEST_FRIENDLY_NAME = "Friendly Name";
     private static final String[] TEST_HTTP_URLS = {TEST_HTTP_OTHER_URL1, TEST_HTTP_OTHER_URL2};
     private static final String[] TEST_HTTPS_URLS = {TEST_HTTPS_OTHER_URL1, TEST_HTTPS_OTHER_URL2};
     private static final int TEST_TCP_FAIL_RATE = 99;
@@ -2535,6 +2540,58 @@ public class NetworkMonitorTest {
         // No conclusive result from both HTTP and HTTPS probes. Expect to create 2 HTTP and 2 HTTPS
         // probes as resource configuration.
         verify(mCleartextDnsNetwork, times(4)).openConnection(any());
+    }
+
+    @Test
+    public void testIsCaptivePortal_FromExternalSource() throws Exception {
+        assumeTrue(CaptivePortalDataShimImpl.isSupported());
+        assumeTrue(ShimUtils.isAtLeastS());
+        when(mDependencies.isFeatureEnabled(any(), eq(NAMESPACE_CONNECTIVITY),
+                eq(DISMISS_PORTAL_IN_VALIDATED_NETWORK), anyBoolean())).thenReturn(true);
+        final NetworkMonitor monitor = makeMonitor(WIFI_NOT_METERED_CAPABILITIES);
+        CaptivePortalData captivePortalData =
+                new CaptivePortalData.Builder().setCaptive(true).build();
+        final LinkProperties linkProperties = new LinkProperties(TEST_LINK_PROPERTIES);
+        linkProperties.setCaptivePortalData(captivePortalData);
+        NetworkInformationShim networkShim = NetworkInformationShimImpl.newInstance();
+        CaptivePortalDataShim captivePortalDataShim =
+                networkShim.getCaptivePortalData(linkProperties);
+
+        try {
+            // Set up T&C captive portal info from Passpoint
+            captivePortalData = captivePortalDataShim.withPasspointInfo(TEST_FRIENDLY_NAME,
+                    Uri.parse(TEST_VENUE_INFO_URL), Uri.parse(TEST_LOGIN_URL));
+        } catch (UnsupportedApiLevelException e) {
+            // Minimum API level for this test is 31
+            return;
+        }
+
+        linkProperties.setCaptivePortalData(captivePortalData);
+        monitor.notifyLinkPropertiesChanged(linkProperties);
+        final NetworkCapabilities networkCapabilities =
+                new NetworkCapabilities(WIFI_NOT_METERED_CAPABILITIES);
+        monitor.notifyNetworkConnected(linkProperties, networkCapabilities);
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1))
+                .showProvisioningNotification(any(), any());
+        assertEquals(1, mRegisteredReceivers.size());
+        verifyNetworkTested(VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */, TEST_LOGIN_URL);
+
+        // Force reevaluation and confirm that the network is still captive
+        HandlerUtils.waitForIdle(monitor.getHandler(), HANDLER_TIMEOUT_MS);
+        resetCallbacks();
+        monitor.forceReevaluation(Process.myUid());
+        assertEquals(monitor.getEvaluationState().getProbeCompletedResult(), 0);
+        verifyNetworkTested(VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */, TEST_LOGIN_URL);
+
+        // Check that startCaptivePortalApp sends the expected intent.
+        monitor.launchCaptivePortalApp();
+
+        verify(mCm, timeout(HANDLER_TIMEOUT_MS).times(1)).startCaptivePortalApp(
+                argThat(network -> TEST_NETID == network.netId),
+                argThat(bundle -> bundle.getString(
+                        ConnectivityManager.EXTRA_CAPTIVE_PORTAL_URL).equals(TEST_LOGIN_URL)
+                        && TEST_NETID == ((Network) bundle.getParcelable(
+                        ConnectivityManager.EXTRA_NETWORK)).netId));
     }
 
     private void setupResourceForMultipleProbes() {
