@@ -68,7 +68,7 @@ aidl_interface {
         // For framework parcelables.
         "frameworks/base/core/java",
         // For API parcelables in connectivity
-        "frameworks/base/packages/Connectivity/framework/src",
+        "frameworks/base/packages/Connectivity/framework/aidl-export",
         "frameworks/native/aidl/binder", // For PersistableBundle.aidl
     ],
     srcs: [
@@ -161,5 +161,9 @@ java_library {
         "//frameworks/base/services/net",
         "//frameworks/opt/net/wifi/service",
         "//packages/modules/NetworkStack",
+    ],
+    apex_available: [
+        "//apex_available:platform",
+        "com.android.tethering",
     ],
 }
