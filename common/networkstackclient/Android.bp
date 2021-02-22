@@ -156,8 +156,8 @@ java_library {
         "src/android/net/shared/**/*.java",
     ],
     static_libs: [
-        "ipmemorystore-aidl-interfaces-unstable-java",
-        "networkstack-aidl-interfaces-unstable-java",
+        "ipmemorystore-aidl-interfaces-V10-java",
+        "networkstack-aidl-interfaces-V10-java",
     ],
     visibility: [
         "//frameworks/base/packages/Tethering",
