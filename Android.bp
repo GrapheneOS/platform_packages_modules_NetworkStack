@@ -41,6 +41,10 @@
 //                                                         TestNetworkStack
 
 // Common defaults to define SDK level
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
 java_defaults {
     name: "NetworkStackDevApiLevel",
     min_sdk_version: "29",
