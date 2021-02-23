@@ -17,6 +17,10 @@
 // Shared utility sources to be used by multiple network modules
 // TODO: remove all frameworks/base dependencies on packages/modules/NetworkStack and
 // frameworks/base/packages/Tethering by moving these files to frameworks/libs/net.
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
 filegroup {
     name: "net-module-utils-srcs",
     srcs: [
