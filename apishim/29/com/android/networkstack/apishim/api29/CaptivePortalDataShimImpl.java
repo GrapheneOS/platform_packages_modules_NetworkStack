@@ -16,7 +16,6 @@
 
 package com.android.networkstack.apishim.api29;
 
-import android.net.CaptivePortalData;
 import android.net.Uri;
 
 import androidx.annotation.NonNull;
@@ -75,7 +74,7 @@ public abstract class CaptivePortalDataShimImpl implements CaptivePortalDataShim
      * @return a {@link CaptivePortalData} object with a friendly name set
      */
     @Override
-    public CaptivePortalData withVenueFriendlyName(String friendlyName)
+    public CaptivePortalDataShim withVenueFriendlyName(String friendlyName)
             throws UnsupportedApiLevelException {
         // Not supported in API level 29
         throw new UnsupportedApiLevelException("CaptivePortalData not supported on API 29");
@@ -93,7 +92,7 @@ public abstract class CaptivePortalDataShimImpl implements CaptivePortalDataShim
      * and conditions URL set
      */
     @Override
-    public CaptivePortalData withPasspointInfo(@NonNull String friendlyName,
+    public CaptivePortalDataShim withPasspointInfo(@NonNull String friendlyName,
             @NonNull Uri venueInfoUrl, @NonNull Uri termsAndConditionsUrl)
             throws UnsupportedApiLevelException {
         // Not supported in API level 29
