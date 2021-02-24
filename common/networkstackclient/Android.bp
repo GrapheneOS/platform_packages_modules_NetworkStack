@@ -15,6 +15,10 @@
 //
 
 // AIDL interfaces between the core system and the networking mainline module.
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
 aidl_interface {
     name: "ipmemorystore-aidl-interfaces",
     local_include_dir: "src",
