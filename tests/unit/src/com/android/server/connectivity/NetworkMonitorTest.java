@@ -2549,11 +2549,12 @@ public class NetworkMonitorTest {
         when(mDependencies.isFeatureEnabled(any(), eq(NAMESPACE_CONNECTIVITY),
                 eq(DISMISS_PORTAL_IN_VALIDATED_NETWORK), anyBoolean())).thenReturn(true);
         final NetworkMonitor monitor = makeMonitor(WIFI_NOT_METERED_CAPABILITIES);
-        CaptivePortalData captivePortalData =
-                new CaptivePortalData.Builder().setCaptive(true).build();
-        final LinkProperties linkProperties = new LinkProperties(TEST_LINK_PROPERTIES);
-        linkProperties.setCaptivePortalData(captivePortalData);
+
         NetworkInformationShim networkShim = NetworkInformationShimImpl.newInstance();
+        CaptivePortalDataShim captivePortalData = new CaptivePortalDataShimImpl(
+                new CaptivePortalData.Builder().setCaptive(true).build());
+        final LinkProperties linkProperties = new LinkProperties(TEST_LINK_PROPERTIES);
+        networkShim.setCaptivePortalData(linkProperties, captivePortalData);
         CaptivePortalDataShim captivePortalDataShim =
                 networkShim.getCaptivePortalData(linkProperties);
 
@@ -2566,7 +2567,7 @@ public class NetworkMonitorTest {
             return;
         }
 
-        linkProperties.setCaptivePortalData(captivePortalData);
+        networkShim.setCaptivePortalData(linkProperties, captivePortalData);
         monitor.notifyLinkPropertiesChanged(linkProperties);
         final NetworkCapabilities networkCapabilities =
                 new NetworkCapabilities(WIFI_NOT_METERED_CAPABILITIES);
