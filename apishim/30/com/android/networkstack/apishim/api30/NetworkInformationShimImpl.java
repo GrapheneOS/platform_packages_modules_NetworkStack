@@ -105,4 +105,13 @@ public class NetworkInformationShimImpl extends
             @NonNull Inet4Address serverAddress) {
         lp.setDhcpServerAddress(serverAddress);
     }
+
+    @Override
+    public void setCaptivePortalData(@NonNull LinkProperties lp,
+            @Nullable CaptivePortalDataShim captivePortalData) {
+        if (lp == null) {
+            return;
+        }
+        lp.setCaptivePortalData(((CaptivePortalDataShimImpl) captivePortalData).getData());
+    }
 }
