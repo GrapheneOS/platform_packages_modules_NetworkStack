@@ -16,7 +16,6 @@
 
 package com.android.networkstack.apishim.api29;
 
-import android.net.CaptivePortalData;
 import android.net.IpPrefix;
 import android.net.LinkProperties;
 import android.net.NetworkCapabilities;
@@ -121,10 +120,7 @@ public class NetworkInformationShimImpl implements NetworkInformationShim {
      * @param captivePortalData Captive portal data to be used
      */
     public void setCaptivePortalData(@NonNull LinkProperties lp,
-            @Nullable CaptivePortalData captivePortalData) {
-        if (lp == null) {
-            return;
-        }
-        lp.setCaptivePortalData(captivePortalData);
+            @Nullable CaptivePortalDataShim captivePortalData) {
+        // Not supported on this API level: no-op
     }
 }
