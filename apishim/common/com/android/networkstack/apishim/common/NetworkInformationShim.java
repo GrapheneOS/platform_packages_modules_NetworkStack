@@ -16,7 +16,6 @@
 
 package com.android.networkstack.apishim.common;
 
-import android.net.CaptivePortalData;
 import android.net.IpPrefix;
 import android.net.LinkProperties;
 import android.net.NetworkCapabilities;
@@ -83,5 +82,5 @@ public interface NetworkInformationShim {
      * @param captivePortalData Captive portal data to be used
      */
     void setCaptivePortalData(@NonNull LinkProperties lp,
-            @Nullable CaptivePortalData captivePortalData);
+            @Nullable CaptivePortalDataShim captivePortalData);
 }
