@@ -22,12 +22,12 @@
 //                                            /    \
 //           +NetworkStackApiStableShims --> /      \ <-- +NetworkStackApiCurrentShims
 //           +NetworkStackReleaseApiLevel   /        \    +NetworkStackDevApiLevel
-//           +jarjar apistub.api[latest].* /          \   +module src/
-//            to apistub.*                /            \
+//           +jarjar apishim.api[latest].* /          \
+//            to apishim.*                /            \
 //                                       /              \
-//         NetworkStackApiStableDependencies             \
+//                                      /                \
 //                                     /                  \               android libs w/ all code
-//                   +module src/ --> /                    \              (also used in unit tests)
+//                                    / <- +module src/ -> \              (also used in unit tests)
 //                                   /                      \                        |
 //               NetworkStackApiStableLib               NetworkStackApiCurrentLib <--*
 //                          |                                     |
@@ -58,28 +58,104 @@ java_defaults {
     target_sdk_version: "30",
 }
 
-// Filegroups for the API shims
-filegroup {
-    name: "NetworkStackApiCurrentShims",
-    srcs: [
-        "apishim/common/**/*.java",
-        "apishim/29/**/*.java",
-        "apishim/30/**/*.java",
-        "apishim/31/**/*.java",
-        ":networkstack-module-utils-srcs",
+// Libraries for the API shims
+java_defaults {
+    name: "NetworkStackShimsDefaults",
+    libs: [
+        "androidx.annotation_annotation",
+        "networkstack-client",
     ],
+    min_sdk_version: "29",
 }
 
-// API stable shims only include the compat package, but it is jarjared to replace the non-compat
-// package
-filegroup {
-    name: "NetworkStackApiStableShims",
-    srcs: [
-        "apishim/common/**/*.java",
-        "apishim/29/**/*.java",
-        "apishim/30/**/*.java",
-        ":networkstack-module-utils-srcs",
+// Common shim code. This includes the shim interface definitions themselves, and things like
+// ShimUtils and UnsupportedApiLevelException. Compiles against system_current because ShimUtils
+// needs access to all Build.VERSION_CODES.*, which by definition are only in the newest SDK.
+// TODO: consider moving ShimUtils into a library (or removing it in favour of SdkLevel) and compile
+// this target against the lowest-supported SDK (currently 29).
+java_library {
+    name: "NetworkStackShimsCommon",
+    defaults: ["NetworkStackShimsDefaults"],
+    srcs: ["apishim/common/**/*.java"],
+    sdk_version: "system_current",
+    visibility: ["//visibility:private"],
+}
+
+// Each level of the shims (29, 30, ...) is its own java_library compiled against the corresponding
+// system_X SDK. this ensures that each shim can only use SDK classes that exist in its SDK level.
+java_library {
+    name: "NetworkStackApi29Shims",
+    defaults: ["NetworkStackShimsDefaults"],
+    srcs: ["apishim/29/**/*.java"],
+    libs: [
+        "NetworkStackShimsCommon",
     ],
+    sdk_version: "system_29",
+    visibility: ["//visibility:private"],
+}
+
+java_library {
+    name: "NetworkStackApi30Shims",
+    defaults: ["NetworkStackShimsDefaults"],
+    srcs: [
+        "apishim/30/**/*.java",
+    ],
+    libs: [
+        "NetworkStackShimsCommon",
+        "NetworkStackApi29Shims",
+    ],
+    sdk_version: "system_30",
+    visibility: ["//visibility:private"],
+}
+
+// Shims for APIs being added to the current development version of Android. These APIs are not
+// stable and have no defined version number. We could call these 10000, but we just pick the next
+// integer, so if the next SDK release happens to use that integer, we don't need to rename them.
+java_library {
+    name: "NetworkStackApi31Shims",
+    defaults: ["NetworkStackShimsDefaults"],
+    srcs: [
+        "apishim/31/**/*.java",
+    ],
+    libs: [
+        "NetworkStackShimsCommon",
+        "NetworkStackApi29Shims",
+        "NetworkStackApi30Shims",
+    ],
+    sdk_version: "system_current",
+    visibility: ["//visibility:private"],
+}
+
+// API current uses the API current shims directly.
+// The current (in-progress) shims are in the com.android.networkstack.apishim package and are
+// called directly by the networkstack code.
+java_library {
+    name: "NetworkStackApiCurrentShims",
+    defaults: ["NetworkStackShimsDefaults"],
+    static_libs: [
+        "NetworkStackShimsCommon",
+        "NetworkStackApi29Shims",
+        "NetworkStackApi30Shims",
+        "NetworkStackApi31Shims",
+    ],
+    sdk_version: "system_current",
+    visibility: ["//visibility:private"],
+}
+
+// API stable uses jarjar to rename the latest stable apishim package from
+// com.android.networkstack.apishim.apiXX to com.android.networkstack.apishim, which is called by
+// the networkstack code.
+java_library {
+    name: "NetworkStackApiStableShims",
+    defaults: ["NetworkStackShimsDefaults"],
+    static_libs: [
+        "NetworkStackShimsCommon",
+        "NetworkStackApi29Shims",
+        "NetworkStackApi30Shims",
+    ],
+    jarjar_rules: "apishim/jarjar-rules-compat.txt",
+    sdk_version: "system_30",
+    visibility: ["//visibility:private"],
 }
 
 // Common defaults for android libraries containing network stack code, used to compile variants of
@@ -88,6 +164,7 @@ java_defaults {
     name: "NetworkStackAndroidLibraryDefaults",
     srcs: [
         ":framework-networkstack-shared-srcs",
+        ":networkstack-module-utils-srcs",
     ],
     libs: ["unsupportedappusage"],
     static_libs: [
@@ -105,41 +182,26 @@ java_defaults {
     plugins: ["java_api_finder"],
 }
 
-// The versions of the android library containing network stack code compiled for each SDK variant
-// API current uses the sources of the API current shims directly.
-// This allows API current code to be treated identically to code in src/ (it will be moved
-// there eventually), and to use the compat shim as fallback on older devices.
+// The versions of the android library containing network stack code compiled for each SDK variant.
 android_library {
     name: "NetworkStackApiCurrentLib",
     defaults: ["NetworkStackDevApiLevel", "NetworkStackAndroidLibraryDefaults"],
     srcs: [
-        ":NetworkStackApiCurrentShims",
         "src/**/*.java",
         ":statslog-networkstack-java-gen"
     ],
+    static_libs: ["NetworkStackApiCurrentShims"],
     manifest: "AndroidManifestBase.xml",
-}
-
-// For API stable, first build the dependencies using jarjar compat rules, then build the sources
-// linking with the dependencies.
-java_library {
-    name: "NetworkStackApiStableDependencies",
-    defaults: ["NetworkStackReleaseApiLevel", "NetworkStackAndroidLibraryDefaults"],
-    srcs: [":NetworkStackApiStableShims"],
-    jarjar_rules: "apishim/jarjar-rules-compat.txt",
 }
 
 android_library {
     name: "NetworkStackApiStableLib",
-    defaults: ["NetworkStackReleaseApiLevel"],
+    defaults: ["NetworkStackReleaseApiLevel", "NetworkStackAndroidLibraryDefaults"],
     srcs: [
         "src/**/*.java",
         ":statslog-networkstack-java-gen",
     ],
-    // API stable uses a jarjared version of the shims
-    static_libs: [
-        "NetworkStackApiStableDependencies",
-    ],
+    static_libs: ["NetworkStackApiStableShims"],
     manifest: "AndroidManifestBase.xml",
 }
 
