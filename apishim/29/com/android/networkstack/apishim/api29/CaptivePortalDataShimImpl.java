@@ -28,7 +28,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
- * Compatibility implementation of {@link CaptivePortalDataShim}.
+ * Compatibility implementation of {@link CaptivePortalData}.
  *
  * <p>Use {@link com.android.networkstack.apishim.CaptivePortalDataShimImpl} instead of this
  * fallback implementation.
@@ -37,7 +37,7 @@ public abstract class CaptivePortalDataShimImpl implements CaptivePortalDataShim
     protected CaptivePortalDataShimImpl() {}
 
     /**
-     * Parse a {@link android.net.CaptivePortalData} from JSON.
+     * Parse a {@link android.net.CaptivePortalDataShim} from JSON.
      *
      * <p>Use
      * {@link com.android.networkstack.apishim.CaptivePortalDataShimImpl#fromJson(JSONObject)}
@@ -68,7 +68,7 @@ public abstract class CaptivePortalDataShimImpl implements CaptivePortalDataShim
     }
 
     /**
-     * Generate a {@link CaptivePortalData} object with a friendly name set
+     * Generate a {@link CaptivePortalDataShim} object with a friendly name set
      *
      * @param friendlyName The friendly name to set
      * @return a {@link CaptivePortalData} object with a friendly name set
@@ -81,14 +81,14 @@ public abstract class CaptivePortalDataShimImpl implements CaptivePortalDataShim
     }
 
     /**
-     * Generate a {@link CaptivePortalData} object with a friendly name and Passpoint external URLs
-     * set
+     * Generate a {@link CaptivePortalDataShim} object with a friendly name and Passpoint external
+     * URLs set
      *
      * @param friendlyName The friendly name to set
      * @param venueInfoUrl Venue information URL
      * @param termsAndConditionsUrl Terms and conditions URL
      *
-     * @return a {@link CaptivePortalData} object with friendly name, venue info URL and terms
+     * @return a {@link CaptivePortalDataShim} object with friendly name, venue info URL and terms
      * and conditions URL set
      */
     @Override
