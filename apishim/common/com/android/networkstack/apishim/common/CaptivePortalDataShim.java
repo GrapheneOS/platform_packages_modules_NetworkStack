@@ -16,7 +16,6 @@
 
 package com.android.networkstack.apishim.common;
 
-import android.net.CaptivePortalData;
 import android.net.INetworkMonitorCallbacks;
 import android.net.Uri;
 import android.os.RemoteException;
