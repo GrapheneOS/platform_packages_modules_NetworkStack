@@ -16,11 +16,12 @@
 
 package com.android.networkstack.apishim.common;
 
-import android.annotation.NonNull;
 import android.net.CaptivePortalData;
 import android.net.INetworkMonitorCallbacks;
 import android.net.Uri;
 import android.os.RemoteException;
+
+import androidx.annotation.NonNull;
 
 /**
  * Compatibility interface for {@link android.net.CaptivePortalData}.
