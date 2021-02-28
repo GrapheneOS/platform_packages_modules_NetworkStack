@@ -109,8 +109,8 @@ java_library {
 }
 
 // Shims for APIs being added to the current development version of Android. These APIs are not
-// stable and have no defined version number. We could call these 10000, but we just pick the next
-// integer, so if the next SDK release happens to use that integer, we don't need to rename them.
+// stable and have no defined version number. These could be called 10000, but they use the next
+// integer so if the next SDK release happens to use that integer, we don't need to rename them.
 java_library {
     name: "NetworkStackApi31Shims",
     defaults: ["NetworkStackShimsDefaults"],
@@ -188,7 +188,7 @@ android_library {
     defaults: ["NetworkStackDevApiLevel", "NetworkStackAndroidLibraryDefaults"],
     srcs: [
         "src/**/*.java",
-        ":statslog-networkstack-java-gen"
+        ":statslog-networkstack-java-gen-current"
     ],
     static_libs: ["NetworkStackApiCurrentShims"],
     manifest: "AndroidManifestBase.xml",
@@ -199,7 +199,7 @@ android_library {
     defaults: ["NetworkStackReleaseApiLevel", "NetworkStackAndroidLibraryDefaults"],
     srcs: [
         "src/**/*.java",
-        ":statslog-networkstack-java-gen",
+        ":statslog-networkstack-java-gen-stable",
     ],
     static_libs: ["NetworkStackApiStableShims"],
     manifest: "AndroidManifestBase.xml",
@@ -327,13 +327,23 @@ cc_library_shared {
 }
 
 genrule {
-    name: "statslog-networkstack-java-gen",
+    name: "statslog-networkstack-java-gen-current",
     tools: ["stats-log-api-gen"],
     cmd: "$(location stats-log-api-gen) --java $(out) --module network_stack" +
          " --javaPackage com.android.networkstack.metrics --javaClass NetworkStackStatsLog" +
-         " --supportQ",
+         " --minApiLevel 29",
     out: ["com/android/networkstack/metrics/NetworkStackStatsLog.java"],
 }
+
+genrule {
+    name: "statslog-networkstack-java-gen-stable",
+    tools: ["stats-log-api-gen"],
+    cmd: "$(location stats-log-api-gen) --java $(out) --module network_stack" +
+         " --javaPackage com.android.networkstack.metrics --javaClass NetworkStackStatsLog" +
+         " --minApiLevel 29 --compileApiLevel 30",
+    out: ["com/android/networkstack/metrics/NetworkStackStatsLog.java"],
+}
+
 
 version_code_networkstack_next = "300000000"
 version_code_networkstack_test = "999999999"
