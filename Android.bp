@@ -140,7 +140,9 @@ java_library {
         "NetworkStackApi31Shims",
     ],
     sdk_version: "module_current",
-    visibility: ["//visibility:private"],
+    visibility: [
+        "//packages/modules/Connectivity/tests/cts/net",
+    ],
 }
 
 // API stable uses jarjar to rename the latest stable apishim package from
@@ -156,7 +158,9 @@ java_library {
     ],
     jarjar_rules: "apishim/jarjar-rules-compat.txt",
     sdk_version: "system_30",
-    visibility: ["//visibility:private"],
+    visibility: [
+        "//packages/modules/Connectivity/tests/cts/net",
+    ],
 }
 
 // Common defaults for android libraries containing network stack code, used to compile variants of
