@@ -113,6 +113,7 @@ java_library {
 // integer so if the next SDK release happens to use that integer, we don't need to rename them.
 java_library {
     name: "NetworkStackApi31Shims",
+    enabled: false, // Disabled in mainline-prod
     defaults: ["NetworkStackShimsDefaults"],
     srcs: [
         "apishim/31/**/*.java",
@@ -131,6 +132,7 @@ java_library {
 // called directly by the networkstack code.
 java_library {
     name: "NetworkStackApiCurrentShims",
+    enabled: false, // Disabled in mainline-prod
     defaults: ["NetworkStackShimsDefaults"],
     static_libs: [
         "NetworkStackShimsCommon",
