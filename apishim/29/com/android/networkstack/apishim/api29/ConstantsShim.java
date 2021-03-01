@@ -38,4 +38,8 @@ public class ConstantsShim {
     // Constants defined in android.net.CaptivePortalData.
     public static final int CAPTIVE_PORTAL_DATA_SOURCE_OTHER = 0;
     public static final int CAPTIVE_PORTAL_DATA_SOURCE_PASSPOINT = 1;
+
+    // Constants defined in android.net.NetworkCapabilities.
+    public static final int NET_CAPABILITY_NOT_VCN_MANAGED = 28;
+
 }
