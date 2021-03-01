@@ -122,8 +122,9 @@ java_library {
         "NetworkStackShimsCommon",
         "NetworkStackApi29Shims",
         "NetworkStackApi30Shims",
+        "framework-connectivity",
     ],
-    sdk_version: "system_current",
+    sdk_version: "module_current",
     visibility: ["//visibility:private"],
 }
 
@@ -140,7 +141,7 @@ java_library {
         "NetworkStackApi30Shims",
         "NetworkStackApi31Shims",
     ],
-    sdk_version: "system_current",
+    sdk_version: "module_current",
     visibility: ["//visibility:private"],
 }
 
