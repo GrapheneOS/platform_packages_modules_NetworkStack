@@ -197,6 +197,13 @@ android_library {
     ],
     static_libs: ["NetworkStackApiCurrentShims"],
     manifest: "AndroidManifestBase.xml",
+    visibility: [
+        "//frameworks/base/tests/net/integration",
+        "//packages/modules/Connectivity/Tethering/tests/integration",
+        "//packages/modules/Connectivity/tests/cts/net",
+        "//packages/modules/NetworkStack/tests/unit",
+        "//packages/modules/NetworkStack/tests/integration",
+    ],
 }
 
 android_library {
@@ -208,6 +215,13 @@ android_library {
     ],
     static_libs: ["NetworkStackApiStableShims"],
     manifest: "AndroidManifestBase.xml",
+    visibility: [
+        "//frameworks/base/tests/net/integration",
+        "//packages/modules/Connectivity/Tethering/tests/integration",
+        "//packages/modules/Connectivity/tests/cts/net",
+        "//packages/modules/NetworkStack/tests/unit",
+        "//packages/modules/NetworkStack/tests/integration",
+    ],
 }
 
 filegroup {
@@ -216,7 +230,6 @@ filegroup {
     visibility: [
         "//packages/modules/NetworkStack/tests/unit",
         "//packages/modules/NetworkStack/tests/integration",
-        "//frameworks/base/packages/Tethering/tests/integration",
         "//packages/modules/Connectivity/Tethering/tests/integration",
     ]
 }
@@ -282,19 +295,6 @@ android_app {
     // The permission configuration *must* be included to ensure security of the device
     required: ["NetworkPermissionConfig"],
     updatable: true,
-}
-
-// Android library to derive test APKs for integration tests
-android_library {
-    name: "TestNetworkStackLib",
-    defaults: ["NetworkStackAppDefaults", "NetworkStackReleaseApiLevel"],
-    static_libs: ["NetworkStackApiStableLib"],
-    manifest: "AndroidManifestBase.xml",
-    visibility: [
-        "//frameworks/base/tests/net/integration",
-        "//cts/tests/tests/net",
-        "//packages/modules/Connectivity/tests/cts/net",
-    ],
 }
 
 cc_library_shared {
