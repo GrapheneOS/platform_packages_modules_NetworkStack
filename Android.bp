@@ -45,6 +45,10 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
+// Whether to enable the targets in this file that target current SDKs.
+// Set to false in branches like mainline-prod where API classes are too old to build current code.
+enable_current_sdk_targets = false
+
 java_defaults {
     name: "NetworkStackDevApiLevel",
     min_sdk_version: "29",
@@ -113,7 +117,7 @@ java_library {
 // integer so if the next SDK release happens to use that integer, we don't need to rename them.
 java_library {
     name: "NetworkStackApi31Shims",
-    enabled: false, // Disabled in mainline-prod
+    enabled: enable_current_sdk_targets,
     defaults: ["NetworkStackShimsDefaults"],
     srcs: [
         "apishim/31/**/*.java",
@@ -133,7 +137,7 @@ java_library {
 // called directly by the networkstack code.
 java_library {
     name: "NetworkStackApiCurrentShims",
-    enabled: false, // Disabled in mainline-prod
+    enabled: enable_current_sdk_targets,
     defaults: ["NetworkStackShimsDefaults"],
     static_libs: [
         "NetworkStackShimsCommon",
@@ -199,7 +203,7 @@ android_library {
     ],
     static_libs: ["NetworkStackApiCurrentShims"],
     manifest: "AndroidManifestBase.xml",
-    enabled: false, // Disabled in mainline-prod
+    enabled: enable_current_sdk_targets,
     visibility: [
         "//frameworks/base/tests/net/integration",
         "//packages/modules/Connectivity/Tethering/tests/integration",
@@ -267,7 +271,7 @@ android_app {
     // The InProcessNetworkStack goes together with the PlatformCaptivePortalLogin, which replaces
     // the default CaptivePortalLogin.
     required: ["PlatformNetworkPermissionConfig", "PlatformCaptivePortalLogin"],
-    enabled: false, // Disabled in mainline-prod
+    enabled: enable_current_sdk_targets,
 }
 
 // Pre-merge the AndroidManifest for NetworkStackNext, so that its manifest can be merged on top
@@ -276,7 +280,7 @@ android_library {
     defaults: ["NetworkStackAppDefaults", "NetworkStackDevApiLevel"],
     static_libs: ["NetworkStackApiCurrentLib"],
     manifest: "AndroidManifest.xml",
-    enabled: false, // Disabled in mainline-prod
+    enabled: enable_current_sdk_targets,
 }
 
 // NetworkStack build targeting the current API release, for testing on in-development SDK
@@ -288,7 +292,7 @@ android_app {
     manifest: "AndroidManifest_Next.xml",
     // The permission configuration *must* be included to ensure security of the device
     required: ["NetworkPermissionConfig"],
-    enabled: false, // Disabled in mainline-prod
+    enabled: enable_current_sdk_targets,
 }
 
 // Updatable network stack for finalized API
