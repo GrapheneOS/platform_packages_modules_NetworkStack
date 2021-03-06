@@ -65,6 +65,10 @@ java_defaults {
         "androidx.annotation_annotation",
         "networkstack-client",
     ],
+    apex_available: [
+        "com.android.tethering",
+        "//apex_available:platform",  // For InProcessNetworkStack and InProcessTethering
+    ],
     min_sdk_version: "29",
 }
 
@@ -141,6 +145,7 @@ java_library {
     ],
     sdk_version: "module_current",
     visibility: [
+        "//packages/modules/Connectivity/Tethering",
         "//packages/modules/Connectivity/tests/cts/net",
     ],
 }
@@ -159,6 +164,7 @@ java_library {
     jarjar_rules: "apishim/jarjar-rules-compat.txt",
     sdk_version: "system_30",
     visibility: [
+        "//packages/modules/Connectivity/Tethering",
         "//packages/modules/Connectivity/tests/cts/net",
     ],
 }
