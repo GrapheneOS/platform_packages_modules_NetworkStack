@@ -21,8 +21,6 @@ import android.net.NetworkRequest;
 import android.os.Handler;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-
 
 /**
  * Interface used to access API methods in {@link android.net.ConnectivityManager}, with
@@ -36,7 +34,7 @@ import androidx.annotation.Nullable;
 public interface ConnectivityManagerShim {
     /** See android.net.ConnectivityManager#requestBackgroundNetwork */
     void requestBackgroundNetwork(@NonNull NetworkRequest request,
-            @Nullable Handler handler, @NonNull NetworkCallback networkCallback)
+            @NonNull Handler handler, @NonNull NetworkCallback networkCallback)
             throws UnsupportedApiLevelException;
 
     /** See android.net.ConnectivityManager#registerSystemDefaultNetworkCallback */
