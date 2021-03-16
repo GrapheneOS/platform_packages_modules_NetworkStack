@@ -22,7 +22,6 @@ import android.net.NetworkRequest;
 import android.os.Handler;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 
 import com.android.networkstack.apishim.common.ConnectivityManagerShim;
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
@@ -45,7 +44,7 @@ public class ConnectivityManagerShimImpl implements ConnectivityManagerShim {
      */
     @Override
     public void requestBackgroundNetwork(@NonNull NetworkRequest request,
-            @Nullable Handler handler, @NonNull NetworkCallback networkCallback)
+            @NonNull Handler handler, @NonNull NetworkCallback networkCallback)
             throws UnsupportedApiLevelException {
         // Not supported for API 29.
         throw new UnsupportedApiLevelException("Not supported in API 29.");
