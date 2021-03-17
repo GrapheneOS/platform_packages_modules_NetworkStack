@@ -33,12 +33,12 @@ import static android.system.OsConstants.SOL_SOCKET;
 import static android.system.OsConstants.SO_BROADCAST;
 import static android.system.OsConstants.SO_REUSEADDR;
 
-import static com.android.internal.util.TrafficStatsConstants.TAG_SYSTEM_DHCP_SERVER;
 import static com.android.net.module.util.Inet4AddressUtils.getBroadcastAddress;
 import static com.android.net.module.util.Inet4AddressUtils.getPrefixMaskAsInet4Address;
 import static com.android.net.module.util.NetworkStackConstants.INFINITE_LEASE;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ALL;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ANY;
+import static com.android.net.module.util.NetworkStackConstants.TAG_SYSTEM_DHCP_SERVER;
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
 import static java.lang.Integer.toUnsignedLong;

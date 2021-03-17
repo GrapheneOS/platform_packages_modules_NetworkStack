@@ -97,9 +97,9 @@ import com.android.internal.util.HexDump;
 import com.android.internal.util.MessageUtils;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
-import com.android.internal.util.TrafficStatsConstants;
 import com.android.internal.util.WakeupMessage;
 import com.android.net.module.util.DeviceConfigUtils;
+import com.android.net.module.util.NetworkStackConstants;
 import com.android.net.module.util.PacketReader;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
@@ -611,7 +611,7 @@ public class DhcpClient extends StateMachine {
 
     private boolean initUdpSocket() {
         final int oldTag = TrafficStats.getAndSetThreadStatsTag(
-                TrafficStatsConstants.TAG_SYSTEM_DHCP);
+                NetworkStackConstants.TAG_SYSTEM_DHCP);
         try {
             mUdpSock = Os.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
             SocketUtils.bindSocketToInterface(mUdpSock, mIfaceName);
