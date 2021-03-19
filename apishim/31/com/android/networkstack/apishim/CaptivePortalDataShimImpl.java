@@ -33,7 +33,7 @@ public class CaptivePortalDataShimImpl
     }
 
     @Override
-    public String getVenueFriendlyName() {
+    public CharSequence getVenueFriendlyName() {
         return mData.getVenueFriendlyName();
     }
 
