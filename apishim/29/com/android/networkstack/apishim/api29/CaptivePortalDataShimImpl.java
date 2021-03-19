@@ -51,7 +51,7 @@ public abstract class CaptivePortalDataShimImpl implements CaptivePortalDataShim
     }
 
     @Override
-    public String getVenueFriendlyName() {
+    public CharSequence getVenueFriendlyName() {
         // Not supported in API level 29
         return null;
     }
