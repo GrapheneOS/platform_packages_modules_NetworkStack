@@ -237,8 +237,8 @@ public class NetworkStackNotifier {
 
             // If the venue friendly name is available (in Passpoint use-case), display it.
             // Otherwise, display the SSID.
-            final String friendlyName = capportData.getVenueFriendlyName();
-            final String venueDisplayName = TextUtils.isEmpty(friendlyName)
+            final CharSequence friendlyName = capportData.getVenueFriendlyName();
+            final CharSequence venueDisplayName = TextUtils.isEmpty(friendlyName)
                     ? getSsid(networkStatus) : friendlyName;
 
             builder = getNotificationBuilder(channel, networkStatus, res, venueDisplayName)
@@ -284,9 +284,9 @@ public class NetworkStackNotifier {
 
     private Notification.Builder getNotificationBuilder(@NonNull String channelId,
             @NonNull TrackedNetworkStatus networkStatus, @NonNull Resources res,
-            @NonNull String ssid) {
+            @NonNull CharSequence networkIdentifier) {
         return new Notification.Builder(mContext, channelId)
-                .setContentTitle(ssid)
+                .setContentTitle(networkIdentifier)
                 .setSmallIcon(R.drawable.icon_wifi);
     }
 
