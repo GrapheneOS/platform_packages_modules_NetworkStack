@@ -54,7 +54,7 @@ public interface CaptivePortalDataShim {
     /**
      * @see CaptivePortalData#getVenueFriendlyName()
      */
-    String getVenueFriendlyName();
+    CharSequence getVenueFriendlyName();
 
     /**
      * @see CaptivePortalData#getUserPortalUrlSource()
