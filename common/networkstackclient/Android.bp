@@ -160,10 +160,10 @@ java_library {
         "networkstack-aidl-interfaces-V10-java",
     ],
     visibility: [
-        "//frameworks/base/packages/Tethering",
+        "//frameworks/base/packages/Connectivity/service",
         "//packages/modules/Connectivity/Tethering",
+        "//packages/modules/Connectivity/service",
         "//frameworks/base/services/net",
-        "//frameworks/opt/net/wifi/service",
         "//packages/modules/NetworkStack",
     ],
     apex_available: [
