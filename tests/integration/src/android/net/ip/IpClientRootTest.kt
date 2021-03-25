@@ -26,12 +26,12 @@ import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener
 import android.net.ipmemorystore.NetworkAttributes
 import android.net.ipmemorystore.Status
 import android.net.networkstack.TestNetworkStackServiceClient
-import android.net.util.NetworkStackUtils
 import android.os.Process
 import android.provider.DeviceConfig
 import android.util.ArrayMap
 import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
+import com.android.net.module.util.DeviceConfigUtils
 import java.lang.System.currentTimeMillis
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
@@ -194,37 +194,33 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
         return ipClientCaptor.value
     }
 
-    override fun setDhcpFeatures(
-        isDhcpLeaseCacheEnabled: Boolean,
-        isRapidCommitEnabled: Boolean,
-        isDhcpIpConflictDetectEnabled: Boolean,
-        isIPv6OnlyPreferredEnabled: Boolean
-    ) {
+    override fun setFeatureEnabled(feature: String, enabled: Boolean) {
         automation.adoptShellPermissionIdentity(READ_DEVICE_CONFIG, WRITE_DEVICE_CONFIG)
         try {
-            setFeatureEnabled(NetworkStackUtils.DHCP_INIT_REBOOT_VERSION, isDhcpLeaseCacheEnabled)
-            setFeatureEnabled(NetworkStackUtils.DHCP_RAPID_COMMIT_VERSION, isRapidCommitEnabled)
-            setFeatureEnabled(NetworkStackUtils.DHCP_IP_CONFLICT_DETECT_VERSION,
-                    isDhcpIpConflictDetectEnabled)
-            setFeatureEnabled(NetworkStackUtils.DHCP_IPV6_ONLY_PREFERRED_VERSION,
-                    isIPv6OnlyPreferredEnabled)
+            // Do not use computeIfAbsent as it would overwrite null values (flag originally unset)
+            if (!originalFlagValues.containsKey(feature)) {
+                originalFlagValues[feature] =
+                        DeviceConfig.getProperty(DeviceConfig.NAMESPACE_CONNECTIVITY, feature)
+            }
+            // The feature is enabled if the flag is lower than the package version.
+            // Package versions follow a standard format with 9 digits.
+            // TODO: consider resetting flag values on reboot when set to special values like "1" or
+            // "999999999"
+            DeviceConfig.setProperty(DeviceConfig.NAMESPACE_CONNECTIVITY, feature,
+                    if (enabled) "1" else "999999999", false)
         } finally {
             automation.dropShellPermissionIdentity()
         }
     }
 
-    private fun setFeatureEnabled(feature: String, enabled: Boolean) {
-        // Do not use computeIfAbsent as it would overwrite null values (flag originally unset)
-        if (!originalFlagValues.containsKey(feature)) {
-            originalFlagValues[feature] =
-                    DeviceConfig.getProperty(DeviceConfig.NAMESPACE_CONNECTIVITY, feature)
+    override fun isFeatureEnabled(name: String, defaultEnabled: Boolean): Boolean {
+        automation.adoptShellPermissionIdentity(READ_DEVICE_CONFIG, WRITE_DEVICE_CONFIG)
+        try {
+            return DeviceConfigUtils.isFeatureEnabled(mContext, DeviceConfig.NAMESPACE_CONNECTIVITY,
+                    name, defaultEnabled)
+        } finally {
+            automation.dropShellPermissionIdentity()
         }
-        // The feature is enabled if the flag is lower than the package version.
-        // Package versions follow a standard format with 9 digits.
-        // TODO: consider resetting flag values on reboot when set to special values like "1" or
-        // "999999999"
-        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_CONNECTIVITY, feature,
-                if (enabled) "1" else "999999999", false)
     }
 
     private class TestAttributesRetrievedListener : OnNetworkAttributesRetrievedListener {
