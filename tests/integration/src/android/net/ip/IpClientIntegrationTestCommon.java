@@ -343,32 +343,12 @@ public abstract class IpClientIntegrationTestCommon {
     };
 
     protected class Dependencies extends IpClient.Dependencies {
-        private boolean mIsDhcpLeaseCacheEnabled;
-        private boolean mIsDhcpRapidCommitEnabled;
-        private boolean mIsDhcpIpConflictDetectEnabled;
         // Can't use SparseIntArray, it doesn't have an easy way to know if a key is not present.
         private HashMap<String, Integer> mIntConfigProperties = new HashMap<>();
         private DhcpClient mDhcpClient;
         private boolean mIsHostnameConfigurationEnabled;
         private String mHostname;
         private boolean mIsInterfaceRecovered;
-        private boolean mIsIPv6OnlyPreferredEnabled;
-
-        public void setDhcpLeaseCacheEnabled(final boolean enable) {
-            mIsDhcpLeaseCacheEnabled = enable;
-        }
-
-        public void setDhcpRapidCommitEnabled(final boolean enable) {
-            mIsDhcpRapidCommitEnabled = enable;
-        }
-
-        public void setDhcpIpConflictDetectEnabled(final boolean enable) {
-            mIsDhcpIpConflictDetectEnabled = enable;
-        }
-
-        public void setIPv6OnlyPreferredEnabled(final boolean enable) {
-            mIsIPv6OnlyPreferredEnabled = enable;
-        }
 
         public void setHostnameConfiguration(final boolean enable, final String hostname) {
             mIsHostnameConfigurationEnabled = enable;
@@ -410,6 +390,11 @@ public abstract class IpClientIntegrationTestCommon {
             return mDhcpClient;
         }
 
+        public boolean isFeatureEnabled(final Context context, final String name,
+                final boolean defaultEnabled) {
+            return IpClientIntegrationTestCommon.this.isFeatureEnabled(name, defaultEnabled);
+        }
+
         @Override
         public DhcpClient.Dependencies getDhcpClientDependencies(
                 NetworkStackIpMemoryStore ipMemoryStore, IpProvisioningMetrics metrics) {
@@ -417,19 +402,7 @@ public abstract class IpClientIntegrationTestCommon {
                 @Override
                 public boolean isFeatureEnabled(final Context context, final String name,
                         final boolean defaultEnabled) {
-                    switch (name) {
-                        case NetworkStackUtils.DHCP_RAPID_COMMIT_VERSION:
-                            return mIsDhcpRapidCommitEnabled;
-                        case NetworkStackUtils.DHCP_INIT_REBOOT_VERSION:
-                            return mIsDhcpLeaseCacheEnabled;
-                        case NetworkStackUtils.DHCP_IP_CONFLICT_DETECT_VERSION:
-                            return mIsDhcpIpConflictDetectEnabled;
-                        case NetworkStackUtils.DHCP_IPV6_ONLY_PREFERRED_VERSION:
-                            return mIsIPv6OnlyPreferredEnabled;
-                        default:
-                            fail("Invalid experiment flag: " + name);
-                            return false;
-                    }
+                    return Dependencies.this.isFeatureEnabled(context, name, defaultEnabled);
                 }
 
                 @Override
@@ -473,9 +446,9 @@ public abstract class IpClientIntegrationTestCommon {
     protected abstract IIpClient makeIIpClient(
             @NonNull String ifaceName, @NonNull IIpClientCallbacks cb);
 
-    protected abstract void setDhcpFeatures(boolean isDhcpLeaseCacheEnabled,
-            boolean isRapidCommitEnabled, boolean isDhcpIpConflictDetectEnabled,
-            boolean isIPv6OnlyPreferredEnabled);
+    protected abstract void setFeatureEnabled(String name, boolean enabled);
+
+    protected abstract boolean isFeatureEnabled(String name, boolean defaultEnabled);
 
     protected abstract boolean useNetworkStackSignature();
 
@@ -488,6 +461,17 @@ public abstract class IpClientIntegrationTestCommon {
         // if it is run on devices where TestNetworkStackServiceClient is not supported
         return !useNetworkStackSignature()
                 && (mIsSignatureRequiredTest || !TestNetworkStackServiceClient.isSupported());
+    }
+
+    protected void setDhcpFeatures(final boolean isDhcpLeaseCacheEnabled,
+            final boolean isRapidCommitEnabled, final boolean isDhcpIpConflictDetectEnabled,
+            final boolean isIPv6OnlyPreferredEnabled) {
+        setFeatureEnabled(NetworkStackUtils.DHCP_INIT_REBOOT_VERSION, isDhcpLeaseCacheEnabled);
+        setFeatureEnabled(NetworkStackUtils.DHCP_RAPID_COMMIT_VERSION, isRapidCommitEnabled);
+        setFeatureEnabled(NetworkStackUtils.DHCP_IP_CONFLICT_DETECT_VERSION,
+                isDhcpIpConflictDetectEnabled);
+        setFeatureEnabled(NetworkStackUtils.DHCP_IPV6_ONLY_PREFERRED_VERSION,
+                isIPv6OnlyPreferredEnabled);
     }
 
     @Before
