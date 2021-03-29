@@ -18,8 +18,14 @@ package android.net.ip;
 
 import static android.net.RouteInfo.RTN_UNICAST;
 import static android.net.dhcp.DhcpResultsParcelableUtil.toStableParcelable;
+import static android.net.util.NetworkStackUtils.IPCLIENT_GRATUITOUS_NA_VERSION;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
+import static android.system.OsConstants.AF_PACKET;
+import static android.system.OsConstants.ETH_P_IPV6;
+import static android.system.OsConstants.SOCK_NONBLOCK;
+import static android.system.OsConstants.SOCK_RAW;
 
+import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_ROUTERS_MULTICAST;
 import static com.android.net.module.util.NetworkStackConstants.VENDOR_SPECIFIC_IE_ID;
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
@@ -52,6 +58,7 @@ import android.net.shared.ProvisioningConfiguration;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo.InformationElement;
 import android.net.util.InterfaceParams;
+import android.net.util.NetworkStackUtils;
 import android.net.util.SharedLog;
 import android.os.Build;
 import android.os.ConditionVariable;
@@ -61,6 +68,8 @@ import android.os.RemoteException;
 import android.os.ServiceSpecificException;
 import android.os.SystemClock;
 import android.stats.connectivity.DisconnectCode;
+import android.system.ErrnoException;
+import android.system.Os;
 import android.text.TextUtils;
 import android.util.LocalLog;
 import android.util.Log;
@@ -79,16 +88,21 @@ import com.android.internal.util.StateMachine;
 import com.android.internal.util.WakeupMessage;
 import com.android.net.module.util.DeviceConfigUtils;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
+import com.android.networkstack.apishim.SocketUtilsShimImpl;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
 import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.metrics.IpProvisioningMetrics;
+import com.android.networkstack.packets.NeighborAdvertisement;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.MalformedURLException;
+import java.net.SocketAddress;
+import java.net.SocketException;
 import java.net.URL;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
@@ -479,6 +493,8 @@ public class IpClient extends StateMachine {
     private final MessageHandlingLogger mMsgStateLogger;
     private final IpConnectivityLog mMetricsLog;
     private final InterfaceController mInterfaceCtrl;
+    // Set of IPv6 addresses for which unsolicited gratuitous NA packets have been sent.
+    private final Set<Inet6Address> mGratuitousNaTargetAddresses = new HashSet<>();
 
     // Ignore nonzero RDNSS option lifetimes below this value. 0 = disabled.
     private final int mMinRdnssLifetimeSec;
@@ -564,6 +580,16 @@ public class IpClient extends StateMachine {
         public IpConnectivityLog getIpConnectivityLog() {
             return new IpConnectivityLog();
         }
+
+        /**
+         * Return whether a feature guarded by a feature flag is enabled.
+         * @see NetworkStackUtils#isFeatureEnabled(Context, String, String)
+         */
+        public boolean isFeatureEnabled(final Context context, final String name,
+                boolean defaultEnabled) {
+            return DeviceConfigUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name,
+                    defaultEnabled);
+        }
     }
 
     public IpClient(Context context, String ifName, IIpClientCallbacks callback,
@@ -645,6 +671,21 @@ public class IpClient extends StateMachine {
 
                 final String msg = "interfaceRemoved(" + iface + ")";
                 logMsg(msg);
+            }
+
+            @Override
+            public void onInterfaceAddressRemoved(LinkAddress address, String iface) {
+                super.onInterfaceAddressRemoved(address, iface);
+                if (!mInterfaceName.equals(iface)) return;
+                if (!address.isIpv6()) return;
+                final Inet6Address targetIp = (Inet6Address) address.getAddress();
+                if (mGratuitousNaTargetAddresses.contains(targetIp)) {
+                    mGratuitousNaTargetAddresses.remove(targetIp);
+
+                    final String msg = "Global IPv6 address: " + targetIp
+                            + " has removed from the set of gratuitous NA target address.";
+                    logMsg(msg);
+                }
             }
 
             private void logMsg(String msg) {
@@ -791,6 +832,11 @@ public class IpClient extends StateMachine {
     private void stopStateMachineUpdaters() {
         mObserverRegistry.unregisterObserver(mLinkObserver);
         mLinkObserver.shutdown();
+    }
+
+    private boolean isGratuitousNaEnabled() {
+        return mDependencies.isFeatureEnabled(mContext, IPCLIENT_GRATUITOUS_NA_VERSION,
+                false /* defaultEnabled */);
     }
 
     @Override
@@ -1377,12 +1423,68 @@ public class IpClient extends StateMachine {
         }
     }
 
+    private void sendGratuitousNA(final Inet6Address srcIp, final Inet6Address target) {
+        final int flags = 0; // R=0, S=0, O=0
+        final Inet6Address dstIp = IPV6_ADDR_ALL_ROUTERS_MULTICAST;
+        // Ethernet multicast destination address: 33:33:00:00:00:02.
+        final MacAddress dstMac = NetworkStackUtils.ipv6MulticastToEthernetMulticast(dstIp);
+        final ByteBuffer packet = NeighborAdvertisement.build(mInterfaceParams.macAddr, dstMac,
+                srcIp, dstIp, flags, target);
+        FileDescriptor sock = null;
+        try {
+            sock = Os.socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, 0 /* protocol */);
+            final SocketAddress sockAddress =
+                    SocketUtilsShimImpl.newInstance().makePacketSocketAddress(ETH_P_IPV6,
+                            mInterfaceParams.index, dstMac.toByteArray());
+            Os.sendto(sock, packet.array(), 0 /* byteOffset */, packet.limit() /* byteCount */,
+                    0 /* flags */, sockAddress);
+        } catch (SocketException | ErrnoException e) {
+            logError("Fail to send Gratuitous Neighbor Advertisement", e);
+        } finally {
+            NetworkStackUtils.closeSocketQuietly(sock);
+        }
+    }
+
+    private Inet6Address getIpv6LinkLocalAddress(final LinkProperties newLp) {
+        Inet6Address src = null;
+        for (LinkAddress la : newLp.getLinkAddresses()) {
+            if (!la.isIpv6()) continue;
+            final Inet6Address ip = (Inet6Address) la.getAddress();
+            if (ip.isLinkLocalAddress()) return ip;
+        }
+        return null;
+    }
+
+    private void maybeSendGratuitousNAs(final LinkProperties newLp) {
+        if (!newLp.hasGlobalIpv6Address() || !isGratuitousNaEnabled()) return;
+
+        final Inet6Address src = getIpv6LinkLocalAddress(newLp);
+        if (src == null) return;
+        for (LinkAddress la : newLp.getLinkAddresses()) {
+            if (!la.isIpv6() || !la.isGlobalPreferred()) continue;
+            final Inet6Address targetIp = (Inet6Address) la.getAddress();
+            // Already sent gratuitous NA with this target global IPv6 address.
+            if (mGratuitousNaTargetAddresses.contains(targetIp)) continue;
+            if (DBG) {
+                Log.d(mTag, "send Gratuitous NA from " + src + ", target Address is "
+                            + targetIp);
+            }
+            sendGratuitousNA(src, targetIp);
+            mGratuitousNaTargetAddresses.add(targetIp);
+        }
+    }
+
     // Returns false if we have lost provisioning, true otherwise.
     private boolean handleLinkPropertiesUpdate(boolean sendCallbacks) {
         final LinkProperties newLp = assembleLinkProperties();
         if (Objects.equals(newLp, mLinkProperties)) {
             return true;
         }
+
+        // Check if new assigned IPv6 GUA is available in the LinkProperties now. If so, initiate
+        // gratuitous multicast unsolicited Neighbor Advertisements as soon as possible to inform
+        // first-hop routers that the new GUA host is goning to use.
+        maybeSendGratuitousNAs(newLp);
 
         // Either success IPv4 or IPv6 provisioning triggers new LinkProperties update,
         // wait for the provisioning completion and record the latency.
@@ -1662,6 +1764,7 @@ public class IpClient extends StateMachine {
         public void enter() {
             stopAllIP();
             mHasDisabledIPv6OnProvLoss = false;
+            mGratuitousNaTargetAddresses.clear();
 
             mLinkObserver.clearInterfaceParams();
             resetLinkProperties();
