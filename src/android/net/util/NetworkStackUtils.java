@@ -17,12 +17,16 @@
 package android.net.util;
 
 import android.content.Context;
+import android.net.MacAddress;
+
+import androidx.annotation.NonNull;
 
 import com.android.net.module.util.DeviceConfigUtils;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.SocketException;
 
 /**
@@ -232,6 +236,12 @@ public class NetworkStackUtils {
      */
     public static final String VALIDATION_METRICS_VERSION = "validation_metrics_version";
 
+    /**
+     * Experiment flag to enable sending gratuitous multicast unsolicited Neighbor Advertisements
+     * to propagate new assigned IPv6 GUA as quickly as possible.
+     */
+    public static final String IPCLIENT_GRATUITOUS_NA_VERSION = "ipclient_gratuitous_na_version";
+
     static {
         System.loadLibrary("networkstackutilsjni");
     }
@@ -244,6 +254,21 @@ public class NetworkStackUtils {
             SocketUtils.closeSocket(fd);
         } catch (IOException ignored) {
         }
+    }
+
+    /**
+     * Convert IPv6 multicast address to ethernet multicast address in network order.
+     */
+    public static MacAddress ipv6MulticastToEthernetMulticast(@NonNull final Inet6Address addr) {
+        final byte[] etherMulticast = new byte[6];
+        final byte[] ipv6Multicast = addr.getAddress();
+        etherMulticast[0] = (byte) 0x33;
+        etherMulticast[1] = (byte) 0x33;
+        etherMulticast[2] = ipv6Multicast[12];
+        etherMulticast[3] = ipv6Multicast[13];
+        etherMulticast[4] = ipv6Multicast[14];
+        etherMulticast[5] = ipv6Multicast[15];
+        return MacAddress.fromBytes(etherMulticast);
     }
 
     /**
