@@ -161,8 +161,8 @@ import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.RingBufferIndices;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
-import com.android.internal.util.TrafficStatsConstants;
 import com.android.net.module.util.DeviceConfigUtils;
+import com.android.net.module.util.NetworkStackConstants;
 import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
@@ -2463,7 +2463,7 @@ public class NetworkMonitor extends StateMachine {
         String redirectUrl = null;
         final Stopwatch probeTimer = new Stopwatch().start();
         final int oldTag = TrafficStats.getAndSetThreadStatsTag(
-                TrafficStatsConstants.TAG_SYSTEM_PROBE);
+                NetworkStackConstants.TAG_SYSTEM_PROBE);
         try {
             // Follow redirects for PAC probes as such probes verify connectivity by fetching the
             // PAC proxy file, which may be configured behind a redirect.
