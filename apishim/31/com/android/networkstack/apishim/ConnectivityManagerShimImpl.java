@@ -68,4 +68,13 @@ public class ConnectivityManagerShimImpl
             @NonNull NetworkCallback networkCallback, @NonNull Handler handler) {
         mCm.registerSystemDefaultNetworkCallback(networkCallback, handler);
     }
+
+    /**
+     * See android.net.ConnectivityManager#registerDefaultNetworkCallbackAsUid
+     */
+    @Override
+    public void registerDefaultNetworkCallbackAsUid(
+            int uid, @NonNull NetworkCallback networkCallback, @NonNull Handler handler) {
+        mCm.registerDefaultNetworkCallbackAsUid(uid, networkCallback, handler);
+    }
 }
