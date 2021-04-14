@@ -19,8 +19,11 @@ package com.android.networkstack.apishim.common;
 import android.net.ConnectivityManager.NetworkCallback;
 import android.net.NetworkRequest;
 import android.os.Handler;
+import android.util.Range;
 
 import androidx.annotation.NonNull;
+
+import java.util.Collection;
 
 /**
  * Interface used to access API methods in {@link android.net.ConnectivityManager}, with
@@ -45,6 +48,17 @@ public interface ConnectivityManagerShim {
     /** See android.net.ConnectivityManager#registerDefaultNetworkCallbackAsUid */
     default void registerDefaultNetworkCallbackAsUid(
             int uid, @NonNull NetworkCallback networkCallback, @NonNull Handler handler)
+            throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported starting from API 31");
+    }
+
+    /** See android.net.ConnectivityManager#setLegacyLockdownVpnEnabled */
+    default void setLegacyLockdownVpnEnabled(boolean enabled) throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported starting from API 31");
+    }
+
+    /** See android.net.ConnectivityManager#setRequireVpnForUids */
+    default void setRequireVpnForUids(boolean requireVpn, Collection<Range<Integer>> ranges)
             throws UnsupportedApiLevelException {
         throw new UnsupportedApiLevelException("Only supported starting from API 31");
     }
