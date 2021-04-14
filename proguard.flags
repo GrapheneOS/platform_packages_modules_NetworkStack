@@ -9,7 +9,7 @@
 }
 
 -keepclassmembers public class * extends com.android.networkstack.util.Struct {
-    public <init>(...);
+    *;
 }
 
 # The lite proto runtime uses reflection to access fields based on the names in
