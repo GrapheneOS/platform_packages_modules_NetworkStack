@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<issues format="5" by="lint 4.1.0" client="cli" variant="all" version="4.1.0">
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `com.android.net.module.util.ConnectivityUtils#addressAndPortToString`"
+        errorLine1="                        ConnectivityUtils.addressAndPortToString("
+        errorLine2="                                          ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/android/net/apf/ApfFilter.java"
+            line="1032"
+            column="43"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `com.android.net.module.util.ConnectivityUtils#addressAndPortToString`"
+        errorLine1="                        ConnectivityUtils.addressAndPortToString("
+        errorLine2="                                          ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/android/net/apf/ApfFilter.java"
+            line="1034"
+            column="43"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `com.android.net.module.util.ConnectivityUtils#addressAndPortToString`"
+        errorLine1="                        ConnectivityUtils.addressAndPortToString("
+        errorLine2="                                          ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/android/net/apf/ApfFilter.java"
+            line="1087"
+            column="43"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `com.android.net.module.util.ConnectivityUtils#addressAndPortToString`"
+        errorLine1="                        ConnectivityUtils.addressAndPortToString("
+        errorLine2="                                          ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/android/net/apf/ApfFilter.java"
+            line="1089"
+            column="43"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `com.android.net.module.util.CollectionUtils#any`"
+        errorLine1="        final boolean haveKeepaliveResponses = CollectionUtils.any(mKeepalivePackets,"
+        errorLine2="                                                               ~~~">
+        <location
+            file="packages/modules/NetworkStack/src/android/net/apf/ApfFilter.java"
+            line="1368"
+            column="64"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `com.android.net.module.util.CollectionUtils#toIntArray`"
+        errorLine1="                    CollectionUtils.toIntArray(mDnsReturnCode),"
+        errorLine2="                                    ~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/com/android/networkstack/metrics/DataStallDetectionStats.java"
+            line="302"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `com.android.net.module.util.CollectionUtils#toLongArray`"
+        errorLine1="                    CollectionUtils.toLongArray(mDnsTimeStamp),"
+        errorLine2="                                    ~~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/com/android/networkstack/metrics/DataStallDetectionStats.java"
+            line="303"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level R (current min is 29): `android.net.LinkProperties#getNat64Prefix`"
+        errorLine1="        newLp.setNat64Prefix(netlinkLinkProperties.getNat64Prefix());"
+        errorLine2="                                                   ~~~~~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/android/net/ip/IpClient.java"
+            line="1337"
+            column="52"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level R (current min is 29): `android.net.LinkProperties#setNat64Prefix`"
+        errorLine1="        newLp.setNat64Prefix(netlinkLinkProperties.getNat64Prefix());"
+        errorLine2="              ~~~~~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/android/net/ip/IpClient.java"
+            line="1337"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `com.android.net.module.util.ConnectivityUtils#saturatedCast`"
+        errorLine1="            mStatsBuilder.setIpv4LatencyMicros(ConnectivityUtils.saturatedCast(mIpv4Watch.stop()));"
+        errorLine2="                                                                 ~~~~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/com/android/networkstack/metrics/IpProvisioningMetrics.java"
+            line="74"
+            column="66"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `com.android.net.module.util.ConnectivityUtils#saturatedCast`"
+        errorLine1="            mStatsBuilder.setIpv6LatencyMicros(ConnectivityUtils.saturatedCast(mIpv6Watch.stop()));"
+        errorLine2="                                                                 ~~~~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/com/android/networkstack/metrics/IpProvisioningMetrics.java"
+            line="83"
+            column="66"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `com.android.net.module.util.CollectionUtils#isEmpty`"
+        errorLine1="        if (isEmpty(mCaptivePortalFallbackSpecs)) {"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/com/android/server/connectivity/NetworkMonitor.java"
+            line="2279"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `com.android.net.module.util.ConnectivityUtils#isIPv6ULA`"
+        errorLine1="                    || isIPv6ULA(address)) {"
+        errorLine2="                       ~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/com/android/server/connectivity/NetworkMonitor.java"
+            line="2447"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level R (current min is 29): `android.telephony.NetworkRegistrationInfo#getCellIdentity`"
+        errorLine1="                    nri == null ? null : nri.getCellIdentity());"
+        errorLine2="                                             ~~~~~~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/com/android/server/connectivity/NetworkMonitor.java"
+            line="3088"
+            column="46"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `com.android.net.module.util.ConnectivityUtils#saturatedCast`"
+        errorLine1="        int latencyUs = ConnectivityUtils.saturatedCast(durationUs);"
+        errorLine2="                                          ~~~~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/com/android/networkstack/metrics/NetworkValidationMetrics.java"
+            line="198"
+            column="43"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `com.android.net.module.util.ConnectivityUtils#saturatedCast`"
+        errorLine1="                .setRemainingTtlSecs(ConnectivityUtils.saturatedCast(secondsRemaining))"
+        errorLine2="                                                       ~~~~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/com/android/networkstack/metrics/NetworkValidationMetrics.java"
+            line="209"
+            column="56"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `com.android.net.module.util.ConnectivityUtils#saturatedCast`"
+        errorLine1="                        ConnectivityUtils.saturatedCast(capportData.getByteLimit() / 1000))"
+        errorLine2="                                          ~~~~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/com/android/networkstack/metrics/NetworkValidationMetrics.java"
+            line="212"
+            column="43"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `com.android.net.module.util.ConnectivityUtils#saturatedCast`"
+        errorLine1="        mStatsBuilder.setLatencyMicros(ConnectivityUtils.saturatedCast(mWatch.stop()));"
+        errorLine2="                                                         ~~~~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/com/android/networkstack/metrics/NetworkValidationMetrics.java"
+            line="237"
+            column="58"/>
+    </issue>
+
+</issues>
