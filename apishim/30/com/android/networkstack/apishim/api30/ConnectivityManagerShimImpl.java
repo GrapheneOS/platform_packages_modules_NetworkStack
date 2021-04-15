@@ -54,7 +54,7 @@ public class ConnectivityManagerShimImpl
      */
     @Override
     public void requestBackgroundNetwork(@NonNull NetworkRequest request,
-            @NonNull Handler handler, @NonNull NetworkCallback networkCallback)
+            @NonNull NetworkCallback networkCallback, @NonNull Handler handler)
             throws UnsupportedApiLevelException {
         // Not supported for API 30.
         throw new UnsupportedApiLevelException("Not supported in API 30.");

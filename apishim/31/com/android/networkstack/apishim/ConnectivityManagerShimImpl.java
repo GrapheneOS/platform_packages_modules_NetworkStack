@@ -59,8 +59,8 @@ public class ConnectivityManagerShimImpl
      */
     @Override
     public void requestBackgroundNetwork(@NonNull NetworkRequest request,
-            @NonNull Handler handler, @NonNull NetworkCallback networkCallback) {
-        mCm.requestBackgroundNetwork(request, handler, networkCallback);
+            @NonNull NetworkCallback networkCallback, @NonNull Handler handler) {
+        mCm.requestBackgroundNetwork(request, networkCallback, handler);
     }
 
     /**
