@@ -38,8 +38,11 @@ public class ConstantsShim extends com.android.networkstack.apishim.api29.Consta
     public static final int DETECTION_METHOD_TCP_METRICS =
             DataStallReport.DETECTION_METHOD_TCP_METRICS;
 
+    // Constants defined in android.net.ConnectivityManager.
+    public static final int BLOCKED_REASON_NONE = 0;
+    public static final int BLOCKED_REASON_LOCKDOWN_VPN = 16;
+
     // Constants defined in android.net.NetworkCapabilities.
     public static final int NET_CAPABILITY_NOT_VCN_MANAGED = 28;
     public static final int TRANSPORT_TEST = 7;
-
 }
