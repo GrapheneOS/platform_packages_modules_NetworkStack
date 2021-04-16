@@ -37,7 +37,7 @@ import java.util.Collection;
 public interface ConnectivityManagerShim {
     /** See android.net.ConnectivityManager#requestBackgroundNetwork */
     void requestBackgroundNetwork(@NonNull NetworkRequest request,
-            @NonNull Handler handler, @NonNull NetworkCallback networkCallback)
+            @NonNull NetworkCallback networkCallback, @NonNull Handler handler)
             throws UnsupportedApiLevelException;
 
     /** See android.net.ConnectivityManager#registerSystemDefaultNetworkCallback */
