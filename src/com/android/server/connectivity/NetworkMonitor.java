@@ -21,8 +21,6 @@ import static android.net.CaptivePortal.APP_RETURN_UNWANTED;
 import static android.net.CaptivePortal.APP_RETURN_WANTED_AS_IS;
 import static android.net.ConnectivityManager.EXTRA_CAPTIVE_PORTAL_PROBE_SPEC;
 import static android.net.ConnectivityManager.EXTRA_CAPTIVE_PORTAL_URL;
-import static android.net.ConnectivityManager.TYPE_MOBILE;
-import static android.net.ConnectivityManager.TYPE_WIFI;
 import static android.net.DnsResolver.FLAG_EMPTY;
 import static android.net.INetworkMonitor.NETWORK_TEST_RESULT_INVALID;
 import static android.net.INetworkMonitor.NETWORK_TEST_RESULT_PARTIAL_CONNECTIVITY;
@@ -35,8 +33,6 @@ import static android.net.INetworkMonitor.NETWORK_VALIDATION_PROBE_PRIVDNS;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_PARTIAL;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_VALID;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED;
-import static android.net.NetworkCapabilities.TRANSPORT_CELLULAR;
-import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
 import static android.net.captiveportal.CaptivePortalProbeSpec.parseCaptivePortalProbeSpecs;
 import static android.net.metrics.ValidationProbeEvent.DNS_FAILURE;
 import static android.net.metrics.ValidationProbeEvent.DNS_SUCCESS;
@@ -126,12 +122,10 @@ import android.os.Message;
 import android.os.Process;
 import android.os.RemoteException;
 import android.os.SystemClock;
-import android.os.UserHandle;
 import android.provider.DeviceConfig;
 import android.provider.Settings;
 import android.stats.connectivity.ProbeResult;
 import android.stats.connectivity.ProbeType;
-import android.telephony.AccessNetworkConstants;
 import android.telephony.CellIdentityNr;
 import android.telephony.CellInfo;
 import android.telephony.CellInfoGsm;
@@ -140,8 +134,6 @@ import android.telephony.CellInfoNr;
 import android.telephony.CellInfoTdscdma;
 import android.telephony.CellInfoWcdma;
 import android.telephony.CellSignalStrength;
-import android.telephony.NetworkRegistrationInfo;
-import android.telephony.ServiceState;
 import android.telephony.SignalStrength;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
@@ -2329,10 +2321,6 @@ public class NetworkMonitor extends StateMachine {
 
         long endTime = SystemClock.elapsedRealtime();
 
-        sendNetworkConditionsBroadcast(true /* response received */,
-                result.isPortal() /* isCaptivePortal */,
-                startTime, endTime);
-
         log("isCaptivePortal: isSuccessful()=" + result.isSuccessful()
                 + " isPortal()=" + result.isPortal()
                 + " RedirectUrl=" + result.redirectUrl
@@ -3003,74 +2991,6 @@ public class NetworkMonitor extends StateMachine {
         return null;
     }
 
-    /**
-     * @param responseReceived - whether or not we received a valid HTTP response to our request.
-     * If false, isCaptivePortal and responseTimestampMs are ignored
-     * TODO: This should be moved to the transports.  The latency could be passed to the transports
-     * along with the captive portal result.  Currently the TYPE_MOBILE broadcasts appear unused so
-     * perhaps this could just be added to the WiFi transport only.
-     */
-    private void sendNetworkConditionsBroadcast(boolean responseReceived, boolean isCaptivePortal,
-            long requestTimestampMs, long responseTimestampMs) {
-        Intent latencyBroadcast =
-                new Intent(NetworkMonitorUtils.ACTION_NETWORK_CONDITIONS_MEASURED);
-        if (mNetworkCapabilities.hasTransport(TRANSPORT_WIFI)) {
-            if (!mWifiManager.isScanAlwaysAvailable()) {
-                return;
-            }
-
-            WifiInfo currentWifiInfo = mWifiManager.getConnectionInfo();
-            if (currentWifiInfo != null) {
-                // NOTE: getSSID()'s behavior changed in API 17; before that, SSIDs were not
-                // surrounded by double quotation marks (thus violating the Javadoc), but this
-                // was changed to match the Javadoc in API 17. Since clients may have started
-                // sanitizing the output of this method since API 17 was released, we should
-                // not change it here as it would become impossible to tell whether the SSID is
-                // simply being surrounded by quotes due to the API, or whether those quotes
-                // are actually part of the SSID.
-                latencyBroadcast.putExtra(NetworkMonitorUtils.EXTRA_SSID,
-                        currentWifiInfo.getSSID());
-                latencyBroadcast.putExtra(NetworkMonitorUtils.EXTRA_BSSID,
-                        currentWifiInfo.getBSSID());
-            } else {
-                if (VDBG) logw("network info is TYPE_WIFI but no ConnectionInfo found");
-                return;
-            }
-            latencyBroadcast.putExtra(NetworkMonitorUtils.EXTRA_CONNECTIVITY_TYPE, TYPE_WIFI);
-        } else if (mNetworkCapabilities.hasTransport(TRANSPORT_CELLULAR)) {
-            // TODO(b/123893112): Support multi-sim.
-            latencyBroadcast.putExtra(NetworkMonitorUtils.EXTRA_NETWORK_TYPE,
-                    mTelephonyManager.getNetworkType());
-            final ServiceState dataSs = mTelephonyManager.getServiceState();
-            if (dataSs == null) {
-                logw("failed to retrieve ServiceState");
-                return;
-            }
-            // See if the data sub is registered for PS services on cell.
-            final NetworkRegistrationInfo nri = dataSs.getNetworkRegistrationInfo(
-                    NetworkRegistrationInfo.DOMAIN_PS,
-                    AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
-            latencyBroadcast.putExtra(
-                    NetworkMonitorUtils.EXTRA_CELL_ID,
-                    nri == null ? null : nri.getCellIdentity());
-            latencyBroadcast.putExtra(NetworkMonitorUtils.EXTRA_CONNECTIVITY_TYPE, TYPE_MOBILE);
-        } else {
-            return;
-        }
-        latencyBroadcast.putExtra(NetworkMonitorUtils.EXTRA_RESPONSE_RECEIVED,
-                responseReceived);
-        latencyBroadcast.putExtra(NetworkMonitorUtils.EXTRA_REQUEST_TIMESTAMP_MS,
-                requestTimestampMs);
-
-        if (responseReceived) {
-            latencyBroadcast.putExtra(NetworkMonitorUtils.EXTRA_IS_CAPTIVE_PORTAL,
-                    isCaptivePortal);
-            latencyBroadcast.putExtra(NetworkMonitorUtils.EXTRA_RESPONSE_TIMESTAMP_MS,
-                    responseTimestampMs);
-        }
-        mDependencies.sendNetworkConditionsBroadcast(mContext, latencyBroadcast);
-    }
-
     private void logNetworkEvent(int evtype) {
         int[] transports = mNetworkCapabilities.getTransportTypes();
         mMetricsLog.log(mCleartextDnsNetwork, transports, new NetworkEvent(evtype));
@@ -3180,15 +3100,6 @@ public class NetworkMonitor extends StateMachine {
          */
         public boolean isFeatureEnabled(@NonNull Context context, @NonNull String name) {
             return NetworkStackUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name);
-        }
-
-        /**
-         * Send a broadcast indicating network conditions.
-         */
-        public void sendNetworkConditionsBroadcast(@NonNull Context context,
-                @NonNull Intent broadcast) {
-            context.sendBroadcastAsUser(broadcast, UserHandle.CURRENT,
-                    NetworkMonitorUtils.PERMISSION_ACCESS_NETWORK_CONDITIONS);
         }
 
         /**
