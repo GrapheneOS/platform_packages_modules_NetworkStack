@@ -5,14 +5,14 @@
     },
     {
       "name": "NetworkStackNextTests"
+    },
+    {
+      "name": "NetworkStackIntegrationTests"
     }
   ],
   "postsubmit": [
     {
       "name": "NetworkStackHostTests"
-    },
-    {
-      "name": "NetworkStackIntegrationTests"
     }
   ],
   "auto-postsubmit": [
@@ -42,6 +42,11 @@
     {
       // TODO: add back tethering when it is updatable in this branch
       "name": "NetworkStackTests[CaptivePortalLoginGoogle.apk+NetworkStackGoogle.apk+com.google.android.resolv.apex]"
+    }
+  ],
+  "mainline-postsubmit": [
+    {
+      "name": "NetworkStackIntegrationTests[CaptivePortalLoginGoogle.apk+NetworkStackGoogle.apk+com.google.android.resolv.apex+com.google.android.tethering.apex]"
     }
   ],
   "imports": [
