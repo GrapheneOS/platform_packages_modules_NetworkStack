@@ -200,7 +200,8 @@ public abstract class DhcpPacket {
      * DHCP Optional Type: DHCP Interface MTU
      */
     public static final byte DHCP_MTU = 26;
-    protected Short mMtu;
+    @VisibleForTesting(otherwise = VisibleForTesting.PROTECTED)
+    public Short mMtu;
 
     /**
      * DHCP Optional Type: DHCP BROADCAST ADDRESS
