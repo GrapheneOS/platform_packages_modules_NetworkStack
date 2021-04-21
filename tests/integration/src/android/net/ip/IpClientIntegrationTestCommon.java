@@ -135,6 +135,7 @@ import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.internal.util.HexDump;
 import com.android.internal.util.StateMachine;
 import com.android.net.module.util.ArrayTrackRecord;
 import com.android.net.module.util.Ipv6Utils;
@@ -2748,8 +2749,8 @@ public abstract class IpClientIntegrationTestCommon {
         final List<DhcpOption> options = Arrays.asList(
                 makeDhcpOption((byte) 60, TEST_OEM_VENDOR_ID.getBytes()),
                 makeDhcpOption((byte) 77, TEST_OEM_USER_CLASS_INFO),
-                // DHCP_HOST_NAME
-                makeDhcpOption((byte) 12, new String("Pixel 3 XL").getBytes()));
+                // Option 26: MTU
+                makeDhcpOption((byte) 26, HexDump.toByteArray(TEST_DEFAULT_MTU)));
         final ScanResultInfo info = makeScanResultInfo(0xdd /* vendor-specificIE */, TEST_OEM_OUI,
                 (byte) 0x17 /* vendor-specific IE type */);
         final DhcpPacket packet = doCustomizedDhcpOptionsTest(options, info);
@@ -2757,7 +2758,7 @@ public abstract class IpClientIntegrationTestCommon {
         assertTrue(packet instanceof DhcpDiscoverPacket);
         assertEquals(packet.mVendorId, TEST_OEM_VENDOR_ID);
         assertArrayEquals(packet.mUserClass, TEST_OEM_USER_CLASS_INFO);
-        assertNull(packet.mHostName);
+        assertNull(packet.mMtu);
     }
 
     @Test
