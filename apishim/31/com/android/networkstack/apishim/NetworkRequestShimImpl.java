@@ -22,6 +22,7 @@ import android.util.Range;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 
 import com.android.networkstack.apishim.common.NetworkRequestShim;
 import com.android.networkstack.apishim.common.ShimUtils;
@@ -52,5 +53,11 @@ public class NetworkRequestShimImpl
     public void setUids(@NonNull NetworkRequest.Builder builder,
             @Nullable Set<Range<Integer>> uids) {
         builder.setUids(uids);
+    }
+
+    @RequiresApi(Build.VERSION_CODES.S)
+    @Override
+    public NetworkRequest.Builder newBuilder(@NonNull NetworkRequest request) {
+        return new NetworkRequest.Builder(request);
     }
 }
