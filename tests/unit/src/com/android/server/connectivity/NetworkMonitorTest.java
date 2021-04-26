@@ -2023,6 +2023,8 @@ public class NetworkMonitorTest {
                 ArgumentCaptor.forClass(DataStallDetectionStats.class);
         verify(mDependencies, timeout(HANDLER_TIMEOUT_MS).times(1))
                 .writeDataStallDetectionStats(statsCaptor.capture(), probeResultCaptor.capture());
+        // Ensure probe will not stop due to rate-limiting mechanism.
+        nm.setLastProbeTime(SystemClock.elapsedRealtime() - 1000);
         assertTrue(nm.isDataStall());
         assertTrue(probeResultCaptor.getValue().isSuccessful());
         verifyTestDataStallDetectionStats(evalType, transport, statsCaptor.getValue());
