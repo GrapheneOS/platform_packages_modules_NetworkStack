@@ -45,8 +45,8 @@ public interface ConnectivityManagerShim {
             @NonNull NetworkCallback networkCallback, @NonNull Handler handler)
             throws UnsupportedApiLevelException;
 
-    /** See android.net.ConnectivityManager#registerDefaultNetworkCallbackAsUid */
-    default void registerDefaultNetworkCallbackAsUid(
+    /** See android.net.ConnectivityManager#registerDefaultNetworkCallbackForUid */
+    default void registerDefaultNetworkCallbackForUid(
             int uid, @NonNull NetworkCallback networkCallback, @NonNull Handler handler)
             throws UnsupportedApiLevelException {
         throw new UnsupportedApiLevelException("Only supported starting from API 31");
