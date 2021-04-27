@@ -44,5 +44,6 @@ public class ConstantsShim extends com.android.networkstack.apishim.api29.Consta
 
     // Constants defined in android.net.NetworkCapabilities.
     public static final int NET_CAPABILITY_NOT_VCN_MANAGED = 28;
+    public static final int NET_CAPABILITY_ENTERPRISE = 29;
     public static final int TRANSPORT_TEST = 7;
 }
