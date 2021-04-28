@@ -83,4 +83,17 @@ public interface NetworkInformationShim {
      */
     void setCaptivePortalData(@NonNull LinkProperties lp,
             @Nullable CaptivePortalDataShim captivePortalData);
+
+    /**
+     * Get the name of the given capability that carriers use.
+     * If the capability does not have a carrier-name, returns null.
+     *
+     * @param capability The capability to get the carrier-name of.
+     * @return The carrier-name of the capability, or null if it doesn't exist.
+     * @hide
+     */
+    @Nullable
+    default String getCapabilityCarrierName(int capability) {
+        return null;
+    }
 }
