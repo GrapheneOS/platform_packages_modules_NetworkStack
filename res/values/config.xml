@@ -31,8 +31,8 @@
          this resource. It will break if the enforcement of overlayable starts.
          -->
     <string-array name="default_captive_portal_fallback_urls" translatable="false">
-        <item>http://grapheneos.network/gen_204</item>
-        <item>http://grapheneos.network/generate_204</item>
+        <item>http://grapheneos.online/gen_204</item>
+        <item>http://grapheneos.online/generate_204</item>
     </string-array>
     <!-- Configuration hooks for the above settings.
          Empty by default but may be overridden by RROs. -->
