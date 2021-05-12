@@ -123,6 +123,7 @@ import android.os.Message;
 import android.os.Process;
 import android.os.RemoteException;
 import android.os.SystemClock;
+import android.os.SystemProperties;
 import android.provider.DeviceConfig;
 import android.provider.Settings;
 import android.stats.connectivity.ProbeResult;
@@ -218,6 +219,9 @@ public class NetworkMonitor extends StateMachine {
     private static final String TAG = NetworkMonitor.class.getSimpleName();
     private static final boolean DBG  = true;
     private static final boolean VDBG = false;
+    // TODO(b/185082309): For flaky test debug only, remove it after fixing.
+    private static final boolean DDBG_STALL = "cf_x86_auto-userdebug".equals(
+            SystemProperties.get("ro.build.flavor", ""));
     private static final boolean VDBG_STALL = Log.isLoggable(TAG, Log.DEBUG);
     private static final String DEFAULT_USER_AGENT    = "Mozilla/5.0 (X11; Linux x86_64) "
                                                       + "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -3218,6 +3222,10 @@ public class NetworkMonitor extends StateMachine {
             // considered in the evaluation happened in defined threshold time.
             final long now = SystemClock.elapsedRealtime();
             final long firstTimeoutTime = now - mDnsEvents[firstConsecutiveTimeoutIndex].mTimeStamp;
+            if (DDBG_STALL) {
+                Log.d(TAG, "DSD.isDataStallSuspected, first="
+                        + firstTimeoutTime + ", valid=" + validTime);
+            }
             return (firstTimeoutTime < validTime);
         }
 
@@ -3272,12 +3280,17 @@ public class NetworkMonitor extends StateMachine {
 
         int typeToCollect = 0;
         final int notStall = -1;
-        final StringJoiner msg = (DBG || VDBG_STALL) ? new StringJoiner(", ") : null;
+        final StringJoiner msg = (DBG || VDBG_STALL || DDBG_STALL) ? new StringJoiner(", ") : null;
         // Reevaluation will generate traffic. Thus, set a minimal reevaluation timer to limit the
         // possible traffic cost in metered network.
+        final long currentTime = SystemClock.elapsedRealtime();
         if (!mNetworkCapabilities.hasCapability(NET_CAPABILITY_NOT_METERED)
-                && (SystemClock.elapsedRealtime() - getLastProbeTime()
-                < mDataStallMinEvaluateTime)) {
+                && (currentTime - getLastProbeTime() < mDataStallMinEvaluateTime)) {
+            if (DDBG_STALL) {
+                Log.d(TAG, "isDataStall: false, currentTime=" + currentTime
+                        + ", lastProbeTime=" + getLastProbeTime()
+                        + ", MinEvaluateTime=" + mDataStallMinEvaluateTime);
+            }
             return false;
         }
         // Check TCP signal. Suspect it may be a data stall if :
@@ -3290,7 +3303,7 @@ public class NetworkMonitor extends StateMachine {
             } else if (tst.isDataStallSuspected()) {
                 typeToCollect |= DATA_STALL_EVALUATION_TYPE_TCP;
             }
-            if (DBG || VDBG_STALL) {
+            if (DBG || VDBG_STALL || DDBG_STALL) {
                 msg.add("tcp packets received=" + tst.getLatestReceivedCount())
                     .add("latest tcp fail rate=" + tst.getLatestPacketFailPercentage());
             }
@@ -3307,7 +3320,7 @@ public class NetworkMonitor extends StateMachine {
                 typeToCollect |= DATA_STALL_EVALUATION_TYPE_DNS;
                 logNetworkEvent(NetworkEvent.NETWORK_CONSECUTIVE_DNS_TIMEOUT_FOUND);
             }
-            if (DBG || VDBG_STALL) {
+            if (DBG || VDBG_STALL || DDBG_STALL) {
                 msg.add("consecutive dns timeout count=" + dsd.getConsecutiveTimeoutCount());
             }
         }
@@ -3332,7 +3345,7 @@ public class NetworkMonitor extends StateMachine {
         }
 
         // log only data stall suspected.
-        if ((DBG && (typeToCollect > 0)) || VDBG_STALL) {
+        if ((DBG && (typeToCollect > 0)) || VDBG_STALL || DDBG_STALL) {
             log("isDataStall: result=" + typeToCollect + ", " + msg);
         }
 
