@@ -1252,9 +1252,7 @@ public class IpClient extends StateMachine {
                 mInterfaceCtrl.disableIPv6();
                 mHasDisabledIPv6OnProvLoss = true;
                 delta = PROV_CHANGE_STILL_PROVISIONED;
-                if (DBG) {
-                    mLog.log("Disable IPv6 stack completely when the default router has gone");
-                }
+                mLog.log("Disable IPv6 stack completely when the default router has gone");
             } else {
                 delta = PROV_CHANGE_LOST_PROVISIONING;
             }
