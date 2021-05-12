@@ -1056,6 +1056,10 @@ public class ApfTest {
             { (byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
     private static final byte[] IPV6_ALL_ROUTERS_ADDRESS =
             { (byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 };
+    private static final byte[] IPV6_SOLICITED_NODE_MULTICAST_ADDRESS = {
+            (byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+            (byte) 0xff, (byte) 0xab, (byte) 0xcd, (byte) 0xef,
+    };
 
     private static final int ICMP6_TYPE_OFFSET           = IP_HEADER_OFFSET + IPV6_HEADER_LEN;
     private static final int ICMP6_ROUTER_SOLICITATION   = 133;
@@ -1240,6 +1244,14 @@ public class ApfTest {
         // Verify ICMPv6 NA to ff02::1 is dropped
         put(packet, IPV6_DEST_ADDR_OFFSET, IPV6_ALL_NODES_ADDRESS);
         assertDrop(program, packet.array());
+
+        // Verify ICMPv6 NA to ff02::2 is dropped
+        put(packet, IPV6_DEST_ADDR_OFFSET, IPV6_ALL_ROUTERS_ADDRESS);
+        assertDrop(program, packet.array());
+
+        // Verify ICMPv6 NA to Solicited-Node Multicast is passed
+        put(packet, IPV6_DEST_ADDR_OFFSET, IPV6_SOLICITED_NODE_MULTICAST_ADDRESS);
+        assertPass(program, packet.array());
 
         // Verify ICMPv6 RS to any is dropped
         packet.put(ICMP6_TYPE_OFFSET, (byte)ICMP6_ROUTER_SOLICITATION);
