@@ -69,6 +69,9 @@ java_defaults {
         "androidx.annotation_annotation",
         "networkstack-client",
     ],
+    static_libs : [
+        "modules-utils-build_system"
+    ],
     apex_available: [
         "com.android.tethering",
         "//apex_available:platform",  // For InProcessNetworkStack and InProcessTethering
