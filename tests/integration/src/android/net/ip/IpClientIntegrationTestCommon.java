@@ -128,6 +128,7 @@ import android.os.PowerManager;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.SystemProperties;
+import android.stats.connectivity.NetworkQuirkEvent;
 import android.system.ErrnoException;
 import android.system.Os;
 
@@ -147,6 +148,7 @@ import com.android.networkstack.apishim.ConstantsShim;
 import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.arp.ArpPacket;
 import com.android.networkstack.metrics.IpProvisioningMetrics;
+import com.android.networkstack.metrics.NetworkQuirkMetrics;
 import com.android.networkstack.packets.NeighborAdvertisement;
 import com.android.server.NetworkObserver;
 import com.android.server.NetworkObserverRegistry;
@@ -260,6 +262,7 @@ public abstract class IpClientIntegrationTestCommon {
     @Mock private IpMemoryStoreService mIpMemoryStoreService;
     @Mock private PowerManager.WakeLock mTimeoutWakeLock;
     @Mock protected NetworkStackIpMemoryStore mIpMemoryStore;
+    @Mock private NetworkQuirkMetrics.Dependencies mNetworkQuirkMetricsDeps;
 
     @Spy private INetd mNetd;
     private NetworkObserverRegistry mNetworkObserverRegistry;
@@ -447,6 +450,11 @@ public abstract class IpClientIntegrationTestCommon {
 
         public void setDeviceConfigProperty(String name, int value) {
             mIntConfigProperties.put(name, value);
+        }
+
+        @Override
+        public NetworkQuirkMetrics getNetworkQuirkMetrics() {
+            return new NetworkQuirkMetrics(mNetworkQuirkMetricsDeps);
         }
     }
 
@@ -2427,6 +2435,11 @@ public abstract class IpClientIntegrationTestCommon {
         assertNotNull(lp);
         assertEquals(lp.getAddresses().get(0), CLIENT_ADDR);
         assertEquals(lp.getDnsServers().get(0), SERVER_ADDR);
+
+        final ArgumentCaptor<Integer> quirkEvent = ArgumentCaptor.forClass(Integer.class);
+        verify(mNetworkQuirkMetricsDeps, timeout(TEST_TIMEOUT_MS)).writeStats(quirkEvent.capture());
+        assertEquals((long) quirkEvent.getValue(),
+                (long) NetworkQuirkEvent.QE_IPV6_PROVISIONING_ROUTER_LOST.ordinal());
     }
 
     @Test @SignatureRequiredTest(reason = "TODO: evaluate whether signature perms are required")
