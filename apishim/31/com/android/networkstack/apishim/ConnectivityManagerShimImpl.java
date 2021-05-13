@@ -19,7 +19,6 @@ package com.android.networkstack.apishim;
 import static com.android.modules.utils.build.SdkLevel.isAtLeastS;
 
 import android.content.Context;
-import android.net.ConnectivityManager;
 import android.net.ConnectivityManager.NetworkCallback;
 import android.net.NetworkRequest;
 import android.os.Build;
@@ -39,11 +38,9 @@ import java.util.Collection;
 @RequiresApi(Build.VERSION_CODES.S)
 public class ConnectivityManagerShimImpl
         extends com.android.networkstack.apishim.api30.ConnectivityManagerShimImpl  {
-    private final ConnectivityManager mCm;
 
     protected ConnectivityManagerShimImpl(Context context) {
         super(context);
-        mCm = context.getSystemService(ConnectivityManager.class);
     }
 
     /**
