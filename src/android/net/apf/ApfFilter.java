@@ -27,6 +27,7 @@ import static android.system.OsConstants.IPPROTO_TCP;
 import static android.system.OsConstants.IPPROTO_UDP;
 import static android.system.OsConstants.SOCK_RAW;
 
+import static com.android.net.module.util.NetworkStackConstants.ETHER_BROADCAST;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ECHO_REQUEST_TYPE;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_NEIGHBOR_ADVERTISEMENT;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
@@ -285,8 +286,6 @@ public class ApfFilter {
     private static final int ETH_ETHERTYPE_OFFSET = 12;
     private static final int ETH_TYPE_MIN = 0x0600;
     private static final int ETH_TYPE_MAX = 0xFFFF;
-    private static final byte[] ETH_BROADCAST_MAC_ADDRESS =
-            {(byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff };
     // TODO: Make these offsets relative to end of link-layer header; don't include ETH_HEADER_LEN.
     private static final int IPV4_TOTAL_LENGTH_OFFSET = ETH_HEADER_LEN + 2;
     private static final int IPV4_FRAGMENT_OFFSET_OFFSET = ETH_HEADER_LEN + 6;
@@ -1254,7 +1253,7 @@ public class ApfFilter {
         // Pass if unicast reply.
         gen.addLoadImmediate(Register.R0, ETH_DEST_ADDR_OFFSET);
         maybeSetupCounter(gen, Counter.PASSED_ARP_UNICAST_REPLY);
-        gen.addJumpIfBytesNotEqual(Register.R0, ETH_BROADCAST_MAC_ADDRESS, mCountAndPassLabel);
+        gen.addJumpIfBytesNotEqual(Register.R0, ETHER_BROADCAST, mCountAndPassLabel);
 
         // Either a unicast request, a unicast reply, or a broadcast reply.
         gen.defineLabel(checkTargetIPv4);
@@ -1350,7 +1349,7 @@ public class ApfFilter {
             // TODO: can we invert this condition to fall through to the common pass case below?
             maybeSetupCounter(gen, Counter.PASSED_IPV4_UNICAST);
             gen.addLoadImmediate(Register.R0, ETH_DEST_ADDR_OFFSET);
-            gen.addJumpIfBytesNotEqual(Register.R0, ETH_BROADCAST_MAC_ADDRESS, mCountAndPassLabel);
+            gen.addJumpIfBytesNotEqual(Register.R0, ETHER_BROADCAST, mCountAndPassLabel);
             maybeSetupCounter(gen, Counter.DROPPED_IPV4_L2_BROADCAST);
             gen.addJump(mCountAndDropLabel);
         } else {
@@ -1412,7 +1411,7 @@ public class ApfFilter {
         //     pass
         // if it's ICMPv6 RS to any:
         //   drop
-        // if it's ICMPv6 NA to ff02::1:
+        // if it's ICMPv6 NA to ff02::1 or ff02::2:
         //   drop
         // if keepalive ack
         //   drop
@@ -1466,11 +1465,14 @@ public class ApfFilter {
         gen.addJumpIfR0Equals(ICMPV6_ROUTER_SOLICITATION, mCountAndDropLabel);
         // If not neighbor announcements, skip filter.
         gen.addJumpIfR0NotEquals(ICMPV6_NEIGHBOR_ADVERTISEMENT, skipUnsolicitedMulticastNALabel);
-        // If to ff02::1, drop.
+        // Drop all multicast NA to ff02::/120.
+        // This is a way to cover ff02::1 and ff02::2 with a single JNEBS.
         // TODO: Drop only if they don't contain the address of on-link neighbours.
+        final byte[] unsolicitedNaDropPrefix = Arrays.copyOf(IPV6_ALL_NODES_ADDRESS, 15);
         gen.addLoadImmediate(Register.R0, IPV6_DEST_ADDR_OFFSET);
-        gen.addJumpIfBytesNotEqual(Register.R0, IPV6_ALL_NODES_ADDRESS,
+        gen.addJumpIfBytesNotEqual(Register.R0, unsolicitedNaDropPrefix,
                 skipUnsolicitedMulticastNALabel);
+
         maybeSetupCounter(gen, Counter.DROPPED_IPV6_MULTICAST_NA);
         gen.addJump(mCountAndDropLabel);
         gen.defineLabel(skipUnsolicitedMulticastNALabel);
@@ -1493,7 +1495,7 @@ public class ApfFilter {
      * <li>Drop all broadcast non-IP non-ARP packets.
      * <li>Pass all non-ICMPv6 IPv6 packets,
      * <li>Pass all non-IPv4 and non-IPv6 packets,
-     * <li>Drop IPv6 ICMPv6 NAs to ff02::1.
+     * <li>Drop IPv6 ICMPv6 NAs to ff02::1 or ff02::2.
      * <li>Drop IPv6 ICMPv6 RSs.
      * <li>Filter IPv4 packets (see generateIPv4FilterLocked())
      * <li>Filter IPv6 packets (see generateIPv6FilterLocked())
@@ -1569,7 +1571,7 @@ public class ApfFilter {
         // Drop non-IP non-ARP broadcasts, pass the rest
         gen.addLoadImmediate(Register.R0, ETH_DEST_ADDR_OFFSET);
         maybeSetupCounter(gen, Counter.PASSED_NON_IP_UNICAST);
-        gen.addJumpIfBytesNotEqual(Register.R0, ETH_BROADCAST_MAC_ADDRESS, mCountAndPassLabel);
+        gen.addJumpIfBytesNotEqual(Register.R0, ETHER_BROADCAST, mCountAndPassLabel);
         maybeSetupCounter(gen, Counter.DROPPED_ETH_BROADCAST);
         gen.addJump(mCountAndDropLabel);
 
