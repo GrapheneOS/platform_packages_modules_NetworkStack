@@ -228,9 +228,11 @@ android_library {
     static_libs: ["NetworkStackApiStableShims"],
     manifest: "AndroidManifestBase.xml",
     visibility: [
+        "//frameworks/base/packages/Connectivity/tests/integration",
         "//frameworks/base/tests/net/integration",
         "//packages/modules/Connectivity/Tethering/tests/integration",
         "//packages/modules/Connectivity/tests/cts/net",
+        "//packages/modules/Connectivity/tests/integration",
         "//packages/modules/NetworkStack/tests/unit",
         "//packages/modules/NetworkStack/tests/integration",
     ],
