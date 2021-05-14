@@ -11,3 +11,6 @@ rule android.net.DhcpResults* android.net.networkstack.DhcpResults@1
 rule android.util.LocalLog* android.net.networkstack.util.LocalLog@1
 
 rule android.util.IndentingPrintWriter* android.net.networkstack.util.AndroidUtilIndentingPrintWriter@1
+
+# Classes from modules-utils-build_system
+rule com.android.modules.utils.build.** com.android.networkstack.utils.build.@1
