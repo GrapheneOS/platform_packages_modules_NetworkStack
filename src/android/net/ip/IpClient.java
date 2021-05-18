@@ -859,6 +859,28 @@ public class IpClient extends StateMachine {
                 false /* defaultEnabled */);
     }
 
+    private void setInitialBssid(final ProvisioningConfiguration req) {
+        final ScanResultInfo scanResultInfo = req.mScanResultInfo;
+        mCurrentBssid = null;
+        // http://b/185202634
+        // ScanResultInfo is not populated in some situations.
+        // On S and above, prefer getting the BSSID from the Layer2Info.
+        // On R and below, get the BSSID from the ScanResultInfo and fall back to
+        // getting it from the Layer2Info. This ensures no regressions if any R
+        // devices pass in a null or meaningless BSSID in the Layer2Info.
+        if (!ShimUtils.isAtLeastS() && scanResultInfo != null) {
+            try {
+                mCurrentBssid = MacAddress.fromString(scanResultInfo.getBssid());
+            } catch (IllegalArgumentException e) {
+                Log.wtf(mTag, "Invalid BSSID: " + scanResultInfo.getBssid()
+                        + " in provisioning configuration", e);
+            }
+        }
+        if (mCurrentBssid == null && req.mLayer2Info != null) {
+            mCurrentBssid = req.mLayer2Info.mBssid;
+        }
+    }
+
     @Override
     protected void onQuitting() {
         mCallback.onQuit();
@@ -882,17 +904,7 @@ public class IpClient extends StateMachine {
             return;
         }
 
-        final ScanResultInfo scanResultInfo = req.mScanResultInfo;
-        mCurrentBssid = null;
-        if (scanResultInfo != null) {
-            try {
-                mCurrentBssid = MacAddress.fromString(scanResultInfo.getBssid());
-            } catch (IllegalArgumentException e) {
-                Log.wtf(mTag, "Invalid BSSID: " + scanResultInfo.getBssid()
-                        + " in provisioning configuration", e);
-            }
-        }
-
+        setInitialBssid(req);
         if (req.mLayer2Info != null) {
             mL2Key = req.mLayer2Info.mL2Key;
             mCluster = req.mLayer2Info.mCluster;
