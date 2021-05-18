@@ -72,6 +72,7 @@ android_test {
     platform_apis: true,
     test_suites: ["device-tests"],
     min_sdk_version: "29",
+    target_sdk_version: "30",
 }
 
 // Network stack next integration tests.
@@ -111,6 +112,7 @@ android_test {
     certificate: "networkstack",
     platform_apis: true,
     min_sdk_version: "29",
+    target_sdk_version: "30",
     test_suites: ["device-tests", "mts"],
     test_config: "AndroidTest_Coverage.xml",
     defaults: ["NetworkStackIntegrationTestsJniDefaults"],
