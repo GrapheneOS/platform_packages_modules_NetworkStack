@@ -51,6 +51,12 @@ public class ConntrackMonitor extends NetlinkMonitor {
     public static final int NF_NETLINK_CONNTRACK_UPDATE = 2;
     public static final int NF_NETLINK_CONNTRACK_DESTROY = 4;
 
+    // The socket receive buffer size in bytes. If too many conntrack messages are sent too
+    // quickly, the conntrack messages can overflow the socket receive buffer. This can happen
+    // if too many connections are disconnected by losing network and so on. Use a large-enough
+    // buffer to avoid the error ENOBUFS while listening to the conntrack messages.
+    private static final int SOCKET_RECV_BUFSIZE = 6 * 1024 * 1024;
+
     /**
      * A class for describing parsed netfilter conntrack events.
      */
@@ -176,7 +182,7 @@ public class ConntrackMonitor extends NetlinkMonitor {
     public ConntrackMonitor(@NonNull Handler h, @NonNull SharedLog log,
             @NonNull ConntrackEventConsumer cb) {
         super(h, log, TAG, OsConstants.NETLINK_NETFILTER, NF_NETLINK_CONNTRACK_NEW
-                | NF_NETLINK_CONNTRACK_UPDATE | NF_NETLINK_CONNTRACK_DESTROY);
+                | NF_NETLINK_CONNTRACK_UPDATE | NF_NETLINK_CONNTRACK_DESTROY, SOCKET_RECV_BUFSIZE);
         mConsumer = cb;
     }
 
