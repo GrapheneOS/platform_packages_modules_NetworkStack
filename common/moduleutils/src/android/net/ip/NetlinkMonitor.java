@@ -21,6 +21,8 @@ import static android.net.util.SocketUtils.makeNetlinkSocketAddress;
 import static android.system.OsConstants.AF_NETLINK;
 import static android.system.OsConstants.SOCK_DGRAM;
 import static android.system.OsConstants.SOCK_NONBLOCK;
+import static android.system.OsConstants.SOL_SOCKET;
+import static android.system.OsConstants.SO_RCVBUF;
 
 import android.annotation.NonNull;
 import android.net.netlink.NetlinkErrorMessage;
@@ -56,8 +58,12 @@ public class NetlinkMonitor extends PacketReader {
     protected final String mTag;
     private final int mFamily;
     private final int mBindGroups;
+    private final int mSockRcvbufSize;
 
     private static final boolean DBG = false;
+
+    // Default socket receive buffer size. This means the specific buffer size is not set.
+    private static final int DEFAULT_SOCKET_RECV_BUFSIZE = -1;
 
     /**
      * Constructs a new {@code NetlinkMonitor} instance.
@@ -68,14 +74,23 @@ public class NetlinkMonitor extends PacketReader {
      * @param tag The log tag to use for log messages.
      * @param family the Netlink socket family to, e.g., {@code NETLINK_ROUTE}.
      * @param bindGroups the netlink groups to bind to.
+     * @param sockRcvbufSize the specific socket receive buffer size in bytes. -1 means that don't
+     *        set the specific socket receive buffer size in #createFd and use the default value in
+     *        /proc/sys/net/core/rmem_default file. See SO_RCVBUF in man-pages/socket.
      */
     public NetlinkMonitor(@NonNull Handler h, @NonNull SharedLog log, @NonNull String tag,
-            int family, int bindGroups) {
+            int family, int bindGroups, int sockRcvbufSize) {
         super(h, NetlinkSocket.DEFAULT_RECV_BUFSIZE);
         mLog = log.forSubComponent(tag);
         mTag = tag;
         mFamily = family;
         mBindGroups = bindGroups;
+        mSockRcvbufSize = sockRcvbufSize;
+    }
+
+    public NetlinkMonitor(@NonNull Handler h, @NonNull SharedLog log, @NonNull String tag,
+            int family, int bindGroups) {
+        this(h, log, tag, family, bindGroups, DEFAULT_SOCKET_RECV_BUFSIZE);
     }
 
     @Override
@@ -84,6 +99,9 @@ public class NetlinkMonitor extends PacketReader {
 
         try {
             fd = Os.socket(AF_NETLINK, SOCK_DGRAM | SOCK_NONBLOCK, mFamily);
+            if (mSockRcvbufSize != DEFAULT_SOCKET_RECV_BUFSIZE) {
+                Os.setsockoptInt(fd, SOL_SOCKET, SO_RCVBUF, mSockRcvbufSize);
+            }
             Os.bind(fd, makeNetlinkSocketAddress(0, mBindGroups));
             NetlinkSocket.connectToKernel(fd);
 
