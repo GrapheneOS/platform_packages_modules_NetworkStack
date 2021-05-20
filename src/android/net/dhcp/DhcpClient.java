@@ -75,6 +75,9 @@ import android.net.metrics.IpConnectivityLog;
 import android.net.networkstack.aidl.dhcp.DhcpOption;
 import android.net.util.HostnameTransliterator;
 import android.net.util.SocketUtils;
+import android.net.wifi.WifiConfiguration;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
 import android.os.Handler;
 import android.os.Message;
 import android.os.PowerManager;
@@ -115,6 +118,7 @@ import java.net.SocketAddress;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
@@ -1270,7 +1274,7 @@ public class DhcpClient extends StateMachine {
                                 + " lease expiry: "  + attributes.assignedV4AddressExpiry
                                 + " current time: "  + currentTime);
                     }
-                    if (currentTime >= attributes.assignedV4AddressExpiry) {
+                    if (currentTime >= attributes.assignedV4AddressExpiry || shouldAvoidStateReuse()) {
                         // Lease has expired.
                         transitionTo(mDhcpInitState);
                         return HANDLED;
@@ -1300,6 +1304,29 @@ public class DhcpClient extends StateMachine {
 
         mIpv6OnlyWaitTimeMs = packet.getIpv6OnlyWaitTimeMillis();
         transitionTo(mIpv6OnlyWaitState);
+        return true;
+    }
+
+    private static final int RANDOMIZATION_ALWAYS = 100;
+
+    private boolean shouldAvoidStateReuse() {
+        try {
+            WifiManager wifiManager = (WifiManager) mContext.getSystemService(Context.WIFI_SERVICE);
+            WifiInfo wifiInfo =  wifiManager.getConnectionInfo();
+            if (wifiInfo != null) {
+                int connectedNetworkId = wifiInfo.getNetworkId();
+                List<WifiConfiguration> configurationList = wifiManager.getConfiguredNetworks();
+                for (WifiConfiguration configuration : configurationList){
+                    if (configuration.networkId == connectedNetworkId){
+                        return configuration.macRandomizationSetting == RANDOMIZATION_ALWAYS;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            loge(e.getLocalizedMessage(), e);
+        }
+
+        loge("ConfiguredNetworks should contain Connected network id config");
         return true;
     }
 
