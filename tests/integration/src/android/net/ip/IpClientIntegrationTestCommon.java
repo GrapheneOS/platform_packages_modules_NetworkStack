@@ -2404,12 +2404,15 @@ public abstract class IpClientIntegrationTestCommon {
         reset(mCb);
     }
 
-    private void doDualStackProvisioning() throws Exception {
+    private void doDualStackProvisioning(boolean shouldDisableAcceptRa) throws Exception {
         when(mCm.shouldAvoidBadWifi()).thenReturn(true);
 
         final ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
                 .build();
+
+        setFeatureEnabled(NetworkStackUtils.IPCLIENT_DISABLE_ACCEPT_RA_VERSION,
+                shouldDisableAcceptRa);
         // Enable rapid commit to accelerate DHCP handshake to shorten test duration,
         // not strictly necessary.
         setDhcpFeatures(false /* isDhcpLeaseCacheEnabled */, true /* isRapidCommitEnabled */,
@@ -2419,9 +2422,9 @@ public abstract class IpClientIntegrationTestCommon {
         performDualStackProvisioning();
     }
 
-    @Test @SignatureRequiredTest(reason = "TODO: evaluate whether signature perms are required")
-    public void testIgnoreIpv6ProvisioningLoss() throws Exception {
-        doDualStackProvisioning();
+    @Test @SignatureRequiredTest(reason = "signature perms are required due to mocked callabck")
+    public void testIgnoreIpv6ProvisioningLoss_disableIPv6Stack() throws Exception {
+        doDualStackProvisioning(false /* shouldDisableAcceptRa */);
 
         final CompletableFuture<LinkProperties> lpFuture = new CompletableFuture<>();
 
@@ -2450,9 +2453,45 @@ public abstract class IpClientIntegrationTestCommon {
                 (long) NetworkQuirkEvent.QE_IPV6_PROVISIONING_ROUTER_LOST.ordinal());
     }
 
+    @Test @SignatureRequiredTest(reason = "signature perms are required due to mocked callabck")
+    public void testIgnoreIpv6ProvisioningLoss_disableAcceptRa() throws Exception {
+        doDualStackProvisioning(true /* shouldDisableAcceptRa */);
+
+        final CompletableFuture<LinkProperties> lpFuture = new CompletableFuture<>();
+
+        // Send RA with 0-lifetime and wait until all global IPv6 addresses, IPv6-related default
+        // route and DNS servers have been removed, then verify if there is IPv4-only, IPv6 link
+        // local address and route to fe80::/64 info left in the LinkProperties.
+        sendRouterAdvertisementWithZeroLifetime();
+        verify(mCb, timeout(TEST_TIMEOUT_MS).atLeastOnce()).onLinkPropertiesChange(
+                argThat(x -> {
+                    // Only IPv4 provisioned and IPv6 link-local address
+                    final boolean isIPv6LinkLocalAndIPv4OnlyProvisioned =
+                            (x.getLinkAddresses().size() == 2
+                                    && x.getDnsServers().size() == 1
+                                    && x.getAddresses().get(0) instanceof Inet4Address
+                                    && x.getDnsServers().get(0) instanceof Inet4Address);
+
+                    if (!isIPv6LinkLocalAndIPv4OnlyProvisioned) return false;
+                    lpFuture.complete(x);
+                    return true;
+                }));
+        final LinkProperties lp = lpFuture.get(TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        assertNotNull(lp);
+        assertEquals(lp.getAddresses().get(0), CLIENT_ADDR);
+        assertEquals(lp.getDnsServers().get(0), SERVER_ADDR);
+        assertTrue(lp.getAddresses().get(1).isLinkLocalAddress());
+
+        reset(mCb);
+
+        // Send an RA to verify that global IPv6 addresses won't be configured on the interface.
+        sendBasicRouterAdvertisement(false /* waitForRs */);
+        verify(mCb, timeout(TEST_TIMEOUT_MS).times(0)).onLinkPropertiesChange(any());
+    }
+
     @Test @SignatureRequiredTest(reason = "TODO: evaluate whether signature perms are required")
     public void testDualStackProvisioning() throws Exception {
-        doDualStackProvisioning();
+        doDualStackProvisioning(false /* shouldDisableAcceptRa */);
 
         verify(mCb, never()).onProvisioningFailure(any());
     }
@@ -2672,7 +2711,7 @@ public abstract class IpClientIntegrationTestCommon {
     public void testNoFdLeaks() throws Exception {
         // Shut down and restart IpClient once to ensure that any fds that are opened the first
         // time it runs do not cause the test to fail.
-        doDualStackProvisioning();
+        doDualStackProvisioning(false /* shouldDisableAcceptRa */);
         shutdownAndRecreateIpClient();
 
         // Unfortunately we cannot use a large number of iterations as it would make the test run
@@ -2680,7 +2719,7 @@ public abstract class IpClientIntegrationTestCommon {
         final int iterations = 10;
         final int before = getNumOpenFds();
         for (int i = 0; i < iterations; i++) {
-            doDualStackProvisioning();
+            doDualStackProvisioning(false /* shouldDisableAcceptRa */);
             shutdownAndRecreateIpClient();
             // The last time this loop runs, mIpc will be shut down in tearDown.
         }
