@@ -36,6 +36,7 @@ import static com.android.net.module.util.NetworkStackConstants.VENDOR_SPECIFIC_
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
 import android.content.Context;
+import android.content.res.Resources;
 import android.net.ConnectivityManager;
 import android.net.DhcpResults;
 import android.net.INetd;
@@ -94,6 +95,7 @@ import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.internal.util.WakeupMessage;
 import com.android.net.module.util.DeviceConfigUtils;
+import com.android.networkstack.R;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.networkstack.apishim.SocketUtilsShimImpl;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
@@ -604,6 +606,16 @@ public class IpClient extends StateMachine {
                 boolean defaultEnabled) {
             return DeviceConfigUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name,
                     defaultEnabled);
+        }
+
+        /**
+         * Create an APF filter if apfCapabilities indicates support for packet filtering using
+         * APF programs.
+         * @see ApfFilter#maybeCreate
+         */
+        public ApfFilter maybeCreateApfFilter(Context context, ApfFilter.ApfConfiguration config,
+                InterfaceParams ifParams, IpClientCallbacksWrapper cb) {
+            return ApfFilter.maybeCreate(context, config, ifParams, cb);
         }
     }
 
@@ -2195,10 +2207,19 @@ public class IpClient extends StateMachine {
             apfConfig.apfCapabilities = mConfiguration.mApfCapabilities;
             apfConfig.multicastFilter = mMulticastFiltering;
             // Get the Configuration for ApfFilter from Context
-            apfConfig.ieee802_3Filter = ApfCapabilities.getApfDrop8023Frames();
-            apfConfig.ethTypeBlackList = ApfCapabilities.getApfEtherTypeBlackList();
+            // Resource settings were moved from ApfCapabilities APIs to NetworkStack resources in S
+            if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.R)) {
+                final Resources res = mContext.getResources();
+                apfConfig.ieee802_3Filter = res.getBoolean(R.bool.config_apfDrop802_3Frames);
+                apfConfig.ethTypeBlackList = res.getIntArray(R.array.config_apfEthTypeDenyList);
+            } else {
+                apfConfig.ieee802_3Filter = ApfCapabilities.getApfDrop8023Frames();
+                apfConfig.ethTypeBlackList = ApfCapabilities.getApfEtherTypeBlackList();
+            }
+
             apfConfig.minRdnssLifetimeSec = mMinRdnssLifetimeSec;
-            mApfFilter = ApfFilter.maybeCreate(mContext, apfConfig, mInterfaceParams, mCallback);
+            mApfFilter = mDependencies.maybeCreateApfFilter(mContext, apfConfig, mInterfaceParams,
+                    mCallback);
             // TODO: investigate the effects of any multicast filtering racing/interfering with the
             // rest of this IP configuration startup.
             if (mApfFilter == null) {
