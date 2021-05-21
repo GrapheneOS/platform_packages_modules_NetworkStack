@@ -72,7 +72,7 @@ aidl_interface {
         // For framework parcelables.
         "frameworks/base/core/java",
         // For API parcelables in connectivity
-        "frameworks/base/packages/Connectivity/framework/aidl-export",
+        "packages/modules/Connectivity/framework/aidl-export",
         "frameworks/native/aidl/binder", // For PersistableBundle.aidl
     ],
     srcs: [
