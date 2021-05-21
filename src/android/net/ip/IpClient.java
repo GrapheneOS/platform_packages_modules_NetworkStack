@@ -18,6 +18,7 @@ package android.net.ip;
 
 import static android.net.RouteInfo.RTN_UNICAST;
 import static android.net.dhcp.DhcpResultsParcelableUtil.toStableParcelable;
+import static android.net.util.NetworkStackUtils.IPCLIENT_DISABLE_ACCEPT_RA_VERSION;
 import static android.net.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
 import static android.net.util.NetworkStackUtils.IPCLIENT_GRATUITOUS_NA_VERSION;
 import static android.net.util.SocketUtils.makePacketSocketAddress;
@@ -35,6 +36,7 @@ import static com.android.net.module.util.NetworkStackConstants.VENDOR_SPECIFIC_
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
 import android.content.Context;
+import android.content.res.Resources;
 import android.net.ConnectivityManager;
 import android.net.DhcpResults;
 import android.net.INetd;
@@ -93,6 +95,7 @@ import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.internal.util.WakeupMessage;
 import com.android.net.module.util.DeviceConfigUtils;
+import com.android.networkstack.R;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.networkstack.apishim.SocketUtilsShimImpl;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
@@ -527,7 +530,7 @@ public class IpClient extends StateMachine {
     private boolean mMulticastFiltering;
     private long mStartTimeMillis;
     private MacAddress mCurrentBssid;
-    private boolean mHasDisabledIPv6OnProvLoss;
+    private boolean mHasDisabledIpv6OrAcceptRaOnProvLoss;
 
     /**
      * Reading the snapshot is an asynchronous operation initiated by invoking
@@ -603,6 +606,16 @@ public class IpClient extends StateMachine {
                 boolean defaultEnabled) {
             return DeviceConfigUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name,
                     defaultEnabled);
+        }
+
+        /**
+         * Create an APF filter if apfCapabilities indicates support for packet filtering using
+         * APF programs.
+         * @see ApfFilter#maybeCreate
+         */
+        public ApfFilter maybeCreateApfFilter(Context context, ApfFilter.ApfConfiguration config,
+                InterfaceParams ifParams, IpClientCallbacksWrapper cb) {
+            return ApfFilter.maybeCreate(context, config, ifParams, cb);
         }
     }
 
@@ -859,6 +872,33 @@ public class IpClient extends StateMachine {
                 false /* defaultEnabled */);
     }
 
+    private void setInitialBssid(final ProvisioningConfiguration req) {
+        final ScanResultInfo scanResultInfo = req.mScanResultInfo;
+        mCurrentBssid = null;
+        // http://b/185202634
+        // ScanResultInfo is not populated in some situations.
+        // On S and above, prefer getting the BSSID from the Layer2Info.
+        // On R and below, get the BSSID from the ScanResultInfo and fall back to
+        // getting it from the Layer2Info. This ensures no regressions if any R
+        // devices pass in a null or meaningless BSSID in the Layer2Info.
+        if (!ShimUtils.isAtLeastS() && scanResultInfo != null) {
+            try {
+                mCurrentBssid = MacAddress.fromString(scanResultInfo.getBssid());
+            } catch (IllegalArgumentException e) {
+                Log.wtf(mTag, "Invalid BSSID: " + scanResultInfo.getBssid()
+                        + " in provisioning configuration", e);
+            }
+        }
+        if (mCurrentBssid == null && req.mLayer2Info != null) {
+            mCurrentBssid = req.mLayer2Info.mBssid;
+        }
+    }
+
+    private boolean shouldDisableAcceptRaOnProvisioningLoss() {
+        return mDependencies.isFeatureEnabled(mContext, IPCLIENT_DISABLE_ACCEPT_RA_VERSION,
+                true /* defaultEnabled */);
+    }
+
     @Override
     protected void onQuitting() {
         mCallback.onQuit();
@@ -882,17 +922,7 @@ public class IpClient extends StateMachine {
             return;
         }
 
-        final ScanResultInfo scanResultInfo = req.mScanResultInfo;
-        mCurrentBssid = null;
-        if (scanResultInfo != null) {
-            try {
-                mCurrentBssid = MacAddress.fromString(scanResultInfo.getBssid());
-            } catch (IllegalArgumentException e) {
-                Log.wtf(mTag, "Invalid BSSID: " + scanResultInfo.getBssid()
-                        + " in provisioning configuration", e);
-            }
-        }
-
+        setInitialBssid(req);
         if (req.mLayer2Info != null) {
             mL2Key = req.mLayer2Info.mL2Key;
             mCluster = req.mLayer2Info.mCluster;
@@ -1186,6 +1216,21 @@ public class IpClient extends StateMachine {
         return config.isProvisionedBy(lp.getLinkAddresses(), lp.getRoutes());
     }
 
+    private void setIpv6AcceptRa(int acceptRa) {
+        try {
+            mNetd.setProcSysNet(INetd.IPV6, INetd.CONF, mInterfaceParams.name, "accept_ra",
+                    Integer.toString(acceptRa));
+        } catch (Exception e) {
+            Log.e(mTag, "Failed to set accept_ra to " + acceptRa);
+        }
+    }
+
+    private void restartIpv6WithAcceptRaDisabled() {
+        mInterfaceCtrl.disableIPv6();
+        setIpv6AcceptRa(0 /* accept_ra */);
+        startIPv6();
+    }
+
     // TODO: Investigate folding all this into the existing static function
     // LinkProperties.compareProvisioning() or some other single function that
     // takes two LinkProperties objects and returns a ProvisioningChange
@@ -1235,7 +1280,7 @@ public class IpClient extends StateMachine {
         // Note that we can still be disconnected by IpReachabilityMonitor
         // if the IPv6 default gateway (but not the IPv6 DNS servers; see
         // accompanying code in IpReachabilityMonitor) is unreachable.
-        final boolean ignoreIPv6ProvisioningLoss = mHasDisabledIPv6OnProvLoss
+        final boolean ignoreIPv6ProvisioningLoss = mHasDisabledIpv6OrAcceptRaOnProvLoss
                 || (mConfiguration != null && mConfiguration.mUsingMultinetworkPolicyTracker
                         && !mCm.shouldAvoidBadWifi());
 
@@ -1263,18 +1308,31 @@ public class IpClient extends StateMachine {
         if (oldLp.hasGlobalIpv6Address() && (lostIPv6Router && !ignoreIPv6ProvisioningLoss)) {
             // Although link properties have lost IPv6 default route in this case, if IPv4 is still
             // working with appropriate routes and DNS servers, we can keep the current connection
-            // without disconnecting from the network, just disable IPv6 on that given network until
-            // to the next provisioning. Disabling IPv6 will result in all IPv6 connectivity torn
-            // down and all IPv6 sockets being closed, the non-routable IPv6 DNS servers will be
-            // stripped out, so applications will be able to reconnect immediately over IPv4. See
-            // b/131781810.
+            // without disconnecting from the network, just disable IPv6 or accept_ra parameter on
+            // that given network until to the next provisioning.
+            //
+            // Disabling IPv6 stack will result in all IPv6 connectivity torn down and all IPv6
+            // sockets being closed, the non-routable IPv6 DNS servers will be stripped out, so
+            // applications will be able to reconnect immediately over IPv4. See b/131781810.
+            //
+            // Sometimes disabling IPv6 stack might introduce other issues(see b/179222860),
+            // instead disabling accept_ra will result in only IPv4 provisioning and IPv6 link
+            // local address left on the interface, so applications will be able to reconnect
+            // immediately over IPv4 and keep IPv6 link-local capable.
             if (newLp.isIpv4Provisioned()) {
-                mInterfaceCtrl.disableIPv6();
+                if (shouldDisableAcceptRaOnProvisioningLoss()) {
+                    restartIpv6WithAcceptRaDisabled();
+                } else {
+                    mInterfaceCtrl.disableIPv6();
+                }
                 mNetworkQuirkMetrics.setEvent(NetworkQuirkEvent.QE_IPV6_PROVISIONING_ROUTER_LOST);
                 mNetworkQuirkMetrics.statsWrite();
-                mHasDisabledIPv6OnProvLoss = true;
+                mHasDisabledIpv6OrAcceptRaOnProvLoss = true;
                 delta = PROV_CHANGE_STILL_PROVISIONED;
-                mLog.log("Disable IPv6 stack completely when the default router has gone");
+                mLog.log(shouldDisableAcceptRaOnProvisioningLoss()
+                        ? "Disabled accept_ra parameter "
+                        : "Disabled IPv6 stack completely "
+                        + "when the IPv6 default router has gone");
             } else {
                 delta = PROV_CHANGE_LOST_PROVISIONING;
             }
@@ -1827,7 +1885,8 @@ public class IpClient extends StateMachine {
         @Override
         public void enter() {
             stopAllIP();
-            mHasDisabledIPv6OnProvLoss = false;
+            setIpv6AcceptRa(2 /* accept_ra */);
+            mHasDisabledIpv6OrAcceptRaOnProvLoss = false;
             mGratuitousNaTargetAddresses.clear();
 
             mLinkObserver.clearInterfaceParams();
@@ -2148,10 +2207,19 @@ public class IpClient extends StateMachine {
             apfConfig.apfCapabilities = mConfiguration.mApfCapabilities;
             apfConfig.multicastFilter = mMulticastFiltering;
             // Get the Configuration for ApfFilter from Context
-            apfConfig.ieee802_3Filter = ApfCapabilities.getApfDrop8023Frames();
-            apfConfig.ethTypeBlackList = ApfCapabilities.getApfEtherTypeBlackList();
+            // Resource settings were moved from ApfCapabilities APIs to NetworkStack resources in S
+            if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.R)) {
+                final Resources res = mContext.getResources();
+                apfConfig.ieee802_3Filter = res.getBoolean(R.bool.config_apfDrop802_3Frames);
+                apfConfig.ethTypeBlackList = res.getIntArray(R.array.config_apfEthTypeDenyList);
+            } else {
+                apfConfig.ieee802_3Filter = ApfCapabilities.getApfDrop8023Frames();
+                apfConfig.ethTypeBlackList = ApfCapabilities.getApfEtherTypeBlackList();
+            }
+
             apfConfig.minRdnssLifetimeSec = mMinRdnssLifetimeSec;
-            mApfFilter = ApfFilter.maybeCreate(mContext, apfConfig, mInterfaceParams, mCallback);
+            mApfFilter = mDependencies.maybeCreateApfFilter(mContext, apfConfig, mInterfaceParams,
+                    mCallback);
             // TODO: investigate the effects of any multicast filtering racing/interfering with the
             // rest of this IP configuration startup.
             if (mApfFilter == null) {
