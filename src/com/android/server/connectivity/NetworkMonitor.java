@@ -2541,8 +2541,17 @@ public class NetworkMonitor extends StateMachine {
 
         final CaptivePortalProbeResult probeResult;
         if (probeSpec == null) {
+            if (CaptivePortalProbeResult.isPortalCode(httpResponseCode)
+                    && TextUtils.isEmpty(redirectUrl)
+                    && ShimUtils.isAtLeastS()) {
+                // If a portal is a non-redirect portal (often portals that return HTTP 200 with a
+                // login page for all HTTP requests), report the probe URL as the login URL starting
+                // from S (b/172048052). This avoids breaking assumptions that
+                // [is a portal] is equivalent to [there is a login URL].
+                redirectUrl = url.toString();
+            }
             probeResult = new CaptivePortalProbeResult(httpResponseCode, redirectUrl,
-                    url.toString(),   1 << probeType);
+                    url.toString(), 1 << probeType);
         } else {
             probeResult = probeSpec.getResult(httpResponseCode, redirectUrl);
         }
