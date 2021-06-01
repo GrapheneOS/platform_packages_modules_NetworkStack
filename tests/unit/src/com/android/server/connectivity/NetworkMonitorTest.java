@@ -155,6 +155,7 @@ import com.android.server.connectivity.nano.CellularData;
 import com.android.server.connectivity.nano.DnsEvent;
 import com.android.server.connectivity.nano.WifiData;
 import com.android.testutils.DevSdkIgnoreRule;
+import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
 import com.android.testutils.HandlerUtils;
 
@@ -1066,6 +1067,34 @@ public class NetworkMonitorTest {
         setSslException(mHttpsConnection);
         setPortal302(mHttpConnection);
         runPortalNetworkTest();
+    }
+
+    @Test
+    public void testIsCaptivePortal_Http200EmptyResponse() throws Exception {
+        setSslException(mHttpsConnection);
+        setStatus(mHttpConnection, 200);
+        // Invalid if there is no content (can't login to an empty page)
+        runNetworkTest(VALIDATION_RESULT_INVALID, 0 /* probesSucceeded */, null);
+        verify(mCallbacks, never()).showProvisioningNotification(any(), any());
+    }
+
+    private void doCaptivePortal200ResponseTest(String expectedRedirectUrl) throws Exception {
+        setSslException(mHttpsConnection);
+        setStatus(mHttpConnection, 200);
+        doReturn(100L).when(mHttpConnection).getContentLengthLong();
+        // Redirect URL was null before S
+        runNetworkTest(VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */, expectedRedirectUrl);
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS)).showProvisioningNotification(any(), any());
+    }
+
+    @Test @IgnoreAfter(Build.VERSION_CODES.R)
+    public void testIsCaptivePortal_HttpProbeIs200Portal_R() throws Exception {
+        doCaptivePortal200ResponseTest(null);
+    }
+
+    @Test @IgnoreUpTo(Build.VERSION_CODES.R)
+    public void testIsCaptivePortal_HttpProbeIs200Portal() throws Exception {
+        doCaptivePortal200ResponseTest(TEST_HTTP_URL);
     }
 
     private void setupPrivateIpResponse(String privateAddr) throws Exception {
