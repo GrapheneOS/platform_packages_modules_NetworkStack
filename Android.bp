@@ -290,7 +290,10 @@ android_app {
     // The permission configuration *must* be included to ensure security of the device
     // The InProcessNetworkStack goes together with the PlatformCaptivePortalLogin, which replaces
     // the default CaptivePortalLogin.
-    required: ["PlatformNetworkPermissionConfig", "PlatformCaptivePortalLogin"],
+    required: [
+        "PlatformNetworkPermissionConfig",
+        "PlatformCaptivePortalLogin",
+    ],
     enabled: enable_current_sdk_targets,
 }
 
@@ -311,7 +314,10 @@ android_app {
     certificate: "networkstack",
     manifest: "AndroidManifest_Next.xml",
     // The permission configuration *must* be included to ensure security of the device
-    required: ["NetworkPermissionConfig"],
+    required: [
+        "NetworkPermissionConfig",
+        "privapp_whitelist_com.android.networkstack",
+    ],
     enabled: enable_current_sdk_targets,
 }
 
@@ -323,7 +329,10 @@ android_app {
     certificate: "networkstack",
     manifest: "AndroidManifest.xml",
     // The permission configuration *must* be included to ensure security of the device
-    required: ["NetworkPermissionConfig"],
+    required: [
+        "NetworkPermissionConfig",
+        "privapp_whitelist_com.android.networkstack",
+    ],
     updatable: true,
 }
 
@@ -400,7 +409,10 @@ android_app {
     certificate: "networkstack",
     manifest: ":NetworkStackTestAndroidManifest",
     // The permission configuration *must* be included to ensure security of the device
-    required: ["NetworkPermissionConfig"],
+    required: [
+        "NetworkPermissionConfig",
+        "privapp_whitelist_com.android.networkstack",
+    ],
 }
 
 // When adding or modifying protos, the jarjar rules and possibly proguard rules need
