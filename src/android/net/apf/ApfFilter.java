@@ -1411,7 +1411,7 @@ public class ApfFilter {
         //     pass
         // if it's ICMPv6 RS to any:
         //   drop
-        // if it's ICMPv6 NA to ff02::1 or ff02::2:
+        // if it's ICMPv6 NA to anything in ff02::/120
         //   drop
         // if keepalive ack
         //   drop
@@ -1495,7 +1495,7 @@ public class ApfFilter {
      * <li>Drop all broadcast non-IP non-ARP packets.
      * <li>Pass all non-ICMPv6 IPv6 packets,
      * <li>Pass all non-IPv4 and non-IPv6 packets,
-     * <li>Drop IPv6 ICMPv6 NAs to ff02::1 or ff02::2.
+     * <li>Drop IPv6 ICMPv6 NAs to anything in ff02::/120.
      * <li>Drop IPv6 ICMPv6 RSs.
      * <li>Filter IPv4 packets (see generateIPv4FilterLocked())
      * <li>Filter IPv6 packets (see generateIPv6FilterLocked())

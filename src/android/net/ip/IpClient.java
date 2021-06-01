@@ -61,6 +61,7 @@ import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.IpManagerEvent;
 import android.net.networkstack.aidl.dhcp.DhcpOption;
 import android.net.shared.InitialConfiguration;
+import android.net.shared.Layer2Information;
 import android.net.shared.ProvisioningConfiguration;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo.InformationElement;
@@ -147,6 +148,7 @@ import java.util.stream.Collectors;
  * @hide
  */
 public class IpClient extends StateMachine {
+    private static final String TAG = IpClient.class.getSimpleName();
     private static final boolean DBG = false;
 
     // For message logging.
@@ -872,26 +874,28 @@ public class IpClient extends StateMachine {
                 false /* defaultEnabled */);
     }
 
-    private void setInitialBssid(final ProvisioningConfiguration req) {
-        final ScanResultInfo scanResultInfo = req.mScanResultInfo;
-        mCurrentBssid = null;
+    @VisibleForTesting
+    static MacAddress getInitialBssid(final Layer2Information layer2Info,
+            final ScanResultInfo scanResultInfo, boolean isAtLeastS) {
+        MacAddress bssid = null;
         // http://b/185202634
         // ScanResultInfo is not populated in some situations.
         // On S and above, prefer getting the BSSID from the Layer2Info.
         // On R and below, get the BSSID from the ScanResultInfo and fall back to
         // getting it from the Layer2Info. This ensures no regressions if any R
         // devices pass in a null or meaningless BSSID in the Layer2Info.
-        if (!ShimUtils.isAtLeastS() && scanResultInfo != null) {
+        if (!isAtLeastS && scanResultInfo != null) {
             try {
-                mCurrentBssid = MacAddress.fromString(scanResultInfo.getBssid());
+                bssid = MacAddress.fromString(scanResultInfo.getBssid());
             } catch (IllegalArgumentException e) {
-                Log.wtf(mTag, "Invalid BSSID: " + scanResultInfo.getBssid()
+                Log.wtf(TAG, "Invalid BSSID: " + scanResultInfo.getBssid()
                         + " in provisioning configuration", e);
             }
         }
-        if (mCurrentBssid == null && req.mLayer2Info != null) {
-            mCurrentBssid = req.mLayer2Info.mBssid;
+        if (bssid == null && layer2Info != null) {
+            bssid = layer2Info.mBssid;
         }
+        return bssid;
     }
 
     private boolean shouldDisableAcceptRaOnProvisioningLoss() {
@@ -922,7 +926,8 @@ public class IpClient extends StateMachine {
             return;
         }
 
-        setInitialBssid(req);
+        mCurrentBssid = getInitialBssid(req.mLayer2Info, req.mScanResultInfo,
+                ShimUtils.isAtLeastS());
         if (req.mLayer2Info != null) {
             mL2Key = req.mLayer2Info.mL2Key;
             mCluster = req.mLayer2Info.mCluster;
