@@ -70,6 +70,7 @@ import android.net.util.NetworkStackUtils;
 import android.net.util.SharedLog;
 import android.os.Build;
 import android.os.ConditionVariable;
+import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.os.RemoteException;
@@ -596,8 +597,30 @@ public class IpClient extends StateMachine {
             return new IpConnectivityLog();
         }
 
+        /**
+         * Get a NetworkQuirkMetrics instance.
+         */
         public NetworkQuirkMetrics getNetworkQuirkMetrics() {
             return new NetworkQuirkMetrics();
+        }
+
+        /**
+         * Get a IpReachabilityMonitor instance.
+         */
+        public IpReachabilityMonitor getIpReachabilityMonitor(Context context,
+                InterfaceParams ifParams, Handler h, SharedLog log,
+                IpReachabilityMonitor.Callback callback, boolean usingMultinetworkPolicyTracker,
+                IpReachabilityMonitor.Dependencies deps, final INetd netd) {
+            return new IpReachabilityMonitor(context, ifParams, h, log, callback,
+                    usingMultinetworkPolicyTracker, deps, netd);
+        }
+
+        /**
+         * Get a IpReachabilityMonitor dependencies instance.
+         */
+        public IpReachabilityMonitor.Dependencies getIpReachabilityMonitorDeps(Context context,
+                String name) {
+            return IpReachabilityMonitor.Dependencies.makeDefault(context, name);
         }
 
         /**
@@ -1776,7 +1799,7 @@ public class IpClient extends StateMachine {
 
     private boolean startIpReachabilityMonitor() {
         try {
-            mIpReachabilityMonitor = new IpReachabilityMonitor(
+            mIpReachabilityMonitor = mDependencies.getIpReachabilityMonitor(
                     mContext,
                     mInterfaceParams,
                     getHandler(),
@@ -1788,6 +1811,7 @@ public class IpClient extends StateMachine {
                         }
                     },
                     mConfiguration.mUsingMultinetworkPolicyTracker,
+                    mDependencies.getIpReachabilityMonitorDeps(mContext, mInterfaceParams.name),
                     mNetd);
         } catch (IllegalArgumentException iae) {
             // Failed to start IpReachabilityMonitor. Log it and call
