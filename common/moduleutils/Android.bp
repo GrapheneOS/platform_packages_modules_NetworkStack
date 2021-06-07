@@ -39,6 +39,8 @@ filegroup {
     ],
     visibility: [
         "//frameworks/base/services/net",
+        "//frameworks/base/packages/Connectivity/service",
+        "//packages/modules/Connectivity/service",
     ]
 }
 
