@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.networkstack.apishim;
+package com.android.networkstack.apishim.api31;
 
 import static com.android.modules.utils.build.SdkLevel.isAtLeastS;
 
