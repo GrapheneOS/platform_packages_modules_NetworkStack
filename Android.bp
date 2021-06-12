@@ -53,9 +53,14 @@ java_defaults {
 
 java_defaults {
     name: "NetworkStackReleaseApiLevel",
-    sdk_version: "system_30",
+    sdk_version: "module_31",
     min_sdk_version: "29",
-    target_sdk_version: "30",
+    target_sdk_version: "31",
+    libs: [
+        "framework-connectivity",
+        "framework-statsd",
+        "framework-wifi",
+    ]
 }
 
 // Libraries for the API shims
@@ -133,6 +138,27 @@ java_library {
         "NetworkStackApi30Shims",
         "framework-connectivity",
     ],
+    sdk_version: "module_31",
+    visibility: ["//visibility:private"],
+}
+
+
+// Shims for APIs being added to the current development version of Android. These APIs are not
+// stable and have no defined version number. These could be called 10000, but they use the next
+// integer so if the next SDK release happens to use that integer, we don't need to rename them.
+java_library {
+    name: "NetworkStackApi32Shims",
+    defaults: ["NetworkStackShimsDefaults"],
+    srcs: [
+        "apishim/32/**/*.java",
+    ],
+    libs: [
+        "NetworkStackShimsCommon",
+        "NetworkStackApi29Shims",
+        "NetworkStackApi30Shims",
+        "NetworkStackApi31Shims",
+        "framework-connectivity",
+    ],
     sdk_version: "module_current",
     visibility: ["//visibility:private"],
 }
@@ -148,6 +174,7 @@ java_library {
         "NetworkStackApi29Shims",
         "NetworkStackApi30Shims",
         "NetworkStackApi31Shims",
+        "NetworkStackApi32Shims",
     ],
     sdk_version: "module_current",
     visibility: [
@@ -166,9 +193,10 @@ java_library {
         "NetworkStackShimsCommon",
         "NetworkStackApi29Shims",
         "NetworkStackApi30Shims",
+        "NetworkStackApi31Shims",
     ],
     jarjar_rules: "apishim/jarjar-rules-compat.txt",
-    sdk_version: "system_30",
+    sdk_version: "module_31",
     visibility: [
         "//packages/modules/Connectivity/Tethering",
         "//packages/modules/Connectivity/tests/cts/net",

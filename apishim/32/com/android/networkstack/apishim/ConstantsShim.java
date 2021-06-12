@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 The Android Open Source Project
+ * Copyright (C) 2021 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import androidx.annotation.VisibleForTesting;
 /**
  * Utility class for defining and importing constants from the Android platform.
  */
-public class ConstantsShim extends com.android.networkstack.apishim.api30.ConstantsShim {
+public class ConstantsShim extends com.android.networkstack.apishim.api31.ConstantsShim {
     /**
      * Constant that callers can use to determine what version of the shim they are using.
      * Must be the same as the version of the shims.
@@ -29,9 +29,5 @@ public class ConstantsShim extends com.android.networkstack.apishim.api30.Consta
      * the shimmed objects and methods themselves.
      */
     @VisibleForTesting
-    public static final int VERSION = 31;
-
-    // When removing this shim, the version in NetworkMonitorUtils should be removed too.
-    // TODO: add TRANSPORT_TEST to system API in API 31 (it is only a test API as of R)
-    public static final int TRANSPORT_TEST = 7;
+    public static final int VERSION = 32;
 }

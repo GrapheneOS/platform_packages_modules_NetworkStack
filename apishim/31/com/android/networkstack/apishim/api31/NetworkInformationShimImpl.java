@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.networkstack.apishim;
+package com.android.networkstack.apishim.api31;
 
 import android.net.LinkProperties;
 import android.net.NetworkCapabilities;
@@ -50,7 +50,7 @@ public class NetworkInformationShimImpl
         if (!useApiAboveR()) {
             return com.android.networkstack.apishim.api30.NetworkInformationShimImpl.newInstance();
         }
-        return new com.android.networkstack.apishim.NetworkInformationShimImpl();
+        return new NetworkInformationShimImpl();
     }
 
     @Nullable
