@@ -21,7 +21,6 @@ import static android.net.shared.ParcelableUtil.toParcelableArray;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
-import android.net.INetd;
 import android.net.InformationElementParcelable;
 import android.net.Network;
 import android.net.ProvisioningConfigurationParcelable;
@@ -75,6 +74,13 @@ public class ProvisioningConfiguration {
     //
     // allowing for 10% jitter.
     private static final int DEFAULT_TIMEOUT_MS = 18 * 1000;
+
+    // TODO: These cannot be imported from INetd.aidl, because networkstack-client cannot depend on
+    // INetd, as there are users of IpClient that depend on INetd directly (potentially at a
+    // different version, which is not allowed by the build system).
+    // Find a better way to express these constants.
+    public static final int IPV6_ADDR_GEN_MODE_EUI64 = 0;
+    public static final int IPV6_ADDR_GEN_MODE_STABLE_PRIVACY = 2;
 
     /**
      * Builder to create a {@link ProvisioningConfiguration}.
@@ -180,7 +186,7 @@ public class ProvisioningConfiguration {
          * Specify that IPv6 address generation should use a random MAC address.
          */
         public Builder withRandomMacAddress() {
-            mConfig.mIPv6AddrGenMode = INetd.IPV6_ADDR_GEN_MODE_EUI64;
+            mConfig.mIPv6AddrGenMode = IPV6_ADDR_GEN_MODE_EUI64;
             return this;
         }
 
@@ -188,7 +194,7 @@ public class ProvisioningConfiguration {
          * Specify that IPv6 address generation should use a stable MAC address.
          */
         public Builder withStableMacAddress() {
-            mConfig.mIPv6AddrGenMode = INetd.IPV6_ADDR_GEN_MODE_STABLE_PRIVACY;
+            mConfig.mIPv6AddrGenMode = IPV6_ADDR_GEN_MODE_STABLE_PRIVACY;
             return this;
         }
 
@@ -437,7 +443,7 @@ public class ProvisioningConfiguration {
     public StaticIpConfiguration mStaticIpConfig;
     public ApfCapabilities mApfCapabilities;
     public int mProvisioningTimeoutMs = DEFAULT_TIMEOUT_MS;
-    public int mIPv6AddrGenMode = INetd.IPV6_ADDR_GEN_MODE_STABLE_PRIVACY;
+    public int mIPv6AddrGenMode = IPV6_ADDR_GEN_MODE_STABLE_PRIVACY;
     public Network mNetwork = null;
     public String mDisplayName = null;
     public ScanResultInfo mScanResultInfo;
