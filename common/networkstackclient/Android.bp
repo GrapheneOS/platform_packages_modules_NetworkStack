@@ -145,15 +145,22 @@ aidl_interface {
 java_library {
     name: "networkstack-client",
     sdk_version: "system_current",
-    // this is part of updatable modules(NetworkStack) which targets 29(Q)
+    // this is part of updatable modules(NetworkStack) which runs on Q and above
     min_sdk_version: "29",
     srcs: [
         ":framework-annotations",
+        "src/android/net/ip/**/*.java",
+        "src/android/net/IpMemoryStore.java",
         "src/android/net/IpMemoryStoreClient.java",
         "src/android/net/ipmemorystore/**/*.java",
+        "src/android/net/NetworkMonitorManager.java",
         "src/android/net/networkstack/**/*.java",
         "src/android/net/networkstack/aidl/quirks/**/*.java",
         "src/android/net/shared/**/*.java",
+        "src/android/net/util/**/*.java",
+    ],
+    libs: [
+        "net-utils-framework-common",  // XXX for IpUtils.java only
     ],
     static_libs: [
         "ipmemorystore-aidl-interfaces-V10-java",
@@ -164,6 +171,8 @@ java_library {
         "//packages/modules/Connectivity/Tethering",
         "//packages/modules/Connectivity/service",
         "//frameworks/base/services/net",
+        "//frameworks/opt/net/wifi/service",
+        "//packages/apps/Bluetooth",
         "//packages/modules/NetworkStack",
     ],
     apex_available: [
