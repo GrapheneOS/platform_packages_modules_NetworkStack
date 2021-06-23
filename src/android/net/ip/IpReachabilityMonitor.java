@@ -199,9 +199,9 @@ public class IpReachabilityMonitor {
 
     public IpReachabilityMonitor(
             Context context, InterfaceParams ifParams, Handler h, SharedLog log, Callback callback,
-            boolean usingMultinetworkPolicyTracker, final INetd netd) {
-        this(context, ifParams, h, log, callback, usingMultinetworkPolicyTracker,
-                Dependencies.makeDefault(context, ifParams.name), new IpConnectivityLog(), netd);
+            boolean usingMultinetworkPolicyTracker, Dependencies dependencies, final INetd netd) {
+        this(context, ifParams, h, log, callback, usingMultinetworkPolicyTracker, dependencies,
+                new IpConnectivityLog(), netd);
     }
 
     @VisibleForTesting
