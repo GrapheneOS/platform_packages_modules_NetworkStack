@@ -19,6 +19,7 @@ package android.net.shared;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN;
+import static android.net.NetworkCapabilities.NET_CAPABILITY_OEM_PAID;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_TRUSTED;
 import static android.net.NetworkCapabilities.TRANSPORT_BLUETOOTH;
 import static android.net.NetworkCapabilities.TRANSPORT_CELLULAR;
@@ -61,7 +62,8 @@ public class NetworkMonitorUtils {
 
         // TODO: Consider requiring validation for DUN networks.
         if (nc.hasCapability(NET_CAPABILITY_INTERNET)
-                && nc.hasCapability(NET_CAPABILITY_NOT_RESTRICTED)
+                && (nc.hasCapability(NET_CAPABILITY_NOT_RESTRICTED)
+                        || nc.hasCapability(NET_CAPABILITY_OEM_PAID))
                 && nc.hasCapability(NET_CAPABILITY_TRUSTED)) {
             // Real networks
             return true;
