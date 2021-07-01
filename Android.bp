@@ -222,7 +222,6 @@ java_defaults {
         "androidx.annotation_annotation",
         "modules-utils-build_system",
         "netd_aidl_interface-lateststable-java",
-        "netlink-client",
         "networkstack-client",
         "net-utils-framework-common",
         // See note on statsprotos when adding/updating proto build rules
@@ -230,6 +229,7 @@ java_defaults {
         "statsprotos",
         "captiveportal-lib",
         "net-utils-device-common",
+        "net-utils-device-common-netlink",
     ],
     plugins: ["java_api_finder"],
 }

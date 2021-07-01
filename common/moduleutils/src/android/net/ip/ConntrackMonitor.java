@@ -16,12 +16,9 @@
 
 package android.net.ip;
 
-import static android.net.netlink.ConntrackMessage.DYING_MASK;
-import static android.net.netlink.ConntrackMessage.ESTABLISHED_MASK;
+import static com.android.net.module.util.netlink.ConntrackMessage.DYING_MASK;
+import static com.android.net.module.util.netlink.ConntrackMessage.ESTABLISHED_MASK;
 
-import android.net.netlink.ConntrackMessage;
-import android.net.netlink.NetlinkConstants;
-import android.net.netlink.NetlinkMessage;
 import android.net.util.SharedLog;
 import android.os.Handler;
 import android.system.OsConstants;
@@ -29,6 +26,9 @@ import android.system.OsConstants;
 import androidx.annotation.NonNull;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.net.module.util.netlink.ConntrackMessage;
+import com.android.net.module.util.netlink.NetlinkConstants;
+import com.android.net.module.util.netlink.NetlinkMessage;
 
 import java.util.Objects;
 
