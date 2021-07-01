@@ -33,6 +33,7 @@ import static android.net.INetworkMonitor.NETWORK_VALIDATION_PROBE_PRIVDNS;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_PARTIAL;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_VALID;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED;
+import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED;
 import static android.net.captiveportal.CaptivePortalProbeSpec.parseCaptivePortalProbeSpecs;
 import static android.net.metrics.ValidationProbeEvent.DNS_FAILURE;
 import static android.net.metrics.ValidationProbeEvent.DNS_SUCCESS;
@@ -671,6 +672,7 @@ public class NetworkMonitor extends StateMachine {
                 (Pair<LinkProperties, NetworkCapabilities>) connectedMsg.obj;
         mLinkProperties = attrs.first;
         mNetworkCapabilities = attrs.second;
+        suppressNotificationIfNetworkRestricted();
     }
 
     /**
@@ -733,6 +735,12 @@ public class NetworkMonitor extends StateMachine {
 
     private boolean isPrivateDnsValidationRequired() {
         return NetworkMonitorUtils.isPrivateDnsValidationRequired(mNetworkCapabilities);
+    }
+
+    private void suppressNotificationIfNetworkRestricted() {
+        if (!mNetworkCapabilities.hasCapability(NET_CAPABILITY_NOT_RESTRICTED)) {
+            mDontDisplaySigninNotification = true;
+        }
     }
 
     private void notifyNetworkTested(NetworkTestResultParcelable result) {
@@ -984,6 +992,7 @@ public class NetworkMonitor extends StateMachine {
                     break;
                 case EVENT_NETWORK_CAPABILITIES_CHANGED:
                     mNetworkCapabilities = (NetworkCapabilities) message.obj;
+                    suppressNotificationIfNetworkRestricted();
                     break;
                 default:
                     break;
