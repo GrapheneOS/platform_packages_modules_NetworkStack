@@ -28,6 +28,8 @@ import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_PARTIAL;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_VALID;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED;
+import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED;
+import static android.net.NetworkCapabilities.NET_CAPABILITY_OEM_PAID;
 import static android.net.NetworkCapabilities.TRANSPORT_CELLULAR;
 import static android.net.NetworkCapabilities.TRANSPORT_VPN;
 import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
@@ -91,6 +93,7 @@ import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toList;
 
 import android.annotation.NonNull;
+import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.ContextWrapper;
@@ -202,6 +205,7 @@ import javax.net.ssl.SSLHandshakeException;
 
 @RunWith(AndroidJUnit4.class)
 @SmallTest
+@SuppressLint("NewApi")  // Uses hidden APIs, which the linter would identify as missing APIs.
 public class NetworkMonitorTest {
     private static final String LOCATION_HEADER = "location";
     private static final String CONTENT_TYPE_HEADER = "Content-Type";
@@ -315,6 +319,14 @@ public class NetworkMonitorTest {
 
     private static final NetworkCapabilities CELL_NO_INTERNET_CAPABILITIES =
             new NetworkCapabilities().addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR);
+
+    private static final NetworkCapabilities WIFI_OEM_PAID_CAPABILITIES =
+            new NetworkCapabilities()
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .addCapability(NET_CAPABILITY_INTERNET)
+                .addCapability(NET_CAPABILITY_NOT_METERED)
+                .addCapability(NET_CAPABILITY_OEM_PAID)
+                .removeCapability(NET_CAPABILITY_NOT_RESTRICTED);
 
     /**
      * Fakes DNS responses.
@@ -2631,6 +2643,61 @@ public class NetworkMonitorTest {
                         ConnectivityManager.EXTRA_CAPTIVE_PORTAL_URL).equals(TEST_LOGIN_URL)
                         && TEST_NETID == ((Network) bundle.getParcelable(
                         ConnectivityManager.EXTRA_NETWORK)).netId));
+    }
+
+    @Test
+    public void testOemPaidNetworkValidated() throws Exception {
+        setValidProbes();
+
+        final NetworkMonitor nm = runNetworkTest(TEST_LINK_PROPERTIES,
+                WIFI_OEM_PAID_CAPABILITIES,
+                NETWORK_VALIDATION_RESULT_VALID,
+                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS,
+                null /* redirectUrl */);
+        assertEquals(NETWORK_VALIDATION_RESULT_VALID,
+                nm.getEvaluationState().getEvaluationResult());
+    }
+
+    @Test
+    public void testOemPaidNetwork_AllProbesFailed() throws Exception {
+        setSslException(mHttpsConnection);
+        setStatus(mHttpConnection, 500);
+        setStatus(mFallbackConnection, 404);
+
+        runNetworkTest(TEST_LINK_PROPERTIES,
+                WIFI_OEM_PAID_CAPABILITIES,
+                VALIDATION_RESULT_INVALID, 0 /* probesSucceeded */, null /* redirectUrl */);
+    }
+
+    @Test
+    public void testOemPaidNetworkNoInternetCapabilityValidated() throws Exception {
+        setSslException(mHttpsConnection);
+        setStatus(mHttpConnection, 500);
+        setStatus(mFallbackConnection, 404);
+
+        final NetworkCapabilities networkCapabilities =
+                new NetworkCapabilities(WIFI_OEM_PAID_CAPABILITIES);
+        networkCapabilities.removeCapability(NET_CAPABILITY_INTERNET);
+        runNetworkTest(TEST_LINK_PROPERTIES, networkCapabilities,
+                NETWORK_VALIDATION_RESULT_VALID, 0 /* probesSucceeded */, null /* redirectUrl */);
+
+        verify(mCleartextDnsNetwork, never()).openConnection(any());
+        verify(mHttpsConnection, never()).getResponseCode();
+        verify(mHttpConnection, never()).getResponseCode();
+        verify(mFallbackConnection, never()).getResponseCode();
+    }
+
+    @Test
+    public void testOemPaidNetwork_CaptivePortalNotLaunched() throws Exception {
+        setSslException(mHttpsConnection);
+        setStatus(mFallbackConnection, 404);
+        setPortal302(mHttpConnection);
+
+        runNetworkTest(TEST_LINK_PROPERTIES, WIFI_OEM_PAID_CAPABILITIES,
+                VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */,
+                TEST_LOGIN_URL);
+
+        verify(mCallbacks, never()).showProvisioningNotification(any(), any());
     }
 
     private void setupResourceForMultipleProbes() {
