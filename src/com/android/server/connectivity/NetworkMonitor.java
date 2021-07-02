@@ -31,6 +31,7 @@ import static android.net.INetworkMonitor.NETWORK_VALIDATION_PROBE_HTTP;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_PROBE_HTTPS;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_PROBE_PRIVDNS;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_PARTIAL;
+import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_SKIPPED;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_VALID;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED;
@@ -3435,6 +3436,14 @@ public class NetworkMonitor extends StateMachine {
         }
 
         protected void reportEvaluationResult(int result, @Nullable String redirectUrl) {
+            if (!isValidationRequired() && mProbeCompleted == 0 && ShimUtils.isAtLeastS()) {
+                // If validation is not required AND no probes were attempted, the validation was
+                // skipped. Report this to ConnectivityService for ConnectivityDiagnostics, but only
+                // if the platform is Android S+, as ConnectivityService must also know how to
+                // understand this bit.
+                result |= NETWORK_VALIDATION_RESULT_SKIPPED;
+            }
+
             mEvaluationResult = result;
             mRedirectUrl = redirectUrl;
             final NetworkTestResultParcelable p = new NetworkTestResultParcelable();
