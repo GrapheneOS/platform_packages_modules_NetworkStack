@@ -25,6 +25,7 @@ import static android.net.INetworkMonitor.NETWORK_VALIDATION_PROBE_HTTP;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_PROBE_HTTPS;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_PROBE_PRIVDNS;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_PARTIAL;
+import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_SKIPPED;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_VALID;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED;
@@ -1794,8 +1795,13 @@ public class NetworkMonitorTest {
 
     @Test
     public void testNoInternetCapabilityValidated() throws Exception {
-        runNetworkTest(TEST_LINK_PROPERTIES, CELL_NO_INTERNET_CAPABILITIES,
-                NETWORK_VALIDATION_RESULT_VALID, 0 /* probesSucceeded */, null /* redirectUrl */);
+        // For S+, the RESULT_SKIPPED bit will be included on networks that both do not require
+        // validation and for which validation is not performed.
+        final int validationResult = ShimUtils.isAtLeastS()
+                ? NETWORK_VALIDATION_RESULT_VALID | NETWORK_VALIDATION_RESULT_SKIPPED
+                : NETWORK_VALIDATION_RESULT_VALID;
+        runNetworkTest(TEST_LINK_PROPERTIES, CELL_NO_INTERNET_CAPABILITIES, validationResult,
+                0 /* probesSucceeded */, null /* redirectUrl */);
         verify(mCleartextDnsNetwork, never()).openConnection(any());
     }
 
@@ -2678,8 +2684,12 @@ public class NetworkMonitorTest {
         final NetworkCapabilities networkCapabilities =
                 new NetworkCapabilities(WIFI_OEM_PAID_CAPABILITIES);
         networkCapabilities.removeCapability(NET_CAPABILITY_INTERNET);
+
+        final int validationResult = ShimUtils.isAtLeastS()
+                ? NETWORK_VALIDATION_RESULT_VALID | NETWORK_VALIDATION_RESULT_SKIPPED
+                : NETWORK_VALIDATION_RESULT_VALID;
         runNetworkTest(TEST_LINK_PROPERTIES, networkCapabilities,
-                NETWORK_VALIDATION_RESULT_VALID, 0 /* probesSucceeded */, null /* redirectUrl */);
+                validationResult, 0 /* probesSucceeded */, null /* redirectUrl */);
 
         verify(mCleartextDnsNetwork, never()).openConnection(any());
         verify(mHttpsConnection, never()).getResponseCode();
