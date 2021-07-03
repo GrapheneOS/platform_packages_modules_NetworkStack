@@ -115,6 +115,7 @@ import android.net.NetworkTestResultParcelable;
 import android.net.Uri;
 import android.net.captiveportal.CaptivePortalProbeResult;
 import android.net.metrics.IpConnectivityLog;
+import android.net.shared.NetworkMonitorUtils;
 import android.net.shared.PrivateDnsConfig;
 import android.net.util.SharedLog;
 import android.net.wifi.WifiInfo;
@@ -1797,6 +1798,47 @@ public class NetworkMonitorTest {
         runNetworkTest(TEST_LINK_PROPERTIES, CELL_NO_INTERNET_CAPABILITIES,
                 NETWORK_VALIDATION_RESULT_VALID, 0 /* probesSucceeded */, null /* redirectUrl */);
         verify(mCleartextDnsNetwork, never()).openConnection(any());
+    }
+
+    private NetworkCapabilities getVcnUnderlyingCarrierWifiCaps() {
+        // Must be called from within the test because NOT_VCN_MANAGED is an invalid capability
+        // value up to Android R. Thus, this must be guarded by an SDK check in tests that use this.
+        return new NetworkCapabilities.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .removeCapability(NetworkMonitorUtils.NET_CAPABILITY_NOT_VCN_MANAGED)
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_TRUSTED)
+                .addCapability(NET_CAPABILITY_INTERNET)
+                .build();
+    }
+
+    @Test
+    public void testVcnUnderlyingNetwork() throws Exception {
+        assumeTrue(ShimUtils.isAtLeastS());
+        setStatus(mHttpsConnection, 204);
+        setStatus(mHttpConnection, 204);
+
+        final NetworkMonitor nm = runNetworkTest(
+                TEST_LINK_PROPERTIES, getVcnUnderlyingCarrierWifiCaps(),
+                NETWORK_VALIDATION_RESULT_VALID,
+                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS,
+                null /* redirectUrl */);
+        assertEquals(NETWORK_VALIDATION_RESULT_VALID,
+                nm.getEvaluationState().getEvaluationResult());
+    }
+
+    @Test
+    public void testVcnUnderlyingNetworkBadNetwork() throws Exception {
+        assumeTrue(ShimUtils.isAtLeastS());
+        setSslException(mHttpsConnection);
+        setStatus(mHttpConnection, 500);
+        setStatus(mFallbackConnection, 404);
+
+        final NetworkMonitor nm = runNetworkTest(
+                TEST_LINK_PROPERTIES, getVcnUnderlyingCarrierWifiCaps(),
+                VALIDATION_RESULT_INVALID, 0 /* probesSucceeded */, null /* redirectUrl */);
+        assertEquals(VALIDATION_RESULT_INVALID,
+                nm.getEvaluationState().getEvaluationResult());
     }
 
     @Test
