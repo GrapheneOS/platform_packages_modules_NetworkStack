@@ -19,6 +19,7 @@ package com.android.networkstack.packets;
 import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
 
+import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ND_OPTION_SLLA;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_NEIGHBOR_SOLICITATION;
 import static com.android.testutils.MiscAsserts.assertThrows;
 
@@ -193,7 +194,7 @@ public final class NeighborSolicitationTest {
         (byte) 0x11, (byte) 0x22, (byte) 0x33, (byte) 0x44,
         // slla option
         (byte) 0x01, (byte) 0x01,
-        // link-layer address
+        // truncatd link-layer address: 4bytes
         (byte) 0x06, (byte) 0x5a, (byte) 0xac, (byte) 0x02,
     };
 
@@ -218,6 +219,8 @@ public final class NeighborSolicitationTest {
         assertEquals(0, ns.icmpv6Hdr.code);
         assertEquals(TEST_TARGET_ADDR, ns.nsHdr.target);
         if (hasSllaOption) {
+            assertEquals(ICMPV6_ND_OPTION_SLLA, ns.slla.type);
+            assertEquals(1, ns.slla.length);
             assertEquals(MacAddress.fromBytes(TEST_SOURCE_MAC_ADDR), ns.slla.linkLayerAddress);
         }
     }

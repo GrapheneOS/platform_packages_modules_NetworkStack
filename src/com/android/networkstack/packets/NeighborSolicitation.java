@@ -17,8 +17,8 @@
 package com.android.networkstack.packets;
 
 import static com.android.net.module.util.NetworkStackConstants.ETHER_HEADER_LEN;
-import static com.android.net.module.util.NetworkStackConstants.ICMPV6_HEADER_MIN_LEN;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ND_OPTION_SLLA;
+import static com.android.net.module.util.NetworkStackConstants.ICMPV6_NS_HEADER_LEN;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_HEADER_LEN;
 
 import android.net.MacAddress;
@@ -43,8 +43,6 @@ import java.nio.ByteBuffer;
  * @hide
  */
 public class NeighborSolicitation {
-    private static final int NS_HEADER_LEN = Struct.getSize(NsHeader.class);
-
     @NonNull
     public final EthernetHeader ethHdr;
     @NonNull
@@ -105,7 +103,7 @@ public class NeighborSolicitation {
      */
     public static NeighborSolicitation parse(@NonNull final byte[] recvbuf, final int length)
             throws ParseException {
-        if (length < ETHER_HEADER_LEN + IPV6_HEADER_LEN + ICMPV6_HEADER_MIN_LEN + NS_HEADER_LEN
+        if (length < ETHER_HEADER_LEN + IPV6_HEADER_LEN + ICMPV6_NS_HEADER_LEN
                 || recvbuf.length < length) {
             throw new ParseException("Invalid packet length: " + length);
         }
