@@ -7,15 +7,6 @@ import android.net.NetworkCapabilities
 import com.android.testutils.ConcurrentInterpreter
 import com.android.testutils.InterpretMatcher
 import com.android.testutils.RecorderCallback.CallbackEntry
-import com.android.testutils.RecorderCallback.CallbackEntry.Companion.AVAILABLE
-import com.android.testutils.RecorderCallback.CallbackEntry.Companion.BLOCKED_STATUS
-import com.android.testutils.RecorderCallback.CallbackEntry.Companion.LINK_PROPERTIES_CHANGED
-import com.android.testutils.RecorderCallback.CallbackEntry.Companion.LOSING
-import com.android.testutils.RecorderCallback.CallbackEntry.Companion.NETWORK_CAPS_UPDATED
-import com.android.testutils.RecorderCallback.CallbackEntry.Companion.LOST
-import com.android.testutils.RecorderCallback.CallbackEntry.Companion.RESUMED
-import com.android.testutils.RecorderCallback.CallbackEntry.Companion.SUSPENDED
-import com.android.testutils.RecorderCallback.CallbackEntry.Companion.UNAVAILABLE
 import com.android.testutils.RecorderCallback.CallbackEntry.Available
 import com.android.testutils.RecorderCallback.CallbackEntry.BlockedStatus
 import com.android.testutils.RecorderCallback.CallbackEntry.CapabilitiesChanged
@@ -254,41 +245,6 @@ class TestableNetworkCallbackTest {
             onBlockedStatus(199)       | poll(1) = BlockedStatus(199) time 0..3
         """)
     }
-
-    @Test
-    fun testEventuallyExpect() {
-        // TODO: Current test does not verify the inline one. Also verify the behavior after
-        // aligning two eventuallyExpect()
-        val net1 = Network(100)
-        val net2 = Network(101)
-        mCallback.onAvailable(net1)
-        mCallback.onCapabilitiesChanged(net1, NetworkCapabilities())
-        mCallback.onLinkPropertiesChanged(net1, LinkProperties())
-        mCallback.eventuallyExpect(LINK_PROPERTIES_CHANGED) {
-            net1.equals(it.network)
-        }
-        // No further new callback. Expect no callback.
-        assertFails { mCallback.eventuallyExpect(LINK_PROPERTIES_CHANGED) }
-
-        // Verify no predicate set.
-        mCallback.onAvailable(net2)
-        mCallback.onLinkPropertiesChanged(net2, LinkProperties())
-        mCallback.onBlockedStatusChanged(net1, false)
-        mCallback.eventuallyExpect(BLOCKED_STATUS) { net1.equals(it.network) }
-        // Verify no callback received if the callback does not happen.
-        assertFails { mCallback.eventuallyExpect(LOSING) }
-    }
-
-    @Test
-    fun testEventuallyExpectOnMultiThreads() {
-        TNCInterpreter.interpretTestSpec(initial = mCallback, lineShift = 1,
-                threadTransform = { cb -> cb.createLinkedCopy() }, spec = """
-                onAvailable(100)                   | eventually(CapabilitiesChanged(100), 1) fails
-                sleep ; onCapabilitiesChanged(100) | eventually(CapabilitiesChanged(100), 2)
-                onAvailable(101) ; onBlockedStatus(101) | eventually(BlockedStatus(100), 2) fails
-                onSuspended(100) ; sleep ; onLost(100)  | eventually(Lost(100), 2)
-        """)
-    }
 }
 
 private object TNCInterpreter : ConcurrentInterpreter<TestableNetworkCallback>(interpretTable)
@@ -333,26 +289,5 @@ private val interpretTable = listOf<InterpretMatcher<TestableNetworkCallback>>(
     },
     Regex("""poll\((\d+)\)""") to { i, cb, t ->
         cb.pollForNextCallback(t.timeArg(1))
-    },
-    // Interpret "eventually(Available(xx), timeout)" as calling eventuallyExpect that expects
-    // CallbackEntry.AVAILABLE with netId of xx within timeout*INTERPRET_TIME_UNIT timeout, and
-    // likewise for all callback types.
-    Regex("""eventually\(($EntryList)\((\d+)\),\s+(\d+)\)""") to { i, cb, t ->
-        val net = Network(t.intArg(2))
-        val timeout = t.timeArg(3)
-        when (t.strArg(1)) {
-            "Available" -> cb.eventuallyExpect(AVAILABLE, timeout) { net == it.network }
-            "Suspended" -> cb.eventuallyExpect(SUSPENDED, timeout) { net == it.network }
-            "Resumed" -> cb.eventuallyExpect(RESUMED, timeout) { net == it.network }
-            "Losing" -> cb.eventuallyExpect(LOSING, timeout) { net == it.network }
-            "Lost" -> cb.eventuallyExpect(LOST, timeout) { net == it.network }
-            "Unavailable" -> cb.eventuallyExpect(UNAVAILABLE, timeout) { net == it.network }
-            "BlockedStatus" -> cb.eventuallyExpect(BLOCKED_STATUS, timeout) { net == it.network }
-            "CapabilitiesChanged" ->
-                cb.eventuallyExpect(NETWORK_CAPS_UPDATED, timeout) { net == it.network }
-            "LinkPropertiesChanged" ->
-                cb.eventuallyExpect(LINK_PROPERTIES_CHANGED, timeout) { net == it.network }
-            else -> fail("Unknown callback type")
-        }
     }
 )
