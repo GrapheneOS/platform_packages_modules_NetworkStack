@@ -255,6 +255,13 @@ public class NetworkStackUtils {
      */
     public static final String IPCLIENT_DISABLE_ACCEPT_RA_VERSION = "ipclient_disable_accept_ra";
 
+    /**
+     * Experiment flag to enable "mcast_resolicit" neighbor parameter in IpReachabilityMonitor,
+     * set it to 3 by default.
+     */
+    public static final String IP_REACHABILITY_MCAST_RESOLICIT_VERSION =
+            "ip_reachability_mcast_resolicit_version";
+
     static {
         System.loadLibrary("networkstackutilsjni");
     }
