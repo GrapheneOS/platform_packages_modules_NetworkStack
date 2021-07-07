@@ -28,6 +28,8 @@ import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
 
 import android.net.NetworkCapabilities;
 
+import com.android.modules.utils.build.SdkLevel;
+
 /** @hide */
 public class NetworkMonitorUtils {
     // This class is used by both NetworkMonitor and ConnectivityService, so it cannot use
@@ -68,7 +70,8 @@ public class NetworkMonitorUtils {
     public static boolean isPrivateDnsValidationRequired(NetworkCapabilities nc) {
         if (nc == null) return false;
 
-        final boolean isVcnManaged = !nc.hasCapability(NET_CAPABILITY_NOT_VCN_MANAGED);
+        final boolean isVcnManaged = SdkLevel.isAtLeastS()
+                && !nc.hasCapability(NET_CAPABILITY_NOT_VCN_MANAGED);
         final boolean isOemPaid = nc.hasCapability(NET_CAPABILITY_OEM_PAID)
                 && nc.hasCapability(NET_CAPABILITY_TRUSTED);
         final boolean isDefaultCapable = nc.hasCapability(NET_CAPABILITY_NOT_RESTRICTED)
