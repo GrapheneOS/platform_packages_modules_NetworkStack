@@ -27,6 +27,8 @@ import static android.net.dhcp.DhcpPacket.INADDR_BROADCAST;
 import static android.net.dhcp.DhcpPacket.INFINITE_LEASE;
 import static android.net.dhcp.DhcpPacket.MIN_V6ONLY_WAIT_MS;
 import static android.net.dhcp.DhcpResultsParcelableUtil.fromStableParcelable;
+import static android.net.ip.IpReachabilityMonitor.MIN_NUD_SOLICIT_NUM;
+import static android.net.ip.IpReachabilityMonitor.NUD_MCAST_RESOLICIT_NUM;
 import static android.net.ipmemorystore.Status.SUCCESS;
 import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.IFA_F_TEMPORARY;
@@ -49,6 +51,7 @@ import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_NO
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_ROUTERS_MULTICAST;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_HEADER_LEN;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_PROTOCOL_OFFSET;
+import static com.android.net.module.util.NetworkStackConstants.NEIGHBOR_ADVERTISEMENT_FLAG_OVERRIDE;
 import static com.android.net.module.util.NetworkStackConstants.NEIGHBOR_ADVERTISEMENT_FLAG_ROUTER;
 import static com.android.net.module.util.NetworkStackConstants.NEIGHBOR_ADVERTISEMENT_FLAG_SOLICITED;
 import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_AUTONOMOUS;
@@ -473,6 +476,11 @@ public abstract class IpClientIntegrationTestCommon {
                 public IpNeighborMonitor makeIpNeighborMonitor(Handler h, SharedLog log,
                         NeighborEventConsumer cb) {
                     return new IpNeighborMonitor(h, log, cb);
+                }
+
+                public boolean isFeatureEnabled(final Context context, final String name,
+                        boolean defaultEnabled) {
+                    return Dependencies.this.isFeatureEnabled(context, name, defaultEnabled);
                 }
             };
         }
@@ -3094,7 +3102,50 @@ public abstract class IpClientIntegrationTestCommon {
         assertNeighborSolicitation(ns, target);
     }
 
+    private void assertMulticastNeighborSolicitation(final NeighborSolicitation ns,
+            final Inet6Address target) {
+        final MacAddress etherMulticast =
+                NetworkStackUtils.ipv6MulticastToEthernetMulticast(ns.ipv6Hdr.dstIp);
+        assertEquals(etherMulticast, ns.ethHdr.dstMac);
+        assertTrue(ns.ipv6Hdr.dstIp.isMulticastAddress());
+        assertNeighborSolicitation(ns, target);
+    }
+
+    private NeighborSolicitation waitForUnicastNeighborSolicitation(final MacAddress dstMac,
+            final Inet6Address dstIp, final Inet6Address targetIp) throws Exception {
+        NeighborSolicitation ns;
+        while ((ns = getNextNeighborSolicitation()) != null) {
+            // Filter out the NSes used for duplicate address detetction, the target address
+            // is the global IPv6 address inside these NSes.
+            if (ns.nsHdr.target.isLinkLocalAddress()) break;
+        }
+        assertNotNull("No unicast Neighbor solicitation received on interface within timeout", ns);
+        assertUnicastNeighborSolicitation(ns, dstMac, dstIp, targetIp);
+        return ns;
+    }
+
+    private List<NeighborSolicitation> waitForMultipleNeighborSolicitations() throws Exception {
+        NeighborSolicitation ns;
+        final List<NeighborSolicitation> nsList = new ArrayList<NeighborSolicitation>();
+        while ((ns = getNextNeighborSolicitation()) != null) {
+            // Filter out the NSes used for duplicate address detetction, the target address
+            // is the global IPv6 address inside these NSes.
+            if (ns.nsHdr.target.isLinkLocalAddress()) {
+                nsList.add(ns);
+            }
+        }
+        assertFalse(nsList.isEmpty());
+        return nsList;
+    }
+
+    // Override this function with disabled experiment flag by default, in order not to
+    // affect those tests which are just related to basic IpReachabilityMonitor infra.
     private void prepareIpReachabilityMonitorTest() throws Exception {
+        prepareIpReachabilityMonitorTest(false /* isMulticastResolicitEnabled */);
+    }
+
+    private void prepareIpReachabilityMonitorTest(boolean isMulticastResolicitEnabled)
+            throws Exception {
         final ScanResultInfo info = makeScanResultInfo(TEST_DEFAULT_SSID, TEST_DEFAULT_BSSID);
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withLayer2Information(new Layer2Information(TEST_L2KEY, TEST_CLUSTER,
@@ -3103,6 +3154,8 @@ public abstract class IpClientIntegrationTestCommon {
                 .withDisplayName(TEST_DEFAULT_SSID)
                 .withoutIPv4()
                 .build();
+        setFeatureEnabled(NetworkStackUtils.IP_REACHABILITY_MCAST_RESOLICIT_VERSION,
+                isMulticastResolicitEnabled);
         startIpClientProvisioning(config);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
         doIpv6OnlyProvisioning();
@@ -3115,16 +3168,8 @@ public abstract class IpClientIntegrationTestCommon {
     public void testIpReachabilityMonitor_probeFailed() throws Exception {
         prepareIpReachabilityMonitorTest();
 
-        NeighborSolicitation packet;
-        final List<NeighborSolicitation> nsList = new ArrayList<NeighborSolicitation>();
-        while ((packet = getNextNeighborSolicitation()) != null) {
-            // Filter out the NSes used for duplicate address detetction, the target address
-            // is the global IPv6 address inside these NSes.
-            if (packet.nsHdr.target.isLinkLocalAddress()) {
-                nsList.add(packet);
-            }
-        }
-        assertEquals(IpReachabilityMonitor.MIN_NUD_SOLICIT_NUM, nsList.size());
+        final List<NeighborSolicitation> nsList = waitForMultipleNeighborSolicitations();
+        assertEquals(MIN_NUD_SOLICIT_NUM, nsList.size());
         for (NeighborSolicitation ns : nsList) {
             assertUnicastNeighborSolicitation(ns, ROUTER_MAC /* dstMac */,
                     ROUTER_LINK_LOCAL /* dstIp */, ROUTER_LINK_LOCAL /* targetIp */);
@@ -3136,13 +3181,7 @@ public abstract class IpClientIntegrationTestCommon {
     public void testIpReachabilityMonitor_probeReachable() throws Exception {
         prepareIpReachabilityMonitorTest();
 
-        NeighborSolicitation ns;
-        while ((ns = getNextNeighborSolicitation()) != null) {
-            // Filter out the NSes used for duplicate address detetction, the target address
-            // is the global IPv6 address inside these NSes.
-            if (ns.nsHdr.target.isLinkLocalAddress()) break;
-        }
-        assertUnicastNeighborSolicitation(ns, ROUTER_MAC /* dstMac */,
+        final NeighborSolicitation ns = waitForUnicastNeighborSolicitation(ROUTER_MAC /* dstMac */,
                 ROUTER_LINK_LOCAL /* dstIp */, ROUTER_LINK_LOCAL /* targetIp */);
 
         // Reply Neighbor Advertisement and check notifyLost callback won't be triggered.
@@ -3152,5 +3191,62 @@ public abstract class IpClientIntegrationTestCommon {
                 ns.ipv6Hdr.srcIp /* dstIp */, flag, ROUTER_LINK_LOCAL /* target */);
         mPacketReader.sendResponse(na);
         assertNeverNotifyNeighborLost();
+    }
+
+    @Test
+    public void testIpReachabilityMonitor_mcastResoclicitProbeFailed() throws Exception {
+        prepareIpReachabilityMonitorTest(true /* isMulticastResolicitEnabled */);
+
+        final List<NeighborSolicitation> nsList = waitForMultipleNeighborSolicitations();
+        int expectedSize = MIN_NUD_SOLICIT_NUM + NUD_MCAST_RESOLICIT_NUM;
+        assertEquals(expectedSize, nsList.size()); // 5 unicast NSes + 3 multicast NSes
+        for (NeighborSolicitation ns : nsList.subList(0, MIN_NUD_SOLICIT_NUM)) {
+            assertUnicastNeighborSolicitation(ns, ROUTER_MAC /* dstMac */,
+                    ROUTER_LINK_LOCAL /* dstIp */, ROUTER_LINK_LOCAL /* targetIp */);
+        }
+        for (NeighborSolicitation ns : nsList.subList(MIN_NUD_SOLICIT_NUM, nsList.size())) {
+            assertMulticastNeighborSolicitation(ns, ROUTER_LINK_LOCAL /* targetIp */);
+        }
+        assertNotifyNeighborLost(ROUTER_LINK_LOCAL /* targetIp */);
+    }
+
+    @Test
+    public void testIpReachabilityMonitor_mcastResoclicitProbeReachableWithSameLinkLayerAddress()
+            throws Exception {
+        prepareIpReachabilityMonitorTest(true /* isMulticastResolicitEnabled */);
+
+        final NeighborSolicitation ns = waitForUnicastNeighborSolicitation(ROUTER_MAC /* dstMac */,
+                ROUTER_LINK_LOCAL /* dstIp */, ROUTER_LINK_LOCAL /* targetIp */);
+
+        // Reply Neighbor Advertisement and check notifyLost callback won't be triggered.
+        int flag = NEIGHBOR_ADVERTISEMENT_FLAG_ROUTER | NEIGHBOR_ADVERTISEMENT_FLAG_SOLICITED;
+        final ByteBuffer na = NeighborAdvertisement.build(ROUTER_MAC /* srcMac */,
+                ns.ethHdr.srcMac /* dstMac */, ROUTER_LINK_LOCAL /* srcIp */,
+                ns.ipv6Hdr.srcIp /* dstIp */, flag, ROUTER_LINK_LOCAL /* target */);
+        mPacketReader.sendResponse(na);
+        assertNeverNotifyNeighborLost();
+    }
+
+    @Test
+    public void testIpReachabilityMonitor_mcastResoclicitProbeReachableWithDiffLinkLayerAddress()
+            throws Exception {
+        prepareIpReachabilityMonitorTest(true /* isMulticastResolicitEnabled */);
+
+        final NeighborSolicitation ns = waitForUnicastNeighborSolicitation(ROUTER_MAC /* dstMac */,
+                ROUTER_LINK_LOCAL /* dstIp */, ROUTER_LINK_LOCAL /* targetIp */);
+
+        // Reply Neighbor Advertisement with a different link-layer address and check notifyLost
+        // callback will be triggered. Override flag must be set, which indicates that the
+        // advertisement should override an existing cache entry and update the cached link-layer
+        // address, otherwise, kernel won't transit to REACHABLE state with a different link-layer
+        // address.
+        int flag = NEIGHBOR_ADVERTISEMENT_FLAG_ROUTER | NEIGHBOR_ADVERTISEMENT_FLAG_SOLICITED
+                | NEIGHBOR_ADVERTISEMENT_FLAG_OVERRIDE;
+        final MacAddress newMac = MacAddress.fromString("00:1a:11:22:33:55");
+        final ByteBuffer na = NeighborAdvertisement.build(newMac /* srcMac */,
+                ns.ethHdr.srcMac /* dstMac */, ROUTER_LINK_LOCAL /* srcIp */,
+                ns.ipv6Hdr.srcIp /* dstIp */, flag, ROUTER_LINK_LOCAL /* target */);
+        mPacketReader.sendResponse(na);
+        assertNotifyNeighborLost(ROUTER_LINK_LOCAL /* targetIp */);
     }
 }
