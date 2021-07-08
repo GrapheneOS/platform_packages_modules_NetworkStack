@@ -20,6 +20,8 @@ import static android.net.metrics.IpReachabilityEvent.NUD_FAILED;
 import static android.net.metrics.IpReachabilityEvent.NUD_FAILED_ORGANIC;
 import static android.net.metrics.IpReachabilityEvent.PROVISIONING_LOST;
 import static android.net.metrics.IpReachabilityEvent.PROVISIONING_LOST_ORGANIC;
+import static android.net.util.NetworkStackUtils.IP_REACHABILITY_MCAST_RESOLICIT_VERSION;
+import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
 import android.content.Context;
 import android.net.ConnectivityManager;
@@ -43,8 +45,12 @@ import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.Preconditions;
+import com.android.net.module.util.DeviceConfigUtils;
 import com.android.networkstack.R;
 
 import java.io.PrintWriter;
@@ -143,6 +149,8 @@ public class IpReachabilityMonitor {
     protected static final int MIN_NUD_SOLICIT_NUM = 5;
     protected static final int MAX_NUD_SOLICIT_INTERVAL_MS = 1000;
     protected static final int MIN_NUD_SOLICIT_INTERVAL_MS = 750;
+    protected static final int NUD_MCAST_RESOLICIT_NUM = 3;
+    private static final int INVALID_NUD_MCAST_RESOLICIT_NUM = -1;
 
     public interface Callback {
         /**
@@ -161,6 +169,7 @@ public class IpReachabilityMonitor {
     interface Dependencies {
         void acquireWakeLock(long durationMs);
         IpNeighborMonitor makeIpNeighborMonitor(Handler h, SharedLog log, NeighborEventConsumer cb);
+        boolean isFeatureEnabled(Context context, String name, boolean defaultEnabled);
 
         static Dependencies makeDefault(Context context, String iface) {
             final String lockName = TAG + "." + iface;
@@ -176,6 +185,12 @@ public class IpReachabilityMonitor {
                         NeighborEventConsumer cb) {
                     return new IpNeighborMonitor(h, log, cb);
                 }
+
+                public boolean isFeatureEnabled(final Context context, final String name,
+                        boolean defaultEnabled) {
+                    return DeviceConfigUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name,
+                            defaultEnabled);
+                }
             };
         }
     }
@@ -183,7 +198,6 @@ public class IpReachabilityMonitor {
     private final InterfaceParams mInterfaceParams;
     private final IpNeighborMonitor mIpNeighborMonitor;
     private final SharedLog mLog;
-    private final Callback mCallback;
     private final Dependencies mDependencies;
     private final boolean mUsingMultinetworkPolicyTracker;
     private final ConnectivityManager mCm;
@@ -196,6 +210,8 @@ public class IpReachabilityMonitor {
     private volatile long mLastProbeTimeMs;
     private int mNumSolicits;
     private int mInterSolicitIntervalMs;
+    @NonNull
+    private final Callback mCallback;
 
     public IpReachabilityMonitor(
             Context context, InterfaceParams ifParams, Handler h, SharedLog log, Callback callback,
@@ -225,7 +241,10 @@ public class IpReachabilityMonitor {
         // In case the overylaid parameters specify an invalid configuration, set the parameters
         // to the hardcoded defaults first, then set them to the values used in the steady state.
         try {
-            setNeighborParameters(MIN_NUD_SOLICIT_NUM, MIN_NUD_SOLICIT_INTERVAL_MS);
+            int numResolicits = isMulticastResolicitEnabled()
+                    ? NUD_MCAST_RESOLICIT_NUM
+                    : INVALID_NUD_MCAST_RESOLICIT_NUM;
+            setNeighborParameters(MIN_NUD_SOLICIT_NUM, MIN_NUD_SOLICIT_INTERVAL_MS, numResolicits);
         } catch (Exception e) {
             Log.e(TAG, "Failed to adjust neighbor parameters with hardcoded defaults");
         }
@@ -241,10 +260,12 @@ public class IpReachabilityMonitor {
                     // TODO: Consider what to do with other states that are not within
                     // NeighborEvent#isValid() (i.e. NUD_NONE, NUD_INCOMPLETE).
                     if (event.nudState == StructNdMsg.NUD_FAILED) {
+                        // After both unicast probe and multicast probe(if mcast_resolicit is not 0)
+                        // attempts fail, trigger the neighbor lost event and disconnect.
                         mLog.w("ALERT neighbor went from: " + prev + " to: " + event);
                         handleNeighborLost(event);
                     } else if (event.nudState == StructNdMsg.NUD_REACHABLE) {
-                        maybeRestoreNeighborParameters();
+                        handleNeighborReachable(prev, event);
                     }
                 });
         mIpNeighborMonitor.start();
@@ -296,6 +317,26 @@ public class IpReachabilityMonitor {
         return false;
     }
 
+    private boolean hasDefaultRouterNeighborMacAddressChanged(
+            @Nullable final NeighborEvent prev, @NonNull final NeighborEvent event) {
+        if (prev == null || !isNeighborDefaultRouter(event)) return false;
+        return !event.macAddr.equals(prev.macAddr);
+    }
+
+    private boolean isNeighborDefaultRouter(@NonNull final NeighborEvent event) {
+        // For the IPv6 link-local scoped address, equals() works because the NeighborEvent.ip
+        // doesn't have a scope id and Inet6Address#equals doesn't consider scope id neither.
+        for (RouteInfo route : mLinkProperties.getRoutes()) {
+            if (route.isDefaultRoute() && event.ip.equals(route.getGateway())) return true;
+        }
+        return false;
+    }
+
+    private boolean isMulticastResolicitEnabled() {
+        return mDependencies.isFeatureEnabled(mContext, IP_REACHABILITY_MCAST_RESOLICIT_VERSION,
+                false /* defaultEnabled */);
+    }
+
     public void updateLinkProperties(LinkProperties lp) {
         if (!mInterfaceParams.name.equals(lp.getInterfaceName())) {
             // TODO: figure out whether / how to cope with interface changes.
@@ -331,6 +372,24 @@ public class IpReachabilityMonitor {
         mLinkProperties.clear();
         mNeighborWatchList.clear();
         if (DBG) { Log.d(TAG, "clear: " + describeWatchList()); }
+    }
+
+    private void handleNeighborReachable(@Nullable final NeighborEvent prev,
+            @NonNull final NeighborEvent event) {
+        if (isMulticastResolicitEnabled()
+                && hasDefaultRouterNeighborMacAddressChanged(prev, event)) {
+            // This implies device has confirmed the neighbor's reachability from
+            // other states(e.g., NUD_PROBE or NUD_STALE), checking if the mac
+            // address hasn't changed is required. If Mac address does change, then
+            // trigger a new neighbor lost event and disconnect.
+            final String logMsg = "ALERT neighbor: " + event.ip
+                    + " MAC address changed from: " + prev.macAddr
+                    + " to: " + event.macAddr;
+            mLog.w(logMsg);
+            mCallback.notifyLost(event.ip, logMsg);
+            return;
+        }
+        maybeRestoreNeighborParameters();
     }
 
     private void handleNeighborLost(NeighborEvent event) {
@@ -370,11 +429,9 @@ public class IpReachabilityMonitor {
         if (lostProvisioning) {
             final String logMsg = "FAILURE: LOST_PROVISIONING, " + event;
             Log.w(TAG, logMsg);
-            if (mCallback != null) {
-                // TODO: remove |ip| when the callback signature no longer has
-                // an InetAddress argument.
-                mCallback.notifyLost(ip, logMsg);
-            }
+            // TODO: remove |ip| when the callback signature no longer has
+            // an InetAddress argument.
+            mCallback.notifyLost(ip, logMsg);
         }
         logNudFailed(lostProvisioning);
     }
@@ -450,6 +507,12 @@ public class IpReachabilityMonitor {
 
     private void setNeighborParameters(int numSolicits, int interSolicitIntervalMs)
             throws RemoteException, IllegalArgumentException {
+        // Do not set mcast_resolicit param by default.
+        setNeighborParameters(numSolicits, interSolicitIntervalMs, INVALID_NUD_MCAST_RESOLICIT_NUM);
+    }
+
+    private void setNeighborParameters(int numSolicits, int interSolicitIntervalMs,
+            int numResolicits) throws RemoteException, IllegalArgumentException {
         Preconditions.checkArgument(numSolicits >= MIN_NUD_SOLICIT_NUM,
                 "numSolicits must be at least " + MIN_NUD_SOLICIT_NUM);
         Preconditions.checkArgument(numSolicits <= MAX_NUD_SOLICIT_NUM,
@@ -464,6 +527,10 @@ public class IpReachabilityMonitor {
                     Integer.toString(interSolicitIntervalMs));
             mNetd.setProcSysNet(family, INetd.NEIGH, mInterfaceParams.name, "ucast_solicit",
                     Integer.toString(numSolicits));
+            if (numResolicits != INVALID_NUD_MCAST_RESOLICIT_NUM) {
+                mNetd.setProcSysNet(family, INetd.NEIGH, mInterfaceParams.name, "mcast_resolicit",
+                        Integer.toString(numResolicits));
+            }
         }
 
         mNumSolicits = numSolicits;
