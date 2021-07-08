@@ -1,5 +1,6 @@
 package android.net.testutils
 
+import android.annotation.SuppressLint
 import android.net.LinkAddress
 import android.net.LinkProperties
 import android.net.Network
@@ -33,6 +34,7 @@ const val CELLULAR = NetworkCapabilities.TRANSPORT_CELLULAR
 const val TEST_INTERFACE_NAME = "testInterfaceName"
 
 @RunWith(JUnit4::class)
+@SuppressLint("NewApi") // Uses hidden APIs, which the linter would identify as missing APIs.
 class TestableNetworkCallbackTest {
     private lateinit var mCallback: TestableNetworkCallback
 
@@ -254,6 +256,7 @@ private fun callbackEntryFromString(name: String): KClass<out CallbackEntry> {
     return CallbackEntry::class.sealedSubclasses.first { it.simpleName == name }
 }
 
+@SuppressLint("NewApi") // Uses hidden APIs, which the linter would identify as missing APIs.
 private val interpretTable = listOf<InterpretMatcher<TestableNetworkCallback>>(
     // Interpret "Available(xx)" as "call to onAvailable with netId xx", and likewise for
     // all callback types. This is implemented above by enumerating the subclasses of
