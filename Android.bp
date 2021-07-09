@@ -220,6 +220,7 @@ java_defaults {
     libs: ["unsupportedappusage"],
     static_libs: [
         "androidx.annotation_annotation",
+        "modules-utils-build_system",
         "netd_aidl_interface-lateststable-java",
         "netlink-client",
         "networkstack-client",
