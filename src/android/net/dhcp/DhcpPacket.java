@@ -403,7 +403,7 @@ public abstract class DhcpPacket {
 
     // Set in unit tests, to ensure that the test does not break when run on different devices and
     // on different releases.
-    static String testOverrideVendorId = null;
+    static String sTestOverrideVendorId = null;
 
     protected DhcpPacket(int transId, short secs, Inet4Address clientIp, Inet4Address yourIp,
                          Inet4Address nextIp, Inet4Address relayIp,
@@ -779,7 +779,7 @@ public abstract class DhcpPacket {
      * with the customized option value if any.
      */
     private static String getVendorId(@Nullable List<DhcpOption> customizedClientOptions) {
-        if (testOverrideVendorId != null) return testOverrideVendorId;
+        if (sTestOverrideVendorId != null) return sTestOverrideVendorId;
 
         String vendorId = "android-dhcp-" + Build.VERSION.RELEASE;
         if (customizedClientOptions != null) {
