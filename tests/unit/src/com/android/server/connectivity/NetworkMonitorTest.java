@@ -1813,26 +1813,28 @@ public class NetworkMonitorTest {
 
     @Test
     public void testNoTrustedCapabilityValidated() throws Exception {
-        final NetworkCapabilities.Builder nc = new NetworkCapabilities.Builder()
+        // Cannot use the NetworkCapabilities builder on Q
+        final NetworkCapabilities nc = new NetworkCapabilities()
                 .addCapability(NET_CAPABILITY_INTERNET)
                 .removeCapability(NET_CAPABILITY_TRUSTED)
                 .addTransportType(TRANSPORT_CELLULAR);
         if (ShimUtils.isAtLeastS()) {
             nc.addCapability(NET_CAPABILITY_NOT_VCN_MANAGED);
         }
-        doValidationSkippedTest(nc.build());
+        doValidationSkippedTest(nc);
     }
 
     @Test
     public void testRestrictedCapabilityValidated() throws Exception {
-        final NetworkCapabilities.Builder nc = new NetworkCapabilities.Builder()
+        // Cannot use the NetworkCapabilities builder on Q
+        final NetworkCapabilities nc = new NetworkCapabilities()
                 .addCapability(NET_CAPABILITY_INTERNET)
                 .removeCapability(NET_CAPABILITY_NOT_RESTRICTED)
                 .addTransportType(TRANSPORT_CELLULAR);
         if (ShimUtils.isAtLeastS()) {
             nc.addCapability(NET_CAPABILITY_NOT_VCN_MANAGED);
         }
-        doValidationSkippedTest(nc.build());
+        doValidationSkippedTest(nc);
     }
 
     private NetworkCapabilities getVcnUnderlyingCarrierWifiCaps() {
