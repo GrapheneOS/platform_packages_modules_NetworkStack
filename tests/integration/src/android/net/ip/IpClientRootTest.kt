@@ -271,4 +271,8 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
     override fun assertNeverNotifyNeighborLost() {
         verify(mCb, never()).onReachabilityLost(anyString())
     }
+
+    override fun storeNetworkAttributes(l2Key: String, na: NetworkAttributes) {
+        mStore.storeNetworkAttributes(l2Key, na, null /* listener */)
+    }
 }
