@@ -239,7 +239,7 @@ public class ProvisioningConfiguration {
          *
          * @param: options customized DHCP option stable parcelable list.
          */
-        public Builder withDhcpOptions(List<DhcpOption> options) {
+        public Builder withDhcpOptions(@Nullable List<DhcpOption> options) {
             mConfig.mDhcpOptions = options;
             return this;
         }
