@@ -113,6 +113,20 @@ class TestableNetworkCallbackTest {
     }
 
     @Test
+    fun testAssertNoCallbackThat() {
+        val net = Network(101)
+        mCallback.assertNoCallbackThat { it is Available }
+        mCallback.onAvailable(net)
+        // Expect no blocked status change. Receive other callback does not fail the test.
+        mCallback.assertNoCallbackThat { it is BlockedStatus }
+        mCallback.onBlockedStatusChanged(net, true)
+        assertFails { mCallback.assertNoCallbackThat { it is BlockedStatus } }
+        mCallback.onBlockedStatusChanged(net, false)
+        mCallback.onCapabilitiesChanged(net, NetworkCapabilities())
+        assertFails { mCallback.assertNoCallbackThat { it is CapabilitiesChanged } }
+    }
+
+    @Test
     fun testCapabilitiesWithAndWithout() {
         val net = Network(101)
         val matcher = makeHasNetwork(101)
