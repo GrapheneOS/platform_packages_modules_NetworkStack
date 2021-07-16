@@ -3180,7 +3180,7 @@ public class NetworkMonitor extends StateMachine {
          * data to statsd pipeline.
          * @param stats a {@link DataStallDetectionStats} that contains the detection level
          *              information.
-         * @para result the network reevaluation result.
+         * @param result the network reevaluation result.
          */
         public void writeDataStallDetectionStats(@NonNull final DataStallDetectionStats stats,
                 @NonNull final CaptivePortalProbeResult result) {
