@@ -88,7 +88,8 @@ public class NetlinkSocketTest {
         if (SdkLevel.isAtLeastT() && targetSdk > 31) {
             try {
                 NetlinkSocket.sendMessage(fd, req, 0, req.length, TIMEOUT);
-                fail("RTM_GETNEIGH is not allowed for apps targeting SDK > 31 on T+ platforms");
+                fail("RTM_GETNEIGH is not allowed for apps targeting SDK > 31 on T+ platforms,"
+                        + " target SDK version: " + targetSdk);
             } catch (ErrnoException e) {
                 // Expected
                 assertEquals(e.errno, EACCES);
