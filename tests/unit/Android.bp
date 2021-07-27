@@ -44,7 +44,6 @@ java_defaults {
         "libnetworkstackutilsjni",
     ],
     jni_uses_sdk_apis: true,
-    jarjar_rules: ":NetworkStackJarJarRules",
 }
 
 // Tests for NetworkStackNext.
@@ -58,6 +57,7 @@ android_test {
     defaults: ["NetworkStackTestsDefaults"],
     static_libs: ["NetworkStackApiCurrentLib"],
     compile_multilib: "both", // Workaround for b/147785146 for mainline-presubmit
+    jarjar_rules: ":NetworkStackJarJarRules",
 }
 
 // Library containing the unit tests. This is used by the coverage test target to pull in the
@@ -84,6 +84,7 @@ android_test {
     defaults: ["NetworkStackTestsDefaults"],
     static_libs: ["NetworkStackApiStableLib"],
     compile_multilib: "both",
+    jarjar_rules: ":NetworkStackJarJarRules",
 }
 
 // Additional dependencies of libnetworkstackutilsjni that are not provided by the system when
