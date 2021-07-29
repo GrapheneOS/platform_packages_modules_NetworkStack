@@ -35,7 +35,13 @@
 package android.net;
 @JavaDerive(toString=true)
 parcelable ProvisioningConfigurationParcelable {
+  /**
+   * @deprecated use ipv4ProvisioningMode instead.
+   */
   boolean enableIPv4;
+  /**
+   * @deprecated use ipv6ProvisioningMode instead.
+   */
   boolean enableIPv6;
   boolean usingMultinetworkPolicyTracker;
   boolean usingIpReachabilityMonitor;
@@ -51,4 +57,6 @@ parcelable ProvisioningConfigurationParcelable {
   @nullable android.net.ScanResultInfoParcelable scanResultInfo;
   @nullable android.net.Layer2InformationParcelable layer2Info;
   @nullable List<android.net.networkstack.aidl.dhcp.DhcpOption> options;
+  int ipv4ProvisioningMode;
+  int ipv6ProvisioningMode;
 }
