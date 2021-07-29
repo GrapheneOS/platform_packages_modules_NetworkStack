@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2019, The Android Open Source Project
+ * Copyright (c) 2018, The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,28 +31,29 @@
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
 
-package android.net.ip;
+package android.net;
 /* @hide */
-interface IIpClient {
-  oneway void completedPreDhcpAction();
-  oneway void confirmConfiguration();
-  oneway void readPacketFilterComplete(in byte[] data);
-  oneway void shutdown();
-  oneway void startProvisioning(in android.net.ProvisioningConfigurationParcelable req);
-  oneway void stop();
-  oneway void setTcpBufferSizes(in String tcpBufferSizes);
-  oneway void setHttpProxy(in android.net.ProxyInfo proxyInfo);
-  oneway void setMulticastFilter(boolean enabled);
-  oneway void addKeepalivePacketFilter(int slot, in android.net.TcpKeepalivePacketDataParcelable pkt);
-  oneway void removeKeepalivePacketFilter(int slot);
-  oneway void setL2KeyAndGroupHint(in String l2Key, in String cluster);
-  oneway void addNattKeepalivePacketFilter(int slot, in android.net.NattKeepalivePacketDataParcelable pkt);
-  oneway void notifyPreconnectionComplete(boolean success);
-  oneway void updateLayer2Information(in android.net.Layer2InformationParcelable info);
-  const int PROV_IPV4_DISABLED = 0;
-  const int PROV_IPV4_STATIC = 1;
-  const int PROV_IPV4_DHCP = 2;
-  const int PROV_IPV6_DISABLED = 0;
-  const int PROV_IPV6_SLAAC = 1;
-  const int PROV_IPV6_LINKLOCAL = 2;
+interface INetworkMonitor {
+  oneway void start();
+  oneway void launchCaptivePortalApp();
+  oneway void notifyCaptivePortalAppFinished(int response);
+  oneway void setAcceptPartialConnectivity();
+  oneway void forceReevaluation(int uid);
+  oneway void notifyPrivateDnsChanged(in android.net.PrivateDnsConfigParcel config);
+  oneway void notifyDnsResponse(int returnCode);
+  oneway void notifyNetworkConnected(in android.net.LinkProperties lp, in android.net.NetworkCapabilities nc);
+  oneway void notifyNetworkDisconnected();
+  oneway void notifyLinkPropertiesChanged(in android.net.LinkProperties lp);
+  oneway void notifyNetworkCapabilitiesChanged(in android.net.NetworkCapabilities nc);
+  const int NETWORK_TEST_RESULT_VALID = 0;
+  const int NETWORK_TEST_RESULT_INVALID = 1;
+  const int NETWORK_TEST_RESULT_PARTIAL_CONNECTIVITY = 2;
+  const int NETWORK_VALIDATION_RESULT_VALID = 1;
+  const int NETWORK_VALIDATION_RESULT_PARTIAL = 2;
+  const int NETWORK_VALIDATION_RESULT_SKIPPED = 4;
+  const int NETWORK_VALIDATION_PROBE_DNS = 4;
+  const int NETWORK_VALIDATION_PROBE_HTTP = 8;
+  const int NETWORK_VALIDATION_PROBE_HTTPS = 16;
+  const int NETWORK_VALIDATION_PROBE_FALLBACK = 32;
+  const int NETWORK_VALIDATION_PROBE_PRIVDNS = 64;
 }
