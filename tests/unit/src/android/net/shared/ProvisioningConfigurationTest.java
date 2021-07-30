@@ -17,12 +17,22 @@
 package android.net.shared;
 
 import static android.net.InetAddresses.parseNumericAddress;
+import static android.net.ip.IIpClient.PROV_IPV4_DHCP;
+import static android.net.ip.IIpClient.PROV_IPV4_DISABLED;
+import static android.net.ip.IIpClient.PROV_IPV4_STATIC;
+import static android.net.ip.IIpClient.PROV_IPV6_DISABLED;
+import static android.net.ip.IIpClient.PROV_IPV6_LINKLOCAL;
+import static android.net.ip.IIpClient.PROV_IPV6_SLAAC;
 import static android.net.shared.ProvisioningConfiguration.fromStableParcelable;
+import static android.net.shared.ProvisioningConfiguration.ipv4ProvisioningModeToString;
+import static android.net.shared.ProvisioningConfiguration.ipv6ProvisioningModeToString;
 
 import static com.android.testutils.MiscAsserts.assertFieldCountEquals;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
 
 import android.net.LinkAddress;
 import android.net.MacAddress;
@@ -79,8 +89,6 @@ public class ProvisioningConfigurationTest {
     @Before
     public void setUp() {
         mConfig = new ProvisioningConfiguration();
-        mConfig.mEnableIPv4 = true;
-        mConfig.mEnableIPv6 = true;
         mConfig.mUsingMultinetworkPolicyTracker = true;
         mConfig.mUsingIpReachabilityMonitor = true;
         mConfig.mRequestedPreDhcpActionMs = 42;
@@ -102,6 +110,8 @@ public class ProvisioningConfigurationTest {
                 MacAddress.fromString("00:01:02:03:04:05"));
         mConfig.mDhcpOptions = makeCustomizedDhcpOptions((byte) 60,
                 new String("android-dhcp-11").getBytes());
+        mConfig.mIPv4ProvisioningMode = PROV_IPV4_DHCP;
+        mConfig.mIPv6ProvisioningMode = PROV_IPV6_SLAAC;
         // Any added field must be included in equals() to be tested properly
         assertFieldCountEquals(16, ProvisioningConfiguration.class);
     }
@@ -153,18 +163,40 @@ public class ProvisioningConfigurationTest {
         doParcelUnparcelTest();
     }
 
+    @Test
+    public void testParcelUnparcel_DisabledIpProvisioningMode() {
+        mConfig.mIPv4ProvisioningMode = PROV_IPV4_DISABLED;
+        mConfig.mIPv6ProvisioningMode = PROV_IPV6_DISABLED;
+        doParcelUnparcelTest();
+
+        assertFalse(mConfig.toStableParcelable().enableIPv4);
+        assertFalse(mConfig.toStableParcelable().enableIPv6);
+    }
+
+    @Test
+    public void testParcelUnparcel_enabledIpProvisioningMode() {
+        mConfig.mIPv4ProvisioningMode = PROV_IPV4_DHCP;
+        mConfig.mIPv6ProvisioningMode = PROV_IPV6_SLAAC;
+        doParcelUnparcelTest();
+
+        assertTrue(mConfig.toStableParcelable().enableIPv4);
+        assertTrue(mConfig.toStableParcelable().enableIPv6);
+    }
+
     private void doParcelUnparcelTest() {
-        final ProvisioningConfiguration unparceled =
-                fromStableParcelable(mConfig.toStableParcelable());
-        assertEquals(mConfig, unparceled);
+        final ProvisioningConfiguration unparceledOnOldPlatform =
+                fromStableParcelable(mConfig.toStableParcelable(), 11);
+        assertEquals(mConfig, unparceledOnOldPlatform);
+
+        final ProvisioningConfiguration unparceledOnNewPlatform =
+                fromStableParcelable(mConfig.toStableParcelable(), 12);
+        assertEquals(mConfig, unparceledOnOldPlatform);
     }
 
     @Test
     public void testEquals() {
         assertEquals(mConfig, new ProvisioningConfiguration(mConfig));
 
-        assertNotEqualsAfterChange(c -> c.mEnableIPv4 = false);
-        assertNotEqualsAfterChange(c -> c.mEnableIPv6 = false);
         assertNotEqualsAfterChange(c -> c.mUsingMultinetworkPolicyTracker = false);
         assertNotEqualsAfterChange(c -> c.mUsingIpReachabilityMonitor = false);
         assertNotEqualsAfterChange(c -> c.mRequestedPreDhcpActionMs++);
@@ -198,6 +230,10 @@ public class ProvisioningConfigurationTest {
                   new String("vendor-class-identifier").getBytes()));
         assertNotEqualsAfterChange(c -> c.mDhcpOptions = makeCustomizedDhcpOptions((byte) 77,
                   new String("vendor-class-identifier").getBytes()));
+        assertNotEqualsAfterChange(c -> c.mIPv4ProvisioningMode = PROV_IPV4_DISABLED);
+        assertNotEqualsAfterChange(c -> c.mIPv4ProvisioningMode = PROV_IPV4_STATIC);
+        assertNotEqualsAfterChange(c -> c.mIPv6ProvisioningMode = PROV_IPV6_DISABLED);
+        assertNotEqualsAfterChange(c -> c.mIPv6ProvisioningMode = PROV_IPV6_LINKLOCAL);
         assertFieldCountEquals(16, ProvisioningConfiguration.class);
     }
 
@@ -223,7 +259,8 @@ public class ProvisioningConfigurationTest {
             + " android.net.Layer2InformationParcelable{l2Key: some l2key,"
             + " cluster: some cluster, bssid: %s},"
             + " options: [android.net.networkstack.aidl.dhcp.DhcpOption{type: 60,"
-            + " value: [97, 110, 100, 114, 111, 105, 100, 45, 100, 104, 99, 112, 45, 49, 49]}]}";
+            + " value: [97, 110, 100, 114, 111, 105, 100, 45, 100, 104, 99, 112, 45, 49, 49]}],"
+            + " ipv4ProvisioningMode: 2, ipv6ProvisioningMode: 1}";
 
     @Test
     public void testParcelableToString() {
@@ -234,5 +271,18 @@ public class ProvisioningConfigurationTest {
         parcelWithNull.layer2Info.bssid = null;
         expected = String.format(TEMPLATE, "null");
         assertEquals(expected, parcelWithNull.toString());
+    }
+
+    @Test
+    public void testIpProvisioningModeToString() {
+        assertEquals("disabled", ipv4ProvisioningModeToString(PROV_IPV4_DISABLED));
+        assertEquals("static", ipv4ProvisioningModeToString(PROV_IPV4_STATIC));
+        assertEquals("dhcp", ipv4ProvisioningModeToString(PROV_IPV4_DHCP));
+        assertEquals("unknown", ipv4ProvisioningModeToString(0x03 /* unknown mode */));
+
+        assertEquals("disabled", ipv6ProvisioningModeToString(PROV_IPV6_DISABLED));
+        assertEquals("slaac", ipv6ProvisioningModeToString(PROV_IPV6_SLAAC));
+        assertEquals("link-local", ipv6ProvisioningModeToString(PROV_IPV6_LINKLOCAL));
+        assertEquals("unknown", ipv6ProvisioningModeToString(0x03 /* unknown mode */));
     }
 }

@@ -18,6 +18,8 @@ package android.net.ip;
 
 import static android.net.RouteInfo.RTN_UNICAST;
 import static android.net.dhcp.DhcpResultsParcelableUtil.toStableParcelable;
+import static android.net.ip.IIpClient.PROV_IPV4_DISABLED;
+import static android.net.ip.IIpClient.PROV_IPV6_DISABLED;
 import static android.net.util.NetworkStackUtils.IPCLIENT_DISABLE_ACCEPT_RA_VERSION;
 import static android.net.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
 import static android.net.util.NetworkStackUtils.IPCLIENT_GRATUITOUS_NA_VERSION;
@@ -496,6 +498,7 @@ public class IpClient extends StateMachine {
     private final String mClatInterfaceName;
     @VisibleForTesting
     protected final IpClientCallbacksWrapper mCallback;
+    private final IIpClientCallbacks mIpClientCallback;
     private final Dependencies mDependencies;
     private final CountDownLatch mShutdownLatch;
     private final ConnectivityManager mCm;
@@ -675,6 +678,7 @@ public class IpClient extends StateMachine {
         sPktLogs.putIfAbsent(mInterfaceName, new LocalLog(MAX_PACKET_RECORDS));
         mConnectivityPacketLog = sPktLogs.get(mInterfaceName);
         mMsgStateLogger = new MessageHandlingLogger();
+        mIpClientCallback = callback;
         mCallback = new IpClientCallbacksWrapper(callback, mLog, mShim);
 
         // TODO: Consider creating, constructing, and passing in some kind of
@@ -795,7 +799,14 @@ public class IpClient extends StateMachine {
         @Override
         public void startProvisioning(ProvisioningConfigurationParcelable req) {
             enforceNetworkStackCallingPermission();
-            IpClient.this.startProvisioning(ProvisioningConfiguration.fromStableParcelable(req));
+            int interfaceVersion = 0;
+            try {
+                interfaceVersion = mIpClientCallback.getInterfaceVersion();
+            } catch (RemoteException e) {
+                mLog.e("Fail to get the remote IIpClientCallbacks interface version", e);
+            }
+            IpClient.this.startProvisioning(ProvisioningConfiguration.fromStableParcelable(req,
+                    interfaceVersion));
         }
         @Override
         public void stop() {
@@ -2226,6 +2237,14 @@ public class IpClient extends StateMachine {
         }
     }
 
+    private boolean isIpv6Enabled() {
+        return mConfiguration.mIPv6ProvisioningMode != PROV_IPV6_DISABLED;
+    }
+
+    private boolean isIpv4Enabled() {
+        return mConfiguration.mIPv4ProvisioningMode != PROV_IPV4_DISABLED;
+    }
+
     class RunningState extends State {
         private ConnectivityPacketTracker mPacketTracker;
         private boolean mDhcpActionInFlight;
@@ -2258,13 +2277,13 @@ public class IpClient extends StateMachine {
             mPacketTracker = createPacketTracker();
             if (mPacketTracker != null) mPacketTracker.start(mConfiguration.mDisplayName);
 
-            if (mConfiguration.mEnableIPv6 && !startIPv6()) {
+            if (isIpv6Enabled() && !startIPv6()) {
                 doImmediateProvisioningFailure(IpManagerEvent.ERROR_STARTING_IPV6);
                 enqueueJumpToStoppingState(DisconnectCode.DC_ERROR_STARTING_IPV6);
                 return;
             }
 
-            if (mConfiguration.mEnableIPv4 && !isUsingPreconnection() && !startIPv4()) {
+            if (isIpv4Enabled() && !isUsingPreconnection() && !startIPv4()) {
                 doImmediateProvisioningFailure(IpManagerEvent.ERROR_STARTING_IPV4);
                 enqueueJumpToStoppingState(DisconnectCode.DC_ERROR_STARTING_IPV4);
                 return;
