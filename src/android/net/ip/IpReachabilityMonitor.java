@@ -32,7 +32,6 @@ import android.net.ip.IpNeighborMonitor.NeighborEvent;
 import android.net.ip.IpNeighborMonitor.NeighborEventConsumer;
 import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.IpReachabilityEvent;
-import android.net.netlink.StructNdMsg;
 import android.net.util.InterfaceParams;
 import android.net.util.SharedLog;
 import android.os.ConditionVariable;
@@ -51,6 +50,7 @@ import androidx.annotation.Nullable;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.Preconditions;
 import com.android.net.module.util.DeviceConfigUtils;
+import com.android.net.module.util.netlink.StructNdMsg;
 import com.android.networkstack.R;
 
 import java.io.PrintWriter;

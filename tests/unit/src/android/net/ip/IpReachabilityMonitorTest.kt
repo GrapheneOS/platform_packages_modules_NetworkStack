@@ -23,9 +23,6 @@ import android.net.LinkAddress
 import android.net.LinkProperties
 import android.net.RouteInfo
 import android.net.metrics.IpConnectivityLog
-import android.net.netlink.StructNdMsg.NUD_FAILED
-import android.net.netlink.StructNdMsg.NUD_STALE
-import android.net.netlink.makeNewNeighMessage
 import android.net.util.InterfaceParams
 import android.net.util.SharedLog
 import android.os.Handler
@@ -36,6 +33,9 @@ import android.system.ErrnoException
 import android.system.OsConstants.EAGAIN
 import androidx.test.filters.SmallTest
 import androidx.test.runner.AndroidJUnit4
+import com.android.net.module.util.netlink.StructNdMsg.NUD_FAILED
+import com.android.net.module.util.netlink.StructNdMsg.NUD_STALE
+import com.android.testutils.makeNewNeighMessage
 import com.android.testutils.waitForIdle
 import org.junit.After
 import org.junit.Before
