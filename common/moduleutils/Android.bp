@@ -64,7 +64,6 @@ filegroup {
         "src/android/net/ip/InterfaceController.java",
         "src/android/net/ip/IpNeighborMonitor.java",
         "src/android/net/ip/NetlinkMonitor.java",
-        "src/android/net/netlink/*.java",
         "src/android/net/shared/NetdUtils.java",
         "src/android/net/shared/RouteUtils.java",
         "src/android/net/util/InterfaceParams.java",
