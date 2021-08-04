@@ -16,7 +16,6 @@
 
 package com.android.networkstack.netlink;
 
-import static android.net.netlink.NetlinkConstants.SOCKDIAG_MSG_HEADER_SIZE;
 import static android.net.util.DataStallUtils.CONFIG_TCP_PACKETS_FAIL_PERCENTAGE;
 import static android.net.util.DataStallUtils.DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
@@ -26,6 +25,7 @@ import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentat
 
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.doReturn;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
+import static com.android.net.module.util.netlink.NetlinkConstants.SOCKDIAG_MSG_HEADER_SIZE;
 
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
@@ -43,7 +43,6 @@ import static org.mockito.Mockito.when;
 import android.net.INetd;
 import android.net.MarkMaskParcel;
 import android.net.Network;
-import android.net.netlink.StructNlMsgHdr;
 import android.os.Build;
 import android.util.Log;
 import android.util.Log.TerribleFailureHandler;
@@ -51,6 +50,7 @@ import android.util.Log.TerribleFailureHandler;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.net.module.util.netlink.StructNlMsgHdr;
 import com.android.networkstack.apishim.ConstantsShim;
 import com.android.networkstack.apishim.NetworkShimImpl;
 import com.android.testutils.DevSdkIgnoreRule;

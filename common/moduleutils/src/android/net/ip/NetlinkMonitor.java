@@ -16,7 +16,6 @@
 
 package android.net.ip;
 
-import static android.net.netlink.NetlinkConstants.hexify;
 import static android.net.util.SocketUtils.makeNetlinkSocketAddress;
 import static android.system.OsConstants.AF_NETLINK;
 import static android.system.OsConstants.SOCK_DGRAM;
@@ -24,10 +23,9 @@ import static android.system.OsConstants.SOCK_NONBLOCK;
 import static android.system.OsConstants.SOL_SOCKET;
 import static android.system.OsConstants.SO_RCVBUF;
 
+import static com.android.net.module.util.netlink.NetlinkConstants.hexify;
+
 import android.annotation.NonNull;
-import android.net.netlink.NetlinkErrorMessage;
-import android.net.netlink.NetlinkMessage;
-import android.net.netlink.NetlinkSocket;
 import android.net.util.SharedLog;
 import android.net.util.SocketUtils;
 import android.os.Handler;
@@ -37,6 +35,9 @@ import android.system.Os;
 import android.util.Log;
 
 import com.android.net.module.util.PacketReader;
+import com.android.net.module.util.netlink.NetlinkErrorMessage;
+import com.android.net.module.util.netlink.NetlinkMessage;
+import com.android.net.module.util.netlink.NetlinkSocket;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
