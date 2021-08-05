@@ -43,7 +43,6 @@ import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService
 import com.android.testutils.DevSdkIgnoreRule
 import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo
-import com.android.testutils.ExceptionUtils
 import com.android.testutils.assertThrows
 import org.junit.Rule
 import org.junit.Test
@@ -207,10 +206,10 @@ class NetworkStackServiceTest {
         verify(mockDhcpCb, times(2)).onDhcpServerCreated(eq(IDhcpServer.STATUS_SUCCESS), any())
 
         // allowTestUid does not need to record the caller's version
-        assertThrows(SecurityException::class.java, ExceptionUtils.ThrowingRunnable {
+        assertThrows(SecurityException::class.java) {
             // Should throw because the test does not run as root
             connector.allowTestUid(Process.myUid(), null)
-        })
+        }
 
         // Verify all methods were covered by the test (5 methods + getVersion + getHash)
         assertEquals(7, INetworkStackConnector::class.declaredMemberFunctions.count {
