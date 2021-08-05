@@ -119,7 +119,6 @@ import android.net.ip.IpNeighborMonitor.NeighborEventConsumer;
 import android.net.ipmemorystore.NetworkAttributes;
 import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener;
 import android.net.ipmemorystore.Status;
-import android.net.netlink.StructNdOptPref64;
 import android.net.networkstack.TestNetworkStackServiceClient;
 import android.net.networkstack.aidl.dhcp.DhcpOption;
 import android.net.shared.Layer2Information;
@@ -150,6 +149,7 @@ import com.android.internal.util.HexDump;
 import com.android.internal.util.StateMachine;
 import com.android.net.module.util.ArrayTrackRecord;
 import com.android.net.module.util.Ipv6Utils;
+import com.android.net.module.util.netlink.StructNdOptPref64;
 import com.android.net.module.util.structs.LlaOption;
 import com.android.net.module.util.structs.PrefixInformationOption;
 import com.android.net.module.util.structs.RdnssOption;
@@ -2072,6 +2072,52 @@ public abstract class IpClientIntegrationTestCommon {
         mIIpClient.notifyPreconnectionComplete(false /* success */);
         HandlerUtils.waitForIdle(mDependencies.mDhcpClient.getHandler(), TEST_TIMEOUT_MS);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
+    }
+
+    @Test
+    @SignatureRequiredTest(reason = "needs mocked alarm and access to IpClient handler thread")
+    public void testDhcpClientPreconnection_DelayedAbortAndTransitToStoppedState()
+            throws Exception {
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIpReachabilityMonitor()
+                .withPreconnection()
+                .build();
+        setDhcpFeatures(false /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
+                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+        startIpClientProvisioning(config);
+        assertDiscoverPacketOnPreconnectionStart();
+
+        // IpClient is in the PreconnectingState, simulate provisioning timeout event
+        // and force IpClient state machine transit to StoppingState.
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        final OnAlarmListener alarm = expectAlarmSet(null /* inOrder */, "TIMEOUT", 18,
+                mIpc.getHandler());
+        mIpc.getHandler().post(() -> alarm.onAlarm());
+
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(captor.capture());
+        final LinkProperties lp = captor.getValue();
+        assertNotNull(lp);
+        assertEquals(mIfaceName, lp.getInterfaceName());
+        assertEquals(0, lp.getLinkAddresses().size());
+        assertEquals(0, lp.getRoutes().size());
+        assertEquals(0, lp.getMtu());
+        assertEquals(0, lp.getDnsServers().size());
+
+        // Send preconnection abort message, but IpClient should ignore it at this moment and
+        // transit to StoppedState finally.
+        mIpc.notifyPreconnectionComplete(false /* abort */);
+        mIpc.stop();
+        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+
+        reset(mCb);
+
+        // Start provisioning again to verify IpClient can process CMD_START correctly at
+        // StoppedState.
+        startIpClientProvisioning(false /* isDhcpLeaseCacheEnabled */,
+                false /* shouldReplyRapidCommitAck */, false /* isPreConnectionEnabled */,
+                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+        final DhcpPacket discover = getNextDhcpPacket();
+        assertTrue(discover instanceof DhcpDiscoverPacket);
     }
 
     @Test
