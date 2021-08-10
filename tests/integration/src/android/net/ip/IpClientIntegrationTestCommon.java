@@ -30,6 +30,7 @@ import static android.net.dhcp.DhcpResultsParcelableUtil.fromStableParcelable;
 import static android.net.ip.IpReachabilityMonitor.MIN_NUD_SOLICIT_NUM;
 import static android.net.ip.IpReachabilityMonitor.NUD_MCAST_RESOLICIT_NUM;
 import static android.net.ipmemorystore.Status.SUCCESS;
+import static android.net.shared.ProvisioningConfiguration.VERSION_ADDED_PROVISIONING_ENUM;
 import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.IFA_F_TEMPORARY;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
@@ -56,6 +57,7 @@ import static com.android.net.module.util.NetworkStackConstants.NEIGHBOR_ADVERTI
 import static com.android.net.module.util.NetworkStackConstants.NEIGHBOR_ADVERTISEMENT_FLAG_SOLICITED;
 import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_AUTONOMOUS;
 import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_ON_LINK;
+import static com.android.testutils.MiscAsserts.assertThrows;
 
 import static junit.framework.Assert.fail;
 
@@ -106,6 +108,7 @@ import android.net.LinkAddress;
 import android.net.LinkProperties;
 import android.net.MacAddress;
 import android.net.NetworkStackIpMemoryStore;
+import android.net.RouteInfo;
 import android.net.TestNetworkInterface;
 import android.net.TestNetworkManager;
 import android.net.Uri;
@@ -570,6 +573,7 @@ public abstract class IpClientIntegrationTestCommon {
         when(mContext.getContentResolver()).thenReturn(mContentResolver);
         when(mNetworkStackServiceManager.getIpMemoryStoreService())
                 .thenReturn(mIpMemoryStoreService);
+        when(mCb.getInterfaceVersion()).thenReturn(VERSION_ADDED_PROVISIONING_ENUM);
 
         mDependencies.setDeviceConfigProperty(IpClient.CONFIG_MIN_RDNSS_LIFETIME, 67);
         mDependencies.setDeviceConfigProperty(DhcpClient.DHCP_RESTART_CONFIG_DELAY, 10);
@@ -3457,5 +3461,40 @@ public abstract class IpClientIntegrationTestCommon {
                 ns.ipv6Hdr.srcIp /* dstIp */, flag, ROUTER_LINK_LOCAL /* target */);
         mPacketReader.sendResponse(na);
         assertNotifyNeighborLost(ROUTER_LINK_LOCAL /* targetIp */);
+    }
+
+    @Test
+    public void testIPv6LinkLocalOnly() throws Exception {
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIPv4()
+                .withIpv6LinkLocalOnly()
+                .withRandomMacAddress()
+                .build();
+        startIpClientProvisioning(config);
+
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        final LinkProperties lp = captor.getValue();
+        assertNotNull(lp);
+        assertEquals(0, lp.getDnsServers().size());
+        final List<LinkAddress> addresses = lp.getLinkAddresses();
+        assertEquals(1, addresses.size());
+        assertTrue(addresses.get(0).getAddress().isLinkLocalAddress());
+        assertEquals(1, lp.getRoutes().size());
+        final RouteInfo route = lp.getRoutes().get(0);
+        assertNotNull(route);
+        assertTrue(route.getDestination().equals(new IpPrefix("fe80::/64")));
+        assertTrue(route.getGateway().isAnyLocalAddress());
+    }
+
+    @Test
+    public void testIPv6LinkLocalOnly_enableBothIPv4andIPv6LinkLocalOnly() throws Exception {
+        assertThrows(IllegalArgumentException.class,
+                () -> new ProvisioningConfiguration.Builder()
+                        .withoutIpReachabilityMonitor()
+                        .withIpv6LinkLocalOnly()
+                        .withRandomMacAddress()
+                        .build()
+        );
     }
 }

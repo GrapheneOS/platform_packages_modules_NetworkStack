@@ -92,7 +92,7 @@ public class ProvisioningConfiguration {
 
     // ipv4ProvisioningMode and ipv6ProvisioningMode members are introduced since
     // networkstack-aidl-interfaces-v12.
-    private static final int VERSION_ADDED_PROVISIONING_ENUM = 12;
+    public static final int VERSION_ADDED_PROVISIONING_ENUM = 12;
 
     /**
      * Builder to create a {@link ProvisioningConfiguration}.
@@ -258,9 +258,26 @@ public class ProvisioningConfiguration {
         }
 
         /**
+         * Specify that the configuration should enable IPv6 link-local only mode used for
+         * WiFi Neighbor Aware Networking and other link-local-only technologies. It's not
+         * used by default, and IPv4 must be disabled when this mode is enabled.
+         *
+         * @note This API is only supported since Android T.
+         */
+        public Builder withIpv6LinkLocalOnly() {
+            mConfig.mIPv6ProvisioningMode = PROV_IPV6_LINKLOCAL;
+            return this;
+        }
+
+        /**
          * Build the configuration using previously specified parameters.
          */
         public ProvisioningConfiguration build() {
+            if (mConfig.mIPv6ProvisioningMode == PROV_IPV6_LINKLOCAL
+                    && mConfig.mIPv4ProvisioningMode != PROV_IPV4_DISABLED) {
+                throw new IllegalArgumentException("IPv4 must be disabled in IPv6 link-local"
+                        + "only mode.");
+            }
             return new ProvisioningConfiguration(mConfig);
         }
     }
