@@ -20,6 +20,7 @@ import static android.net.RouteInfo.RTN_UNICAST;
 import static android.net.dhcp.DhcpResultsParcelableUtil.toStableParcelable;
 import static android.net.ip.IIpClient.PROV_IPV4_DISABLED;
 import static android.net.ip.IIpClient.PROV_IPV6_DISABLED;
+import static android.net.ip.IIpClient.PROV_IPV6_LINKLOCAL;
 import static android.net.util.NetworkStackUtils.IPCLIENT_DISABLE_ACCEPT_RA_VERSION;
 import static android.net.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
 import static android.net.util.NetworkStackUtils.IPCLIENT_GRATUITOUS_NA_VERSION;
@@ -399,6 +400,24 @@ public class IpClient extends StateMachine {
                 log("Failed to call onPreconnectionStart", e);
             }
         }
+
+        /**
+         * Get the version of the IIpClientCallbacks AIDL interface.
+         */
+        public int getInterfaceVersion() {
+            log("getInterfaceVersion");
+            try {
+                return mCallback.getInterfaceVersion();
+            } catch (RemoteException e) {
+                // This can never happen for callers in the system server, because if the
+                // system server crashes, then the networkstack will crash as well. But it can
+                // happen for other callers such as bluetooth or telephony (if it starts to use
+                // IpClient). 0 will generally work but will assume an old client and disable
+                // all new features.
+                log("Failed to call getInterfaceVersion", e);
+                return 0;
+            }
+        }
     }
 
     public static final String DUMP_ARG_CONFIRM = "confirm";
@@ -498,7 +517,6 @@ public class IpClient extends StateMachine {
     private final String mClatInterfaceName;
     @VisibleForTesting
     protected final IpClientCallbacksWrapper mCallback;
-    private final IIpClientCallbacks mIpClientCallback;
     private final Dependencies mDependencies;
     private final CountDownLatch mShutdownLatch;
     private final ConnectivityManager mCm;
@@ -678,7 +696,6 @@ public class IpClient extends StateMachine {
         sPktLogs.putIfAbsent(mInterfaceName, new LocalLog(MAX_PACKET_RECORDS));
         mConnectivityPacketLog = sPktLogs.get(mInterfaceName);
         mMsgStateLogger = new MessageHandlingLogger();
-        mIpClientCallback = callback;
         mCallback = new IpClientCallbacksWrapper(callback, mLog, mShim);
 
         // TODO: Consider creating, constructing, and passing in some kind of
@@ -799,14 +816,8 @@ public class IpClient extends StateMachine {
         @Override
         public void startProvisioning(ProvisioningConfigurationParcelable req) {
             enforceNetworkStackCallingPermission();
-            int interfaceVersion = 0;
-            try {
-                interfaceVersion = mIpClientCallback.getInterfaceVersion();
-            } catch (RemoteException e) {
-                mLog.e("Fail to get the remote IIpClientCallbacks interface version", e);
-            }
             IpClient.this.startProvisioning(ProvisioningConfiguration.fromStableParcelable(req,
-                    interfaceVersion));
+                    mCallback.getInterfaceVersion()));
         }
         @Override
         public void stop() {
@@ -1238,12 +1249,41 @@ public class IpClient extends StateMachine {
         transitionTo(mStoppingState);
     }
 
+    private static boolean hasIpv6LinkLocalInterfaceRoute(final LinkProperties lp) {
+        for (RouteInfo r : lp.getRoutes()) {
+            if (r.getDestination().equals(new IpPrefix("fe80::/64"))
+                    && r.getGateway().isAnyLocalAddress()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasIpv6LinkLocalAddress(final LinkProperties lp) {
+        for (LinkAddress address : lp.getLinkAddresses()) {
+            if (address.isIpv6() && address.getAddress().isLinkLocalAddress()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // LinkProperties has a link-local (fe80::xxx) IPv6 address and route to fe80::/64 destination.
+    private boolean isIpv6LinkLocalProvisioned(final LinkProperties lp) {
+        if (mConfiguration == null
+                || mConfiguration.mIPv6ProvisioningMode != PROV_IPV6_LINKLOCAL) return false;
+        if (hasIpv6LinkLocalAddress(lp) && hasIpv6LinkLocalInterfaceRoute(lp)) return true;
+        return false;
+    }
+
     // For now: use WifiStateMachine's historical notion of provisioned.
     @VisibleForTesting
-    static boolean isProvisioned(LinkProperties lp, InitialConfiguration config) {
-        // For historical reasons, we should connect even if all we have is
-        // an IPv4 address and nothing else.
-        if (lp.hasIpv4Address() || lp.isProvisioned()) {
+    boolean isProvisioned(final LinkProperties lp, final InitialConfiguration config) {
+        // For historical reasons, we should connect even if all we have is an IPv4
+        // address and nothing else. If IPv6 link-local only mode is enabled and
+        // it's provisioned without IPv4, then still connecting once IPv6 link-local
+        // address is ready to use and route to fe80::/64 destination is up.
+        if (lp.hasIpv4Address() || lp.isProvisioned() || isIpv6LinkLocalProvisioned(lp)) {
             return true;
         }
         if (config == null) {

@@ -431,6 +431,7 @@ public class IpClientTest {
 
     @Test
     public void testIsProvisioned() throws Exception {
+        final IpClient ipc = makeIpClient(TEST_IFNAME);
         InitialConfiguration empty = conf(links(), prefixes());
         IsProvisionedTestCase[] testcases = {
             // nothing
@@ -462,7 +463,7 @@ public class IpClientTest {
         };
 
         for (IsProvisionedTestCase testcase : testcases) {
-            if (IpClient.isProvisioned(testcase.lp, testcase.config) != testcase.isProvisioned) {
+            if (ipc.isProvisioned(testcase.lp, testcase.config) != testcase.isProvisioned) {
                 fail(testcase.errorMessage());
             }
         }
