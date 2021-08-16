@@ -41,6 +41,9 @@ import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
 import android.os.RemoteException;
 import android.os.SystemClock;
+import android.stats.connectivity.IpType;
+import android.stats.connectivity.NudEventType;
+import android.stats.connectivity.NudNeighborType;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -52,6 +55,7 @@ import com.android.internal.util.Preconditions;
 import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.netlink.StructNdMsg;
 import com.android.networkstack.R;
+import com.android.networkstack.metrics.IpReachabilityMonitorMetrics;
 
 import java.io.PrintWriter;
 import java.net.Inet6Address;
@@ -170,6 +174,7 @@ public class IpReachabilityMonitor {
         void acquireWakeLock(long durationMs);
         IpNeighborMonitor makeIpNeighborMonitor(Handler h, SharedLog log, NeighborEventConsumer cb);
         boolean isFeatureEnabled(Context context, String name, boolean defaultEnabled);
+        IpReachabilityMonitorMetrics getIpReachabilityMonitorMetrics();
 
         static Dependencies makeDefault(Context context, String iface) {
             final String lockName = TAG + "." + iface;
@@ -191,6 +196,10 @@ public class IpReachabilityMonitor {
                     return DeviceConfigUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name,
                             defaultEnabled);
                 }
+
+                public IpReachabilityMonitorMetrics getIpReachabilityMonitorMetrics() {
+                    return new IpReachabilityMonitorMetrics();
+                }
             };
         }
     }
@@ -204,10 +213,14 @@ public class IpReachabilityMonitor {
     private final IpConnectivityLog mMetricsLog;
     private final Context mContext;
     private final INetd mNetd;
+    private final IpReachabilityMonitorMetrics mIpReachabilityMetrics;
     private LinkProperties mLinkProperties = new LinkProperties();
     private Map<InetAddress, NeighborEvent> mNeighborWatchList = new HashMap<>();
     // Time in milliseconds of the last forced probe request.
     private volatile long mLastProbeTimeMs;
+    // Time in milliseconds of the last forced probe request due to roam or CMD_CONFIRM.
+    private long mLastProbeDueToRoamMs;
+    private long mLastProbeDueToConfirmMs;
     private int mNumSolicits;
     private int mInterSolicitIntervalMs;
     @NonNull
@@ -269,6 +282,7 @@ public class IpReachabilityMonitor {
                     }
                 });
         mIpNeighborMonitor.start();
+        mIpReachabilityMetrics = dependencies.getIpReachabilityMonitorMetrics();
     }
 
     public void stop() {
@@ -328,6 +342,13 @@ public class IpReachabilityMonitor {
         // doesn't have a scope id and Inet6Address#equals doesn't consider scope id neither.
         for (RouteInfo route : mLinkProperties.getRoutes()) {
             if (route.isDefaultRoute() && event.ip.equals(route.getGateway())) return true;
+        }
+        return false;
+    }
+
+    private boolean isNeighborDnsServer(@NonNull final NeighborEvent event) {
+        for (InetAddress dns : mLinkProperties.getDnsServers()) {
+            if (event.ip.equals(dns)) return true;
         }
         return false;
     }
@@ -433,7 +454,7 @@ public class IpReachabilityMonitor {
             // an InetAddress argument.
             mCallback.notifyLost(ip, logMsg);
         }
-        logNudFailed(lostProvisioning);
+        logNudFailed(event, lostProvisioning);
     }
 
     private void maybeRestoreNeighborParameters() {
@@ -457,7 +478,13 @@ public class IpReachabilityMonitor {
         return !mUsingMultinetworkPolicyTracker || mCm.shouldAvoidBadWifi();
     }
 
-    public void probeAll() {
+    /**
+     * Force probe to verify whether or not the critical on-link neighbours are still reachable.
+     *
+     * @param dueToRoam indicate on which situation forced probe has been sent, e.g., on post
+     *                  roaming or receiving CMD_CONFIRM from IpClient.
+     */
+    public void probeAll(boolean dueToRoam) {
         setNeighbourParametersPostRoaming();
 
         final List<InetAddress> ipProbeList = new ArrayList<>(mNeighborWatchList.keySet());
@@ -478,6 +505,11 @@ public class IpReachabilityMonitor {
             logEvent(IpReachabilityEvent.PROBE, rval);
         }
         mLastProbeTimeMs = SystemClock.elapsedRealtime();
+        if (dueToRoam) {
+            mLastProbeDueToRoamMs = mLastProbeTimeMs;
+        } else {
+            mLastProbeDueToConfirmMs = mLastProbeTimeMs;
+        }
     }
 
     private long getProbeWakeLockDuration() {
@@ -537,16 +569,81 @@ public class IpReachabilityMonitor {
         mInterSolicitIntervalMs = interSolicitIntervalMs;
     }
 
+    private boolean isFromProbe() {
+        final long duration = SystemClock.elapsedRealtime() - mLastProbeTimeMs;
+        return duration < getProbeWakeLockDuration();
+    }
+
+    private boolean isProbedNudFailureDueToRoam() {
+        // Check to which probe expiry the curren timestamp gets close when NUD failure event
+        // happens, theoretically that indicates which probe event(due to roam or CMD_CONFIRM)
+        // was triggered eariler.
+        //
+        // Note that this would be incorrect if the probe or confirm was so long ago that the
+        // probe duration has already expired. That cannot happen because isFromProbe would return
+        // false, and this method is only called on NUD failures due to probes.
+        final long probeExpiryAfterRoam = mLastProbeDueToRoamMs + getProbeWakeLockDuration();
+        final long probeExpiryAfterConfirm =
+                mLastProbeDueToConfirmMs + getProbeWakeLockDuration();
+        final long currentTime = SystemClock.elapsedRealtime();
+        return Math.abs(probeExpiryAfterRoam - currentTime)
+                < Math.abs(probeExpiryAfterConfirm - currentTime);
+    }
+
     private void logEvent(int probeType, int errorCode) {
         int eventType = probeType | (errorCode & 0xff);
         mMetricsLog.log(mInterfaceParams.name, new IpReachabilityEvent(eventType));
     }
 
-    private void logNudFailed(boolean lostProvisioning) {
-        long duration = SystemClock.elapsedRealtime() - mLastProbeTimeMs;
-        boolean isFromProbe = (duration < getProbeWakeLockDuration());
-        int eventType = nudFailureEventType(isFromProbe, lostProvisioning);
+    private void logNudFailed(final NeighborEvent event, boolean lostProvisioning) {
+        final int eventType = nudFailureEventType(isFromProbe(), lostProvisioning);
         mMetricsLog.log(mInterfaceParams.name, new IpReachabilityEvent(eventType));
+        logNeighborLostEvent(event, lostProvisioning);
+    }
+
+    /**
+     * Returns the neighbor type code corresponding to the given conditions.
+     */
+    private NudNeighborType getNeighborType(final NeighborEvent event) {
+        final boolean isGateway = isNeighborDefaultRouter(event);
+        final boolean isDnsServer = isNeighborDnsServer(event);
+
+        if (isGateway && isDnsServer) return NudNeighborType.NUD_NEIGHBOR_BOTH;
+        if (isGateway && !isDnsServer) return NudNeighborType.NUD_NEIGHBOR_GATEWAY;
+        if (!isGateway && isDnsServer) return NudNeighborType.NUD_NEIGHBOR_DNS;
+        return NudNeighborType.NUD_NEIGHBOR_UNKNOWN;
+    }
+
+    /**
+     * Returns the NUD failure event type code corresponding to the given conditions.
+     */
+    private static NudEventType getNudFailureEventType(boolean isFromProbe, boolean isDueToRoam,
+            boolean isProvisioningLost) {
+        if (!isFromProbe) {
+            return isProvisioningLost
+                    ? NudEventType.NUD_ORGANIC_FAILED_CRITICAL
+                    : NudEventType.NUD_ORGANIC_FAILED;
+        }
+        return isProvisioningLost
+                ? isDueToRoam
+                        ? NudEventType.NUD_POST_ROAMING_FAILED_CRITICAL
+                        : NudEventType.NUD_CONFIRM_FAILED_CRITICAL
+                : isDueToRoam
+                        ? NudEventType.NUD_POST_ROAMING_FAILED
+                        : NudEventType.NUD_CONFIRM_FAILED;
+    }
+
+    /**
+     * Log NUD failure metrics with new Westworld APIs while the function using mMetricsLog API
+     * still sends the legacy metrics, @see #logNudFailed.
+     */
+    private void logNeighborLostEvent(final NeighborEvent event, boolean isProvisioningLost) {
+        final IpType ipType = (event.ip instanceof Inet6Address) ? IpType.IPV6 : IpType.IPV4;
+        mIpReachabilityMetrics.setNudIpType(ipType);
+        mIpReachabilityMetrics.setNudNeighborType(getNeighborType(event));
+        mIpReachabilityMetrics.setNudEventType(getNudFailureEventType(isFromProbe(),
+                isProbedNudFailureDueToRoam(), isProvisioningLost));
+        mIpReachabilityMetrics.statsWrite();
     }
 
     /**
