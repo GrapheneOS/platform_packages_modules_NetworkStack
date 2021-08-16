@@ -1944,7 +1944,7 @@ public class IpClient extends StateMachine {
         }
 
         if (mIpReachabilityMonitor != null) {
-            mIpReachabilityMonitor.probeAll();
+            mIpReachabilityMonitor.probeAll(true /* dueToRoam */);
         }
 
         // Check whether to refresh previous IP lease on L2 roaming happened.
@@ -2419,7 +2419,7 @@ public class IpClient extends StateMachine {
                     // a DHCPv4 RENEW.  We used to do this on Wi-Fi framework
                     // roams.
                     if (mIpReachabilityMonitor != null) {
-                        mIpReachabilityMonitor.probeAll();
+                        mIpReachabilityMonitor.probeAll(false /* dueToRoam */);
                     }
                     break;
 
