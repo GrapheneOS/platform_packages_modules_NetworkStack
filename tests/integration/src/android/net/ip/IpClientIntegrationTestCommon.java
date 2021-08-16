@@ -161,6 +161,7 @@ import com.android.networkstack.apishim.ConstantsShim;
 import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.arp.ArpPacket;
 import com.android.networkstack.metrics.IpProvisioningMetrics;
+import com.android.networkstack.metrics.IpReachabilityMonitorMetrics;
 import com.android.networkstack.metrics.NetworkQuirkMetrics;
 import com.android.networkstack.packets.NeighborAdvertisement;
 import com.android.networkstack.packets.NeighborSolicitation;
@@ -277,6 +278,7 @@ public abstract class IpClientIntegrationTestCommon {
     @Mock private PowerManager.WakeLock mTimeoutWakeLock;
     @Mock protected NetworkStackIpMemoryStore mIpMemoryStore;
     @Mock private NetworkQuirkMetrics.Dependencies mNetworkQuirkMetricsDeps;
+    @Mock private IpReachabilityMonitorMetrics mIpReachabilityMonitorMetrics;
     @Mock protected IpReachabilityMonitor.Callback mCallback;
 
     @Spy private INetd mNetd;
@@ -484,6 +486,10 @@ public abstract class IpClientIntegrationTestCommon {
                 public boolean isFeatureEnabled(final Context context, final String name,
                         boolean defaultEnabled) {
                     return Dependencies.this.isFeatureEnabled(context, name, defaultEnabled);
+                }
+
+                public IpReachabilityMonitorMetrics getIpReachabilityMonitorMetrics() {
+                    return mIpReachabilityMonitorMetrics;
                 }
             };
         }
