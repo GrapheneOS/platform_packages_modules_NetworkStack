@@ -36,7 +36,6 @@ import java.util.Set;
 @RequiresApi(Build.VERSION_CODES.S)
 public class NetworkRequestShimImpl
         extends com.android.networkstack.apishim.api30.NetworkRequestShimImpl {
-    @RequiresApi(Build.VERSION_CODES.S)
     protected NetworkRequestShimImpl() {
         super();
     }
@@ -56,6 +55,13 @@ public class NetworkRequestShimImpl
     public void setUids(@NonNull NetworkRequest.Builder builder,
             @Nullable Set<Range<Integer>> uids) {
         builder.setUids(uids);
+    }
+
+    @Override
+    public NetworkRequest.Builder setIncludeOtherUidNetworks(NetworkRequest.Builder builder,
+            boolean include) {
+        builder.setIncludeOtherUidNetworks(include);
+        return builder;
     }
 
     @Override
