@@ -17,6 +17,7 @@
 package com.android.server.connectivity;
 
 import static android.net.CaptivePortal.APP_RETURN_DISMISSED;
+import static android.net.CaptivePortal.APP_RETURN_WANTED_AS_IS;
 import static android.net.DnsResolver.TYPE_A;
 import static android.net.DnsResolver.TYPE_AAAA;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_PROBE_DNS;
@@ -1878,12 +1879,10 @@ public class NetworkMonitorTest {
                 nm.getEvaluationState().getEvaluationResult());
     }
 
-    @Test
-    public void testLaunchCaptivePortalApp() throws Exception {
+    public void setupAndLaunchCaptivePortalApp(final NetworkMonitor nm) throws Exception {
         setSslException(mHttpsConnection);
         setPortal302(mHttpConnection);
         when(mHttpConnection.getHeaderField(eq("location"))).thenReturn(TEST_LOGIN_URL);
-        final NetworkMonitor nm = makeMonitor(CELL_METERED_CAPABILITIES);
         notifyNetworkConnected(nm, CELL_METERED_CAPABILITIES);
 
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1))
@@ -1910,17 +1909,49 @@ public class NetworkMonitorTest {
         final String redirectUrl = bundle.getString(ConnectivityManager.EXTRA_CAPTIVE_PORTAL_URL);
         assertEquals(TEST_HTTP_URL, redirectUrl);
 
+        resetCallbacks();
+    }
+
+    @Test
+    public void testCaptivePortalLogin() throws Exception {
+        final NetworkMonitor nm = makeMonitor(CELL_METERED_CAPABILITIES);
+        setupAndLaunchCaptivePortalApp(nm);
+
         // Have the app report that the captive portal is dismissed, and check that we revalidate.
         setStatus(mHttpsConnection, 204);
         setStatus(mHttpConnection, 204);
 
-        resetCallbacks();
         nm.notifyCaptivePortalAppFinished(APP_RETURN_DISMISSED);
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).atLeastOnce())
                 .notifyNetworkTestedWithExtras(matchNetworkTestResultParcelable(
                         NETWORK_VALIDATION_RESULT_VALID,
                         NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTP));
         assertEquals(0, mRegisteredReceivers.size());
+    }
+
+    @Test
+    public void testCaptivePortalUseAsIs() throws Exception {
+        final NetworkMonitor nm = makeMonitor(CELL_METERED_CAPABILITIES);
+        setupAndLaunchCaptivePortalApp(nm);
+
+        // The user decides this network is wanted as is, either by encountering an SSL error or
+        // encountering an unknown scheme and then deciding to continue through the browser, or by
+        // selecting this option through the options menu.
+        nm.notifyCaptivePortalAppFinished(APP_RETURN_WANTED_AS_IS);
+        // The captive portal is still closed, but the network validates since the user said so.
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).atLeastOnce())
+                .notifyNetworkTestedWithExtras(matchNetworkTestResultParcelable(
+                        NETWORK_VALIDATION_RESULT_VALID, 0 /* probesSucceeded */));
+        resetCallbacks();
+
+        // Revalidate.
+        nm.forceReevaluation(0 /* responsibleUid */);
+
+        // The network should still be valid.
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).atLeastOnce())
+                .notifyNetworkTestedWithExtras(matchNetworkTestResultParcelable(
+                        NETWORK_VALIDATION_RESULT_VALID, 0 /* probesSucceeded */,
+                        TEST_LOGIN_URL));
     }
 
     @Test
