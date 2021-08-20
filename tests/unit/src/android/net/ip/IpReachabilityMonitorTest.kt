@@ -25,6 +25,7 @@ import android.net.LinkProperties
 import android.net.RouteInfo
 import android.net.metrics.IpConnectivityLog
 import android.net.util.InterfaceParams
+import android.net.util.NetworkStackUtils.IP_REACHABILITY_MCAST_RESOLICIT_VERSION
 import android.net.util.SharedLog
 import android.os.Handler
 import android.os.HandlerThread
@@ -36,6 +37,7 @@ import android.stats.connectivity.IpType.IPV6
 import android.stats.connectivity.NudEventType
 import android.stats.connectivity.NudEventType.NUD_CONFIRM_FAILED
 import android.stats.connectivity.NudEventType.NUD_CONFIRM_FAILED_CRITICAL
+import android.stats.connectivity.NudEventType.NUD_MAC_ADDRESS_CHANGED
 import android.stats.connectivity.NudEventType.NUD_POST_ROAMING_FAILED
 import android.stats.connectivity.NudEventType.NUD_POST_ROAMING_FAILED_CRITICAL
 import android.stats.connectivity.NudEventType.NUD_ORGANIC_FAILED
@@ -50,6 +52,7 @@ import androidx.test.filters.SmallTest
 import androidx.test.runner.AndroidJUnit4
 import com.android.networkstack.metrics.IpReachabilityMonitorMetrics
 import com.android.net.module.util.netlink.StructNdMsg.NUD_FAILED
+import com.android.net.module.util.netlink.StructNdMsg.NUD_REACHABLE
 import com.android.net.module.util.netlink.StructNdMsg.NUD_STALE
 import com.android.testutils.makeNewNeighMessage
 import com.android.testutils.waitForIdle
@@ -59,7 +62,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
+import org.mockito.ArgumentMatchers.anyBoolean
 import org.mockito.ArgumentMatchers.anyInt
+import org.mockito.ArgumentMatchers.anyObject
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.doAnswer
@@ -324,6 +329,29 @@ class IpReachabilityMonitorTest {
         verifyNudFailureMetrics(eventType, ipType, lostNeighborType)
     }
 
+    private fun runNeighborReachableButMacAddrChangedTest(
+        newLp: LinkProperties,
+        neighbor: InetAddress,
+        ipType: IpType
+    ) {
+        doReturn(true).`when`(dependencies).isFeatureEnabled(anyObject(),
+                eq(IP_REACHABILITY_MCAST_RESOLICIT_VERSION), anyBoolean())
+
+        reachabilityMonitor.updateLinkProperties(newLp)
+
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(neighbor, NUD_REACHABLE,
+                "001122334455" /* oldMac */))
+        handlerThread.waitForIdle(TEST_TIMEOUT_MS)
+        verify(callback, never()).notifyLost(eq(neighbor), anyString())
+
+        reachabilityMonitor.probeAll(true /* dueToRoam */)
+
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(neighbor, NUD_REACHABLE,
+                "1122334455aa" /* newMac */))
+        verify(callback, timeout(TEST_TIMEOUT_MS)).notifyLost(eq(neighbor), anyString())
+        verifyNudFailureMetrics(NUD_MAC_ADDRESS_CHANGED, ipType, NUD_NEIGHBOR_GATEWAY)
+    }
+
     @Test
     fun testLoseProvisioning_Ipv4DnsLost() {
         runLoseProvisioningTest(TEST_LINK_PROPERTIES, TEST_IPV4_DNS)
@@ -518,5 +546,15 @@ class IpReachabilityMonitorTest {
         runLoseProvisioningTest(TEST_LINK_PROPERTIES, TEST_IPV6_GATEWAY)
 
         verifyNudFailureMetrics(NUD_CONFIRM_FAILED_CRITICAL, IPV6, NUD_NEIGHBOR_GATEWAY)
+    }
+
+    @Test
+    fun testNudProbeFailedMetrics_defaultIPv6GatewayMacAddrChanged() {
+        runNeighborReachableButMacAddrChangedTest(TEST_LINK_PROPERTIES, TEST_IPV6_GATEWAY, IPV6)
+    }
+
+    @Test
+    fun testNudProbeFailedMetrics_defaultIPv4GatewayMacAddrChanged() {
+        runNeighborReachableButMacAddrChangedTest(TEST_LINK_PROPERTIES, TEST_IPV4_GATEWAY, IPV4)
     }
 }
