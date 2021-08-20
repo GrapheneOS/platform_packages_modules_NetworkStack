@@ -3483,11 +3483,11 @@ public class NetworkMonitor extends StateMachine {
         protected void reportEvaluationResult(int result, @Nullable String redirectUrl) {
             if (mCaptivePortalWantedAsIs) {
                 result = NETWORK_VALIDATION_RESULT_VALID;
-            } else if (!isValidationRequired() && mProbeCompleted == 0 && ShimUtils.isAtLeastS()) {
+            } else if (!isValidationRequired() && mProbeCompleted == 0 && mCallbackVersion >= 11) {
                 // If validation is not required AND no probes were attempted, the validation was
                 // skipped. Report this to ConnectivityService for ConnectivityDiagnostics, but only
-                // if the platform is Android S+, as ConnectivityService must also know how to
-                // understand this bit.
+                // if the platform has callback version 11+, as ConnectivityService must also know
+                // how to understand this bit.
                 result |= NETWORK_VALIDATION_RESULT_SKIPPED;
             }
 
