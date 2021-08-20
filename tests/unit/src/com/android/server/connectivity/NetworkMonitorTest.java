@@ -589,7 +589,7 @@ public class NetworkMonitorTest {
     }
 
     private void resetCallbacks() {
-        resetCallbacks(6);
+        resetCallbacks(11);
     }
 
     private void resetCallbacks(int interfaceVersion) {
@@ -1796,12 +1796,8 @@ public class NetworkMonitorTest {
         runFailedNetworkTest();
     }
 
-    private void doValidationSkippedTest(NetworkCapabilities nc) throws Exception {
-        // For S+, the RESULT_SKIPPED bit will be included on networks that both do not require
-        // validation and for which validation is not performed.
-        final int validationResult = ShimUtils.isAtLeastS()
-                ? NETWORK_VALIDATION_RESULT_VALID | NETWORK_VALIDATION_RESULT_SKIPPED
-                : NETWORK_VALIDATION_RESULT_VALID;
+    private void doValidationSkippedTest(NetworkCapabilities nc, int validationResult)
+            throws Exception {
         runNetworkTest(TEST_LINK_PROPERTIES, nc, validationResult,
                 0 /* probesSucceeded */, null /* redirectUrl */);
         verify(mCleartextDnsNetwork, never()).openConnection(any());
@@ -1809,7 +1805,15 @@ public class NetworkMonitorTest {
 
     @Test
     public void testNoInternetCapabilityValidated() throws Exception {
-        doValidationSkippedTest(CELL_NO_INTERNET_CAPABILITIES);
+        doValidationSkippedTest(CELL_NO_INTERNET_CAPABILITIES,
+                NETWORK_VALIDATION_RESULT_VALID | NETWORK_VALIDATION_RESULT_SKIPPED);
+    }
+
+    @Test
+    public void testNoInternetCapabilityValidated_OlderPlatform() throws Exception {
+        // Before callbacks version 11, NETWORK_VALIDATION_RESULT_SKIPPED is not sent
+        resetCallbacks(10);
+        doValidationSkippedTest(CELL_NO_INTERNET_CAPABILITIES, NETWORK_VALIDATION_RESULT_VALID);
     }
 
     @Test
@@ -1822,7 +1826,8 @@ public class NetworkMonitorTest {
         if (ShimUtils.isAtLeastS()) {
             nc.addCapability(NET_CAPABILITY_NOT_VCN_MANAGED);
         }
-        doValidationSkippedTest(nc);
+        doValidationSkippedTest(nc,
+                NETWORK_VALIDATION_RESULT_VALID | NETWORK_VALIDATION_RESULT_SKIPPED);
     }
 
     @Test
@@ -1835,7 +1840,8 @@ public class NetworkMonitorTest {
         if (ShimUtils.isAtLeastS()) {
             nc.addCapability(NET_CAPABILITY_NOT_VCN_MANAGED);
         }
-        doValidationSkippedTest(nc);
+        doValidationSkippedTest(nc,
+                NETWORK_VALIDATION_RESULT_VALID | NETWORK_VALIDATION_RESULT_SKIPPED);
     }
 
     private NetworkCapabilities getVcnUnderlyingCarrierWifiCaps() {
@@ -2789,9 +2795,8 @@ public class NetworkMonitorTest {
                 new NetworkCapabilities(WIFI_OEM_PAID_CAPABILITIES);
         networkCapabilities.removeCapability(NET_CAPABILITY_INTERNET);
 
-        final int validationResult = ShimUtils.isAtLeastS()
-                ? NETWORK_VALIDATION_RESULT_VALID | NETWORK_VALIDATION_RESULT_SKIPPED
-                : NETWORK_VALIDATION_RESULT_VALID;
+        final int validationResult =
+                NETWORK_VALIDATION_RESULT_VALID | NETWORK_VALIDATION_RESULT_SKIPPED;
         runNetworkTest(TEST_LINK_PROPERTIES, networkCapabilities,
                 validationResult, 0 /* probesSucceeded */, null /* redirectUrl */);
 
