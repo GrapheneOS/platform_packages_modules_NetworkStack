@@ -388,7 +388,7 @@ public class NetworkMonitor extends StateMachine {
     private static final int CMD_BANDWIDTH_CHECK_COMPLETE = 23;
 
     /**
-     * Message to self to know the bandwidth check is timeouted.
+     * Message to self to know the bandwidth check has timed out.
      */
     private static final int CMD_BANDWIDTH_CHECK_TIMEOUT = 24;
 
@@ -636,6 +636,13 @@ public class NetworkMonitor extends StateMachine {
 
     /**
      * Request the NetworkMonitor to reevaluate the network.
+     *
+     * TODO : refactor reevaluation to introduce rate limiting. If the system finds a network is
+     * validated but some app can't access their server, or the network is behind a captive portal
+     * that only lets the validation URL through, apps may be calling reportNetworkConnectivity
+     * often, causing many revalidation attempts. Meanwhile, reevaluation attempts that result
+     * from actions that may affect the validation status (e.g. the user just logged in through
+     * the captive portal app) should never be skipped because of the rate limitation.
      */
     public void forceReevaluation(int responsibleUid) {
         sendMessage(CMD_FORCE_REEVALUATION, responsibleUid, 0);
@@ -916,6 +923,18 @@ public class NetworkMonitor extends StateMachine {
                             // If the user wants to use this network anyway, there is no need to
                             // perform the bandwidth check even if configured.
                             mIsBandwidthCheckPassedOrIgnored = true;
+                            // If the user wants to use this network anyway, it should always
+                            // be reported as validated, but other checks still need to be
+                            // done. For example, it should still validate strict private DNS and
+                            // show a notification if not available, because the network will
+                            // be unusable for this additional reason.
+                            mEvaluationState.setCaptivePortalWantedAsIs();
+                            // A successful evaluation result should be reported immediately, so
+                            // that the network stack may immediately use the validation in ranking
+                            // without waiting for a possibly long private DNS or bandwidth eval
+                            // step.
+                            mEvaluationState.reportEvaluationResult(NETWORK_VALIDATION_RESULT_VALID,
+                                    null);
                             // TODO: Distinguish this from a network that actually validates.
                             // Displaying the "x" on the system UI icon may still be a good idea.
                             transitionTo(mEvaluatingPrivateDnsState);
@@ -1290,11 +1309,19 @@ public class NetworkMonitor extends StateMachine {
                     //    the network so don't bother validating here.  Furthermore sending HTTP
                     //    packets over the network may be undesirable, for example an extremely
                     //    expensive metered network, or unwanted leaking of the User Agent string.
+                    // Also don't bother validating networks that the user already said they
+                    // wanted as-is.
                     //
                     // On networks that need to support private DNS in strict mode (e.g., VPNs, but
                     // not networks that don't provide Internet access), we still need to perform
                     // private DNS server resolution.
-                    if (!isValidationRequired()) {
+                    if (mEvaluationState.isCaptivePortalWantedAsIs()
+                            && isPrivateDnsValidationRequired()) {
+                        // Captive portals can only be detected on networks that validate both
+                        // validation and private DNS validation.
+                        validationLog("Captive portal is used as is, resolving private DNS");
+                        transitionTo(mEvaluatingPrivateDnsState);
+                    } else if (!isValidationRequired()) {
                         if (isPrivateDnsValidationRequired()) {
                             validationLog("Network would not satisfy default request, "
                                     + "resolving private DNS");
@@ -3390,18 +3417,28 @@ public class NetworkMonitor extends StateMachine {
     // NETWORK_VALIDATION_RESULT_VALID. But with this scheme, the first two or three validation
     // reports are all failures, because they are "HTTP succeeded but validation not yet passed",
     // "HTTP and HTTPS succeeded but validation not yet passed", etc.
+    // TODO : rename EvaluationState to not contain "State" in the name, as it makes this class
+    // sound like one of the states of the state machine, which it's not.
     @VisibleForTesting
     protected class EvaluationState {
         // The latest validation result for this network. This is a bitmask of
         // INetworkMonitor.NETWORK_VALIDATION_RESULT_* constants.
         private int mEvaluationResult = NETWORK_VALIDATION_RESULT_INVALID;
+
+
+        // Set when the captive portal app said this network should be used as is as a result
+        // of user interaction. The valid bit represents the user's decision to override automatic
+        // determination of whether the network has access to Internet, so in this case the
+        // network is always reported as validated.
+        // TODO : Make ConnectivityService aware of this state, so that it can use the network as
+        // the default without setting the VALIDATED bit, as it's a bit of a lie. This can't be
+        // done on Android <= R where CS can't be updated, but it is doable on S+.
+        private boolean mCaptivePortalWantedAsIs = false;
         // Indicates which probes have succeeded since clearProbeResults was called.
         // This is a bitmask of INetworkMonitor.NETWORK_VALIDATION_PROBE_* constants.
         private int mProbeResults = 0;
         // A bitmask to record which probes are completed.
         private int mProbeCompleted = 0;
-        // The latest redirect URL.
-        private String mRedirectUrl;
 
         protected void clearProbeResults() {
             mProbeResults = 0;
@@ -3435,17 +3472,26 @@ public class NetworkMonitor extends StateMachine {
             });
         }
 
+        protected void setCaptivePortalWantedAsIs() {
+            mCaptivePortalWantedAsIs = true;
+        }
+
+        protected boolean isCaptivePortalWantedAsIs() {
+            return mCaptivePortalWantedAsIs;
+        }
+
         protected void reportEvaluationResult(int result, @Nullable String redirectUrl) {
-            if (!isValidationRequired() && mProbeCompleted == 0 && ShimUtils.isAtLeastS()) {
+            if (mCaptivePortalWantedAsIs) {
+                result = NETWORK_VALIDATION_RESULT_VALID;
+            } else if (!isValidationRequired() && mProbeCompleted == 0 && mCallbackVersion >= 11) {
                 // If validation is not required AND no probes were attempted, the validation was
                 // skipped. Report this to ConnectivityService for ConnectivityDiagnostics, but only
-                // if the platform is Android S+, as ConnectivityService must also know how to
-                // understand this bit.
+                // if the platform has callback version 11+, as ConnectivityService must also know
+                // how to understand this bit.
                 result |= NETWORK_VALIDATION_RESULT_SKIPPED;
             }
 
             mEvaluationResult = result;
-            mRedirectUrl = redirectUrl;
             final NetworkTestResultParcelable p = new NetworkTestResultParcelable();
             p.result = result;
             p.probesSucceeded = mProbeResults;

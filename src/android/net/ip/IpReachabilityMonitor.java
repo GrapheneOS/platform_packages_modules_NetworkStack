@@ -156,6 +156,8 @@ public class IpReachabilityMonitor {
     protected static final int NUD_MCAST_RESOLICIT_NUM = 3;
     private static final int INVALID_NUD_MCAST_RESOLICIT_NUM = -1;
 
+    private static final int INVALID_LEGACY_NUD_FAILURE_TYPE = -1;
+
     public interface Callback {
         /**
          * This callback function must execute as quickly as possible as it is
@@ -408,6 +410,7 @@ public class IpReachabilityMonitor {
                     + " to: " + event.macAddr;
             mLog.w(logMsg);
             mCallback.notifyLost(event.ip, logMsg);
+            logNudFailed(event, NudEventType.NUD_MAC_ADDRESS_CHANGED);
             return;
         }
         maybeRestoreNeighborParameters();
@@ -446,6 +449,8 @@ public class IpReachabilityMonitor {
         final boolean lostProvisioning =
                 (mLinkProperties.isIpv4Provisioned() && !whatIfLp.isIpv4Provisioned())
                 || (mLinkProperties.isIpv6Provisioned() && !whatIfLp.isIpv6Provisioned());
+        final NudEventType type = getNudFailureEventType(isFromProbe(),
+                isNudFailureDueToRoam(), lostProvisioning);
 
         if (lostProvisioning) {
             final String logMsg = "FAILURE: LOST_PROVISIONING, " + event;
@@ -454,7 +459,7 @@ public class IpReachabilityMonitor {
             // an InetAddress argument.
             mCallback.notifyLost(ip, logMsg);
         }
-        logNudFailed(event, lostProvisioning);
+        logNudFailed(event, type);
     }
 
     private void maybeRestoreNeighborParameters() {
@@ -574,14 +579,16 @@ public class IpReachabilityMonitor {
         return duration < getProbeWakeLockDuration();
     }
 
-    private boolean isProbedNudFailureDueToRoam() {
+    private boolean isNudFailureDueToRoam() {
+        if (!isFromProbe()) return false;
+
         // Check to which probe expiry the curren timestamp gets close when NUD failure event
         // happens, theoretically that indicates which probe event(due to roam or CMD_CONFIRM)
         // was triggered eariler.
         //
         // Note that this would be incorrect if the probe or confirm was so long ago that the
         // probe duration has already expired. That cannot happen because isFromProbe would return
-        // false, and this method is only called on NUD failures due to probes.
+        // false.
         final long probeExpiryAfterRoam = mLastProbeDueToRoamMs + getProbeWakeLockDuration();
         final long probeExpiryAfterConfirm =
                 mLastProbeDueToConfirmMs + getProbeWakeLockDuration();
@@ -595,10 +602,15 @@ public class IpReachabilityMonitor {
         mMetricsLog.log(mInterfaceParams.name, new IpReachabilityEvent(eventType));
     }
 
-    private void logNudFailed(final NeighborEvent event, boolean lostProvisioning) {
-        final int eventType = nudFailureEventType(isFromProbe(), lostProvisioning);
+    private void logNudFailed(final NeighborEvent event, final NudEventType type) {
+        logNeighborLostEvent(event, type);
+
+        // The legacy metrics only record whether the failure came from a probe and whether
+        // the network is still provisioned. They do not record provisioning failures due to
+        // multicast resolicits finding that the MAC address has changed.
+        final int eventType = legacyNudFailureType(type);
+        if (eventType == INVALID_LEGACY_NUD_FAILURE_TYPE) return;
         mMetricsLog.log(mInterfaceParams.name, new IpReachabilityEvent(eventType));
-        logNeighborLostEvent(event, lostProvisioning);
     }
 
     /**
@@ -637,23 +649,32 @@ public class IpReachabilityMonitor {
      * Log NUD failure metrics with new Westworld APIs while the function using mMetricsLog API
      * still sends the legacy metrics, @see #logNudFailed.
      */
-    private void logNeighborLostEvent(final NeighborEvent event, boolean isProvisioningLost) {
+    private void logNeighborLostEvent(final NeighborEvent event, final NudEventType type) {
         final IpType ipType = (event.ip instanceof Inet6Address) ? IpType.IPV6 : IpType.IPV4;
         mIpReachabilityMetrics.setNudIpType(ipType);
         mIpReachabilityMetrics.setNudNeighborType(getNeighborType(event));
-        mIpReachabilityMetrics.setNudEventType(getNudFailureEventType(isFromProbe(),
-                isProbedNudFailureDueToRoam(), isProvisioningLost));
+        mIpReachabilityMetrics.setNudEventType(type);
         mIpReachabilityMetrics.statsWrite();
     }
 
     /**
      * Returns the NUD failure event type code corresponding to the given conditions.
      */
-    private static int nudFailureEventType(boolean isFromProbe, boolean isProvisioningLost) {
-        if (isFromProbe) {
-            return isProvisioningLost ? PROVISIONING_LOST : NUD_FAILED;
-        } else {
-            return isProvisioningLost ? PROVISIONING_LOST_ORGANIC : NUD_FAILED_ORGANIC;
+    private static int legacyNudFailureType(final NudEventType type) {
+        switch (type) {
+            case NUD_POST_ROAMING_FAILED:
+            case NUD_CONFIRM_FAILED:
+                return NUD_FAILED;
+            case NUD_POST_ROAMING_FAILED_CRITICAL:
+            case NUD_CONFIRM_FAILED_CRITICAL:
+                return PROVISIONING_LOST;
+            case NUD_ORGANIC_FAILED:
+                return NUD_FAILED_ORGANIC;
+            case NUD_ORGANIC_FAILED_CRITICAL:
+                return PROVISIONING_LOST_ORGANIC;
+            default:
+                // Do not log legacy event
+                return INVALID_LEGACY_NUD_FAILURE_TYPE;
         }
     }
 }
