@@ -21,6 +21,7 @@
   android:sharedUserId="android.uid.networkstack"
   android:versionCode="319999900"
   android:versionName="s_aml_319999900"
+  coreApp="true"
 >
     <!-- Permissions must be defined here, and not in the base manifest, as the network stack
          running in the system server process does not need any permission, and having privileged
