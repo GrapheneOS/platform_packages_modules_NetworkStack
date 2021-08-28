@@ -18,5 +18,6 @@
           package="com.android.networkstack"
           android:sharedUserId="android.uid.networkstack"
           android:versionCode="320000000"
-          android:versionName="T-next">
+          android:versionName="T-next"
+          coreApp="true">
 </manifest>
