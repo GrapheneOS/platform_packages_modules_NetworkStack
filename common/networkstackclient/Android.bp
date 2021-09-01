@@ -121,7 +121,7 @@ aidl_interface {
             enabled: false,
         },
     },
-    imports: ["ipmemorystore-aidl-interfaces"],
+    imports: ["ipmemorystore-aidl-interfaces-V10"],
     versions: [
         "1",
         "2",
