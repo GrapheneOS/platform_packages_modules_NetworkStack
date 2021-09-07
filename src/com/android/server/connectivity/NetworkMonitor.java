@@ -623,6 +623,10 @@ public class NetworkMonitor extends StateMachine {
         // even before notifyNetworkConnected.
         mLinkProperties = new LinkProperties();
         mNetworkCapabilities = new NetworkCapabilities(null);
+
+        Log.d(TAG, "Starting on network " + mNetwork
+                + " with capport HTTPS URL " + Arrays.toString(mCaptivePortalHttpsUrls)
+                + " and HTTP URL " + Arrays.toString(mCaptivePortalHttpUrls));
     }
 
     /**
