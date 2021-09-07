@@ -715,7 +715,7 @@ public class IpClient extends StateMachine {
                 (ifaceUp) -> sendMessage(EVENT_NETLINK_LINKPROPERTIES_CHANGED, ifaceUp
                         ? ARG_LINKPROP_CHANGED_LINKSTATE_UP
                         : ARG_LINKPROP_CHANGED_LINKSTATE_DOWN),
-                config, mLog) {
+                config, mLog, mDependencies) {
             @Override
             public void onInterfaceAdded(String iface) {
                 super.onInterfaceAdded(iface);
