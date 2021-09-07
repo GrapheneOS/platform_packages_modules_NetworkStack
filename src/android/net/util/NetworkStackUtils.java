@@ -250,6 +250,13 @@ public class NetworkStackUtils {
             "ipclient_garp_na_roaming_version";
 
     /**
+     * Experiment flag to enable parsing netlink events from kernel directly instead from netd aidl
+     * interface.
+     */
+    public static final String IPCLIENT_PARSE_NETLINK_EVENTS_VERSION =
+            "ipclient_parse_netlink_events_version";
+
+    /**
      * Experiment flag to disable accept_ra parameter when IPv6 provisioning loss happens due to
      * the default route has gone.
      */
