@@ -906,6 +906,7 @@ public class IpClient extends StateMachine {
 
     private void stopStateMachineUpdaters() {
         mObserverRegistry.unregisterObserver(mLinkObserver);
+        mLinkObserver.clearInterfaceParams();
         mLinkObserver.shutdown();
     }
 
@@ -1969,7 +1970,6 @@ public class IpClient extends StateMachine {
             mHasDisabledIpv6OrAcceptRaOnProvLoss = false;
             mGratuitousNaTargetAddresses.clear();
 
-            mLinkObserver.clearInterfaceParams();
             resetLinkProperties();
             if (mStartTimeMillis > 0) {
                 // Completed a life-cycle; send a final empty LinkProperties
