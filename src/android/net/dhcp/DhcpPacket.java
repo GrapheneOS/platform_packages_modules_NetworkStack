@@ -321,7 +321,8 @@ public abstract class DhcpPacket {
      * packet may include this option.
      */
     public static final byte DHCP_RAPID_COMMIT = 80;
-    protected boolean mRapidCommit;
+    @VisibleForTesting(otherwise = VisibleForTesting.PROTECTED)
+    public boolean mRapidCommit;
 
     /**
      * DHCP IPv6-Only Preferred Option(RFC 8925).
