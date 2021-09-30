@@ -36,7 +36,6 @@ import java.util.Set;
 @RequiresApi(Build.VERSION_CODES.S)
 public class NetworkRequestShimImpl
         extends com.android.networkstack.apishim.api30.NetworkRequestShimImpl {
-    @RequiresApi(Build.VERSION_CODES.S)
     protected NetworkRequestShimImpl() {
         super();
     }
