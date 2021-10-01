@@ -1595,8 +1595,13 @@ public class NetworkMonitor extends StateMachine {
 
             final int token = ++mProbeToken;
             final ValidationProperties deps = new ValidationProperties(mNetworkCapabilities);
+            final URL fallbackUrl = nextFallbackUrl();
+            final URL[] httpsUrls = Arrays.copyOf(
+                    mCaptivePortalHttpsUrls, mCaptivePortalHttpsUrls.length);
+            final URL[] httpUrls = Arrays.copyOf(
+                    mCaptivePortalHttpUrls, mCaptivePortalHttpUrls.length);
             mThread = new Thread(() -> sendMessage(obtainMessage(CMD_PROBE_COMPLETE, token, 0,
-                    isCaptivePortal(deps))));
+                    isCaptivePortal(deps, httpsUrls, httpUrls, fallbackUrl))));
             mThread.start();
         }
 
@@ -2345,15 +2350,14 @@ public class NetworkMonitor extends StateMachine {
         }
     }
 
-    private CaptivePortalProbeResult isCaptivePortal(ValidationProperties properties) {
+    private CaptivePortalProbeResult isCaptivePortal(ValidationProperties properties,
+            URL[] httpsUrls, URL[] httpUrls, URL fallbackUrl) {
         if (!mIsCaptivePortalCheckEnabled) {
             validationLog("Validation disabled.");
             return CaptivePortalProbeResult.success(CaptivePortalProbeResult.PROBE_UNKNOWN);
         }
 
         URL pacUrl = null;
-        final URL[] httpsUrls = mCaptivePortalHttpsUrls;
-        final URL[] httpUrls = mCaptivePortalHttpUrls;
 
         // On networks with a PAC instead of fetching a URL that should result in a 204
         // response, we instead simply fetch the PAC script.  This is done for a few reasons:
@@ -2394,7 +2398,7 @@ public class NetworkMonitor extends StateMachine {
         } else if (mUseHttps && httpsUrls.length == 1 && httpUrls.length == 1) {
             // Probe results are reported inside sendHttpAndHttpsParallelWithFallbackProbes.
             result = sendHttpAndHttpsParallelWithFallbackProbes(properties, proxyInfo,
-                    httpsUrls[0], httpUrls[0]);
+                    httpsUrls[0], httpUrls[0], fallbackUrl);
         } else if (mUseHttps) {
             // Support result aggregation from multiple Urls.
             result = sendMultiParallelHttpAndHttpsProbes(properties, proxyInfo, httpsUrls,
@@ -2996,7 +3000,8 @@ public class NetworkMonitor extends StateMachine {
     }
 
     private CaptivePortalProbeResult sendHttpAndHttpsParallelWithFallbackProbes(
-            ValidationProperties properties, ProxyInfo proxy, URL httpsUrl, URL httpUrl) {
+            ValidationProperties properties, ProxyInfo proxy, URL httpsUrl, URL httpUrl,
+            URL fallbackUrl) {
         // Number of probes to wait for. If a probe completes with a conclusive answer
         // it shortcuts the latch immediately by forcing the count to 0.
         final CountDownLatch latch = new CountDownLatch(2);
@@ -3042,10 +3047,10 @@ public class NetworkMonitor extends StateMachine {
         // If a fallback method exists, use it to retry portal detection.
         // If we have new-style probe specs, use those. Otherwise, use the fallback URLs.
         final CaptivePortalProbeSpec probeSpec = nextFallbackSpec();
-        final URL fallbackUrl = (probeSpec != null) ? probeSpec.getUrl() : nextFallbackUrl();
+        final URL fallback = (probeSpec != null) ? probeSpec.getUrl() : fallbackUrl;
         CaptivePortalProbeResult fallbackProbeResult = null;
-        if (fallbackUrl != null) {
-            fallbackProbeResult = sendHttpProbe(fallbackUrl, PROBE_FALLBACK, probeSpec);
+        if (fallback != null) {
+            fallbackProbeResult = sendHttpProbe(fallback, PROBE_FALLBACK, probeSpec);
             reportHttpProbeResult(NETWORK_VALIDATION_PROBE_FALLBACK, fallbackProbeResult);
             if (fallbackProbeResult.isPortal()) {
                 return fallbackProbeResult;
