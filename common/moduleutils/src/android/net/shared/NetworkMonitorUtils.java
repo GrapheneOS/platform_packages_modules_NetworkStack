@@ -83,10 +83,6 @@ public class NetworkMonitorUtils {
             return true;
         }
 
-        // TODO: once TRANSPORT_TEST is @SystemApi in S and S SDK is stable (so constant shims can
-        // be replaced with the SDK constant that will be inlined), replace isTestNetwork with
-        // hasTransport(TRANSPORT_TEST)
-
         // Test networks that also have one of the major transport types are attempting to replicate
         // that transport on a test interface (for example, test ethernet networks with
         // EthernetManager#setIncludeTestInterfaces). Run validation on them for realistic tests.
