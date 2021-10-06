@@ -48,9 +48,7 @@ public class SettingsShimImpl
     public boolean checkAndNoteWriteSettingsOperation(@NonNull Context context, int uid,
             @NonNull String callingPackage, @Nullable String callingAttributionTag,
             boolean throwException) {
-        // Since checkAndNoteWriteSettingsOperation with callingAttributionTag (S method) is not
-        // available in AOSP, calling R method (same as API 30 shim) temporary.
         return Settings.checkAndNoteWriteSettingsOperation(context, uid, callingPackage,
-                throwException);
+                callingAttributionTag, throwException);
     }
 }

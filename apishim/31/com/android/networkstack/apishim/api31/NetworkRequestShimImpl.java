@@ -58,6 +58,13 @@ public class NetworkRequestShimImpl
     }
 
     @Override
+    public NetworkRequest.Builder setIncludeOtherUidNetworks(NetworkRequest.Builder builder,
+            boolean include) {
+        builder.setIncludeOtherUidNetworks(include);
+        return builder;
+    }
+
+    @Override
     public NetworkRequest.Builder newBuilder(@NonNull NetworkRequest request) {
         return new NetworkRequest.Builder(request);
     }

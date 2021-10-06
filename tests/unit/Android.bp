@@ -36,7 +36,10 @@ java_defaults {
         "android.test.base",
         "android.test.mock",
     ],
-    defaults: ["libnetworkstackutilsjni_deps"],
+    defaults: [
+        "framework-connectivity-test-defaults",
+        "libnetworkstackutilsjni_deps"
+    ],
     jni_libs: [
         // For mockito extended
         "libdexmakerjvmtiagent",

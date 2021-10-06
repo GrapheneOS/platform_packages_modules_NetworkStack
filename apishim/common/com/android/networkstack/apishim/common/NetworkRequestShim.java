@@ -37,6 +37,14 @@ public interface NetworkRequestShim {
             @Nullable Set<Range<Integer>> uids) throws UnsupportedApiLevelException;
 
     /**
+     * See android.net.NetworkRequest.Builder#setIncludeOtherUidNetworks.
+     */
+    default NetworkRequest.Builder setIncludeOtherUidNetworks(NetworkRequest.Builder builder,
+            boolean include) throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Not supported before API 31.");
+    }
+
+    /**
      * See android.net.NetworkRequest.Builder(NetworkRequest).
      * @throws UnsupportedApiLevelException if API is not available in the API level.
      */
