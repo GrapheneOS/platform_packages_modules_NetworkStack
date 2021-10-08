@@ -130,7 +130,7 @@ public class CaptivePortalDataShimImpl
     @Override
     public CaptivePortalDataShim withVenueFriendlyName(String friendlyName)
             throws UnsupportedApiLevelException {
-        // Not supported in API level 29
+        // Not supported in API level 30
         throw new UnsupportedApiLevelException("FriendlyName not supported on API 30");
     }
 
@@ -149,7 +149,7 @@ public class CaptivePortalDataShimImpl
     public CaptivePortalDataShim withPasspointInfo(@NonNull String friendlyName,
             @NonNull Uri venueInfoUrl, @NonNull Uri termsAndConditionsUrl)
             throws UnsupportedApiLevelException {
-        // Not supported in API level 29
+        // Not supported in API level 30
         throw new UnsupportedApiLevelException("PasspointInfo not supported on API 30");
     }
 }
