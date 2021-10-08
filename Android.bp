@@ -119,7 +119,7 @@ java_library {
     sdk_version: "system_30",
     visibility: ["//visibility:private"],
     lint: {
-        baseline_filename: "lint-baseline-api-30-shims.xml",
+        strict_updatability_linting: true,
     },
 }
 
