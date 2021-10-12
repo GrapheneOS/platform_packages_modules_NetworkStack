@@ -110,7 +110,7 @@ public class IpClientTest {
     private static final int TEST_IFINDEX = 1001;
     // See RFC 7042#section-2.1.2 for EUI-48 documentation values.
     private static final MacAddress TEST_MAC = MacAddress.fromString("00:00:5E:00:53:01");
-    private static final int TEST_TIMEOUT_MS = 400;
+    private static final int TEST_TIMEOUT_MS = 30_000;
     private static final String TEST_L2KEY = "some l2key";
     private static final String TEST_CLUSTER = "some cluster";
     private static final String TEST_SSID = "test_ssid";
