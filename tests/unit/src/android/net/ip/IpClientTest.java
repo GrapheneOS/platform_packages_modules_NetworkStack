@@ -16,6 +16,7 @@
 
 package android.net.ip;
 
+import static android.net.util.NetworkStackUtils.IPCLIENT_PARSE_NETLINK_EVENTS_VERSION;
 import static android.system.OsConstants.RT_SCOPE_UNIVERSE;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -25,6 +26,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyBoolean;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
@@ -164,6 +166,8 @@ public class IpClientTest {
         when(mDependencies.getIpMemoryStore(mContext, mNetworkStackServiceManager))
                 .thenReturn(mIpMemoryStore);
         when(mDependencies.getIpConnectivityLog()).thenReturn(mMetricsLog);
+        when(mDependencies.isFeatureEnabled(eq(mContext),
+                eq(IPCLIENT_PARSE_NETLINK_EVENTS_VERSION), anyBoolean())).thenReturn(false);
 
         mIfParams = null;
     }
