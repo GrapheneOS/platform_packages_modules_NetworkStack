@@ -19,11 +19,13 @@ package android.net.util;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.text.TextUtils;
-import android.util.LocalLog;
 import android.util.Log;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
+import java.time.LocalDateTime;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.StringJoiner;
 
 
@@ -43,7 +45,7 @@ public class SharedLog {
         ERROR,
         MARK,
         WARN,
-    };
+    }
 
     private final LocalLog mLocalLog;
     // The tag to use for output to the system log. This is not output to the
@@ -89,7 +91,7 @@ public class SharedLog {
      * <p>This method may be called on any thread.
      */
     public void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
-        mLocalLog.readOnlyLocalLog().dump(fd, writer, args);
+        mLocalLog.dump(writer);
     }
 
     //////
@@ -181,7 +183,7 @@ public class SharedLog {
 
     private String record(Category category, String msg) {
         final String entry = logLine(category, msg);
-        mLocalLog.log(entry);
+        mLocalLog.append(entry);
         return entry;
     }
 
@@ -197,5 +199,34 @@ public class SharedLog {
     // or is a subcomponent within the hierarchy.
     private boolean isRootLogInstance() {
         return TextUtils.isEmpty(mComponent) || mComponent.equals(mTag);
+    }
+
+    private static final class LocalLog {
+        private final Deque<String> mLog;
+        private final int mMaxLines;
+
+        LocalLog(int maxLines) {
+            mMaxLines = Math.max(0, maxLines);
+            mLog = new ArrayDeque<>(mMaxLines);
+        }
+
+        synchronized void append(String logLine) {
+            if (mMaxLines <= 0) return;
+            while (mLog.size() >= mMaxLines) {
+                mLog.remove();
+            }
+            mLog.add(LocalDateTime.now() + " - " + logLine);
+        }
+
+        /**
+         * Dumps the content of local log to print writer with each log entry
+         *
+         * @param pw printer writer to write into
+         */
+        synchronized void dump(PrintWriter pw) {
+            for (final String s : mLog) {
+                pw.println(s);
+            }
+        }
     }
 }
