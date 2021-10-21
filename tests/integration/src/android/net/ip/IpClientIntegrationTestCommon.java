@@ -620,13 +620,7 @@ public abstract class IpClientIntegrationTestCommon {
     @After
     public void tearDown() throws Exception {
         if (testSkipped()) return;
-        if (mPacketReader != null) {
-            mHandler.post(() -> mPacketReader.stop()); // Also closes the socket
-            mTapFd = null;
-        }
-        if (mPacketReaderThread != null) {
-            mPacketReaderThread.quitSafely();
-        }
+        teardownTapInterface();
         mIIpClient.shutdown();
         awaitIpClientShutdown();
     }
@@ -662,6 +656,16 @@ public abstract class IpClientIntegrationTestCommon {
         mTapFd.setInt$(iface.getFileDescriptor().detachFd());
         mPacketReader = new TapPacketReader(mHandler, mTapFd, DATA_BUFFER_LEN);
         mHandler.post(() -> mPacketReader.start());
+    }
+
+    private void teardownTapInterface() {
+        if (mPacketReader != null) {
+            mHandler.post(() -> mPacketReader.stop());  // Also closes the socket
+            mTapFd = null;
+        }
+        if (mPacketReaderThread != null) {
+            mPacketReaderThread.quitSafely();
+        }
     }
 
     private MacAddress getIfaceMacAddr(String ifaceName) throws IOException {
@@ -3514,6 +3518,43 @@ public abstract class IpClientIntegrationTestCommon {
         assertNotNull(route);
         assertTrue(route.getDestination().equals(new IpPrefix("fe80::/64")));
         assertTrue(route.getGateway().isAnyLocalAddress());
+
+        // Check that if an RA is received, no IP addresses, routes, or DNS servers are configured.
+        // Instead of waiting some period of time for the RA to be received and checking the
+        // LinkProperties after that, tear down the interface and wait for it to go down. Then check
+        // that no LinkProperties updates ever contained non-link-local information.
+        sendBasicRouterAdvertisement(false /* waitForRs */);
+        teardownTapInterface();
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(any());
+        verify(mCb, never()).onLinkPropertiesChange(argThat(newLp ->
+                newLp.getDnsServers().size() != 0
+                        || newLp.getRoutes().size() > 1
+                        || newLp.hasIpv6DefaultRoute()
+                        || newLp.hasGlobalIpv6Address()
+        ));
+    }
+
+    @Test
+    public void testIPv6LinkLocalOnlyAndThenGlobal() throws Exception {
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIPv4()
+                .withIpv6LinkLocalOnly()
+                .withRandomMacAddress()
+                .build();
+        startIpClientProvisioning(config);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(any());
+        mIIpClient.stop();
+        verifyAfterIpClientShutdown();
+        reset(mCb);
+
+        // Speed up provisioning by enabling rapid commit. TODO: why is this necessary?
+        setDhcpFeatures(false /* isDhcpLeaseCacheEnabled */, true /* isRapidCommitEnabled */,
+                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+        config = new ProvisioningConfiguration.Builder()
+                .build();
+        startIpClientProvisioning(config);
+        performDualStackProvisioning();
+        // No exceptions? Dual-stack provisioning worked.
     }
 
     @Test
