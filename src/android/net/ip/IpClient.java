@@ -1301,7 +1301,7 @@ public class IpClient extends StateMachine {
             mNetd.setProcSysNet(INetd.IPV6, INetd.CONF, mInterfaceParams.name, "accept_ra",
                     Integer.toString(acceptRa));
         } catch (Exception e) {
-            Log.e(mTag, "Failed to set accept_ra to " + acceptRa);
+            Log.e(mTag, "Failed to set accept_ra to " + acceptRa + ": " + e);
         }
     }
 
@@ -1835,6 +1835,7 @@ public class IpClient extends StateMachine {
     }
 
     private boolean startIPv6() {
+        setIpv6AcceptRa(mConfiguration.mIPv6ProvisioningMode == PROV_IPV6_LINKLOCAL ? 0 : 2);
         return mInterfaceCtrl.setIPv6PrivacyExtensions(true)
                 && mInterfaceCtrl.setIPv6AddrGenModeIfSupported(mConfiguration.mIPv6AddrGenMode)
                 && mInterfaceCtrl.enableIPv6();
@@ -1966,7 +1967,6 @@ public class IpClient extends StateMachine {
         @Override
         public void enter() {
             stopAllIP();
-            setIpv6AcceptRa(2 /* accept_ra */);
             mHasDisabledIpv6OrAcceptRaOnProvLoss = false;
             mGratuitousNaTargetAddresses.clear();
 
