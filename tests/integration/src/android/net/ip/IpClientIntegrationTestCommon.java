@@ -255,7 +255,7 @@ public abstract class IpClientIntegrationTestCommon {
 
     @Parameterized.Parameters
     public static Iterable<? extends Object> data() {
-        return Arrays.asList(Boolean.valueOf("false"), Boolean.valueOf("true"));
+        return Arrays.asList(Boolean.FALSE, Boolean.TRUE);
     }
 
     /**
@@ -575,6 +575,17 @@ public abstract class IpClientIntegrationTestCommon {
         mIsSignatureRequiredTest = testMethod.getAnnotation(SignatureRequiredTest.class) != null;
         assumeFalse(testSkipped());
 
+        // Depend on the parameterized value to enable/disable netlink message refactor flag.
+        // Make sure both of the old codepath(rely on the INetdUnsolicitedEventListener aidl)
+        // and new codepath(parse netlink event from kernel) will be executed.
+        //
+        // Note this must be called before making IpClient instance since MyNetlinkMontior ctor
+        // in IpClientLinkObserver will use mIsNetlinkEventParseEnabled to decide the proper
+        // bindGroups, otherwise, the parameterized value got from ArrayMap(integration test) is
+        // always false.
+        setFeatureEnabled(NetworkStackUtils.IPCLIENT_PARSE_NETLINK_EVENTS_VERSION,
+                mIsNetlinkEventParseEnabled /* default value */);
+
         setUpTapInterface();
         mCb = mock(IIpClientCallbacks.class);
 
@@ -584,12 +595,6 @@ public abstract class IpClientIntegrationTestCommon {
         }
 
         mIIpClient = makeIIpClient(mIfaceName, mCb);
-
-        // Depend on the parameterized value to enable/disable netlink message refactor flag.
-        // Make sure both of the old codepath(rely on the INetdUnsolicitedEventListener aidl)
-        // and new codepath(parse netlink event from kernel) will be executed.
-        setFeatureEnabled(NetworkStackUtils.IPCLIENT_PARSE_NETLINK_EVENTS_VERSION,
-                mIsNetlinkEventParseEnabled /* default value */);
     }
 
     protected void setUpMocks() throws Exception {
@@ -1676,8 +1681,10 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     private boolean isStablePrivacyAddress(LinkAddress addr) {
-        // TODO: move away from getting address updates from netd and make this work on Q as well.
-        final int flag = ShimUtils.isAtLeastR() ? IFA_F_STABLE_PRIVACY : 0;
+        // The Q netd does not understand the IFA_F_STABLE_PRIVACY flag.
+        // See r.android.com/1295670.
+        final int flag = (mIsNetlinkEventParseEnabled || ShimUtils.isAtLeastR())
+                ? IFA_F_STABLE_PRIVACY : 0;
         return addr.isGlobalPreferred() && hasFlag(addr, flag);
     }
 
@@ -1903,12 +1910,9 @@ public abstract class IpClientIntegrationTestCommon {
         HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
     }
 
-    private void addIpAddressAndWaitForIt(final String iface) throws Exception {
+    private void waitForAddressViaNetworkObserver(final String iface, final String addr1,
+            final String addr2, int prefixLength) throws Exception {
         final CountDownLatch latch = new CountDownLatch(1);
-
-        final String addr1 = "192.0.2.99";
-        final String addr2 = "192.0.2.3";
-        final int prefixLength = 26;
 
         // Add two IPv4 addresses to the specified interface, and proceed when the NetworkObserver
         // has seen the second one. This ensures that every other NetworkObserver registered with
@@ -1932,6 +1936,22 @@ public abstract class IpClientIntegrationTestCommon {
                     latch.await(TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS));
         } finally {
             mNetworkObserverRegistry.unregisterObserver(observer);
+        }
+    }
+
+    private void addIpAddressAndWaitForIt(final String iface) throws Exception {
+        final String addr1 = "192.0.2.99";
+        final String addr2 = "192.0.2.3";
+        final int prefixLength = 26;
+
+        if (!mIsNetlinkEventParseEnabled) {
+            waitForAddressViaNetworkObserver(iface, addr1, addr2, prefixLength);
+        } else {
+            // IpClient gets IP addresses directly from netlink instead of from netd, unnecessary
+            // to rely on the NetworkObserver callbacks to confirm new added address update. Just
+            // add the addresses directly and wait to see if IpClient has seen the address
+            mNetd.interfaceAddAddress(iface, addr1, prefixLength);
+            mNetd.interfaceAddAddress(iface, addr2, prefixLength);
         }
 
         // Wait for IpClient to process the addition of the address.
@@ -1959,9 +1979,6 @@ public abstract class IpClientIntegrationTestCommon {
         // The address must be noticed before startProvisioning is called, or IpClient will
         // immediately declare provisioning success due to the presence of an IPv4 address.
         // The address must be IPv4 because IpClient clears IPv6 addresses on startup.
-        //
-        // TODO: once IpClient gets IP addresses directly from netlink instead of from netd, it
-        // may be sufficient to call waitForIdle to see if IpClient has seen the address.
         addIpAddressAndWaitForIt(mIfaceName);
     }
 
