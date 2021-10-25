@@ -40,7 +40,9 @@ import android.util.Log;
 import com.android.net.module.util.netlink.NduseroptMessage;
 import com.android.net.module.util.netlink.NetlinkConstants;
 import com.android.net.module.util.netlink.NetlinkMessage;
+import com.android.net.module.util.netlink.RtNetlinkAddressMessage;
 import com.android.net.module.util.netlink.RtNetlinkLinkMessage;
+import com.android.net.module.util.netlink.StructIfaddrMsg;
 import com.android.net.module.util.netlink.StructIfinfoMsg;
 import com.android.net.module.util.netlink.StructNdOptPref64;
 import com.android.net.module.util.netlink.StructNdOptRdnss;
@@ -158,6 +160,10 @@ public class IpClientLinkObserver implements NetworkObserver {
         }
     }
 
+    private void maybeLog(String operation, int ifindex, LinkAddress address) {
+        maybeLog(operation, "ifindex " + ifindex, address);
+    }
+
     private void maybeLog(String operation, Object o) {
         if (DBG) {
             Log.d(mTag, operation + ": " + o.toString());
@@ -196,34 +202,18 @@ public class IpClientLinkObserver implements NetworkObserver {
 
     @Override
     public void onInterfaceAddressUpdated(LinkAddress address, String iface) {
-        if (mInterfaceName.equals(iface)) {
-            maybeLog("addressUpdated", iface, address);
-            final boolean changed;
-            final boolean linkState;
-            synchronized (this) {
-                changed = mLinkProperties.addLinkAddress(address);
-                linkState = getInterfaceLinkStateLocked();
-            }
-            if (changed) {
-                mCallback.update(linkState);
-            }
-        }
+        if (isNetlinkEventParsingEnabled()) return;
+        if (!mInterfaceName.equals(iface)) return;
+        maybeLog("addressUpdated", iface, address);
+        updateInterfaceAddress(address, true /* add address */);
     }
 
     @Override
     public void onInterfaceAddressRemoved(LinkAddress address, String iface) {
-        if (mInterfaceName.equals(iface)) {
-            maybeLog("addressRemoved", iface, address);
-            final boolean changed;
-            final boolean linkState;
-            synchronized (this) {
-                changed = mLinkProperties.removeLinkAddress(address);
-                linkState = getInterfaceLinkStateLocked();
-            }
-            if (changed) {
-                mCallback.update(linkState);
-            }
-        }
+        if (isNetlinkEventParsingEnabled()) return;
+        if (!mInterfaceName.equals(iface)) return;
+        maybeLog("addressRemoved", iface, address);
+        updateInterfaceAddress(address, false /* remove address */);
     }
 
     @Override
@@ -282,6 +272,22 @@ public class IpClientLinkObserver implements NetworkObserver {
         }
     }
 
+    private void updateInterfaceAddress(final LinkAddress address, boolean add) {
+        final boolean changed;
+        final boolean linkState;
+        synchronized (this) {
+            if (add) {
+                changed = mLinkProperties.addLinkAddress(address);
+            } else {
+                changed = mLinkProperties.removeLinkAddress(address);
+            }
+            linkState = getInterfaceLinkStateLocked();
+        }
+        if (changed) {
+            mCallback.update(linkState);
+        }
+    }
+
     /**
      * Returns a copy of this object's LinkProperties.
      */
@@ -331,7 +337,9 @@ public class IpClientLinkObserver implements NetworkObserver {
             super(h, log, tag, OsConstants.NETLINK_ROUTE,
                     !isNetlinkEventParsingEnabled()
                     ? NetlinkConstants.RTMGRP_ND_USEROPT
-                    : (NetlinkConstants.RTMGRP_ND_USEROPT | NetlinkConstants.RTMGRP_LINK));
+                    : (NetlinkConstants.RTMGRP_ND_USEROPT | NetlinkConstants.RTMGRP_LINK
+                            | NetlinkConstants.RTMGRP_IPV4_IFADDR
+                            | NetlinkConstants.RTMGRP_IPV6_IFADDR));
             mHandler = h;
         }
 
@@ -485,12 +493,37 @@ public class IpClientLinkObserver implements NetworkObserver {
             }
         }
 
+        private void processRtNetlinkAddressMessage(RtNetlinkAddressMessage msg) {
+            if (!isNetlinkEventParsingEnabled()) return;
+
+            final StructIfaddrMsg ifaddrMsg = msg.getIfaddrHeader();
+            if (ifaddrMsg.index != mIfindex) return;
+            final LinkAddress la = new LinkAddress(msg.getIpAddress(), ifaddrMsg.prefixLen,
+                    msg.getFlags(), ifaddrMsg.scope);
+
+            switch (msg.getHeader().nlmsg_type) {
+                case NetlinkConstants.RTM_NEWADDR:
+                    maybeLog("addressUpdated", mIfindex, la);
+                    updateInterfaceAddress(la, true /* add address */);
+                    break;
+                case NetlinkConstants.RTM_DELADDR:
+                    maybeLog("addressRemoved", mIfindex, la);
+                    updateInterfaceAddress(la, false /* remove address */);
+                    break;
+                default:
+                    Log.e(mTag, "Unknown rtnetlink address msg type " + msg.getHeader().nlmsg_type);
+                    return;
+            }
+        }
+
         @Override
         protected void processNetlinkMessage(NetlinkMessage nlMsg, long whenMs) {
             if (nlMsg instanceof NduseroptMessage) {
                 processNduseroptMessage((NduseroptMessage) nlMsg, whenMs);
             } else if (nlMsg instanceof RtNetlinkLinkMessage) {
                 processRtNetlinkLinkMessage((RtNetlinkLinkMessage) nlMsg);
+            } else if (nlMsg instanceof RtNetlinkAddressMessage) {
+                processRtNetlinkAddressMessage((RtNetlinkAddressMessage) nlMsg);
             } else {
                 Log.e(mTag, "Unknown netlink message: " + nlMsg);
             }
