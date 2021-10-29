@@ -23,7 +23,6 @@ import android.net.Uri;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
 import com.android.networkstack.apishim.common.CaptivePortalDataShim;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
@@ -47,22 +46,6 @@ public class NetworkInformationShimImpl implements NetworkInformationShim {
      */
     public static NetworkInformationShim newInstance() {
         return new NetworkInformationShimImpl();
-    }
-
-    /**
-     * Indicates whether the shim can use APIs above the Q SDK.
-     */
-    @VisibleForTesting
-    public static boolean useApiAboveQ() {
-        return false;
-    }
-
-    /**
-     * Indicates whether the shim can use APIs above the R SDK.
-     */
-    @VisibleForTesting
-    public static boolean useApiAboveR() {
-        return false;
     }
 
     @Nullable
