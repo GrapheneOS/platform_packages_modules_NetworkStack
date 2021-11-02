@@ -20,9 +20,11 @@ import android.net.IpPrefix;
 import android.net.LinkProperties;
 import android.net.NetworkCapabilities;
 import android.net.Uri;
+import android.os.Build;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 
 import com.android.networkstack.apishim.common.CaptivePortalDataShim;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
@@ -35,6 +37,7 @@ import java.net.Inet4Address;
  * <p>Use {@link com.android.networkstack.apishim.NetworkInformationShimImpl} instead of this
  * fallback implementation.
  */
+@RequiresApi(Build.VERSION_CODES.Q)
 public class NetworkInformationShimImpl implements NetworkInformationShim {
     protected NetworkInformationShimImpl() {}
 
