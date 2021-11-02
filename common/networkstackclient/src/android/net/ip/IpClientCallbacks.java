@@ -141,5 +141,9 @@ public class IpClientCallbacks {
      *
      * @param lossInfo the specific neighbor reachability loss information.
      */
-    public void onReachabilityFailure(ReachabilityLossInfoParcelable lossInfo) {}
+    public void onReachabilityFailure(ReachabilityLossInfoParcelable lossInfo) {
+        // If the client does not implement this method, call the older
+        // onReachabilityLost method.
+        onReachabilityLost(lossInfo.message);
+    }
 }
