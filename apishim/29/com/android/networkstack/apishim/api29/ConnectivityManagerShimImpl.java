@@ -25,9 +25,11 @@ import android.net.ConnectivityManager;
 import android.net.ConnectivityManager.NetworkCallback;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
+import android.os.Build;
 import android.os.Handler;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 
 import com.android.networkstack.apishim.common.ConnectivityManagerShim;
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
@@ -35,6 +37,7 @@ import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 /**
  * Implementation of {@link ConnectivityManagerShim} for API 29.
  */
+@RequiresApi(Build.VERSION_CODES.Q)
 public class ConnectivityManagerShimImpl implements ConnectivityManagerShim {
     protected final ConnectivityManager mCm;
     protected ConnectivityManagerShimImpl(Context context) {
