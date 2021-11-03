@@ -1492,7 +1492,7 @@ public class IpClient extends StateMachine {
             newLp.addRoute(route);
         }
         addAllReachableDnsServers(newLp, netlinkLinkProperties.getDnsServers());
-        newLp.setNat64Prefix(netlinkLinkProperties.getNat64Prefix());
+        mShim.setNat64Prefix(newLp, mShim.getNat64Prefix(netlinkLinkProperties));
 
         // [3] Add in data from DHCPv4, if available.
         //
