@@ -68,7 +68,7 @@ java_defaults {
     name: "NetworkStackShimsDefaults",
     libs: [
         "androidx.annotation_annotation",
-        "networkstack-client",
+        "networkstack-aidl-latest",
     ],
     static_libs : [
         "modules-utils-build_system"
