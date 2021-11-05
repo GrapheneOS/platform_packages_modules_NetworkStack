@@ -145,12 +145,27 @@ aidl_interface {
 }
 
 java_library {
-    name: "networkstack-client",
+    name: "networkstack-aidl-latest",
     sdk_version: "system_current",
+    min_sdk_version: "29",
+    static_libs: [
+        "ipmemorystore-aidl-interfaces-V10-java",
+        "networkstack-aidl-interfaces-V12-java",
+    ],
+    visibility: ["//packages/modules/NetworkStack:__subpackages__"],
+    apex_available: [
+        "//apex_available:platform",
+        "com.android.tethering",
+        "com.android.wifi",
+    ],
+}
+
+java_library {
+    name: "networkstack-client",
+    sdk_version: "module_current",
     // this is part of updatable modules(NetworkStack) which runs on Q and above
     min_sdk_version: "29",
     srcs: [
-        ":framework-annotations",
         "src/android/net/ip/**/*.java",
         "src/android/net/IpMemoryStore.java",
         "src/android/net/IpMemoryStoreClient.java",
@@ -162,11 +177,13 @@ java_library {
         "src/android/net/util/**/*.java",
     ],
     libs: [
-        "net-utils-framework-common", // XXX for IpUtils.java only
+        // Since this library is sdk_version: "module_current", "framework-connectivity" is just
+        // the module_current API stubs of framework-connectivity
+        "framework-connectivity",
+        "framework-annotations-lib",
     ],
     static_libs: [
-        "ipmemorystore-aidl-interfaces-V10-java",
-        "networkstack-aidl-interfaces-V12-java",
+        "networkstack-aidl-latest",
     ],
     visibility: [
         "//frameworks/base/packages/Connectivity/service",
