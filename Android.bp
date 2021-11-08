@@ -50,7 +50,7 @@ package {
 // have a different value depending on the branch.
 java_defaults {
     name: "NetworkStackNextEnableDefaults",
-    enabled: true,
+    enabled: false,
 }
 // This is a placeholder comment to avoid merge conflicts
 // as the above target may have different "enabled" values
