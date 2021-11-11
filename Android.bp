@@ -215,6 +215,8 @@ java_defaults {
     static_libs: [
         "androidx.annotation_annotation",
         "modules-utils-build_system",
+        "modules-utils-preconditions",
+        "modules-utils-statemachine",
         "netd_aidl_interface-lateststable-java",
         "networkstack-client",
         "net-utils-framework-common",
