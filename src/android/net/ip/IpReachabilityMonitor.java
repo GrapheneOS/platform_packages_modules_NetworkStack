@@ -570,7 +570,7 @@ public class IpReachabilityMonitor {
             }
         }
 
-        mNumSolicits = numSolicits;
+        mNumSolicits = isMulticastResolicitEnabled() ? (numSolicits + numResolicits) : numSolicits;
         mInterSolicitIntervalMs = interSolicitIntervalMs;
     }
 
