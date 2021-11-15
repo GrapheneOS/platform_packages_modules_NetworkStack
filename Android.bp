@@ -45,6 +45,17 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
+// Defaults to enable/disable java targets that depend on
+// NetworkStackNext, which uses development APIs. "enabled" may
+// have a different value depending on the branch.
+java_defaults {
+    name: "NetworkStackNextEnableDefaults",
+    enabled: true,
+}
+// This is a placeholder comment to avoid merge conflicts
+// as the above target may have different "enabled" values
+// depending on the branch
+
 java_defaults {
     name: "NetworkStackDevApiLevel",
     min_sdk_version: "29",
@@ -233,7 +244,11 @@ java_defaults {
 // The versions of the android library containing network stack code compiled for each SDK variant.
 android_library {
     name: "NetworkStackApiCurrentLib",
-    defaults: ["NetworkStackDevApiLevel", "NetworkStackAndroidLibraryDefaults"],
+    defaults: [
+        "NetworkStackDevApiLevel",
+        "NetworkStackAndroidLibraryDefaults",
+        "NetworkStackNextEnableDefaults",
+    ],
     srcs: [
         "src/**/*.java",
         ":statslog-networkstack-java-gen-current"
@@ -302,7 +317,11 @@ java_defaults {
 // Non-updatable network stack running in the system server process for devices not using the module
 android_app {
     name: "InProcessNetworkStack",
-    defaults: [ "NetworkStackAppDefaults", "NetworkStackDevApiLevel"],
+    defaults: [
+        "NetworkStackAppDefaults",
+        "NetworkStackDevApiLevel",
+        "NetworkStackNextEnableDefaults",
+    ],
     static_libs: ["NetworkStackApiCurrentLib"],
     certificate: "platform",
     manifest: "AndroidManifest_InProcess.xml",
@@ -320,7 +339,11 @@ android_app {
 // Pre-merge the AndroidManifest for NetworkStackNext, so that its manifest can be merged on top
 android_library {
     name: "NetworkStackNextManifestBase",
-    defaults: ["NetworkStackAppDefaults", "NetworkStackDevApiLevel"],
+    defaults: [
+        "NetworkStackAppDefaults",
+        "NetworkStackDevApiLevel",
+        "NetworkStackNextEnableDefaults",
+    ],
     static_libs: ["NetworkStackApiCurrentLib"],
     manifest: "AndroidManifest.xml"
 }
@@ -328,7 +351,11 @@ android_library {
 // NetworkStack build targeting the current API release, for testing on in-development SDK
 android_app {
     name: "NetworkStackNext",
-    defaults: ["NetworkStackAppDefaults", "NetworkStackDevApiLevel"],
+    defaults: [
+        "NetworkStackAppDefaults",
+        "NetworkStackDevApiLevel",
+        "NetworkStackNextEnableDefaults",
+    ],
     static_libs: ["NetworkStackNextManifestBase"],
     certificate: "networkstack",
     manifest: "AndroidManifest_Next.xml",
