@@ -855,10 +855,10 @@ public abstract class IpClientIntegrationTestCommon {
                 captivePortalApiUrl, null /* ipv6OnlyWaitTime */);
     }
 
-    private static ByteBuffer buildDhcpNakPacket(final DhcpPacket packet) {
+    private static ByteBuffer buildDhcpNakPacket(final DhcpPacket packet, final String message) {
         return DhcpPacket.buildNakPacket(DhcpPacket.ENCAP_L2, packet.getTransactionId(),
             SERVER_ADDR /* serverIp */, INADDR_ANY /* relayIp */, packet.getClientMac(),
-            false /* broadcast */, "duplicated request IP address");
+            false /* broadcast */, message);
     }
 
     private void sendArpReply(final byte[] clientMac) throws IOException {
@@ -996,7 +996,7 @@ public abstract class IpClientIntegrationTestCommon {
                 final ByteBuffer byteBuffer = isSuccessLease
                         ? buildDhcpAckPacket(packet, CLIENT_ADDR, leaseTimeSec, (short) mtu,
                                 false /* rapidCommit */, captivePortalApiUrl)
-                        : buildDhcpNakPacket(packet);
+                        : buildDhcpNakPacket(packet, "duplicated request IP address");
                 mPacketReader.sendResponse(byteBuffer);
             } else {
                 fail("invalid DHCP packet");
@@ -2459,7 +2459,8 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     private void doDhcpRoamingTest(final boolean hasMismatchedIpAddress, final String displayName,
-            final MacAddress bssid, final boolean expectRoaming) throws Exception {
+            final MacAddress bssid, final boolean expectRoaming,
+            final boolean shouldReplyNakOnRoam) throws Exception {
         long currentTime = System.currentTimeMillis();
         final Layer2Information layer2Info = new Layer2Information(TEST_L2KEY, TEST_CLUSTER, bssid);
 
@@ -2501,11 +2502,16 @@ public abstract class IpClientIntegrationTestCommon {
         assertNull(packet.mRequestedIp);                // requested IP option
         assertNull(packet.mServerIdentifier);           // server ID
 
-        mPacketReader.sendResponse(buildDhcpAckPacket(packet,
-                hasMismatchedIpAddress ? CLIENT_ADDR_NEW : CLIENT_ADDR, TEST_LEASE_DURATION_S,
-                (short) TEST_DEFAULT_MTU, false /* rapidcommit */, null /* captivePortalUrl */));
+        final ByteBuffer packetBuffer = shouldReplyNakOnRoam
+                ? buildDhcpNakPacket(packet, "request IP on a wrong subnet")
+                : buildDhcpAckPacket(packet,
+                        hasMismatchedIpAddress ? CLIENT_ADDR_NEW : CLIENT_ADDR,
+                        TEST_LEASE_DURATION_S, (short) TEST_DEFAULT_MTU,
+                        false /* rapidCommit */, null /* captivePortalApiUrl */);
+        mPacketReader.sendResponse(packetBuffer);
         HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
-        if (hasMismatchedIpAddress) {
+
+        if (shouldReplyNakOnRoam || hasMismatchedIpAddress) {
             // notifyFailure
             ArgumentCaptor<DhcpResultsParcelable> captor =
                     ArgumentCaptor.forClass(DhcpResultsParcelable.class);
@@ -2513,9 +2519,9 @@ public abstract class IpClientIntegrationTestCommon {
             DhcpResults lease = fromStableParcelable(captor.getValue());
             assertNull(lease);
 
-            // roll back to INIT state.
-            packet = getNextDhcpPacket();
-            assertTrue(packet instanceof DhcpDiscoverPacket);
+            // DhcpClient rolls back to StoppedState instead of INIT state after calling
+            // notifyFailure, DHCPDISCOVER should not be sent out.
+            assertNull(getNextDhcpPacket(TEST_TIMEOUT_MS));
         } else {
             assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime,
                     TEST_DEFAULT_MTU);
@@ -2525,31 +2531,42 @@ public abstract class IpClientIntegrationTestCommon {
     @Test @SignatureRequiredTest(reason = "TODO: evaluate whether signature perms are required")
     public void testDhcpRoaming() throws Exception {
         doDhcpRoamingTest(false /* hasMismatchedIpAddress */, "\"0001docomo\"" /* display name */,
-                MacAddress.fromString(TEST_DEFAULT_BSSID), true /* expectRoaming */);
+                MacAddress.fromString(TEST_DEFAULT_BSSID), true /* expectRoaming */,
+                false /* shouldReplyNakOnRoam */);
     }
 
     @Test @SignatureRequiredTest(reason = "TODO: evaluate whether signature perms are required")
     public void testDhcpRoaming_invalidBssid() throws Exception {
         doDhcpRoamingTest(false /* hasMismatchedIpAddress */, "\"0001docomo\"" /* display name */,
-                MacAddress.fromString(TEST_DHCP_ROAM_BSSID), false /* expectRoaming */);
+                MacAddress.fromString(TEST_DHCP_ROAM_BSSID), false /* expectRoaming */,
+                false/* shouldReplyNakOnRoam */);
     }
 
     @Test @SignatureRequiredTest(reason = "TODO: evaluate whether signature perms are required")
     public void testDhcpRoaming_nullBssid() throws Exception {
         doDhcpRoamingTest(false /* hasMismatchedIpAddress */, "\"0001docomo\"" /* display name */,
-                null /* BSSID */, false /* expectRoaming */);
+                null /* BSSID */, false /* expectRoaming */, false /* shouldReplyNakOnRoam */);
     }
 
     @Test @SignatureRequiredTest(reason = "TODO: evaluate whether signature perms are required")
     public void testDhcpRoaming_invalidDisplayName() throws Exception {
         doDhcpRoamingTest(false /* hasMismatchedIpAddress */, "\"test-ssid\"" /* display name */,
-                MacAddress.fromString(TEST_DEFAULT_BSSID), false /* expectRoaming */);
+                MacAddress.fromString(TEST_DEFAULT_BSSID), false /* expectRoaming */,
+                false /* shouldReplyNakOnRoam */);
     }
 
     @Test @SignatureRequiredTest(reason = "TODO: evaluate whether signature perms are required")
     public void testDhcpRoaming_mismatchedLeasedIpAddress() throws Exception {
         doDhcpRoamingTest(true /* hasMismatchedIpAddress */, "\"0001docomo\"" /* display name */,
-                MacAddress.fromString(TEST_DEFAULT_BSSID), true /* expectRoaming */);
+                MacAddress.fromString(TEST_DEFAULT_BSSID), true /* expectRoaming */,
+                false /* shouldReplyNakOnRoam */);
+    }
+
+    @Test @SignatureRequiredTest(reason = "TODO: evaluate whether signature perms are required")
+    public void testDhcpRoaming_failureLeaseOnNak() throws Exception {
+        doDhcpRoamingTest(false /* hasMismatchedIpAddress */, "\"0001docomo\"" /* display name */,
+                MacAddress.fromString(TEST_DEFAULT_BSSID), true /* expectRoaming */,
+                true /* shouldReplyNakOnRoam */);
     }
 
     private void performDualStackProvisioning() throws Exception {
