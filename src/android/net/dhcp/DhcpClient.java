@@ -1450,7 +1450,7 @@ public class DhcpClient extends StateMachine {
                 case CMD_EXPIRE_DHCP:
                     Log.d(TAG, "Lease expired!");
                     notifyFailure();
-                    transitionTo(mDhcpInitState);
+                    transitionTo(mStoppedState);
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -1830,7 +1830,7 @@ public class DhcpClient extends StateMachine {
                     if (!mDhcpLease.ipAddress.equals(results.ipAddress)) {
                         Log.d(TAG, "Renewed lease not for our current IP address!");
                         notifyFailure();
-                        transitionTo(mDhcpInitState);
+                        transitionTo(mStoppedState);
                         return;
                     }
                     setDhcpLeaseExpiry(packet);
@@ -1844,9 +1844,9 @@ public class DhcpClient extends StateMachine {
                     transitionTo(mDhcpBoundState);
                 }
             } else if (packet instanceof DhcpNakPacket) {
-                Log.d(TAG, "Received NAK, returning to INIT");
+                Log.d(TAG, "Received NAK, returning to StoppedState");
                 notifyFailure();
-                transitionTo(mDhcpInitState);
+                transitionTo(mStoppedState);
             }
         }
     }
