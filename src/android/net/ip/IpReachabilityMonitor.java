@@ -410,7 +410,8 @@ public class IpReachabilityMonitor {
                     + " to: " + event.macAddr;
             mLog.w(logMsg);
             mCallback.notifyLost(event.ip, logMsg);
-            logNudFailed(event, NudEventType.NUD_MAC_ADDRESS_CHANGED);
+            logNudFailed(event,
+                    getMacAddressChangedEventType(isFromProbe(), isNudFailureDueToRoam()));
             return;
         }
         maybeRestoreNeighborParameters();
@@ -643,6 +644,19 @@ public class IpReachabilityMonitor {
                 : isDueToRoam
                         ? NudEventType.NUD_POST_ROAMING_FAILED
                         : NudEventType.NUD_CONFIRM_FAILED;
+    }
+
+    /**
+     * Returns the NUD failure event type code due to neighbor's MAC address has changed
+     * corresponding to the given conditions.
+     */
+    private static NudEventType getMacAddressChangedEventType(boolean isFromProbe,
+            boolean isDueToRoam) {
+        return isFromProbe
+                ? isDueToRoam
+                        ? NudEventType.NUD_POST_ROAMING_MAC_ADDRESS_CHANGED
+                        : NudEventType.NUD_CONFIRM_MAC_ADDRESS_CHANGED
+                : NudEventType.NUD_ORGANIC_MAC_ADDRESS_CHANGED;
     }
 
     /**
