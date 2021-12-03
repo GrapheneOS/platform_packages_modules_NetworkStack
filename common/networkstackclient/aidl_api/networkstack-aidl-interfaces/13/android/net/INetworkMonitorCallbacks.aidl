@@ -1,16 +1,16 @@
-/**
- * Copyright (c) 2019, The Android Open Source Project
+/*
+ * Copyright (C) 2018 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing perNmissions and
+ * See the License for the specific language governing permissions and
  * limitations under the License.
  */
 ///////////////////////////////////////////////////////////////////////////////
@@ -31,22 +31,16 @@
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
 
-package android.net.ip;
+package android.net;
 /* @hide */
-interface IIpClientCallbacks {
-  oneway void onIpClientCreated(in android.net.ip.IIpClient ipClient);
-  oneway void onPreDhcpAction();
-  oneway void onPostDhcpAction();
-  oneway void onNewDhcpResults(in android.net.DhcpResultsParcelable dhcpResults);
-  oneway void onProvisioningSuccess(in android.net.LinkProperties newLp);
-  oneway void onProvisioningFailure(in android.net.LinkProperties newLp);
-  oneway void onLinkPropertiesChange(in android.net.LinkProperties newLp);
-  oneway void onReachabilityLost(in String logMsg);
-  oneway void onQuit();
-  oneway void installPacketFilter(in byte[] filter);
-  oneway void startReadPacketFilter();
-  oneway void setFallbackMulticastFilter(boolean enabled);
-  oneway void setNeighborDiscoveryOffload(boolean enable);
-  oneway void onPreconnectionStart(in List<android.net.Layer2PacketParcelable> packets);
-  oneway void onReachabilityFailure(in android.net.networkstack.aidl.ip.ReachabilityLossInfoParcelable lossInfo);
+interface INetworkMonitorCallbacks {
+  oneway void onNetworkMonitorCreated(in android.net.INetworkMonitor networkMonitor) = 0;
+  oneway void notifyNetworkTested(int testResult, @nullable String redirectUrl) = 1;
+  oneway void notifyPrivateDnsConfigResolved(in android.net.PrivateDnsConfigParcel config) = 2;
+  oneway void showProvisioningNotification(String action, String packageName) = 3;
+  oneway void hideProvisioningNotification() = 4;
+  oneway void notifyProbeStatusChanged(int probesCompleted, int probesSucceeded) = 5;
+  oneway void notifyNetworkTestedWithExtras(in android.net.NetworkTestResultParcelable result) = 6;
+  oneway void notifyDataStallSuspected(in android.net.DataStallReportParcelable report) = 7;
+  oneway void notifyCaptivePortalDataChanged(in android.net.CaptivePortalData data) = 8;
 }
