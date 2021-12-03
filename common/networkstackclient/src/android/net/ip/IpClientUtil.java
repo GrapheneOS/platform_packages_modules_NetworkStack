@@ -21,6 +21,7 @@ import android.net.DhcpResultsParcelable;
 import android.net.Layer2PacketParcelable;
 import android.net.LinkProperties;
 import android.net.networkstack.ModuleNetworkStackClient;
+import android.net.networkstack.aidl.ip.ReachabilityLossInfoParcelable;
 import android.os.ConditionVariable;
 
 import java.io.FileDescriptor;
@@ -180,6 +181,13 @@ public class IpClientUtil {
         @Override
         public void onPreconnectionStart(List<Layer2PacketParcelable> packets) {
             mCb.onPreconnectionStart(packets);
+        }
+
+        // Called when the internal IpReachabilityMonitor (if enabled) has detected the loss of a
+        // critical number of required neighbors or DHCP roaming fails.
+        @Override
+        public void onReachabilityFailure(ReachabilityLossInfoParcelable lossInfo) {
+            mCb.onReachabilityFailure(lossInfo);
         }
 
         @Override
