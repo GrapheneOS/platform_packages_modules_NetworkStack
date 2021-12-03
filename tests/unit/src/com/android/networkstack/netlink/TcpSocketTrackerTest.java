@@ -24,7 +24,6 @@ import static android.system.OsConstants.AF_INET;
 import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentation;
 
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.doReturn;
-import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
 import static com.android.net.module.util.netlink.NetlinkConstants.SOCKDIAG_MSG_HEADER_SIZE;
 
 import static junit.framework.Assert.assertEquals;
@@ -52,7 +51,6 @@ import androidx.test.runner.AndroidJUnit4;
 
 import com.android.net.module.util.netlink.StructNlMsgHdr;
 import com.android.networkstack.apishim.ConstantsShim;
-import com.android.networkstack.apishim.NetworkShimImpl;
 import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
@@ -66,8 +64,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.mockito.MockitoSession;
-import org.mockito.quality.Strictness;
 
 import java.io.FileDescriptor;
 import java.nio.ByteBuffer;
@@ -210,7 +206,6 @@ public class TcpSocketTrackerTest {
     @Mock private INetd mNetd;
     private final Network mNetwork = new Network(TEST_NETID1);
     private final Network mOtherNetwork = new Network(TEST_NETID2);
-    private MockitoSession mSession;
     private TerribleFailureHandler mOldWtfHandler;
 
     @Rule
@@ -230,10 +225,6 @@ public class TcpSocketTrackerTest {
                 eq(NAMESPACE_CONNECTIVITY),
                 eq(CONFIG_TCP_PACKETS_FAIL_PERCENTAGE),
                 anyInt())).thenReturn(DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE);
-        mSession = mockitoSession()
-                .spyStatic(NetworkShimImpl.class)
-                .strictness(Strictness.WARN)
-                .startMocking();
 
         when(mNetd.getFwmarkForNetwork(eq(TEST_NETID1)))
                 .thenReturn(makeMarkMaskParcel(NETID_MASK, TEST_NETID1_FWMARK));
@@ -241,7 +232,6 @@ public class TcpSocketTrackerTest {
 
     @After
     public void tearDown() {
-        mSession.finishMocking();
         Log.setWtfHandler(mOldWtfHandler);
     }
 
