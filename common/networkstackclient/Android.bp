@@ -102,6 +102,8 @@ aidl_interface {
         // New AIDL classes should go into android.net.networkstack.aidl so they can be clearly
         // identified
         "src/android/net/networkstack/aidl/dhcp/DhcpOption.aidl",
+        "src/android/net/networkstack/aidl/ip/ReachabilityLossInfoParcelable.aidl",
+        "src/android/net/networkstack/aidl/ip/ReachabilityLossReason.aidl",
     ],
     backend: {
         java: {
@@ -135,6 +137,7 @@ aidl_interface {
         "10",
         "11",
         "12",
+        "13",
     ],
     // TODO: have tethering depend on networkstack-client and set visibility to private
     visibility: [
@@ -150,7 +153,7 @@ java_library {
     min_sdk_version: "29",
     static_libs: [
         "ipmemorystore-aidl-interfaces-V10-java",
-        "networkstack-aidl-interfaces-V12-java",
+        "networkstack-aidl-interfaces-V13-java",
     ],
     visibility: ["//packages/modules/NetworkStack:__subpackages__"],
     apex_available: [
