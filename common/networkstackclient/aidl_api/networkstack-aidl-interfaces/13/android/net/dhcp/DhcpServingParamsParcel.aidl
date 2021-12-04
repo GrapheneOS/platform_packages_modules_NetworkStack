@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2019, The Android Open Source Project
+ *
+ * Copyright (C) 2018 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -10,7 +11,7 @@
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing perNmissions and
+ * See the License for the specific language governing permissions and
  * limitations under the License.
  */
 ///////////////////////////////////////////////////////////////////////////////
@@ -31,22 +32,17 @@
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
 
-package android.net.ip;
-/* @hide */
-interface IIpClientCallbacks {
-  oneway void onIpClientCreated(in android.net.ip.IIpClient ipClient);
-  oneway void onPreDhcpAction();
-  oneway void onPostDhcpAction();
-  oneway void onNewDhcpResults(in android.net.DhcpResultsParcelable dhcpResults);
-  oneway void onProvisioningSuccess(in android.net.LinkProperties newLp);
-  oneway void onProvisioningFailure(in android.net.LinkProperties newLp);
-  oneway void onLinkPropertiesChange(in android.net.LinkProperties newLp);
-  oneway void onReachabilityLost(in String logMsg);
-  oneway void onQuit();
-  oneway void installPacketFilter(in byte[] filter);
-  oneway void startReadPacketFilter();
-  oneway void setFallbackMulticastFilter(boolean enabled);
-  oneway void setNeighborDiscoveryOffload(boolean enable);
-  oneway void onPreconnectionStart(in List<android.net.Layer2PacketParcelable> packets);
-  oneway void onReachabilityFailure(in android.net.networkstack.aidl.ip.ReachabilityLossInfoParcelable lossInfo);
+package android.net.dhcp;
+@JavaDerive(toString=true)
+parcelable DhcpServingParamsParcel {
+  int serverAddr;
+  int serverAddrPrefixLength;
+  int[] defaultRouters;
+  int[] dnsServers;
+  int[] excludedAddrs;
+  long dhcpLeaseTimeSecs;
+  int linkMtu;
+  boolean metered;
+  int singleClientAddr = 0;
+  boolean changePrefixOnDecline = false;
 }

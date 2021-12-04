@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2019, The Android Open Source Project
+ * Copyright (c) 2018, The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,22 +31,15 @@
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
 
-package android.net.ip;
+package android.net.dhcp;
 /* @hide */
-interface IIpClientCallbacks {
-  oneway void onIpClientCreated(in android.net.ip.IIpClient ipClient);
-  oneway void onPreDhcpAction();
-  oneway void onPostDhcpAction();
-  oneway void onNewDhcpResults(in android.net.DhcpResultsParcelable dhcpResults);
-  oneway void onProvisioningSuccess(in android.net.LinkProperties newLp);
-  oneway void onProvisioningFailure(in android.net.LinkProperties newLp);
-  oneway void onLinkPropertiesChange(in android.net.LinkProperties newLp);
-  oneway void onReachabilityLost(in String logMsg);
-  oneway void onQuit();
-  oneway void installPacketFilter(in byte[] filter);
-  oneway void startReadPacketFilter();
-  oneway void setFallbackMulticastFilter(boolean enabled);
-  oneway void setNeighborDiscoveryOffload(boolean enable);
-  oneway void onPreconnectionStart(in List<android.net.Layer2PacketParcelable> packets);
-  oneway void onReachabilityFailure(in android.net.networkstack.aidl.ip.ReachabilityLossInfoParcelable lossInfo);
+interface IDhcpServer {
+  oneway void start(in android.net.INetworkStackStatusCallback cb) = 0;
+  oneway void startWithCallbacks(in android.net.INetworkStackStatusCallback statusCb, in android.net.dhcp.IDhcpEventCallbacks eventCb) = 3;
+  oneway void updateParams(in android.net.dhcp.DhcpServingParamsParcel params, in android.net.INetworkStackStatusCallback cb) = 1;
+  oneway void stop(in android.net.INetworkStackStatusCallback cb) = 2;
+  const int STATUS_UNKNOWN = 0;
+  const int STATUS_SUCCESS = 1;
+  const int STATUS_INVALID_ARGUMENT = 2;
+  const int STATUS_UNKNOWN_ERROR = 3;
 }
