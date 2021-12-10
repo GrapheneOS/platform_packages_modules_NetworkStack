@@ -747,9 +747,14 @@ public class DhcpClient extends StateMachine {
     }
 
     private boolean sendDiscoverPacket() {
+        // When Rapid Commit option is enabled, limit only the first 3 DHCPDISCOVER packets
+        // taking Rapid Commit option, in order to prevent the potential interoperability issue
+        // and be able to rollback later. See {@link DHCP_TIMEOUT_MS} for the (re)transmission
+        // schedule with 10% jitter.
+        final boolean requestRapidCommit = isDhcpRapidCommitEnabled() && (getSecs() <= 4);
         final ByteBuffer packet = DhcpPacket.buildDiscoverPacket(
                 DhcpPacket.ENCAP_L2, mTransactionId, getSecs(), mHwAddr,
-                DO_UNICAST, getRequestedParams(), isDhcpRapidCommitEnabled(), mHostname,
+                DO_UNICAST, getRequestedParams(), requestRapidCommit, mHostname,
                 mConfiguration.options);
         mMetrics.incrementCountForDiscover();
         return transmitPacket(packet, "DHCPDISCOVER", DhcpPacket.ENCAP_L2, INADDR_BROADCAST);
