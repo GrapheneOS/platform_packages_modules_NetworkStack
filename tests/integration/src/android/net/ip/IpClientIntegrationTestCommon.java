@@ -71,6 +71,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeFalse;
 import static org.junit.Assume.assumeTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.longThat;
 import static org.mockito.Mockito.any;
@@ -592,6 +593,8 @@ public abstract class IpClientIntegrationTestCommon {
         if (useNetworkStackSignature()) {
             setUpMocks();
             setUpIpClient();
+            // Enable packet retransmit alarm in DhcpClient.
+            enableRealAlarm("DhcpClient." + mIfaceName + ".KICK");
         }
 
         mIIpClient = makeIIpClient(mIfaceName, mCb);
@@ -686,6 +689,17 @@ public abstract class IpClientIntegrationTestCommon {
              BufferedReader reader = new BufferedReader(new FileReader(fd.getFileDescriptor()))) {
             return reader.readLine();
         }
+    }
+
+    private void enableRealAlarm(String cmdName) {
+        doAnswer((inv) -> {
+            final Context context = InstrumentationRegistry.getTargetContext();
+            final AlarmManager alarmManager = context.getSystemService(AlarmManager.class);
+            alarmManager.setExact(inv.getArgument(0), inv.getArgument(1), inv.getArgument(2),
+                    inv.getArgument(3), inv.getArgument(4));
+            return null;
+        }).when(mAlarm).setExact(anyInt(), anyLong(), eq(cmdName), any(OnAlarmListener.class),
+                any(Handler.class));
     }
 
     private IpClient makeIpClient() throws Exception {
@@ -1386,6 +1400,27 @@ public abstract class IpClientIntegrationTestCommon {
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
         verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
         assertIpMemoryStoreNetworkAttributes(TEST_LEASE_DURATION_S, currentTime, TEST_DEFAULT_MTU);
+    }
+
+    @Test
+    public void testRollbackFromRapidCommitOption() throws Exception {
+        startIpClientProvisioning(false /* isDhcpLeaseCacheEnabled */,
+                true /* isDhcpRapidCommitEnabled */, false /* isPreConnectionEnabled */,
+                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+
+        final List<DhcpPacket> discoverList = new ArrayList<DhcpPacket>();
+        DhcpPacket packet;
+        do {
+            packet = getNextDhcpPacket();
+            assertTrue(packet instanceof DhcpDiscoverPacket);
+            discoverList.add(packet);
+        } while (discoverList.size() < 4);
+
+        // Check the only first 3 DHCPDISCOVERs take rapid commit option.
+        assertTrue(discoverList.get(0).mRapidCommit);
+        assertTrue(discoverList.get(1).mRapidCommit);
+        assertTrue(discoverList.get(2).mRapidCommit);
+        assertFalse(discoverList.get(3).mRapidCommit);
     }
 
     @Test @SignatureRequiredTest(reason = "TODO: evaluate whether signature perms are required")
