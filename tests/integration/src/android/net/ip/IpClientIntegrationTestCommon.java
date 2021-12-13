@@ -156,6 +156,7 @@ import com.android.net.module.util.netlink.StructNdOptPref64;
 import com.android.net.module.util.structs.LlaOption;
 import com.android.net.module.util.structs.PrefixInformationOption;
 import com.android.net.module.util.structs.RdnssOption;
+import com.android.networkstack.R;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.apishim.ConstantsShim;
 import com.android.networkstack.apishim.common.ShimUtils;
@@ -607,6 +608,13 @@ public abstract class IpClientIntegrationTestCommon {
         when(mContext.getSystemService(eq(Context.ALARM_SERVICE))).thenReturn(mAlarm);
         when(mContext.getSystemService(eq(ConnectivityManager.class))).thenReturn(mCm);
         when(mContext.getResources()).thenReturn(mResources);
+        when(mResources.getInteger(eq(R.integer.config_nud_postroaming_solicit_num))).thenReturn(5);
+        when(mResources.getInteger(eq(R.integer.config_nud_postroaming_solicit_interval)))
+                 .thenReturn(750);
+        when(mResources.getInteger(eq(R.integer.config_nud_steadystate_solicit_num)))
+                 .thenReturn(10);
+        when(mResources.getInteger(eq(R.integer.config_nud_steadystate_solicit_interval)))
+                 .thenReturn(750);
         when(mContext.getContentResolver()).thenReturn(mContentResolver);
         when(mNetworkStackServiceManager.getIpMemoryStoreService())
                 .thenReturn(mIpMemoryStoreService);
