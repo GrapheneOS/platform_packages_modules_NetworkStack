@@ -520,7 +520,9 @@ public class IpReachabilityMonitor {
 
     private long getProbeWakeLockDuration() {
         final long gracePeriodMs = 500;
-        return (long) (mNumSolicits * mInterSolicitIntervalMs) + gracePeriodMs;
+        final int numSolicits =
+                mNumSolicits + (isMulticastResolicitEnabled() ? NUD_MCAST_RESOLICIT_NUM : 0);
+        return (long) (numSolicits * mInterSolicitIntervalMs) + gracePeriodMs;
     }
 
     private void setNeighbourParametersPostRoaming() {
@@ -571,7 +573,7 @@ public class IpReachabilityMonitor {
             }
         }
 
-        mNumSolicits = isMulticastResolicitEnabled() ? (numSolicits + numResolicits) : numSolicits;
+        mNumSolicits = numSolicits;
         mInterSolicitIntervalMs = interSolicitIntervalMs;
     }
 
