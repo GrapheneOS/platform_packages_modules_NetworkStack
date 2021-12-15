@@ -21,6 +21,8 @@ import static android.net.dhcp.DhcpResultsParcelableUtil.toStableParcelable;
 import static android.net.ip.IIpClient.PROV_IPV4_DISABLED;
 import static android.net.ip.IIpClient.PROV_IPV6_DISABLED;
 import static android.net.ip.IIpClient.PROV_IPV6_LINKLOCAL;
+import static android.net.ip.IpReachabilityMonitor.INVALID_REACHABILITY_LOSS_TYPE;
+import static android.net.ip.IpReachabilityMonitor.nudEventTypeToInt;
 import static android.net.util.NetworkStackUtils.IPCLIENT_DISABLE_ACCEPT_RA_VERSION;
 import static android.net.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
 import static android.net.util.NetworkStackUtils.IPCLIENT_GRATUITOUS_NA_VERSION;
@@ -63,6 +65,8 @@ import android.net.dhcp.DhcpPacket;
 import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.IpManagerEvent;
 import android.net.networkstack.aidl.dhcp.DhcpOption;
+import android.net.networkstack.aidl.ip.ReachabilityLossInfoParcelable;
+import android.net.networkstack.aidl.ip.ReachabilityLossReason;
 import android.net.shared.InitialConfiguration;
 import android.net.shared.Layer2Information;
 import android.net.shared.ProvisioningConfiguration;
@@ -81,6 +85,7 @@ import android.os.ServiceSpecificException;
 import android.os.SystemClock;
 import android.stats.connectivity.DisconnectCode;
 import android.stats.connectivity.NetworkQuirkEvent;
+import android.stats.connectivity.NudEventType;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.text.TextUtils;
@@ -316,6 +321,11 @@ public class IpClient extends StateMachine {
         /**
          * Called when the internal IpReachabilityMonitor (if enabled) has detected the loss of
          * required neighbors (e.g. on-link default gw or dns servers) due to NUD_FAILED.
+         *
+         * Note this method is only supported on networkstack-aidl-interfaces-v12 or below.
+         * For above aidl versions, the caller should call {@link onReachabilityFailure} instead.
+         * For callbacks extending IpClientCallbacks, this method will be called iff the callback
+         * does not implement onReachabilityFailure.
          */
         public void onReachabilityLost(String logMsg) {
             log("onReachabilityLost(" + logMsg + ")");
@@ -402,6 +412,20 @@ public class IpClient extends StateMachine {
         }
 
         /**
+         * Called when Neighbor Unreachability Detection fails, that might be caused by the organic
+         * probe or probeAll from IpReachabilityMonitor (if enabled).
+         */
+        public void onReachabilityFailure(ReachabilityLossInfoParcelable lossInfo) {
+            log("onReachabilityFailure(" + lossInfo.message + ", loss reason: "
+                    + reachabilityLossReasonToString(lossInfo.reason) + ")");
+            try {
+                mCallback.onReachabilityFailure(lossInfo);
+            } catch (RemoteException e) {
+                log("Failed to call onReachabilityFailure", e);
+            }
+        }
+
+        /**
          * Get the version of the IIpClientCallbacks AIDL interface.
          */
         public int getInterfaceVersion() {
@@ -477,6 +501,10 @@ public class IpClient extends StateMachine {
     private static final int PROV_CHANGE_LOST_PROVISIONING = 2;
     private static final int PROV_CHANGE_GAINED_PROVISIONING = 3;
     private static final int PROV_CHANGE_STILL_PROVISIONED = 4;
+
+    // onReachabilityFailure callback is added since networkstack-aidl-interfaces-v13.
+    @VisibleForTesting
+    static final int VERSION_ADDED_REACHABILITY_FAILURE = 13;
 
     // Specific vendor OUI(3 bytes)/vendor specific type(1 byte) pattern for upstream hotspot
     // device detection. Add new byte array pattern below in turn.
@@ -1250,6 +1278,20 @@ public class IpClient extends StateMachine {
         transitionTo(mStoppingState);
     }
 
+    // Convert reachability loss reason enum to a string.
+    private static String reachabilityLossReasonToString(int reason) {
+        switch (reason) {
+            case ReachabilityLossReason.ROAM:
+                return "reachability_loss_after_roam";
+            case ReachabilityLossReason.CONFIRM:
+                return "reachability_loss_after_confirm";
+            case ReachabilityLossReason.ORGANIC:
+                return "reachability_loss_organic";
+            default:
+                return "unknown";
+        }
+    }
+
     private static boolean hasIpv6LinkLocalInterfaceRoute(final LinkProperties lp) {
         for (RouteInfo r : lp.getRoutes()) {
             if (r.getDestination().equals(new IpPrefix("fe80::/64"))
@@ -1859,8 +1901,17 @@ public class IpClient extends StateMachine {
                     mLog,
                     new IpReachabilityMonitor.Callback() {
                         @Override
-                        public void notifyLost(InetAddress ip, String logMsg) {
-                            mCallback.onReachabilityLost(logMsg);
+                        public void notifyLost(InetAddress ip, String logMsg, NudEventType type) {
+                            final int version = mCallback.getInterfaceVersion();
+                            if (version >= VERSION_ADDED_REACHABILITY_FAILURE) {
+                                final int reason = nudEventTypeToInt(type);
+                                if (reason == INVALID_REACHABILITY_LOSS_TYPE) return;
+                                final ReachabilityLossInfoParcelable lossInfo =
+                                        new ReachabilityLossInfoParcelable(logMsg, reason);
+                                mCallback.onReachabilityFailure(lossInfo);
+                            } else {
+                                mCallback.onReachabilityLost(logMsg);
+                            }
                         }
                     },
                     mConfiguration.mUsingMultinetworkPolicyTracker,

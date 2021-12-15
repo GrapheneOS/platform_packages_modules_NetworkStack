@@ -21,8 +21,6 @@ import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener
 import android.net.ipmemorystore.Status
 import android.net.ipmemorystore.Status.SUCCESS
 import android.util.ArrayMap
-import java.net.Inet6Address
-import kotlin.test.assertEquals
 import org.mockito.Mockito.any
 import org.mockito.Mockito.doAnswer
 import org.mockito.ArgumentCaptor
@@ -61,17 +59,6 @@ class IpClientIntegrationTest : IpClientIntegrationTestCommon() {
 
     override fun assertIpMemoryNeverStoreNetworkAttributes(l2Key: String, timeout: Long) {
         verify(mIpMemoryStore, never()).storeNetworkAttributes(eq(l2Key), any(), any())
-    }
-
-    override fun assertNotifyNeighborLost(targetIp: Inet6Address) {
-        val target = ArgumentCaptor.forClass(Inet6Address::class.java)
-
-        verify(mCallback, timeout(TEST_TIMEOUT_MS)).notifyLost(target.capture(), any())
-        assertEquals(targetIp, target.getValue())
-    }
-
-    override fun assertNeverNotifyNeighborLost() {
-        verify(mCallback, never()).notifyLost(any(), any())
     }
 
     override fun storeNetworkAttributes(l2Key: String, na: NetworkAttributes) {
