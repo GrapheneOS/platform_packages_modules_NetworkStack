@@ -1989,18 +1989,18 @@ public class IpClient extends StateMachine {
         // If the BSSID has not changed, there is nothing to do.
         if (info.bssid.equals(mCurrentBssid)) return;
 
-        // Before trigger probing to the interesting neighbors, send Gratuitous ARP
+        // Before trigger probing to the critical neighbors, send Gratuitous ARP
         // and Neighbor Advertisment in advance to propgate host's IPv4/v6 addresses.
         if (isGratuitousArpNaRoamingEnabled()) {
             maybeSendGratuitousARP(mLinkProperties);
             maybeSendGratuitousNAs(mLinkProperties, true /* isGratuitousNaAfterRoaming */);
         }
 
-        if (mIpReachabilityMonitor != null) {
-            mIpReachabilityMonitor.probeAll(true /* dueToRoam */);
-        }
-
-        // Check whether to refresh previous IP lease on L2 roaming happened.
+        // Check whether attempting to refresh previous IP lease on specific networks or need to
+        // probe the critical neighbors proactively on L2 roaming happened. The NUD probe on the
+        // specific networks is cancelled because otherwise the probe will happen in parallel with
+        // DHCP refresh, it will be difficult to understand what happened exactly and error-prone
+        // to introduce race condition.
         final String ssid = removeDoubleQuotes(mConfiguration.mDisplayName);
         if (DHCP_ROAMING_SSID_SET.contains(ssid) && mDhcpClient != null) {
             if (DBG) {
@@ -2010,6 +2010,8 @@ public class IpClient extends StateMachine {
                         + " , starting refresh leased IP address");
             }
             mDhcpClient.sendMessage(DhcpClient.CMD_REFRESH_LINKADDRESS);
+        } else if (mIpReachabilityMonitor != null) {
+            mIpReachabilityMonitor.probeAll(true /* dueToRoam */);
         }
         mCurrentBssid = info.bssid;
     }
@@ -2599,6 +2601,20 @@ public class IpClient extends StateMachine {
                             handleIPv4Failure();
                             break;
                         case DhcpClient.DHCP_IPV6_ONLY:
+                            break;
+                        case DhcpClient.DHCP_REFRESH_FAILURE:
+                            // This case should only happen on the receipt of DHCPNAK when
+                            // refreshing IP address post L2 roaming on some specific networks.
+                            // WiFi should try to restart a new provisioning immediately without
+                            // disconnecting L2 when it receives DHCP roaming failure event. IPv4
+                            // link address still will be cleared when DhcpClient transits to
+                            // StoppedState from RefreshingAddress State, although it will result
+                            // in a following onProvisioningFailure then, WiFi should ignore this
+                            // failure and start a new DHCP reconfiguration from INIT state.
+                            final ReachabilityLossInfoParcelable lossInfo =
+                                    new ReachabilityLossInfoParcelable("DHCP refresh failure",
+                                            ReachabilityLossReason.ROAM);
+                            mCallback.onReachabilityFailure(lossInfo);
                             break;
                         default:
                             logError("Unknown CMD_POST_DHCP_ACTION status: %s", msg.arg1);

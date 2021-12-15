@@ -126,6 +126,7 @@ import android.net.ipmemorystore.Status;
 import android.net.networkstack.TestNetworkStackServiceClient;
 import android.net.networkstack.aidl.dhcp.DhcpOption;
 import android.net.networkstack.aidl.ip.ReachabilityLossInfoParcelable;
+import android.net.networkstack.aidl.ip.ReachabilityLossReason;
 import android.net.shared.Layer2Information;
 import android.net.shared.ProvisioningConfiguration;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
@@ -2551,12 +2552,23 @@ public abstract class IpClientIntegrationTestCommon {
         mPacketReader.sendResponse(packetBuffer);
         HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
 
-        if (shouldReplyNakOnRoam || hasMismatchedIpAddress) {
-            // notifyFailure
-            ArgumentCaptor<DhcpResultsParcelable> captor =
+        if (shouldReplyNakOnRoam) {
+            ArgumentCaptor<ReachabilityLossInfoParcelable> lossInfoCaptor =
+                    ArgumentCaptor.forClass(ReachabilityLossInfoParcelable.class);
+            verify(mCb, timeout(TEST_TIMEOUT_MS)).onReachabilityFailure(lossInfoCaptor.capture());
+            assertEquals(ReachabilityLossReason.ROAM, lossInfoCaptor.getValue().reason);
+
+            // IPv4 address will be still deleted when DhcpClient state machine exits from
+            // DhcpHaveLeaseState, a following onProvisioningFailure will be thrown then.
+            // Also check DhcpClient won't send any DHCPDISCOVER packet.
+            verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(any());
+            assertNull(getNextDhcpPacket(TEST_TIMEOUT_MS));
+            verify(mCb, never()).onNewDhcpResults(any());
+        } else if (hasMismatchedIpAddress) {
+            ArgumentCaptor<DhcpResultsParcelable> resultsCaptor =
                     ArgumentCaptor.forClass(DhcpResultsParcelable.class);
-            verify(mCb, timeout(TEST_TIMEOUT_MS)).onNewDhcpResults(captor.capture());
-            DhcpResults lease = fromStableParcelable(captor.getValue());
+            verify(mCb, timeout(TEST_TIMEOUT_MS)).onNewDhcpResults(resultsCaptor.capture());
+            DhcpResults lease = fromStableParcelable(resultsCaptor.getValue());
             assertNull(lease);
 
             // DhcpClient rolls back to StoppedState instead of INIT state after calling
