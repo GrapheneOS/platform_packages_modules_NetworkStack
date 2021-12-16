@@ -191,6 +191,7 @@ java_library {
     visibility: [
         "//packages/modules/Connectivity/Tethering",
         "//packages/modules/Connectivity/tests/cts/net",
+        "//packages/modules/Connectivity/tests/cts/hostside/app",
     ],
 }
 
@@ -211,6 +212,7 @@ java_library {
     visibility: [
         "//packages/modules/Connectivity/Tethering",
         "//packages/modules/Connectivity/tests/cts/net",
+        "//packages/modules/Connectivity/tests/cts/hostside/app",
     ],
 }
 
