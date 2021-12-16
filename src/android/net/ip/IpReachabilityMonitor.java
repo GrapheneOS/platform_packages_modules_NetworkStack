@@ -32,6 +32,7 @@ import android.net.ip.IpNeighborMonitor.NeighborEvent;
 import android.net.ip.IpNeighborMonitor.NeighborEventConsumer;
 import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.IpReachabilityEvent;
+import android.net.networkstack.aidl.ip.ReachabilityLossReason;
 import android.net.util.InterfaceParams;
 import android.net.util.SharedLog;
 import android.os.ConditionVariable;
@@ -157,6 +158,7 @@ public class IpReachabilityMonitor {
     private static final int INVALID_NUD_MCAST_RESOLICIT_NUM = -1;
 
     private static final int INVALID_LEGACY_NUD_FAILURE_TYPE = -1;
+    public static final int INVALID_REACHABILITY_LOSS_TYPE = -1;
 
     public interface Callback {
         /**
@@ -165,7 +167,7 @@ public class IpReachabilityMonitor {
          *
          * TODO: refactor to something like notifyProvisioningLost(String msg).
          */
-        void notifyLost(InetAddress ip, String logMsg);
+        void notifyLost(InetAddress ip, String logMsg, NudEventType type);
     }
 
     /**
@@ -408,10 +410,11 @@ public class IpReachabilityMonitor {
             final String logMsg = "ALERT neighbor: " + event.ip
                     + " MAC address changed from: " + prev.macAddr
                     + " to: " + event.macAddr;
+            final NudEventType type =
+                    getMacAddressChangedEventType(isFromProbe(), isNudFailureDueToRoam());
             mLog.w(logMsg);
-            mCallback.notifyLost(event.ip, logMsg);
-            logNudFailed(event,
-                    getMacAddressChangedEventType(isFromProbe(), isNudFailureDueToRoam()));
+            mCallback.notifyLost(event.ip, logMsg, type);
+            logNudFailed(event, type);
             return;
         }
         maybeRestoreNeighborParameters();
@@ -458,7 +461,7 @@ public class IpReachabilityMonitor {
             Log.w(TAG, logMsg);
             // TODO: remove |ip| when the callback signature no longer has
             // an InetAddress argument.
-            mCallback.notifyLost(ip, logMsg);
+            mCallback.notifyLost(ip, logMsg, type);
         }
         logNudFailed(event, type);
     }
@@ -691,6 +694,26 @@ public class IpReachabilityMonitor {
             default:
                 // Do not log legacy event
                 return INVALID_LEGACY_NUD_FAILURE_TYPE;
+        }
+    }
+
+    /**
+     * Convert the NUD critical failure event type to a int constant defined in IIpClientCallbacks.
+     */
+    public static int nudEventTypeToInt(final NudEventType type) {
+        switch (type) {
+            case NUD_POST_ROAMING_FAILED_CRITICAL:
+            case NUD_POST_ROAMING_MAC_ADDRESS_CHANGED:
+                return ReachabilityLossReason.ROAM;
+            case NUD_CONFIRM_FAILED_CRITICAL:
+            case NUD_CONFIRM_MAC_ADDRESS_CHANGED:
+                return ReachabilityLossReason.CONFIRM;
+            case NUD_ORGANIC_FAILED_CRITICAL:
+            case NUD_ORGANIC_MAC_ADDRESS_CHANGED:
+                return ReachabilityLossReason.ORGANIC;
+            // For other NudEventType which won't trigger notifyLost, just ignore these events.
+            default:
+                return INVALID_REACHABILITY_LOSS_TYPE;
         }
     }
 }
