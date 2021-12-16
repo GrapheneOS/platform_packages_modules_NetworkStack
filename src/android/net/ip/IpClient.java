@@ -21,6 +21,8 @@ import static android.net.dhcp.DhcpResultsParcelableUtil.toStableParcelable;
 import static android.net.ip.IIpClient.PROV_IPV4_DISABLED;
 import static android.net.ip.IIpClient.PROV_IPV6_DISABLED;
 import static android.net.ip.IIpClient.PROV_IPV6_LINKLOCAL;
+import static android.net.ip.IpReachabilityMonitor.INVALID_REACHABILITY_LOSS_TYPE;
+import static android.net.ip.IpReachabilityMonitor.nudEventTypeToInt;
 import static android.net.util.NetworkStackUtils.IPCLIENT_DISABLE_ACCEPT_RA_VERSION;
 import static android.net.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
 import static android.net.util.NetworkStackUtils.IPCLIENT_GRATUITOUS_NA_VERSION;
@@ -63,6 +65,8 @@ import android.net.dhcp.DhcpPacket;
 import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.IpManagerEvent;
 import android.net.networkstack.aidl.dhcp.DhcpOption;
+import android.net.networkstack.aidl.ip.ReachabilityLossInfoParcelable;
+import android.net.networkstack.aidl.ip.ReachabilityLossReason;
 import android.net.shared.InitialConfiguration;
 import android.net.shared.Layer2Information;
 import android.net.shared.ProvisioningConfiguration;
@@ -81,6 +85,7 @@ import android.os.ServiceSpecificException;
 import android.os.SystemClock;
 import android.stats.connectivity.DisconnectCode;
 import android.stats.connectivity.NetworkQuirkEvent;
+import android.stats.connectivity.NudEventType;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.text.TextUtils;
@@ -316,6 +321,11 @@ public class IpClient extends StateMachine {
         /**
          * Called when the internal IpReachabilityMonitor (if enabled) has detected the loss of
          * required neighbors (e.g. on-link default gw or dns servers) due to NUD_FAILED.
+         *
+         * Note this method is only supported on networkstack-aidl-interfaces-v12 or below.
+         * For above aidl versions, the caller should call {@link onReachabilityFailure} instead.
+         * For callbacks extending IpClientCallbacks, this method will be called iff the callback
+         * does not implement onReachabilityFailure.
          */
         public void onReachabilityLost(String logMsg) {
             log("onReachabilityLost(" + logMsg + ")");
@@ -402,6 +412,20 @@ public class IpClient extends StateMachine {
         }
 
         /**
+         * Called when Neighbor Unreachability Detection fails, that might be caused by the organic
+         * probe or probeAll from IpReachabilityMonitor (if enabled).
+         */
+        public void onReachabilityFailure(ReachabilityLossInfoParcelable lossInfo) {
+            log("onReachabilityFailure(" + lossInfo.message + ", loss reason: "
+                    + reachabilityLossReasonToString(lossInfo.reason) + ")");
+            try {
+                mCallback.onReachabilityFailure(lossInfo);
+            } catch (RemoteException e) {
+                log("Failed to call onReachabilityFailure", e);
+            }
+        }
+
+        /**
          * Get the version of the IIpClientCallbacks AIDL interface.
          */
         public int getInterfaceVersion() {
@@ -477,6 +501,10 @@ public class IpClient extends StateMachine {
     private static final int PROV_CHANGE_LOST_PROVISIONING = 2;
     private static final int PROV_CHANGE_GAINED_PROVISIONING = 3;
     private static final int PROV_CHANGE_STILL_PROVISIONED = 4;
+
+    // onReachabilityFailure callback is added since networkstack-aidl-interfaces-v13.
+    @VisibleForTesting
+    static final int VERSION_ADDED_REACHABILITY_FAILURE = 13;
 
     // Specific vendor OUI(3 bytes)/vendor specific type(1 byte) pattern for upstream hotspot
     // device detection. Add new byte array pattern below in turn.
@@ -1250,6 +1278,20 @@ public class IpClient extends StateMachine {
         transitionTo(mStoppingState);
     }
 
+    // Convert reachability loss reason enum to a string.
+    private static String reachabilityLossReasonToString(int reason) {
+        switch (reason) {
+            case ReachabilityLossReason.ROAM:
+                return "reachability_loss_after_roam";
+            case ReachabilityLossReason.CONFIRM:
+                return "reachability_loss_after_confirm";
+            case ReachabilityLossReason.ORGANIC:
+                return "reachability_loss_organic";
+            default:
+                return "unknown";
+        }
+    }
+
     private static boolean hasIpv6LinkLocalInterfaceRoute(final LinkProperties lp) {
         for (RouteInfo r : lp.getRoutes()) {
             if (r.getDestination().equals(new IpPrefix("fe80::/64"))
@@ -1859,8 +1901,17 @@ public class IpClient extends StateMachine {
                     mLog,
                     new IpReachabilityMonitor.Callback() {
                         @Override
-                        public void notifyLost(InetAddress ip, String logMsg) {
-                            mCallback.onReachabilityLost(logMsg);
+                        public void notifyLost(InetAddress ip, String logMsg, NudEventType type) {
+                            final int version = mCallback.getInterfaceVersion();
+                            if (version >= VERSION_ADDED_REACHABILITY_FAILURE) {
+                                final int reason = nudEventTypeToInt(type);
+                                if (reason == INVALID_REACHABILITY_LOSS_TYPE) return;
+                                final ReachabilityLossInfoParcelable lossInfo =
+                                        new ReachabilityLossInfoParcelable(logMsg, reason);
+                                mCallback.onReachabilityFailure(lossInfo);
+                            } else {
+                                mCallback.onReachabilityLost(logMsg);
+                            }
                         }
                     },
                     mConfiguration.mUsingMultinetworkPolicyTracker,
@@ -1938,18 +1989,18 @@ public class IpClient extends StateMachine {
         // If the BSSID has not changed, there is nothing to do.
         if (info.bssid.equals(mCurrentBssid)) return;
 
-        // Before trigger probing to the interesting neighbors, send Gratuitous ARP
+        // Before trigger probing to the critical neighbors, send Gratuitous ARP
         // and Neighbor Advertisment in advance to propgate host's IPv4/v6 addresses.
         if (isGratuitousArpNaRoamingEnabled()) {
             maybeSendGratuitousARP(mLinkProperties);
             maybeSendGratuitousNAs(mLinkProperties, true /* isGratuitousNaAfterRoaming */);
         }
 
-        if (mIpReachabilityMonitor != null) {
-            mIpReachabilityMonitor.probeAll(true /* dueToRoam */);
-        }
-
-        // Check whether to refresh previous IP lease on L2 roaming happened.
+        // Check whether attempting to refresh previous IP lease on specific networks or need to
+        // probe the critical neighbors proactively on L2 roaming happened. The NUD probe on the
+        // specific networks is cancelled because otherwise the probe will happen in parallel with
+        // DHCP refresh, it will be difficult to understand what happened exactly and error-prone
+        // to introduce race condition.
         final String ssid = removeDoubleQuotes(mConfiguration.mDisplayName);
         if (DHCP_ROAMING_SSID_SET.contains(ssid) && mDhcpClient != null) {
             if (DBG) {
@@ -1959,6 +2010,8 @@ public class IpClient extends StateMachine {
                         + " , starting refresh leased IP address");
             }
             mDhcpClient.sendMessage(DhcpClient.CMD_REFRESH_LINKADDRESS);
+        } else if (mIpReachabilityMonitor != null) {
+            mIpReachabilityMonitor.probeAll(true /* dueToRoam */);
         }
         mCurrentBssid = info.bssid;
     }
@@ -2548,6 +2601,20 @@ public class IpClient extends StateMachine {
                             handleIPv4Failure();
                             break;
                         case DhcpClient.DHCP_IPV6_ONLY:
+                            break;
+                        case DhcpClient.DHCP_REFRESH_FAILURE:
+                            // This case should only happen on the receipt of DHCPNAK when
+                            // refreshing IP address post L2 roaming on some specific networks.
+                            // WiFi should try to restart a new provisioning immediately without
+                            // disconnecting L2 when it receives DHCP roaming failure event. IPv4
+                            // link address still will be cleared when DhcpClient transits to
+                            // StoppedState from RefreshingAddress State, although it will result
+                            // in a following onProvisioningFailure then, WiFi should ignore this
+                            // failure and start a new DHCP reconfiguration from INIT state.
+                            final ReachabilityLossInfoParcelable lossInfo =
+                                    new ReachabilityLossInfoParcelable("DHCP refresh failure",
+                                            ReachabilityLossReason.ROAM);
+                            mCallback.onReachabilityFailure(lossInfo);
                             break;
                         default:
                             logError("Unknown CMD_POST_DHCP_ACTION status: %s", msg.arg1);
