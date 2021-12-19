@@ -15,6 +15,7 @@
  */
 package android.net.ip
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.ip.IpNeighborMonitor.NeighborEventConsumer
 import android.net.INetd
@@ -106,6 +107,8 @@ private val TEST_IPV6_DNS = parseNumericAddress("2001:db8::321") as Inet6Address
 private val TEST_IPV6_DNS2 = parseNumericAddress("2001:db8::456") as Inet6Address
 
 private val TEST_IFACE = InterfaceParams("fake0", 21, null)
+
+@SuppressLint("NewApi")
 private val TEST_LINK_PROPERTIES = LinkProperties().apply {
     interfaceName = TEST_IFACE.name
     addLinkAddress(TEST_IPV4_LINKADDR)
@@ -123,6 +126,7 @@ private val TEST_LINK_PROPERTIES = LinkProperties().apply {
     addDnsServer(TEST_IPV6_DNS)
 }
 
+@SuppressLint("NewApi")
 private val TEST_IPV4_ONLY_LINK_PROPERTIES = LinkProperties().apply {
     interfaceName = TEST_IFACE.name
     addLinkAddress(TEST_IPV4_LINKADDR)
@@ -136,6 +140,7 @@ private val TEST_IPV4_ONLY_LINK_PROPERTIES = LinkProperties().apply {
     addDnsServer(TEST_IPV4_GATEWAY_DNS)
 }
 
+@SuppressLint("NewApi")
 private val TEST_IPV6_LINKLOCAL_SCOPED_LINK_PROPERTIES = LinkProperties().apply {
     interfaceName = TEST_IFACE.name
     addLinkAddress(TEST_IPV6_LINKADDR)
@@ -151,6 +156,7 @@ private val TEST_IPV6_LINKLOCAL_SCOPED_LINK_PROPERTIES = LinkProperties().apply 
     addDnsServer(TEST_IPV6_DNS)
 }
 
+@SuppressLint("NewApi")
 private val TEST_DUAL_LINK_PROPERTIES = LinkProperties().apply {
     interfaceName = TEST_IFACE.name
     addLinkAddress(TEST_IPV4_LINKADDR)
