@@ -45,6 +45,7 @@ import static java.util.stream.Collectors.toSet;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.SuppressLint;
 import android.net.IpPrefix;
 import android.net.MacAddress;
 import android.net.dhcp.DhcpServer.Clock;
@@ -84,6 +85,7 @@ public class DhcpLeaseRepositoryTest {
     private static final Inet4Address TEST_INETADDR_2 = parseAddr4("192.168.42.249");
     private static final String TEST_HOSTNAME_1 = "hostname1";
     private static final String TEST_HOSTNAME_2 = "hostname2";
+    @SuppressLint("NewApi")
     private static final IpPrefix TEST_IP_PREFIX = new IpPrefix(TEST_SERVER_ADDR, 22);
     private static final long TEST_TIME = 100L;
     private static final int TEST_LEASE_TIME_MS = 3_600_000;
@@ -149,6 +151,7 @@ public class DhcpLeaseRepositoryTest {
         }
     }
 
+    @SuppressLint("NewApi")
     @Test
     public void testAddressExhaustion() throws Exception {
         // Use a /28 to quickly run out of addresses
@@ -169,6 +172,7 @@ public class DhcpLeaseRepositoryTest {
         verifyNoMoreInteractions(mCallbacks);
     }
 
+    @SuppressLint("NewApi")
     @Test
     public void testUpdateParams_LeaseCleanup() throws Exception {
         // Inside /28:
@@ -229,6 +233,7 @@ public class DhcpLeaseRepositoryTest {
         }
     }
 
+    @SuppressLint("NewApi")
     @Test
     public void testUpdateParams_UsesNewPrefix() throws Exception {
         final IpPrefix newPrefix = new IpPrefix(parseAddr4("192.168.123.0"), 24);
@@ -538,6 +543,7 @@ public class DhcpLeaseRepositoryTest {
         assertNotEquals(lease.getNetAddr(), newLease.getNetAddr());
     }
 
+    @SuppressLint("NewApi")
     @Test
     public void testMarkLeaseDeclined_UsedIfOutOfAddresses() throws Exception {
         // Use a /28 to quickly run out of addresses
