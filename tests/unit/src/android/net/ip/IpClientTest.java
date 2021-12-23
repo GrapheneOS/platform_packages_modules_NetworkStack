@@ -40,6 +40,7 @@ import static org.mockito.Mockito.when;
 
 import static java.util.Collections.emptySet;
 
+import android.annotation.SuppressLint;
 import android.app.AlarmManager;
 import android.content.ContentResolver;
 import android.content.Context;
@@ -296,6 +297,7 @@ public class IpClientTest {
         return ipc;
     }
 
+    @SuppressLint("NewApi")
     private void addIPv4Provisioning(LinkProperties lp) {
         final LinkAddress la = new LinkAddress(TEST_IPV4_LINKADDRESS);
         final RouteInfo defaultRoute = new RouteInfo(new IpPrefix(Inet4Address.ANY, 0),
@@ -625,6 +627,7 @@ public class IpClientTest {
                 TEST_IFNAME));
     }
 
+    @SuppressLint("NewApi")
     static RouteInfo defaultIPV6Route(String gateway) {
         return new RouteInfo(new IpPrefix(Inet6Address.ANY, 0),
                 InetAddresses.parseNumericAddress(gateway), TEST_IFNAME);
