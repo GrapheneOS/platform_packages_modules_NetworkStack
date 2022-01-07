@@ -16,19 +16,20 @@
 
 package com.android.networkstack.apishim;
 
-import android.net.Network;
 import android.os.Build;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
+import com.android.networkstack.apishim.common.NetworkRequestShim;
+
 /**
- * Compatibility implementation of {@link com.android.networkstack.apishim.common.NetworkShim}.
+ * Implementation of {@link NetworkRequestShim} for API 33.
  */
-@RequiresApi(Build.VERSION_CODES.S) // Change to T when version code available, and adding T methods
-public class NetworkShimImpl extends com.android.networkstack.apishim.api30.NetworkShimImpl {
-    // Currently, this is the same as the API 31 shim, so inherit everything from that.
-    protected NetworkShimImpl(@NonNull Network network) {
-        super(network);
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+public class NetworkRequestShimImpl
+        extends com.android.networkstack.apishim.api31.NetworkRequestShimImpl {
+    // Currently identical to the API 31 shim, so inherit everything
+    protected NetworkRequestShimImpl() {
+        super();
     }
 }

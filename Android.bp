@@ -158,10 +158,10 @@ java_library {
 // stable and have no defined version number. These could be called 10000, but they use the next
 // integer so if the next SDK release happens to use that integer, we don't need to rename them.
 java_library {
-    name: "NetworkStackApi32Shims",
+    name: "NetworkStackApi33Shims",
     defaults: ["NetworkStackShimsDefaults"],
     srcs: [
-        "apishim/32/**/*.java",
+        "apishim/33/**/*.java",
     ],
     libs: [
         "NetworkStackShimsCommon",
@@ -185,7 +185,7 @@ java_library {
         "NetworkStackApi29Shims",
         "NetworkStackApi30Shims",
         "NetworkStackApi31Shims",
-        "NetworkStackApi32Shims",
+        "NetworkStackApi33Shims",
     ],
     sdk_version: "module_current",
     visibility: [
