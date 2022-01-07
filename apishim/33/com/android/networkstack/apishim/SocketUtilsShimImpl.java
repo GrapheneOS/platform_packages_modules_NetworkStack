@@ -20,16 +20,12 @@ import android.os.Build;
 
 import androidx.annotation.RequiresApi;
 
-import com.android.networkstack.apishim.common.NetworkRequestShim;
-
 /**
- * Implementation of {@link NetworkRequestShim} for API 31.
+ * Implementation of {@link com.android.networkstack.apishim.common.SocketUtilsShim}.
  */
-@RequiresApi(Build.VERSION_CODES.S) // Change to T when version code available, and adding T methods
-public class NetworkRequestShimImpl
-        extends com.android.networkstack.apishim.api31.NetworkRequestShimImpl {
-    // Currently identical to the API 31 shim, so inherit everything
-    protected NetworkRequestShimImpl() {
-        super();
-    }
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+public class SocketUtilsShimImpl
+        extends com.android.networkstack.apishim.api30.SocketUtilsShimImpl {
+    // Currently, this is the same as the API 31 shim, so inherit everything from that.
+    protected SocketUtilsShimImpl() {}
 }
