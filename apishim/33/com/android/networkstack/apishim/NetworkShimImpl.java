@@ -16,18 +16,19 @@
 
 package com.android.networkstack.apishim;
 
-import androidx.annotation.VisibleForTesting;
+import android.net.Network;
+import android.os.Build;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 
 /**
- * Utility class for defining and importing constants from the Android platform.
+ * Compatibility implementation of {@link com.android.networkstack.apishim.common.NetworkShim}.
  */
-public class ConstantsShim extends com.android.networkstack.apishim.api31.ConstantsShim {
-    /**
-     * Constant that callers can use to determine what version of the shim they are using.
-     * Must be the same as the version of the shims.
-     * This should only be used by test code. Production code that uses the shims should be using
-     * the shimmed objects and methods themselves.
-     */
-    @VisibleForTesting
-    public static final int VERSION = 32;
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+public class NetworkShimImpl extends com.android.networkstack.apishim.api30.NetworkShimImpl {
+    // Currently, this is the same as the API 31 shim, so inherit everything from that.
+    protected NetworkShimImpl(@NonNull Network network) {
+        super(network);
+    }
 }
