@@ -47,6 +47,7 @@ java_defaults {
         "libnetworkstackutilsjni",
     ],
     jni_uses_sdk_apis: true,
+    exclude_kotlinc_generated_files: false,
 }
 
 // Tests for NetworkStackNext.
