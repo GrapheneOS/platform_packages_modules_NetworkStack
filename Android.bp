@@ -169,6 +169,7 @@ java_library {
         "NetworkStackApi30Shims",
         "NetworkStackApi31Shims",
         "framework-connectivity",
+        "framework-tethering",
     ],
     sdk_version: "module_current",
     visibility: ["//visibility:private"],
