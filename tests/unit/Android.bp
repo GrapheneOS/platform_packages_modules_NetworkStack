@@ -56,8 +56,11 @@ android_test {
     min_sdk_version: "29",
     srcs: [], // TODO: tests that only apply to the current, non-stable API can be added here
     test_suites: ["general-tests"],
-    test_mainline_modules: ["CaptivePortalLoginGoogle.apk+NetworkStackGoogle.apk+com.google.android.resolv.apex+com.google.android.tethering.apex"],
-    defaults: ["NetworkStackTestsDefaults", "NetworkStackNextEnableDefaults"],
+    defaults: [
+        "NetworkStackTestsDefaults",
+        "NetworkStackNextEnableDefaults",
+        "connectivity-mainline-presubmit-java-defaults",
+    ],
     static_libs: ["NetworkStackApiCurrentLib"],
     compile_multilib: "both", // Workaround for b/147785146 for mainline-presubmit
     jarjar_rules: ":NetworkStackJarJarRules",
@@ -83,8 +86,10 @@ android_test {
     min_sdk_version: "29",
     target_sdk_version: "30",
     test_suites: ["general-tests", "mts"],
-    test_mainline_modules: ["CaptivePortalLoginGoogle.apk+NetworkStackGoogle.apk+com.google.android.resolv.apex+com.google.android.tethering.apex"],
-    defaults: ["NetworkStackTestsDefaults"],
+    defaults: [
+        "NetworkStackTestsDefaults",
+        "connectivity-mainline-presubmit-java-defaults",
+    ],
     static_libs: ["NetworkStackApiStableLib"],
     compile_multilib: "both",
     jarjar_rules: ":NetworkStackJarJarRules",
