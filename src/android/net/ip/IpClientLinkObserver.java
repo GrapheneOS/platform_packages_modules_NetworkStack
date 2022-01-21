@@ -42,6 +42,8 @@ import android.os.Handler;
 import android.system.OsConstants;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+
 import com.android.net.module.util.netlink.NduseroptMessage;
 import com.android.net.module.util.netlink.NetlinkConstants;
 import com.android.net.module.util.netlink.NetlinkMessage;
@@ -56,6 +58,7 @@ import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
 import com.android.server.NetworkObserver;
 
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -111,6 +114,13 @@ public class IpClientLinkObserver implements NetworkObserver {
          *                  with {@link #getLinkProperties()} in particular.
          */
         void update(boolean linkState);
+
+        /**
+         * Called when an IPv6 address was removed from the interface.
+         *
+         * @param addr The removed IPv6 address.
+         */
+        void onIpv6AddressRemoved(Inet6Address addr);
     }
 
     /** Configuration parameters for IpClientLinkObserver. */
@@ -262,7 +272,7 @@ public class IpClientLinkObserver implements NetworkObserver {
         }
     }
 
-    private void updateInterfaceAddress(final LinkAddress address, boolean add) {
+    private void updateInterfaceAddress(@NonNull final LinkAddress address, boolean add) {
         final boolean changed;
         final boolean linkState;
         synchronized (this) {
@@ -275,6 +285,10 @@ public class IpClientLinkObserver implements NetworkObserver {
         }
         if (changed) {
             mCallback.update(linkState);
+            if (!add && address.isIpv6()) {
+                final Inet6Address addr = (Inet6Address) address.getAddress();
+                mCallback.onIpv6AddressRemoved(addr);
+            }
         }
     }
 
