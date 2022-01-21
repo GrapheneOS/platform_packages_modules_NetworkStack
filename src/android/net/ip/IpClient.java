@@ -95,6 +95,7 @@ import android.util.Pair;
 import android.util.SparseArray;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.HexDump;
@@ -740,9 +741,27 @@ public class IpClient extends StateMachine {
         mLinkObserver = new IpClientLinkObserver(
                 mContext, getHandler(),
                 mInterfaceName,
-                (ifaceUp) -> sendMessage(EVENT_NETLINK_LINKPROPERTIES_CHANGED, ifaceUp
-                        ? ARG_LINKPROP_CHANGED_LINKSTATE_UP
-                        : ARG_LINKPROP_CHANGED_LINKSTATE_DOWN),
+                new IpClientLinkObserver.Callback() {
+                    @Override
+                    public void update(boolean linkState) {
+                        sendMessage(EVENT_NETLINK_LINKPROPERTIES_CHANGED, linkState
+                                ? ARG_LINKPROP_CHANGED_LINKSTATE_UP
+                                : ARG_LINKPROP_CHANGED_LINKSTATE_DOWN);
+                    }
+
+                    @Override
+                    public void onIpv6AddressRemoved(final Inet6Address targetIp) {
+                        // The update of Gratuitous NA target addresses set should be only accessed
+                        // from the handler thread of IpClient StateMachine, keeping the behaviour
+                        // consistent with relying on the non-blocking NetworkObserver callbacks,
+                        // see {@link registerObserverForNonblockingCallback}. This can be done
+                        // by either sending a message to StateMachine or posting a handler.
+                        getHandler().post(() -> {
+                            if (!mGratuitousNaTargetAddresses.contains(targetIp)) return;
+                            updateGratuitousNaTargetSet(targetIp, false /* remove address */);
+                        });
+                    }
+                },
                 config, mLog, mDependencies) {
             @Override
             public void onInterfaceAdded(String iface) {
@@ -773,21 +792,6 @@ public class IpClient extends StateMachine {
 
                 final String msg = "interfaceRemoved(" + iface + ")";
                 logMsg(msg);
-            }
-
-            @Override
-            public void onInterfaceAddressRemoved(LinkAddress address, String iface) {
-                super.onInterfaceAddressRemoved(address, iface);
-                if (!mInterfaceName.equals(iface)) return;
-                if (!address.isIpv6()) return;
-                final Inet6Address targetIp = (Inet6Address) address.getAddress();
-                if (mGratuitousNaTargetAddresses.contains(targetIp)) {
-                    mGratuitousNaTargetAddresses.remove(targetIp);
-
-                    final String msg = "Global IPv6 address: " + targetIp
-                            + " has removed from the set of gratuitous NA target address.";
-                    logMsg(msg);
-                }
             }
 
             private void logMsg(String msg) {
@@ -1663,6 +1667,7 @@ public class IpClient extends StateMachine {
         transmitPacket(packet, sockAddress, "Failed to send GARP");
     }
 
+    @Nullable
     private static Inet6Address getIpv6LinkLocalAddress(final LinkProperties newLp) {
         for (LinkAddress la : newLp.getLinkAddresses()) {
             if (!la.isIpv6()) continue;
@@ -1670,6 +1675,16 @@ public class IpClient extends StateMachine {
             if (ip.isLinkLocalAddress()) return ip;
         }
         return null;
+    }
+
+    private void updateGratuitousNaTargetSet(@NonNull final Inet6Address targetIp, boolean add) {
+        if (add) {
+            mGratuitousNaTargetAddresses.add(targetIp);
+        } else {
+            mGratuitousNaTargetAddresses.remove(targetIp);
+        }
+        mLog.log((add ? "Add" : "Remove") + " global IPv6 address " + targetIp
+                + (add ? " to" : " from") + " the set of gratuitous NA target address.");
     }
 
     private void maybeSendGratuitousNAs(final LinkProperties lp, boolean afterRoaming) {
@@ -1692,7 +1707,7 @@ public class IpClient extends StateMachine {
                         + targetIp.getHostAddress() + (afterRoaming ? " after roaming" : ""));
             }
             sendGratuitousNA(srcIp, targetIp);
-            if (!afterRoaming) mGratuitousNaTargetAddresses.add(targetIp);
+            if (!afterRoaming) updateGratuitousNaTargetSet(targetIp, true /* add address */);
         }
     }
 
