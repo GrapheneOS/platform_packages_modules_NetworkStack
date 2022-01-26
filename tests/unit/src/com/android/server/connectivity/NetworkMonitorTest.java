@@ -555,6 +555,11 @@ public class NetworkMonitorTest {
             mRegisteredReceivers.add(invocation.getArgument(0));
             return new Intent();
         });
+        when(mContext.registerReceiver(any(BroadcastReceiver.class), any(), anyInt())).then(
+                (invocation) -> {
+                    mRegisteredReceivers.add(invocation.getArgument(0));
+                    return new Intent();
+                });
 
         doAnswer((invocation) -> {
             mRegisteredReceivers.remove(invocation.getArgument(0));
