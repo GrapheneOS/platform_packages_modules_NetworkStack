@@ -45,6 +45,8 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
+// TODO: remove this default and replace with ConnectivityNextEnableDefaults. This will need to be
+// done separately in each branch due to merge conflicts.
 // Defaults to enable/disable java targets that depend on
 // NetworkStackNext, which uses development APIs. "enabled" may
 // have a different value depending on the branch.
@@ -159,7 +161,7 @@ java_library {
 // integer so if the next SDK release happens to use that integer, we don't need to rename them.
 java_library {
     name: "NetworkStackApi33Shims",
-    defaults: ["NetworkStackShimsDefaults"],
+    defaults: ["NetworkStackShimsDefaults", "ConnectivityNextEnableDefaults"],
     srcs: [
         "apishim/33/**/*.java",
     ],
@@ -180,7 +182,7 @@ java_library {
 // called directly by the networkstack code.
 java_library {
     name: "NetworkStackApiCurrentShims",
-    defaults: ["NetworkStackShimsDefaults"],
+    defaults: ["NetworkStackShimsDefaults", "ConnectivityNextEnableDefaults"],
     static_libs: [
         "NetworkStackShimsCommon",
         "NetworkStackApi29Shims",
@@ -250,7 +252,7 @@ android_library {
     defaults: [
         "NetworkStackDevApiLevel",
         "NetworkStackAndroidLibraryDefaults",
-        "NetworkStackNextEnableDefaults",
+        "ConnectivityNextEnableDefaults",
     ],
     srcs: [
         "src/**/*.java",
@@ -323,7 +325,7 @@ android_app {
     defaults: [
         "NetworkStackAppDefaults",
         "NetworkStackDevApiLevel",
-        "NetworkStackNextEnableDefaults",
+        "ConnectivityNextEnableDefaults",
     ],
     static_libs: ["NetworkStackApiCurrentLib"],
     certificate: "platform",
@@ -345,7 +347,7 @@ android_library {
     defaults: [
         "NetworkStackAppDefaults",
         "NetworkStackDevApiLevel",
-        "NetworkStackNextEnableDefaults",
+        "ConnectivityNextEnableDefaults",
     ],
     static_libs: ["NetworkStackApiCurrentLib"],
     manifest: "AndroidManifest.xml"
@@ -357,7 +359,7 @@ android_app {
     defaults: [
         "NetworkStackAppDefaults",
         "NetworkStackDevApiLevel",
-        "NetworkStackNextEnableDefaults",
+        "ConnectivityNextEnableDefaults",
     ],
     static_libs: ["NetworkStackNextManifestBase"],
     certificate: "networkstack",

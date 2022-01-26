@@ -59,7 +59,7 @@ android_test {
     test_suites: ["general-tests"],
     defaults: [
         "NetworkStackTestsDefaults",
-        "NetworkStackNextEnableDefaults",
+        "ConnectivityNextEnableDefaults",
         "connectivity-mainline-presubmit-java-defaults",
     ],
     static_libs: ["NetworkStackApiCurrentLib"],
