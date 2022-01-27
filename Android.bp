@@ -192,6 +192,8 @@ java_library {
     sdk_version: "module_current",
     visibility: [
         "//packages/modules/Connectivity/Tethering",
+        "//packages/modules/Connectivity/service",
+        "//packages/modules/Connectivity/service-t",
         "//packages/modules/Connectivity/tests/cts/net",
         "//packages/modules/Connectivity/tests/cts/hostside/app",
     ],
@@ -213,6 +215,8 @@ java_library {
     sdk_version: "module_31",
     visibility: [
         "//packages/modules/Connectivity/Tethering",
+        "//packages/modules/Connectivity/service",
+        "//packages/modules/Connectivity/service-t",
         "//packages/modules/Connectivity/tests/cts/net",
         "//packages/modules/Connectivity/tests/cts/hostside/app",
     ],
