@@ -2024,8 +2024,7 @@ public class NetworkMonitorTest {
         // The network should still be valid.
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).atLeastOnce())
                 .notifyNetworkTestedWithExtras(matchNetworkTestResultParcelable(
-                        NETWORK_VALIDATION_RESULT_VALID, 0 /* probesSucceeded */,
-                        TEST_LOGIN_URL));
+                        NETWORK_VALIDATION_RESULT_VALID, 0 /* probesSucceeded */));
     }
 
     @Test
