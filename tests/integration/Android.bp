@@ -81,7 +81,7 @@ android_test {
     defaults: [
         "NetworkStackIntegrationTestsDefaults",
         "NetworkStackIntegrationTestsJniDefaults",
-        "NetworkStackNextEnableDefaults",
+        "ConnectivityNextEnableDefaults",
     ],
     static_libs: [
         "NetworkStackApiCurrentLib",
