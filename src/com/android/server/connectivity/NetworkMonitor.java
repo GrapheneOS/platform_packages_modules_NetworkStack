@@ -83,6 +83,7 @@ import static com.android.net.module.util.ConnectivityUtils.isIPv6ULA;
 import static com.android.net.module.util.DeviceConfigUtils.getResBooleanConfig;
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DNS_EVENTS;
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_TCP_METRICS;
+import static com.android.networkstack.apishim.ConstantsShim.RECEIVER_NOT_EXPORTED;
 import static com.android.networkstack.apishim.ConstantsShim.TRANSPORT_TEST;
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
 import static com.android.networkstack.util.DnsUtils.TYPE_ADDRCONFIG;
@@ -157,6 +158,7 @@ import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.RingBufferIndices;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
+import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.NetworkStackConstants;
 import com.android.networkstack.NetworkStackNotifier;
@@ -1428,7 +1430,8 @@ public class NetworkMonitor extends StateMachine {
             mToken = token;
             mWhat = what;
             mAction = action + "_" + mCleartextDnsNetwork.getNetworkHandle() + "_" + token;
-            mContext.registerReceiver(this, new IntentFilter(mAction));
+            final int flags = SdkLevel.isAtLeastT() ? RECEIVER_NOT_EXPORTED : 0;
+            mContext.registerReceiver(this, new IntentFilter(mAction), flags);
         }
         public PendingIntent getPendingIntent() {
             final Intent intent = new Intent(mAction);
