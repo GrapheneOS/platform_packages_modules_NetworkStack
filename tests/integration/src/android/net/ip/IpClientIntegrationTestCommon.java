@@ -16,6 +16,7 @@
 
 package android.net.ip;
 
+import static android.Manifest.permission.MANAGE_TEST_NETWORKS;
 import static android.net.dhcp.DhcpClient.EXPIRED_LEASE;
 import static android.net.dhcp.DhcpPacket.DHCP_BOOTREQUEST;
 import static android.net.dhcp.DhcpPacket.DHCP_CLIENT;
@@ -58,6 +59,7 @@ import static com.android.net.module.util.NetworkStackConstants.NEIGHBOR_ADVERTI
 import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_AUTONOMOUS;
 import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_ON_LINK;
 import static com.android.testutils.MiscAsserts.assertThrows;
+import static com.android.testutils.TestPermissionUtil.runAsShell;
 
 import static junit.framework.Assert.fail;
 
@@ -641,19 +643,11 @@ public abstract class IpClientIntegrationTestCommon {
 
     private void setUpTapInterface() throws Exception {
         final Instrumentation inst = InstrumentationRegistry.getInstrumentation();
-        // Adopt the shell permission identity to create a test TAP interface.
-        inst.getUiAutomation().adoptShellPermissionIdentity();
-
-        final TestNetworkInterface iface;
-        try {
-            final TestNetworkManager tnm = (TestNetworkManager)
-                    inst.getContext().getSystemService(Context.TEST_NETWORK_SERVICE);
-            iface = tnm.createTapInterface();
-        } finally {
-            // Drop the identity in order to regain the network stack permissions, which the shell
-            // does not have.
-            inst.getUiAutomation().dropShellPermissionIdentity();
-        }
+        final TestNetworkInterface iface = runAsShell(MANAGE_TEST_NETWORKS, () -> {
+            final TestNetworkManager tnm =
+                    inst.getContext().getSystemService(TestNetworkManager.class);
+            return tnm.createTapInterface();
+        });
         mIfaceName = iface.getInterfaceName();
         mClientMac = getIfaceMacAddr(mIfaceName).toByteArray();
         mPacketReaderThread = new HandlerThread(
