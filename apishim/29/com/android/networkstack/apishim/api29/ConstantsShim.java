@@ -16,6 +16,11 @@
 
 package com.android.networkstack.apishim.api29;
 
+import android.os.Build;
+import android.provider.Settings;
+import android.telephony.CarrierConfigManager;
+
+import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
 
 /**
@@ -44,4 +49,16 @@ public class ConstantsShim {
 
     // Constants defined in android.content.Context
     public static final String NEARBY_SERVICE = "nearby";
+
+    /** Compatibility class for {@link CarrierConfigManager}. */
+    @RequiresApi(Build.VERSION_CODES.Q)
+    /** See {@link CarrierManager#KEY_CARRIER_SUPPORTS_TETHERING_BOOL} */
+    public static final String KEY_CARRIER_SUPPORTS_TETHERING_BOOL =
+            "carrier_supports_tethering_bool";
+
+    /** Compatibility class for {@link Settings}. */
+    @RequiresApi(Build.VERSION_CODES.Q)
+    /** @see android.provider.Settings#ACTION_TETHER_UNSUPPORTED_CARRIER_UI */
+    public static final  String ACTION_TETHER_UNSUPPORTED_CARRIER_UI =
+            "android.settings.TETHER_UNSUPPORTED_CARRIER_UI";
 }
