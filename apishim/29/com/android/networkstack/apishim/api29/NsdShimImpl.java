@@ -17,6 +17,7 @@
 package com.android.networkstack.apishim.api29;
 
 import android.net.Network;
+import android.net.NetworkRequest;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.os.Build;
@@ -58,5 +59,13 @@ public class NsdShimImpl implements NsdShim {
             int protocolType, @Nullable Network network,
             @NonNull NsdManager.DiscoveryListener listener) throws UnsupportedApiLevelException {
         throw new UnsupportedApiLevelException("Discover on network is only supported on T+");
+    }
+
+    @Override
+    public void discoverServices(@NonNull NsdManager nsdManager, @NonNull String serviceType,
+            int protocolType, @Nullable NetworkRequest request,
+            @NonNull NsdManager.DiscoveryListener listener) throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException(
+                "Discover with NetworkRequest is only supported on T+");
     }
 }
