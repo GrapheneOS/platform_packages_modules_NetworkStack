@@ -17,6 +17,7 @@
 package com.android.networkstack.apishim.common;
 
 import android.net.Network;
+import android.net.NetworkRequest;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 
@@ -42,5 +43,12 @@ public interface NsdShim {
      */
     void discoverServices(@NonNull NsdManager nsdManager, @NonNull String serviceType,
             int protocolType, @Nullable Network network,
+            @NonNull NsdManager.DiscoveryListener listener) throws UnsupportedApiLevelException;
+
+    /**
+     * @see NsdManager#discoverServices(String, int, NetworkRequest, NsdManager.DiscoveryListener)
+     */
+    void discoverServices(@NonNull NsdManager nsdManager, @NonNull String serviceType,
+            int protocolType, @Nullable NetworkRequest request,
             @NonNull NsdManager.DiscoveryListener listener) throws UnsupportedApiLevelException;
 }
