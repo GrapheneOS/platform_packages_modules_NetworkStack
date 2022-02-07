@@ -130,6 +130,7 @@ public final class DhcpResults implements Parcelable {
         }
     }
 
+    /** Clears all data and resets this object to its initial state. */
     public void clear() {
         ipAddress = null;
         gateway = null;
@@ -145,7 +146,7 @@ public final class DhcpResults implements Parcelable {
 
     @Override
     public String toString() {
-        StringBuffer str = new StringBuffer(super.toString());
+        StringBuilder str = new StringBuilder(super.toString());
 
         str.append(" DHCP server ").append(serverAddress);
         str.append(" Vendor info ").append(vendorInfo);
@@ -165,7 +166,7 @@ public final class DhcpResults implements Parcelable {
 
         if (!(obj instanceof DhcpResults)) return false;
 
-        DhcpResults target = (DhcpResults)obj;
+        DhcpResults target = (DhcpResults) obj;
 
         return toStaticIpConfiguration().equals(target.toStaticIpConfiguration())
                 && Objects.equals(serverAddress, target.serverAddress)
@@ -176,19 +177,25 @@ public final class DhcpResults implements Parcelable {
                 && Objects.equals(captivePortalApiUrl, target.captivePortalApiUrl);
     }
 
+    @Override
+    public int hashCode() {
+        return Objects.hash(ipAddress, gateway, dnsServers, domains, serverAddress, vendorInfo,
+            serverHostName, captivePortalApiUrl) + 43 *  leaseDuration + 67 * mtu;
+    }
+
     /**
      * Implement the Parcelable interface
      */
     public static final @android.annotation.NonNull Creator<DhcpResults> CREATOR =
-        new Creator<DhcpResults>() {
-            public DhcpResults createFromParcel(Parcel in) {
-                return readFromParcel(in);
-            }
+            new Creator<DhcpResults>() {
+                public DhcpResults createFromParcel(Parcel in) {
+                    return readFromParcel(in);
+                }
 
-            public DhcpResults[] newArray(int size) {
-                return new DhcpResults[size];
-            }
-        };
+                public DhcpResults[] newArray(int size) {
+                    return new DhcpResults[size];
+                }
+            };
 
     /** Implement the Parcelable interface */
     public void writeToParcel(Parcel dest, int flags) {
@@ -218,19 +225,30 @@ public final class DhcpResults implements Parcelable {
         return dhcpResults;
     }
 
-    // Utils for jni population - false on success
-    // Not part of the superclass because they're only used by the JNI iterface to the DHCP daemon.
+    /**
+     * Sets the IPv4 address.
+     *
+     * @param addrString the string representation of the IPv4 address
+     * @param prefixLength the prefix length.
+     * @return false on success, true on failure
+     */
     public boolean setIpAddress(String addrString, int prefixLength) {
         try {
             Inet4Address addr = (Inet4Address) InetAddresses.parseNumericAddress(addrString);
             ipAddress = new LinkAddress(addr, prefixLength);
-        } catch (IllegalArgumentException|ClassCastException e) {
+        } catch (IllegalArgumentException | ClassCastException e) {
             Log.e(TAG, "setIpAddress failed with addrString " + addrString + "/" + prefixLength);
             return true;
         }
         return false;
     }
 
+    /**
+     * Sets the gateway IPv4 address.
+     *
+     * @param addrString the string representation of the gateway IPv4 address
+     * @return false on success, true on failure
+     */
     public boolean setGateway(String addrString) {
         try {
             gateway = InetAddresses.parseNumericAddress(addrString);
@@ -241,16 +259,21 @@ public final class DhcpResults implements Parcelable {
         return false;
     }
 
+    /**
+     * Adds a DNS server to the list.
+     *
+     * @param addrString the string representation of the DNS server IPv4 address
+     * @return false on success, true on failure
+     */
     public boolean addDns(String addrString) {
-        if (TextUtils.isEmpty(addrString) == false) {
-            try {
-                dnsServers.add(InetAddresses.parseNumericAddress(addrString));
-            } catch (IllegalArgumentException e) {
-                Log.e(TAG, "addDns failed with addrString " + addrString);
-                return true;
-            }
+        if (TextUtils.isEmpty(addrString)) return false;
+        try {
+            dnsServers.add(InetAddresses.parseNumericAddress(addrString));
+            return false;
+        } catch (IllegalArgumentException e) {
+            Log.e(TAG, "addDns failed with addrString " + addrString);
+            return true;
         }
-        return false;
     }
 
     public LinkAddress getIpAddress() {
