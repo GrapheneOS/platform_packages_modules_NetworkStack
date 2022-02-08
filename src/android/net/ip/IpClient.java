@@ -40,6 +40,7 @@ import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_RO
 import static com.android.net.module.util.NetworkStackConstants.VENDOR_SPECIFIC_IE_ID;
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.Resources;
 import android.net.ConnectivityManager;
@@ -1872,6 +1873,7 @@ public class IpClient extends StateMachine {
         mCallback.onProvisioningFailure(mLinkProperties);
     }
 
+    @SuppressLint("NewApi") // TODO: b/193460475 remove once fixed
     private boolean startIPv4() {
         // If we have a StaticIpConfiguration attempt to apply it and
         // handle the result accordingly.
