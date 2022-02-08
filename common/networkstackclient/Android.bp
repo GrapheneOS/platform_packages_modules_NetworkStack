@@ -34,6 +34,7 @@ aidl_interface {
         java: {
             apex_available: [
                 "//apex_available:platform",
+                "com.android.bluetooth",
                 "com.android.wifi",
                 "com.android.tethering",
             ],
@@ -108,6 +109,7 @@ aidl_interface {
         java: {
             apex_available: [
                 "//apex_available:platform",
+                "com.android.bluetooth",
                 "com.android.wifi",
                 "com.android.tethering",
             ],
@@ -156,6 +158,7 @@ java_library {
     visibility: ["//packages/modules/NetworkStack:__subpackages__"],
     apex_available: [
         "//apex_available:platform",
+        "com.android.bluetooth",
         "com.android.tethering",
         "com.android.wifi",
     ],
@@ -193,6 +196,7 @@ java_library {
         "//frameworks/base/services/net",
         "//frameworks/opt/net/wifi/service",
         "//packages/apps/Bluetooth",
+        "//packages/modules/Bluetooth/android/app",
         "//packages/modules/NetworkStack",
     ],
     apex_available: [
