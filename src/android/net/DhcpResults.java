@@ -17,6 +17,7 @@
 package android.net;
 
 import android.annotation.Nullable;
+import android.annotation.SuppressLint;
 import android.compat.annotation.UnsupportedAppUsage;
 import android.os.Build;
 import android.os.Parcel;
@@ -79,6 +80,7 @@ public final class DhcpResults implements Parcelable {
     /**
      * Create a {@link StaticIpConfiguration} based on the DhcpResults.
      */
+    @SuppressLint("NewApi") // TODO: b/193460475 remove once fixed
     public StaticIpConfiguration toStaticIpConfiguration() {
         return new StaticIpConfiguration.Builder()
                 .setIpAddress(ipAddress)
@@ -88,6 +90,7 @@ public final class DhcpResults implements Parcelable {
                 .build();
     }
 
+    @SuppressLint("NewApi") // TODO: b/193460475 remove once fixed
     public DhcpResults(StaticIpConfiguration source) {
         if (source != null) {
             ipAddress = source.getIpAddress();
@@ -186,6 +189,7 @@ public final class DhcpResults implements Parcelable {
     /**
      * Implement the Parcelable interface
      */
+    @SuppressLint("NewApi") // TODO: b/193460475 remove once fixed
     public static final @android.annotation.NonNull Creator<DhcpResults> CREATOR =
             new Creator<DhcpResults>() {
                 public DhcpResults createFromParcel(Parcel in) {
@@ -213,6 +217,7 @@ public final class DhcpResults implements Parcelable {
         return 0;
     }
 
+    @SuppressLint("NewApi") // TODO: b/193460475 remove once fixed
     private static DhcpResults readFromParcel(Parcel in) {
         final StaticIpConfiguration s = StaticIpConfiguration.CREATOR.createFromParcel(in);
         final DhcpResults dhcpResults = new DhcpResults(s);
