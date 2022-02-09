@@ -142,6 +142,7 @@ aidl_interface {
         "11",
         "12",
         "13",
+        "14",
     ],
     // TODO: have tethering depend on networkstack-client and set visibility to private
     visibility: [
