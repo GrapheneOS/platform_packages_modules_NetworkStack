@@ -220,8 +220,7 @@ java_library {
         "//packages/modules/Connectivity/Tethering",
         "//packages/modules/Connectivity/service",
         "//packages/modules/Connectivity/service-t",
-        "//packages/modules/Connectivity/tests/cts/net",
-        "//packages/modules/Connectivity/tests/cts/hostside/app",
+        "//packages/modules/Connectivity/tests/cts:__subpackages__",
     ],
 }
 

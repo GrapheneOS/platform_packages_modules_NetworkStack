@@ -36,6 +36,12 @@ public class ConstantsShim extends com.android.networkstack.apishim.api30.Consta
     public static final int TRANSPORT_TEST = 7;
 
     /**
+     * Flag for {@link #registerReceiver}: The receiver can receive broadcasts from other apps;
+     * has the same behavior as marking a statically registered receiver with "exported=true".
+     */
+    public static final int RECEIVER_EXPORTED = 0x2;
+
+    /**
      * Flag for {@link android.content.Context#registerReceiver}: The receiver cannot receive
      * broadcasts from other apps; has the same behavior as marking a statically registered receiver
      * with "exported=false".
