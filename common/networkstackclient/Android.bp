@@ -101,6 +101,7 @@ aidl_interface {
         "src/android/net/ip/IIpClientCallbacks.aidl",
         // New AIDL classes should go into android.net.networkstack.aidl so they can be clearly
         // identified
+        "src/android/net/networkstack/aidl/NetworkMonitorParameters.aidl",
         "src/android/net/networkstack/aidl/dhcp/DhcpOption.aidl",
         "src/android/net/networkstack/aidl/ip/ReachabilityLossInfoParcelable.aidl",
         "src/android/net/networkstack/aidl/ip/ReachabilityLossReason.aidl",
