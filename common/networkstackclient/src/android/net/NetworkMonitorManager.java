@@ -18,6 +18,7 @@ package android.net;
 
 import android.annotation.Hide;
 import android.annotation.NonNull;
+import android.net.networkstack.aidl.NetworkMonitorParameters;
 import android.os.Binder;
 import android.os.RemoteException;
 import android.util.Log;
@@ -147,10 +148,10 @@ public class NetworkMonitorManager {
         }
     }
 
-    public boolean notifyNetworkConnected(LinkProperties lp, NetworkCapabilities nc) {
+    public boolean notifyNetworkConnected(NetworkMonitorParameters params) {
         final long token = Binder.clearCallingIdentity();
         try {
-            mNetworkMonitor.notifyNetworkConnected(lp, nc);
+            mNetworkMonitor.notifyNetworkConnectedParcel(params);
             return true;
         } catch (RemoteException e) {
             log("Error in notifyNetworkConnected", e);
