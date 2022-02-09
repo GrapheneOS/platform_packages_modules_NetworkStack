@@ -77,7 +77,7 @@ oneway interface INetworkMonitor {
     void notifyLinkPropertiesChanged(in LinkProperties lp);
     void notifyNetworkCapabilitiesChanged(in NetworkCapabilities nc);
     /**
-     * Notify NetworkMonitor that this network connected, used on T+.
+     * Notify NetworkMonitor that this network connected, version 2
      */
     void notifyNetworkConnectedParcel(in NetworkMonitorParameters params);
 }
