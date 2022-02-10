@@ -18,6 +18,7 @@ package android.net;
 import android.net.LinkProperties;
 import android.net.NetworkCapabilities;
 import android.net.PrivateDnsConfigParcel;
+import android.net.networkstack.aidl.NetworkMonitorParameters;
 
 /** @hide */
 oneway interface INetworkMonitor {
@@ -67,8 +68,16 @@ oneway interface INetworkMonitor {
     void forceReevaluation(int uid);
     void notifyPrivateDnsChanged(in PrivateDnsConfigParcel config);
     void notifyDnsResponse(int returnCode);
+    /**
+     * Notify NetworkMonitor that this network connected.
+     * @Deprecated use notifyNetworkConnectedParcel.
+     */
     void notifyNetworkConnected(in LinkProperties lp, in NetworkCapabilities nc);
     void notifyNetworkDisconnected();
     void notifyLinkPropertiesChanged(in LinkProperties lp);
     void notifyNetworkCapabilitiesChanged(in NetworkCapabilities nc);
+    /**
+     * Notify NetworkMonitor that this network connected, version 2
+     */
+    void notifyNetworkConnectedParcel(in NetworkMonitorParameters params);
 }
