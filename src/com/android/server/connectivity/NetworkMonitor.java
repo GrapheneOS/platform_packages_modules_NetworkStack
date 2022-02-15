@@ -83,6 +83,7 @@ import static com.android.net.module.util.ConnectivityUtils.isIPv6ULA;
 import static com.android.net.module.util.DeviceConfigUtils.getResBooleanConfig;
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DNS_EVENTS;
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_TCP_METRICS;
+import static com.android.networkstack.apishim.ConstantsShim.RECEIVER_NOT_EXPORTED;
 import static com.android.networkstack.apishim.ConstantsShim.TRANSPORT_TEST;
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
 import static com.android.networkstack.util.DnsUtils.TYPE_ADDRCONFIG;
@@ -112,6 +113,7 @@ import android.net.captiveportal.CaptivePortalProbeSpec;
 import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.NetworkEvent;
 import android.net.metrics.ValidationProbeEvent;
+import android.net.networkstack.aidl.NetworkMonitorParameters;
 import android.net.shared.NetworkMonitorUtils;
 import android.net.shared.PrivateDnsConfig;
 import android.net.util.DataStallUtils.EvaluationType;
@@ -143,7 +145,6 @@ import android.telephony.SignalStrength;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Log;
-import android.util.Pair;
 import android.util.SparseArray;
 
 import androidx.annotation.ArrayRes;
@@ -157,6 +158,7 @@ import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.RingBufferIndices;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
+import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.NetworkStackConstants;
 import com.android.networkstack.NetworkStackNotifier;
@@ -691,17 +693,29 @@ public class NetworkMonitor extends StateMachine {
 
     /**
      * Send a notification to NetworkMonitor indicating that the network is now connected.
+     * @Deprecated use notifyNetworkConnectedParcel. This method is called on R-, or in
+     *             cases where the Connectivity module is old in S.
      */
     public void notifyNetworkConnected(LinkProperties lp, NetworkCapabilities nc) {
-        sendMessage(CMD_NETWORK_CONNECTED, new Pair<>(
-                new LinkProperties(lp), new NetworkCapabilities(nc)));
+        final NetworkMonitorParameters params = new NetworkMonitorParameters();
+        params.linkProperties = lp;
+        params.networkCapabilities = nc;
+        notifyNetworkConnectedParcel(params);
+    }
+
+    /**
+     * Send a notification to NetworkMonitor indicating that the network is now connected.
+     * Called in S when the Connectivity module is recent enough, or in T+ in all cases.
+     */
+    public void notifyNetworkConnectedParcel(NetworkMonitorParameters params) {
+        sendMessage(CMD_NETWORK_CONNECTED, params);
     }
 
     private void updateConnectedNetworkAttributes(Message connectedMsg) {
-        final Pair<LinkProperties, NetworkCapabilities> attrs =
-                (Pair<LinkProperties, NetworkCapabilities>) connectedMsg.obj;
-        mLinkProperties = attrs.first;
-        mNetworkCapabilities = attrs.second;
+        final NetworkMonitorParameters params = (NetworkMonitorParameters) connectedMsg.obj;
+        // TODO : also read the NetworkAgentConfig
+        mLinkProperties = params.linkProperties;
+        mNetworkCapabilities = params.networkCapabilities;
         suppressNotificationIfNetworkRestricted();
     }
 
@@ -1428,7 +1442,8 @@ public class NetworkMonitor extends StateMachine {
             mToken = token;
             mWhat = what;
             mAction = action + "_" + mCleartextDnsNetwork.getNetworkHandle() + "_" + token;
-            mContext.registerReceiver(this, new IntentFilter(mAction));
+            final int flags = SdkLevel.isAtLeastT() ? RECEIVER_NOT_EXPORTED : 0;
+            mContext.registerReceiver(this, new IntentFilter(mAction), flags);
         }
         public PendingIntent getPendingIntent() {
             final Intent intent = new Intent(mAction);

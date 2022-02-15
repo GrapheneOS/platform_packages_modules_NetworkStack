@@ -34,8 +34,8 @@ aidl_interface {
         java: {
             apex_available: [
                 "//apex_available:platform",
+                "com.android.bluetooth",
                 "com.android.wifi",
-                "com.android.bluetooth.updatable",
                 "com.android.tethering",
             ],
             // this is part of updatable modules(NetworkStack) which targets 29(Q)
@@ -101,6 +101,7 @@ aidl_interface {
         "src/android/net/ip/IIpClientCallbacks.aidl",
         // New AIDL classes should go into android.net.networkstack.aidl so they can be clearly
         // identified
+        "src/android/net/networkstack/aidl/NetworkMonitorParameters.aidl",
         "src/android/net/networkstack/aidl/dhcp/DhcpOption.aidl",
         "src/android/net/networkstack/aidl/ip/ReachabilityLossInfoParcelable.aidl",
         "src/android/net/networkstack/aidl/ip/ReachabilityLossReason.aidl",
@@ -109,12 +110,15 @@ aidl_interface {
         java: {
             apex_available: [
                 "//apex_available:platform",
-                "com.android.bluetooth.updatable",
+                "com.android.bluetooth",
                 "com.android.wifi",
                 "com.android.tethering",
             ],
             // this is part of updatable modules(NetworkStack) which targets 29(Q)
             min_sdk_version: "29",
+            lint: {
+                enabled: false,
+            },
         },
         ndk: {
             enabled: false,
@@ -138,6 +142,7 @@ aidl_interface {
         "11",
         "12",
         "13",
+        "14",
     ],
     // TODO: have tethering depend on networkstack-client and set visibility to private
     visibility: [
@@ -153,11 +158,12 @@ java_library {
     min_sdk_version: "29",
     static_libs: [
         "ipmemorystore-aidl-interfaces-V10-java",
-        "networkstack-aidl-interfaces-V13-java",
+        "networkstack-aidl-interfaces-V14-java",
     ],
     visibility: ["//packages/modules/NetworkStack:__subpackages__"],
     apex_available: [
         "//apex_available:platform",
+        "com.android.bluetooth",
         "com.android.tethering",
         "com.android.wifi",
     ],
@@ -195,6 +201,7 @@ java_library {
         "//frameworks/base/services/net",
         "//frameworks/opt/net/wifi/service",
         "//packages/apps/Bluetooth",
+        "//packages/modules/Bluetooth/android/app",
         "//packages/modules/NetworkStack",
     ],
     apex_available: [

@@ -24,6 +24,7 @@ import static com.android.net.module.util.NetworkStackConstants.IPV4_MIN_MTU;
 
 import static java.lang.Integer.toUnsignedLong;
 
+import android.annotation.SuppressLint;
 import android.net.IpPrefix;
 import android.net.LinkAddress;
 import android.util.ArraySet;
@@ -411,6 +412,7 @@ public class DhcpServingParams {
     /**
      * Utility method to create an IpPrefix with the address and prefix length of a LinkAddress.
      */
+    @SuppressLint("NewApi")
     @NonNull
     static IpPrefix makeIpPrefix(@NonNull LinkAddress addr) {
         return new IpPrefix(addr.getAddress(), addr.getPrefixLength());

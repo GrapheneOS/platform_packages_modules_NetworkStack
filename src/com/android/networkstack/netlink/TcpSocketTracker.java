@@ -86,8 +86,8 @@ import java.util.List;
  * This is not thread-safe. This should be only accessed from one thread.
  */
 public class TcpSocketTracker {
-    private static final String TAG = "TcpSocketTracker";
-    private static final boolean DBG = false;
+    private static final String TAG = TcpSocketTracker.class.getSimpleName();
+    private static final boolean DBG = Log.isLoggable(TAG, Log.DEBUG);
     private static final int[] ADDRESS_FAMILIES = new int[] {AF_INET6, AF_INET};
     // Enough for parsing v1 tcp_info for more than 200 sockets per time.
     private static final int DEFAULT_RECV_BUFSIZE = 60_000;
@@ -355,7 +355,7 @@ public class TcpSocketTracker {
             stat.lostCount -= previous.tcpInfo.mLost;
             stat.retransmitCount -= previous.tcpInfo.mRetransmits;
         }
-
+        log("calculateLatestPacketsStat, stat:" + stat);
         return stat;
     }
 
@@ -518,6 +518,12 @@ public class TcpSocketTracker {
             lostCount += stat.lostCount;
             receivedCount += stat.receivedCount;
             retransmitCount += stat.retransmitCount;
+        }
+
+        @Override
+        public String toString() {
+            return "TcpStat {sent=" + sentCount + ", lost=" + lostCount
+                    + ", retransmit=" + retransmitCount + ", received=" + receivedCount + "}";
         }
     }
 
