@@ -193,6 +193,7 @@ java_library {
     ],
     static_libs: [
         "networkstack-aidl-latest",
+        "modules-utils-build",
     ],
     visibility: [
         "//frameworks/base/packages/Connectivity/service",
