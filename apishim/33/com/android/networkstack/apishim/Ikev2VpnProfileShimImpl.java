@@ -44,10 +44,10 @@ public class Ikev2VpnProfileShimImpl
     }
 
     /**
-     * @see Ikev2VpnProfile#getRequiresInternetValidation()
+     * @see Ikev2VpnProfile#isInternetValidationRequired()
      */
     @Override
-    public boolean getRequiresInternetValidation(@NonNull final Ikev2VpnProfile profile) {
-        return profile.getRequiresInternetValidation();
+    public boolean isInternetValidationRequired(@NonNull final Ikev2VpnProfile profile) {
+        return profile.isInternetValidationRequired();
     }
 }
