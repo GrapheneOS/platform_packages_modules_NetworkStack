@@ -23,7 +23,7 @@ import android.net.NetworkAgentConfig;
  */
 public interface NetworkAgentConfigShim {
     /**
-     * @see NetworkAgentConfig#getVpnRequiresValidation()
+     * @see NetworkAgentConfig#isVpnValidationRequired()
      */
-    boolean getVpnRequiresValidation();
+    boolean isVpnValidationRequired();
 }
