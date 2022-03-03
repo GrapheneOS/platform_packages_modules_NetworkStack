@@ -23,7 +23,7 @@ import com.android.networkstack.apishim.common.NetworkAgentConfigShim;
  */
 public class NetworkAgentConfigShimImpl implements NetworkAgentConfigShim {
     @Override
-    public boolean getVpnRequiresValidation() {
+    public boolean isVpnValidationRequired() {
         return false;
     }
 }
