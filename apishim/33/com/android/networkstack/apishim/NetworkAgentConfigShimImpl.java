@@ -46,11 +46,11 @@ public class NetworkAgentConfigShimImpl
     }
 
     @Override
-    public boolean getVpnRequiresValidation() {
+    public boolean isVpnValidationRequired() {
         if (null == mNetworkAgentConfig) {
             return false;
         } else {
-            return mNetworkAgentConfig.getVpnRequiresValidation();
+            return mNetworkAgentConfig.isVpnValidationRequired();
         }
     }
 
