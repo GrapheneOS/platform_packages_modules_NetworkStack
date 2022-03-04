@@ -26,7 +26,7 @@ package com.android.networkstack.apishim.common;
 // TODO : when API29 is no longer supported, remove the type argument
 public interface Ikev2VpnProfileShim<T> {
     /**
-     * @see Ikev2VpnProfile#getRequiresInternetValidation()
+     * @see Ikev2VpnProfile#isInternetValidationRequired()
      */
-    boolean getRequiresInternetValidation(T profile) throws UnsupportedApiLevelException;
+    boolean isInternetValidationRequired(T profile) throws UnsupportedApiLevelException;
 }
