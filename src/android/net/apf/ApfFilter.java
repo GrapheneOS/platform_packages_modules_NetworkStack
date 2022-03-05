@@ -49,7 +49,6 @@ import android.net.metrics.ApfProgramEvent;
 import android.net.metrics.ApfStats;
 import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.RaEvent;
-import android.net.util.InterfaceParams;
 import android.net.util.NetworkStackUtils;
 import android.os.PowerManager;
 import android.os.SystemClock;
@@ -67,6 +66,7 @@ import com.android.internal.util.HexDump;
 import com.android.internal.util.IndentingPrintWriter;
 import com.android.net.module.util.CollectionUtils;
 import com.android.net.module.util.ConnectivityUtils;
+import com.android.net.module.util.InterfaceParams;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
