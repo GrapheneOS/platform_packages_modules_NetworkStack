@@ -62,12 +62,12 @@ import android.net.shared.InitialConfiguration;
 import android.net.shared.Layer2Information;
 import android.net.shared.ProvisioningConfiguration;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
-import android.net.util.InterfaceParams;
 import android.os.Build;
 
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.net.module.util.InterfaceParams;
 import com.android.networkstack.R;
 import com.android.server.NetworkObserver;
 import com.android.server.NetworkObserverRegistry;
