@@ -42,4 +42,6 @@ public class ConstantsShim {
     // Constants defined in android.net.NetworkCapabilities.
     public static final int NET_CAPABILITY_NOT_VCN_MANAGED = 28;
 
+    // Constants defined in android.content.Context
+    public static final String NEARBY_SERVICE = "nearby";
 }
