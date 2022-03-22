@@ -29,6 +29,8 @@ import androidx.annotation.RequiresApi;
 import com.android.networkstack.apishim.common.NsdShim;
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 
+import java.util.concurrent.Executor;
+
 /**
  * Implementation of {@link NsdShim}.
  */
@@ -55,17 +57,33 @@ public class NsdShimImpl implements NsdShim {
     }
 
     @Override
+    public void registerService(@NonNull NsdManager nsdManager, @NonNull NsdServiceInfo serviceInfo,
+            int protocolType, @NonNull Executor executor,
+            @NonNull NsdManager.RegistrationListener listener) throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Register with an executor is only supported on T+");
+    }
+
+    @Override
     public void discoverServices(@NonNull NsdManager nsdManager, @NonNull String serviceType,
             int protocolType, @Nullable Network network,
-            @NonNull NsdManager.DiscoveryListener listener) throws UnsupportedApiLevelException {
+            @NonNull Executor executor, @NonNull NsdManager.DiscoveryListener listener)
+            throws UnsupportedApiLevelException {
         throw new UnsupportedApiLevelException("Discover on network is only supported on T+");
     }
 
     @Override
     public void discoverServices(@NonNull NsdManager nsdManager, @NonNull String serviceType,
             int protocolType, @Nullable NetworkRequest request,
-            @NonNull NsdManager.DiscoveryListener listener) throws UnsupportedApiLevelException {
+            @NonNull Executor executor, @NonNull NsdManager.DiscoveryListener listener)
+            throws UnsupportedApiLevelException {
         throw new UnsupportedApiLevelException(
                 "Discover with NetworkRequest is only supported on T+");
+    }
+
+    @Override
+    public void resolveService(@NonNull NsdManager nsdManager, @NonNull NsdServiceInfo serviceInfo,
+            @NonNull Executor executor, @NonNull NsdManager.ResolveListener resolveListener)
+            throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Resolve with executor is only supported on T+");
     }
 }

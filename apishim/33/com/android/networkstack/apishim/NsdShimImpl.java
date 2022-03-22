@@ -30,6 +30,8 @@ import com.android.modules.utils.build.SdkLevel;
 import com.android.networkstack.apishim.common.NsdShim;
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 
+import java.util.concurrent.Executor;
+
 /**
  * Implementation of {@link com.android.networkstack.apishim.common.NsdShim}.
  */
@@ -60,16 +62,32 @@ public class NsdShimImpl extends com.android.networkstack.apishim.api31.NsdShimI
     }
 
     @Override
+    public void registerService(@NonNull NsdManager nsdManager, @NonNull NsdServiceInfo serviceInfo,
+            int protocolType, @NonNull Executor executor,
+            @NonNull NsdManager.RegistrationListener listener) {
+        nsdManager.registerService(serviceInfo, protocolType, executor, listener);
+    }
+
+    @Override
     public void discoverServices(@NonNull NsdManager nsdManager, @NonNull String serviceType,
             int protocolType, @Nullable Network network,
-            @NonNull NsdManager.DiscoveryListener listener) throws UnsupportedApiLevelException {
-        nsdManager.discoverServices(serviceType, protocolType, network, listener);
+            @NonNull Executor executor, @NonNull NsdManager.DiscoveryListener listener)
+            throws UnsupportedApiLevelException {
+        nsdManager.discoverServices(serviceType, protocolType, network, executor, listener);
     }
 
     @Override
     public void discoverServices(@NonNull NsdManager nsdManager, @NonNull String serviceType,
             int protocolType, @Nullable NetworkRequest request,
-            @NonNull NsdManager.DiscoveryListener listener) throws UnsupportedApiLevelException {
-        nsdManager.discoverServices(serviceType, protocolType, request, listener);
+            @NonNull Executor executor, @NonNull NsdManager.DiscoveryListener listener)
+            throws UnsupportedApiLevelException {
+        nsdManager.discoverServices(serviceType, protocolType, request, executor, listener);
+    }
+
+    @Override
+    public void resolveService(@NonNull NsdManager nsdManager, @NonNull NsdServiceInfo serviceInfo,
+            @NonNull Executor executor, @NonNull NsdManager.ResolveListener resolveListener)
+            throws UnsupportedApiLevelException {
+        nsdManager.resolveService(serviceInfo, executor, resolveListener);
     }
 }
