@@ -165,6 +165,9 @@ java_library {
     srcs: [
         "apishim/33/**/*.java",
     ],
+    static_libs: [
+        "net-utils-framework-common",
+    ],
     libs: [
         "NetworkStackShimsCommon",
         "NetworkStackApi29Shims",
