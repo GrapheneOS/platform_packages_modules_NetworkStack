@@ -21,7 +21,7 @@ import android.net.IpConfiguration;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-
+import java.util.List;
 import java.util.concurrent.Executor;
 
 /** API shim for EthernetManager */
@@ -54,5 +54,10 @@ public interface EthernetManagerShim {
     /** Shim for EthernetManager#setIncludeTestInterfaces */
     default void setIncludeTestInterfaces(boolean include) throws UnsupportedApiLevelException {
         throw new UnsupportedApiLevelException("Not supported until API 30");
+    }
+
+    /** Shim for EthernetManager#getInterfaceList */
+    default List<String> getInterfaceList() throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Not supported until API 33");
     }
 }
