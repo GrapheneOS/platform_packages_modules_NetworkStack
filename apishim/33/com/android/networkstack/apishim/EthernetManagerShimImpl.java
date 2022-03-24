@@ -27,6 +27,7 @@ import androidx.annotation.RequiresApi;
 
 import com.android.networkstack.apishim.common.EthernetManagerShim;
 
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 
@@ -94,5 +95,11 @@ public class EthernetManagerShimImpl
     // because otherwise it could be used by production code on R and S.
     public void setIncludeTestInterfaces(boolean include) {
         mEm.setIncludeTestInterfaces(include);
+    }
+
+    @Override
+    @NonNull
+    public List<String> getInterfaceList() {
+        return mEm.getInterfaceList();
     }
 }
