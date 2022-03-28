@@ -164,9 +164,11 @@ import com.android.net.module.util.NetworkStackConstants;
 import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
+import com.android.networkstack.apishim.NetworkAgentConfigShimImpl;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.networkstack.apishim.api29.ConstantsShim;
 import com.android.networkstack.apishim.common.CaptivePortalDataShim;
+import com.android.networkstack.apishim.common.NetworkAgentConfigShim;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
 import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
@@ -427,6 +429,7 @@ public class NetworkMonitor extends StateMachine {
     private final INetworkMonitorCallbacks mCallback;
     private final int mCallbackVersion;
     private final Network mCleartextDnsNetwork;
+    @NonNull
     private final Network mNetwork;
     private final TelephonyManager mTelephonyManager;
     private final WifiManager mWifiManager;
@@ -460,7 +463,11 @@ public class NetworkMonitor extends StateMachine {
     private final int mEvaluatingBandwidthTimeoutMs;
     private final AtomicInteger mNextEvaluatingBandwidthThreadId = new AtomicInteger(1);
 
+    @NonNull
+    private NetworkAgentConfigShim mNetworkAgentConfig;
+    @NonNull
     private NetworkCapabilities mNetworkCapabilities;
+    @NonNull
     private LinkProperties mLinkProperties;
 
     @VisibleForTesting
@@ -647,6 +654,7 @@ public class NetworkMonitor extends StateMachine {
         // even before notifyNetworkConnected.
         mLinkProperties = new LinkProperties();
         mNetworkCapabilities = new NetworkCapabilities(null);
+        mNetworkAgentConfig = NetworkAgentConfigShimImpl.newInstance(null);
     }
 
     /**
@@ -712,7 +720,7 @@ public class NetworkMonitor extends StateMachine {
 
     private void updateConnectedNetworkAttributes(Message connectedMsg) {
         final NetworkMonitorParameters params = (NetworkMonitorParameters) connectedMsg.obj;
-        // TODO : also read the NetworkAgentConfig
+        mNetworkAgentConfig = NetworkAgentConfigShimImpl.newInstance(params.networkAgentConfig);
         mLinkProperties = params.linkProperties;
         mNetworkCapabilities = params.networkCapabilities;
         suppressNotificationIfNetworkRestricted();
@@ -773,7 +781,7 @@ public class NetworkMonitor extends StateMachine {
     }
 
     private boolean isValidationRequired() {
-        return NetworkMonitorUtils.isValidationRequired(mNetworkCapabilities);
+        return NetworkMonitorUtils.isValidationRequired(mNetworkAgentConfig, mNetworkCapabilities);
     }
 
     private boolean isPrivateDnsValidationRequired() {
