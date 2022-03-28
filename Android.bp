@@ -61,7 +61,13 @@ java_defaults {
 java_defaults {
     name: "NetworkStackDevApiLevel",
     min_sdk_version: "29",
-    sdk_version: "system_current",
+    sdk_version: "module_current",
+    libs: [
+        "framework-connectivity",
+        "framework-connectivity-t.stubs.module_lib",
+        "framework-statsd",
+        "framework-wifi",
+    ]
 }
 
 java_defaults {
