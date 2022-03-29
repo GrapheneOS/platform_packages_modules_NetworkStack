@@ -26,9 +26,11 @@ import static android.net.NetworkCapabilities.TRANSPORT_CELLULAR;
 import static android.net.NetworkCapabilities.TRANSPORT_ETHERNET;
 import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
 
+import android.annotation.NonNull;
 import android.net.NetworkCapabilities;
 
 import com.android.modules.utils.build.SdkLevel;
+import com.android.networkstack.apishim.common.NetworkAgentConfigShim;
 
 /** @hide */
 public class NetworkMonitorUtils {
@@ -67,9 +69,7 @@ public class NetworkMonitorUtils {
      * Return whether validation is required for private DNS in strict mode.
      * @param nc Network capabilities of the network to test.
      */
-    public static boolean isPrivateDnsValidationRequired(NetworkCapabilities nc) {
-        if (nc == null) return false;
-
+    public static boolean isPrivateDnsValidationRequired(@NonNull final NetworkCapabilities nc) {
         final boolean isVcnManaged = SdkLevel.isAtLeastS()
                 && !nc.hasCapability(NET_CAPABILITY_NOT_VCN_MANAGED);
         final boolean isOemPaid = nc.hasCapability(NET_CAPABILITY_OEM_PAID)
@@ -100,10 +100,15 @@ public class NetworkMonitorUtils {
 
     /**
      * Return whether validation is required for a network.
+     * @param config Configuration of the network to test.
      * @param nc Network capabilities of the network to test.
      */
-    public static boolean isValidationRequired(NetworkCapabilities nc) {
+    public static boolean isValidationRequired(@NonNull final NetworkAgentConfigShim config,
+            @NonNull final NetworkCapabilities nc) {
         // TODO: Consider requiring validation for DUN networks.
-        return isPrivateDnsValidationRequired(nc) && nc.hasCapability(NET_CAPABILITY_NOT_VPN);
+        if (!nc.hasCapability(NET_CAPABILITY_NOT_VPN)) {
+            return config.isVpnValidationRequired();
+        }
+        return isPrivateDnsValidationRequired(nc);
     }
 }
