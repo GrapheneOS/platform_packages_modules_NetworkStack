@@ -17,19 +17,10 @@
 package com.android.networkstack.apishim.api29;
 
 import com.android.networkstack.apishim.common.Ikev2VpnProfileShim;
-import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 
 /**
  * Implementation of Ikev2VpnProfileShim for API 29.
  * @param <T> type of profile, typically Ikev2VpnProfile
  */
 public class Ikev2VpnProfileShimImpl<T> implements Ikev2VpnProfileShim<T> {
-    /**
-     * @see Ikev2VpnProfile#isInternetValidationRequired(boolean)
-     */
-    @Override
-    public boolean isInternetValidationRequired(T profile)
-            throws UnsupportedApiLevelException {
-        throw new UnsupportedApiLevelException("Only supported from API level 33.");
-    }
 }
