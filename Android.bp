@@ -64,7 +64,7 @@ java_defaults {
     sdk_version: "module_current",
     libs: [
         "framework-connectivity",
-        "framework-connectivity-t.stubs.module_lib",
+        "framework-connectivity-t",
         "framework-statsd",
         "framework-wifi",
     ]
