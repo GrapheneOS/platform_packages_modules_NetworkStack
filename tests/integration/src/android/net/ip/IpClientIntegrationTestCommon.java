@@ -358,6 +358,9 @@ public abstract class IpClientIntegrationTestCommon {
     private static final Inet4Address NETMASK = getPrefixMaskAsInet4Address(PREFIX_LENGTH);
     private static final Inet4Address BROADCAST_ADDR = getBroadcastAddress(
             SERVER_ADDR, PREFIX_LENGTH);
+    private static final String IPV6_LINK_LOCAL_PREFIX = "fe80::/64";
+    private static final String IPV4_TEST_SUBNET_PREFIX = "192.168.1.0/24";
+    private static final String IPV4_ANY_ADDRESS_PREFIX = "0.0.0.0/0";
     private static final String HOSTNAME = "testhostname";
     private static final int TEST_DEFAULT_MTU = 1500;
     private static final int TEST_MIN_MTU = 1280;
@@ -2692,6 +2695,13 @@ public abstract class IpClientIntegrationTestCommon {
                 (long) NetworkQuirkEvent.QE_IPV6_PROVISIONING_ROUTER_LOST.ordinal());
     }
 
+    private boolean hasRouteTo(@NonNull final LinkProperties lp, @NonNull final String prefix) {
+        for (RouteInfo r : lp.getRoutes()) {
+            if (r.getDestination().equals(new IpPrefix(prefix))) return true;
+        }
+        return false;
+    }
+
     @Test @SignatureRequiredTest(reason = "signature perms are required due to mocked callabck")
     public void testIgnoreIpv6ProvisioningLoss_disableAcceptRa() throws Exception {
         doDualStackProvisioning(true /* shouldDisableAcceptRa */);
@@ -2707,6 +2717,8 @@ public abstract class IpClientIntegrationTestCommon {
                     // Only IPv4 provisioned and IPv6 link-local address
                     final boolean isIPv6LinkLocalAndIPv4OnlyProvisioned =
                             (x.getLinkAddresses().size() == 2
+                                    // fe80::/64, IPv4 default route, IPv4 subnet route
+                                    && x.getRoutes().size() == 3
                                     && x.getDnsServers().size() == 1
                                     && x.getAddresses().get(0) instanceof Inet4Address
                                     && x.getDnsServers().get(0) instanceof Inet4Address);
@@ -2719,13 +2731,23 @@ public abstract class IpClientIntegrationTestCommon {
         assertNotNull(lp);
         assertEquals(lp.getAddresses().get(0), CLIENT_ADDR);
         assertEquals(lp.getDnsServers().get(0), SERVER_ADDR);
+        assertEquals(3, lp.getRoutes().size());
+        assertTrue(hasRouteTo(lp, IPV6_LINK_LOCAL_PREFIX)); // fe80::/64
+        assertTrue(hasRouteTo(lp, IPV4_TEST_SUBNET_PREFIX)); // IPv4 directly-connected route
+        assertTrue(hasRouteTo(lp, IPV4_ANY_ADDRESS_PREFIX)); // IPv4 default route
         assertTrue(lp.getAddresses().get(1).isLinkLocalAddress());
 
         reset(mCb);
 
-        // Send an RA to verify that global IPv6 addresses won't be configured on the interface.
+        // Send an RA to verify that global IPv6 addresses will be added back due to the accept_ra
+        // was restored to 2.
+        // TODO: This behavior isn't aligned with the expectation, once the IPv6 default route has
+        // lost, the accept_ra should be set to 0 until IpClient restarts. That being said, the
+        // interface should not process the following RA. Fix it in a follow-up CL and also cleanup
+        // the test.
         sendBasicRouterAdvertisement(false /* waitForRs */);
-        verify(mCb, timeout(TEST_TIMEOUT_MS).times(0)).onLinkPropertiesChange(any());
+        verify(mCb, timeout(TEST_TIMEOUT_MS).atLeastOnce()).onLinkPropertiesChange(
+                argThat(x -> x.isIpv6Provisioned()));
     }
 
     @Test @SignatureRequiredTest(reason = "TODO: evaluate whether signature perms are required")
