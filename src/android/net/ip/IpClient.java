@@ -1354,8 +1354,7 @@ public class IpClient extends StateMachine {
 
     private void restartIpv6WithAcceptRaDisabled() {
         mInterfaceCtrl.disableIPv6();
-        setIpv6AcceptRa(0 /* accept_ra */);
-        startIPv6();
+        startIPv6(0 /* acceptRa */);
     }
 
     // TODO: Investigate folding all this into the existing static function
@@ -1893,8 +1892,8 @@ public class IpClient extends StateMachine {
         return true;
     }
 
-    private boolean startIPv6() {
-        setIpv6AcceptRa(mConfiguration.mIPv6ProvisioningMode == PROV_IPV6_LINKLOCAL ? 0 : 2);
+    private boolean startIPv6(int acceptRa) {
+        setIpv6AcceptRa(acceptRa);
         return mInterfaceCtrl.setIPv6PrivacyExtensions(true)
                 && mInterfaceCtrl.setIPv6AddrGenModeIfSupported(mConfiguration.mIPv6AddrGenMode)
                 && mInterfaceCtrl.enableIPv6();
@@ -2390,7 +2389,9 @@ public class IpClient extends StateMachine {
             mPacketTracker = createPacketTracker();
             if (mPacketTracker != null) mPacketTracker.start(mConfiguration.mDisplayName);
 
-            if (isIpv6Enabled() && !startIPv6()) {
+            final int acceptRa =
+                    mConfiguration.mIPv6ProvisioningMode == PROV_IPV6_LINKLOCAL ? 0 : 2;
+            if (isIpv6Enabled() && !startIPv6(acceptRa)) {
                 doImmediateProvisioningFailure(IpManagerEvent.ERROR_STARTING_IPV6);
                 enqueueJumpToStoppingState(DisconnectCode.DC_ERROR_STARTING_IPV6);
                 return;
