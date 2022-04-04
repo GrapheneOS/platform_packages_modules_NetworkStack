@@ -2739,15 +2739,9 @@ public abstract class IpClientIntegrationTestCommon {
 
         reset(mCb);
 
-        // Send an RA to verify that global IPv6 addresses will be added back due to the accept_ra
-        // was restored to 2.
-        // TODO: This behavior isn't aligned with the expectation, once the IPv6 default route has
-        // lost, the accept_ra should be set to 0 until IpClient restarts. That being said, the
-        // interface should not process the following RA. Fix it in a follow-up CL and also cleanup
-        // the test.
+        // Send an RA to verify that global IPv6 addresses won't be configured on the interface.
         sendBasicRouterAdvertisement(false /* waitForRs */);
-        verify(mCb, timeout(TEST_TIMEOUT_MS).atLeastOnce()).onLinkPropertiesChange(
-                argThat(x -> x.isIpv6Provisioned()));
+        verify(mCb, timeout(TEST_TIMEOUT_MS).times(0)).onLinkPropertiesChange(any());
     }
 
     @Test @SignatureRequiredTest(reason = "TODO: evaluate whether signature perms are required")
