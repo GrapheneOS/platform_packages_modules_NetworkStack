@@ -28,5 +28,21 @@ public interface Ikev2VpnProfileShim<T> {
     /**
      * @see Ikev2VpnProfile#isInternetValidationRequired()
      */
-    boolean isInternetValidationRequired(T profile) throws UnsupportedApiLevelException;
+    default boolean isInternetValidationRequired() throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported from API level 33.");
+    }
+
+    /**
+     * @see Ikev2VpnProfile#getIkeTunnelConnectionParams()
+     */
+    default Object getIkeTunnelConnectionParams() throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported from API level 33.");
+    }
+
+    /**
+     * Return the <T> type of profile.
+     */
+    default T getProfile() throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported from API level 30.");
+    }
 }

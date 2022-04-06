@@ -16,9 +16,11 @@
 
 package com.android.networkstack.apishim;
 
+import static com.android.net.module.util.CollectionUtils.toIntArray;
+
 import android.os.Build;
 import android.telephony.TelephonyManager;
-import android.telephony.TelephonyManager.CarrierPrivilegesListener;
+import android.telephony.TelephonyManager.CarrierPrivilegesCallback;
 
 import androidx.annotation.RequiresApi;
 
@@ -27,6 +29,7 @@ import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Executor;
 
 /**
@@ -35,34 +38,41 @@ import java.util.concurrent.Executor;
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 public class TelephonyManagerShimImpl extends
         com.android.networkstack.apishim.api31.TelephonyManagerShimImpl {
-    private HashMap<CarrierPrivilegesListenerShim, CarrierPrivilegesListener> mListenerMap =
+    private HashMap<CarrierPrivilegesListenerShim, CarrierPrivilegesCallback> mListenerMap =
             new HashMap<>();
     public TelephonyManagerShimImpl(TelephonyManager telephonyManager) {
         super(telephonyManager);
     }
 
-    /** See android.telephony.TelephonyManager#addCarrierPrivilegesListener */
+    /** See android.telephony.TelephonyManager#registerCarrierPrivilegesCallback */
     public void addCarrierPrivilegesListener(
             int logicalSlotIndex,
             Executor executor,
             CarrierPrivilegesListenerShim listener)
             throws UnsupportedApiLevelException {
-        CarrierPrivilegesListener carrierPrivilegesListener = new CarrierPrivilegesListener() {
+        CarrierPrivilegesCallback carrierPrivilegesCallback = new CarrierPrivilegesCallback() {
             public void onCarrierPrivilegesChanged(
-                    List<String> privilegedPackageNames,
-                    int[] privilegedUids) {
-                listener.onCarrierPrivilegesChanged(privilegedPackageNames, privilegedUids);
+                    Set<String> privilegedPackageNames,
+                    Set<Integer> privilegedUids) {
+                // TODO(b/221306368): Rebuild thoroughly based on onCarrierServiceChanged interface
+                // This is the minimum change to remove the dependency on the obsoleted API in
+                // CarrierPrivilegesListener. A follow-up CL should refactor Connectivity modules
+                // with carrier service change API instead.
+                List<String> pkgNames = List.copyOf(privilegedPackageNames);
+                int[] pkgUids = toIntArray(privilegedUids);
+                listener.onCarrierPrivilegesChanged(pkgNames, pkgUids);
             }
         };
-        mTm.addCarrierPrivilegesListener(logicalSlotIndex, executor, carrierPrivilegesListener);
-        mListenerMap.put(listener, carrierPrivilegesListener);
+        mTm.registerCarrierPrivilegesCallback(logicalSlotIndex, executor,
+                carrierPrivilegesCallback);
+        mListenerMap.put(listener, carrierPrivilegesCallback);
     }
 
-    /** See android.telephony.TelephonyManager#addCarrierPrivilegesListener */
+    /** See android.telephony.TelephonyManager#unregisterCarrierPrivilegesCallback */
     public void removeCarrierPrivilegesListener(
             CarrierPrivilegesListenerShim listener)
             throws UnsupportedApiLevelException {
-        mTm.removeCarrierPrivilegesListener(mListenerMap.get(listener));
+        mTm.unregisterCarrierPrivilegesCallback(mListenerMap.get(listener));
         mListenerMap.remove(listener);
     }
 

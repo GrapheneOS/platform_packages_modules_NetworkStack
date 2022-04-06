@@ -16,8 +16,11 @@
 
 package com.android.networkstack.apishim.api29;
 
+import android.os.Build;
+
+import androidx.annotation.RequiresApi;
+
 import com.android.networkstack.apishim.common.Ikev2VpnProfileBuilderShim;
-import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 
 /**
  * Implementation of Ikev2VpnProfileBuilderShim for API 29.
@@ -29,13 +32,6 @@ import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 // NOTE : the trick with the formal parameter only works because when this shim was introduced,
 // the stable API already contained the class that the caller needs to pass in; this won't
 // work for a class added in the latest API level.
+@RequiresApi(Build.VERSION_CODES.Q)
 public class Ikev2VpnProfileBuilderShimImpl<T> implements Ikev2VpnProfileBuilderShim<T> {
-    /**
-     * @see Ikev2VpnProfile.Builder#setRequiresInternetValidation(boolean)
-     */
-    @Override
-    public T setRequiresInternetValidation(T builder,
-            boolean requiresInternetValidation) throws UnsupportedApiLevelException {
-        throw new UnsupportedApiLevelException("Only supported from API level 33.");
-    }
 }
