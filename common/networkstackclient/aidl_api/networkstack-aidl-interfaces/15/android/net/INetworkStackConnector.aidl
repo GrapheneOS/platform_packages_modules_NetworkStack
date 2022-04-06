@@ -1,6 +1,5 @@
 /**
- *
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (c) 2018, The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -11,7 +10,7 @@
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
+ * See the License for the specific language governing perNmissions and
  * limitations under the License.
  */
 ///////////////////////////////////////////////////////////////////////////////
@@ -32,18 +31,12 @@
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
 
-package android.net.dhcp;
-@JavaDerive(toString=true)
-parcelable DhcpServingParamsParcel {
-  int serverAddr;
-  int serverAddrPrefixLength;
-  int[] defaultRouters;
-  int[] dnsServers;
-  int[] excludedAddrs;
-  long dhcpLeaseTimeSecs;
-  int linkMtu;
-  boolean metered;
-  int singleClientAddr = 0;
-  boolean changePrefixOnDecline = false;
-  int leasesSubnetPrefixLength = 0;
+package android.net;
+/* @hide */
+interface INetworkStackConnector {
+  oneway void makeDhcpServer(in String ifName, in android.net.dhcp.DhcpServingParamsParcel params, in android.net.dhcp.IDhcpServerCallbacks cb);
+  oneway void makeNetworkMonitor(in android.net.Network network, String name, in android.net.INetworkMonitorCallbacks cb);
+  oneway void makeIpClient(in String ifName, in android.net.ip.IIpClientCallbacks callbacks);
+  oneway void fetchIpMemoryStore(in android.net.IIpMemoryStoreCallbacks cb);
+  oneway void allowTestUid(int uid, in android.net.INetworkStackStatusCallback cb);
 }
