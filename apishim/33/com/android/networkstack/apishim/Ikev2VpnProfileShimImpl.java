@@ -19,11 +19,7 @@ package com.android.networkstack.apishim;
 import android.net.Ikev2VpnProfile;
 import android.os.Build;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
-
-import com.android.modules.utils.build.SdkLevel;
-import com.android.networkstack.apishim.common.Ikev2VpnProfileShim;
 
 /**
  * A shim for Ikev2VpnProfile
@@ -31,23 +27,23 @@ import com.android.networkstack.apishim.common.Ikev2VpnProfileShim;
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 public class Ikev2VpnProfileShimImpl
         extends com.android.networkstack.apishim.api31.Ikev2VpnProfileShimImpl {
-    /**
-     * Returns a new instance of this shim impl.
-     */
-    @RequiresApi(Build.VERSION_CODES.R)
-    public static Ikev2VpnProfileShim<Ikev2VpnProfile> newInstance() {
-        if (SdkLevel.isAtLeastT()) {
-            return new Ikev2VpnProfileShimImpl();
-        } else {
-            return com.android.networkstack.apishim.api31.Ikev2VpnProfileShimImpl.newInstance();
-        }
+    public Ikev2VpnProfileShimImpl(Ikev2VpnProfile profile) {
+       super(profile);
     }
 
     /**
      * @see Ikev2VpnProfile#isInternetValidationRequired()
      */
     @Override
-    public boolean isInternetValidationRequired(@NonNull final Ikev2VpnProfile profile) {
-        return profile.isInternetValidationRequired();
+    public boolean isInternetValidationRequired() {
+        return mProfile.isInternetValidationRequired();
+    }
+
+    /**
+     * @see Ikev2VpnProfile#getIkeTunnelConnectionParams()
+     */
+    @Override
+    public Object getIkeTunnelConnectionParams() {
+        return mProfile.getIkeTunnelConnectionParams();
     }
 }
