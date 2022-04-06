@@ -1,6 +1,5 @@
 /**
- *
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (c) 2018, The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -11,7 +10,7 @@
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
+ * See the License for the specific language governing perNmissions and
  * limitations under the License.
  */
 ///////////////////////////////////////////////////////////////////////////////
@@ -33,17 +32,14 @@
 // later when a module using the interface is updated, e.g., Mainline modules.
 
 package android.net.dhcp;
-@JavaDerive(toString=true)
-parcelable DhcpServingParamsParcel {
-  int serverAddr;
-  int serverAddrPrefixLength;
-  int[] defaultRouters;
-  int[] dnsServers;
-  int[] excludedAddrs;
-  long dhcpLeaseTimeSecs;
-  int linkMtu;
-  boolean metered;
-  int singleClientAddr = 0;
-  boolean changePrefixOnDecline = false;
-  int leasesSubnetPrefixLength = 0;
+/* @hide */
+interface IDhcpServer {
+  oneway void start(in android.net.INetworkStackStatusCallback cb) = 0;
+  oneway void startWithCallbacks(in android.net.INetworkStackStatusCallback statusCb, in android.net.dhcp.IDhcpEventCallbacks eventCb) = 3;
+  oneway void updateParams(in android.net.dhcp.DhcpServingParamsParcel params, in android.net.INetworkStackStatusCallback cb) = 1;
+  oneway void stop(in android.net.INetworkStackStatusCallback cb) = 2;
+  const int STATUS_UNKNOWN = 0;
+  const int STATUS_SUCCESS = 1;
+  const int STATUS_INVALID_ARGUMENT = 2;
+  const int STATUS_UNKNOWN_ERROR = 3;
 }
