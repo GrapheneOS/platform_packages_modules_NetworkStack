@@ -143,6 +143,7 @@ aidl_interface {
         "12",
         "13",
         "14",
+        "15",
     ],
     // TODO: have tethering depend on networkstack-client and set visibility to private
     visibility: [
@@ -158,7 +159,7 @@ java_library {
     min_sdk_version: "29",
     static_libs: [
         "ipmemorystore-aidl-interfaces-V10-java",
-        "networkstack-aidl-interfaces-V14-java",
+        "networkstack-aidl-interfaces-V15-java",
     ],
     visibility: ["//packages/modules/NetworkStack:__subpackages__"],
     apex_available: [
