@@ -16,6 +16,16 @@
 
 package com.android.networkstack.apishim.common;
 
+import android.net.ProxyInfo;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import java.security.PrivateKey;
+import java.security.cert.X509Certificate;
+import java.util.List;
+
+
 /**
  * A shim for Ikev2VpnProfile.Builder.
  *
@@ -28,6 +38,96 @@ public interface Ikev2VpnProfileBuilderShim<T> {
     /**
      * @see Ikev2VpnProfile.Builder#setRequiresInternetValidation(boolean)
      */
-    T setRequiresInternetValidation(T builder, boolean requiresInternetValidation)
-            throws UnsupportedApiLevelException;
+    default Ikev2VpnProfileBuilderShim<T> setRequiresInternetValidation(
+            boolean requiresInternetValidation) throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported from API 33");
+    }
+
+    /**
+     * @see Ikev2VpnProfile.Builder#setAuthPsk(byte[])
+     */
+    default Ikev2VpnProfileBuilderShim<T> setAuthPsk(@NonNull byte[] psk)
+            throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported from API 30");
+    }
+
+    /**
+     * @see Ikev2VpnProfile.Builder#setAuthUsernamePassword(String, String, X509Certificate)
+     */
+    default Ikev2VpnProfileBuilderShim<T> setAuthUsernamePassword(@NonNull String user,
+            @NonNull String pass, @Nullable X509Certificate serverRootCa)
+            throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported from API 30");
+    }
+
+    /**
+     * @see Ikev2VpnProfile.Builder#setAuthDigitalSignature(X509Certificate, PrivateKey,
+     *      X509Certificate)
+     */
+    default Ikev2VpnProfileBuilderShim<T> setAuthDigitalSignature(@NonNull X509Certificate userCert,
+            @NonNull PrivateKey key, @Nullable X509Certificate serverRootCa)
+            throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported from API 30");
+    }
+
+    /**
+     * @see Ikev2VpnProfile.Builder#setBypassable(boolean)
+     */
+    default Ikev2VpnProfileBuilderShim<T> setBypassable(boolean isBypassable)
+            throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported from API 30");
+    }
+
+    /**
+     * @see Ikev2VpnProfile.Builder#setProxy(ProxyInfo)
+     */
+    default Ikev2VpnProfileBuilderShim<T> setProxy(@Nullable ProxyInfo proxy)
+            throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported from API 30");
+    }
+
+    /**
+     * @see Ikev2VpnProfile.Builder#setMaxMtu(int)
+     */
+    default Ikev2VpnProfileBuilderShim<T> setMaxMtu(int mtu) throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported from API 30");
+    }
+
+    /**
+     * @see Ikev2VpnProfile.Builder#setMetered(boolean)
+     */
+    default Ikev2VpnProfileBuilderShim<T> setMetered(boolean isMetered)
+            throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported from API 30");
+    }
+
+    /**
+     * @see Ikev2VpnProfile.Builder#setAllowedAlgorithms(List<String>)
+     */
+    default Ikev2VpnProfileBuilderShim<T> setAllowedAlgorithms(@NonNull List<String> algorithmNames)
+            throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported from API 30");
+    }
+
+    /**
+     * @see Ikev2VpnProfile.Builder#setLocalRoutesExcluded(boolean)
+     */
+    default Ikev2VpnProfileBuilderShim<T> setLocalRoutesExcluded(boolean excludeLocalRoutes)
+            throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported from API 33");
+    }
+
+    /**
+     * Get <T> type of builder, typically Ikev2VpnProfile.Builder
+     */
+    default T getBuilder() throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported from API 30");
+    }
+
+    /**
+     * Build an Ikev2VpnProfileShim
+     */
+    default Ikev2VpnProfileShim build() throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported from API 30");
+    }
 }
