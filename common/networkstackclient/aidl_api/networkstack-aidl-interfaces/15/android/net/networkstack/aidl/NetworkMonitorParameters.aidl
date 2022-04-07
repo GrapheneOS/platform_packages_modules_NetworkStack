@@ -1,6 +1,6 @@
 /**
  *
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,18 +32,10 @@
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
 
-package android.net.dhcp;
-@JavaDerive(toString=true)
-parcelable DhcpServingParamsParcel {
-  int serverAddr;
-  int serverAddrPrefixLength;
-  int[] defaultRouters;
-  int[] dnsServers;
-  int[] excludedAddrs;
-  long dhcpLeaseTimeSecs;
-  int linkMtu;
-  boolean metered;
-  int singleClientAddr = 0;
-  boolean changePrefixOnDecline = false;
-  int leasesSubnetPrefixLength = 0;
+package android.net.networkstack.aidl;
+@JavaDerive(equals=true, toString=true)
+parcelable NetworkMonitorParameters {
+  android.net.NetworkAgentConfig networkAgentConfig;
+  android.net.NetworkCapabilities networkCapabilities;
+  android.net.LinkProperties linkProperties;
 }

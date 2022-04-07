@@ -1,12 +1,11 @@
-/**
- *
- * Copyright (C) 2018 The Android Open Source Project
+/*
+ * Copyright (C) 2021 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -32,18 +31,10 @@
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
 
-package android.net.dhcp;
-@JavaDerive(toString=true)
-parcelable DhcpServingParamsParcel {
-  int serverAddr;
-  int serverAddrPrefixLength;
-  int[] defaultRouters;
-  int[] dnsServers;
-  int[] excludedAddrs;
-  long dhcpLeaseTimeSecs;
-  int linkMtu;
-  boolean metered;
-  int singleClientAddr = 0;
-  boolean changePrefixOnDecline = false;
-  int leasesSubnetPrefixLength = 0;
+package android.net.networkstack.aidl.ip;
+@Backing(type="int")
+enum ReachabilityLossReason {
+  ROAM = 0,
+  CONFIRM = 1,
+  ORGANIC = 2,
 }
