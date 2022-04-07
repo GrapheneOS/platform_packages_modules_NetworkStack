@@ -16,9 +16,14 @@
 
 package com.android.networkstack.apishim.api31;
 
+import android.net.Ikev2VpnProfile;
+
 /**
  * Implementation of Ikev2VpnProfileShim for API 31.
  */
 public class Ikev2VpnProfileShimImpl extends
         com.android.networkstack.apishim.api30.Ikev2VpnProfileShimImpl {
+    public Ikev2VpnProfileShimImpl(Ikev2VpnProfile profile) {
+        super(profile);
+    }
 }
