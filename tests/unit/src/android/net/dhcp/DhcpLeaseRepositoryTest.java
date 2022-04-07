@@ -92,6 +92,7 @@ public class DhcpLeaseRepositoryTest {
     private static final Set<Inet4Address> TEST_EXCL_SET =
             Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
                 TEST_SERVER_ADDR, TEST_DEF_ROUTER, TEST_RESERVED_ADDR)));
+    private static final int DEFAULT_TARGET_PREFIX_LENGTH = 0;
 
     @NonNull
     private SharedLog mLog;
@@ -122,7 +123,9 @@ public class DhcpLeaseRepositoryTest {
         // Use a non-null Binder for linkToDeath
         when(mCallbacks.asBinder()).thenReturn(mCallbacksBinder);
         mRepo = new DhcpLeaseRepository(
-                TEST_IP_PREFIX, TEST_EXCL_SET, TEST_LEASE_TIME_MS, clientAddr, mLog, mClock);
+                TEST_IP_PREFIX, TEST_EXCL_SET, TEST_LEASE_TIME_MS, clientAddr,
+                DEFAULT_TARGET_PREFIX_LENGTH,
+                mLog, mClock);
         mRepo.addLeaseCallbacks(mCallbacks);
         verify(mCallbacks, atLeastOnce()).asBinder();
     }
@@ -131,7 +134,7 @@ public class DhcpLeaseRepositoryTest {
      * Request a number of addresses through offer/request. Useful to test address exhaustion.
      * @param nAddr Number of addresses to request.
      */
-    private void requestAddresses(byte nAddr) throws Exception {
+    private Set<Inet4Address> requestAddresses(byte nAddr) throws Exception {
         final HashSet<Inet4Address> addrs = new HashSet<>();
         byte[] hwAddrBytes = new byte[] { 8, 4, 3, 2, 1, 0 };
         for (byte i = 0; i < nAddr; i++) {
@@ -149,6 +152,8 @@ public class DhcpLeaseRepositoryTest {
 
             requestLeaseSelecting(newMac, lease.getNetAddr(), hostname);
         }
+
+        return addrs;
     }
 
     @SuppressLint("NewApi")
@@ -156,7 +161,7 @@ public class DhcpLeaseRepositoryTest {
     public void testAddressExhaustion() throws Exception {
         // Use a /28 to quickly run out of addresses
         mRepo.updateParams(new IpPrefix(TEST_SERVER_ADDR, 28), TEST_EXCL_SET, TEST_LEASE_TIME_MS,
-                null /* clientAddr */);
+                null /* clientAddr */, DEFAULT_TARGET_PREFIX_LENGTH);
 
         // /28 should have 16 addresses, 14 w/o the first/last, 11 w/o excluded addresses
         requestAddresses((byte) 11);
@@ -204,7 +209,7 @@ public class DhcpLeaseRepositoryTest {
         Set<Inet4Address> newReserved = new HashSet<>(TEST_EXCL_SET);
         newReserved.add(reservedAddr);
         mRepo.updateParams(new IpPrefix(TEST_SERVER_ADDR, 28), newReserved, TEST_LEASE_TIME_MS,
-                null /* clientAddr */);
+                null /* clientAddr */, DEFAULT_TARGET_PREFIX_LENGTH);
         // Callback is called for the second time with just this lease
         verifyLeasesChangedCallback(2 /* times */, reqAddrIn28Lease);
         verifyNoMoreInteractions(mCallbacks);
@@ -237,7 +242,8 @@ public class DhcpLeaseRepositoryTest {
     @Test
     public void testUpdateParams_UsesNewPrefix() throws Exception {
         final IpPrefix newPrefix = new IpPrefix(parseAddr4("192.168.123.0"), 24);
-        mRepo.updateParams(newPrefix, TEST_EXCL_SET, TEST_LEASE_TIME_MS, null /* clientAddr */);
+        mRepo.updateParams(newPrefix, TEST_EXCL_SET, TEST_LEASE_TIME_MS, null /* clientAddr */,
+                DEFAULT_TARGET_PREFIX_LENGTH);
 
         DhcpLease lease = mRepo.getOffer(CLIENTID_UNSPEC, TEST_MAC_1,
                 IPV4_ADDR_ANY /* relayAddr */, INETADDR_UNSPEC /* reqAddr */, HOSTNAME_NONE);
@@ -548,7 +554,7 @@ public class DhcpLeaseRepositoryTest {
     public void testMarkLeaseDeclined_UsedIfOutOfAddresses() throws Exception {
         // Use a /28 to quickly run out of addresses
         mRepo.updateParams(new IpPrefix(TEST_SERVER_ADDR, 28), TEST_EXCL_SET, TEST_LEASE_TIME_MS,
-                null /* clientAddr */);
+                null /* clientAddr */, DEFAULT_TARGET_PREFIX_LENGTH);
 
         mRepo.markLeaseDeclined(TEST_INETADDR_1);
         mRepo.markLeaseDeclined(TEST_INETADDR_2);
@@ -576,6 +582,35 @@ public class DhcpLeaseRepositoryTest {
         assertEquals(TEST_HOSTNAME_1, firstLease.getHostname());
         assertEquals(TEST_INETADDR_2, secondLease.getNetAddr());
         assertEquals(TEST_HOSTNAME_2, secondLease.getHostname());
+    }
+
+    // Android Lint doesn't handle API change from @SystemApi to public API correctly
+    // (see b/193460475). Suppresses NewApi warnings for IpPrefix(InetAddress, int).
+    @SuppressLint("NewApi")
+    @Test
+    public void testSetTargetPrefixLength() throws Exception {
+        final Inet4Address p2pStaticAddr = parseAddr4("192.168.49.1");
+        final Set<Inet4Address> excludedAddrs = new HashSet<>(Arrays.asList(p2pStaticAddr));
+        // Set leasesSubnetPrefixLength to /29.
+        mRepo.updateParams(new IpPrefix(p2pStaticAddr, 24), excludedAddrs, TEST_LEASE_TIME_MS,
+                null /* clientAddr */, 29);
+
+        // /29 should have 8 addresses (192.168.49.0 ~ 192.168.49.7),
+        // 6 w/o the first and last addresses, 5 w/o server addresses: 192.168.49.2 ~ 192.168.49.6.
+        final Set<Inet4Address> offerAddresses = requestAddresses((byte) 5);
+        assertTrue(offerAddresses.contains(parseAddr4("192.168.49.2")));
+        assertTrue(offerAddresses.contains(parseAddr4("192.168.49.3")));
+        assertTrue(offerAddresses.contains(parseAddr4("192.168.49.4")));
+        assertTrue(offerAddresses.contains(parseAddr4("192.168.49.5")));
+        assertTrue(offerAddresses.contains(parseAddr4("192.168.49.6")));
+
+        try {
+            mRepo.getOffer(null, TEST_MAC_2,
+                    IPV4_ADDR_ANY /* relayAddr */, INETADDR_UNSPEC /* reqAddr */, HOSTNAME_NONE);
+            fail("Should be out of addresses");
+        } catch (DhcpLeaseRepository.OutOfAddressesException e) {
+            // Expected
+        }
     }
 
     private DhcpLease requestLease(@NonNull MacAddress macAddr, @NonNull Inet4Address clientAddr,
