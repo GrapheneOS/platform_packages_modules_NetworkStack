@@ -26,4 +26,11 @@ public interface NetworkAgentConfigShim {
      * @see NetworkAgentConfig#isVpnValidationRequired()
      */
     boolean isVpnValidationRequired();
+
+    /**
+     * Return the config.
+     */
+    default NetworkAgentConfig getConfig() throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Only supported from API 31");
+    }
 }
