@@ -148,12 +148,15 @@ import android.util.ArrayMap;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.modules.utils.build.SdkLevel;
 import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.apishim.ConstantsShim;
+import com.android.networkstack.apishim.NetworkAgentConfigShimImpl;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.networkstack.apishim.common.CaptivePortalDataShim;
+import com.android.networkstack.apishim.common.NetworkAgentConfigShim;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
 import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
@@ -298,8 +301,8 @@ public class NetworkMonitorTest {
     private static final int TEST_MIN_STALL_EVALUATE_INTERVAL_MS = 500;
     private static final int STALL_EXPECTED_LAST_PROBE_TIME_MS =
             TEST_MIN_STALL_EVALUATE_INTERVAL_MS + HANDLER_TIMEOUT_MS;
-    private static final NetworkAgentConfig TEST_AGENT_CONFIG =
-            new NetworkAgentConfig.Builder().build();
+    private static final NetworkAgentConfigShim TEST_AGENT_CONFIG =
+            NetworkAgentConfigShimImpl.newInstance(null);
     private static final LinkProperties TEST_LINK_PROPERTIES = new LinkProperties();
 
     // Cannot have a static member for the LinkProperties with captive portal API information, as
@@ -1396,8 +1399,7 @@ public class NetworkMonitorTest {
                 + "'user-portal-url': '" + TEST_LOGIN_URL + "'}");
 
         // After notifyNetworkConnected, validation uses the capport API contents
-        nm.notifyNetworkConnectedParcel(
-                makeParams(TEST_AGENT_CONFIG, lp, CELL_METERED_CAPABILITIES));
+        notifyNetworkConnected(nm, lp, CELL_METERED_CAPABILITIES);
         verifyNetworkTested(VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */, TEST_LOGIN_URL);
 
         verify(mHttpConnection, never()).getResponseCode();
@@ -2072,8 +2074,7 @@ public class NetworkMonitorTest {
 
         WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig("dns.google", new InetAddress[0]));
-        wnm.notifyNetworkConnectedParcel(makeParams(TEST_AGENT_CONFIG, TEST_LINK_PROPERTIES,
-                CELL_NOT_METERED_CAPABILITIES));
+        notifyNetworkConnected(wnm, CELL_NOT_METERED_CAPABILITIES);
         verifyNetworkTested(VALIDATION_RESULT_INVALID,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS);
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS)).notifyProbeStatusChanged(
@@ -2100,8 +2101,7 @@ public class NetworkMonitorTest {
 
         WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig("dns.google", new InetAddress[0]));
-        wnm.notifyNetworkConnectedParcel(makeParams(TEST_AGENT_CONFIG, TEST_LINK_PROPERTIES,
-                CELL_NOT_METERED_CAPABILITIES));
+        notifyNetworkConnected(wnm, CELL_NOT_METERED_CAPABILITIES);
         verifyNetworkTested(VALIDATION_RESULT_INVALID,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS);
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1)).notifyProbeStatusChanged(
@@ -2232,7 +2232,7 @@ public class NetworkMonitorTest {
             nm = null;
             fail("Undefined transport type");
         }
-        nm.notifyNetworkConnectedParcel(makeParams(TEST_AGENT_CONFIG, TEST_LINK_PROPERTIES, nc));
+        notifyNetworkConnected(nm, nc);
         verifyNetworkTested(NETWORK_VALIDATION_RESULT_VALID,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS);
         nm.setLastProbeTime(SystemClock.elapsedRealtime() - STALL_EXPECTED_LAST_PROBE_TIME_MS);
@@ -2542,9 +2542,7 @@ public class NetworkMonitorTest {
         setStatus(mHttpsConnection, 204);
         setStatus(mHttpConnection, 204);
         final NetworkMonitor nm = makeMonitor(CELL_METERED_CAPABILITIES);
-        nm.notifyNetworkConnectedParcel(makeParams(TEST_AGENT_CONFIG, TEST_LINK_PROPERTIES,
-                CELL_METERED_CAPABILITIES));
-
+        notifyNetworkConnected(nm, CELL_METERED_CAPABILITIES);
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS))
                 .notifyNetworkTested(eq(NETWORK_VALIDATION_RESULT_VALID
                         | NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS),
@@ -2808,8 +2806,7 @@ public class NetworkMonitorTest {
         monitor.notifyLinkPropertiesChanged(linkProperties);
         final NetworkCapabilities networkCapabilities =
                 new NetworkCapabilities(WIFI_NOT_METERED_CAPABILITIES);
-        monitor.notifyNetworkConnectedParcel(makeParams(TEST_AGENT_CONFIG,
-                linkProperties, networkCapabilities));
+        notifyNetworkConnected(monitor, linkProperties, networkCapabilities);
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1))
                 .showProvisioningNotification(any(), any());
         assertCaptivePortalAppReceiverRegistered(true /* isPortal */);
@@ -2971,21 +2968,21 @@ public class NetworkMonitorTest {
                 eq(key), any() /* defaultValue */);
     }
 
-    private NetworkMonitor runPortalNetworkTest() throws RemoteException {
+    private NetworkMonitor runPortalNetworkTest() throws Exception {
         final NetworkMonitor nm = runNetworkTest(VALIDATION_RESULT_PORTAL,
                 0 /* probesSucceeded */, TEST_LOGIN_URL);
         assertCaptivePortalAppReceiverRegistered(true /* isPortal */);
         return nm;
     }
 
-    private NetworkMonitor runNoValidationNetworkTest() throws RemoteException {
+    private NetworkMonitor runNoValidationNetworkTest() throws Exception {
         final NetworkMonitor nm = runNetworkTest(NETWORK_VALIDATION_RESULT_VALID,
                 0 /* probesSucceeded */, null /* redirectUrl */);
         assertCaptivePortalAppReceiverRegistered(false /* isPortal */);
         return nm;
     }
 
-    private NetworkMonitor runFailedNetworkTest() throws RemoteException {
+    private NetworkMonitor runFailedNetworkTest() throws Exception {
         final NetworkMonitor nm = runNetworkTest(
                 VALIDATION_RESULT_INVALID, 0 /* probesSucceeded */, null /* redirectUrl */);
         assertCaptivePortalAppReceiverRegistered(false /* isPortal */);
@@ -2993,14 +2990,14 @@ public class NetworkMonitorTest {
     }
 
     private NetworkMonitor runPartialConnectivityNetworkTest(int probesSucceeded)
-            throws RemoteException {
+            throws Exception {
         final NetworkMonitor nm = runNetworkTest(NETWORK_VALIDATION_RESULT_PARTIAL,
                 probesSucceeded, null /* redirectUrl */);
         assertCaptivePortalAppReceiverRegistered(false /* isPortal */);
         return nm;
     }
 
-    private NetworkMonitor runValidatedNetworkTest() throws RemoteException {
+    private NetworkMonitor runValidatedNetworkTest() throws Exception {
         // Expect to send HTTPS and evaluation results.
         return runNetworkTest(NETWORK_VALIDATION_RESULT_VALID,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS,
@@ -3008,23 +3005,23 @@ public class NetworkMonitorTest {
     }
 
     private NetworkMonitor runNetworkTest(int testResult, int probesSucceeded, String redirectUrl)
-            throws RemoteException {
+            throws Exception {
         return runNetworkTest(TEST_AGENT_CONFIG, TEST_LINK_PROPERTIES, CELL_METERED_CAPABILITIES,
                 testResult, probesSucceeded, redirectUrl);
     }
 
-    private NetworkMonitor runNetworkTest(NetworkAgentConfig config,
+    private NetworkMonitor runNetworkTest(NetworkAgentConfigShim config,
             LinkProperties lp, NetworkCapabilities nc,
-            int testResult, int probesSucceeded, String redirectUrl) throws RemoteException {
+            int testResult, int probesSucceeded, String redirectUrl) throws Exception {
         final NetworkMonitor monitor = makeMonitor(nc);
-        monitor.notifyNetworkConnectedParcel(makeParams(config, lp, nc));
+        notifyNetworkConnected(monitor, config, lp, nc);
         verifyNetworkTested(testResult, probesSucceeded, redirectUrl);
         HandlerUtils.waitForIdle(monitor.getHandler(), HANDLER_TIMEOUT_MS);
 
         return monitor;
     }
 
-    private void verifyNetworkTested(int testResult, int probesSucceeded) throws RemoteException {
+    private void verifyNetworkTested(int testResult, int probesSucceeded) throws Exception {
         verifyNetworkTested(testResult, probesSucceeded, null /* redirectUrl */);
     }
 
@@ -3054,14 +3051,30 @@ public class NetworkMonitorTest {
         }
     }
 
-    private void notifyNetworkConnected(NetworkMonitor nm, NetworkCapabilities nc) {
-        nm.notifyNetworkConnectedParcel(makeParams(TEST_AGENT_CONFIG, TEST_LINK_PROPERTIES, nc));
+    private void notifyNetworkConnected(NetworkMonitor nm, NetworkAgentConfigShim config,
+            LinkProperties lp, NetworkCapabilities nc) throws Exception {
+        if (SdkLevel.isAtLeastT()) {
+            nm.notifyNetworkConnectedParcel(makeParams(config, lp, nc));
+        } else {
+            nm.notifyNetworkConnected(lp, nc);
+        }
     }
 
-    private NetworkMonitorParameters makeParams(@NonNull final NetworkAgentConfig config,
-            @NonNull final LinkProperties prop, @NonNull final NetworkCapabilities caps) {
+    private void notifyNetworkConnected(NetworkMonitor nm, LinkProperties lp,
+            NetworkCapabilities nc) throws Exception {
+        notifyNetworkConnected(nm, TEST_AGENT_CONFIG, lp, nc);
+    }
+
+    private void notifyNetworkConnected(NetworkMonitor nm, NetworkCapabilities nc)
+            throws Exception {
+        notifyNetworkConnected(nm, TEST_LINK_PROPERTIES, nc);
+    }
+
+    private NetworkMonitorParameters makeParams(@NonNull final NetworkAgentConfigShim config,
+            @NonNull final LinkProperties prop, @NonNull final NetworkCapabilities caps)
+            throws Exception {
         final NetworkMonitorParameters params = new NetworkMonitorParameters();
-        params.networkAgentConfig = config;
+        params.networkAgentConfig = (NetworkAgentConfig) config.getConfig();
         params.linkProperties = prop;
         params.networkCapabilities = caps;
         return params;
