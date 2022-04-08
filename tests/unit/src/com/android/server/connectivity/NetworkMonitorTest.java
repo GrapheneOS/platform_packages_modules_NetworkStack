@@ -115,7 +115,6 @@ import android.net.INetworkMonitorCallbacks;
 import android.net.InetAddresses;
 import android.net.LinkProperties;
 import android.net.Network;
-import android.net.NetworkAgentConfig;
 import android.net.NetworkCapabilities;
 import android.net.NetworkTestResultParcelable;
 import android.net.Uri;
@@ -3074,7 +3073,7 @@ public class NetworkMonitorTest {
             @NonNull final LinkProperties prop, @NonNull final NetworkCapabilities caps)
             throws Exception {
         final NetworkMonitorParameters params = new NetworkMonitorParameters();
-        params.networkAgentConfig = (NetworkAgentConfig) config.getConfig();
+        config.writeToNetworkMonitorParams(params);
         params.linkProperties = prop;
         params.networkCapabilities = caps;
         return params;
