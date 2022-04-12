@@ -29,7 +29,13 @@ import com.android.networkstack.apishim.common.TelephonyManagerShim;
 @RequiresApi(Build.VERSION_CODES.Q)
 public class TelephonyManagerShimImpl implements TelephonyManagerShim {
     protected final TelephonyManager mTm;
-    public TelephonyManagerShimImpl(TelephonyManager tm) {
+    protected TelephonyManagerShimImpl(TelephonyManager tm) {
         mTm = tm;
+    }
+
+    /** Get a new instance of {@link TelephonyManagerShim}. */
+    @RequiresApi(Build.VERSION_CODES.Q)
+    public static TelephonyManagerShim newInstance(TelephonyManager tm) {
+        return new TelephonyManagerShimImpl(tm);
     }
 }
