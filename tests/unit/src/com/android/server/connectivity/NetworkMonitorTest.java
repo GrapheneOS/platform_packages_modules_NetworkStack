@@ -61,6 +61,7 @@ import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
 import static com.android.server.connectivity.NetworkMonitor.INITIAL_REEVALUATE_DELAY_MS;
 import static com.android.server.connectivity.NetworkMonitor.extractCharset;
+import static com.android.testutils.DevSdkIgnoreRuleKt.SC_V2;
 
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
@@ -115,6 +116,7 @@ import android.net.INetworkMonitorCallbacks;
 import android.net.InetAddresses;
 import android.net.LinkProperties;
 import android.net.Network;
+import android.net.NetworkAgentConfig;
 import android.net.NetworkCapabilities;
 import android.net.NetworkTestResultParcelable;
 import android.net.Uri;
@@ -1500,6 +1502,37 @@ public class NetworkMonitorTest {
     @Test
     public void testIsCaptivePortal_InvalidUrlFormat() throws Exception {
         runCapportApiInvalidUrlTest("ThisIsNotAValidUrl");
+    }
+
+    @Test @IgnoreUpTo(SC_V2)
+    public void testVpnReevaluationWhenUnderlyingNetworkChange() throws Exception {
+        // Skip this test if the test is built against SDK < T
+        assumeTrue(ConstantsShim.VERSION > SC_V2);
+        // Start a VPN network
+        final NetworkCapabilities nc = new NetworkCapabilities.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_VPN)
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+                .build();
+        setStatus(mHttpsConnection, 204);
+        setStatus(mHttpConnection, 204);
+        final NetworkAgentConfigShim config = NetworkAgentConfigShimImpl.newInstance(
+                new NetworkAgentConfig.Builder().setVpnRequiresValidation(true).build());
+        final NetworkMonitor nm = runNetworkTest(config, TEST_LINK_PROPERTIES, nc,
+                NETWORK_VALIDATION_RESULT_VALID,
+                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS, null);
+
+        reset(mCallbacks);
+
+        // Underlying network changed.
+        final List<Network> underlyingNetwork = List.of(new Network(TEST_NETID));
+
+        final NetworkCapabilities newNc = new NetworkCapabilities.Builder(nc)
+                .setUnderlyingNetworks(underlyingNetwork).build();
+        nm.notifyNetworkCapabilitiesChanged(newNc);
+        // The underlying network change should cause a re-validation
+        HandlerUtils.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
+        verifyNetworkTested(NETWORK_VALIDATION_RESULT_VALID,
+                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS);
     }
 
     @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
