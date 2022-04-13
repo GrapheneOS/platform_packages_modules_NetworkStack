@@ -16,6 +16,7 @@
 
 package com.android.networkstack.apishim;
 
+import static com.android.modules.utils.build.SdkLevel.isAtLeastT;
 import static com.android.net.module.util.CollectionUtils.toIntArray;
 
 import android.os.Build;
@@ -40,8 +41,17 @@ public class TelephonyManagerShimImpl extends
         com.android.networkstack.apishim.api31.TelephonyManagerShimImpl {
     private HashMap<CarrierPrivilegesListenerShim, CarrierPrivilegesCallback> mListenerMap =
             new HashMap<>();
-    public TelephonyManagerShimImpl(TelephonyManager telephonyManager) {
+    protected TelephonyManagerShimImpl(TelephonyManager telephonyManager) {
         super(telephonyManager);
+    }
+
+    /** Get a new instance of {@link TelephonyManagerShim}. */
+    @RequiresApi(Build.VERSION_CODES.Q)
+    public static TelephonyManagerShim newInstance(TelephonyManager tm) {
+        if (!isAtLeastT()) {
+            return com.android.networkstack.apishim.api31.TelephonyManagerShimImpl.newInstance(tm);
+        }
+        return new TelephonyManagerShimImpl(tm);
     }
 
     /** See android.telephony.TelephonyManager#registerCarrierPrivilegesCallback */
