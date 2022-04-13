@@ -36,6 +36,10 @@ public class ConstantsShim {
     @VisibleForTesting
     public static final int VERSION = 29;
 
+    // Constants defined in android.net.VpnProfileState
+    public static final int VPN_PROFILE_STATE_CONNECTING = 1;
+    public static final int VPN_PROFILE_STATE_CONNECTED = 2;
+
     // Constants defined in android.net.ConnectivityDiagnosticsManager.
     public static final int DETECTION_METHOD_DNS_EVENTS = 1;
     public static final int DETECTION_METHOD_TCP_METRICS = 2;
