@@ -48,13 +48,4 @@ public class VpnManagerShimImpl extends com.android.networkstack.apishim.api29.V
         }
         return new VpnManagerShimImpl(context);
     }
-
-    /**
-     * See android.net.VpnManager#startProvisionedVpnProfileSession
-     */
-    @Override
-    public String startProvisionedVpnProfileSession() throws UnsupportedApiLevelException {
-        // Not supported for API 30.
-        throw new UnsupportedApiLevelException("Not supported in API 30.");
-    }
 }
