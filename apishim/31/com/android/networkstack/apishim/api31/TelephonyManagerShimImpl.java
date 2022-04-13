@@ -16,6 +16,8 @@
 
 package com.android.networkstack.apishim.api31;
 
+import static com.android.modules.utils.build.SdkLevel.isAtLeastS;
+
 import android.os.Build;
 import android.telephony.TelephonyManager;
 
@@ -28,8 +30,17 @@ import com.android.networkstack.apishim.common.TelephonyManagerShim;
  */
 @RequiresApi(Build.VERSION_CODES.S)
 public class TelephonyManagerShimImpl
-        extends com.android.networkstack.apishim.api30.TelephonyManagerShimImpl {
-    public TelephonyManagerShimImpl(TelephonyManager telephonyManager) {
+        extends com.android.networkstack.apishim.api29.TelephonyManagerShimImpl {
+    protected TelephonyManagerShimImpl(TelephonyManager telephonyManager) {
         super(telephonyManager);
+    }
+
+    /** Get a new instance of {@link TelephonyManagerShim}. */
+    @RequiresApi(Build.VERSION_CODES.Q)
+    public static TelephonyManagerShim newInstance(TelephonyManager tm) {
+        if (!isAtLeastS()) {
+            return com.android.networkstack.apishim.api29.TelephonyManagerShimImpl.newInstance(tm);
+        }
+        return new TelephonyManagerShimImpl(tm);
     }
 }
