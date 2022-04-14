@@ -326,9 +326,11 @@ public class IpReachabilityMonitor {
         return sb.toString();
     }
 
-    private static boolean isOnLink(List<RouteInfo> routes, InetAddress ip) {
+    @VisibleForTesting
+    static boolean isOnLink(List<RouteInfo> routes, InetAddress ip) {
         for (RouteInfo route : routes) {
-            if (!route.hasGateway() && route.matches(ip)) {
+            if (!route.hasGateway() && route.matches(ip)
+                    && route.getType() == RouteInfo.RTN_UNICAST) {
                 return true;
             }
         }
