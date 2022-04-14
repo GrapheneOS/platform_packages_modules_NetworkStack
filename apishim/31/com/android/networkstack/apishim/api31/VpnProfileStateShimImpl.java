@@ -13,28 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.android.networkstack.apishim.api31;
 
-package com.android.networkstack.apishim.api29;
-
-import android.content.Context;
 import android.os.Build;
 
 import androidx.annotation.RequiresApi;
 
-import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
-import com.android.networkstack.apishim.common.VpnManagerShim;
+import com.android.networkstack.apishim.common.VpnProfileStateShim;
 
-/**
- * Implementation of {@link VpnManagerShim} for API 29.
- */
-@RequiresApi(Build.VERSION_CODES.Q)
-public class VpnManagerShimImpl implements VpnManagerShim {
-    protected VpnManagerShimImpl(Context context) {}
-
-    /**
-     * Get a new instance of {@link VpnManagerShim}.
-     */
-    public static VpnManagerShim newInstance(Context context) throws UnsupportedApiLevelException {
-        return new VpnManagerShimImpl(context);
-    }
+/** Implementation of {@link VpnProfileStateShim} for API 31. */
+@RequiresApi(Build.VERSION_CODES.S)
+public class VpnProfileStateShimImpl
+        extends com.android.networkstack.apishim.api29.VpnProfileStateShimImpl {
 }
