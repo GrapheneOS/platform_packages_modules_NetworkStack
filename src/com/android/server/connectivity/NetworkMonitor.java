@@ -1392,6 +1392,7 @@ public class NetworkMonitor extends StateMachine {
                         // validation and private DNS validation.
                         validationLog("Captive portal is used as is, resolving private DNS");
                         transitionTo(mEvaluatingPrivateDnsState);
+                        return HANDLED;
                     } else if (!isValidationRequired()) {
                         if (isPrivateDnsValidationRequired()) {
                             validationLog("Network would not satisfy default request, "
