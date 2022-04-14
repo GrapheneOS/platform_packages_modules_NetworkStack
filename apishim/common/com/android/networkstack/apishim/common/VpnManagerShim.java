@@ -22,5 +22,13 @@ package com.android.networkstack.apishim.common;
  */
 public interface VpnManagerShim {
     /** See android.net.VpnManager#startProvisionedVpnProfileSession */
-    String startProvisionedVpnProfileSession() throws UnsupportedApiLevelException;
+    default String startProvisionedVpnProfileSession() throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Not supported before API 33.");
+    }
+
+    /** See android.net.VpnManager#getProvisionedVpnProfileState */
+    default VpnProfileStateShim getProvisionedVpnProfileState()
+            throws UnsupportedApiLevelException {
+        throw new UnsupportedApiLevelException("Not supported before API 33.");
+    }
 }

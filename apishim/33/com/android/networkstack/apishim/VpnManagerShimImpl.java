@@ -19,19 +19,21 @@ package com.android.networkstack.apishim;
 import static com.android.modules.utils.build.SdkLevel.isAtLeastT;
 
 import android.content.Context;
+import android.net.VpnProfileState;
 import android.os.Build;
 
+import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 import com.android.networkstack.apishim.common.VpnManagerShim;
+import com.android.networkstack.apishim.common.VpnProfileStateShim;
 
 /**
  * Compatibility implementation of {@link VpnManagerShim}.
  */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 public class VpnManagerShimImpl extends com.android.networkstack.apishim.api31.VpnManagerShimImpl {
-
     protected VpnManagerShimImpl(Context context) {
         super(context);
     }
@@ -53,5 +55,15 @@ public class VpnManagerShimImpl extends com.android.networkstack.apishim.api31.V
     @Override
     public String startProvisionedVpnProfileSession() {
         return mVm.startProvisionedVpnProfileSession();
+    }
+
+    /**
+     * See android.net.VpnManager#getProvisionedVpnProfileState
+     */
+    @Override
+    @Nullable
+    public VpnProfileStateShim getProvisionedVpnProfileState() {
+        final VpnProfileState profileState = mVm.getProvisionedVpnProfileState();
+        return (profileState == null) ? null : new VpnProfileStateShimImpl(profileState);
     }
 }
