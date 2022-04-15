@@ -16,11 +16,18 @@
 
 package com.android.networkstack.apishim;
 
+import static com.android.modules.utils.build.SdkLevel.isAtLeastT;
+
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.os.Build;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
 import com.android.networkstack.apishim.common.NetworkInformationShim;
+
+import java.util.List;
 
 /**
  * Compatibility implementation of {@link NetworkInformationShim}.
@@ -28,6 +35,21 @@ import com.android.networkstack.apishim.common.NetworkInformationShim;
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 public class NetworkInformationShimImpl
         extends com.android.networkstack.apishim.api31.NetworkInformationShimImpl {
-    // Currently identical to the API 31 shim, so inherit everything
     protected NetworkInformationShimImpl() {}
+
+    /**
+     * Get a new instance of {@link NetworkInformationShim}.
+     */
+    @RequiresApi(Build.VERSION_CODES.Q)
+    public static NetworkInformationShim newInstance() {
+        if (!isAtLeastT()) {
+            return com.android.networkstack.apishim.api31.NetworkInformationShimImpl.newInstance();
+        }
+        return new NetworkInformationShimImpl();
+    }
+
+    @Override
+    public List<Network> getUnderlyingNetworks(@NonNull NetworkCapabilities nc) {
+        return nc.getUnderlyingNetworks();
+    }
 }
