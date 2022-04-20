@@ -265,6 +265,7 @@ public class NetworkMonitorTest {
     private @Mock WifiInfo mWifiInfo;
 
     private static final int TEST_NETID = 4242;
+    private static final int TEST_NETID2 = 2121;
     private static final String TEST_HTTP_URL = "http://www.google.com/gen_204";
     private static final String TEST_HTTP_OTHER_URL1 = "http://other1.google.com/gen_204";
     private static final String TEST_HTTP_OTHER_URL2 = "http://other2.google.com/gen_204";
@@ -1522,17 +1523,32 @@ public class NetworkMonitorTest {
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS, null);
 
         reset(mCallbacks);
-
         // Underlying network changed.
-        final List<Network> underlyingNetwork = List.of(new Network(TEST_NETID));
-
-        final NetworkCapabilities newNc = new NetworkCapabilities.Builder(nc)
-                .setUnderlyingNetworks(underlyingNetwork).build();
-        nm.notifyNetworkCapabilitiesChanged(newNc);
+        notifyUnderlyingNetworkChange(nm, nc , List.of(new Network(TEST_NETID)));
         // The underlying network change should cause a re-validation
-        HandlerUtils.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
         verifyNetworkTested(NETWORK_VALIDATION_RESULT_VALID,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS);
+
+        reset(mCallbacks);
+        notifyUnderlyingNetworkChange(nm, nc , List.of(new Network(TEST_NETID)));
+        // Identical networks should not cause revalidation.
+        verify(mCallbacks, never()).notifyNetworkTestedWithExtras(matchNetworkTestResultParcelable(
+                NETWORK_VALIDATION_RESULT_VALID,
+                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS));
+
+        reset(mCallbacks);
+        // Change to another network
+        notifyUnderlyingNetworkChange(nm, nc , List.of(new Network(TEST_NETID2)));
+        verifyNetworkTested(NETWORK_VALIDATION_RESULT_VALID,
+                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS);
+    }
+
+    private void notifyUnderlyingNetworkChange(NetworkMonitor nm, NetworkCapabilities nc,
+            List<Network> underlyingNetworks) {
+        final NetworkCapabilities newNc = new NetworkCapabilities.Builder(nc)
+                .setUnderlyingNetworks(underlyingNetworks).build();
+        nm.notifyNetworkCapabilitiesChanged(newNc);
+        HandlerUtils.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
     }
 
     @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
