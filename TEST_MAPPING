@@ -10,11 +10,6 @@
       "name": "NetworkStackIntegrationTests"
     }
   ],
-  "postsubmit": [
-    {
-      "name": "NetworkStackHostTests"
-    }
-  ],
   "auto-postsubmit": [
     // Test tag for automotive targets. These are only running in postsubmit so as to harden the
     // automotive targets to avoid introducing additional test flake and build time. The plan for
@@ -27,9 +22,6 @@
     },
     {
       "name": "NetworkStackNextTests"
-    },
-    {
-      "name": "NetworkStackHostTests"
     },
     {
       "name": "NetworkStackIntegrationTests"
