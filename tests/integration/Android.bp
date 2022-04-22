@@ -34,6 +34,7 @@ java_defaults {
 
 java_defaults {
     name: "NetworkStackIntegrationTestsDefaults",
+    defaults: ["framework-connectivity-test-defaults"],
     srcs: [
         "src/**/*.java",
         "src/**/*.kt",
