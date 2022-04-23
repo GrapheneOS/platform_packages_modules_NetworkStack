@@ -493,10 +493,6 @@ public class IpClient extends StateMachine {
     private static final boolean NO_CALLBACKS = false;
     private static final boolean SEND_CALLBACKS = true;
 
-    // This must match the interface prefix in clatd.c.
-    // TODO: Revert this hack once IpClient and Nat464Xlat work in concert.
-    private static final String CLAT_PREFIX = "v4-";
-
     private static final int IMMEDIATE_FAILURE_DURATION = 0;
 
     private static final int PROV_CHANGE_STILL_NOT_PROVISIONED = 1;
@@ -544,7 +540,6 @@ public class IpClient extends StateMachine {
     private final String mTag;
     private final Context mContext;
     private final String mInterfaceName;
-    private final String mClatInterfaceName;
     @VisibleForTesting
     protected final IpClientCallbacksWrapper mCallback;
     private final Dependencies mDependencies;
@@ -712,7 +707,6 @@ public class IpClient extends StateMachine {
 
         mContext = context;
         mInterfaceName = ifName;
-        mClatInterfaceName = CLAT_PREFIX + ifName;
         mDependencies = deps;
         mMetricsLog = deps.getIpConnectivityLog();
         mNetworkQuirkMetrics = deps.getNetworkQuirkMetrics();
@@ -762,44 +756,19 @@ public class IpClient extends StateMachine {
                             updateGratuitousNaTargetSet(targetIp, false /* remove address */);
                         });
                     }
+
+                    @Override
+                    public void onClatInterfaceStateUpdate(boolean add) {
+                        // TODO: when clat interface was removed, consider sending a message to
+                        // the IpClient main StateMachine thread, in case "NDO enabled" state
+                        // becomes tied to more things that 464xlat operation.
+                        getHandler().post(() -> {
+                            mCallback.setNeighborDiscoveryOffload(add ? false : true);
+                        });
+                    }
                 },
-                config, mLog, mDependencies) {
-            @Override
-            public void onInterfaceAdded(String iface) {
-                super.onInterfaceAdded(iface);
-                if (mClatInterfaceName.equals(iface)) {
-                    mCallback.setNeighborDiscoveryOffload(false);
-                } else if (!mInterfaceName.equals(iface)) {
-                    return;
-                }
-
-                final String msg = "interfaceAdded(" + iface + ")";
-                logMsg(msg);
-            }
-
-            @Override
-            public void onInterfaceRemoved(String iface) {
-                super.onInterfaceRemoved(iface);
-                // TODO: Also observe mInterfaceName going down and take some
-                // kind of appropriate action.
-                if (mClatInterfaceName.equals(iface)) {
-                    // TODO: consider sending a message to the IpClient main
-                    // StateMachine thread, in case "NDO enabled" state becomes
-                    // tied to more things that 464xlat operation.
-                    mCallback.setNeighborDiscoveryOffload(true);
-                } else if (!mInterfaceName.equals(iface)) {
-                    return;
-                }
-
-                final String msg = "interfaceRemoved(" + iface + ")";
-                logMsg(msg);
-            }
-
-            private void logMsg(String msg) {
-                Log.d(mTag, msg);
-                getHandler().post(() -> mLog.log("OBSERVED " + msg));
-            }
-        };
+                config, mLog, mDependencies
+        );
 
         mLinkProperties = new LinkProperties();
         mLinkProperties.setInterfaceName(mInterfaceName);

@@ -28,6 +28,7 @@ import static android.net.dhcp.DhcpPacket.INADDR_BROADCAST;
 import static android.net.dhcp.DhcpPacket.INFINITE_LEASE;
 import static android.net.dhcp.DhcpPacket.MIN_V6ONLY_WAIT_MS;
 import static android.net.dhcp.DhcpResultsParcelableUtil.fromStableParcelable;
+import static android.net.ip.IpClientLinkObserver.CLAT_PREFIX;
 import static android.net.ip.IpReachabilityMonitor.MIN_NUD_SOLICIT_NUM;
 import static android.net.ip.IpReachabilityMonitor.NUD_MCAST_RESOLICIT_NUM;
 import static android.net.ip.IpReachabilityMonitor.nudEventTypeToInt;
@@ -670,6 +671,16 @@ public abstract class IpClientIntegrationTestCommon {
         mHandler.post(() -> mPacketReader.start());
     }
 
+    private TestNetworkInterface setUpClatInterface(@NonNull String baseIface) throws Exception {
+        final Instrumentation inst = InstrumentationRegistry.getInstrumentation();
+        final TestNetworkInterface iface = runAsShell(MANAGE_TEST_NETWORKS, () -> {
+            final TestNetworkManager tnm =
+                    inst.getContext().getSystemService(TestNetworkManager.class);
+            return tnm.createTapInterface(false /* bringUp */, CLAT_PREFIX + baseIface);
+        });
+        return iface;
+    }
+
     private void teardownTapInterface() {
         if (mPacketReader != null) {
             mHandler.post(() -> mPacketReader.stop());  // Also closes the socket
@@ -1077,7 +1088,7 @@ public abstract class IpClientIntegrationTestCommon {
         return getNextDhcpPacket();
     }
 
-    private void removeTapInterface(final FileDescriptor fd) {
+    private void removeTestInterface(final FileDescriptor fd) {
         try {
             Os.close(fd);
         } catch (ErrnoException e) {
@@ -1109,7 +1120,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     private void doRestoreInitialMtuTest(final boolean shouldChangeMtu,
-            final boolean shouldRemoveTapInterface) throws Exception {
+            final boolean shouldRemoveTestInterface) throws Exception {
         final long currentTime = System.currentTimeMillis();
         int mtu = TEST_DEFAULT_MTU;
 
@@ -1132,11 +1143,11 @@ public abstract class IpClientIntegrationTestCommon {
         // empty LinkProperties changes instead of one.
         reset(mCb);
 
-        if (shouldRemoveTapInterface) removeTapInterface(mTapFd);
+        if (shouldRemoveTestInterface) removeTestInterface(mTapFd);
         try {
             mIpc.shutdown();
             awaitIpClientShutdown();
-            if (shouldRemoveTapInterface) {
+            if (shouldRemoveTestInterface) {
                 verify(mNetd, never()).interfaceSetMtu(mIfaceName, TEST_DEFAULT_MTU);
             } else {
                 // Verify that MTU indeed has been restored or not.
@@ -1504,12 +1515,12 @@ public abstract class IpClientIntegrationTestCommon {
 
     @Test @SignatureRequiredTest(reason = "TODO: evaluate whether signature perms are required")
     public void testRestoreInitialInterfaceMtu() throws Exception {
-        doRestoreInitialMtuTest(true /* shouldChangeMtu */, false /* shouldRemoveTapInterface */);
+        doRestoreInitialMtuTest(true /* shouldChangeMtu */, false /* shouldRemoveTestInterface */);
     }
 
     @Test @SignatureRequiredTest(reason = "TODO: evaluate whether signature perms are required")
     public void testRestoreInitialInterfaceMtu_WithoutMtuChange() throws Exception {
-        doRestoreInitialMtuTest(false /* shouldChangeMtu */, false /* shouldRemoveTapInterface */);
+        doRestoreInitialMtuTest(false /* shouldChangeMtu */, false /* shouldRemoveTestInterface */);
     }
 
     @Test @SignatureRequiredTest(reason = "TODO: evaluate whether signature perms are required")
@@ -1517,19 +1528,19 @@ public abstract class IpClientIntegrationTestCommon {
         doThrow(new RemoteException("NetdNativeService::interfaceSetMtu")).when(mNetd)
                 .interfaceSetMtu(mIfaceName, TEST_DEFAULT_MTU);
 
-        doRestoreInitialMtuTest(true /* shouldChangeMtu */, false /* shouldRemoveTapInterface */);
+        doRestoreInitialMtuTest(true /* shouldChangeMtu */, false /* shouldRemoveTestInterface */);
         assertEquals(NetworkInterface.getByName(mIfaceName).getMTU(), TEST_MIN_MTU);
     }
 
     @Test @SignatureRequiredTest(reason = "TODO: evaluate whether signature perms are required")
     public void testRestoreInitialInterfaceMtu_NotFoundInterfaceWhenStopping() throws Exception {
-        doRestoreInitialMtuTest(true /* shouldChangeMtu */, true /* shouldRemoveTapInterface */);
+        doRestoreInitialMtuTest(true /* shouldChangeMtu */, true /* shouldRemoveTestInterface */);
     }
 
     @Test
     public void testRestoreInitialInterfaceMtu_NotFoundInterfaceWhenStartingProvisioning()
             throws Exception {
-        removeTapInterface(mTapFd);
+        removeTestInterface(mTapFd);
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
                 .withoutIPv6()
@@ -1588,7 +1599,7 @@ public abstract class IpClientIntegrationTestCommon {
 
         // Intend to remove the tap interface and force IpClient throw provisioning failure
         // due to that interface is not found.
-        removeTapInterface(mTapFd);
+        removeTestInterface(mTapFd);
         assertNull(InterfaceParams.getByName(mIfaceName));
 
         startIpClientProvisioning(config);
@@ -3751,5 +3762,26 @@ public abstract class IpClientIntegrationTestCommon {
                         .withRandomMacAddress()
                         .build()
         );
+    }
+
+    @Test
+    public void testIpClientLinkObserver_onClatInterfaceStateUpdate() throws Exception {
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIPv4()
+                .build();
+        startIpClientProvisioning(config);
+        doIpv6OnlyProvisioning();
+
+        reset(mCb);
+
+        // Add the clat interface and check the callback.
+        final TestNetworkInterface clatIface = setUpClatInterface(mIfaceName);
+        assertNotNull(clatIface);
+        assertTrue(clatIface.getInterfaceName().equals(CLAT_PREFIX + mIfaceName));
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).setNeighborDiscoveryOffload(false);
+
+        // Remove the clat interface and check the callback.
+        removeTestInterface(clatIface.getFileDescriptor().getFileDescriptor());
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).setNeighborDiscoveryOffload(true);
     }
 }
