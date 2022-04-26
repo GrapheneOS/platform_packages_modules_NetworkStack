@@ -23,6 +23,8 @@
   android:versionName="s_aml_319999900"
   coreApp="true"
 >
+    <permission android:name="android.permission.MAINLINE_NETWORK_STACK"
+                android:protectionLevel="signature"/>
     <!-- Permissions must be defined here, and not in the base manifest, as the network stack
          running in the system server process does not need any permission, and having privileged
          permissions added would cause crashes on startup unless they are also added to the
