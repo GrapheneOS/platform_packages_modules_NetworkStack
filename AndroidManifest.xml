@@ -23,6 +23,7 @@
   android:versionName="s_aml_319999900"
   coreApp="true"
 >
+    <!--- Defines the MAINLINE_NETWORK_STACK permission used by the networkstack process. -->
     <permission android:name="android.permission.MAINLINE_NETWORK_STACK"
                 android:protectionLevel="signature"/>
     <!-- Permissions must be defined here, and not in the base manifest, as the network stack
