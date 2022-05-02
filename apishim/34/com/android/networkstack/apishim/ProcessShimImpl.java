@@ -16,32 +16,14 @@
 package com.android.networkstack.apishim;
 
 import android.os.Build;
-import android.os.Process;
 
 import androidx.annotation.RequiresApi;
 
-import com.android.modules.utils.build.SdkLevel;
 import com.android.networkstack.apishim.common.ProcessShim;
 
-/** Implementation of {@link ProcessShim} for API 33. */
-@RequiresApi(Build.VERSION_CODES.TIRAMISU)
-public class ProcessShimImpl implements ProcessShim {
-
-    /** Get a new instance of {@link ProcessShim}. */
-    @RequiresApi(Build.VERSION_CODES.Q)
-    public static ProcessShim newInstance() {
-        if (!SdkLevel.isAtLeastT()) {
-            return com.android.networkstack.apishim.api31.ProcessShimImpl.newInstance();
-        } else {
-            return new ProcessShimImpl();
-        }
-    }
-
-    /**
-     * @see Process#toSdkSandboxUid(int)
-     */
-    @Override
-    public int toSdkSandboxUid(int applicationUid) {
-        return Process.toSdkSandboxUid(applicationUid);
-    }
+/** Implementation of {@link ProcessShim} for API 34. */
+// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+@RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
+public class ProcessShimImpl extends com.android.networkstack.apishim.api33.ProcessShimImpl {
+    protected ProcessShimImpl() {}
 }

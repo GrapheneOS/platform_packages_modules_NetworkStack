@@ -16,34 +16,19 @@
 
 package com.android.networkstack.apishim;
 
-import android.net.ConnectivityFrameworkInitializerTiramisu;
 import android.os.Build;
 
 import androidx.annotation.RequiresApi;
 
-import com.android.modules.utils.build.SdkLevel;
 import com.android.networkstack.apishim.common.ConnectivityFrameworkInitShim;
 
 /**
  * Implementation of {@link ConnectivityFrameworkInitShim}.
  */
-@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+@RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
 public class ConnectivityFrameworkInitShimImpl extends
-        com.android.networkstack.apishim.api31.ConnectivityFrameworkInitShimImpl {
-    /**
-     * Get a new instance of {@link ConnectivityFrameworkInitShimImpl}.
-     */
-    @RequiresApi(Build.VERSION_CODES.Q)
-    public static ConnectivityFrameworkInitShim newInstance() {
-        if (SdkLevel.isAtLeastT()) {
-            return new ConnectivityFrameworkInitShimImpl();
-        } else {
-            return new com.android.networkstack.apishim.api31.ConnectivityFrameworkInitShimImpl();
-        }
-    }
-
-    @Override
-    public void registerServiceWrappers() {
-        ConnectivityFrameworkInitializerTiramisu.registerServiceWrappers();
-    }
+        com.android.networkstack.apishim.api33.ConnectivityFrameworkInitShimImpl {
+    // Currently identical to the API 33 shim, so inherit everything
+    protected ConnectivityFrameworkInitShimImpl() {}
 }
