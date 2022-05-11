@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +16,20 @@
 
 package com.android.networkstack.apishim;
 
-import android.content.Context;
 import android.os.Build;
 
+import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
-import com.android.networkstack.apishim.common.ConnectivityManagerShim;
-
 /**
- * Compatibility implementation of {@link ConnectivityManagerShim}.
+ * A shim for Ikev2VpnProfile.Builder
  */
-@RequiresApi(Build.VERSION_CODES.TIRAMISU)
-public class ConnectivityManagerShimImpl
-        extends com.android.networkstack.apishim.api31.ConnectivityManagerShimImpl  {
-    // Currently identical to the API 31 shim, so inherit everything
-    protected ConnectivityManagerShimImpl(Context context) {
-        super(context);
+// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+@RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
+public class Ikev2VpnProfileBuilderShimImpl
+        extends com.android.networkstack.apishim.api33.Ikev2VpnProfileBuilderShimImpl {
+    protected Ikev2VpnProfileBuilderShimImpl(@Nullable String serverAddr,
+            @Nullable String identity, @Nullable Object params) {
+        super(serverAddr, identity, params);
     }
 }
