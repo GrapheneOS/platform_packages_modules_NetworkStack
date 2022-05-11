@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.networkstack.apishim;
+package com.android.networkstack.apishim.api33;
 
 import android.net.IpPrefix;
 import android.net.VpnService;

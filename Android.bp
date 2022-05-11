@@ -45,6 +45,10 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
+// In some branches, this may be module_current instead of module_33 if the SDK prebuilts are not
+// yet dropped there, meaning module_33 cannot be used yet.
+module_33_version = "module_33"
+
 // TODO: remove this default and replace with ConnectivityNextEnableDefaults. This will need to be
 // done separately in each branch due to merge conflicts.
 // Defaults to enable/disable java targets that depend on
@@ -72,11 +76,12 @@ java_defaults {
 
 java_defaults {
     name: "NetworkStackReleaseApiLevel",
-    sdk_version: "module_31",
+    sdk_version: module_33_version,
     min_sdk_version: "29",
-    target_sdk_version: "31",
+    target_sdk_version: "33",
     libs: [
         "framework-connectivity",
+        "framework-connectivity-t",
         "framework-statsd",
         "framework-wifi",
     ]
@@ -142,9 +147,6 @@ java_library {
     },
 }
 
-// Shims for APIs being added to the current development version of Android. These APIs are not
-// stable and have no defined version number. These could be called 10000, but they use the next
-// integer so if the next SDK release happens to use that integer, we don't need to rename them.
 java_library {
     name: "NetworkStackApi31Shims",
     defaults: ["NetworkStackShimsDefaults"],
@@ -161,10 +163,6 @@ java_library {
     visibility: ["//visibility:private"],
 }
 
-
-// Shims for APIs being added to the current development version of Android. These APIs are not
-// stable and have no defined version number. These could be called 10000, but they use the next
-// integer so if the next SDK release happens to use that integer, we don't need to rename them.
 java_library {
     name: "NetworkStackApi33Shims",
     defaults: ["NetworkStackShimsDefaults", "ConnectivityNextEnableDefaults"],
@@ -185,6 +183,34 @@ java_library {
         "framework-tethering",
         "android.net.ipsec.ike.stubs.module_lib",
     ],
+    sdk_version: module_33_version,
+    visibility: ["//visibility:private"],
+}
+
+// Shims for APIs being added to the current development version of Android. These APIs are not
+// stable and have no defined version number. These could be called 10000, but they use the next
+// integer so if the next SDK release happens to use that integer, we don't need to rename them.
+java_library {
+    name: "NetworkStackApi34Shims",
+    defaults: ["NetworkStackShimsDefaults", "ConnectivityNextEnableDefaults"],
+    srcs: [
+        "apishim/34/**/*.java",
+    ],
+    static_libs: [
+        "net-utils-framework-common",
+    ],
+    libs: [
+        "NetworkStackShimsCommon",
+        "NetworkStackApi29Shims",
+        "NetworkStackApi30Shims",
+        "NetworkStackApi31Shims",
+        "NetworkStackApi33Shims",
+        "framework-bluetooth",
+        "framework-connectivity",
+        "framework-connectivity-t.stubs.module_lib",
+        "framework-tethering",
+        "android.net.ipsec.ike.stubs.module_lib",
+    ],
     sdk_version: "module_current",
     visibility: ["//visibility:private"],
 }
@@ -194,15 +220,19 @@ java_library {
 // called directly by the networkstack code.
 java_library {
     name: "NetworkStackApiCurrentShims",
-    defaults: ["NetworkStackShimsDefaults", "ConnectivityNextEnableDefaults"],
+    defaults: [
+        "NetworkStackShimsDefaults",
+        "NetworkStackDevApiLevel",
+        "ConnectivityNextEnableDefaults",
+    ],
     static_libs: [
         "NetworkStackShimsCommon",
         "NetworkStackApi29Shims",
         "NetworkStackApi30Shims",
         "NetworkStackApi31Shims",
         "NetworkStackApi33Shims",
+        "NetworkStackApi34Shims",
     ],
-    sdk_version: "module_current",
     visibility: [
         "//packages/modules/Connectivity/Tethering",
         "//packages/modules/Connectivity/service",
@@ -217,15 +247,15 @@ java_library {
 // the networkstack code.
 java_library {
     name: "NetworkStackApiStableShims",
-    defaults: ["NetworkStackShimsDefaults"],
+    defaults: ["NetworkStackShimsDefaults", "NetworkStackReleaseApiLevel"],
     static_libs: [
         "NetworkStackShimsCommon",
         "NetworkStackApi29Shims",
         "NetworkStackApi30Shims",
         "NetworkStackApi31Shims",
+        "NetworkStackApi33Shims",
     ],
     jarjar_rules: "apishim/jarjar-rules-compat.txt",
-    sdk_version: "module_31",
     visibility: [
         "//packages/modules/Connectivity/Tethering",
         "//packages/modules/Connectivity/service",
