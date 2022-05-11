@@ -14,21 +14,20 @@
  * limitations under the License.
  */
 
-package com.android.networkstack.apishim;
+package com.android.networkstack.apishim.api33;
 
-import android.net.Network;
 import android.os.Build;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
+import com.android.networkstack.apishim.common.SettingsShim;
+
 /**
- * Compatibility implementation of {@link com.android.networkstack.apishim.common.NetworkShim}.
+ * Compatibility implementation of {@link SettingsShim} for API 33.
  */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-public class NetworkShimImpl extends com.android.networkstack.apishim.api30.NetworkShimImpl {
-    // Currently, this is the same as the API 31 shim, so inherit everything from that.
-    protected NetworkShimImpl(@NonNull Network network) {
-        super(network);
-    }
+public class SettingsShimImpl
+        extends com.android.networkstack.apishim.api30.SettingsShimImpl {
+    // Currently identical to the API 31 shim, so inherit everything
+    protected SettingsShimImpl() { }
 }
