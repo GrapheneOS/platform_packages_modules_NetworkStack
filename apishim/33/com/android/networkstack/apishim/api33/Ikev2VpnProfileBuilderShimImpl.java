@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.networkstack.apishim;
+package com.android.networkstack.apishim.api33;
 
 import android.net.Ikev2VpnProfile;
 import android.net.ipsec.ike.IkeTunnelConnectionParams;
@@ -32,7 +32,7 @@ import com.android.networkstack.apishim.common.Ikev2VpnProfileBuilderShim;
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 public class Ikev2VpnProfileBuilderShimImpl
         extends com.android.networkstack.apishim.api31.Ikev2VpnProfileBuilderShimImpl {
-    private Ikev2VpnProfileBuilderShimImpl(@Nullable String serverAddr,
+    protected Ikev2VpnProfileBuilderShimImpl(@Nullable String serverAddr,
             @Nullable String identity, @Nullable Object params) {
         super(serverAddr, identity, params);
 
