@@ -16,34 +16,20 @@
 
 package com.android.networkstack.apishim;
 
-import android.net.Ikev2VpnProfile;
+import android.net.NetworkAgentConfig;
 import android.os.Build;
 
+import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
 /**
- * A shim for Ikev2VpnProfile
+ * A shim for NetworkAgentConfig
  */
-@RequiresApi(Build.VERSION_CODES.TIRAMISU)
-public class Ikev2VpnProfileShimImpl
-        extends com.android.networkstack.apishim.api31.Ikev2VpnProfileShimImpl {
-    public Ikev2VpnProfileShimImpl(Ikev2VpnProfile profile) {
-       super(profile);
-    }
-
-    /**
-     * @see Ikev2VpnProfile#isInternetValidationRequired()
-     */
-    @Override
-    public boolean isInternetValidationRequired() {
-        return mProfile.isInternetValidationRequired();
-    }
-
-    /**
-     * @see Ikev2VpnProfile#getIkeTunnelConnectionParams()
-     */
-    @Override
-    public Object getIkeTunnelConnectionParams() {
-        return mProfile.getIkeTunnelConnectionParams();
+// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+@RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
+public class NetworkAgentConfigShimImpl
+        extends com.android.networkstack.apishim.api33.NetworkAgentConfigShimImpl {
+    protected NetworkAgentConfigShimImpl(@Nullable final NetworkAgentConfig config) {
+        super(config);
     }
 }
