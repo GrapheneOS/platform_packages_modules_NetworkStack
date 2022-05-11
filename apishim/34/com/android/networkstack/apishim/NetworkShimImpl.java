@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,20 @@
 
 package com.android.networkstack.apishim;
 
+import android.net.Network;
 import android.os.Build;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
 /**
- * Implementation of {@link com.android.networkstack.apishim.common.SocketUtilsShim}.
+ * Compatibility implementation of {@link com.android.networkstack.apishim.common.NetworkShim}.
  */
-@RequiresApi(Build.VERSION_CODES.TIRAMISU)
-public class SocketUtilsShimImpl
-        extends com.android.networkstack.apishim.api30.SocketUtilsShimImpl {
-    // Currently, this is the same as the API 31 shim, so inherit everything from that.
-    protected SocketUtilsShimImpl() {}
+// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+@RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
+public class NetworkShimImpl extends com.android.networkstack.apishim.api33.NetworkShimImpl {
+    // Currently, this is the same as the API 33 shim, so inherit everything from that.
+    protected NetworkShimImpl(@NonNull Network network) {
+        super(network);
+    }
 }
