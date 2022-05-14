@@ -667,7 +667,7 @@ public class IpReachabilityMonitor {
     }
 
     /**
-     * Log NUD failure metrics with new Westworld APIs while the function using mMetricsLog API
+     * Log NUD failure metrics with new statsd APIs while the function using mMetricsLog API
      * still sends the legacy metrics, @see #logNudFailed.
      */
     private void logNeighborLostEvent(final NeighborEvent event, final NudEventType type) {
