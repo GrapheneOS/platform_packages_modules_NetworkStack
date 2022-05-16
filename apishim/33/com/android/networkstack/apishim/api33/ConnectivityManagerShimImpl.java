@@ -14,24 +14,23 @@
  * limitations under the License.
  */
 
-package com.android.networkstack.apishim;
+package com.android.networkstack.apishim.api33;
 
-import android.net.CaptivePortalData;
+import android.content.Context;
 import android.os.Build;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
-import com.android.networkstack.apishim.common.CaptivePortalDataShim;
+import com.android.networkstack.apishim.common.ConnectivityManagerShim;
 
 /**
- * Compatibility implementation of {@link CaptivePortalDataShim}.
+ * Compatibility implementation of {@link ConnectivityManagerShim}.
  */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-public class CaptivePortalDataShimImpl
-        extends com.android.networkstack.apishim.api31.CaptivePortalDataShimImpl {
+public class ConnectivityManagerShimImpl
+        extends com.android.networkstack.apishim.api31.ConnectivityManagerShimImpl  {
     // Currently identical to the API 31 shim, so inherit everything
-    public CaptivePortalDataShimImpl(@NonNull CaptivePortalData data) {
-        super(data);
+    protected ConnectivityManagerShimImpl(Context context) {
+        super(context);
     }
 }

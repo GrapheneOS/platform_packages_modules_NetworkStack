@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,14 +20,17 @@ import android.os.Build;
 
 import androidx.annotation.RequiresApi;
 
-import com.android.networkstack.apishim.common.SettingsShim;
+import com.android.networkstack.apishim.common.NetworkRequestShim;
 
 /**
- * Compatibility implementation of {@link SettingsShim} for API 33.
+ * Implementation of {@link NetworkRequestShim} for API 34.
  */
-@RequiresApi(Build.VERSION_CODES.TIRAMISU)
-public class SettingsShimImpl
-        extends com.android.networkstack.apishim.api30.SettingsShimImpl {
-    // Currently identical to the API 31 shim, so inherit everything
-    protected SettingsShimImpl() { }
+// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+@RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
+public class NetworkRequestShimImpl
+        extends com.android.networkstack.apishim.api33.NetworkRequestShimImpl {
+    // Currently identical to the API 33 shim, so inherit everything
+    protected NetworkRequestShimImpl() {
+        super();
+    }
 }
