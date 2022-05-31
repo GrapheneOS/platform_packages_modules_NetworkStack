@@ -205,10 +205,12 @@ java_library {
         "//packages/apps/Bluetooth",
         "//packages/modules/Bluetooth/android/app",
         "//packages/modules/NetworkStack",
+        "//packages/modules/Wifi/service",
     ],
     apex_available: [
         "//apex_available:platform",
         "com.android.bluetooth",
         "com.android.tethering",
+        "com.android.wifi",
     ],
 }
