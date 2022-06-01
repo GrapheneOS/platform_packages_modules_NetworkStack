@@ -160,7 +160,7 @@ public class IpClientLinkObserver implements NetworkObserver {
     // This must match the interface prefix in clatd.c.
     // TODO: Revert this hack once IpClient and Nat464Xlat work in concert.
     protected static final String CLAT_PREFIX = "v4-";
-    private static final boolean DBG = false;
+    private static final boolean DBG = true;
 
     public IpClientLinkObserver(Context context, Handler h, String iface, Callback callback,
             Configuration config, SharedLog log, IpClient.Dependencies deps) {
@@ -178,7 +178,11 @@ public class IpClientLinkObserver implements NetworkObserver {
         mAlarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         mDependencies = deps;
         mNetlinkMonitor = new MyNetlinkMonitor(h, log, mTag);
-        mHandler.post(mNetlinkMonitor::start);
+        mHandler.post(() -> {
+            if (!mNetlinkMonitor.start()) {
+                Log.wtf(mTag, "Fail to start NetlinkMonitor.");
+            }
+        });
     }
 
     public void shutdown() {
@@ -279,10 +283,10 @@ public class IpClientLinkObserver implements NetworkObserver {
     }
 
     private void updateInterfaceDnsServerInfo(long lifetime, final String[] addresses) {
-        maybeLog("interfaceDnsServerInfo", Arrays.toString(addresses));
         final boolean changed = mDnsServerRepository.addServers(lifetime, addresses);
         final boolean linkState;
         if (changed) {
+            maybeLog("interfaceDnsServerInfo", Arrays.toString(addresses));
             synchronized (this) {
                 mDnsServerRepository.setDnsServersOn(mLinkProperties);
                 linkState = getInterfaceLinkStateLocked();
@@ -291,7 +295,7 @@ public class IpClientLinkObserver implements NetworkObserver {
         }
     }
 
-    private void updateInterfaceAddress(@NonNull final LinkAddress address, boolean add) {
+    private boolean updateInterfaceAddress(@NonNull final LinkAddress address, boolean add) {
         final boolean changed;
         final boolean linkState;
         synchronized (this) {
@@ -309,9 +313,10 @@ public class IpClientLinkObserver implements NetworkObserver {
                 mCallback.onIpv6AddressRemoved(addr);
             }
         }
+        return changed;
     }
 
-    private void updateInterfaceRoute(final RouteInfo route, boolean add) {
+    private boolean updateInterfaceRoute(final RouteInfo route, boolean add) {
         final boolean changed;
         final boolean linkState;
         synchronized (this) {
@@ -325,6 +330,7 @@ public class IpClientLinkObserver implements NetworkObserver {
         if (changed) {
             mCallback.update(linkState);
         }
+        return changed;
     }
 
     private void updateInterfaceRemoved() {
@@ -423,6 +429,9 @@ public class IpClientLinkObserver implements NetworkObserver {
         private int mIfindex;
 
         void setIfindex(int ifindex) {
+            if (!isRunning()) {
+                Log.wtf(mTag, "NetlinkMonitor is not running when setting interface parameter!");
+            }
             mIfindex = ifindex;
         }
 
@@ -602,12 +611,14 @@ public class IpClientLinkObserver implements NetworkObserver {
 
             switch (msg.getHeader().nlmsg_type) {
                 case NetlinkConstants.RTM_NEWADDR:
-                    maybeLog("addressUpdated", mIfindex, la);
-                    updateInterfaceAddress(la, true /* add address */);
+                    if (updateInterfaceAddress(la, true /* add address */)) {
+                        maybeLog("addressUpdated", mIfindex, la);
+                    }
                     break;
                 case NetlinkConstants.RTM_DELADDR:
-                    maybeLog("addressRemoved", mIfindex, la);
-                    updateInterfaceAddress(la, false /* remove address */);
+                    if (updateInterfaceAddress(la, false /* remove address */)) {
+                        maybeLog("addressRemoved", mIfindex, la);
+                    }
                     break;
                 default:
                     Log.e(mTag, "Unknown rtnetlink address msg type " + msg.getHeader().nlmsg_type);
@@ -632,12 +643,14 @@ public class IpClientLinkObserver implements NetworkObserver {
                     mInterfaceName, msg.getRtMsgHeader().type);
             switch (msg.getHeader().nlmsg_type) {
                 case NetlinkConstants.RTM_NEWROUTE:
-                    maybeLog("routeUpdated", route);
-                    updateInterfaceRoute(route, true /* add route */);
+                    if (updateInterfaceRoute(route, true /* add route */)) {
+                        maybeLog("routeUpdated", route);
+                    }
                     break;
                 case NetlinkConstants.RTM_DELROUTE:
-                    maybeLog("routeRemoved", route);
-                    updateInterfaceRoute(route, false /* remove route */);
+                    if (updateInterfaceRoute(route, false /* remove route */)) {
+                        maybeLog("routeRemoved", route);
+                    }
                     break;
                 default:
                     Log.e(mTag, "Unknown rtnetlink route msg type " + msg.getHeader().nlmsg_type);
