@@ -1346,11 +1346,6 @@ public abstract class DhcpPacket {
                 newPacket = new DhcpReleasePacket(
                         transactionId, serverIdentifier, clientIp, relayIp, clientMac);
                 break;
-            case DHCP_MESSAGE_TYPE_INFORM:
-                newPacket = new DhcpInformPacket(
-                    transactionId, secs, clientIp, yourIp, nextIp, relayIp,
-                    clientMac);
-                break;
             default:
                 throw new ParseException(DhcpErrorEvent.DHCP_UNKNOWN_MSG_TYPE,
                         "Unimplemented DHCP type %d", dhcpType);
