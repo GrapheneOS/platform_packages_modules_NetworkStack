@@ -147,6 +147,11 @@ public class NetlinkMonitor extends PacketReader {
         }
     }
 
+    @Override
+    protected void logError(String msg, Exception e) {
+        mLog.e(msg, e);
+    }
+
     // TODO: move NetworkStackUtils to frameworks/libs/net for NetworkStackUtils#closeSocketQuietly.
     private void closeSocketQuietly(FileDescriptor fd) {
         try {
