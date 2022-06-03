@@ -7,8 +7,8 @@
         errorLine1="        assertEquals(SERVER_ADDR, captor.getValue().getDhcpServerAddress());"
         errorLine2="                                                    ~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="packages/modules/NetworkStack/tests/integration/src/android/net/ip/IpClientIntegrationTestCommon.java"
-            line="1327"
+            file="packages/modules/NetworkStack/tests/integration/common/android/net/ip/IpClientIntegrationTestCommon.java"
+            line="1513"
             column="53"/>
     </issue>
 
@@ -18,8 +18,8 @@
         errorLine1="                argThat(lp -> Objects.equals(expected, lp.getNat64Prefix())));"
         errorLine2="                                                          ~~~~~~~~~~~~~~">
         <location
-            file="packages/modules/NetworkStack/tests/integration/src/android/net/ip/IpClientIntegrationTestCommon.java"
-            line="1623"
+            file="packages/modules/NetworkStack/tests/integration/common/android/net/ip/IpClientIntegrationTestCommon.java"
+            line="1836"
             column="59"/>
     </issue>
 
@@ -29,8 +29,8 @@
         errorLine1="                lp -> !Objects.equals(unchanged, lp.getNat64Prefix())));"
         errorLine2="                                                    ~~~~~~~~~~~~~~">
         <location
-            file="packages/modules/NetworkStack/tests/integration/src/android/net/ip/IpClientIntegrationTestCommon.java"
-            line="1629"
+            file="packages/modules/NetworkStack/tests/integration/common/android/net/ip/IpClientIntegrationTestCommon.java"
+            line="1842"
             column="53"/>
     </issue>
 
@@ -40,8 +40,8 @@
         errorLine1="        if (lp.getNat64Prefix() != null) {"
         errorLine2="               ~~~~~~~~~~~~~~">
         <location
-            file="packages/modules/NetworkStack/tests/integration/src/android/net/ip/IpClientIntegrationTestCommon.java"
-            line="1660"
+            file="packages/modules/NetworkStack/tests/integration/common/android/net/ip/IpClientIntegrationTestCommon.java"
+            line="1873"
             column="16"/>
     </issue>
 
@@ -51,8 +51,8 @@
         errorLine1="            assertEquals(prefix, lp.getNat64Prefix());"
         errorLine2="                                    ~~~~~~~~~~~~~~">
         <location
-            file="packages/modules/NetworkStack/tests/integration/src/android/net/ip/IpClientIntegrationTestCommon.java"
-            line="1661"
+            file="packages/modules/NetworkStack/tests/integration/common/android/net/ip/IpClientIntegrationTestCommon.java"
+            line="1874"
             column="37"/>
     </issue>
 
