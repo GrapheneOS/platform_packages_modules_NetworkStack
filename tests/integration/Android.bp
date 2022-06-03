@@ -36,8 +36,8 @@ java_defaults {
     name: "NetworkStackIntegrationTestsDefaults",
     defaults: ["framework-connectivity-test-defaults"],
     srcs: [
-        "src/**/*.java",
-        "src/**/*.kt",
+        "common/**/*.java",
+        "common/**/*.kt",
     ],
     static_libs: [
         "androidx.annotation_annotation",
@@ -52,11 +52,16 @@ java_defaults {
         "android.test.mock",
     ],
     visibility: ["//visibility:private"],
+    jarjar_rules: ":NetworkStackJarJarRules",
 }
 
 android_library {
     name: "NetworkStackIntegrationTestsLib",
     defaults: ["NetworkStackIntegrationTestsDefaults"],
+    srcs: [
+        "signature/**/*.java",
+        "signature/**/*.kt",
+    ],
     min_sdk_version: "29",
     static_libs: [
         "NetworkStackApiStableLib",
@@ -73,7 +78,6 @@ android_test {
     test_suites: ["device-tests"],
     min_sdk_version: "29",
     target_sdk_version: "30",
-    jarjar_rules: ":NetworkStackJarJarRules",
 }
 
 // Network stack next integration tests.
@@ -84,13 +88,35 @@ android_test {
         "NetworkStackIntegrationTestsJniDefaults",
         "ConnectivityNextEnableDefaults",
     ],
+    srcs: [
+        "signature/**/*.java",
+        "signature/**/*.kt",
+    ],
     static_libs: [
         "NetworkStackApiCurrentLib",
     ],
     certificate: "networkstack",
     platform_apis: true,
     test_suites: ["device-tests"],
-    jarjar_rules: ":NetworkStackJarJarRules",
+}
+
+// Network stack integration root tests.
+android_test {
+    name: "NetworkStackRootTests",
+    defaults: [
+        "NetworkStackIntegrationTestsDefaults",
+        "NetworkStackIntegrationTestsJniDefaults",
+    ],
+    srcs: [
+        "root/**/*.java",
+        "root/**/*.kt",
+    ],
+    static_libs: [
+        "NetworkStackApiCurrentLib",
+    ],
+    platform_apis: true,
+    test_suites: ["general-tests", "mts-networking"],
+    manifest: "AndroidManifest_root.xml",
 }
 
 // Special version of the network stack tests that includes all tests necessary for code coverage
@@ -101,7 +127,7 @@ android_test {
     platform_apis: true,
     min_sdk_version: "29",
     target_sdk_version: "30",
-    test_suites: ["device-tests", "mts"],
+    test_suites: ["device-tests", "mts-networking"],
     test_config: "AndroidTest_Coverage.xml",
     defaults: ["NetworkStackIntegrationTestsJniDefaults"],
     static_libs: [
@@ -113,5 +139,4 @@ android_test {
     ],
     compile_multilib: "both",
     manifest: "AndroidManifest_coverage.xml",
-    jarjar_rules: ":NetworkStackJarJarRules",
 }
