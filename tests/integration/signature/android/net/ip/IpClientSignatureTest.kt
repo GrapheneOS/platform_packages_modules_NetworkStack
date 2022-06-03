@@ -32,7 +32,7 @@ import org.mockito.Mockito.verify
 /**
  * Tests for IpClient, run with signature permissions.
  */
-class IpClientIntegrationTest : IpClientIntegrationTestCommon() {
+class IpClientSignatureTest : IpClientIntegrationTestCommon() {
     private val mEnabledFeatures = ArrayMap<String, Boolean>()
 
     override fun makeIIpClient(ifaceName: String, cb: IIpClientCallbacks): IIpClient {
