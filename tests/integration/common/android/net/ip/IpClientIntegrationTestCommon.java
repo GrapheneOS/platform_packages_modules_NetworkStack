@@ -552,10 +552,10 @@ public abstract class IpClientIntegrationTestCommon {
     protected abstract void assertIpMemoryNeverStoreNetworkAttributes(String l2Key, long timeout);
 
     protected final boolean testSkipped() {
-        // TODO: split out a test suite for root tests, and fail hard instead of skipping the test
-        // if it is run on devices where TestNetworkStackServiceClient is not supported
-        return !useNetworkStackSignature()
-                && (mIsSignatureRequiredTest || !TestNetworkStackServiceClient.isSupported());
+        if (!useNetworkStackSignature() && !TestNetworkStackServiceClient.isSupported()) {
+            fail("Device running root tests doesn't support TestNetworkStackServiceClient.");
+        }
+        return !useNetworkStackSignature() && mIsSignatureRequiredTest;
     }
 
     protected void setDhcpFeatures(final boolean isDhcpLeaseCacheEnabled,
