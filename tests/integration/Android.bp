@@ -52,7 +52,6 @@ java_defaults {
         "android.test.mock",
     ],
     visibility: ["//visibility:private"],
-    jarjar_rules: ":NetworkStackJarJarRules",
 }
 
 android_library {
@@ -78,6 +77,7 @@ android_test {
     test_suites: ["device-tests"],
     min_sdk_version: "29",
     target_sdk_version: "30",
+    jarjar_rules: ":NetworkStackJarJarRules",
 }
 
 // Network stack next integration tests.
@@ -98,6 +98,7 @@ android_test {
     certificate: "networkstack",
     platform_apis: true,
     test_suites: ["device-tests"],
+    jarjar_rules: ":NetworkStackJarJarRules",
 }
 
 // Network stack integration root tests.
@@ -117,6 +118,7 @@ android_test {
     platform_apis: true,
     test_suites: ["general-tests", "mts-networking"],
     manifest: "AndroidManifest_root.xml",
+    jarjar_rules: ":NetworkStackJarJarRules",
 }
 
 // Special version of the network stack tests that includes all tests necessary for code coverage
@@ -139,4 +141,5 @@ android_test {
     ],
     compile_multilib: "both",
     manifest: "AndroidManifest_coverage.xml",
+    jarjar_rules: ":NetworkStackJarJarRules",
 }
