@@ -3784,4 +3784,42 @@ public abstract class IpClientIntegrationTestCommon {
         removeTestInterface(clatIface.getFileDescriptor().getFileDescriptor());
         verify(mCb, timeout(TEST_TIMEOUT_MS)).setNeighborDiscoveryOffload(true);
     }
+
+    @Test @SignatureRequiredTest(reason = "requires mock callback object")
+    public void testNetlinkSocketReceiveENOBUFS() throws Exception {
+        if (!mIsNetlinkEventParseEnabled) return;
+
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIPv4()
+                .build();
+        startIpClientProvisioning(config);
+        doIpv6OnlyProvisioning();
+        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+
+        // Block IpClient handler.
+        final CountDownLatch latch = new CountDownLatch(1);
+        mIpc.getHandler().post(() -> {
+            try {
+                latch.await(10_000L /* 10s */, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                // do nothing
+            }
+        });
+
+        // Send large amount of RAs to overflow the netlink socket receive buffer.
+        for (int i = 0; i < 100; i++) {
+            sendBasicRouterAdvertisement(false /* waitRs */);
+        }
+
+        // Unblock the IpClient handler.
+        latch.countDown();
+        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+
+        reset(mCb);
+
+        // Send RA with 0 router lifetime to see if IpClient can see the loss of IPv6 default route.
+        sendRouterAdvertisementWithZeroLifetime();
+        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+        verify(mCb, never()).onProvisioningFailure(any());
+    }
 }
