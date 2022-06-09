@@ -21,6 +21,7 @@
           android:sharedUserId="android.uid.system"
           android:process="system"
           coreApp="true">
+    <!--- Defines the MAINLINE_NETWORK_STACK permission used by the networkstack process. -->
     <permission android:name="android.permission.MAINLINE_NETWORK_STACK"
                 android:protectionLevel="signature"/>
     <application>
