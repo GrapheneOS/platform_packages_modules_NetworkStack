@@ -29,6 +29,7 @@ import static android.net.dhcp.DhcpPacket.INFINITE_LEASE;
 import static android.net.dhcp.DhcpPacket.MIN_V6ONLY_WAIT_MS;
 import static android.net.dhcp.DhcpResultsParcelableUtil.fromStableParcelable;
 import static android.net.ip.IpClientLinkObserver.CLAT_PREFIX;
+import static android.net.ip.IpClientLinkObserver.CONFIG_SOCKET_RECV_BUFSIZE;
 import static android.net.ip.IpReachabilityMonitor.MIN_NUD_SOLICIT_NUM;
 import static android.net.ip.IpReachabilityMonitor.NUD_MCAST_RESOLICIT_NUM;
 import static android.net.ip.IpReachabilityMonitor.nudEventTypeToInt;
@@ -632,6 +633,11 @@ public abstract class IpClientIntegrationTestCommon {
         mDependencies.setDeviceConfigProperty(DhcpClient.ARP_PROBE_MAX_MS, 20);
         mDependencies.setDeviceConfigProperty(DhcpClient.ARP_FIRST_ANNOUNCE_DELAY_MS, 10);
         mDependencies.setDeviceConfigProperty(DhcpClient.ARP_ANNOUNCE_INTERVAL_MS, 10);
+
+        // Set the initial netlink socket receive buffer size to a minimum of 10KB to ensure test
+        // cases are still working, meanwhile in order to easily overflow the receive buffer by
+        // sending as few RAs as possible for test case where it's used to verify ENOBUFS.
+        mDependencies.setDeviceConfigProperty(CONFIG_SOCKET_RECV_BUFSIZE, 10 * 1024);
     }
 
     private void awaitIpClientShutdown() throws Exception {
@@ -3818,8 +3824,12 @@ public abstract class IpClientIntegrationTestCommon {
         reset(mCb);
 
         // Send RA with 0 router lifetime to see if IpClient can see the loss of IPv6 default route.
+        // Due to ignoring the ENOBUFS and wait until handler gets idle, IpClient should be still
+        // able to see the RA with 0 router lifetime and the IPv6 default route will be removed.
         sendRouterAdvertisementWithZeroLifetime();
-        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mCb, never()).onProvisioningFailure(any());
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(captor.capture());
+        final LinkProperties lp = captor.getValue();
+        assertFalse(lp.hasIpv6DefaultRoute());
     }
 }
