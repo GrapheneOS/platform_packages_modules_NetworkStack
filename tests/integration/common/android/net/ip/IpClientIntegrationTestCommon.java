@@ -3770,7 +3770,10 @@ public abstract class IpClientIntegrationTestCommon {
         );
     }
 
+    // Since createTapInterface(boolean, String) method was introduced since T, this method
+    // cannot be found on Q/R/S platform, ignore this test on T- platform.
     @Test
+    @IgnoreUpTo(Build.VERSION_CODES.S_V2)
     public void testIpClientLinkObserver_onClatInterfaceStateUpdate() throws Exception {
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIPv4()
