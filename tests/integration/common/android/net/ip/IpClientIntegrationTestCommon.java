@@ -634,10 +634,10 @@ public abstract class IpClientIntegrationTestCommon {
         mDependencies.setDeviceConfigProperty(DhcpClient.ARP_FIRST_ANNOUNCE_DELAY_MS, 10);
         mDependencies.setDeviceConfigProperty(DhcpClient.ARP_ANNOUNCE_INTERVAL_MS, 10);
 
-        // Set the initial netlink socket receive buffer size to a minimum of 10KB to ensure test
+        // Set the initial netlink socket receive buffer size to a minimum of 100KB to ensure test
         // cases are still working, meanwhile in order to easily overflow the receive buffer by
         // sending as few RAs as possible for test case where it's used to verify ENOBUFS.
-        mDependencies.setDeviceConfigProperty(CONFIG_SOCKET_RECV_BUFSIZE, 10 * 1024);
+        mDependencies.setDeviceConfigProperty(CONFIG_SOCKET_RECV_BUFSIZE, 100 * 1024);
     }
 
     private void awaitIpClientShutdown() throws Exception {
@@ -1663,13 +1663,16 @@ public abstract class IpClientIntegrationTestCommon {
     private void sendRouterAdvertisement(boolean waitForRs, short lifetime) throws Exception {
         final String dnsServer = "2001:4860:4860::64";
         final ByteBuffer pio = buildPioOption(3600, 1800, "2001:db8:1::/64");
-        ByteBuffer rdnss = buildRdnssOption(3600, dnsServer);
-        ByteBuffer ra = buildRaPacket(lifetime, pio, rdnss);
+        final ByteBuffer rdnss = buildRdnssOption(3600, dnsServer);
+        sendRouterAdvertisement(waitForRs, lifetime, pio, rdnss);
+    }
 
+    private void sendRouterAdvertisement(boolean waitForRs, short lifetime,
+            ByteBuffer... options) throws Exception {
+        final ByteBuffer ra = buildRaPacket(lifetime, options);
         if (waitForRs) {
             waitForRouterSolicitation();
         }
-
         mPacketReader.sendResponse(ra);
     }
 
@@ -3796,7 +3799,8 @@ public abstract class IpClientIntegrationTestCommon {
 
     @Test @SignatureRequiredTest(reason = "requires mock callback object")
     public void testNetlinkSocketReceiveENOBUFS() throws Exception {
-        if (!mIsNetlinkEventParseEnabled) return;
+        // Only run the test when the flag of parsing netlink events is enabled.
+        assumeTrue(mIsNetlinkEventParseEnabled);
 
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIPv4()
@@ -3805,13 +3809,14 @@ public abstract class IpClientIntegrationTestCommon {
         doIpv6OnlyProvisioning();
         HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
 
+        final Handler handler = mIpc.getHandler();
         // Block IpClient handler.
         final CountDownLatch latch = new CountDownLatch(1);
-        mIpc.getHandler().post(() -> {
+        handler.post(() -> {
             try {
-                latch.await(10_000L /* 10s */, TimeUnit.MILLISECONDS);
+                latch.await(10, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
-                // do nothing
+                fail("latch wait unexpectedly interrupted");
             }
         });
 
@@ -3820,19 +3825,30 @@ public abstract class IpClientIntegrationTestCommon {
             sendBasicRouterAdvertisement(false /* waitRs */);
         }
 
-        // Unblock the IpClient handler.
+        // Send another RA with a different IPv6 global prefix. This PIO option should be dropped
+        // due to the ENOBUFS happens, it means IpClient shouldn't see the new IPv6 global prefix.
+        final String dnsServer = "2001:4860:4860::64";
+        final String prefix = "2001:db8:dead:beef::/64";
+        final ByteBuffer pio = buildPioOption(3600, 1800, prefix);
+        ByteBuffer rdnss = buildRdnssOption(3600, dnsServer);
+        sendRouterAdvertisement(false /* waitForRs */, (short) 1800, pio, rdnss);
+
+        // Unblock the IpClient handler and ENOBUFS should happen then.
         latch.countDown();
-        HandlerUtils.waitForIdle(mIpc.getHandler(), TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(handler, TEST_TIMEOUT_MS);
 
         reset(mCb);
 
         // Send RA with 0 router lifetime to see if IpClient can see the loss of IPv6 default route.
         // Due to ignoring the ENOBUFS and wait until handler gets idle, IpClient should be still
         // able to see the RA with 0 router lifetime and the IPv6 default route will be removed.
+        // LinkProperties should not include any route to the new prefix 2001:db8:dead:beef::/64.
         sendRouterAdvertisementWithZeroLifetime();
         final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(captor.capture());
         final LinkProperties lp = captor.getValue();
+        assertNotNull(lp);
+        assertFalse(hasRouteTo(lp, prefix));
         assertFalse(lp.hasIpv6DefaultRoute());
     }
 }
