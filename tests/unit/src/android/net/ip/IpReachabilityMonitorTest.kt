@@ -17,7 +17,6 @@ package android.net.ip
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.net.ip.IpNeighborMonitor.NeighborEventConsumer
 import android.net.INetd
 import android.net.InetAddresses.parseNumericAddress
 import android.net.IpPrefix
@@ -53,10 +52,12 @@ import androidx.test.filters.SmallTest
 import androidx.test.runner.AndroidJUnit4
 import com.android.networkstack.metrics.IpReachabilityMonitorMetrics
 import com.android.net.module.util.InterfaceParams
+import com.android.net.module.util.SharedLog
+import com.android.net.module.util.ip.IpNeighborMonitor
+import com.android.net.module.util.ip.IpNeighborMonitor.NeighborEventConsumer
 import com.android.net.module.util.netlink.StructNdMsg.NUD_FAILED
 import com.android.net.module.util.netlink.StructNdMsg.NUD_REACHABLE
 import com.android.net.module.util.netlink.StructNdMsg.NUD_STALE
-import com.android.net.module.util.SharedLog
 import com.android.testutils.makeNewNeighMessage
 import com.android.testutils.waitForIdle
 import org.junit.After
