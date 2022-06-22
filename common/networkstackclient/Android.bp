@@ -204,7 +204,7 @@ java_library {
         "//packages/apps/Bluetooth",
         "//packages/modules/Bluetooth/android/app",
         "//packages/modules/NetworkStack",
-        "//packages/modules/Wifi/service",
+        "//packages/modules/Wifi/service:__subpackages__",
     ],
     apex_available: [
         "//apex_available:platform",
