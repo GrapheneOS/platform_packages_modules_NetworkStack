@@ -433,6 +433,11 @@ public class TcpSocketTracker {
         if (DBG) Log.d(TAG, str);
     }
 
+    /** Stops monitoring and releases resources. */
+    public void quit() {
+        mDependencies.removeDeviceConfigChangedListener(mConfigListener);
+    }
+
     /**
      * Corresponds to {@code struct rtattr} from bionic/libc/kernel/uapi/linux/rtnetlink.h
      *
@@ -614,6 +619,12 @@ public class TcpSocketTracker {
                 @NonNull final DeviceConfig.OnPropertiesChangedListener listener) {
             DeviceConfig.addOnPropertiesChangedListener(NAMESPACE_CONNECTIVITY,
                     AsyncTask.THREAD_POOL_EXECUTOR, listener);
+        }
+
+        /** Remove device config change listener */
+        public void removeDeviceConfigChangedListener(
+                @NonNull final DeviceConfig.OnPropertiesChangedListener listener) {
+            DeviceConfig.removeOnPropertiesChangedListener(listener);
         }
     }
 }
