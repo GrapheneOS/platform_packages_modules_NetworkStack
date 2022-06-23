@@ -934,6 +934,9 @@ public class NetworkMonitor extends StateMachine {
                 case CMD_NETWORK_DISCONNECTED:
                     maybeStopCollectionAndSendMetrics();
                     logNetworkEvent(NetworkEvent.NETWORK_DISCONNECTED);
+                    if (mTcpTracker != null) {
+                        mTcpTracker.quit();
+                    }
                     quit();
                     return HANDLED;
                 case CMD_FORCE_REEVALUATION:
