@@ -516,10 +516,10 @@ public class IpClient extends StateMachine {
     private static final Map<Byte, List<byte[]>> DHCP_OPTIONS_ALLOWED = Map.of(
             (byte) 60, Arrays.asList(
                     // KT OUI: 00:17:C3, type: 17. See b/170928882.
-                    new byte[]{ (byte) 0x00, (byte) 0x17, (byte) 0xc3, (byte) 0x17 }),
+                    new byte[]{ (byte) 0x00, (byte) 0x17, (byte) 0xc3, (byte) 0x11 }),
             (byte) 77, Arrays.asList(
                     // KT OUI: 00:17:C3, type: 17. See b/170928882.
-                    new byte[]{ (byte) 0x00, (byte) 0x17, (byte) 0xc3, (byte) 0x17 })
+                    new byte[]{ (byte) 0x00, (byte) 0x17, (byte) 0xc3, (byte) 0x11 })
     );
 
     // Initialize configurable particular SSID set supporting DHCP Roaming feature. See
