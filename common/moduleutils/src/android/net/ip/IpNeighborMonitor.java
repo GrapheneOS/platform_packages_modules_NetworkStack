@@ -23,12 +23,12 @@ import static com.android.net.module.util.netlink.NetlinkConstants.hexify;
 import static com.android.net.module.util.netlink.NetlinkConstants.stringForNlMsgType;
 
 import android.net.MacAddress;
-import android.net.util.SharedLog;
 import android.os.Handler;
 import android.system.ErrnoException;
 import android.system.OsConstants;
 import android.util.Log;
 
+import com.android.net.module.util.SharedLog;
 import com.android.net.module.util.netlink.NetlinkMessage;
 import com.android.net.module.util.netlink.NetlinkSocket;
 import com.android.net.module.util.netlink.RtNetlinkNeighborMessage;
