@@ -19,13 +19,13 @@ package android.net.ip;
 import static com.android.net.module.util.netlink.ConntrackMessage.DYING_MASK;
 import static com.android.net.module.util.netlink.ConntrackMessage.ESTABLISHED_MASK;
 
-import android.net.util.SharedLog;
 import android.os.Handler;
 import android.system.OsConstants;
 
 import androidx.annotation.NonNull;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.net.module.util.SharedLog;
 import com.android.net.module.util.netlink.ConntrackMessage;
 import com.android.net.module.util.netlink.NetlinkConstants;
 import com.android.net.module.util.netlink.NetlinkMessage;
