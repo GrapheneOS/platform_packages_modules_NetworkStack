@@ -45,7 +45,6 @@ import android.net.ip.IIpClientCallbacks;
 import android.net.ip.IpClient;
 import android.net.networkstack.aidl.NetworkMonitorParameters;
 import android.net.shared.PrivateDnsConfig;
-import android.net.util.SharedLog;
 import android.os.Build;
 import android.os.HandlerThread;
 import android.os.IBinder;
@@ -60,6 +59,7 @@ import androidx.annotation.VisibleForTesting;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.IndentingPrintWriter;
+import com.android.net.module.util.SharedLog;
 import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.common.ShimUtils;
