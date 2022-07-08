@@ -22,10 +22,11 @@ import static android.net.INetd.IF_STATE_UP;
 import android.net.INetd;
 import android.net.InterfaceConfigurationParcel;
 import android.net.LinkAddress;
-import android.net.util.SharedLog;
 import android.os.RemoteException;
 import android.os.ServiceSpecificException;
 import android.system.OsConstants;
+
+import com.android.net.module.util.SharedLog;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
