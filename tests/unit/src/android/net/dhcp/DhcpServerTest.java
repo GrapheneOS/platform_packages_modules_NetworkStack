@@ -52,13 +52,13 @@ import android.net.dhcp.DhcpLeaseRepository.InvalidAddressException;
 import android.net.dhcp.DhcpLeaseRepository.OutOfAddressesException;
 import android.net.dhcp.DhcpServer.Clock;
 import android.net.dhcp.DhcpServer.Dependencies;
-import android.net.util.SharedLog;
 import android.os.ConditionVariable;
 import android.testing.AndroidTestingRunner;
 
 import androidx.test.filters.SmallTest;
 
 import com.android.net.module.util.Inet4AddressUtils;
+import com.android.net.module.util.SharedLog;
 import com.android.testutils.HandlerUtils;
 
 import org.junit.After;

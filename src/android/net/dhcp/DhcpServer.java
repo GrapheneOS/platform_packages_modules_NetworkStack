@@ -49,7 +49,6 @@ import android.net.IpPrefix;
 import android.net.MacAddress;
 import android.net.TrafficStats;
 import android.net.util.NetworkStackUtils;
-import android.net.util.SharedLog;
 import android.net.util.SocketUtils;
 import android.os.Handler;
 import android.os.Message;
@@ -68,6 +67,7 @@ import com.android.internal.util.HexDump;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.net.module.util.DeviceConfigUtils;
+import com.android.net.module.util.SharedLog;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
