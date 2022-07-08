@@ -26,7 +26,6 @@ filegroup {
     name: "net-module-utils-srcs",
     srcs: [
         "src/android/net/shared/NetdUtils.java",
-        "src/android/net/util/SharedLog.java",
     ],
     visibility: [
         "//frameworks/base/services/net",
@@ -36,7 +35,6 @@ filegroup {
 filegroup {
     name: "connectivity-module-utils-srcs",
     srcs: [
-        "src/android/net/util/SharedLog.java",
         "src/android/net/shared/NetdUtils.java",
         "src/android/net/shared/NetworkMonitorUtils.java",
     ],
@@ -62,7 +60,6 @@ filegroup {
         "src/android/net/ip/IpNeighborMonitor.java",
         "src/android/net/ip/NetlinkMonitor.java",
         "src/android/net/shared/NetdUtils.java",
-        "src/android/net/util/SharedLog.java",
     ],
     visibility: [
         "//frameworks/base/packages/Tethering",
