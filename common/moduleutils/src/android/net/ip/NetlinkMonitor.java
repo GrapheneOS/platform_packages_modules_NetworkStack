@@ -27,7 +27,6 @@ import static android.system.OsConstants.SO_RCVBUF;
 import static com.android.net.module.util.netlink.NetlinkConstants.hexify;
 
 import android.annotation.NonNull;
-import android.net.util.SharedLog;
 import android.net.util.SocketUtils;
 import android.os.Handler;
 import android.os.SystemClock;
@@ -36,6 +35,7 @@ import android.system.Os;
 import android.util.Log;
 
 import com.android.net.module.util.PacketReader;
+import com.android.net.module.util.SharedLog;
 import com.android.net.module.util.netlink.NetlinkErrorMessage;
 import com.android.net.module.util.netlink.NetlinkMessage;
 import com.android.net.module.util.netlink.NetlinkSocket;

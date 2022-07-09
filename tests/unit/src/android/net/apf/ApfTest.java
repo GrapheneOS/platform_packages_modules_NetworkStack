@@ -51,7 +51,6 @@ import android.net.ip.IIpClientCallbacks;
 import android.net.ip.IpClient.IpClientCallbacksWrapper;
 import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.RaEvent;
-import android.net.util.SharedLog;
 import android.os.ConditionVariable;
 import android.os.Parcelable;
 import android.os.SystemClock;
@@ -68,6 +67,7 @@ import com.android.internal.util.HexDump;
 import com.android.net.module.util.Inet4AddressUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.NetworkStackConstants;
+import com.android.net.module.util.SharedLog;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.server.networkstack.tests.R;
 
