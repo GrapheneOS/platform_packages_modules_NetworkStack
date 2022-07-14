@@ -45,7 +45,9 @@ filegroup {
 
 filegroup {
     name: "networkstack-module-utils-srcs",
-    srcs: ["src/**/*.java"],
+    srcs: [
+        "src/android/net/shared/*.java",
+    ],
     visibility: [
         "//packages/modules/NetworkStack",
     ]
