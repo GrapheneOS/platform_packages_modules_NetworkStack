@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-package android.net.util;
+package com.android.networkstack.util;
 
 import android.content.Context;
 import android.net.MacAddress;
+import android.net.util.SocketUtils;
 import android.system.ErrnoException;
 
 import androidx.annotation.NonNull;

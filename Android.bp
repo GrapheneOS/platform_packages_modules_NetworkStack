@@ -153,6 +153,12 @@ java_library {
     srcs: [
         "apishim/31/**/*.java",
     ],
+    static_libs: [
+        // Libs building against module API can only be linked against when building against
+        // module API (so NetworkStackApi30Shims or NetworkStackApi29Shims can't use it, since they
+        // use system_30 and system_29 respectively).
+        "net-utils-framework-common",
+    ],
     libs: [
         "NetworkStackShimsCommon",
         "NetworkStackApi29Shims",
@@ -168,9 +174,6 @@ java_library {
     defaults: ["NetworkStackShimsDefaults", "ConnectivityNextEnableDefaults"],
     srcs: [
         "apishim/33/**/*.java",
-    ],
-    static_libs: [
-        "net-utils-framework-common",
     ],
     libs: [
         "NetworkStackShimsCommon",
@@ -189,14 +192,15 @@ java_library {
 // Shims for APIs being added to the current development version of Android. These APIs are not
 // stable and have no defined version number. These could be called 10000, but they use the next
 // integer so if the next SDK release happens to use that integer, we don't need to rename them.
+// Jarjar rules are generated based on the stable shims, which do not contain this library. As a
+// result, no static_lib that needs jarjar should be used here. In general, static_libs should not
+// be used in this library at all; instead they can be in one of the earlier, shim libraries which
+// are part of the stable shims and scanned when generating jarjar rules.
 java_library {
     name: "NetworkStackApi34Shims",
     defaults: ["NetworkStackShimsDefaults", "ConnectivityNextEnableDefaults"],
     srcs: [
         "apishim/34/**/*.java",
-    ],
-    static_libs: [
-        "net-utils-framework-common",
     ],
     libs: [
         "NetworkStackShimsCommon",
@@ -353,15 +357,31 @@ java_library {
     visibility: ["//packages/modules/Connectivity/tests/cts/net"],
 }
 
-filegroup {
+java_genrule {
     name: "NetworkStackJarJarRules",
-    srcs: ["jarjar-rules-shared.txt"],
+    tool_files: [
+        // com.android.networkstack.apishim is already in the target package that is not jarjared,
+        // so it does not matter whether ApiStable or ApiCurrent is used to generate the jarjar
+        // rules. Use ApiStable to be based on most stable release configuration and be buildable
+        // in all branches.
+        ":NetworkStackApiStableLib{.jar}",
+        "jarjar-excludes.txt",
+    ],
+    tools: [
+        "jarjar-rules-generator",
+    ],
+    out: ["NetworkStackJarJarRules.txt"],
+    cmd: "$(location jarjar-rules-generator) " +
+        "--jars $(location :NetworkStackApiStableLib{.jar}) " +
+        "--prefix com.android.networkstack " +
+        "--excludes $(location jarjar-excludes.txt) " +
+        "--output $(out)",
     visibility: [
         "//packages/modules/NetworkStack/tests/unit",
         "//packages/modules/NetworkStack/tests/integration",
         "//packages/modules/Connectivity/tests:__subpackages__",
         "//packages/modules/Connectivity/Tethering/tests/integration",
-    ]
+    ],
 }
 
 // Common defaults for compiling the actual APK, based on the NetworkStackApiXBase android libraries

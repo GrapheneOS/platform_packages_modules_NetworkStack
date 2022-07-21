@@ -23,9 +23,9 @@ import static android.net.dhcp.DhcpPacket.INADDR_ANY;
 import static android.net.dhcp.DhcpPacket.INADDR_BROADCAST;
 import static android.net.dhcp.DhcpServer.CMD_RECEIVE_PACKET;
 import static android.net.dhcp.IDhcpServer.STATUS_SUCCESS;
-import static android.net.util.NetworkStackUtils.DHCP_RAPID_COMMIT_VERSION;
 
 import static com.android.net.module.util.Inet4AddressUtils.inet4AddressToIntHTH;
+import static com.android.networkstack.util.NetworkStackUtils.DHCP_RAPID_COMMIT_VERSION;
 
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;

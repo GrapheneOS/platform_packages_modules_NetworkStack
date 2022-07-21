@@ -38,7 +38,8 @@
 #include <android/log.h>
 
 namespace android {
-constexpr const char NETWORKSTACKUTILS_PKG_NAME[] = "android/net/util/NetworkStackUtils";
+constexpr const char NETWORKSTACKUTILS_PKG_NAME[] =
+    "com/android/networkstack/util/NetworkStackUtils";
 
 static const uint32_t kEtherTypeOffset = offsetof(ether_header, ether_type);
 static const uint32_t kEtherHeaderLen = sizeof(ether_header);
