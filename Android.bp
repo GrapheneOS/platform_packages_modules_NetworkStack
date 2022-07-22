@@ -307,7 +307,6 @@ android_library {
     visibility: [
         "//frameworks/base/tests/net/integration",
         "//packages/modules/Connectivity/Tethering/tests/integration",
-        "//packages/modules/Connectivity/tests/cts/net",
         "//packages/modules/NetworkStack/tests/unit",
         "//packages/modules/NetworkStack/tests/integration",
     ],
@@ -327,12 +326,32 @@ android_library {
         "//frameworks/base/packages/Connectivity/tests/integration",
         "//frameworks/base/tests/net/integration",
         "//packages/modules/Connectivity/Tethering/tests/integration",
-        "//packages/modules/Connectivity/tests/cts/net",
         "//packages/modules/Connectivity/tests/integration",
         "//packages/modules/NetworkStack/tests/unit",
         "//packages/modules/NetworkStack/tests/integration",
     ],
     lint: { strict_updatability_linting: true },
+}
+
+java_library {
+    name: "DhcpPacketLib",
+    defaults: ["NetworkStackReleaseApiLevel"],
+    srcs: [
+        "src/android/net/DhcpResults.java",
+        "src/android/net/dhcp/Dhcp*Packet.java",
+    ],
+    libs: [
+        "androidx.annotation_annotation",
+        "framework-annotations-lib",
+    ],
+    static_libs: [
+        "modules-utils-build",
+        "net-utils-framework-common",
+        "networkstack-client",
+    ],
+    // If this library is ever used outside of tests, it should not use "Dhcp*Packet", and specify
+    // its contents explicitly.
+    visibility: ["//packages/modules/Connectivity/tests/cts/net"],
 }
 
 filegroup {
