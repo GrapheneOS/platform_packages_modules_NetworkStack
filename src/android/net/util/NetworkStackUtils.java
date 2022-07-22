@@ -211,6 +211,13 @@ public class NetworkStackUtils {
             "dhcp_ipv6_only_preferred_version";
 
     /**
+     * Minimum module version at which to enable slow DHCP retransmission approach in renew/rebind
+     * state suggested in RFC2131 section 4.4.5.
+     */
+    public static final String DHCP_SLOW_RETRANSMISSION_VERSION =
+            "dhcp_slow_retransmission_version";
+
+    /**
      * Minimum module version at which to enable dismissal CaptivePortalLogin app in validated
      * network feature. CaptivePortalLogin app will also use validation facilities in
      * {@link NetworkMonitor} to perform portal validation if feature is enabled.
