@@ -21,17 +21,6 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-// TODO: remove this filegroup together with services.net
-filegroup {
-    name: "net-module-utils-srcs",
-    srcs: [
-        "src/android/net/shared/NetdUtils.java",
-    ],
-    visibility: [
-        "//frameworks/base/services/net",
-    ]
-}
-
 filegroup {
     name: "connectivity-module-utils-srcs",
     srcs: [
