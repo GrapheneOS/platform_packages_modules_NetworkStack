@@ -63,6 +63,8 @@ public final class DhcpResults implements Parcelable {
     @Nullable
     public String captivePortalApiUrl;
 
+    public ArrayList<String> dmnsrchList = new ArrayList<>();
+
     public DhcpResults() {
         super();
     }
@@ -100,6 +102,7 @@ public final class DhcpResults implements Parcelable {
             mtu = source.mtu;
             serverHostName = source.serverHostName;
             captivePortalApiUrl = source.captivePortalApiUrl;
+            dmnsrchList = source.dmnsrchList;
         }
     }
 
@@ -135,6 +138,7 @@ public final class DhcpResults implements Parcelable {
         mtu = 0;
         serverHostName = null;
         captivePortalApiUrl = null;
+        dmnsrchList.clear();
     }
 
     @Override
@@ -167,13 +171,14 @@ public final class DhcpResults implements Parcelable {
                 && Objects.equals(serverHostName, target.serverHostName)
                 && leaseDuration == target.leaseDuration
                 && mtu == target.mtu
-                && Objects.equals(captivePortalApiUrl, target.captivePortalApiUrl);
+                && Objects.equals(captivePortalApiUrl, target.captivePortalApiUrl)
+                && dmnsrchList.equals(target.dmnsrchList);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(ipAddress, gateway, dnsServers, domains, serverAddress, vendorInfo,
-            serverHostName, captivePortalApiUrl) + 43 *  leaseDuration + 67 * mtu;
+            serverHostName, captivePortalApiUrl, dmnsrchList) + 43 *  leaseDuration + 67 * mtu;
     }
 
     /**
@@ -300,6 +305,15 @@ public final class DhcpResults implements Parcelable {
 
     public String getDomains() {
         return domains;
+    }
+
+    /**
+     * Append the domain search list strings separated by space to domain string.
+     */
+    public String appendDomainsSearchList() {
+        final String domainsPrefix = domains == null ? "" : domains;
+        final String separator = domains != null && dmnsrchList.size() > 0 ? " " : "";
+        return domainsPrefix + separator + TextUtils.join(" ", dmnsrchList);
     }
 
     public void setDomains(String domains) {

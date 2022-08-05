@@ -320,7 +320,6 @@ java_defaults {
         "datastallprotosnano",
         "statsprotos",
         "captiveportal-lib",
-        "net-utils-device-common",
         "net-utils-device-common-ip",
         "net-utils-device-common-netlink",
     ],
@@ -390,6 +389,7 @@ java_library {
         "modules-utils-build",
         "net-utils-framework-common",
         "networkstack-client",
+        "net-utils-device-common",
     ],
     // If this library is ever used outside of tests, it should not use "Dhcp*Packet", and specify
     // its contents explicitly.

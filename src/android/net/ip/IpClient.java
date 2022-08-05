@@ -50,7 +50,10 @@ import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_MULTICAST
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
 import android.annotation.SuppressLint;
+import android.app.admin.DevicePolicyManager;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.net.ConnectivityManager;
 import android.net.DhcpResults;
@@ -93,6 +96,7 @@ import android.os.Message;
 import android.os.RemoteException;
 import android.os.ServiceSpecificException;
 import android.os.SystemClock;
+import android.os.UserHandle;
 import android.stats.connectivity.DisconnectCode;
 import android.stats.connectivity.NetworkQuirkEvent;
 import android.stats.connectivity.NudEventType;
@@ -662,6 +666,8 @@ public class IpClient extends StateMachine {
     private final Set<Inet6Address> mGratuitousNaTargetAddresses = new HashSet<>();
     // Set of IPv6 addresses from which multicast NS packets have been sent.
     private final Set<Inet6Address> mMulticastNsSourceAddresses = new HashSet<>();
+    @Nullable
+    private final DevicePolicyManager mDevicePolicyManager;
 
     // Ignore nonzero RDNSS option lifetimes below this value. 0 = disabled.
     private final int mMinRdnssLifetimeSec;
@@ -691,6 +697,7 @@ public class IpClient extends StateMachine {
     private AndroidPacketFilter mApfFilter;
     private String mL2Key; // The L2 key for this network, for writing into the memory store
     private String mCluster; // The cluster for this network, for writing into the memory store
+    private int mCreatorUid; // Uid of app creating the wifi configuration
     private boolean mMulticastFiltering;
     private long mStartTimeMillis;
     private long mIPv6ProvisioningDtimGracePeriodMillis;
@@ -844,6 +851,14 @@ public class IpClient extends StateMachine {
             final File sysctl = new File(path);
             return sysctl.exists();
         }
+         /**
+         * Get the configuration from RRO to check whether or not to send domain search list
+         * option in DHCPDISCOVER/DHCPREQUEST message.
+         */
+        public boolean getSendDomainSearchListOption(final Context context) {
+            return context.getResources().getBoolean(R.bool.config_dhcp_client_domain_search_list);
+        }
+
     }
 
     public IpClient(Context context, String ifName, IIpClientCallbacks callback,
@@ -861,6 +876,8 @@ public class IpClient extends StateMachine {
 
         mTag = getName();
 
+        mDevicePolicyManager = (DevicePolicyManager)
+                context.getSystemService(Context.DEVICE_POLICY_SERVICE);
         mContext = context;
         mInterfaceName = ifName;
         mDependencies = deps;
@@ -1150,6 +1167,7 @@ public class IpClient extends StateMachine {
         mCurrentBssid = getInitialBssid(req.mLayer2Info, req.mScanResultInfo,
                 ShimUtils.isAtLeastS());
         mCurrentApfCapabilities = req.mApfCapabilities;
+        mCreatorUid = req.mCreatorUid;
         if (req.mLayer2Info != null) {
             mL2Key = req.mLayer2Info.mL2Key;
             mCluster = req.mLayer2Info.mCluster;
@@ -1712,7 +1730,12 @@ public class IpClient extends StateMachine {
                 newLp.addRoute(route);
             }
             addAllReachableDnsServers(newLp, mDhcpResults.dnsServers);
-            newLp.setDomains(mDhcpResults.domains);
+            if (mDhcpResults.dmnsrchList.size() == 0) {
+                newLp.setDomains(mDhcpResults.domains);
+            } else {
+                final String domainsString = mDhcpResults.appendDomainsSearchList();
+                newLp.setDomains(TextUtils.isEmpty(domainsString) ? null : domainsString);
+            }
 
             if (mDhcpResults.mtu != 0) {
                 newLp.setMtu(mDhcpResults.mtu);
@@ -2570,8 +2593,92 @@ public class IpClient extends StateMachine {
         // registerForPreDhcpNotification is called later when processing the CMD_*_PRECONNECTION
         // messages.
         if (!isUsingPreconnection()) mDhcpClient.registerForPreDhcpNotification();
+        boolean isManagedWifiProfile = false;
+        if (mDependencies.getSendDomainSearchListOption(mContext)
+                && (mCreatorUid > 0) && (isDeviceOwnerNetwork(mCreatorUid)
+                || isProfileOwner(mCreatorUid))) {
+            isManagedWifiProfile = true;
+        }
         mDhcpClient.sendMessage(DhcpClient.CMD_START_DHCP, new DhcpClient.Configuration(mL2Key,
-                isUsingPreconnection(), options));
+                isUsingPreconnection(), options, isManagedWifiProfile));
+    }
+
+    private boolean hasPermission(String permissionName) {
+        return (mContext.checkCallingOrSelfPermission(permissionName)
+                == PackageManager.PERMISSION_GRANTED);
+    }
+
+    private boolean isDeviceOwnerNetwork(int creatorUid) {
+        if (mDevicePolicyManager == null) return false;
+        if (!hasPermission(android.Manifest.permission.MANAGE_USERS)) return false;
+        final ComponentName devicecmpName = mDevicePolicyManager.getDeviceOwnerComponentOnAnyUser();
+        if (devicecmpName == null) return false;
+        final String deviceOwnerPackageName = devicecmpName.getPackageName();
+        if (deviceOwnerPackageName == null) return false;
+
+        final String[] packages = mContext.getPackageManager().getPackagesForUid(creatorUid);
+
+        for (String pkg : packages) {
+            if (pkg.equals(deviceOwnerPackageName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Nullable
+    private Context createPackageContextAsUser(int uid) {
+        Context userContext = null;
+        try {
+            userContext = mContext.createPackageContextAsUser(mContext.getPackageName(), 0,
+                    UserHandle.getUserHandleForUid(uid));
+        } catch (PackageManager.NameNotFoundException e) {
+            Log.e(TAG, "Unknown package name");
+            return null;
+        }
+        return userContext;
+    }
+
+    /**
+     * Returns the DevicePolicyManager from context
+     */
+    private DevicePolicyManager retrieveDevicePolicyManagerFromContext(Context context) {
+        DevicePolicyManager devicePolicyManager =
+                context.getSystemService(DevicePolicyManager.class);
+        if (devicePolicyManager == null
+                && context.getPackageManager().hasSystemFeature(
+                PackageManager.FEATURE_DEVICE_ADMIN)) {
+            Log.wtf(TAG, "Error retrieving DPM service");
+        }
+        return devicePolicyManager;
+    }
+
+    private DevicePolicyManager retrieveDevicePolicyManagerFromUserContext(int uid) {
+        Context userContext = createPackageContextAsUser(uid);
+        if (userContext == null) return null;
+        return retrieveDevicePolicyManagerFromContext(userContext);
+    }
+
+    /**
+     * Returns {@code true} if the calling {@code uid} is the profile owner
+     *
+     */
+
+    private boolean isProfileOwner(int uid) {
+        DevicePolicyManager devicePolicyManager = retrieveDevicePolicyManagerFromUserContext(uid);
+        if (devicePolicyManager == null) return false;
+        String[] packages = mContext.getPackageManager().getPackagesForUid(uid);
+        if (packages == null) {
+            Log.w(TAG, "isProfileOwner: could not find packages for uid="
+                    + uid);
+            return false;
+        }
+        for (String packageName : packages) {
+            if (devicePolicyManager.isProfileOwnerApp(packageName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     class ClearingIpAddressesState extends State {

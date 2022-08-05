@@ -33,6 +33,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
+import com.android.net.module.util.DomainUtils;
 import com.android.net.module.util.Inet4AddressUtils;
 
 import java.io.UnsupportedEncodingException;
@@ -336,6 +337,12 @@ public abstract class DhcpPacket {
 
     public static final byte DHCP_CAPTIVE_PORTAL = (byte) 114;
     protected String mCaptivePortalUrl;
+
+    /**
+     * DHCP Optional Type: Domain Search List, domain suffixes are space separated.
+     */
+    public static final byte DHCP_DOMAIN_SEARCHLIST = (byte) 119;
+    protected List<String> mDmnSrchList;
 
     /**
      * DHCP zero-length option code: pad
@@ -832,6 +839,7 @@ public abstract class DhcpPacket {
         }
     }
 
+    // The common server TLVs are corresponding to the parameter request list from client.
     protected void addCommonServerTlvs(ByteBuffer buf) {
         addTlv(buf, DHCP_LEASE_TIME, mLeaseTime);
         if (mLeaseTime != null && mLeaseTime != INFINITE_LEASE) {
@@ -853,6 +861,15 @@ public abstract class DhcpPacket {
         }
         if (mIpv6OnlyWaitTime != null) {
             addTlv(buf, DHCP_IPV6_ONLY_PREFERRED, (int) Integer.toUnsignedLong(mIpv6OnlyWaitTime));
+        }
+        if (mDmnSrchList != null && mDmnSrchList.size() > 0) {
+            // domain search list string is space separated.
+            String[] searchList = new String[mDmnSrchList.size()];
+            for (int i = 0; i < mDmnSrchList.size(); i++) {
+                searchList[i] = mDmnSrchList.get(i);
+            }
+            final byte[] domains = DomainUtils.encode(searchList, true /* compression */);
+            addTlv(buf, DHCP_DOMAIN_SEARCHLIST, domains);
         }
         addTlv(buf, DHCP_CAPTIVE_PORTAL, mCaptivePortalUrl);
     }
@@ -987,6 +1004,7 @@ public abstract class DhcpPacket {
         byte[] clientId = null;
         List<Inet4Address> dnsServers = new ArrayList<>();
         List<Inet4Address> gateways = new ArrayList<>();  // aka router
+        ArrayList<String> dmnSrchList =  new ArrayList<>();
         Inet4Address serverIdentifier = null;
         Inet4Address netMask = null;
         String message = null;
@@ -1292,6 +1310,14 @@ public abstract class DhcpPacket {
                                 expectedLen = skipOption(packet, optionLen);
                             }
                             break;
+                        case DHCP_DOMAIN_SEARCHLIST:
+                            // TODO: should support multiple options(i.e. length > 255)?
+                            expectedLen = optionLen;
+                            final byte[] bytes = new byte[expectedLen];
+                            packet.get(bytes);
+                            final ByteBuffer buf = ByteBuffer.wrap(bytes);
+                            dmnSrchList = DomainUtils.decode(buf, true /* compression */);
+                            break;
                         default:
                             expectedLen = skipOption(packet, optionLen);
                     }
@@ -1359,7 +1385,6 @@ public abstract class DhcpPacket {
         newPacket.mBroadcastAddress = bcAddr;
         newPacket.mClientId = clientId;
         newPacket.mDnsServers = dnsServers;
-        newPacket.mDomainName = domainName;
         newPacket.mGateways = gateways;
         newPacket.mHostName = hostName;
         newPacket.mLeaseTime = leaseTime;
@@ -1382,6 +1407,10 @@ public abstract class DhcpPacket {
         } else {
             newPacket.mServerHostName = "";
         }
+        // Domain suffixes in the search list are concatenated to domain name with space separated,
+        // which will be set to DnsResolver via LinkProperties.
+        newPacket.mDmnSrchList = dmnSrchList;
+        newPacket.mDomainName = domainName;
         return newPacket;
     }
 
@@ -1451,7 +1480,10 @@ public abstract class DhcpPacket {
         results.mtu = (mMtu != null && MIN_MTU <= mMtu && mMtu <= MAX_MTU) ? mMtu : 0;
         results.serverHostName = mServerHostName;
         results.captivePortalApiUrl = mCaptivePortalUrl;
-
+        // Add the check before setting it
+        if (mDmnSrchList != null && mDmnSrchList.size() > 0) {
+            results.dmnsrchList.addAll(mDmnSrchList);
+        }
         return results;
     }
 
@@ -1512,7 +1544,8 @@ public abstract class DhcpPacket {
             Inet4Address yourIp, byte[] mac, Integer timeout, Inet4Address netMask,
             Inet4Address bcAddr, List<Inet4Address> gateways, List<Inet4Address> dnsServers,
             Inet4Address dhcpServerIdentifier, String domainName, String hostname, boolean metered,
-            short mtu, String captivePortalUrl, Integer ipv6OnlyWaitTime) {
+            short mtu, String captivePortalUrl, Integer ipv6OnlyWaitTime,
+            List<String> domainSearchList) {
         DhcpPacket pkt = new DhcpOfferPacket(
                 transactionId, (short) 0, broadcast, serverIpAddr, relayIp,
                 INADDR_ANY /* clientIp */, yourIp, mac);
@@ -1526,6 +1559,9 @@ public abstract class DhcpPacket {
         pkt.mBroadcastAddress = bcAddr;
         pkt.mMtu = mtu;
         pkt.mCaptivePortalUrl = captivePortalUrl;
+        if (domainSearchList != null) {
+            pkt.mDmnSrchList = new ArrayList<>(domainSearchList);
+        }
         if (metered) {
             pkt.mVendorInfo = VENDOR_INFO_ANDROID_METERED;
         }
@@ -1546,7 +1582,8 @@ public abstract class DhcpPacket {
             short mtu, String captivePortalUrl) {
         return buildOfferPacket(encap, transactionId, broadcast, serverIpAddr, relayIp, yourIp,
                 mac, timeout, netMask, bcAddr, gateways, dnsServers, dhcpServerIdentifier,
-                domainName, hostname, metered, mtu, captivePortalUrl, null /* V6ONLY_WAIT */);
+                domainName, hostname, metered, mtu, captivePortalUrl, null /* V6ONLY_WAIT */,
+                null /* domainSearchList */);
     }
 
     /**
@@ -1557,7 +1594,8 @@ public abstract class DhcpPacket {
             Inet4Address requestClientIp, byte[] mac, Integer timeout, Inet4Address netMask,
             Inet4Address bcAddr, List<Inet4Address> gateways, List<Inet4Address> dnsServers,
             Inet4Address dhcpServerIdentifier, String domainName, String hostname, boolean metered,
-            short mtu, boolean rapidCommit, String captivePortalUrl, Integer ipv6OnlyWaitTime) {
+            short mtu, boolean rapidCommit, String captivePortalUrl, Integer ipv6OnlyWaitTime,
+            List<String> domainSearchList) {
         DhcpPacket pkt = new DhcpAckPacket(
                 transactionId, (short) 0, broadcast, serverIpAddr, relayIp, requestClientIp, yourIp,
                 mac, rapidCommit);
@@ -1571,6 +1609,9 @@ public abstract class DhcpPacket {
         pkt.mBroadcastAddress = bcAddr;
         pkt.mMtu = mtu;
         pkt.mCaptivePortalUrl = captivePortalUrl;
+        if (domainSearchList != null) {
+            pkt.mDmnSrchList = new ArrayList<>(domainSearchList);
+        }
         if (metered) {
             pkt.mVendorInfo = VENDOR_INFO_ANDROID_METERED;
         }
@@ -1592,7 +1633,7 @@ public abstract class DhcpPacket {
         return buildAckPacket(encap, transactionId, broadcast, serverIpAddr, relayIp, yourIp,
                 requestClientIp, mac, timeout, netMask, bcAddr, gateways, dnsServers,
                 dhcpServerIdentifier, domainName, hostname, metered, mtu, rapidCommit,
-                captivePortalUrl, null /* V6ONLY_WAIT */);
+                captivePortalUrl, null /* V6ONLY_WAIT */, null /* domainSearchList */);
     }
 
     /**
