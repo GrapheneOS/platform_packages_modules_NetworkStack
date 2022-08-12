@@ -114,7 +114,6 @@ import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.NetworkEvent;
 import android.net.metrics.ValidationProbeEvent;
 import android.net.networkstack.aidl.NetworkMonitorParameters;
-import android.net.shared.NetworkMonitorUtils;
 import android.net.shared.PrivateDnsConfig;
 import android.net.util.DataStallUtils.EvaluationType;
 import android.net.util.NetworkStackUtils;
@@ -159,6 +158,7 @@ import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.DeviceConfigUtils;
+import com.android.net.module.util.NetworkMonitorUtils;
 import com.android.net.module.util.NetworkStackConstants;
 import com.android.net.module.util.SharedLog;
 import com.android.networkstack.NetworkStackNotifier;
@@ -781,7 +781,8 @@ public class NetworkMonitor extends StateMachine {
     }
 
     private boolean isValidationRequired() {
-        return NetworkMonitorUtils.isValidationRequired(mNetworkAgentConfig, mNetworkCapabilities);
+        return NetworkMonitorUtils.isValidationRequired(
+                mNetworkAgentConfig.isVpnValidationRequired(), mNetworkCapabilities);
     }
 
     private boolean isPrivateDnsValidationRequired() {

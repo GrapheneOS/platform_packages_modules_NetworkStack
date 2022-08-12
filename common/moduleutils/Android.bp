@@ -25,20 +25,9 @@ filegroup {
     name: "connectivity-module-utils-srcs",
     srcs: [
         "src/android/net/shared/NetdUtils.java",
-        "src/android/net/shared/NetworkMonitorUtils.java",
     ],
     visibility: [
         "//packages/modules/Connectivity/service",
-    ]
-}
-
-filegroup {
-    name: "networkstack-module-utils-srcs",
-    srcs: [
-        "src/android/net/shared/*.java",
-    ],
-    visibility: [
-        "//packages/modules/NetworkStack",
     ]
 }
 
