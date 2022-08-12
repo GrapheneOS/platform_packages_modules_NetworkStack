@@ -268,7 +268,6 @@ java_defaults {
     name: "NetworkStackAndroidLibraryDefaults",
     srcs: [
         ":framework-networkstack-shared-srcs",
-        ":networkstack-module-utils-srcs",
     ],
     libs: ["unsupportedappusage"],
     static_libs: [
