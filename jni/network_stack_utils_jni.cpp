@@ -126,8 +126,7 @@ static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jobject clazz, job
 
     int fd = netjniutils::GetNativeFileDescriptor(env, javaFd);
     if (setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &filter, sizeof(filter)) != 0) {
-        jniThrowExceptionFmt(env, "java/net/SocketException",
-                "setsockopt(SO_ATTACH_FILTER): %s", strerror(errno));
+        jniThrowErrnoException(env, "setsockopt(SO_ATTACH_FILTER)", errno);
     }
 }
 
