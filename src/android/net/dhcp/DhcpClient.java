@@ -699,6 +699,10 @@ public class DhcpClient extends StateMachine {
                 Os.bind(mPacketSock, addr);
             } catch (SocketException | ErrnoException e) {
                 logError("Error creating packet socket", e);
+                if (e instanceof ErrnoException
+                        && ((ErrnoException) e).errno == 524 /* ENOTSUPP */) {
+                    Log.wtf(TAG, "Errno: ENOTSUPP");
+                }
                 closeFd(mPacketSock);
                 mPacketSock = null;
                 return null;
