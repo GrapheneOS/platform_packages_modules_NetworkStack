@@ -18,6 +18,7 @@ package android.net.util;
 
 import android.content.Context;
 import android.net.MacAddress;
+import android.system.ErrnoException;
 
 import androidx.annotation.NonNull;
 
@@ -277,7 +278,7 @@ public class NetworkStackUtils {
     /**
      * Attaches a socket filter that accepts DHCP packets to the given socket.
      */
-    public static native void attachDhcpFilter(FileDescriptor fd) throws SocketException;
+    public static native void attachDhcpFilter(FileDescriptor fd) throws ErrnoException;
 
     /**
      * Attaches a socket filter that accepts ICMPv6 router advertisements to the given socket.
