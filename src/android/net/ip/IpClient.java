@@ -507,18 +507,17 @@ public class IpClient extends StateMachine {
 
     // Specific vendor OUI(3 bytes)/vendor specific type(1 byte) pattern for upstream hotspot
     // device detection. Add new byte array pattern below in turn.
-    private static final List<byte[]> METERED_IE_PATTERN_LIST = Collections.unmodifiableList(
-            Arrays.asList(
-                    new byte[] { (byte) 0x00, (byte) 0x17, (byte) 0xf2, (byte) 0x06 }
-    ));
+    private static final List<byte[]> METERED_IE_PATTERN_LIST = Collections.singletonList(
+            new byte[] { (byte) 0x00, (byte) 0x17, (byte) 0xf2, (byte) 0x06 }
+    );
 
     // Allows Wi-Fi to pass in DHCP options when particular vendor-specific IEs are present.
     // Maps each DHCP option code to a list of IEs, any of which will allow that option.
     private static final Map<Byte, List<byte[]>> DHCP_OPTIONS_ALLOWED = Map.of(
-            (byte) 60, Arrays.asList(
+            (byte) 60, Collections.singletonList(
                     // KT OUI: 00:17:C3, type: 17. See b/170928882.
                     new byte[]{ (byte) 0x00, (byte) 0x17, (byte) 0xc3, (byte) 0x11 }),
-            (byte) 77, Arrays.asList(
+            (byte) 77, Collections.singletonList(
                     // KT OUI: 00:17:C3, type: 17. See b/170928882.
                     new byte[]{ (byte) 0x00, (byte) 0x17, (byte) 0xc3, (byte) 0x11 })
     );
