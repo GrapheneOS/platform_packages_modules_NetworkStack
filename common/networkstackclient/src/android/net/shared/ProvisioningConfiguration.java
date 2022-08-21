@@ -333,7 +333,7 @@ public class ProvisioningConfiguration {
 
             @Override
             public int hashCode() {
-                return Objects.hash(mId, mPayload);
+                return Objects.hash(mId, Arrays.hashCode(mPayload));
             }
 
             @Override
