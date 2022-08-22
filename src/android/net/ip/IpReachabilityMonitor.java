@@ -20,8 +20,9 @@ import static android.net.metrics.IpReachabilityEvent.NUD_FAILED;
 import static android.net.metrics.IpReachabilityEvent.NUD_FAILED_ORGANIC;
 import static android.net.metrics.IpReachabilityEvent.PROVISIONING_LOST;
 import static android.net.metrics.IpReachabilityEvent.PROVISIONING_LOST_ORGANIC;
-import static android.net.util.NetworkStackUtils.IP_REACHABILITY_MCAST_RESOLICIT_VERSION;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
+
+import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_MCAST_RESOLICIT_VERSION;
 
 import android.content.Context;
 import android.net.ConnectivityManager;
@@ -175,7 +176,8 @@ public class IpReachabilityMonitor {
      * Encapsulates IpReachabilityMonitor dependencies on systems that hinder unit testing.
      * TODO: consider also wrapping MultinetworkPolicyTracker in this interface.
      */
-    interface Dependencies {
+    @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
+    public interface Dependencies {
         void acquireWakeLock(long durationMs);
         IpNeighborMonitor makeIpNeighborMonitor(Handler h, SharedLog log, NeighborEventConsumer cb);
         boolean isFeatureEnabled(Context context, String name, boolean defaultEnabled);
@@ -239,9 +241,9 @@ public class IpReachabilityMonitor {
     }
 
     @VisibleForTesting
-    IpReachabilityMonitor(Context context, InterfaceParams ifParams, Handler h, SharedLog log,
-            Callback callback, boolean usingMultinetworkPolicyTracker, Dependencies dependencies,
-            final IpConnectivityLog metricsLog, final INetd netd) {
+    public IpReachabilityMonitor(Context context, InterfaceParams ifParams, Handler h,
+            SharedLog log, Callback callback, boolean usingMultinetworkPolicyTracker,
+            Dependencies dependencies, final IpConnectivityLog metricsLog, final INetd netd) {
         if (ifParams == null) throw new IllegalArgumentException("null InterfaceParams");
 
         mContext = context;
