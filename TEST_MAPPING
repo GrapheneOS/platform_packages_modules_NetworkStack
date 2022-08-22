@@ -16,9 +16,7 @@
     // so in theory the infra would not need to reinstall/reboot devices to run both.
     {
       "name": "NetworkStackTests[CaptivePortalLoginGoogle.apk+NetworkStackGoogle.apk+com.google.android.resolv.apex+com.google.android.tethering.apex]"
-    }
-  ],
-  "mainline-postsubmit": [
+    },
     {
       "name": "NetworkStackIntegrationTests[CaptivePortalLoginGoogle.apk+NetworkStackGoogle.apk+com.google.android.resolv.apex+com.google.android.tethering.apex]"
     }
