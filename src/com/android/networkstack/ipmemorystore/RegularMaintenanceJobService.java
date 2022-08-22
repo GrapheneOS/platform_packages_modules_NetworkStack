@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.server.connectivity.ipmemorystore;
+package com.android.networkstack.ipmemorystore;
 
 import android.app.job.JobInfo;
 import android.app.job.JobParameters;

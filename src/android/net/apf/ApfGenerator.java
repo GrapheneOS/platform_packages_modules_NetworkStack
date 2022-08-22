@@ -16,6 +16,8 @@
 
 package android.net.apf;
 
+import com.android.internal.annotations.VisibleForTesting;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -372,7 +374,8 @@ public class ApfGenerator {
      * {@code version} of the APF interpreter. Throws {@code IllegalInstructionException} if
      * the requested version is unsupported.
      */
-    ApfGenerator(int version) throws IllegalInstructionException {
+    @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
+    public ApfGenerator(int version) throws IllegalInstructionException {
         mVersion = version;
         requireApfVersion(MIN_APF_VERSION);
     }
