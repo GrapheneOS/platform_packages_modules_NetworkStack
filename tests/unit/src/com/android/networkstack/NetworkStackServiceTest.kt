@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.server
+package com.android.networkstack
 
 import android.content.Context
 import android.net.IIpMemoryStoreCallbacks
@@ -40,7 +40,7 @@ import com.android.server.NetworkStackService.Dependencies
 import com.android.server.NetworkStackService.NetworkStackConnector
 import com.android.server.NetworkStackService.PermissionChecker
 import com.android.server.connectivity.NetworkMonitor
-import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService
+import com.android.networkstack.ipmemorystore.IpMemoryStoreService
 import com.android.testutils.DevSdkIgnoreRule
 import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo

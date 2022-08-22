@@ -23,9 +23,6 @@ import static android.net.ip.IIpClient.PROV_IPV6_DISABLED;
 import static android.net.ip.IIpClient.PROV_IPV6_LINKLOCAL;
 import static android.net.ip.IpReachabilityMonitor.INVALID_REACHABILITY_LOSS_TYPE;
 import static android.net.ip.IpReachabilityMonitor.nudEventTypeToInt;
-import static android.net.util.NetworkStackUtils.IPCLIENT_DISABLE_ACCEPT_RA_VERSION;
-import static android.net.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
-import static android.net.util.NetworkStackUtils.IPCLIENT_GRATUITOUS_NA_VERSION;
 import static android.net.util.SocketUtils.makePacketSocketAddress;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_PACKET;
@@ -38,6 +35,9 @@ import static com.android.net.module.util.NetworkStackConstants.ARP_REPLY;
 import static com.android.net.module.util.NetworkStackConstants.ETHER_BROADCAST;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_ROUTERS_MULTICAST;
 import static com.android.net.module.util.NetworkStackConstants.VENDOR_SPECIFIC_IE_ID;
+import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DISABLE_ACCEPT_RA_VERSION;
+import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
+import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GRATUITOUS_NA_VERSION;
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
 import android.annotation.SuppressLint;
@@ -73,7 +73,6 @@ import android.net.shared.Layer2Information;
 import android.net.shared.ProvisioningConfiguration;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo.InformationElement;
-import android.net.util.NetworkStackUtils;
 import android.os.Build;
 import android.os.ConditionVariable;
 import android.os.Handler;
@@ -117,6 +116,7 @@ import com.android.networkstack.arp.ArpPacket;
 import com.android.networkstack.metrics.IpProvisioningMetrics;
 import com.android.networkstack.metrics.NetworkQuirkMetrics;
 import com.android.networkstack.packets.NeighborAdvertisement;
+import com.android.networkstack.util.NetworkStackUtils;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
 
@@ -696,7 +696,7 @@ public class IpClient extends StateMachine {
     }
 
     @VisibleForTesting
-    IpClient(Context context, String ifName, IIpClientCallbacks callback,
+    public IpClient(Context context, String ifName, IIpClientCallbacks callback,
             NetworkObserverRegistry observerRegistry, NetworkStackServiceManager nssManager,
             Dependencies deps) {
         super(IpClient.class.getSimpleName() + "." + ifName);
