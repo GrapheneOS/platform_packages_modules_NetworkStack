@@ -984,7 +984,7 @@ public class ApfTest {
         }
 
         @Override
-        void maybeStartFilter() {
+        public void maybeStartFilter() {
             mHardwareAddress = MOCK_MAC_ADDR;
             installNewProgramLocked();
 

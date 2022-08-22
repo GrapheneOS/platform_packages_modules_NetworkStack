@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.server.connectivity.ipmemorystore;
+package com.android.networkstack.ipmemorystore;
 
 /**
  * Small data class to wrap a Status and an int.
