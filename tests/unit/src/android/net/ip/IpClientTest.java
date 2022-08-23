@@ -16,8 +16,9 @@
 
 package android.net.ip;
 
-import static android.net.util.NetworkStackUtils.IPCLIENT_PARSE_NETLINK_EVENTS_VERSION;
 import static android.system.OsConstants.RT_SCOPE_UNIVERSE;
+
+import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_PARSE_NETLINK_EVENTS_VERSION;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -69,10 +70,10 @@ import androidx.test.runner.AndroidJUnit4;
 
 import com.android.net.module.util.InterfaceParams;
 import com.android.networkstack.R;
+import com.android.networkstack.ipmemorystore.IpMemoryStoreService;
 import com.android.server.NetworkObserver;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService;
-import com.android.server.connectivity.ipmemorystore.IpMemoryStoreService;
 import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;

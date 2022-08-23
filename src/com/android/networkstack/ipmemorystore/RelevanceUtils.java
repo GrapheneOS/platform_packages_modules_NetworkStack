@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.server.connectivity.ipmemorystore;
+package com.android.networkstack.ipmemorystore;
 
 import com.android.internal.annotations.VisibleForTesting;
 
