@@ -78,6 +78,7 @@ android_test {
     min_sdk_version: "29",
     target_sdk_version: "30",
     jarjar_rules: ":NetworkStackJarJarRules",
+    test_config_template: "AndroidTestTemplate_Integration.xml",
 }
 
 // Network stack next integration tests.
@@ -99,6 +100,7 @@ android_test {
     platform_apis: true,
     test_suites: ["device-tests"],
     jarjar_rules: ":NetworkStackJarJarRules",
+    test_config_template: "AndroidTestTemplate_Integration.xml",
 }
 
 // Network stack integration root tests.

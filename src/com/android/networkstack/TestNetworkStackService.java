@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.server;
+package com.android.networkstack;
 
 import static com.android.server.util.PermissionUtil.isDebuggableBuild;
 
@@ -22,6 +22,8 @@ import android.content.Intent;
 import android.os.IBinder;
 
 import androidx.annotation.Nullable;
+
+import com.android.server.NetworkStackService;
 
 /**
  * A {@link NetworkStackService} that can only be bound to on debuggable builds.

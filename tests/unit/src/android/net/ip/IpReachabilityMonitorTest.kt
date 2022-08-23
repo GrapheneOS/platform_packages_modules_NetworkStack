@@ -24,7 +24,7 @@ import android.net.LinkAddress
 import android.net.LinkProperties
 import android.net.RouteInfo
 import android.net.metrics.IpConnectivityLog
-import android.net.util.NetworkStackUtils.IP_REACHABILITY_MCAST_RESOLICIT_VERSION
+import com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_MCAST_RESOLICIT_VERSION
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.MessageQueue
@@ -54,7 +54,6 @@ import com.android.networkstack.metrics.IpReachabilityMonitorMetrics
 import com.android.net.module.util.InterfaceParams
 import com.android.net.module.util.SharedLog
 import com.android.net.module.util.ip.IpNeighborMonitor
-import com.android.net.module.util.ip.IpNeighborMonitor.NeighborEventConsumer
 import com.android.net.module.util.netlink.StructNdMsg.NUD_FAILED
 import com.android.net.module.util.netlink.StructNdMsg.NUD_REACHABLE
 import com.android.net.module.util.netlink.StructNdMsg.NUD_STALE

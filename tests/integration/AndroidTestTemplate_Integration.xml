@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright (C) 2019 The Android Open Source Project
+<!-- Copyright (C) 2022 The Android Open Source Project
 
      Licensed under the Apache License, Version 2.0 (the "License");
      you may not use this file except in compliance with the License.
@@ -13,14 +13,18 @@
      See the License for the specific language governing permissions and
      limitations under the License.
 -->
-<configuration description="Runs coverage tests for NetworkStack">
-    <target_preparer class="com.android.tradefed.targetprep.TestAppInstallSetup">
-        <option name="test-file-name" value="NetworkStackCoverageTests.apk" />
+<configuration description="Test config for {MODULE}">
+    <target_preparer class="com.android.tradefed.targetprep.suite.SuiteApkInstaller">
+        <option name="cleanup-apks" value="true" />
+        <option name="test-file-name" value="{MODULE}.apk" />
     </target_preparer>
 
-    <option name="test-tag" value="NetworkStackCoverageTests" />
+    <!-- Needed to push to the app's data directory. Without root, there appears to be no directory
+         that the shell can write to and that the networkstack can read from. -->
+    <target_preparer class="com.android.tradefed.targetprep.RootTargetPreparer"/>
+
     <test class="com.android.tradefed.testtype.AndroidJUnitTest" >
-        <option name="package" value="com.android.server.networkstack.coverage" />
+        <option name="package" value="com.android.server.networkstack.integrationtests" />
         <option name="runner" value="androidx.test.runner.AndroidJUnitRunner" />
         <!-- By default, include and exclude filters go into /data/local/tmp/ajur/, which these
              tests cannot access because they run in the network_stack selinux context. Move
@@ -31,6 +35,5 @@
              permission denial trying to read the exclude file. -->
         <option name="test-filter-dir" value="/data/data/{PACKAGE}/cache" />
         <option name="hidden-api-checks" value="false"/>
-        <option name="device-listeners" value="com.android.modules.utils.testing.NativeCoverageHackInstrumentationListener" />
     </test>
 </configuration>

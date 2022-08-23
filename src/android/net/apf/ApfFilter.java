@@ -49,7 +49,6 @@ import android.net.metrics.ApfProgramEvent;
 import android.net.metrics.ApfStats;
 import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.RaEvent;
-import android.net.util.NetworkStackUtils;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.system.ErrnoException;
@@ -67,6 +66,7 @@ import com.android.internal.util.IndentingPrintWriter;
 import com.android.net.module.util.CollectionUtils;
 import com.android.net.module.util.ConnectivityUtils;
 import com.android.net.module.util.InterfaceParams;
+import com.android.networkstack.util.NetworkStackUtils;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -191,7 +191,7 @@ public class ApfFilter {
 
     // Thread to listen for RAs.
     @VisibleForTesting
-    class ReceiveThread extends Thread {
+    public class ReceiveThread extends Thread {
         private final byte[] mPacket = new byte[1514];
         private final FileDescriptor mSocket;
         private final long mStart = SystemClock.elapsedRealtime();
@@ -348,9 +348,9 @@ public class ApfFilter {
     private final IpConnectivityLog mMetricsLog;
 
     @VisibleForTesting
-    byte[] mHardwareAddress;
+    public byte[] mHardwareAddress;
     @VisibleForTesting
-    ReceiveThread mReceiveThread;
+    public ReceiveThread mReceiveThread;
     @GuardedBy("this")
     private long mUniqueCounter;
     @GuardedBy("this")
@@ -386,7 +386,7 @@ public class ApfFilter {
     private int mIPv4PrefixLength;
 
     @VisibleForTesting
-    ApfFilter(Context context, ApfConfiguration config, InterfaceParams ifParams,
+    public ApfFilter(Context context, ApfConfiguration config, InterfaceParams ifParams,
             IpClientCallbacksWrapper ipClientCallback, IpConnectivityLog log) {
         mApfCapabilities = config.apfCapabilities;
         mIpClientCallback = ipClientCallback;
@@ -466,7 +466,7 @@ public class ApfFilter {
      * filters to ignore useless RAs.
      */
     @VisibleForTesting
-    void maybeStartFilter() {
+    public void maybeStartFilter() {
         FileDescriptor socket;
         try {
             mHardwareAddress = mInterfaceParams.macAddr.toByteArray();
@@ -546,7 +546,7 @@ public class ApfFilter {
 
     // A class to hold information about an RA.
     @VisibleForTesting
-    class Ra {
+    public class Ra {
         // From RFC4861:
         private static final int ICMP6_RA_HEADER_LEN = 16;
         private static final int ICMP6_RA_CHECKSUM_OFFSET =
@@ -771,7 +771,8 @@ public class ApfFilter {
         // Buffer.position(int) or due to an invalid-length option) or IndexOutOfBoundsException
         // (from ByteBuffer.get(int) ) if parsing encounters something non-compliant with
         // specifications.
-        Ra(byte[] packet, int length) throws InvalidRaException {
+        @VisibleForTesting
+        public Ra(byte[] packet, int length) throws InvalidRaException {
             if (length < ICMP6_RA_OPTION_OFFSET) {
                 throw new InvalidRaException("Not an ICMP6 router advertisement: too short");
             }
@@ -1619,7 +1620,7 @@ public class ApfFilter {
      */
     @GuardedBy("this")
     @VisibleForTesting
-    void installNewProgramLocked() {
+    public void installNewProgramLocked() {
         purgeExpiredRasLocked();
         ArrayList<Ra> rasToFilter = new ArrayList<>();
         final byte[] program;
@@ -1730,7 +1731,7 @@ public class ApfFilter {
      * @return a ProcessRaResult enum describing what action was performed.
      */
     @VisibleForTesting
-    synchronized ProcessRaResult processRa(byte[] packet, int length) {
+    public synchronized ProcessRaResult processRa(byte[] packet, int length) {
         if (VDBG) hexDump("Read packet = ", packet, length);
 
         // Have we seen this RA before?
