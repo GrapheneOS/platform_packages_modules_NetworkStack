@@ -24,7 +24,7 @@ import com.android.internal.annotations.VisibleForTesting;
  *
  * @hide
  */
-public class RelevanceUtils {
+public final class RelevanceUtils {
     /**
      * The relevance is a decaying value that gets lower and lower until it
      * reaches 0 after some time passes. It follows an exponential decay law,
@@ -304,4 +304,7 @@ public class RelevanceUtils {
         final long newDuration = bumpExpiryDuration(oldExpiryDate - now);
         return now + newDuration;
     }
+
+    // This utility class is not publicly instantiable.
+    private RelevanceUtils() {}
 }
