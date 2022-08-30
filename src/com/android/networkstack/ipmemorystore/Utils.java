@@ -16,18 +16,11 @@
 
 package com.android.networkstack.ipmemorystore;
 
-import android.net.ipmemorystore.Blob;
-
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 /** {@hide} */
-public class Utils {
-    /** Pretty print */
-    public static String blobToString(@Nullable final Blob blob) {
-        return "Blob : " + byteArrayToString(null == blob ? null : blob.data);
-    }
-
+public final class Utils {
     /** Pretty print */
     public static String byteArrayToString(@Nullable final byte[] data) {
         if (null == data) return "null";
@@ -50,4 +43,7 @@ public class Utils {
             sb.append(String.format("%02X", ar[i]));
         }
     }
+
+    // This class is not publicly instantiable.
+    private Utils() {}
 }

@@ -29,6 +29,9 @@ import android.os.IBinder;
 import android.os.RemoteException;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.VisibleForTesting;
+
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
@@ -36,7 +39,7 @@ import java.util.concurrent.TimeUnit;
  * Regular maintenance job service.
  * @hide
  */
-public final class RegularMaintenanceJobService extends JobService {
+public class RegularMaintenanceJobService extends JobService {
     // Must be unique within the system server uid.
     public static final int REGULAR_MAINTENANCE_ID = 3345678;
 
@@ -88,7 +91,7 @@ public final class RegularMaintenanceJobService extends JobService {
                             + " Error is " + result.resultCode);
                 }
                 sInterruptList.remove(im);
-                jobFinished(params, !result.isSuccess());
+                callJobFinished(params, !result.isSuccess());
             }
 
             @Override
@@ -107,6 +110,15 @@ public final class RegularMaintenanceJobService extends JobService {
             }
         }, im);
         return true;
+    }
+
+    // Unfortunately jobFinished is final in JobService and sends a message through a maze
+    // of messengers and callbacks, all of which are private and/or final. Although this method
+    // represents a small change to the production code, it looks like a reasonably safe way
+    // to write some of the tests for this service.
+    @VisibleForTesting
+    protected void callJobFinished(@NonNull final JobParameters params, final boolean reschedule) {
+        jobFinished(params, reschedule);
     }
 
     @Override
