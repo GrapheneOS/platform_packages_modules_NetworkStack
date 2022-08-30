@@ -45,6 +45,7 @@ import android.net.ipmemorystore.StatusParcelable;
 import android.os.ConditionVariable;
 import android.os.IBinder;
 import android.os.RemoteException;
+import android.util.Pair;
 
 import androidx.annotation.NonNull;
 import androidx.test.InstrumentationRegistry;
@@ -435,7 +436,7 @@ public class IpMemoryStoreServiceTest {
                 assertEquals(errorCode, Status.SUCCESS);
             }
 
-            // After inserted fake data, db size should be larger than threshold.
+            // After inserting fake data, the size of the DB should be larger than the threshold.
             assertTrue(mService.isDbSizeOverThreshold());
         } catch (final UnknownHostException e) {
             fail("Insert fake data fail");
@@ -794,11 +795,11 @@ public class IpMemoryStoreServiceTest {
     @Test
     public void testFullMaintenance() throws Exception {
         copyTestData(mDbFile);
-        // After inserted test data, db size should be larger than threshold.
+        // After inserting test data, the size of the DB should be larger than the threshold.
         assertTrue(mService.isDbSizeOverThreshold());
 
         final InterruptMaintenance im = new InterruptMaintenance(0/* Fake JobId */);
-        // Do full maintenance and then db size should go down and meet the threshold.
+        // Do full maintenance and then the db should go down in size and be under the threshold.
         doLatched("Maintenance unexpectedly completed successfully", latch ->
                 mService.fullMaintenance(onStatus((status) -> {
                     assertTrue("Execute full maintenance failed: "
@@ -806,35 +807,36 @@ public class IpMemoryStoreServiceTest {
                     latch.countDown();
                 }), im), LONG_TIMEOUT_MS);
 
-        // Assume that maintenance is successful, db size shall meet the threshold.
+        // If maintenance is successful, the db size shall meet the threshold.
         assertFalse(mService.isDbSizeOverThreshold());
     }
 
     @Test
     public void testInterruptMaintenance() throws Exception {
         copyTestData(mDbFile);
-        // After inserted test data, db size should be larger than threshold.
+        // After inserting test data, the size of the DB should be larger than the threshold.
         assertTrue(mService.isDbSizeOverThreshold());
 
-        final InterruptMaintenance im = new InterruptMaintenance(0/* Fake JobId */);
+        final InterruptMaintenance im = new InterruptMaintenance(48 /* Fake JobId */);
+        assertEquals(48, im.getJobId());
 
         // Test interruption immediately.
         im.setInterrupted(true);
-        // Do full maintenance and the expectation is not completed by interruption.
+        // Start full maintenance. It should be interrupted.
         doLatched("Maintenance unexpectedly completed successfully", latch ->
                 mService.fullMaintenance(onStatus((status) -> {
                     assertFalse(status.isSuccess());
                     latch.countDown();
                 }), im), LONG_TIMEOUT_MS);
 
-        // Assume that no data are removed, db size shall be over the threshold.
+        // No data has been removed, so the db size should still be over the threshold.
         assertTrue(mService.isDbSizeOverThreshold());
 
         // Reset the flag and test interruption during maintenance.
         im.setInterrupted(false);
 
         final ConditionVariable latch = new ConditionVariable();
-        // Do full maintenance and the expectation is not completed by interruption.
+        // Start full maintenance. It should be interrupted soon.
         mService.fullMaintenance(onStatus((status) -> {
             assertFalse(status.isSuccess());
             latch.open();
@@ -849,7 +851,7 @@ public class IpMemoryStoreServiceTest {
             fail("Maintenance unexpectedly completed successfully");
         }
 
-        // Assume that only do dropAllExpiredRecords method in previous maintenance, db size shall
+        // As maintenance should only have started dropAllExpiredRecords, the db size should
         // still be over the threshold.
         assertTrue(mService.isDbSizeOverThreshold());
     }
@@ -916,5 +918,23 @@ public class IpMemoryStoreServiceTest {
                                     status.isSuccess());
                             assertTrue(System.currentTimeMillis() >= startTime + sleepTimeMs);
                         })), DEFAULT_TIMEOUT_MS);
+    }
+
+    private final List<Pair<String, byte[]>> mByteArrayTests = List.of(
+            new Pair<>("null", null),
+            new Pair<>("[]", new byte[] {}),
+            new Pair<>("[0102030405060708090A0B0C]",
+                    new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 }),
+            new Pair<>("[0F1080FF]", new byte[] { 15, 16, -128, -1 }),
+            new Pair<>("[0102030405060708090A0B0C0D0E0F10...15161718191A1B1C]",
+                    new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+                            17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28 })
+    );
+
+    @Test
+    public void testByteArrayToString() {
+        for (final Pair<String, byte[]> testCase : mByteArrayTests) {
+            assertEquals(testCase.first, Utils.byteArrayToString(testCase.second));
+        }
     }
 }
