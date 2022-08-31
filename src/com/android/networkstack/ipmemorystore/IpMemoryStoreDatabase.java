@@ -60,7 +60,9 @@ public class IpMemoryStoreDatabase {
     /**
      * Contract class for the Network Attributes table.
      */
-    public static class NetworkAttributesContract {
+    public static final class NetworkAttributesContract {
+        private NetworkAttributesContract() {}
+
         public static final String TABLENAME = "NetworkAttributes";
 
         public static final String COLNAME_L2KEY = "l2Key";
@@ -112,7 +114,9 @@ public class IpMemoryStoreDatabase {
     /**
      * Contract class for the Private Data table.
      */
-    public static class PrivateDataContract {
+    public static final class PrivateDataContract {
+        private PrivateDataContract() {}
+
         public static final String TABLENAME = "PrivateData";
 
         public static final String COLNAME_L2KEY = "l2Key";
