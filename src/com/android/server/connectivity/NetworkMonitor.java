@@ -125,7 +125,6 @@ import android.os.Message;
 import android.os.Process;
 import android.os.RemoteException;
 import android.os.SystemClock;
-import android.os.SystemProperties;
 import android.provider.DeviceConfig;
 import android.provider.Settings;
 import android.stats.connectivity.ProbeResult;
@@ -226,9 +225,7 @@ public class NetworkMonitor extends StateMachine {
     private static final String TAG = NetworkMonitor.class.getSimpleName();
     private static final boolean DBG  = true;
     private static final boolean VDBG = false;
-    // TODO(b/185082309): For flaky test debug only, remove it after fixing.
-    private static final boolean DDBG_STALL = "cf_x86_auto-userdebug".equals(
-            SystemProperties.get("ro.build.flavor", ""));
+    private static final boolean DDBG_STALL = false;
     private static final boolean VDBG_STALL = Log.isLoggable(TAG, Log.DEBUG);
     private static final String DEFAULT_USER_AGENT    = "Mozilla/5.0 (X11; Linux x86_64) "
                                                       + "AppleWebKit/537.36 (KHTML, like Gecko) "
