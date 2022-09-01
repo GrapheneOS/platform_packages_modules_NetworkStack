@@ -301,6 +301,7 @@ public class NetworkMonitorTest {
 
     private static final int HANDLER_TIMEOUT_MS = 1000;
     private static final int TEST_MIN_STALL_EVALUATE_INTERVAL_MS = 500;
+    private static final int TEST_MIN_VALID_STALL_DNS_TIME_THRESHOLD_MS = 5000;
     private static final int STALL_EXPECTED_LAST_PROBE_TIME_MS =
             TEST_MIN_STALL_EVALUATE_INTERVAL_MS + HANDLER_TIMEOUT_MS;
     private static final NetworkAgentConfigShim TEST_AGENT_CONFIG =
@@ -579,7 +580,7 @@ public class NetworkMonitorTest {
 
         setMinDataStallEvaluateInterval(TEST_MIN_STALL_EVALUATE_INTERVAL_MS);
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_DNS);
-        setValidDataStallDnsTimeThreshold(500);
+        setValidDataStallDnsTimeThreshold(TEST_MIN_VALID_STALL_DNS_TIME_THRESHOLD_MS);
         setConsecutiveDnsTimeoutThreshold(5);
         mCreatedNetworkMonitors = new HashSet<>();
         mRegisteredReceivers = new HashSet<>();
