@@ -397,6 +397,7 @@ java_defaults {
     jarjar_rules: ":NetworkStackJarJarRules",
     use_embedded_native_libs: true,
     optimize: {
+        ignore_warnings: false,
         proguard_flags_files: ["proguard.flags"],
     },
 }
