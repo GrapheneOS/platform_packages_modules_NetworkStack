@@ -372,7 +372,7 @@ java_genrule {
     ],
     out: ["NetworkStackJarJarRules.txt"],
     cmd: "$(location jarjar-rules-generator) " +
-        "--jars $(location :NetworkStackApiStableLib{.jar}) " +
+        "$(location :NetworkStackApiStableLib{.jar}) " +
         "--prefix com.android.networkstack " +
         "--excludes $(location jarjar-excludes.txt) " +
         "--output $(out)",
