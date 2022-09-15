@@ -107,7 +107,7 @@ static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jobject clazz, job
 
         // Check this is not a fragment.
         BPF_STMT(BPF_LD  | BPF_H    | BPF_ABS, kIPv4FlagsOffset),
-        BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K,   IP_OFFMASK, 4, 0),
+        BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K,   IP_MF | IP_OFFMASK, 4, 0),
 
         // Get the IP header length.
         BPF_STMT(BPF_LDX | BPF_B    | BPF_MSH, kEtherHeaderLen),
