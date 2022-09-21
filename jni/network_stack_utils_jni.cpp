@@ -60,7 +60,7 @@ static bool checkLenAndCopy(JNIEnv* env, const jbyteArray& addr, int len, void* 
     return true;
 }
 
-static void network_stack_utils_addArpEntry(JNIEnv *env, jobject thiz, jbyteArray ethAddr,
+static void network_stack_utils_addArpEntry(JNIEnv *env, jclass clazz, jbyteArray ethAddr,
         jbyteArray ipv4Addr, jstring ifname, jobject javaFd) {
     arpreq req = {};
     sockaddr_in& netAddrStruct = *reinterpret_cast<sockaddr_in*>(&req.arp_pa);
@@ -99,7 +99,7 @@ static void network_stack_utils_addArpEntry(JNIEnv *env, jobject thiz, jbyteArra
     }
 }
 
-static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jobject clazz, jobject javaFd) {
+static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jclass clazz, jobject javaFd) {
     static sock_filter filter_code[] = {
         // Check the protocol is UDP.
         BPF_STMT(BPF_LD  | BPF_B    | BPF_ABS, kIPv4Protocol),
@@ -133,7 +133,7 @@ static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jobject clazz, job
     }
 }
 
-static void network_stack_utils_attachRaFilter(JNIEnv *env, jobject clazz, jobject javaFd,
+static void network_stack_utils_attachRaFilter(JNIEnv *env, jclass clazz, jobject javaFd,
         jint hardwareAddressType) {
     if (hardwareAddressType != ARPHRD_ETHER) {
         jniThrowExceptionFmt(env, "java/net/SocketException",
@@ -170,7 +170,7 @@ static void network_stack_utils_attachRaFilter(JNIEnv *env, jobject clazz, jobje
 
 // TODO: Move all this filter code into libnetutils.
 static void network_stack_utils_attachControlPacketFilter(
-        JNIEnv *env, jobject clazz, jobject javaFd, jint hardwareAddressType) {
+        JNIEnv *env, jclass clazz, jobject javaFd, jint hardwareAddressType) {
     if (hardwareAddressType != ARPHRD_ETHER) {
         jniThrowExceptionFmt(env, "java/net/SocketException",
                 "attachControlPacketFilter only supports ARPHRD_ETHER");
