@@ -232,6 +232,7 @@ public class IpReachabilityMonitor {
     private int mInterSolicitIntervalMs;
     @NonNull
     private final Callback mCallback;
+    private final boolean mMulticastResolicitEnabled;
 
     public IpReachabilityMonitor(
             Context context, InterfaceParams ifParams, Handler h, SharedLog log, Callback callback,
@@ -253,6 +254,8 @@ public class IpReachabilityMonitor {
         mUsingMultinetworkPolicyTracker = usingMultinetworkPolicyTracker;
         mCm = context.getSystemService(ConnectivityManager.class);
         mDependencies = dependencies;
+        mMulticastResolicitEnabled = dependencies.isFeatureEnabled(context,
+                IP_REACHABILITY_MCAST_RESOLICIT_VERSION, false /* defaultEnabled */);
         mMetricsLog = metricsLog;
         mNetd = netd;
         Preconditions.checkNotNull(mNetd);
@@ -261,7 +264,7 @@ public class IpReachabilityMonitor {
         // In case the overylaid parameters specify an invalid configuration, set the parameters
         // to the hardcoded defaults first, then set them to the values used in the steady state.
         try {
-            int numResolicits = isMulticastResolicitEnabled()
+            int numResolicits = mMulticastResolicitEnabled
                     ? NUD_MCAST_RESOLICIT_NUM
                     : INVALID_NUD_MCAST_RESOLICIT_NUM;
             setNeighborParameters(MIN_NUD_SOLICIT_NUM, MIN_NUD_SOLICIT_INTERVAL_MS, numResolicits);
@@ -270,7 +273,7 @@ public class IpReachabilityMonitor {
         }
         setNeighbourParametersForSteadyState();
 
-        mIpNeighborMonitor = mDependencies.makeIpNeighborMonitor(h, mLog,
+        mIpNeighborMonitor = dependencies.makeIpNeighborMonitor(h, mLog,
                 (NeighborEvent event) -> {
                     if (mInterfaceParams.index != event.ifindex) return;
                     if (!mNeighborWatchList.containsKey(event.ip)) return;
@@ -362,11 +365,6 @@ public class IpReachabilityMonitor {
         return false;
     }
 
-    private boolean isMulticastResolicitEnabled() {
-        return mDependencies.isFeatureEnabled(mContext, IP_REACHABILITY_MCAST_RESOLICIT_VERSION,
-                false /* defaultEnabled */);
-    }
-
     public void updateLinkProperties(LinkProperties lp) {
         if (!mInterfaceParams.name.equals(lp.getInterfaceName())) {
             // TODO: figure out whether / how to cope with interface changes.
@@ -406,7 +404,7 @@ public class IpReachabilityMonitor {
 
     private void handleNeighborReachable(@Nullable final NeighborEvent prev,
             @NonNull final NeighborEvent event) {
-        if (isMulticastResolicitEnabled()
+        if (mMulticastResolicitEnabled
                 && hasDefaultRouterNeighborMacAddressChanged(prev, event)) {
             // This implies device has confirmed the neighbor's reachability from
             // other states(e.g., NUD_PROBE or NUD_STALE), checking if the mac
@@ -529,7 +527,7 @@ public class IpReachabilityMonitor {
     private long getProbeWakeLockDuration() {
         final long gracePeriodMs = 500;
         final int numSolicits =
-                mNumSolicits + (isMulticastResolicitEnabled() ? NUD_MCAST_RESOLICIT_NUM : 0);
+                mNumSolicits + (mMulticastResolicitEnabled ? NUD_MCAST_RESOLICIT_NUM : 0);
         return (long) (numSolicits * mInterSolicitIntervalMs) + gracePeriodMs;
     }
 
