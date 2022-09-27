@@ -261,6 +261,8 @@ class IpReachabilityMonitorTest {
         }.`when`(dependencies).makeIpNeighborMonitor(any(), any(), any())
         doReturn(mIpReachabilityMonitorMetrics)
                 .`when`(dependencies).getIpReachabilityMonitorMetrics()
+        doReturn(true).`when`(dependencies).isFeatureEnabled(anyObject(),
+                eq(IP_REACHABILITY_MCAST_RESOLICIT_VERSION), anyBoolean())
 
         val monitorFuture = CompletableFuture<IpReachabilityMonitor>()
         // IpReachabilityMonitor needs to be started from the handler thread
@@ -348,9 +350,6 @@ class IpReachabilityMonitorTest {
         newLp: LinkProperties,
         neighbor: InetAddress
     ) {
-        doReturn(true).`when`(dependencies).isFeatureEnabled(anyObject(),
-                eq(IP_REACHABILITY_MCAST_RESOLICIT_VERSION), anyBoolean())
-
         reachabilityMonitor.updateLinkProperties(newLp)
 
         neighborMonitor.enqueuePacket(makeNewNeighMessage(neighbor, NUD_REACHABLE,
