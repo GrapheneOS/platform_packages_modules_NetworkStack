@@ -225,6 +225,13 @@ public class NetworkStackUtils {
     public static final String IPCLIENT_GRATUITOUS_NA_VERSION = "ipclient_gratuitous_na_version";
 
     /**
+     * Experiment flag to send multicast NS from the global IPv6 GUA to the solicited-node
+     * multicast address based on the default router's IPv6 link-local address, which helps
+     * flush the first-hop routers' neighbor cache entry for the global IPv6 GUA.
+     */
+    public static final String IPCLIENT_MULTICAST_NS_VERSION = "ipclient_multicast_ns_version";
+
+    /**
      * Experiment flag to enable sending Gratuitous APR and Gratuitous Neighbor Advertisement for
      * all assigned IPv4 and IPv6 GUAs after completing L2 roaming.
      */
