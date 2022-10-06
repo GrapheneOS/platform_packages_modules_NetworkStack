@@ -39,6 +39,7 @@ import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_CLEAR_ADD
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DISABLE_ACCEPT_RA_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GRATUITOUS_NA_VERSION;
+import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_MULTICAST_NS_VERSION;
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
 import android.annotation.SuppressLint;
@@ -117,6 +118,7 @@ import com.android.networkstack.arp.ArpPacket;
 import com.android.networkstack.metrics.IpProvisioningMetrics;
 import com.android.networkstack.metrics.NetworkQuirkMetrics;
 import com.android.networkstack.packets.NeighborAdvertisement;
+import com.android.networkstack.packets.NeighborSolicitation;
 import com.android.networkstack.util.NetworkStackUtils;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
@@ -569,6 +571,8 @@ public class IpClient extends StateMachine {
     private final InterfaceController mInterfaceCtrl;
     // Set of IPv6 addresses for which unsolicited gratuitous NA packets have been sent.
     private final Set<Inet6Address> mGratuitousNaTargetAddresses = new HashSet<>();
+    // Set of IPv6 addresses from which multicast NS packets have been sent.
+    private final Set<Inet6Address> mMulticastNsSourceAddresses = new HashSet<>();
 
     // Ignore nonzero RDNSS option lifetimes below this value. 0 = disabled.
     private final int mMinRdnssLifetimeSec;
@@ -758,15 +762,18 @@ public class IpClient extends StateMachine {
                     }
 
                     @Override
-                    public void onIpv6AddressRemoved(final Inet6Address targetIp) {
-                        // The update of Gratuitous NA target addresses set should be only accessed
-                        // from the handler thread of IpClient StateMachine, keeping the behaviour
+                    public void onIpv6AddressRemoved(final Inet6Address address) {
+                        // The update of Gratuitous NA target addresses set or unsolicited
+                        // multicast NS source addresses set should be only accessed from the
+                        // handler thread of IpClient StateMachine, keeping the behaviour
                         // consistent with relying on the non-blocking NetworkObserver callbacks,
                         // see {@link registerObserverForNonblockingCallback}. This can be done
                         // by either sending a message to StateMachine or posting a handler.
                         getHandler().post(() -> {
-                            if (!mGratuitousNaTargetAddresses.contains(targetIp)) return;
-                            updateGratuitousNaTargetSet(targetIp, false /* remove address */);
+                            mLog.log("Remove IPv6 GUA " + address
+                                    + " from both Gratuituous NA and Multicast NS sets");
+                            mGratuitousNaTargetAddresses.remove(address);
+                            mMulticastNsSourceAddresses.remove(address);
                         });
                     }
 
@@ -933,6 +940,11 @@ public class IpClient extends StateMachine {
 
     private boolean isGratuitousArpNaRoamingEnabled() {
         return mDependencies.isFeatureEnabled(mContext, IPCLIENT_GARP_NA_ROAMING_VERSION,
+                false /* defaultEnabled */);
+    }
+
+    private boolean isMulticastNsEnabled() {
+        return mDependencies.isFeatureEnabled(mContext, IPCLIENT_MULTICAST_NS_VERSION,
                 false /* defaultEnabled */);
     }
 
@@ -1655,6 +1667,22 @@ public class IpClient extends StateMachine {
         transmitPacket(packet, sockAddress, "Failed to send GARP");
     }
 
+    private void sendMulticastNs(final Inet6Address srcIp, final Inet6Address dstIp,
+            final Inet6Address targetIp) {
+        final MacAddress dstMac = NetworkStackUtils.ipv6MulticastToEthernetMulticast(dstIp);
+        final ByteBuffer packet = NeighborSolicitation.build(mInterfaceParams.macAddr, dstMac,
+                srcIp, dstIp, targetIp);
+        final SocketAddress sockAddress =
+                SocketUtilsShimImpl.newInstance().makePacketSocketAddress(ETH_P_IPV6,
+                        mInterfaceParams.index, dstMac.toByteArray());
+
+        if (DBG) {
+            mLog.log("send multicast NS from " + srcIp.getHostAddress() + " to "
+                    + dstIp.getHostAddress() + " , target IP: " + targetIp.getHostAddress());
+        }
+        transmitPacket(packet, sockAddress, "Failed to send multicast Neighbor Solicitation");
+    }
+
     @Nullable
     private static Inet6Address getIpv6LinkLocalAddress(final LinkProperties newLp) {
         for (LinkAddress la : newLp.getLinkAddresses()) {
@@ -1663,16 +1691,6 @@ public class IpClient extends StateMachine {
             if (ip.isLinkLocalAddress()) return ip;
         }
         return null;
-    }
-
-    private void updateGratuitousNaTargetSet(@NonNull final Inet6Address targetIp, boolean add) {
-        if (add) {
-            mGratuitousNaTargetAddresses.add(targetIp);
-        } else {
-            mGratuitousNaTargetAddresses.remove(targetIp);
-        }
-        mLog.log((add ? "Add" : "Remove") + " global IPv6 address " + targetIp
-                + (add ? " to" : " from") + " the set of gratuitous NA target address.");
     }
 
     private void maybeSendGratuitousNAs(final LinkProperties lp, boolean afterRoaming) {
@@ -1695,7 +1713,9 @@ public class IpClient extends StateMachine {
                         + targetIp.getHostAddress() + (afterRoaming ? " after roaming" : ""));
             }
             sendGratuitousNA(srcIp, targetIp);
-            if (!afterRoaming) updateGratuitousNaTargetSet(targetIp, true /* add address */);
+            if (!afterRoaming) {
+                mGratuitousNaTargetAddresses.add(targetIp);
+            }
         }
     }
 
@@ -1712,6 +1732,39 @@ public class IpClient extends StateMachine {
         }
     }
 
+    @Nullable
+    private static Inet6Address getIPv6DefaultGateway(final LinkProperties lp) {
+        for (RouteInfo r : lp.getRoutes()) {
+            // TODO: call {@link RouteInfo#isIPv6Default} directly after core networking modules
+            // are consolidated.
+            if (r.getType() == RTN_UNICAST && r.getDestination().getPrefixLength() == 0
+                    && r.getDestination().getAddress() instanceof Inet6Address) {
+                // Check if it's IPv6 default route, if yes, return the gateway address
+                // (i.e. default router's IPv6 link-local address)
+                return (Inet6Address) r.getGateway();
+            }
+        }
+        return null;
+    }
+
+    private void maybeSendMulticastNSes(final LinkProperties lp) {
+        if (!(lp.hasGlobalIpv6Address() && lp.hasIpv6DefaultRoute())) return;
+
+        // Get the default router's IPv6 link-local address.
+        final Inet6Address targetIp = getIPv6DefaultGateway(lp);
+        if (targetIp == null) return;
+        final Inet6Address dstIp = NetworkStackUtils.ipv6AddressToSolicitedNodeMulticast(targetIp);
+        if (dstIp == null) return;
+
+        for (LinkAddress la : lp.getLinkAddresses()) {
+            if (!(la.isIpv6() && la.isGlobalPreferred())) continue;
+            final Inet6Address srcIp = (Inet6Address) la.getAddress();
+            if (mMulticastNsSourceAddresses.contains(srcIp)) continue;
+            sendMulticastNs(srcIp, dstIp, targetIp);
+            mMulticastNsSourceAddresses.add(srcIp);
+        }
+    }
+
     // Returns false if we have lost provisioning, true otherwise.
     private boolean handleLinkPropertiesUpdate(boolean sendCallbacks) {
         final LinkProperties newLp = assembleLinkProperties();
@@ -1724,6 +1777,17 @@ public class IpClient extends StateMachine {
         // first-hop routers that the new GUA host is goning to use.
         if (isGratuitousNaEnabled()) {
             maybeSendGratuitousNAs(newLp, false /* isGratuitousNaAfterRoaming */);
+        }
+
+        // Sending multicast NS from each new assigned IPv6 GUAs to the solicited-node multicast
+        // address based on the default router's IPv6 link-local address should trigger default
+        // router response with NA, and update the neighbor cache entry immediately, that would
+        // help speed up the connection to an IPv6-only network.
+        //
+        // TODO: stop sending this multicast NS after deployment of RFC9131 in the field, leverage
+        // the gratuitous NA to update the first-hop router's neighbor cache entry.
+        if (isMulticastNsEnabled()) {
+            maybeSendMulticastNSes(newLp);
         }
 
         // Either success IPv4 or IPv6 provisioning triggers new LinkProperties update,
@@ -2031,6 +2095,7 @@ public class IpClient extends StateMachine {
             stopAllIP();
             mHasDisabledIpv6OrAcceptRaOnProvLoss = false;
             mGratuitousNaTargetAddresses.clear();
+            mMulticastNsSourceAddresses.clear();
 
             resetLinkProperties();
             if (mStartTimeMillis > 0) {

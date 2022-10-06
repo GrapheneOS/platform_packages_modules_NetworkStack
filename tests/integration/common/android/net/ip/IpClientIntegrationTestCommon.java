@@ -3499,6 +3499,25 @@ public abstract class IpClientIntegrationTestCommon {
         assertTrue(target.isGlobalPreferred());
     }
 
+    private void assertMulticastNsFromIpv6Gua(final NeighborSolicitation ns) throws Exception {
+        final Inet6Address solicitedNodeMulticast =
+                NetworkStackUtils.ipv6AddressToSolicitedNodeMulticast(ROUTER_LINK_LOCAL);
+        final MacAddress etherMulticast =
+                NetworkStackUtils.ipv6MulticastToEthernetMulticast(solicitedNodeMulticast);
+
+        assertEquals(etherMulticast, ns.ethHdr.dstMac);
+        assertEquals(ETH_P_IPV6, ns.ethHdr.etherType);
+        assertEquals(IPPROTO_ICMPV6, ns.ipv6Hdr.nextHeader);
+        assertEquals(0xff, ns.ipv6Hdr.hopLimit);
+
+        final LinkAddress srcIp = new LinkAddress(ns.ipv6Hdr.srcIp.getHostAddress() + "/64");
+        assertTrue(srcIp.isGlobalPreferred());
+        assertEquals(solicitedNodeMulticast, ns.ipv6Hdr.dstIp);
+        assertEquals(ICMPV6_NEIGHBOR_SOLICITATION, ns.icmpv6Hdr.type);
+        assertEquals(0, ns.icmpv6Hdr.code);
+        assertEquals(ROUTER_LINK_LOCAL, ns.nsHdr.target);
+    }
+
     @Test
     public void testGratuitousNaForNewGlobalUnicastAddresses() throws Exception {
         final ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
@@ -4025,5 +4044,32 @@ public abstract class IpClientIntegrationTestCommon {
                         && !x.hasIpv6DefaultRoute()
                         && x.getDnsServers().size() == 0));
         awaitIpClientShutdown();
+    }
+
+    @Test
+    public void testMulticastNsFromIPv6Gua() throws Exception {
+        final ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIpReachabilityMonitor()
+                .withoutIPv4()
+                .build();
+
+        setFeatureEnabled(NetworkStackUtils.IPCLIENT_MULTICAST_NS_VERSION,
+                true /* isUnsolicitedNsEnabled */);
+        assertTrue(isFeatureEnabled(NetworkStackUtils.IPCLIENT_MULTICAST_NS_VERSION, false));
+        startIpClientProvisioning(config);
+
+        doIpv6OnlyProvisioning();
+
+        final List<NeighborSolicitation> nsList = new ArrayList<>();
+        NeighborSolicitation packet;
+        while ((packet = getNextNeighborSolicitation()) != null) {
+            // Filter out the NSes used for duplicate address detetction, whose target address
+            // is the global IPv6 address inside these NSes.
+            if (packet.nsHdr.target.isLinkLocalAddress()) {
+                assertMulticastNsFromIpv6Gua(packet);
+                nsList.add(packet);
+            }
+        }
+        assertEquals(2, nsList.size()); // from privacy address and stable privacy address
     }
 }
