@@ -1702,7 +1702,7 @@ public class IpClient extends StateMachine {
         // TODO: add experiment with sending only one gratuitous NA packet instead of one
         // packet per address.
         for (LinkAddress la : lp.getLinkAddresses()) {
-            if (!la.isIpv6() || !la.isGlobalPreferred()) continue;
+            if (!NetworkStackUtils.isIPv6GUA(la)) continue;
             final Inet6Address targetIp = (Inet6Address) la.getAddress();
             // Already sent gratuitous NA with this target global IPv6 address. But for
             // the L2 roaming case, device should always (re)transmit Gratuitous NA for
@@ -1757,7 +1757,7 @@ public class IpClient extends StateMachine {
         if (dstIp == null) return;
 
         for (LinkAddress la : lp.getLinkAddresses()) {
-            if (!(la.isIpv6() && la.isGlobalPreferred())) continue;
+            if (!NetworkStackUtils.isIPv6GUA(la)) continue;
             final Inet6Address srcIp = (Inet6Address) la.getAddress();
             if (mMulticastNsSourceAddresses.contains(srcIp)) continue;
             sendMulticastNs(srcIp, dstIp, targetIp);
