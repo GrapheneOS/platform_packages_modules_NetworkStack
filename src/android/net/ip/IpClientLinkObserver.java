@@ -177,7 +177,7 @@ public class IpClientLinkObserver implements NetworkObserver {
         mContext = context;
         mInterfaceName = iface;
         mClatInterfaceName = CLAT_PREFIX + iface;
-        mTag = "NetlinkTracker/" + mInterfaceName;
+        mTag = "IpClientLinkObserver/" + mInterfaceName;
         mCallback = callback;
         mLinkProperties = new LinkProperties();
         mLinkProperties.setInterfaceName(mInterfaceName);
