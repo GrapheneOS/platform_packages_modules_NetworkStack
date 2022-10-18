@@ -17,6 +17,7 @@
 package com.android.networkstack.util;
 
 import android.content.Context;
+import android.net.LinkAddress;
 import android.net.MacAddress;
 import android.net.util.SocketUtils;
 import android.system.ErrnoException;
@@ -315,6 +316,13 @@ public class NetworkStackUtils {
             Log.e(TAG, "Invalid host IP address " + addr.getHostAddress(), e);
             return null;
         }
+    }
+
+    /**
+     * Check whether a link address is IPv6 global unicast address.
+     */
+    public static boolean isIPv6GUA(@NonNull final LinkAddress address) {
+        return address.isIpv6() && address.isGlobalPreferred();
     }
 
     /**
