@@ -31,9 +31,10 @@ import kotlin.test.fail
  */
 class TestNetworkStackServiceClient private constructor() : NetworkStackClientBase() {
     companion object {
+        private val testNetworkStackServiceAction = "android.net.INetworkStackConnector.Test"
         private val context by lazy { InstrumentationRegistry.getInstrumentation().context }
         private val networkStackVersion by lazy {
-            val component = getNetworkStackComponent(INetworkStackConnector::class.java.name)
+            val component = getNetworkStackComponent(testNetworkStackServiceAction)
             val info = context.packageManager.getPackageInfo(component.packageName, 0 /* flags */)
             info.longVersionCode
         }
@@ -61,16 +62,22 @@ class TestNetworkStackServiceClient private constructor() : NetworkStackClientBa
         }
     }
 
+    // Inner class defined in subclass cannot access the protected methods of parent class directly,
+    // so have a method outside of the inner class: serviceConnection and call this method instead.
+    private fun onNetworkStackConnected(service: IBinder) {
+        onNetworkStackConnected(INetworkStackConnector.Stub.asInterface(service))
+    }
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
-            onNetworkStackConnected(INetworkStackConnector.Stub.asInterface(service))
+            onNetworkStackConnected(service)
         }
 
         override fun onServiceDisconnected(name: ComponentName) = Unit
     }
 
     private fun init() {
-        val bindIntent = Intent(INetworkStackConnector::class.java.name + ".Test")
+        val bindIntent = Intent(testNetworkStackServiceAction)
         bindIntent.component = getNetworkStackComponent(bindIntent.action)
         context.bindService(bindIntent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
