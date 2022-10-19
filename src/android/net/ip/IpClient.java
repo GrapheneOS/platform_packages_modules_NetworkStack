@@ -458,7 +458,7 @@ public class IpClient extends StateMachine {
     private static final int CMD_START                            = 3;
     private static final int CMD_CONFIRM                          = 4;
     private static final int EVENT_PRE_DHCP_ACTION_COMPLETE       = 5;
-    // Triggered by NetlinkTracker to communicate netlink events.
+    // Triggered by IpClientLinkObserver to communicate netlink events.
     private static final int EVENT_NETLINK_LINKPROPERTIES_CHANGED = 6;
     private static final int CMD_UPDATE_TCP_BUFFER_SIZES          = 7;
     private static final int CMD_UPDATE_HTTP_PROXY                = 8;
@@ -1702,7 +1702,7 @@ public class IpClient extends StateMachine {
         // TODO: add experiment with sending only one gratuitous NA packet instead of one
         // packet per address.
         for (LinkAddress la : lp.getLinkAddresses()) {
-            if (!la.isIpv6() || !la.isGlobalPreferred()) continue;
+            if (!NetworkStackUtils.isIPv6GUA(la)) continue;
             final Inet6Address targetIp = (Inet6Address) la.getAddress();
             // Already sent gratuitous NA with this target global IPv6 address. But for
             // the L2 roaming case, device should always (re)transmit Gratuitous NA for
@@ -1757,7 +1757,7 @@ public class IpClient extends StateMachine {
         if (dstIp == null) return;
 
         for (LinkAddress la : lp.getLinkAddresses()) {
-            if (!(la.isIpv6() && la.isGlobalPreferred())) continue;
+            if (!NetworkStackUtils.isIPv6GUA(la)) continue;
             final Inet6Address srcIp = (Inet6Address) la.getAddress();
             if (mMulticastNsSourceAddresses.contains(srcIp)) continue;
             sendMulticastNs(srcIp, dstIp, targetIp);

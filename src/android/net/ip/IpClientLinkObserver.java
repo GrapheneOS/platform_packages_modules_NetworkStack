@@ -60,6 +60,7 @@ import com.android.net.module.util.netlink.StructNdOptPref64;
 import com.android.net.module.util.netlink.StructNdOptRdnss;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
+import com.android.networkstack.util.NetworkStackUtils;
 import com.android.server.NetworkObserver;
 
 import java.net.Inet6Address;
@@ -120,7 +121,7 @@ public class IpClientLinkObserver implements NetworkObserver {
         void update(boolean linkState);
 
         /**
-         * Called when an IPv6 address was removed from the interface.
+         * Called when an IPv6 global unicast address was removed from the interface.
          *
          * @param addr The removed IPv6 address.
          */
@@ -177,7 +178,7 @@ public class IpClientLinkObserver implements NetworkObserver {
         mContext = context;
         mInterfaceName = iface;
         mClatInterfaceName = CLAT_PREFIX + iface;
-        mTag = "NetlinkTracker/" + mInterfaceName;
+        mTag = "IpClientLinkObserver/" + mInterfaceName;
         mCallback = callback;
         mLinkProperties = new LinkProperties();
         mLinkProperties.setInterfaceName(mInterfaceName);
@@ -324,7 +325,7 @@ public class IpClientLinkObserver implements NetworkObserver {
         }
         if (changed) {
             mCallback.update(linkState);
-            if (!add && address.isIpv6()) {
+            if (!add && NetworkStackUtils.isIPv6GUA(address)) {
                 final Inet6Address addr = (Inet6Address) address.getAddress();
                 mCallback.onIpv6AddressRemoved(addr);
             }
