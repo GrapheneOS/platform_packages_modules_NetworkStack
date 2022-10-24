@@ -1964,7 +1964,7 @@ public class NetworkMonitorTest {
                 NETWORK_VALIDATION_RESULT_VALID | NETWORK_VALIDATION_RESULT_SKIPPED);
     }
 
-    private NetworkCapabilities getVcnUnderlyingCarrierWifiCaps() {
+    private static NetworkCapabilities makeVcnUnderlyingCarrierWifiCaps() {
         // Must be called from within the test because NOT_VCN_MANAGED is an invalid capability
         // value up to Android R. Thus, this must be guarded by an SDK check in tests that use this.
         return new NetworkCapabilities.Builder()
@@ -1983,7 +1983,7 @@ public class NetworkMonitorTest {
         setStatus(mHttpConnection, 204);
 
         final NetworkMonitor nm = runNetworkTest(TEST_AGENT_CONFIG,
-                TEST_LINK_PROPERTIES, getVcnUnderlyingCarrierWifiCaps(),
+                TEST_LINK_PROPERTIES, makeVcnUnderlyingCarrierWifiCaps(),
                 NETWORK_VALIDATION_RESULT_VALID,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS,
                 null /* redirectUrl */);
@@ -1999,10 +1999,60 @@ public class NetworkMonitorTest {
         setStatus(mFallbackConnection, 404);
 
         final NetworkMonitor nm = runNetworkTest(TEST_AGENT_CONFIG,
-                TEST_LINK_PROPERTIES, getVcnUnderlyingCarrierWifiCaps(),
+                TEST_LINK_PROPERTIES, makeVcnUnderlyingCarrierWifiCaps(),
                 VALIDATION_RESULT_INVALID, 0 /* probesSucceeded */, null /* redirectUrl */);
         assertEquals(VALIDATION_RESULT_INVALID,
                 nm.getEvaluationState().getEvaluationResult());
+    }
+
+    private static NetworkCapabilities makeDunNetworkCaps() {
+        return new NetworkCapabilities.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_DUN)
+                .build();
+    }
+
+    @Test @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
+    public void testDunNetwork() throws Exception {
+        setStatus(mHttpsConnection, 204);
+        setStatus(mHttpConnection, 204);
+
+        runNetworkTest(TEST_AGENT_CONFIG,
+                TEST_LINK_PROPERTIES, makeDunNetworkCaps(),
+                NETWORK_VALIDATION_RESULT_VALID,
+                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS,
+                null /* redirectUrl */);
+    }
+
+    @Test @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
+    public void testDunNetwork_BadNetwork() throws Exception {
+        setStatus(mHttpsConnection, 500);
+        setStatus(mHttpConnection, 500);
+
+        runNetworkTest(TEST_AGENT_CONFIG,
+                TEST_LINK_PROPERTIES, makeDunNetworkCaps(),
+                VALIDATION_RESULT_INVALID, 0 /* probesSucceeded */, null /* redirectUrl */);
+    }
+
+    @Test @IgnoreAfter(Build.VERSION_CODES.TIRAMISU)
+    public void testDunNetwork_UpToT_Disabled() throws Exception {
+        doValidationSkippedTest(makeDunNetworkCaps(),
+                NETWORK_VALIDATION_RESULT_VALID | NETWORK_VALIDATION_RESULT_SKIPPED);
+    }
+
+    @Test @IgnoreAfter(Build.VERSION_CODES.TIRAMISU)
+    public void testDunNetwork_UpToT_Enabled() throws Exception {
+        doReturn(true).when(mResources).getBoolean(R.bool.config_validate_dun_networks);
+
+        setStatus(mHttpsConnection, 204);
+        setStatus(mHttpConnection, 204);
+
+        runNetworkTest(TEST_AGENT_CONFIG,
+                TEST_LINK_PROPERTIES, makeDunNetworkCaps(),
+                NETWORK_VALIDATION_RESULT_VALID,
+                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS,
+                null /* redirectUrl */);
     }
 
     public void setupAndLaunchCaptivePortalApp(final NetworkMonitor nm) throws Exception {
