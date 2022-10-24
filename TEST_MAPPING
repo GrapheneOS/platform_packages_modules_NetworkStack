@@ -8,6 +8,9 @@
     },
     {
       "name": "NetworkStackIntegrationTests"
+    },
+    {
+      "name": "NetworkStackRootTests"
     }
   ],
   "mainline-presubmit": [
