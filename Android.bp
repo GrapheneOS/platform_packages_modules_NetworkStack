@@ -74,11 +74,18 @@ java_defaults {
     ]
 }
 
+// Common defaults for NetworkStack integration tests, root tests and coverage tests
+// to keep tests always running against the same target sdk version with NetworkStack.
 java_defaults {
-    name: "NetworkStackReleaseApiLevel",
-    sdk_version: module_33_version,
+    name: "NetworkStackReleaseTargetSdk",
     min_sdk_version: "29",
     target_sdk_version: "33",
+}
+
+java_defaults {
+    name: "NetworkStackReleaseApiLevel",
+    defaults:["NetworkStackReleaseTargetSdk"],
+    sdk_version: module_33_version,
     libs: [
         "framework-connectivity",
         "framework-connectivity-t",
