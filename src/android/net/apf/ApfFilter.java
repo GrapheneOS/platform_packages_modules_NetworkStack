@@ -1952,6 +1952,11 @@ public class ApfFilter {
                 mLastInstalledProgram.length, currentTimeSeconds() - mLastTimeInstalledProgram,
                 mLastInstalledProgramMinLifetime));
 
+        pw.print("Denylisted Ethertypes:");
+        for (int p : mEthTypeBlackList) {
+            pw.print(String.format(" %04x", p));
+        }
+        pw.println();
         pw.println("RA filters:");
         pw.increaseIndent();
         for (Ra ra: mRas) {
