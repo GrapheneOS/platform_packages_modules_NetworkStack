@@ -122,4 +122,7 @@
         <item>0x88E1</item>
         <item>0x88E3</item>
     </integer-array>
+
+    <!-- Whether to validate DUN networks. This is unused and always true on U+. -->
+    <bool name="config_validate_dun_networks">false</bool>
 </resources>
