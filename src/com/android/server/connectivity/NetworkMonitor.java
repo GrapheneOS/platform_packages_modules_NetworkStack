@@ -1007,7 +1007,7 @@ public class NetworkMonitor extends StateMachine {
                             mUserDoesNotWant = true;
                             mEvaluationState.reportEvaluationResult(
                                     NETWORK_VALIDATION_RESULT_INVALID, null);
-                            // TODO: Should teardown network.
+
                             mUidResponsibleForReeval = 0;
                             transitionTo(mEvaluatingState);
                             break;
