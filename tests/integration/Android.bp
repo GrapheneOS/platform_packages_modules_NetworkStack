@@ -123,6 +123,7 @@ android_test {
     ],
     platform_apis: true,
     test_suites: ["general-tests", "mts-networking"],
+    compile_multilib: "both",
     manifest: "AndroidManifest_root.xml",
     jarjar_rules: ":NetworkStackJarJarRules",
 }
