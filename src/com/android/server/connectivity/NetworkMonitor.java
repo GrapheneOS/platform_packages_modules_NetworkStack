@@ -57,7 +57,6 @@ import static android.net.util.DataStallUtils.DEFAULT_DNS_LOG_SIZE;
 import static android.net.util.DataStallUtils.DEFAULT_TCP_POLLING_INTERVAL_MS;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
-import static com.android.modules.utils.build.SdkLevel.isAtLeastU;
 import static com.android.net.module.util.CollectionUtils.isEmpty;
 import static com.android.net.module.util.ConnectivityUtils.isIPv6ULA;
 import static com.android.net.module.util.DeviceConfigUtils.getResBooleanConfig;
@@ -786,9 +785,7 @@ public class NetworkMonitor extends StateMachine {
     }
 
     private boolean isValidationRequired() {
-        final boolean dunValidationRequired = isAtLeastU()
-                || mContext.getResources().getBoolean(R.bool.config_validate_dun_networks);
-        return NetworkMonitorUtils.isValidationRequired(dunValidationRequired,
+        return NetworkMonitorUtils.isValidationRequired(
                 mNetworkAgentConfig.isVpnValidationRequired(), mNetworkCapabilities);
     }
 
