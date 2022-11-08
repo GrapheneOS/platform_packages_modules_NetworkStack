@@ -259,13 +259,6 @@ public class NetworkStackUtils {
     public static final String IP_REACHABILITY_MCAST_RESOLICIT_VERSION =
             "ip_reachability_mcast_resolicit_version";
 
-    /**
-     * Experiment flag to wait for IP addresses cleared completely before transition to
-     * IpClient#StoppedState from IpClient#StoppingState.
-     */
-    public static final String IPCLIENT_CLEAR_ADDRESSES_ON_STOP_VERSION =
-            "ipclient_clear_addresses_on_stop_version";
-
     static {
         System.loadLibrary("networkstackutilsjni");
     }
