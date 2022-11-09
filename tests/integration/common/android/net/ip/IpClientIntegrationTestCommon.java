@@ -122,11 +122,11 @@ import android.net.MacAddress;
 import android.net.NetworkAgentConfig;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
+import android.net.NetworkSpecifier;
 import android.net.NetworkStackIpMemoryStore;
 import android.net.RouteInfo;
 import android.net.TestNetworkInterface;
 import android.net.TestNetworkManager;
-import android.net.TestNetworkSpecifier;
 import android.net.Uri;
 import android.net.dhcp.DhcpClient;
 import android.net.dhcp.DhcpDeclinePacket;
@@ -189,6 +189,7 @@ import com.android.networkstack.util.NetworkStackUtils;
 import com.android.server.NetworkObserver;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
+import com.android.testutils.CompatUtil;
 import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
@@ -1556,7 +1557,8 @@ public abstract class IpClientIntegrationTestCommon {
     private void createTestNetworkAgentAndRegister(final LinkProperties lp) throws Exception {
         final Context context = InstrumentationRegistry.getInstrumentation().getContext();
         final ConnectivityManager cm = context.getSystemService(ConnectivityManager.class);
-        final TestNetworkSpecifier testNetworkSpecifier = new TestNetworkSpecifier(mIfaceName);
+        final NetworkSpecifier testNetworkSpecifier =
+                CompatUtil.makeTestNetworkSpecifier(mIfaceName);
         final TestableNetworkCallback cb = new TestableNetworkCallback();
 
         // Requesting a network make sure the NetworkAgent is alive during the whole life cycle of
