@@ -23,7 +23,6 @@ import static android.system.OsConstants.AF_INET;
 
 import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentation;
 
-import static com.android.dx.mockito.inline.extended.ExtendedMockito.doReturn;
 import static com.android.net.module.util.netlink.NetlinkConstants.SOCKDIAG_MSG_HEADER_SIZE;
 
 import static junit.framework.Assert.assertEquals;
@@ -35,6 +34,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -76,28 +76,11 @@ public class TcpSocketTrackerTest {
     private static final int TEST_BUFFER_SIZE = 1024;
     private static final String DIAG_MSG_HEX =
             // struct nlmsghdr.
-            "58000000" +      // length = 88
+            "10000000" +     // length = 16
             "1400" +         // type = SOCK_DIAG_BY_FAMILY
             "0301" +         // flags = NLM_F_REQUEST | NLM_F_DUMP
             "00000000" +     // seqno
-            "00000000" +     // pid (0 == kernel)
-            // struct inet_diag_req_v2
-            "02" +           // family = AF_INET
-            "06" +           // state
-            "00" +           // timer
-            "00" +           // retrans
-            // inet_diag_sockid
-            "DEA5" +         // idiag_sport = 42462
-            "71B9" +         // idiag_dport = 47473
-            "0a006402000000000000000000000000" + // idiag_src = 10.0.100.2
-            "08080808000000000000000000000000" + // idiag_dst = 8.8.8.8
-            "00000000" +    // idiag_if
-            "34ED000076270000" + // idiag_cookie = 43387759684916
-            "00000000" +    // idiag_expires
-            "00000000" +    // idiag_rqueue
-            "00000000" +    // idiag_wqueue
-            "00000000" +    // idiag_uid
-            "00000000";    // idiag_inode
+            "00000000";      // pid (0 == kernel)
     private static final byte[] SOCK_DIAG_MSG_BYTES =
             HexEncoding.decode(DIAG_MSG_HEX.toCharArray(), false);
     // Hexadecimal representation of a SOCK_DIAG response with tcp info.
@@ -300,8 +283,9 @@ public class TcpSocketTrackerTest {
         assertEquals(-1, tst.getLatestPacketFailPercentage());
         assertEquals(0, tst.getSentSinceLastRecv());
 
-        final ByteBuffer tcpBuffer = getByteBuffer(TEST_RESPONSE_BYTES);
-        when(mDependencies.recvMessage(any())).thenReturn(tcpBuffer);
+        final ByteBuffer tcpBufferV6 = getByteBuffer(TEST_RESPONSE_BYTES);
+        final ByteBuffer tcpBufferV4 = getByteBuffer(TEST_RESPONSE_BYTES);
+        doReturn(tcpBufferV6, tcpBufferV4).when(mDependencies).recvMessage(any());
         assertTrue(tst.pollSocketsInfo());
 
         assertEquals(10, tst.getSentSinceLastRecv());
@@ -377,15 +361,16 @@ public class TcpSocketTrackerTest {
         // This test requires shims that provide API 30 access
         assumeTrue(ConstantsShim.VERSION >= 30);
         final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
-        ByteBuffer tcpBuffer = getByteBuffer(TEST_RESPONSE_BYTES);
-
-        when(mDependencies.recvMessage(any())).thenReturn(tcpBuffer);
+        final ByteBuffer tcpBufferV6 = getByteBuffer(TEST_RESPONSE_BYTES);
+        final ByteBuffer tcpBufferV4 = getByteBuffer(TEST_RESPONSE_BYTES);
+        doReturn(tcpBufferV6, tcpBufferV4).when(mDependencies).recvMessage(any());
         assertTrue(tst.pollSocketsInfo());
         assertEquals(10, tst.getSentSinceLastRecv());
         assertEquals(50, tst.getLatestPacketFailPercentage());
 
-        tcpBuffer = getByteBuffer(BAD_SOCK_DIAG_MSG_BYTES);
-        when(mDependencies.recvMessage(any())).thenReturn(tcpBuffer);
+        final ByteBuffer badTcpBufferV6 = getByteBuffer(BAD_SOCK_DIAG_MSG_BYTES);
+        final ByteBuffer badTcpBufferV4 = getByteBuffer(BAD_SOCK_DIAG_MSG_BYTES);
+        doReturn(badTcpBufferV6, badTcpBufferV4).when(mDependencies).recvMessage(any());
         assertTrue(tst.pollSocketsInfo());
         // Expect no additional packets, so still 10.
         assertEquals(10, tst.getSentSinceLastRecv());
@@ -398,8 +383,9 @@ public class TcpSocketTrackerTest {
         when(mNetd.getFwmarkForNetwork(eq(TEST_NETID2)))
                 .thenReturn(makeMarkMaskParcel(NETID_MASK, TEST_NETID2_FWMARK));
         final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mOtherNetwork);
-        final ByteBuffer tcpBuffer = getByteBuffer(TEST_RESPONSE_BYTES);
-        when(mDependencies.recvMessage(any())).thenReturn(tcpBuffer);
+        final ByteBuffer tcpBufferV6 = getByteBuffer(TEST_RESPONSE_BYTES);
+        final ByteBuffer tcpBufferV4 = getByteBuffer(TEST_RESPONSE_BYTES);
+        doReturn(tcpBufferV6, tcpBufferV4).when(mDependencies).recvMessage(any());
         assertTrue(tst.pollSocketsInfo());
 
         assertEquals(0, tst.getSentSinceLastRecv());
