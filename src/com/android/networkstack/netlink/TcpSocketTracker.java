@@ -89,8 +89,8 @@ public class TcpSocketTracker {
     private static final String TAG = TcpSocketTracker.class.getSimpleName();
     private static final boolean DBG = Log.isLoggable(TAG, Log.DEBUG);
     private static final int[] ADDRESS_FAMILIES = new int[] {AF_INET6, AF_INET};
-    // Enough for parsing v1 tcp_info for more than 200 sockets per time.
-    private static final int DEFAULT_RECV_BUFSIZE = 60_000;
+    // This is for individual message. The individual messages should not be excessively large.
+    private static final int DEFAULT_RECV_BUFSIZE = 8192;
     // Default I/O timeout time in ms of the socket request.
     private static final long IO_TIMEOUT = 3_000L;
     /** Cookie offset of an InetMagMessage header. */
