@@ -89,14 +89,15 @@ public class TcpSocketTracker {
     private static final String TAG = TcpSocketTracker.class.getSimpleName();
     private static final boolean DBG = Log.isLoggable(TAG, Log.DEBUG);
     private static final int[] ADDRESS_FAMILIES = new int[] {AF_INET6, AF_INET};
-    // Enough for parsing v1 tcp_info for more than 200 sockets per time.
-    private static final int DEFAULT_RECV_BUFSIZE = 60_000;
+    // This is for individual message. The individual messages should not be excessively large.
+    private static final int DEFAULT_RECV_BUFSIZE = 8192;
     // Default I/O timeout time in ms of the socket request.
     private static final long IO_TIMEOUT = 3_000L;
     /** Cookie offset of an InetMagMessage header. */
     private static final int IDIAG_COOKIE_OFFSET = 44;
     private static final int UNKNOWN_MARK = 0xffffffff;
     private static final int NULL_MASK = 0;
+    private static final int END_OF_PARSING = -1;
     /**
      *  Gather the socket info.
      *
@@ -195,6 +196,7 @@ public class TcpSocketTracker {
     public boolean pollSocketsInfo() {
         if (!mDependencies.isTcpInfoParsingSupported()) return false;
         FileDescriptor fd = null;
+
         try {
             final long time = SystemClock.elapsedRealtime();
             fd = mDependencies.connectToKernel();
@@ -202,61 +204,12 @@ public class TcpSocketTracker {
             final TcpStat stat = new TcpStat();
             for (final int family : ADDRESS_FAMILIES) {
                 mDependencies.sendPollingRequest(fd, mSockDiagMsg.get(family));
-                // Messages are composed with the following format. Stop parsing when receiving
-                // message with nlmsg_type NLMSG_DONE.
-                // +------------------+---------------+--------------+--------+
-                // | Netlink Header   | Family Header | Attributes   | rtattr |
-                // | struct nlmsghdr  | struct rtmsg  | struct rtattr|  data  |
-                // +------------------+---------------+--------------+--------+
-                //               :           :               :
-                // +------------------+---------------+--------------+--------+
-                // | Netlink Header   | Family Header | Attributes   | rtattr |
-                // | struct nlmsghdr  | struct rtmsg  | struct rtattr|  data  |
-                // +------------------+---------------+--------------+--------+
-                final ByteBuffer bytes = mDependencies.recvMessage(fd);
-                try {
-                    while (enoughBytesRemainForValidNlMsg(bytes)) {
-                        final StructNlMsgHdr nlmsghdr = StructNlMsgHdr.parse(bytes);
-                        if (nlmsghdr == null) {
-                            Log.e(TAG, "Badly formatted data.");
-                            break;
-                        }
-                        final int nlmsgLen = nlmsghdr.nlmsg_len;
-                        log("pollSocketsInfo: nlmsghdr=" + nlmsghdr + ", limit=" + bytes.limit());
-                        // End of the message. Stop parsing.
-                        if (nlmsghdr.nlmsg_type == NLMSG_DONE) break;
 
-                        if (nlmsghdr.nlmsg_type != SOCK_DIAG_BY_FAMILY) {
-                            Log.e(TAG, "Expect to get family " + family
-                                    + " SOCK_DIAG_BY_FAMILY message but get "
-                                    + nlmsghdr.nlmsg_type);
-                            break;
-                        }
-
-                        if (isValidInetDiagMsgSize(nlmsgLen)) {
-                            // Get the socket cookie value. Composed by two Integers value.
-                            // Corresponds to inet_diag_sockid in
-                            // &lt;linux_src&gt;/include/uapi/linux/inet_diag.h
-                            bytes.position(bytes.position() + IDIAG_COOKIE_OFFSET);
-                            // It's stored in native with 2 int. Parse it as long for convenience.
-                            final long cookie = bytes.getLong();
-                            // Skip the rest part of StructInetDiagMsg.
-                            bytes.position(bytes.position()
-                                    + StructInetDiagMsg.STRUCT_SIZE - IDIAG_COOKIE_OFFSET
-                                    - Long.BYTES);
-                            final SocketInfo info = parseSockInfo(bytes, family, nlmsgLen, time);
-                            // Update TcpStats based on previous and current socket info.
-                            stat.accumulate(
-                                    calculateLatestPacketsStat(info, mSocketInfos.get(cookie)));
-                            mSocketInfos.put(cookie, info);
-                        }
-                    }
-                } catch (IllegalArgumentException | BufferUnderflowException e) {
-                    Log.wtf(TAG, "Unexpected socket info parsing, family " + family
-                            + " buffer:" + bytes + " "
-                            + Base64.getEncoder().encodeToString(bytes.array()), e);
+                while (parseMessage(mDependencies.recvMessage(fd), family, stat, time)) {
+                    log("Pending info exist. Attempt to read more");
                 }
             }
+
             // Calculate mLatestReceiveCount, mSentSinceLastRecv and mLatestPacketFailPercentage.
             mSentSinceLastRecv = (stat.receivedCount == 0)
                     ? (mSentSinceLastRecv + stat.sentCount) : 0;
@@ -274,6 +227,85 @@ public class TcpSocketTracker {
         }
 
         return false;
+    }
+
+    // Return true if there are more pending messages to read
+    private boolean parseMessage(ByteBuffer bytes, int family, TcpStat stat, long time) {
+        if (!enoughBytesRemainForValidNlMsg(bytes)) {
+            // This is unlikely to happen in real cases. Check this first for testing.
+            Log.e(TAG, "Size is less than header size. Ignored.");
+            return false;
+        }
+
+        // Messages are composed with the following format. Stop parsing when receiving
+        // message with nlmsg_type NLMSG_DONE.
+        // +------------------+---------------+--------------+--------+
+        // | Netlink Header   | Family Header | Attributes   | rtattr |
+        // | struct nlmsghdr  | struct rtmsg  | struct rtattr|  data  |
+        // +------------------+---------------+--------------+--------+
+        //               :           :               :
+        // +------------------+---------------+--------------+--------+
+        // | Netlink Header   | Family Header | Attributes   | rtattr |
+        // | struct nlmsghdr  | struct rtmsg  | struct rtattr|  data  |
+        // +------------------+---------------+--------------+--------+
+        try {
+            do {
+                final int nlmsgLen = getLengthAndVerifyMsgHeader(bytes, family);
+                if (nlmsgLen == END_OF_PARSING) return false;
+
+                if (isValidInetDiagMsgSize(nlmsgLen)) {
+                    // Get the socket cookie value. Composed by two Integers value.
+                    // Corresponds to inet_diag_sockid in
+                    // &lt;linux_src&gt;/include/uapi/linux/inet_diag.h
+                    bytes.position(bytes.position() + IDIAG_COOKIE_OFFSET);
+
+                    // It's stored in native with 2 int. Parse it as long for
+                    // convenience.
+                    final long cookie = bytes.getLong();
+                    log("cookie=" + cookie);
+                    // Skip the rest part of StructInetDiagMsg.
+                    bytes.position(bytes.position()
+                            + StructInetDiagMsg.STRUCT_SIZE - IDIAG_COOKIE_OFFSET
+                            - Long.BYTES);
+                    final SocketInfo info = parseSockInfo(bytes, family, nlmsgLen,
+                            time);
+                    // Update TcpStats based on previous and current socket info.
+                    stat.accumulate(
+                            calculateLatestPacketsStat(info, mSocketInfos.get(cookie)));
+                    mSocketInfos.put(cookie, info);
+                }
+            } while (enoughBytesRemainForValidNlMsg(bytes));
+        } catch (IllegalArgumentException | BufferUnderflowException e) {
+            Log.wtf(TAG, "Unexpected socket info parsing, family " + family
+                    + " buffer:" + bytes + " "
+                    + Base64.getEncoder().encodeToString(bytes.array()), e);
+            return false;
+        }
+
+        return true;
+    }
+
+    private int getLengthAndVerifyMsgHeader(@NonNull ByteBuffer bytes, int family) {
+        final StructNlMsgHdr nlmsghdr = StructNlMsgHdr.parse(bytes);
+        if (nlmsghdr == null) {
+            Log.e(TAG, "Badly formatted data.");
+            return END_OF_PARSING;
+        }
+
+        log("pollSocketsInfo: nlmsghdr=" + nlmsghdr + ", limit=" + bytes.limit());
+        // End of the message. Stop parsing.
+        if (nlmsghdr.nlmsg_type == NLMSG_DONE) {
+            return END_OF_PARSING;
+        }
+
+        if (nlmsghdr.nlmsg_type != SOCK_DIAG_BY_FAMILY) {
+            Log.e(TAG, "Expect to get family " + family
+                    + " SOCK_DIAG_BY_FAMILY message but get "
+                    + nlmsghdr.nlmsg_type);
+            return END_OF_PARSING;
+        }
+
+        return nlmsghdr.nlmsg_len;
     }
 
     private void cleanupSocketInfo(final long time) {
