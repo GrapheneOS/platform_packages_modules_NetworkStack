@@ -23,8 +23,10 @@
          that the shell can write to and that the networkstack can read from. -->
     <target_preparer class="com.android.tradefed.targetprep.RootTargetPreparer"/>
 
+    <option name="config-descriptor:metadata" key="mainline-param" value="CaptivePortalLoginGoogle.apk+NetworkStackGoogle.apk+com.google.android.resolv.apex+com.google.android.tethering.apex" />
+    <option name="config-descriptor:metadata" key="mainline-param" value="CaptivePortalLoginGoogle.apk+NetworkStackGoogle.apk" />
     <test class="com.android.tradefed.testtype.AndroidJUnitTest" >
-        <option name="package" value="com.android.server.networkstack.integrationtests" />
+        <option name="package" value="{PACKAGE}" />
         <option name="runner" value="androidx.test.runner.AndroidJUnitRunner" />
         <!-- By default, include and exclude filters go into /data/local/tmp/ajur/, which these
              tests cannot access because they run in the network_stack selinux context. Move
