@@ -82,6 +82,7 @@ android_test {
     platform_apis: true,
     test_suites: ["device-tests"],
     jarjar_rules: ":NetworkStackJarJarRules",
+    host_required: ["net-tests-utils-host-common"],
     test_config_template: "AndroidTestTemplate_Integration.xml",
 }
 
@@ -104,6 +105,7 @@ android_test {
     platform_apis: true,
     test_suites: ["device-tests"],
     jarjar_rules: ":NetworkStackJarJarRules",
+    host_required: ["net-tests-utils-host-common"],
     test_config_template: "AndroidTestTemplate_Integration.xml",
 }
 
@@ -126,6 +128,7 @@ android_test {
     compile_multilib: "both",
     manifest: "AndroidManifest_root.xml",
     jarjar_rules: ":NetworkStackJarJarRules",
+    host_required: ["net-tests-utils-host-common"],
     test_config_template: "AndroidTestTemplate_Integration.xml",
 }
 
