@@ -59,8 +59,10 @@ import java.io.FileDescriptor
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.nio.ByteBuffer
+import java.util.Arrays
 import kotlin.reflect.KClass
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -75,6 +77,10 @@ class NetworkStackUtilsIntegrationTest {
     private val TEST_TARGET_MAC = MacAddress.fromString("01:23:45:67:89:0A")
     private val TEST_INET6ADDR_1 = parseNumericAddress("2001:db8::1") as Inet6Address
     private val TEST_INET6ADDR_2 = parseNumericAddress("2001:db8::2") as Inet6Address
+    private val TEST_INET6ADDR_3 = parseNumericAddress("fd01:db8::3") as Inet6Address
+
+    // RFC4291 section 2.7.1
+    private val SOLICITED_NODE_MULTICAST_PREFIX = "FF02:0:0:0:0:1:FF00::/104"
 
     private val readerHandler = HandlerThread(
             NetworkStackUtilsIntegrationTest::class.java.simpleName)
@@ -184,6 +190,31 @@ class NetworkStackUtilsIntegrationTest {
         assertEquals(expected.size, readPacket, "Received packet size does not match for $descr")
         assertArrayEquals("Received packet != expected $descr",
                 expected, buffer.copyOfRange(0, readPacket))
+    }
+
+    private fun assertSolicitedNodeMulticastAddress(
+        expected: Inet6Address?,
+        unicast: Inet6Address
+    ) {
+        assertNotNull(expected)
+        val prefix = IpPrefix(SOLICITED_NODE_MULTICAST_PREFIX)
+        assertTrue(prefix.contains(expected))
+        assertTrue(expected.isMulticastAddress())
+        // check the last 3 bytes of address
+        assertArrayEquals(Arrays.copyOfRange(expected.getAddress(), 13, 15),
+                Arrays.copyOfRange(unicast.getAddress(), 13, 15))
+    }
+
+    @Test
+    fun testConvertIpv6AddressToSolicitedNodeMulticast() {
+        val addr1 = NetworkStackUtils.ipv6AddressToSolicitedNodeMulticast(TEST_INET6ADDR_1)
+        assertSolicitedNodeMulticastAddress(addr1, TEST_INET6ADDR_1)
+
+        val addr2 = NetworkStackUtils.ipv6AddressToSolicitedNodeMulticast(TEST_INET6ADDR_2)
+        assertSolicitedNodeMulticastAddress(addr2, TEST_INET6ADDR_2)
+
+        val addr3 = NetworkStackUtils.ipv6AddressToSolicitedNodeMulticast(TEST_INET6ADDR_3)
+        assertSolicitedNodeMulticastAddress(addr3, TEST_INET6ADDR_3)
     }
 }
 
