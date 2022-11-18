@@ -23,6 +23,8 @@
          that the shell can write to and that the networkstack can read from. -->
     <target_preparer class="com.android.tradefed.targetprep.RootTargetPreparer"/>
 
+    <target_preparer class="com.android.testutils.DisableConfigSyncTargetPreparer" />
+
     <option name="config-descriptor:metadata" key="mainline-param" value="CaptivePortalLoginGoogle.apk+NetworkStackGoogle.apk+com.google.android.resolv.apex+com.google.android.tethering.apex" />
     <option name="config-descriptor:metadata" key="mainline-param" value="CaptivePortalLoginGoogle.apk+NetworkStackGoogle.apk" />
     <test class="com.android.tradefed.testtype.AndroidJUnitTest" >
