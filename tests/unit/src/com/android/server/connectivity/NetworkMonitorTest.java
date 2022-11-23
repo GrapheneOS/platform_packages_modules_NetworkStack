@@ -58,7 +58,6 @@ import static com.android.networkstack.util.NetworkStackUtils.CAPTIVE_PORTAL_FAL
 import static com.android.networkstack.util.NetworkStackUtils.CAPTIVE_PORTAL_OTHER_FALLBACK_URLS;
 import static com.android.networkstack.util.NetworkStackUtils.CAPTIVE_PORTAL_USE_HTTPS;
 import static com.android.networkstack.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT;
-import static com.android.networkstack.util.NetworkStackUtils.DISMISS_PORTAL_IN_VALIDATED_NETWORK;
 import static com.android.networkstack.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION;
 import static com.android.server.connectivity.NetworkMonitor.INITIAL_REEVALUATE_DELAY_MS;
 import static com.android.server.connectivity.NetworkMonitor.extractCharset;
@@ -74,7 +73,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeFalse;
 import static org.junit.Assume.assumeTrue;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.after;
@@ -582,7 +580,6 @@ public class NetworkMonitorTest {
         setConsecutiveDnsTimeoutThreshold(5);
         mCreatedNetworkMonitors = new HashSet<>();
         mRegisteredReceivers = new HashSet<>();
-        setDismissPortalInValidatedNetwork(false);
     }
 
     @After
@@ -2055,7 +2052,8 @@ public class NetworkMonitorTest {
                 null /* redirectUrl */);
     }
 
-    public void setupAndLaunchCaptivePortalApp(final NetworkMonitor nm) throws Exception {
+    public void setupAndLaunchCaptivePortalApp(final NetworkMonitor nm, String expectedUrl)
+            throws Exception {
         setSslException(mHttpsConnection);
         setPortal302(mHttpConnection);
         doReturn(TEST_LOGIN_URL).when(mHttpConnection).getHeaderField(eq("location"));
@@ -2083,15 +2081,27 @@ public class NetworkMonitorTest {
         assertEquals(TEST_NETID, networkCaptor.getValue().netId);
         // Portal URL should be detection URL.
         final String redirectUrl = bundle.getString(ConnectivityManager.EXTRA_CAPTIVE_PORTAL_URL);
-        assertEquals(TEST_HTTP_URL, redirectUrl);
+        assertEquals(expectedUrl, redirectUrl);
 
         resetCallbacks();
     }
 
+
     @Test
-    public void testCaptivePortalLogin() throws Exception {
+    public void testCaptivePortalLogin_beforeR() throws Exception {
+        assumeFalse(ShimUtils.isAtLeastR());
+        testCaptivePortalLogin(TEST_HTTP_URL);
+    }
+
+    @Test
+    public void testCaptivePortalLogin_AfterR() throws Exception {
+        assumeTrue(ShimUtils.isAtLeastR());
+        testCaptivePortalLogin(TEST_LOGIN_URL);
+    }
+
+    private void testCaptivePortalLogin(String expectedUrl) throws Exception {
         final NetworkMonitor nm = makeMonitor(CELL_METERED_CAPABILITIES);
-        setupAndLaunchCaptivePortalApp(nm);
+        setupAndLaunchCaptivePortalApp(nm, expectedUrl);
 
         // Have the app report that the captive portal is dismissed, and check that we revalidate.
         setStatus(mHttpsConnection, 204);
@@ -2106,9 +2116,20 @@ public class NetworkMonitorTest {
     }
 
     @Test
-    public void testCaptivePortalUseAsIs() throws Exception {
+    public void testCaptivePortalUseAsIs_beforeR() throws Exception {
+        assumeFalse(ShimUtils.isAtLeastR());
+        testCaptivePortalUseAsIs(TEST_HTTP_URL);
+    }
+
+    @Test
+    public void testCaptivePortalUseAsIs_AfterR() throws Exception {
+        assumeTrue(ShimUtils.isAtLeastR());
+        testCaptivePortalUseAsIs(TEST_LOGIN_URL);
+    }
+
+    private void testCaptivePortalUseAsIs(String expectedUrl) throws Exception {
         final NetworkMonitor nm = makeMonitor(CELL_METERED_CAPABILITIES);
-        setupAndLaunchCaptivePortalApp(nm);
+        setupAndLaunchCaptivePortalApp(nm, expectedUrl);
 
         // The user decides this network is wanted as is, either by encountering an SSL error or
         // encountering an unknown scheme and then deciding to continue through the browser, or by
@@ -2676,7 +2697,6 @@ public class NetworkMonitorTest {
 
     private void testDismissPortalInValidatedNetworkEnabled(String expectedUrl, String locationUrl)
             throws Exception {
-        setDismissPortalInValidatedNetwork(true);
         setSslException(mHttpsConnection);
         setPortal302(mHttpConnection);
         doReturn(locationUrl).when(mHttpConnection).getHeaderField(eq("location"));
@@ -2880,9 +2900,6 @@ public class NetworkMonitorTest {
     public void testIsCaptivePortal_FromExternalSource() throws Exception {
         assumeTrue(CaptivePortalDataShimImpl.isSupported());
         assumeTrue(ShimUtils.isAtLeastS());
-        doReturn(true).when(mDependencies)
-                .isFeatureEnabled(any(), eq(NAMESPACE_CONNECTIVITY),
-                        eq(DISMISS_PORTAL_IN_VALIDATED_NETWORK), anyBoolean());
         final NetworkMonitor monitor = makeMonitor(WIFI_NOT_METERED_CAPABILITIES);
 
         NetworkInformationShim networkShim = NetworkInformationShimImpl.newInstance();
@@ -3056,11 +3073,6 @@ public class NetworkMonitorTest {
     private void setCaptivePortalMode(int mode) {
         doReturn(mode).when(mDependencies).getSetting(any(),
                 eq(Settings.Global.CAPTIVE_PORTAL_MODE), anyInt());
-    }
-
-    private void setDismissPortalInValidatedNetwork(boolean enabled) {
-        doReturn(enabled).when(mDependencies).isFeatureEnabled(any(), any(),
-                eq(DISMISS_PORTAL_IN_VALIDATED_NETWORK), anyBoolean());
     }
 
     private void setDeviceConfig(String key, String value) {
