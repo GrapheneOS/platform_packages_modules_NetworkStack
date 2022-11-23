@@ -67,6 +67,7 @@ java_defaults {
     min_sdk_version: "29",
     sdk_version: "module_current",
     libs: [
+        "framework-configinfrastructure",
         "framework-connectivity",
         "framework-connectivity-t",
         "framework-statsd",
