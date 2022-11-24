@@ -265,6 +265,7 @@ public abstract class IpClientIntegrationTestCommon {
     private static final int IFA_F_STABLE_PRIVACY = 0x800;
 
     protected static final long TEST_TIMEOUT_MS = 2_000L;
+    private static final long TEST_WAIT_ENOBUFS_TIMEOUT_MS = 30_000L;
 
     @Rule
     public final DevSdkIgnoreRule mIgnoreRule = new DevSdkIgnoreRule();
@@ -4008,7 +4009,7 @@ public abstract class IpClientIntegrationTestCommon {
 
         // Unblock the IpClient handler and ENOBUFS should happen then.
         latch.countDown();
-        HandlerUtils.waitForIdle(handler, TEST_TIMEOUT_MS);
+        HandlerUtils.waitForIdle(handler, TEST_WAIT_ENOBUFS_TIMEOUT_MS);
 
         reset(mCb);
 
