@@ -23,6 +23,7 @@ import android.content.ServiceConnection
 import android.content.pm.PackageManager.MATCH_SYSTEM_ONLY
 import android.net.INetworkStackConnector
 import android.os.IBinder
+import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlin.test.fail
 
@@ -31,6 +32,7 @@ import kotlin.test.fail
  */
 class TestNetworkStackServiceClient private constructor() : NetworkStackClientBase() {
     companion object {
+        private val TAG = "TestNetworkStackServiceClient"
         private val testNetworkStackServiceAction = "android.net.INetworkStackConnector.Test"
         private val context by lazy { InstrumentationRegistry.getInstrumentation().context }
         private val networkStackVersion by lazy {
@@ -49,6 +51,7 @@ class TestNetworkStackServiceClient private constructor() : NetworkStackClientBa
 
         @JvmStatic
         fun isSupported(): Boolean {
+            Log.d(TAG, "Running network stack module version is " + networkStackVersion)
             // TestNetworkStackService was introduced in NetworkStack version 301100000.
             // It is also available at HEAD in development branches, where the version code is
             // 300000000.
