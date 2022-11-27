@@ -1807,9 +1807,10 @@ public abstract class IpClientIntegrationTestCommon {
                 mPacketReader.popPacket(PACKET_TIMEOUT_MS, this::isRouterSolicitation));
     }
 
-    private void sendRouterAdvertisement(boolean waitForRs, short lifetime) throws Exception {
+    private void sendRouterAdvertisement(boolean waitForRs, short lifetime, int valid,
+            int preferred) throws Exception {
         final String dnsServer = "2001:4860:4860::64";
-        final ByteBuffer pio = buildPioOption(3600, 1800, "2001:db8:1::/64");
+        final ByteBuffer pio = buildPioOption(valid, preferred, "2001:db8:1::/64");
         final ByteBuffer rdnss = buildRdnssOption(3600, dnsServer);
         sendRouterAdvertisement(waitForRs, lifetime, pio, rdnss);
     }
@@ -1824,11 +1825,13 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     private void sendBasicRouterAdvertisement(boolean waitForRs) throws Exception {
-        sendRouterAdvertisement(waitForRs, (short) 1800);
+        sendRouterAdvertisement(waitForRs, (short) 1800 /* lifetime */, 3600 /* valid */,
+                1800 /* preferred */);
     }
 
-    private void sendRouterAdvertisementWithZeroLifetime() throws Exception {
-        sendRouterAdvertisement(false /* waitForRs */, (short) 0);
+    private void sendRouterAdvertisementWithZeroRouterLifetime() throws Exception {
+        sendRouterAdvertisement(false /* waitForRs */, (short) 0 /* lifetime */, 3600 /* valid */,
+                1800 /* preferred */);
     }
 
     // TODO: move this and the following method to a common location and use them in ApfTest.
@@ -2869,7 +2872,7 @@ public abstract class IpClientIntegrationTestCommon {
 
         // Send RA with 0-lifetime and wait until all IPv6-related default route and DNS servers
         // have been removed, then verify if there is IPv4-only info left in the LinkProperties.
-        sendRouterAdvertisementWithZeroLifetime();
+        sendRouterAdvertisementWithZeroRouterLifetime();
         verify(mCb, timeout(TEST_TIMEOUT_MS).atLeastOnce()).onLinkPropertiesChange(
                 argThat(x -> {
                     final boolean isOnlyIPv4Provisioned = (x.getLinkAddresses().size() == 1
@@ -2908,7 +2911,7 @@ public abstract class IpClientIntegrationTestCommon {
         // Send RA with 0-lifetime and wait until all global IPv6 addresses, IPv6-related default
         // route and DNS servers have been removed, then verify if there is IPv4-only, IPv6 link
         // local address and route to fe80::/64 info left in the LinkProperties.
-        sendRouterAdvertisementWithZeroLifetime();
+        sendRouterAdvertisementWithZeroRouterLifetime();
         verify(mCb, timeout(TEST_TIMEOUT_MS).atLeastOnce()).onLinkPropertiesChange(
                 argThat(x -> {
                     // Only IPv4 provisioned and IPv6 link-local address
@@ -4017,7 +4020,7 @@ public abstract class IpClientIntegrationTestCommon {
         // Due to ignoring the ENOBUFS and wait until handler gets idle, IpClient should be still
         // able to see the RA with 0 router lifetime and the IPv6 default route will be removed.
         // LinkProperties should not include any route to the new prefix 2001:db8:dead:beef::/64.
-        sendRouterAdvertisementWithZeroLifetime();
+        sendRouterAdvertisementWithZeroRouterLifetime();
         final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(captor.capture());
         final LinkProperties lp = captor.getValue();
@@ -4051,5 +4054,35 @@ public abstract class IpClientIntegrationTestCommon {
             }
         }
         assertEquals(2, nsList.size()); // from privacy address and stable privacy address
+    }
+
+    @Test
+    public void testDeprecatedGlobalUnicastAddress() throws Exception {
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIPv4()
+                .build();
+        startIpClientProvisioning(config);
+        doIpv6OnlyProvisioning();
+
+        // Send RA with PIO(0 preferred but valid lifetime) to deprecate the global IPv6 addresses.
+        // Check all of global IPv6 addresses will become deprecated, but still valid.
+        // NetworkStackUtils#isIPv6GUA() will return false for deprecated addresses, however, when
+        // checking if the DNS is still reachable, deprecated addresses are not acceptable, that
+        // results in the on-link DNS server gets lost from LinkProperties, and provisioning failure
+        // happened.
+        // TODO: update the logic of checking reachable on-link DNS server to accept the deprecated
+        // addresses, then onProvisioningFailure callback should never happen.
+        sendRouterAdvertisement(false /* waitForRs*/, (short) 1800 /* router lifetime */,
+                3600 /* valid */, 0 /* preferred */);
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(captor.capture());
+        final LinkProperties lp = captor.getValue();
+        assertNotNull(lp);
+        assertFalse(lp.hasGlobalIpv6Address());
+        assertEquals(3, lp.getLinkAddresses().size()); // IPv6 privacy, stable privacy, link-local
+        for (LinkAddress la : lp.getLinkAddresses()) {
+            final Inet6Address address = (Inet6Address) la.getAddress();
+            assertFalse(NetworkStackUtils.isIPv6GUA(la));
+        }
     }
 }
