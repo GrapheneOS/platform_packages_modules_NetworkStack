@@ -45,6 +45,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.util.HexDump;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.SharedLog;
 import com.android.net.module.util.ip.NetlinkMonitor;
@@ -205,7 +206,8 @@ public class IpClientLinkObserver implements NetworkObserver {
     private void maybeLog(String operation, String iface, LinkAddress address) {
         if (DBG) {
             Log.d(mTag, operation + ": " + address + " on " + iface
-                    + " flags " + address.getFlags() + " scope " + address.getScope());
+                    + " flags " + "0x" + HexDump.toHexString(address.getFlags())
+                    + " scope " + address.getScope());
         }
     }
 
