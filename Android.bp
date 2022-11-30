@@ -298,7 +298,6 @@ java_defaults {
         "net-utils-device-common-ip",
         "net-utils-device-common-netlink",
     ],
-    plugins: ["java_api_finder"],
 }
 
 // The versions of the android library containing network stack code compiled for each SDK variant.
