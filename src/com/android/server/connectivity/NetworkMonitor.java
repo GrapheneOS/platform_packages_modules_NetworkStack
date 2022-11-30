@@ -86,7 +86,6 @@ import static com.android.networkstack.util.NetworkStackUtils.DEFAULT_CAPTIVE_PO
 import static com.android.networkstack.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_FALLBACK_PROBE_SPECS;
 import static com.android.networkstack.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_HTTPS_URLS;
 import static com.android.networkstack.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_HTTP_URLS;
-import static com.android.networkstack.util.NetworkStackUtils.DISMISS_PORTAL_IN_VALIDATED_NETWORK;
 import static com.android.networkstack.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION;
 
 import android.app.PendingIntent;
@@ -1325,10 +1324,7 @@ public class NetworkMonitor extends StateMachine {
         private boolean useRedirectUrlForPortal() {
             // It must match the conditions in CaptivePortalLogin in which the redirect URL is not
             // used to validate that the portal is gone.
-            final boolean aboveQ =
-                    ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q);
-            return aboveQ && mDependencies.isFeatureEnabled(mContext, NAMESPACE_CONNECTIVITY,
-                    DISMISS_PORTAL_IN_VALIDATED_NETWORK, aboveQ /* defaultEnabled */);
+            return ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q);
         }
 
         @Override
