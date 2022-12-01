@@ -39,7 +39,10 @@ import static com.android.net.module.util.netlink.NetlinkConstants.SOCK_DIAG_BY_
 import static com.android.net.module.util.netlink.StructNlMsgHdr.NLM_F_DUMP;
 import static com.android.net.module.util.netlink.StructNlMsgHdr.NLM_F_REQUEST;
 
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.net.INetd;
 import android.net.MarkMaskParcel;
 import android.net.Network;
@@ -47,6 +50,7 @@ import android.net.util.SocketUtils;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.PowerManager;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.provider.DeviceConfig;
@@ -60,6 +64,7 @@ import android.util.SparseArray;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.netlink.NetlinkConstants;
@@ -128,6 +133,10 @@ public class TcpSocketTracker {
     private final int mNetworkMask;
     private int mMinPacketsThreshold = DEFAULT_DATA_STALL_MIN_PACKETS_THRESHOLD;
     private int mTcpPacketsFailRateThreshold = DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE;
+
+    private final Object mDozeModeLock = new Object();
+    @GuardedBy("mDozeModeLock")
+    private boolean mInDozeMode = false;
     @VisibleForTesting
     protected final DeviceConfig.OnPropertiesChangedListener mConfigListener =
             new DeviceConfig.OnPropertiesChangedListener() {
@@ -143,6 +152,19 @@ public class TcpSocketTracker {
                             DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE);
                 }
             };
+
+    final BroadcastReceiver mDeviceIdleReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (intent == null) return;
+
+            if (PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED.equals(intent.getAction())) {
+                final PowerManager powerManager = context.getSystemService(PowerManager.class);
+                final boolean deviceIdle = powerManager.isDeviceIdleMode();
+                setDozeMode(deviceIdle);
+            }
+        }
+    };
 
     public TcpSocketTracker(@NonNull final Dependencies dps, @NonNull final Network network) {
         mDependencies = dps;
@@ -172,6 +194,7 @@ public class TcpSocketTracker {
                             TCP_MONITOR_STATE_FILTER));
         }
         mDependencies.addDeviceConfigChangedListener(mConfigListener);
+        mDependencies.addDeviceIdleReceiver(mDeviceIdleReceiver);
     }
 
     @Nullable
@@ -191,10 +214,17 @@ public class TcpSocketTracker {
      * Request to send a SockDiag Netlink request. Receive and parse the returned message. This
      * function is not thread-safe and should only be called from only one thread.
      *
-     * @Return if this polling request executes successfully or not.
+     * @Return if this polling request is sent to kernel and executes successfully or not.
      */
     public boolean pollSocketsInfo() {
         if (!mDependencies.isTcpInfoParsingSupported()) return false;
+        // Traffic will be restricted in doze mode. TCP info may not reflect the correct network
+        // behavior.
+        // TODO: Traffic may be restricted by other reason. Get the restriction info from bpf in T+.
+        synchronized (mDozeModeLock) {
+            if (mInDozeMode) return false;
+        }
+
         FileDescriptor fd = null;
 
         try {
@@ -358,6 +388,14 @@ public class TcpSocketTracker {
      */
     public boolean isDataStallSuspected() {
         if (!mDependencies.isTcpInfoParsingSupported()) return false;
+
+        // Skip checking data stall since the traffic will be restricted and it will not be real
+        // network stall.
+        // TODO: Traffic may be restricted by other reason. Get the restriction info from bpf in T+.
+        synchronized (mDozeModeLock) {
+            if (mInDozeMode) return false;
+        }
+
         return (getLatestPacketFailPercentage() >= getTcpPacketsFailRateThreshold());
     }
 
@@ -468,6 +506,7 @@ public class TcpSocketTracker {
     /** Stops monitoring and releases resources. */
     public void quit() {
         mDependencies.removeDeviceConfigChangedListener(mConfigListener);
+        mDependencies.removeBroadcastReceiver(mDeviceIdleReceiver);
     }
 
     /**
@@ -564,6 +603,14 @@ public class TcpSocketTracker {
         }
     }
 
+    private void setDozeMode(boolean isEnabled) {
+        synchronized (mDozeModeLock) {
+            if (mInDozeMode == isEnabled) return;
+            mInDozeMode = isEnabled;
+            log("Doze mode enabled=" + mInDozeMode);
+        }
+    }
+
     /**
      * Dependencies class for testing.
      */
@@ -657,6 +704,17 @@ public class TcpSocketTracker {
         public void removeDeviceConfigChangedListener(
                 @NonNull final DeviceConfig.OnPropertiesChangedListener listener) {
             DeviceConfig.removeOnPropertiesChangedListener(listener);
+        }
+
+        /** Add receiver for detecting doze mode change to control TCP detection. */
+        public void addDeviceIdleReceiver(@NonNull final BroadcastReceiver receiver) {
+            mContext.registerReceiver(receiver,
+                    new IntentFilter(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED));
+        }
+
+        /** Remove broadcast receiver. */
+        public void removeBroadcastReceiver(@NonNull final BroadcastReceiver receiver) {
+            mContext.unregisterReceiver(receiver);
         }
     }
 }
