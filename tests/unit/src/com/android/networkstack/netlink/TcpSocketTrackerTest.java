@@ -21,8 +21,6 @@ import static android.net.util.DataStallUtils.DEFAULT_TCP_PACKETS_FAIL_PERCENTAG
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_INET;
 
-import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentation;
-
 import static com.android.net.module.util.netlink.NetlinkConstants.SOCKDIAG_MSG_HEADER_SIZE;
 
 import static junit.framework.Assert.assertEquals;
@@ -39,10 +37,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
 import android.net.INetd;
 import android.net.MarkMaskParcel;
 import android.net.Network;
 import android.os.Build;
+import android.os.PowerManager;
 import android.util.Log;
 import android.util.Log.TerribleFailureHandler;
 
@@ -62,6 +64,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -190,6 +193,8 @@ public class TcpSocketTrackerTest {
     private final Network mNetwork = new Network(TEST_NETID1);
     private final Network mOtherNetwork = new Network(TEST_NETID2);
     private TerribleFailureHandler mOldWtfHandler;
+    @Mock private Context mContext;
+    @Mock private PowerManager mPowerManager;
 
     @Rule
     public final DevSdkIgnoreRule mIgnoreRule = new DevSdkIgnoreRule();
@@ -211,6 +216,7 @@ public class TcpSocketTrackerTest {
 
         when(mNetd.getFwmarkForNetwork(eq(TEST_NETID1)))
                 .thenReturn(makeMarkMaskParcel(NETID_MASK, TEST_NETID1_FWMARK));
+        doReturn(mPowerManager).when(mContext).getSystemService(PowerManager.class);
     }
 
     @After
@@ -262,7 +268,7 @@ public class TcpSocketTrackerTest {
     @Test @IgnoreUpTo(Build.VERSION_CODES.Q) // TCP info parsing is not supported on Q
     public void testPollSocketsInfo() throws Exception {
         // This test requires shims that provide API 30 access
-        assumeTrue(ConstantsShim.VERSION >= 30);
+        assumeTrue(ConstantsShim.VERSION >= Build.VERSION_CODES.R);
         when(mDependencies.isTcpInfoParsingSupported()).thenReturn(false);
         final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
         assertFalse(tst.pollSocketsInfo());
@@ -283,9 +289,7 @@ public class TcpSocketTrackerTest {
         assertEquals(-1, tst.getLatestPacketFailPercentage());
         assertEquals(0, tst.getSentSinceLastRecv());
 
-        final ByteBuffer tcpBufferV6 = getByteBuffer(TEST_RESPONSE_BYTES);
-        final ByteBuffer tcpBufferV4 = getByteBuffer(TEST_RESPONSE_BYTES);
-        doReturn(tcpBufferV6, tcpBufferV4).when(mDependencies).recvMessage(any());
+        setupNormalTestTcpInfo();
         assertTrue(tst.pollSocketsInfo());
 
         assertEquals(10, tst.getSentSinceLastRecv());
@@ -317,15 +321,52 @@ public class TcpSocketTrackerTest {
         verifyNoMoreInteractions(mDependencies);
     }
 
+    @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
+    public void testTcpInfoParsingWithDozeMode() throws Exception {
+        // This test requires shims that provide API 30 access
+        assumeTrue(ConstantsShim.VERSION >= Build.VERSION_CODES.R);
+
+        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
+        final ArgumentCaptor<BroadcastReceiver> receiverCaptor =
+                ArgumentCaptor.forClass(BroadcastReceiver.class);
+
+        verify(mDependencies).addDeviceIdleReceiver(receiverCaptor.capture());
+        setupNormalTestTcpInfo();
+        assertTrue(tst.pollSocketsInfo());
+
+        // Lower the threshold.
+        when(mDependencies.getDeviceConfigPropertyInt(any(), eq(CONFIG_TCP_PACKETS_FAIL_PERCENTAGE),
+                anyInt())).thenReturn(40);
+
+        // Trigger a config update
+        tst.mConfigListener.onPropertiesChanged(null /* properties */);
+        assertEquals(10, tst.getSentSinceLastRecv());
+        assertEquals(50, tst.getLatestPacketFailPercentage());
+        assertTrue(tst.isDataStallSuspected());
+
+        // Enable doze mode
+        doReturn(true).when(mPowerManager).isDeviceIdleMode();
+        final BroadcastReceiver receiver = receiverCaptor.getValue();
+        receiver.onReceive(mContext, new Intent(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED));
+        assertFalse(tst.pollSocketsInfo());
+        assertFalse(tst.isDataStallSuspected());
+    }
+
+    private void setupNormalTestTcpInfo() throws Exception {
+        final ByteBuffer tcpBufferV6 = getByteBuffer(TEST_RESPONSE_BYTES);
+        final ByteBuffer tcpBufferV4 = getByteBuffer(TEST_RESPONSE_BYTES);
+        doReturn(tcpBufferV6, tcpBufferV4).when(mDependencies).recvMessage(any());
+    }
+
     @Test @IgnoreAfter(Build.VERSION_CODES.Q)
     public void testTcpInfoParsingNotSupportedOnQ() {
-        assertFalse(new TcpSocketTracker.Dependencies(getInstrumentation().getContext())
+        assertFalse(new TcpSocketTracker.Dependencies(mContext)
                 .isTcpInfoParsingSupported());
     }
 
     @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
     public void testTcpInfoParsingSupportedFromR() {
-        assertTrue(new TcpSocketTracker.Dependencies(getInstrumentation().getContext())
+        assertTrue(new TcpSocketTracker.Dependencies(mContext)
                 .isTcpInfoParsingSupported());
     }
 
@@ -359,11 +400,9 @@ public class TcpSocketTrackerTest {
     @Test @IgnoreUpTo(Build.VERSION_CODES.Q) // TCP info parsing is not supported on Q
     public void testPollSocketsInfo_BadFormat() throws Exception {
         // This test requires shims that provide API 30 access
-        assumeTrue(ConstantsShim.VERSION >= 30);
+        assumeTrue(ConstantsShim.VERSION >= Build.VERSION_CODES.R);
         final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
-        final ByteBuffer tcpBufferV6 = getByteBuffer(TEST_RESPONSE_BYTES);
-        final ByteBuffer tcpBufferV4 = getByteBuffer(TEST_RESPONSE_BYTES);
-        doReturn(tcpBufferV6, tcpBufferV4).when(mDependencies).recvMessage(any());
+        setupNormalTestTcpInfo();
         assertTrue(tst.pollSocketsInfo());
         assertEquals(10, tst.getSentSinceLastRecv());
         assertEquals(50, tst.getLatestPacketFailPercentage());
@@ -383,9 +422,7 @@ public class TcpSocketTrackerTest {
         when(mNetd.getFwmarkForNetwork(eq(TEST_NETID2)))
                 .thenReturn(makeMarkMaskParcel(NETID_MASK, TEST_NETID2_FWMARK));
         final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mOtherNetwork);
-        final ByteBuffer tcpBufferV6 = getByteBuffer(TEST_RESPONSE_BYTES);
-        final ByteBuffer tcpBufferV4 = getByteBuffer(TEST_RESPONSE_BYTES);
-        doReturn(tcpBufferV6, tcpBufferV4).when(mDependencies).recvMessage(any());
+        setupNormalTestTcpInfo();
         assertTrue(tst.pollSocketsInfo());
 
         assertEquals(0, tst.getSentSinceLastRecv());
