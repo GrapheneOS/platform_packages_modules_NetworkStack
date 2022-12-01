@@ -88,6 +88,7 @@ import static org.mockito.ArgumentMatchers.longThat;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
@@ -2850,7 +2851,7 @@ public abstract class IpClientIntegrationTestCommon {
         assertTrue(lp.getDnsServers().contains(InetAddress.getByName(dnsServer)));
         assertTrue(lp.getDnsServers().contains(SERVER_ADDR));
 
-        reset(mCb);
+        clearInvocations(mCb);
     }
 
     private void doDualStackProvisioning(boolean shouldDisableAcceptRa) throws Exception {
