@@ -505,6 +505,10 @@ public class TcpSocketTracker {
 
     /** Stops monitoring and releases resources. */
     public void quit() {
+        // Do not need to unregister receiver and listener since registration is skipped
+        // in the constructor.
+        if (!mDependencies.isTcpInfoParsingSupported()) return;
+
         mDependencies.removeDeviceConfigChangedListener(mConfigListener);
         mDependencies.removeBroadcastReceiver(mDeviceIdleReceiver);
     }
