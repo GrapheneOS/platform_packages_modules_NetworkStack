@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -319,6 +320,12 @@ public class TcpSocketTrackerTest {
 
         verify(mDependencies, atLeastOnce()).isTcpInfoParsingSupported();
         verifyNoMoreInteractions(mDependencies);
+
+        // Verify that no un-registration for the device configuration listener and broadcast
+        // receiver if TcpInfo parsing is not supported.
+        tst.quit();
+        verify(mDependencies, never()).removeDeviceConfigChangedListener(any());
+        verify(mDependencies, never()).removeBroadcastReceiver(any());
     }
 
     @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
