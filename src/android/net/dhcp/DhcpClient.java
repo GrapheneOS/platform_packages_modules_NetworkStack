@@ -51,6 +51,7 @@ import static com.android.net.module.util.NetworkStackConstants.ETHER_ADDR_LEN;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ANY;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_CONFLICT_ANNOUNCE_NUM;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_CONFLICT_PROBE_NUM;
+import static com.android.networkstack.util.NetworkStackUtils.DHCP_DISABLE_DROP_MF;
 import static com.android.networkstack.util.NetworkStackUtils.DHCP_INIT_REBOOT_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.DHCP_IPV6_ONLY_PREFERRED_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.DHCP_IP_CONFLICT_DETECT_VERSION;
@@ -692,9 +693,11 @@ public class DhcpClient extends StateMachine {
 
         @Override
         protected FileDescriptor createFd() {
+            boolean dropMF = !DeviceConfigUtils.getDeviceConfigPropertyBoolean(
+                    NAMESPACE_CONNECTIVITY, DHCP_DISABLE_DROP_MF, false);
             try {
                 mPacketSock = Os.socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, 0 /* protocol */);
-                NetworkStackUtils.attachDhcpFilter(mPacketSock);
+                NetworkStackUtils.attachDhcpFilter(mPacketSock, dropMF);
                 final SocketAddress addr = makePacketSocketAddress(ETH_P_IP, mIface.index);
                 Os.bind(mPacketSock, addr);
             } catch (SocketException | ErrnoException e) {

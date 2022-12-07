@@ -99,7 +99,9 @@ static void network_stack_utils_addArpEntry(JNIEnv *env, jclass clazz, jbyteArra
     }
 }
 
-static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jclass clazz, jobject javaFd) {
+static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jclass clazz, jobject javaFd, jboolean dropMF) {
+    static const __u32 frag_mask = static_cast<__u32>((dropMF ? IP_MF : 0) | IP_OFFMASK);
+
     static sock_filter filter_code[] = {
         // Check the protocol is UDP.
         BPF_STMT(BPF_LD  | BPF_B    | BPF_ABS, kIPv4Protocol),
@@ -107,7 +109,7 @@ static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jclass clazz, jobj
 
         // Check this is not a fragment.
         BPF_STMT(BPF_LD  | BPF_H    | BPF_ABS, kIPv4FlagsOffset),
-        BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K,   IP_MF | IP_OFFMASK, 4, 0),
+        BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K,   frag_mask, 4, 0),
 
         // Get the IP header length.
         BPF_STMT(BPF_LDX | BPF_B    | BPF_MSH, kEtherHeaderLen),
@@ -251,7 +253,7 @@ static void network_stack_utils_attachControlPacketFilter(
 static const JNINativeMethod gNetworkStackUtilsMethods[] = {
     /* name, signature, funcPtr */
     { "addArpEntry", "([B[BLjava/lang/String;Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_addArpEntry },
-    { "attachDhcpFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_attachDhcpFilter },
+    { "attachDhcpFilter", "(Ljava/io/FileDescriptor;Z)V", (void*) network_stack_utils_attachDhcpFilter },
     { "attachRaFilter", "(Ljava/io/FileDescriptor;I)V", (void*) network_stack_utils_attachRaFilter },
     { "attachControlPacketFilter", "(Ljava/io/FileDescriptor;I)V", (void*) network_stack_utils_attachControlPacketFilter },
 };
