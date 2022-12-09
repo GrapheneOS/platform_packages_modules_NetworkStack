@@ -612,8 +612,15 @@ public abstract class IpClientIntegrationTestCommon {
                 mIsNetlinkEventParseEnabled /* default value */);
 
         setUpTapInterface();
-        mCb = mock(IIpClientCallbacks.class);
+        // It turns out that Router Solicitation will also be sent out even after the tap interface
+        // is brought up, however, we want to wait for RS which is sent due to IPv6 stack is enabled
+        // in the test code. The early RS might bring kind of race, for example, the IPv6 stack has
+        // not been enabled when test code sees the RS, then kernel will not process RA even if we
+        // replies immediately after receiving RS. Always waiting for the first RS show up after
+        // interface is brought up helps prevent the race.
+        waitForRouterSolicitation();
 
+        mCb = mock(IIpClientCallbacks.class);
         if (useNetworkStackSignature()) {
             setUpMocks();
             setUpIpClient();
