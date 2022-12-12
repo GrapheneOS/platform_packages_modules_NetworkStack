@@ -19,25 +19,19 @@ import static android.net.util.DataStallUtils.CONFIG_MIN_PACKETS_THRESHOLD;
 import static android.net.util.DataStallUtils.CONFIG_TCP_PACKETS_FAIL_PERCENTAGE;
 import static android.net.util.DataStallUtils.DEFAULT_DATA_STALL_MIN_PACKETS_THRESHOLD;
 import static android.net.util.DataStallUtils.DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE;
-import static android.net.util.DataStallUtils.TCP_MONITOR_STATE_FILTER;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 import static android.system.OsConstants.AF_NETLINK;
-import static android.system.OsConstants.IPPROTO_TCP;
 import static android.system.OsConstants.NETLINK_INET_DIAG;
 import static android.system.OsConstants.SOCK_CLOEXEC;
 import static android.system.OsConstants.SOCK_DGRAM;
 import static android.system.OsConstants.SOL_SOCKET;
 import static android.system.OsConstants.SO_SNDTIMEO;
 
-import static com.android.net.module.util.netlink.InetDiagMessage.inetDiagReqV2;
-import static com.android.net.module.util.netlink.NetlinkConstants.INET_DIAG_MEMINFO;
 import static com.android.net.module.util.netlink.NetlinkConstants.NLMSG_DONE;
 import static com.android.net.module.util.netlink.NetlinkConstants.SOCKDIAG_MSG_HEADER_SIZE;
 import static com.android.net.module.util.netlink.NetlinkConstants.SOCK_DIAG_BY_FAMILY;
-import static com.android.net.module.util.netlink.StructNlMsgHdr.NLM_F_DUMP;
-import static com.android.net.module.util.netlink.StructNlMsgHdr.NLM_F_REQUEST;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -69,6 +63,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.netlink.NetlinkConstants;
 import com.android.net.module.util.netlink.NetlinkSocket;
+import com.android.net.module.util.netlink.NetlinkUtils;
 import com.android.net.module.util.netlink.StructInetDiagMsg;
 import com.android.net.module.util.netlink.StructNlMsgHdr;
 import com.android.networkstack.apishim.NetworkShimImpl;
@@ -183,15 +178,7 @@ public class TcpSocketTracker {
         // Build SocketDiag messages.
         for (final int family : ADDRESS_FAMILIES) {
             mSockDiagMsg.put(
-                    family,
-                    inetDiagReqV2(IPPROTO_TCP,
-                            null /* local addr */,
-                            null /* remote addr */,
-                            family,
-                            (short) (NLM_F_REQUEST | NLM_F_DUMP) /* flag */,
-                            0 /* pad */,
-                            1 << INET_DIAG_MEMINFO /* idiagExt */,
-                            TCP_MONITOR_STATE_FILTER));
+                    family, NetlinkUtils.buildInetDiagReqForAliveTcpSockets(family));
         }
         mDependencies.addDeviceConfigChangedListener(mConfigListener);
         mDependencies.addDeviceIdleReceiver(mDeviceIdleReceiver);
