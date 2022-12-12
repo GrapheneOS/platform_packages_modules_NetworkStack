@@ -100,9 +100,9 @@ static void network_stack_utils_addArpEntry(JNIEnv *env, jclass clazz, jbyteArra
 }
 
 static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jclass clazz, jobject javaFd, jboolean dropMF) {
-    static const __u32 frag_mask = static_cast<__u32>((dropMF ? IP_MF : 0) | IP_OFFMASK);
+    const __u32 frag_mask = static_cast<__u32>((dropMF ? IP_MF : 0) | IP_OFFMASK);
 
-    static sock_filter filter_code[] = {
+    sock_filter filter_code[] = {
         // Check the protocol is UDP.
         BPF_STMT(BPF_LD  | BPF_B    | BPF_ABS, kIPv4Protocol),
         BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   IPPROTO_UDP, 0, 6),
@@ -124,7 +124,7 @@ static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jclass clazz, jobj
         // Reject.
         BPF_STMT(BPF_RET | BPF_K,              0)
     };
-    static const sock_fprog filter = {
+    const sock_fprog filter = {
         sizeof(filter_code) / sizeof(filter_code[0]),
         filter_code,
     };
