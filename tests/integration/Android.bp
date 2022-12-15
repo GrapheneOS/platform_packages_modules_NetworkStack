@@ -99,7 +99,7 @@ android_test {
         "signature/**/*.kt",
     ],
     static_libs: [
-        "NetworkStackApiCurrentLib",
+        "NetworkStackApiStableLib",
     ],
     certificate: "networkstack",
     platform_apis: true,
@@ -121,7 +121,7 @@ android_test {
         "root/**/*.kt",
     ],
     static_libs: [
-        "NetworkStackApiCurrentLib",
+        "NetworkStackApiStableLib",
     ],
     platform_apis: true,
     test_suites: ["general-tests", "mts-networking"],
