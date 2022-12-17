@@ -86,6 +86,7 @@ import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_TC
 import static com.android.networkstack.apishim.ConstantsShim.RECEIVER_NOT_EXPORTED;
 import static com.android.networkstack.apishim.ConstantsShim.TRANSPORT_TEST;
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
+import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX_GRAPHENE;
 import static com.android.networkstack.util.DnsUtils.TYPE_ADDRCONFIG;
 
 import android.app.PendingIntent;
@@ -1638,9 +1639,17 @@ public class NetworkMonitor extends StateMachine {
             }
         }
 
+        private boolean usingGrapheneConnectivityCheck() {
+            return getCaptivePortalServerHttpsUrl(mContext).equals(
+                    mContext.getResources().getString(R.string.default_captive_portal_https_url));
+        }
+
         private boolean sendPrivateDnsProbe() {
-            final String host = UUID.randomUUID().toString().substring(0, 8)
-                    + PRIVATE_DNS_PROBE_HOST_SUFFIX;
+            String suffix = usingGrapheneConnectivityCheck() ?
+                    PRIVATE_DNS_PROBE_HOST_SUFFIX_GRAPHENE :
+                    PRIVATE_DNS_PROBE_HOST_SUFFIX;
+            final String host = UUID.randomUUID().toString().substring(0, 8) +
+                    suffix;
             final Stopwatch watch = new Stopwatch().start();
             boolean success = false;
             long time;
