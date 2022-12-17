@@ -51,6 +51,7 @@ public class DnsUtils {
     // A one time host name suffix of private dns probe.
     // q.v. system/netd/server/dns/DnsTlsTransport.cpp
     public static final String PRIVATE_DNS_PROBE_HOST_SUFFIX = "-dnsotls-ds.metric.gstatic.com";
+    public static final String PRIVATE_DNS_PROBE_HOST_SUFFIX_GRAPHENE = "-dnsotls-ds.dnscheck.grapheneos.org";
     private static final String TAG = DnsUtils.class.getSimpleName();
     private static final boolean DBG = Log.isLoggable(TAG, Log.DEBUG);
 
