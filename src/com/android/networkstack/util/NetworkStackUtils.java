@@ -19,7 +19,6 @@ package com.android.networkstack.util;
 import android.content.Context;
 import android.net.LinkAddress;
 import android.net.MacAddress;
-import android.net.util.SocketUtils;
 import android.system.ErrnoException;
 import android.util.Log;
 
@@ -258,16 +257,6 @@ public class NetworkStackUtils {
 
     static {
         System.loadLibrary("networkstackutilsjni");
-    }
-
-    /**
-     * Close a socket, ignoring any exception while closing.
-     */
-    public static void closeSocketQuietly(FileDescriptor fd) {
-        try {
-            SocketUtils.closeSocket(fd);
-        } catch (IOException ignored) {
-        }
     }
 
     /**

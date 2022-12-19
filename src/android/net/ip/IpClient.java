@@ -107,6 +107,7 @@ import com.android.internal.util.WakeupMessage;
 import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.SharedLog;
+import com.android.net.module.util.SocketUtils;
 import com.android.net.module.util.ip.InterfaceController;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
@@ -1618,7 +1619,7 @@ public class IpClient extends StateMachine {
         } catch (SocketException | ErrnoException e) {
             logError(msg, e);
         } finally {
-            NetworkStackUtils.closeSocketQuietly(sock);
+            SocketUtils.closeSocketQuietly(sock);
         }
     }
 
