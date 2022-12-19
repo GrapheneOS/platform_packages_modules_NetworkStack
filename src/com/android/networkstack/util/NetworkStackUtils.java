@@ -298,7 +298,7 @@ public class NetworkStackUtils {
     }
 
     /**
-     * Check whether a link address is IPv6 global unicast address.
+     * Check whether a link address is IPv6 global preferred unicast address.
      */
     public static boolean isIPv6GUA(@NonNull final LinkAddress address) {
         return address.isIpv6() && address.isGlobalPreferred();
