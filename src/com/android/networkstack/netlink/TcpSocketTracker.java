@@ -40,7 +40,6 @@ import android.content.IntentFilter;
 import android.net.INetd;
 import android.net.MarkMaskParcel;
 import android.net.Network;
-import android.net.util.SocketUtils;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.IBinder;
@@ -61,6 +60,7 @@ import androidx.annotation.Nullable;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.net.module.util.DeviceConfigUtils;
+import com.android.net.module.util.SocketUtils;
 import com.android.net.module.util.netlink.NetlinkConstants;
 import com.android.net.module.util.netlink.NetlinkSocket;
 import com.android.net.module.util.netlink.NetlinkUtils;
@@ -69,7 +69,6 @@ import com.android.net.module.util.netlink.StructNlMsgHdr;
 import com.android.networkstack.apishim.NetworkShimImpl;
 import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
-import com.android.networkstack.util.NetworkStackUtils;
 
 import java.io.FileDescriptor;
 import java.io.InterruptedIOException;
@@ -240,7 +239,7 @@ public class TcpSocketTracker {
         } catch (ErrnoException | SocketException | InterruptedIOException e) {
             Log.e(TAG, "Fail to get TCP info via netlink.", e);
         } finally {
-            NetworkStackUtils.closeSocketQuietly(fd);
+            SocketUtils.closeSocketQuietly(fd);
         }
 
         return false;
