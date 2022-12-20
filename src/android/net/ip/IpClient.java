@@ -107,6 +107,7 @@ import com.android.internal.util.WakeupMessage;
 import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.SharedLog;
+import com.android.net.module.util.SocketUtils;
 import com.android.net.module.util.ip.InterfaceController;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
@@ -756,6 +757,7 @@ public class IpClient extends StateMachine {
                         // consistent with relying on the non-blocking NetworkObserver callbacks,
                         // see {@link registerObserverForNonblockingCallback}. This can be done
                         // by either sending a message to StateMachine or posting a handler.
+                        if (address.isLinkLocalAddress()) return;
                         getHandler().post(() -> {
                             mLog.log("Remove IPv6 GUA " + address
                                     + " from both Gratuituous NA and Multicast NS sets");
@@ -1618,7 +1620,7 @@ public class IpClient extends StateMachine {
         } catch (SocketException | ErrnoException e) {
             logError(msg, e);
         } finally {
-            NetworkStackUtils.closeSocketQuietly(sock);
+            SocketUtils.closeSocketQuietly(sock);
         }
     }
 
