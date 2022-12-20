@@ -66,6 +66,7 @@ import com.android.internal.util.IndentingPrintWriter;
 import com.android.net.module.util.CollectionUtils;
 import com.android.net.module.util.ConnectivityUtils;
 import com.android.net.module.util.InterfaceParams;
+import com.android.net.module.util.SocketUtils;
 import com.android.networkstack.util.NetworkStackUtils;
 
 import java.io.FileDescriptor;
@@ -212,7 +213,7 @@ public class ApfFilter {
         public void halt() {
             mStopped = true;
             // Interrupts the read() call the thread is blocked in.
-            NetworkStackUtils.closeSocketQuietly(mSocket);
+            SocketUtils.closeSocketQuietly(mSocket);
         }
 
         @Override
