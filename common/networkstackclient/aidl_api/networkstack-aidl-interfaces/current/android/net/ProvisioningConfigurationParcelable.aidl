@@ -59,4 +59,5 @@ parcelable ProvisioningConfigurationParcelable {
   @nullable List<android.net.networkstack.aidl.dhcp.DhcpOption> options;
   int ipv4ProvisioningMode;
   int ipv6ProvisioningMode;
+  boolean uniqueEui64AddressesOnly;
 }
