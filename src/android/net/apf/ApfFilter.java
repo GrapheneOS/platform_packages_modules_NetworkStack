@@ -912,7 +912,7 @@ public class ApfFilter {
         long generateFilterLocked(ApfGenerator gen) throws IllegalInstructionException {
             // Filter for a fraction of the lifetime and adjust for the age of the RA.
             int filterLifetime = (int) (mMinLifetime / FRACTION_OF_LIFETIME_TO_FILTER)
-                    - (int) (currentTimeSeconds() - mLastSeen);
+                    - (int) (mProgramBaseTime - mLastSeen);
             if (filterLifetime <= 0) return Long.MAX_VALUE;
 
             String nextFilterLabel = "Ra" + getUniqueNumberLocked();
@@ -1186,6 +1186,11 @@ public class ApfFilter {
     // packets may be dropped, so let's use 6.
     private static final int FRACTION_OF_LIFETIME_TO_FILTER = 6;
 
+    // The base time for this filter program. In seconds since Unix Epoch.
+    // This is the time when the APF program was generated. All filters in the program should use
+    // this base time as their current time for consistency purposes.
+    @GuardedBy("this")
+    private long mProgramBaseTime;
     // When did we last install a filter program? In seconds since Unix Epoch.
     @GuardedBy("this")
     private long mLastTimeInstalledProgram;
@@ -1640,6 +1645,7 @@ public class ApfFilter {
             maximumApfProgramSize -= Counter.totalSize();
         }
 
+        mProgramBaseTime = currentTimeSeconds();
         try {
             // Step 1: Determine how many RA filters we can fit in the program.
             ApfGenerator gen = emitPrologueLocked();
@@ -1676,8 +1682,8 @@ public class ApfFilter {
             Log.e(TAG, "Failed to generate APF program.", e);
             return;
         }
-        final long now = currentTimeSeconds();
-        mLastTimeInstalledProgram = now;
+        mIpClientCallback.installPacketFilter(program);
+        mLastTimeInstalledProgram = mProgramBaseTime;
         mLastInstalledProgramMinLifetime = programMinLifetime;
         mLastInstalledProgram = program;
         mNumProgramUpdates++;
@@ -1685,8 +1691,7 @@ public class ApfFilter {
         if (VDBG) {
             hexDump("Installing filter: ", program, program.length);
         }
-        mIpClientCallback.installPacketFilter(program);
-        logApfProgramEventLocked(now);
+        logApfProgramEventLocked(mProgramBaseTime);
         mLastInstallEvent = new ApfProgramEvent.Builder()
                 .setLifetime(programMinLifetime)
                 .setFilteredRas(rasToFilter.size())
