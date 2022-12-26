@@ -72,4 +72,11 @@ public interface NsdShim {
             int protocolType, @Nullable NetworkRequest request,
             @NonNull Executor executor, @NonNull DiscoveryListener listener)
             throws UnsupportedApiLevelException;
+
+
+    /**
+     * @see NsdManager#stopServiceResolution(ResolveListener)
+     */
+    void stopServiceResolution(@NonNull NsdManager nsdManager,
+            @NonNull ResolveListener resolveListener) throws UnsupportedApiLevelException;
 }
