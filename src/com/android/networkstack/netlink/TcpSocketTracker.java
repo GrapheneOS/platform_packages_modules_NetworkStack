@@ -19,25 +19,17 @@ import static android.net.util.DataStallUtils.CONFIG_MIN_PACKETS_THRESHOLD;
 import static android.net.util.DataStallUtils.CONFIG_TCP_PACKETS_FAIL_PERCENTAGE;
 import static android.net.util.DataStallUtils.DEFAULT_DATA_STALL_MIN_PACKETS_THRESHOLD;
 import static android.net.util.DataStallUtils.DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE;
-import static android.net.util.DataStallUtils.TCP_MONITOR_STATE_FILTER;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
-import static android.system.OsConstants.AF_NETLINK;
-import static android.system.OsConstants.IPPROTO_TCP;
-import static android.system.OsConstants.NETLINK_INET_DIAG;
-import static android.system.OsConstants.SOCK_CLOEXEC;
-import static android.system.OsConstants.SOCK_DGRAM;
 import static android.system.OsConstants.SOL_SOCKET;
 import static android.system.OsConstants.SO_SNDTIMEO;
 
-import static com.android.net.module.util.netlink.InetDiagMessage.inetDiagReqV2;
-import static com.android.net.module.util.netlink.NetlinkConstants.INET_DIAG_MEMINFO;
 import static com.android.net.module.util.netlink.NetlinkConstants.NLMSG_DONE;
 import static com.android.net.module.util.netlink.NetlinkConstants.SOCKDIAG_MSG_HEADER_SIZE;
 import static com.android.net.module.util.netlink.NetlinkConstants.SOCK_DIAG_BY_FAMILY;
-import static com.android.net.module.util.netlink.StructNlMsgHdr.NLM_F_DUMP;
-import static com.android.net.module.util.netlink.StructNlMsgHdr.NLM_F_REQUEST;
+import static com.android.net.module.util.netlink.NetlinkUtils.DEFAULT_RECV_BUFSIZE;
+import static com.android.net.module.util.netlink.NetlinkUtils.IO_TIMEOUT_MS;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -46,7 +38,6 @@ import android.content.IntentFilter;
 import android.net.INetd;
 import android.net.MarkMaskParcel;
 import android.net.Network;
-import android.net.util.SocketUtils;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.IBinder;
@@ -67,14 +58,15 @@ import androidx.annotation.Nullable;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.net.module.util.DeviceConfigUtils;
+import com.android.net.module.util.SocketUtils;
+import com.android.net.module.util.netlink.InetDiagMessage;
 import com.android.net.module.util.netlink.NetlinkConstants;
-import com.android.net.module.util.netlink.NetlinkSocket;
+import com.android.net.module.util.netlink.NetlinkUtils;
 import com.android.net.module.util.netlink.StructInetDiagMsg;
 import com.android.net.module.util.netlink.StructNlMsgHdr;
 import com.android.networkstack.apishim.NetworkShimImpl;
 import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
-import com.android.networkstack.util.NetworkStackUtils;
 
 import java.io.FileDescriptor;
 import java.io.InterruptedIOException;
@@ -94,14 +86,9 @@ public class TcpSocketTracker {
     private static final String TAG = TcpSocketTracker.class.getSimpleName();
     private static final boolean DBG = Log.isLoggable(TAG, Log.DEBUG);
     private static final int[] ADDRESS_FAMILIES = new int[] {AF_INET6, AF_INET};
-    // This is for individual message. The individual messages should not be excessively large.
-    private static final int DEFAULT_RECV_BUFSIZE = 8192;
-    // Default I/O timeout time in ms of the socket request.
-    private static final long IO_TIMEOUT = 3_000L;
+
     /** Cookie offset of an InetMagMessage header. */
     private static final int IDIAG_COOKIE_OFFSET = 44;
-    private static final int UNKNOWN_MARK = 0xffffffff;
-    private static final int NULL_MASK = 0;
     private static final int END_OF_PARSING = -1;
     /**
      *  Gather the socket info.
@@ -172,10 +159,10 @@ public class TcpSocketTracker {
         mNetd = mDependencies.getNetd();
 
         // If the parcel is null, nothing should be matched which is achieved by the combination of
-        // {@code NULL_MASK} and {@code UNKNOWN_MARK}.
+        // {@code NetlinkUtils#NULL_MASK} and {@code NetlinkUtils#UNKNOWN_MARK}.
         final MarkMaskParcel parcel = getNetworkMarkMask();
-        mNetworkMark = (parcel != null) ? parcel.mark : UNKNOWN_MARK;
-        mNetworkMask = (parcel != null) ? parcel.mask : NULL_MASK;
+        mNetworkMark = (parcel != null) ? parcel.mark : NetlinkUtils.UNKNOWN_MARK;
+        mNetworkMask = (parcel != null) ? parcel.mask : NetlinkUtils.NULL_MASK;
 
         // Request tcp info from NetworkStack directly needs extra SELinux permission added after Q
         // release.
@@ -183,15 +170,7 @@ public class TcpSocketTracker {
         // Build SocketDiag messages.
         for (final int family : ADDRESS_FAMILIES) {
             mSockDiagMsg.put(
-                    family,
-                    inetDiagReqV2(IPPROTO_TCP,
-                            null /* local addr */,
-                            null /* remote addr */,
-                            family,
-                            (short) (NLM_F_REQUEST | NLM_F_DUMP) /* flag */,
-                            0 /* pad */,
-                            1 << INET_DIAG_MEMINFO /* idiagExt */,
-                            TCP_MONITOR_STATE_FILTER));
+                    family, InetDiagMessage.buildInetDiagReqForAliveTcpSockets(family));
         }
         mDependencies.addDeviceConfigChangedListener(mConfigListener);
         mDependencies.addDeviceIdleReceiver(mDeviceIdleReceiver);
@@ -253,7 +232,7 @@ public class TcpSocketTracker {
         } catch (ErrnoException | SocketException | InterruptedIOException e) {
             Log.e(TAG, "Fail to get TCP info via netlink.", e);
         } finally {
-            NetworkStackUtils.closeSocketQuietly(fd);
+            SocketUtils.closeSocketQuietly(fd);
         }
 
         return false;
@@ -359,15 +338,15 @@ public class TcpSocketTracker {
             final int nlmsgLen, final long time) {
         final int remainingDataSize = bytes.position() + nlmsgLen - SOCKDIAG_MSG_HEADER_SIZE;
         TcpInfo tcpInfo = null;
-        int mark = SocketInfo.INIT_MARK_VALUE;
+        int mark = NetlinkUtils.INIT_MARK_VALUE;
         // Get a tcp_info.
         while (bytes.position() < remainingDataSize) {
             final RoutingAttribute rtattr =
                     new RoutingAttribute(bytes.getShort(), bytes.getShort());
             final short dataLen = rtattr.getDataLength();
-            if (rtattr.rtaType == RoutingAttribute.INET_DIAG_INFO) {
+            if (rtattr.rtaType == NetlinkUtils.INET_DIAG_INFO) {
                 tcpInfo = TcpInfo.parse(bytes, dataLen);
-            } else if (rtattr.rtaType == RoutingAttribute.INET_DIAG_MARK) {
+            } else if (rtattr.rtaType == NetlinkUtils.INET_DIAG_MARK) {
                 mark = bytes.getInt();
             } else {
                 // Data provided by kernel will include both valid data and padding data. The data
@@ -524,9 +503,6 @@ public class TcpSocketTracker {
      */
     class RoutingAttribute {
         public static final int HEADER_LENGTH = 4;
-        // Corresponds to enum definition in bionic/libc/kernel/uapi/linux/inet_diag.h
-        public static final int INET_DIAG_INFO = 2;
-        public static final int INET_DIAG_MARK = 15;
 
         public final short rtaLen;  // The whole valid size of the struct.
         public final short rtaType;
@@ -545,8 +521,6 @@ public class TcpSocketTracker {
      */
     @VisibleForTesting
     class SocketInfo {
-        // Initial mark value corresponds to the initValue in system/netd/include/Fwmark.h.
-        public static final int INIT_MARK_VALUE = 0;
         @Nullable
         public final TcpInfo tcpInfo;
         // One of {@code AF_INET6, AF_INET}.
@@ -633,11 +607,10 @@ public class TcpSocketTracker {
          * Throw ErrnoException, SocketException if the exception is thrown.
          */
         public FileDescriptor connectToKernel() throws ErrnoException, SocketException {
-            final FileDescriptor fd =
-                    Os.socket(AF_NETLINK, SOCK_DGRAM | SOCK_CLOEXEC, NETLINK_INET_DIAG);
-            Os.connect(
-                    fd, SocketUtils.makeNetlinkSocketAddress(0 /* portId */, 0 /* groupMask */));
-
+            final FileDescriptor fd = NetlinkUtils.createNetLinkInetDiagSocket();
+            NetlinkUtils.connectSocketToNetlink(fd);
+            Os.setsockoptTimeval(fd, SOL_SOCKET, SO_SNDTIMEO,
+                    StructTimeval.fromMillis(IO_TIMEOUT_MS));
             return fd;
         }
 
@@ -650,8 +623,6 @@ public class TcpSocketTracker {
          */
         public void sendPollingRequest(@NonNull final FileDescriptor fd, @NonNull final byte[] msg)
                 throws ErrnoException, InterruptedIOException {
-            Os.setsockoptTimeval(fd, SOL_SOCKET, SO_SNDTIMEO,
-                    StructTimeval.fromMillis(IO_TIMEOUT));
             Os.write(fd, msg, 0 /* byteOffset */, msg.length);
         }
 
@@ -682,7 +653,7 @@ public class TcpSocketTracker {
          */
         public ByteBuffer recvMessage(@NonNull final FileDescriptor fd)
                 throws ErrnoException, InterruptedIOException {
-            return NetlinkSocket.recvMessage(fd, DEFAULT_RECV_BUFSIZE, IO_TIMEOUT);
+            return NetlinkUtils.recvMessage(fd, DEFAULT_RECV_BUFSIZE, IO_TIMEOUT_MS);
         }
 
         public Context getContext() {

@@ -107,6 +107,7 @@ import com.android.internal.util.WakeupMessage;
 import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.SharedLog;
+import com.android.net.module.util.SocketUtils;
 import com.android.net.module.util.ip.InterfaceController;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
@@ -584,6 +585,7 @@ public class IpClient extends StateMachine {
     private long mStartTimeMillis;
     private MacAddress mCurrentBssid;
     private boolean mHasDisabledIpv6OrAcceptRaOnProvLoss;
+    private Integer mDadTransmits = null;
 
     /**
      * Reading the snapshot is an asynchronous operation initiated by invoking
@@ -756,6 +758,7 @@ public class IpClient extends StateMachine {
                         // consistent with relying on the non-blocking NetworkObserver callbacks,
                         // see {@link registerObserverForNonblockingCallback}. This can be done
                         // by either sending a message to StateMachine or posting a handler.
+                        if (address.isLinkLocalAddress()) return;
                         getHandler().post(() -> {
                             mLog.log("Remove IPv6 GUA " + address
                                     + " from both Gratuituous NA and Multicast NS sets");
@@ -1333,6 +1336,25 @@ public class IpClient extends StateMachine {
         }
     }
 
+    private Integer getIpv6DadTransmits() {
+        try {
+            return Integer.parseUnsignedInt(mNetd.getProcSysNet(INetd.IPV6, INetd.CONF,
+                    mInterfaceName, "dad_transmits"));
+        } catch (RemoteException | ServiceSpecificException e) {
+            logError("Couldn't read dad_transmits on " + mInterfaceName, e);
+            return null;
+        }
+    }
+
+    private void setIpv6DadTransmits(int dadTransmits) {
+        try {
+            mNetd.setProcSysNet(INetd.IPV6, INetd.CONF, mInterfaceParams.name,
+                    "dad_transmits", Integer.toString(dadTransmits));
+        } catch (Exception e) {
+            Log.e(mTag, "Failed to set dad_transmits to " + dadTransmits + ": " + e);
+        }
+    }
+
     private void restartIpv6WithAcceptRaDisabled() {
         mInterfaceCtrl.disableIPv6();
         startIPv6(0 /* acceptRa */);
@@ -1618,7 +1640,7 @@ public class IpClient extends StateMachine {
         } catch (SocketException | ErrnoException e) {
             logError(msg, e);
         } finally {
-            NetworkStackUtils.closeSocketQuietly(sock);
+            SocketUtils.closeSocketQuietly(sock);
         }
     }
 
@@ -1925,8 +1947,22 @@ public class IpClient extends StateMachine {
         return true;
     }
 
+    private boolean shouldDisableDad() {
+        return mConfiguration.mUniqueEui64AddressesOnly
+                && mConfiguration.mIPv6ProvisioningMode == PROV_IPV6_LINKLOCAL
+                && mConfiguration.mIPv6AddrGenMode
+                        == ProvisioningConfiguration.IPV6_ADDR_GEN_MODE_EUI64;
+    }
+
     private boolean startIPv6(int acceptRa) {
         setIpv6AcceptRa(acceptRa);
+        if (shouldDisableDad()) {
+            final Integer dadTransmits = getIpv6DadTransmits();
+            if (dadTransmits != null) {
+                mDadTransmits = dadTransmits;
+                setIpv6DadTransmits(0 /* dad_transmits */);
+            }
+        }
         return mInterfaceCtrl.setIPv6PrivacyExtensions(true)
                 && mInterfaceCtrl.setIPv6AddrGenModeIfSupported(mConfiguration.mIPv6AddrGenMode)
                 && mInterfaceCtrl.enableIPv6();
@@ -2016,6 +2052,13 @@ public class IpClient extends StateMachine {
             logError("Couldn't reset MTU on " + mInterfaceName + " from "
                     + params.defaultMtu + " to " + mInterfaceParams.defaultMtu, e);
         }
+    }
+
+    private void maybeRestoreDadTransmits() {
+        if (mDadTransmits == null) return;
+
+        setIpv6DadTransmits(mDadTransmits);
+        mDadTransmits = null;
     }
 
     private void handleUpdateL2Information(@NonNull Layer2InformationParcelable info) {
@@ -2151,6 +2194,8 @@ public class IpClient extends StateMachine {
 
             // Restore the interface MTU to initial value if it has changed.
             maybeRestoreInterfaceMtu();
+            // Reset number of dad_transmits to default value if changed.
+            maybeRestoreDadTransmits();
         }
 
         @Override

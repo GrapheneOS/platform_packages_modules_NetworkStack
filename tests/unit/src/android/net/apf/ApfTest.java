@@ -965,7 +965,7 @@ public class ApfTest {
         public static final byte[] MOCK_MAC_ADDR = {1,2,3,4,5,6};
 
         private FileDescriptor mWriteSocket;
-        private final long mFixedTimeMs = SystemClock.elapsedRealtime();
+        private long mCurrentTimeMs = SystemClock.elapsedRealtime();
 
         public TestApfFilter(Context context, ApfConfiguration config,
                 IpClientCallbacksWrapper ipClientCallback, IpConnectivityLog log) throws Exception {
@@ -978,13 +978,18 @@ public class ApfTest {
             Os.write(mWriteSocket, packet, 0, packet.length);
         }
 
-        @Override
-        protected long currentTimeSeconds() {
-            return mFixedTimeMs / DateUtils.SECOND_IN_MILLIS;
+        // Simulate current time changes
+        public void increaseCurrentTimeSeconds(int delta) {
+            mCurrentTimeMs += delta * DateUtils.SECOND_IN_MILLIS;
         }
 
         @Override
-        public void maybeStartFilter() {
+        protected long currentTimeSeconds() {
+            return mCurrentTimeMs / DateUtils.SECOND_IN_MILLIS;
+        }
+
+        @Override
+        public synchronized void maybeStartFilter() {
             mHardwareAddress = MOCK_MAC_ADDR;
             installNewProgramLocked();
 
@@ -1951,8 +1956,16 @@ public class ApfTest {
     // Verify that the last program pushed to the IpClient.Callback properly filters the
     // given packet for the given lifetime.
     private void verifyRaLifetime(byte[] program, ByteBuffer packet, int lifetime) {
+        verifyRaLifetime(program, packet, lifetime, 0);
+    }
+
+    // Verify that the last program pushed to the IpClient.Callback properly filters the
+    // given packet for the given lifetime and programInstallTime. programInstallTime is
+    // the time difference between when RA is last seen and the program is installed.
+    private void verifyRaLifetime(byte[] program, ByteBuffer packet, int lifetime,
+            int programInstallTime) {
         final int FRACTION_OF_LIFETIME = 6;
-        final int ageLimit = lifetime / FRACTION_OF_LIFETIME;
+        final int ageLimit = lifetime / FRACTION_OF_LIFETIME - programInstallTime;
 
         // Verify new program should drop RA for 1/6th its lifetime and pass afterwards.
         assertDrop(program, packet.array());
@@ -2205,6 +2218,48 @@ public class ApfTest {
         raPacket.putInt(ICMP6_RA_REACHABLE_TIME_OFFSET, RA_REACHABLE_TIME);
         raPacket.putInt(ICMP6_RA_RETRANSMISSION_TIMER_OFFSET, RA_RETRANSMISSION_TIMER + 1000);
         assertPass(program, raPacket.array());
+    }
+
+    // The ByteBuffer is always created by ByteBuffer#wrap in the helper functions
+    @SuppressWarnings("ByteBufferBackingArray")
+    @Test
+    public void testRaWithProgramInstalledSomeTimeAfterLastSeen() throws Exception {
+        final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
+        final ApfConfiguration config = getDefaultConfig();
+        config.multicastFilter = DROP_MULTICAST;
+        config.ieee802_3Filter = DROP_802_3_FRAMES;
+        final TestApfFilter apfFilter = new TestApfFilter(mContext, config, ipClientCallback, mLog);
+        byte[] program = ipClientCallback.getApfProgram();
+
+        final int routerLifetime = 1000;
+        final int timePassedSeconds = 12;
+
+        // Verify that when the program is generated and installed some time after RA is last seen
+        // it should be installed with the correct remaining lifetime.
+        ByteBuffer basePacket = makeBaseRaPacket();
+        verifyRaLifetime(apfFilter, ipClientCallback, basePacket, routerLifetime);
+        apfFilter.increaseCurrentTimeSeconds(timePassedSeconds);
+        synchronized (apfFilter) {
+            apfFilter.installNewProgramLocked();
+        }
+        program = ipClientCallback.getApfProgram();
+        verifyRaLifetime(program, basePacket, routerLifetime, timePassedSeconds);
+
+        // Packet should be passed if the program is installed after 1/6 * lifetime from last seen
+        apfFilter.increaseCurrentTimeSeconds((int) (routerLifetime / 6) - timePassedSeconds - 1);
+        synchronized (apfFilter) {
+            apfFilter.installNewProgramLocked();
+        }
+        program = ipClientCallback.getApfProgram();
+        assertDrop(program, basePacket.array());
+        apfFilter.increaseCurrentTimeSeconds(1);
+        synchronized (apfFilter) {
+            apfFilter.installNewProgramLocked();
+        }
+        program = ipClientCallback.getApfProgram();
+        assertPass(program, basePacket.array());
+
+        apfFilter.shutdown();
     }
 
     /**

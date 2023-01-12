@@ -471,8 +471,7 @@ public class NetworkMonitor extends StateMachine {
     @NonNull
     private LinkProperties mLinkProperties;
 
-    @VisibleForTesting
-    protected boolean mIsCaptivePortalCheckEnabled;
+    private final boolean mIsCaptivePortalCheckEnabled;
 
     private boolean mUseHttps;
     /**
@@ -572,7 +571,8 @@ public class NetworkMonitor extends StateMachine {
     public NetworkMonitor(Context context, INetworkMonitorCallbacks cb, Network network,
             SharedLog validationLog, @NonNull NetworkStackServiceManager serviceManager) {
         this(context, cb, network, new IpConnectivityLog(), validationLog, serviceManager,
-                Dependencies.DEFAULT, getTcpSocketTrackerOrNull(context, network));
+                Dependencies.DEFAULT, getTcpSocketTrackerOrNull(context, network,
+                        Dependencies.DEFAULT));
     }
 
     @VisibleForTesting
@@ -620,7 +620,7 @@ public class NetworkMonitor extends StateMachine {
         mTestCaptivePortalHttpsUrl =
                 getTestUrl(TEST_CAPTIVE_PORTAL_HTTPS_URL, validationLogs, deps);
         mTestCaptivePortalHttpUrl = getTestUrl(TEST_CAPTIVE_PORTAL_HTTP_URL, validationLogs, deps);
-        mIsCaptivePortalCheckEnabled = getIsCaptivePortalCheckEnabled();
+        mIsCaptivePortalCheckEnabled = getIsCaptivePortalCheckEnabled(context, deps);
         mPrivateIpNoInternetEnabled = getIsPrivateIpNoInternetEnabled();
         mMetricsEnabled = deps.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY,
                 NetworkStackUtils.VALIDATION_METRICS_VERSION, true /* defaultEnabled */);
@@ -634,8 +634,8 @@ public class NetworkMonitor extends StateMachine {
         mDataStallMinEvaluateTime = getDataStallMinEvaluateTime();
         mDataStallValidDnsTimeThreshold = getDataStallValidDnsTimeThreshold();
         mDataStallEvaluationType = getDataStallEvaluationType();
-        mDnsStallDetector = initDnsStallDetectorIfRequired(mDataStallEvaluationType,
-                mConsecutiveDnsTimeoutThreshold);
+        mDnsStallDetector = initDnsStallDetectorIfRequired(mIsCaptivePortalCheckEnabled,
+                mDataStallEvaluationType, mConsecutiveDnsTimeoutThreshold);
         mTcpTracker = tst;
         // Read the configurations of evaluating network bandwidth.
         mEvaluatingBandwidthUrl = getResStringConfig(mContext,
@@ -789,6 +789,10 @@ public class NetworkMonitor extends StateMachine {
                 || mContext.getResources().getBoolean(R.bool.config_validate_dun_networks);
         return NetworkMonitorUtils.isValidationRequired(dunValidationRequired,
                 mNetworkAgentConfig.isVpnValidationRequired(), mNetworkCapabilities);
+    }
+
+    private boolean isDataStallDetectionRequired() {
+        return mIsCaptivePortalCheckEnabled && isValidationRequired();
     }
 
     private boolean isPrivateDnsValidationRequired() {
@@ -1009,7 +1013,7 @@ public class NetworkMonitor extends StateMachine {
                             mUserDoesNotWant = true;
                             mEvaluationState.reportEvaluationResult(
                                     NETWORK_VALIDATION_RESULT_INVALID, null);
-                            // TODO: Should teardown network.
+
                             mUidResponsibleForReeval = 0;
                             transitionTo(mEvaluatingState);
                             break;
@@ -1143,7 +1147,7 @@ public class NetworkMonitor extends StateMachine {
         }
 
         private void initSocketTrackingIfRequired() {
-            if (!isValidationRequired()) return;
+            if (!isDataStallDetectionRequired()) return;
 
             final TcpSocketTracker tst = getTcpSocketTracker();
             if (tst != null) {
@@ -1206,7 +1210,7 @@ public class NetworkMonitor extends StateMachine {
 
     @VisibleForTesting
     void sendTcpPollingEvent() {
-        if (isValidationRequired()) {
+        if (isDataStallDetectionRequired()) {
             sendMessageDelayed(EVENT_POLL_TCPINFO, getTcpPollingInterval());
         }
     }
@@ -1950,10 +1954,11 @@ public class NetworkMonitor extends StateMachine {
         return true;
     }
 
-    private boolean getIsCaptivePortalCheckEnabled() {
+    private static boolean getIsCaptivePortalCheckEnabled(@NonNull Context context,
+            @NonNull Dependencies dependencies) {
         String symbol = CAPTIVE_PORTAL_MODE;
         int defaultValue = CAPTIVE_PORTAL_MODE_PROMPT;
-        int mode = mDependencies.getSetting(mContext, symbol, defaultValue);
+        int mode = dependencies.getSetting(context, symbol, defaultValue);
         return mode != CAPTIVE_PORTAL_MODE_IGNORE;
     }
 
@@ -3439,7 +3444,7 @@ public class NetworkMonitor extends StateMachine {
 
     @VisibleForTesting
     protected boolean isDataStall() {
-        if (!isValidationRequired()) {
+        if (!isDataStallDetectionRequired()) {
             return false;
         }
 
@@ -3693,8 +3698,10 @@ public class NetworkMonitor extends StateMachine {
     }
 
     @Nullable
-    private static TcpSocketTracker getTcpSocketTrackerOrNull(Context context, Network network) {
-        return ((Dependencies.DEFAULT.getDeviceConfigPropertyInt(
+    private static TcpSocketTracker getTcpSocketTrackerOrNull(Context context, Network network,
+                Dependencies deps) {
+        return (getIsCaptivePortalCheckEnabled(context, deps)
+                && (deps.getDeviceConfigPropertyInt(
                 NAMESPACE_CONNECTIVITY,
                 CONFIG_DATA_STALL_EVALUATION_TYPE,
                 DEFAULT_DATA_STALL_EVALUATION_TYPES)
@@ -3704,8 +3711,9 @@ public class NetworkMonitor extends StateMachine {
     }
 
     @Nullable
-    private DnsStallDetector initDnsStallDetectorIfRequired(int type, int threshold) {
-        return ((type & DATA_STALL_EVALUATION_TYPE_DNS) != 0)
+    private DnsStallDetector initDnsStallDetectorIfRequired(boolean isCaptivePortalCheckEnabled,
+                int type, int threshold) {
+        return (isCaptivePortalCheckEnabled && (type & DATA_STALL_EVALUATION_TYPE_DNS) != 0)
                 ? new DnsStallDetector(threshold) : null;
     }
 
