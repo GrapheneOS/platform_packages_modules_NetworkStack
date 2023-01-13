@@ -902,6 +902,18 @@ public class ApfFilter {
             return currentLifetime() <= 0;
         }
 
+        // Filter for a fraction of the lifetime and adjust for the age of the RA.
+        @GuardedBy("ApfFilter.this")
+        int filterLifetime() {
+            return (int) (mMinLifetime / FRACTION_OF_LIFETIME_TO_FILTER)
+                    - (int) (mProgramBaseTime - mLastSeen);
+        }
+
+        @GuardedBy("ApfFilter.this")
+        boolean shouldFilter() {
+            return filterLifetime() > 0;
+        }
+
         // Append a filter for this RA to {@code gen}. Jump to DROP_LABEL if it should be dropped.
         // Jump to the next filter if packet doesn't match this RA.
         // Return Long.MAX_VALUE if we don't install any filter program for this RA. As the return
@@ -910,18 +922,13 @@ public class ApfFilter {
         // filter gets generated makes sure the program lifetime stays unaffected.
         @GuardedBy("ApfFilter.this")
         long generateFilterLocked(ApfGenerator gen) throws IllegalInstructionException {
-            // Filter for a fraction of the lifetime and adjust for the age of the RA.
-            int filterLifetime = (int) (mMinLifetime / FRACTION_OF_LIFETIME_TO_FILTER)
-                    - (int) (mProgramBaseTime - mLastSeen);
-            if (filterLifetime <= 0) return Long.MAX_VALUE;
-
             String nextFilterLabel = "Ra" + getUniqueNumberLocked();
             // Skip if packet is not the right size
             gen.addLoadFromMemory(Register.R0, gen.PACKET_SIZE_MEMORY_SLOT);
             gen.addJumpIfR0NotEquals(mPacket.capacity(), nextFilterLabel);
             // Skip filter if expired
             gen.addLoadFromMemory(Register.R0, gen.FILTER_AGE_MEMORY_SLOT);
-            gen.addJumpIfR0GreaterThan(filterLifetime, nextFilterLabel);
+            gen.addJumpIfR0GreaterThan(filterLifetime(), nextFilterLabel);
             for (PacketSection section : mPacketSections) {
                 // Generate code to match the packet bytes.
                 if (section.type == PacketSection.Type.MATCH) {
@@ -942,13 +949,13 @@ public class ApfFilter {
                             throw new IllegalStateException(
                                     "bogus lifetime size " + section.length);
                     }
-                    gen.addJumpIfR0LessThan(filterLifetime, nextFilterLabel);
+                    gen.addJumpIfR0LessThan(filterLifetime(), nextFilterLabel);
                 }
             }
             maybeSetupCounter(gen, Counter.DROPPED_RA);
             gen.addJump(mCountAndDropLabel);
             gen.defineLabel(nextFilterLabel);
-            return filterLifetime;
+            return filterLifetime();
         }
     }
 
@@ -1661,6 +1668,7 @@ public class ApfFilter {
             }
 
             for (Ra ra : mRas) {
+                if (!ra.shouldFilter()) continue;
                 ra.generateFilterLocked(gen);
                 // Stop if we get too big.
                 if (gen.programLengthOverEstimate() > maximumApfProgramSize) {
