@@ -279,7 +279,12 @@ public class NetworkMonitor extends StateMachine {
 
     static {
         // CTC
+        // This is a wrong config, but it may need to be here for a while since the
+        // carrier_list.textpb in OEM side may still wrong.
+        // TODO: Remove this wrong config when the carrier_list.textpb is corrected everywhere.
         sCarrierIdToMccMnc.put(1854, new MccMncOverrideInfo(460, 03));
+        // China telecom.
+        sCarrierIdToMccMnc.put(2237, new MccMncOverrideInfo(460, 03));
     }
 
     /**
