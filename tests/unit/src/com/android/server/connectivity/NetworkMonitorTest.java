@@ -949,6 +949,16 @@ public class NetworkMonitorTest {
         assertEquals(wnm.getContext(), wnm.getCustomizedContextOrDefault());
     }
 
+    private void checkCustomizedContextByCarrierId(WrappedNetworkMonitor wnm, int carrierId) {
+        doReturn(carrierId).when(mTelephony).getSimCarrierId();
+        assertNotNull(wnm.getMccMncOverrideInfo());
+        // Check if the mcc & mnc has changed as expected.
+        assertEquals(460,
+                wnm.getCustomizedContextOrDefault().getResources().getConfiguration().mcc);
+        assertEquals(03,
+                wnm.getCustomizedContextOrDefault().getResources().getConfiguration().mnc);
+    }
+
     @Test
     public void testGetMccMncOverrideInfo() {
         final WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
@@ -957,13 +967,10 @@ public class NetworkMonitorTest {
         doReturn(1839).when(mTelephony).getSimCarrierId();
         assertNull(wnm.getMccMncOverrideInfo());
         // 1854 is CTC's carrier id.
-        doReturn(1854).when(mTelephony).getSimCarrierId();
-        assertNotNull(wnm.getMccMncOverrideInfo());
-        // Check if the mcc & mnc has changed as expected.
-        assertEquals(460,
-                wnm.getCustomizedContextOrDefault().getResources().getConfiguration().mcc);
-        assertEquals(03,
-                wnm.getCustomizedContextOrDefault().getResources().getConfiguration().mnc);
+        // This line should be removed when the production code is corrected.
+        checkCustomizedContextByCarrierId(wnm, 1854);
+        // 2237 is CT's carrier id.
+        checkCustomizedContextByCarrierId(wnm, 2237);
         // Every mcc and mnc should be set in sCarrierIdToMccMnc.
         // Check if there is any unset value in mcc or mnc.
         for (int i = 0; i < wnm.sCarrierIdToMccMnc.size(); i++) {
