@@ -59,6 +59,7 @@ import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_SO
 import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ANY;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_NODES_MULTICAST;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_ROUTERS_MULTICAST;
+import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ANY;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_HEADER_LEN;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_PROTOCOL_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.NEIGHBOR_ADVERTISEMENT_FLAG_OVERRIDE;
@@ -3712,6 +3713,23 @@ public abstract class IpClientIntegrationTestCommon {
         return nsList;
     }
 
+    private NeighborSolicitation expectDadNeighborSolicitationForLinkLocal(boolean shouldDisableDad)
+            throws Exception {
+        final NeighborSolicitation ns = getNextNeighborSolicitation();
+        if (!shouldDisableDad) {
+            final Inet6Address solicitedNodeMulticast =
+                    NetworkStackUtils.ipv6AddressToSolicitedNodeMulticast(ns.nsHdr.target);
+            assertNotNull("No multicast NS received on interface within timeout", ns);
+            assertEquals(IPV6_ADDR_ANY, ns.ipv6Hdr.srcIp);     // srcIp: ::/
+            assertTrue(ns.ipv6Hdr.dstIp.isMulticastAddress()); // dstIp: solicited-node mcast
+            assertTrue(ns.ipv6Hdr.dstIp.equals(solicitedNodeMulticast));
+            assertTrue(ns.nsHdr.target.isLinkLocalAddress());  // targetIp: IPv6 LL address
+        } else {
+            assertNull(ns);
+        }
+        return ns;
+    }
+
     // Override this function with disabled experiment flag by default, in order not to
     // affect those tests which are just related to basic IpReachabilityMonitor infra.
     private void prepareIpReachabilityMonitorTest() throws Exception {
@@ -3956,6 +3974,59 @@ public abstract class IpClientIntegrationTestCommon {
                         .withRandomMacAddress()
                         .build()
         );
+    }
+
+    private void runIpv6LinkLocalOnlyDadTransmitsCheckTest(boolean shouldDisableDad)
+            throws Exception {
+        ProvisioningConfiguration.Builder config = new ProvisioningConfiguration.Builder()
+                .withoutIPv4()
+                .withIpv6LinkLocalOnly()
+                .withRandomMacAddress();
+        if (shouldDisableDad) config.withUniqueEui64AddressesOnly();
+
+        // dad_transmits has been set to 0 in disableIpv6ProvisioningDelays, re-enable dad_transmits
+        // for testing, but production code could disable dad again later, we should never see any
+        // multicast NS for duplicate address detection then.
+        mNetd.setProcSysNet(INetd.IPV6, INetd.CONF, mIfaceName, "dad_transmits", "1");
+        startIpClientProvisioning(config.build());
+        verify(mNetd, timeout(TEST_TIMEOUT_MS)).interfaceSetEnableIPv6(mIfaceName, true);
+        // Check dad_transmits should be set to 0 if UniqueEui64AddressesOnly mode is enabled.
+        int dadTransmits = Integer.parseUnsignedInt(
+                mNetd.getProcSysNet(INetd.IPV6, INetd.CONF, mIfaceName, "dad_transmits"));
+        if (shouldDisableDad) {
+            assertEquals(0, dadTransmits);
+        } else {
+            assertEquals(1, dadTransmits);
+        }
+
+        final NeighborSolicitation ns =
+                expectDadNeighborSolicitationForLinkLocal(shouldDisableDad);
+        if (shouldDisableDad) {
+            assertNull(ns);
+        } else {
+            assertNotNull(ns);
+        }
+
+        // Shutdown IpClient and check if the dad_transmits always equals to default value 1 (if
+        // dad_transmit was set to 0 before, it should get recovered to default value 1 after
+        // shutting down IpClient)
+        mIpc.shutdown();
+        awaitIpClientShutdown();
+        dadTransmits = Integer.parseUnsignedInt(
+                mNetd.getProcSysNet(INetd.IPV6, INetd.CONF, mIfaceName, "dad_transmits"));
+        assertEquals(1, dadTransmits);
+    }
+
+    @Test
+    @SignatureRequiredTest(reason = "requires mocked netd")
+    public void testIPv6LinkLocalOnly_enableDad() throws Exception {
+        runIpv6LinkLocalOnlyDadTransmitsCheckTest(false /* shouldDisableDad */);
+    }
+
+    @Test
+    @SignatureRequiredTest(reason = "requires mocked netd")
+    public void testIPv6LinkLocalOnly_disableDad() throws Exception {
+        runIpv6LinkLocalOnlyDadTransmitsCheckTest(true /* shouldDisableDad */);
     }
 
     // Since createTapInterface(boolean, String) method was introduced since T, this method
