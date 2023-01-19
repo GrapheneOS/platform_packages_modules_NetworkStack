@@ -16,11 +16,15 @@
 
 package com.android.networkstack.apishim;
 
+import android.net.nsd.NsdManager;
 import android.os.Build;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
+import com.android.modules.utils.build.SdkLevel;
 import com.android.networkstack.apishim.common.NsdShim;
+import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 
 /**
  * Implementation of {@link NsdShim}.
@@ -28,5 +32,23 @@ import com.android.networkstack.apishim.common.NsdShim;
 // TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
 public class NsdShimImpl extends com.android.networkstack.apishim.api33.NsdShimImpl {
-    protected NsdShimImpl() {}
+
+    /**
+     * Get a new instance of {@link NsdShim}.
+     */
+    @RequiresApi(Build.VERSION_CODES.Q)
+    public static NsdShim newInstance() {
+        if (SdkLevel.isAtLeastU()) {
+            return new NsdShimImpl();
+        } else {
+            return new com.android.networkstack.apishim.api33.NsdShimImpl();
+        }
+    }
+
+    @Override
+    public void stopServiceResolution(@NonNull NsdManager nsdManager,
+            @NonNull NsdManager.ResolveListener resolveListener)
+            throws UnsupportedApiLevelException {
+        nsdManager.stopServiceResolution(resolveListener);
+    }
 }
