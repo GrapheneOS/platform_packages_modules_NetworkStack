@@ -63,4 +63,12 @@ public class BroadcastOptionsShimImpl extends
         mOptions.setDeliveryGroupMatchingKey(namespace, key);
         return this;
     }
+
+    /** See android.app.BroadcastOptions#setDeferUntilActive */
+    @Override
+    public BroadcastOptionsShim setDeferUntilActive(boolean shouldDefer)
+            throws UnsupportedApiLevelException {
+        mOptions.setDeferUntilActive(shouldDefer);
+        return this;
+    }
 }
