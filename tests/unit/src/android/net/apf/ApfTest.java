@@ -42,6 +42,7 @@ import android.net.InetAddresses;
 import android.net.IpPrefix;
 import android.net.LinkAddress;
 import android.net.LinkProperties;
+import android.net.MacAddress;
 import android.net.NattKeepalivePacketDataParcelable;
 import android.net.TcpKeepalivePacketDataParcelable;
 import android.net.apf.ApfFilter.ApfConfiguration;
@@ -64,9 +65,11 @@ import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.internal.util.HexDump;
+import com.android.net.module.util.DnsPacket;
 import com.android.net.module.util.Inet4AddressUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.NetworkStackConstants;
+import com.android.net.module.util.PacketBuilder;
 import com.android.net.module.util.SharedLog;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.server.networkstack.tests.R;
@@ -74,6 +77,7 @@ import com.android.server.networkstack.tests.R;
 import libcore.io.IoUtils;
 import libcore.io.Streams;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -88,6 +92,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -1020,6 +1025,10 @@ public class ApfTest {
     private static final int ETH_ETHERTYPE_OFFSET         = 12;
     private static final byte[] ETH_BROADCAST_MAC_ADDRESS =
             {(byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff };
+    private static final byte[] ETH_MULTICAST_MDNS_v4_MAC_ADDRESS =
+            {(byte) 0x01, (byte) 0x00, (byte) 0x5e, (byte) 0x00, (byte) 0x00, (byte) 0xfb};
+    private static final byte[] ETH_MULTICAST_MDNS_V6_MAC_ADDRESS =
+            {(byte) 0x33, (byte) 0x33, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0xfb};
 
     private static final int IP_HEADER_OFFSET = ETH_HEADER_LEN;
 
@@ -1051,11 +1060,11 @@ public class ApfTest {
     private static final int IPV6_NEXT_HEADER_OFFSET     = IP_HEADER_OFFSET + 6;
     private static final int IPV6_SRC_ADDR_OFFSET        = IP_HEADER_OFFSET + 8;
     private static final int IPV6_DEST_ADDR_OFFSET       = IP_HEADER_OFFSET + 24;
-    private static final int IPV6_TCP_HEADER_OFFSET      = IP_HEADER_OFFSET + IPV6_HEADER_LEN;
-    private static final int IPV6_TCP_SRC_PORT_OFFSET    = IPV6_TCP_HEADER_OFFSET + 0;
-    private static final int IPV6_TCP_DEST_PORT_OFFSET   = IPV6_TCP_HEADER_OFFSET + 2;
-    private static final int IPV6_TCP_SEQ_NUM_OFFSET     = IPV6_TCP_HEADER_OFFSET + 4;
-    private static final int IPV6_TCP_ACK_NUM_OFFSET     = IPV6_TCP_HEADER_OFFSET + 8;
+    private static final int IPV6_PAYLOAD_OFFSET = IP_HEADER_OFFSET + IPV6_HEADER_LEN;
+    private static final int IPV6_TCP_SRC_PORT_OFFSET    = IPV6_PAYLOAD_OFFSET + 0;
+    private static final int IPV6_TCP_DEST_PORT_OFFSET   = IPV6_PAYLOAD_OFFSET + 2;
+    private static final int IPV6_TCP_SEQ_NUM_OFFSET     = IPV6_PAYLOAD_OFFSET + 4;
+    private static final int IPV6_TCP_ACK_NUM_OFFSET     = IPV6_PAYLOAD_OFFSET + 8;
     // The IPv6 all nodes address ff02::1
     private static final byte[] IPV6_ALL_NODES_ADDRESS   =
             { (byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
@@ -1134,6 +1143,13 @@ public class ApfTest {
     private static final byte[] BUG_PROBE_SOURCE_ADDR1   = {0, 0, 1, 2};
     private static final byte[] BUG_PROBE_SOURCE_ADDR2   = {3, 4, 0, 0};
     private static final byte[] IPV4_ANY_HOST_ADDR       = {0, 0, 0, 0};
+    private static final byte[] IPV4_MDNS_MULTICAST_ADDR = {(byte) 224, 0, 0, (byte) 251};
+    private static final byte[] IPV6_MDNS_MULTICAST_ADDR =
+            {(byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (byte) 0xfb};
+    private static final int DNS_HEADER_LEN = 12;
+    private static final int DNS_QDCOUNT_OFFSET = 4;
+    private static final int IPV6_UDP_DEST_PORT_OFFSET = IPV6_PAYLOAD_OFFSET + 2;
+    private static final int MDNS_UDP_PORT = 5353;
 
     // Helper to initialize a default apfFilter.
     private ApfFilter setupApfFilter(
@@ -1263,6 +1279,98 @@ public class ApfTest {
         assertDrop(program, packet.array());
         put(packet, IPV6_DEST_ADDR_OFFSET, IPV6_ALL_ROUTERS_ADDRESS);
         assertDrop(program, packet.array());
+
+        apfFilter.shutdown();
+    }
+
+    private static byte[] makeMdnsV4Packet(String qname) throws IOException {
+        final ByteBuffer buf = ByteBuffer.wrap(new byte[100]);
+        final PacketBuilder builder = new PacketBuilder(buf);
+        builder.writeL2Header(MacAddress.fromString("11:22:33:44:55:66"),
+                MacAddress.fromBytes(ETH_MULTICAST_MDNS_v4_MAC_ADDRESS),
+                (short) ETH_P_IP);
+        builder.writeIpv4Header((byte) 0 /* tos */, (short) 0 /* id */,
+                (short) 0 /* flagsAndFragmentOffset */, (byte) 0 /* ttl */, (byte) IPPROTO_UDP,
+                (Inet4Address) Inet4Address.getByAddress(IPV4_SOURCE_ADDR),
+                (Inet4Address) Inet4Address.getByAddress(IPV4_MDNS_MULTICAST_ADDR));
+        builder.writeUdpHeader((short) MDNS_UDP_PORT, (short) MDNS_UDP_PORT);
+        buf.put(new DnsPacket.DnsHeader(0, 0, 1, 0).getBytes());
+        buf.put(DnsPacket.DnsRecord.makeQuestion(qname, 0, 0).getBytes());
+        return builder.finalizePacket().array();
+    }
+
+    private static byte[] makeMdnsV6Packet(String qname) throws IOException {
+        ByteBuffer buf = ByteBuffer.wrap(new byte[100]);
+        final PacketBuilder builder = new PacketBuilder(buf);
+        builder.writeL2Header(MacAddress.fromString("11:22:33:44:55:66"),
+                MacAddress.fromBytes(ETH_MULTICAST_MDNS_V6_MAC_ADDRESS),
+                (short) ETH_P_IPV6);
+        builder.writeIpv6Header(0x680515ca /* vtf */, (byte) IPPROTO_UDP, (short) 0 /* hopLimit */,
+                (Inet6Address) InetAddress.getByAddress(IPV6_ANOTHER_ADDR),
+                (Inet6Address) Inet6Address.getByAddress(IPV6_MDNS_MULTICAST_ADDR));
+        builder.writeUdpHeader((short) MDNS_UDP_PORT, (short) MDNS_UDP_PORT);
+        buf.put(new DnsPacket.DnsHeader(0, 0, 1, 0).getBytes());
+        buf.put(DnsPacket.DnsRecord.makeQuestion(qname, 0, 0).getBytes());
+        return builder.finalizePacket().array();
+    }
+
+    @Test
+    public void testQnameEncoding() {
+        String[] qname = new String[]{"abcd", "ef", "日本"};
+        byte[] encodedQname = ApfFilter.encodeQname(qname);
+        Assert.assertArrayEquals(
+                new byte[]{0x04, 0x61, 0x62, 0x63, 0x64, 0x02, 0x65, 0x66, 0x06, (byte) 0xe6,
+                        (byte) 0x97, (byte) 0xa5, (byte) 0xe6, (byte) 0x9c, (byte) 0xac, 0x00},
+                encodedQname);
+    }
+
+    @Test
+    public void testApfFilterMdns() throws Exception {
+        final byte[] unicastIpv4Addr = {(byte) 192, 0, 2, 63};
+
+        MockIpClientCallback ipClientCallback = new MockIpClientCallback();
+        LinkAddress link = new LinkAddress(InetAddress.getByAddress(unicastIpv4Addr), 24);
+        LinkProperties lp = new LinkProperties();
+        lp.addLinkAddress(link);
+
+        ApfConfiguration config = getDefaultConfig();
+        TestApfFilter apfFilter = new TestApfFilter(mContext, config, ipClientCallback, mLog);
+        apfFilter.setLinkProperties(lp);
+
+        // Construct IPv4 mDNS packet
+        byte[] mdnsv4packet = makeMdnsV4Packet("test.local");
+        byte[] mdnsv6packet = makeMdnsV6Packet("test.local");
+        byte[] program = ipClientCallback.getApfProgram();
+        // mDNSv4 packet is passed if no mDns filter is turned on
+        assertPass(program, mdnsv4packet);
+        // mDNSv6 packet is passed if no mDNS filter is turned on
+        assertPass(program, mdnsv6packet);
+
+        // mDNSv4 packet with qname in the allowlist is passed
+        apfFilter.addToMdnsAllowList(new String[]{"test", "local"});
+        apfFilter.addToMdnsAllowList(new String[]{"abcd", "local"});
+        apfFilter.setMulticastFilter(true);
+        program = ipClientCallback.getApfProgram();
+        assertPass(program, mdnsv4packet);
+        assertPass(program, mdnsv6packet);
+
+        mdnsv4packet = makeMdnsV4Packet("abcd.local");
+        mdnsv6packet = makeMdnsV6Packet("abcd.local");
+        assertPass(program, mdnsv4packet);
+        assertPass(program, mdnsv6packet);
+
+        // mDNSv4 packet with qname not in the allowlist is dropped
+        mdnsv4packet = makeMdnsV4Packet("ffff.local");
+        mdnsv6packet = makeMdnsV6Packet("ffff.local");
+        assertDrop(program, mdnsv4packet);
+        assertDrop(program, mdnsv6packet);
+
+        apfFilter.removeFromAllowList(new String[]{"abcd", "local"});
+        program = ipClientCallback.getApfProgram();
+        mdnsv4packet = makeMdnsV4Packet("abcd.local");
+        mdnsv6packet = makeMdnsV6Packet("abcd.local");
+        assertDrop(program, mdnsv4packet);
+        assertDrop(program, mdnsv6packet);
 
         apfFilter.shutdown();
     }
