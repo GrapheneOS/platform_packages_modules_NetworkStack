@@ -1905,7 +1905,6 @@ public class ApfFilter {
                 if (VDBG) log("matched RA " + ra);
                 // Update lifetimes.
                 ra.mLastSeen = currentTimeSeconds();
-                ra.mMinLifetime = ra.minLifetime();
                 ra.seenCount++;
 
                 // Keep mRas in LRU order so as to prioritize generating filters for recently seen
