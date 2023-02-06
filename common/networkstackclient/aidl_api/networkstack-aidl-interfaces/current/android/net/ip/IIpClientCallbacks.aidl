@@ -49,4 +49,6 @@ interface IIpClientCallbacks {
   oneway void setNeighborDiscoveryOffload(boolean enable);
   oneway void onPreconnectionStart(in List<android.net.Layer2PacketParcelable> packets);
   oneway void onReachabilityFailure(in android.net.networkstack.aidl.ip.ReachabilityLossInfoParcelable lossInfo);
+  oneway void setMaxDtimMultiplier(int multiplier);
+  const int DTIM_MULTIPLIER_RESET = 0;
 }

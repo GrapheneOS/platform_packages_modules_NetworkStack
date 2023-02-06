@@ -432,6 +432,18 @@ public class IpClient extends StateMachine {
         }
 
         /**
+         * Set maximum acceptable DTIM multiplier to hardware driver.
+         */
+        public void setMaxDtimMultiplier(int multiplier) {
+            log("setMaxDtimMultiplier(" + multiplier + ")");
+            try {
+                mCallback.setMaxDtimMultiplier(multiplier);
+            } catch (RemoteException e) {
+                log("Failed to call setMaxDtimMultiplier", e);
+            }
+        }
+
+        /**
          * Get the version of the IIpClientCallbacks AIDL interface.
          */
         public int getInterfaceVersion() {
