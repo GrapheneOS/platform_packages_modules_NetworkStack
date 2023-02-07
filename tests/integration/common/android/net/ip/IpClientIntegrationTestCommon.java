@@ -3926,9 +3926,11 @@ public abstract class IpClientIntegrationTestCommon {
         socket.send(pkt);
     }
 
-    private void runIpReachabilityMonitorAddressResolutionTest(
-            final ProvisioningConfiguration config, final ByteBuffer ra,
-            final Inet6Address dnsServer, final Inet6Address targetIp) throws Exception {
+    private void runIpReachabilityMonitorAddressResolutionTest(final String dnsServer,
+            final Inet6Address targetIp,
+            final boolean isIgnoreIncompleteIpv6DnsServerEnabled,
+            final boolean isIgnoreIncompleteIpv6DefaultRouterEnabled,
+            final boolean expectNeighborLost) throws Exception {
         // This mock is required, otherwise, IpReachabilityMonitor#avoidingBadLinks() will always
         // return false, that results in the target tested IPv6 off-link DNS server won't be removed
         // from LP and notifyLost won't be invoked.
@@ -3941,17 +3943,38 @@ public abstract class IpClientIntegrationTestCommon {
         setDhcpFeatures(false /* isDhcpLeaseCacheEnabled */, true /* isRapidCommitEnabled */,
                 false /* isDhcpIpConflictDetectEnabled */,
                 false /* isIPv6OnlyPreferredEnabled */);
+        setFeatureEnabled(
+                NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION,
+                isIgnoreIncompleteIpv6DnsServerEnabled);
+        setFeatureEnabled(
+                NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION,
+                isIgnoreIncompleteIpv6DefaultRouterEnabled);
+        final ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .build();
         startIpClientProvisioning(config);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
 
-        final LinkProperties lp = performDualStackProvisioning(ra, dnsServer);
+        final List<ByteBuffer> options = new ArrayList<ByteBuffer>();
+        options.add(buildPioOption(3600, 1800, "2001:db8:1::/64")); // PIO
+        options.add(buildRdnssOption(3600, dnsServer));             // RDNSS
+        // If target IP of address resolution is default router's IPv6 link-local address,
+        // then we should not take SLLA option in RA.
+        if (!targetIp.equals(ROUTER_LINK_LOCAL)) {
+            options.add(buildSllaOption());                         // SLLA
+        }
+        final ByteBuffer ra = buildRaPacket(options.toArray(new ByteBuffer[options.size()]));
+        final Inet6Address dnsServerIp =
+                (Inet6Address) InetAddresses.parseNumericAddress(dnsServer);
+        final LinkProperties lp = performDualStackProvisioning(ra, dnsServerIp);
         runAsShell(MANAGE_TEST_NETWORKS, () -> createTestNetworkAgentAndRegister(lp));
 
-        // Send a UDP packet to on-link IPv6 DNS server to trigger address resolution process.
+        // Send a UDP packet to IPv6 DNS server to trigger address resolution process for IPv6
+        // on-link DNS server or default router(if the target is default router, we should pass
+        // in an IPv6 off-link DNS server such as 2001:db8:4860:4860::64).
         final Random random = new Random();
         final byte[] data = new byte[100];
         random.nextBytes(data);
-        sendUdpPacketToNetwork(mNetworkAgent.getNetwork(), dnsServer, 1234 /* port */, data);
+        sendUdpPacketToNetwork(mNetworkAgent.getNetwork(), dnsServerIp, 1234 /* port */, data);
 
         // Wait for the multicast NSes but never respond to them, that results in the on-link
         // DNS gets lost and onReachabilityLost callback will be invoked.
@@ -3968,27 +3991,57 @@ public abstract class IpClientIntegrationTestCommon {
             }
         }
         assertFalse(nsList.isEmpty());
+
+        if (expectNeighborLost) {
+            assertNotifyNeighborLost(targetIp, NudEventType.NUD_ORGANIC_FAILED_CRITICAL);
+        } else {
+            assertNeverNotifyNeighborLost();
+        }
     }
 
     @Test
     @SignatureRequiredTest(reason = "Need to mock NetworkAgent")
     public void testIpReachabilityMonitor_incompleteIpv6DnsServerInDualStack() throws Exception {
-        final ByteBuffer pio = buildPioOption(3600, 1800, "2001:db8:1::/64");
-        final ByteBuffer rdnss = buildRdnssOption(3600, IPV6_ON_LINK_DNS_SERVER);
-        final ByteBuffer slla = buildSllaOption();
-        final ByteBuffer ra = buildRaPacket(pio, rdnss, slla);
-        final Inet6Address dnsServerIp =
+        final Inet6Address targetIp =
                 (Inet6Address) InetAddresses.parseNumericAddress(IPV6_ON_LINK_DNS_SERVER);
+        runIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER, targetIp,
+                true /* isIgnoreIncompleteIpv6DnsServerEnabled */,
+                false /* isIgnoreIncompleteIpv6DefaultRouterEnabled */,
+                false /* expectNeighborLost */);
+    }
 
-        final ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
-                .build();
-        runIpReachabilityMonitorAddressResolutionTest(config, ra, dnsServerIp,
-                dnsServerIp /* targetIp*/);
+    @Test
+    @SignatureRequiredTest(reason = "Need to mock NetworkAgent")
+    public void testIpReachabilityMonitor_incompleteIpv6DnsServerInDualStack_flagoff()
+            throws Exception {
+        final Inet6Address targetIp =
+                (Inet6Address) InetAddresses.parseNumericAddress(IPV6_ON_LINK_DNS_SERVER);
+        runIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER, targetIp,
+                false /* isIgnoreIncompleteIpv6DnsServerEnabled */,
+                false /* isIgnoreIncompleteIpv6DefaultRouterEnabled */,
+                true /* expectNeighborLost */);
+    }
 
-        // address resolution fails for on-link DNS server and trigger onReachabilityFailure.
-        assertNotifyNeighborLost(
-                dnsServerIp /* targetIp */,
-                NudEventType.NUD_ORGANIC_FAILED_CRITICAL);
+    @Test
+    @SignatureRequiredTest(reason = "Need to mock the NetworkAgent")
+    public void testIpReachabilityMonitor_incompleteIpv6DefaultRouterInDualStack()
+            throws Exception {
+        runIpReachabilityMonitorAddressResolutionTest(IPV6_OFF_LINK_DNS_SERVER,
+                ROUTER_LINK_LOCAL /* targetIp */,
+                false /* isIgnoreIncompleteIpv6DnsServerEnabled */,
+                true /* isIgnoreIncompleteIpv6DefaultRouterEnabled */,
+                false /* expectNeighborLost */);
+    }
+
+    @Test
+    @SignatureRequiredTest(reason = "Need to mock the NetworkAgent")
+    public void testIpReachabilityMonitor_incompleteIpv6DefaultRouterInDualStack_flagoff()
+            throws Exception {
+        runIpReachabilityMonitorAddressResolutionTest(IPV6_OFF_LINK_DNS_SERVER,
+                ROUTER_LINK_LOCAL /* targetIp */,
+                false /* isIgnoreIncompleteIpv6DnsServerEnabled */,
+                false /* isIgnoreIncompleteIpv6DefaultRouterEnabled */,
+                true /* expectNeighborLost */);
     }
 
     @Test
