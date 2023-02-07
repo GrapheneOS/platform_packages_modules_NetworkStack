@@ -18,6 +18,7 @@ package android.net.ip;
 
 import static android.Manifest.permission.MANAGE_TEST_NETWORKS;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET;
+import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_SUSPENDED;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN;
@@ -121,6 +122,7 @@ import android.net.Layer2PacketParcelable;
 import android.net.LinkAddress;
 import android.net.LinkProperties;
 import android.net.MacAddress;
+import android.net.Network;
 import android.net.NetworkAgentConfig;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
@@ -223,6 +225,8 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.reflect.Method;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -385,6 +389,7 @@ public abstract class IpClientIntegrationTestCommon {
     private static final String IPV4_ANY_ADDRESS_PREFIX = "0.0.0.0/0";
     private static final String HOSTNAME = "testhostname";
     private static final String IPV6_OFF_LINK_DNS_SERVER = "2001:4860:4860::64";
+    private static final String IPV6_ON_LINK_DNS_SERVER = "2001:db8:1::64";
     private static final int TEST_DEFAULT_MTU = 1500;
     private static final int TEST_MIN_MTU = 1280;
     private static final MacAddress ROUTER_MAC = MacAddress.fromString("00:1A:11:22:33:44");
@@ -679,6 +684,7 @@ public abstract class IpClientIntegrationTestCommon {
         }
         if (mNetworkAgentThread != null) {
             mNetworkAgentThread.quitSafely();
+            mNetworkAgentThread.join();
         }
         teardownTapInterface();
         mIIpClient.shutdown();
@@ -720,13 +726,14 @@ public abstract class IpClientIntegrationTestCommon {
         return iface;
     }
 
-    private void teardownTapInterface() {
+    private void teardownTapInterface() throws Exception {
         if (mPacketReader != null) {
             mHandler.post(() -> mPacketReader.stop());  // Also closes the socket
             mTapFd = null;
         }
         if (mPacketReaderThread != null) {
             mPacketReaderThread.quitSafely();
+            mPacketReaderThread.join();
         }
     }
 
@@ -1586,6 +1593,7 @@ public abstract class IpClientIntegrationTestCommon {
                         .addCapability(NET_CAPABILITY_NOT_SUSPENDED)
                         .addCapability(NET_CAPABILITY_NOT_ROAMING)
                         .addCapability(NET_CAPABILITY_NOT_VPN)
+                        .addCapability(NET_CAPABILITY_NOT_RESTRICTED)
                         .addTransportType(TRANSPORT_TEST)
                         .setNetworkSpecifier(testNetworkSpecifier)
                         .build(),
@@ -2825,13 +2833,21 @@ public abstract class IpClientIntegrationTestCommon {
                 true /* shouldReplyNakOnRoam */);
     }
 
-    private void performDualStackProvisioning() throws Exception {
-        final InOrder inOrder = inOrder(mCb);
-        final CompletableFuture<LinkProperties> lpFuture = new CompletableFuture<>();
+    private LinkProperties performDualStackProvisioning() throws Exception {
+        final Inet6Address dnsServer =
+                (Inet6Address) InetAddresses.parseNumericAddress(IPV6_OFF_LINK_DNS_SERVER);
         final ByteBuffer pio = buildPioOption(3600, 1800, "2001:db8:1::/64");
         final ByteBuffer rdnss = buildRdnssOption(3600, IPV6_OFF_LINK_DNS_SERVER);
         final ByteBuffer slla = buildSllaOption();
         final ByteBuffer ra = buildRaPacket(pio, rdnss, slla);
+
+        return performDualStackProvisioning(ra, dnsServer);
+    }
+
+    private LinkProperties performDualStackProvisioning(final ByteBuffer ra,
+            final InetAddress dnsServer) throws Exception {
+        final InOrder inOrder = inOrder(mCb);
+        final CompletableFuture<LinkProperties> lpFuture = new CompletableFuture<>();
 
         doIpv6OnlyProvisioning(inOrder, ra);
 
@@ -2846,10 +2862,11 @@ public abstract class IpClientIntegrationTestCommon {
 
         final LinkProperties lp = lpFuture.get(TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         assertNotNull(lp);
-        assertTrue(lp.getDnsServers().contains(InetAddress.getByName(IPV6_OFF_LINK_DNS_SERVER)));
+        assertTrue(lp.getDnsServers().contains(dnsServer));
         assertTrue(lp.getDnsServers().contains(SERVER_ADDR));
 
         clearInvocations(mCb);
+        return lp;
     }
 
     private void doDualStackProvisioning(boolean shouldDisableAcceptRa) throws Exception {
@@ -3899,6 +3916,79 @@ public abstract class IpClientIntegrationTestCommon {
         mPacketReader.sendResponse(na);
         assertNotifyNeighborLost(ROUTER_LINK_LOCAL /* targetIp */,
                 NudEventType.NUD_POST_ROAMING_MAC_ADDRESS_CHANGED);
+    }
+
+    private void sendUdpPacketToNetwork(final Network network, final Inet6Address remoteIp,
+            int port, final byte[] data) throws Exception {
+        final DatagramSocket socket = new DatagramSocket(0, (InetAddress) Inet6Address.ANY);
+        final DatagramPacket pkt = new DatagramPacket(data, data.length, remoteIp, port);
+        network.bindSocket(socket);
+        socket.send(pkt);
+    }
+
+    private void runIpReachabilityMonitorAddressResolutionTest(
+            final ProvisioningConfiguration config, final ByteBuffer ra,
+            final Inet6Address dnsServer, final Inet6Address targetIp) throws Exception {
+        // This mock is required, otherwise, IpReachabilityMonitor#avoidingBadLinks() will always
+        // return false, that results in the target tested IPv6 off-link DNS server won't be removed
+        // from LP and notifyLost won't be invoked.
+        when(mCm.shouldAvoidBadWifi()).thenReturn(true);
+
+        mNetworkAgentThread =
+                new HandlerThread(IpClientIntegrationTestCommon.class.getSimpleName());
+        mNetworkAgentThread.start();
+
+        setDhcpFeatures(false /* isDhcpLeaseCacheEnabled */, true /* isRapidCommitEnabled */,
+                false /* isDhcpIpConflictDetectEnabled */,
+                false /* isIPv6OnlyPreferredEnabled */);
+        startIpClientProvisioning(config);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
+
+        final LinkProperties lp = performDualStackProvisioning(ra, dnsServer);
+        runAsShell(MANAGE_TEST_NETWORKS, () -> createTestNetworkAgentAndRegister(lp));
+
+        // Send a UDP packet to on-link IPv6 DNS server to trigger address resolution process.
+        final Random random = new Random();
+        final byte[] data = new byte[100];
+        random.nextBytes(data);
+        sendUdpPacketToNetwork(mNetworkAgent.getNetwork(), dnsServer, 1234 /* port */, data);
+
+        // Wait for the multicast NSes but never respond to them, that results in the on-link
+        // DNS gets lost and onReachabilityLost callback will be invoked.
+        final List<NeighborSolicitation> nsList = new ArrayList<NeighborSolicitation>();
+        NeighborSolicitation ns;
+        while ((ns = getNextNeighborSolicitation()) != null) {
+            // multicast NS for address resolution, IPv6 dst address in that NS is solicited-node
+            // multicast address based on the target IP, the target IP is either on-link IPv6 DNS
+            // server address or IPv6 link-local address of default gateway.
+            final LinkAddress actual = new LinkAddress(ns.nsHdr.target, 64);
+            final LinkAddress target = new LinkAddress(targetIp, 64);
+            if (actual.equals(target) && ns.ipv6Hdr.dstIp.isMulticastAddress()) {
+                nsList.add(ns);
+            }
+        }
+        assertFalse(nsList.isEmpty());
+    }
+
+    @Test
+    @SignatureRequiredTest(reason = "Need to mock NetworkAgent")
+    public void testIpReachabilityMonitor_incompleteIpv6DnsServerInDualStack() throws Exception {
+        final ByteBuffer pio = buildPioOption(3600, 1800, "2001:db8:1::/64");
+        final ByteBuffer rdnss = buildRdnssOption(3600, IPV6_ON_LINK_DNS_SERVER);
+        final ByteBuffer slla = buildSllaOption();
+        final ByteBuffer ra = buildRaPacket(pio, rdnss, slla);
+        final Inet6Address dnsServerIp =
+                (Inet6Address) InetAddresses.parseNumericAddress(IPV6_ON_LINK_DNS_SERVER);
+
+        final ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .build();
+        runIpReachabilityMonitorAddressResolutionTest(config, ra, dnsServerIp,
+                dnsServerIp /* targetIp*/);
+
+        // address resolution fails for on-link DNS server and trigger onReachabilityFailure.
+        assertNotifyNeighborLost(
+                dnsServerIp /* targetIp */,
+                NudEventType.NUD_ORGANIC_FAILED_CRITICAL);
     }
 
     @Test
