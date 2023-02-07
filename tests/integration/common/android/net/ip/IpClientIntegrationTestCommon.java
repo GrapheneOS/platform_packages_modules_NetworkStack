@@ -384,6 +384,7 @@ public abstract class IpClientIntegrationTestCommon {
     private static final String IPV4_TEST_SUBNET_PREFIX = "192.168.1.0/24";
     private static final String IPV4_ANY_ADDRESS_PREFIX = "0.0.0.0/0";
     private static final String HOSTNAME = "testhostname";
+    private static final String IPV6_OFF_LINK_DNS_SERVER = "2001:4860:4860::64";
     private static final int TEST_DEFAULT_MTU = 1500;
     private static final int TEST_MIN_MTU = 1280;
     private static final MacAddress ROUTER_MAC = MacAddress.fromString("00:1A:11:22:33:44");
@@ -1818,9 +1819,8 @@ public abstract class IpClientIntegrationTestCommon {
 
     private void sendRouterAdvertisement(boolean waitForRs, short lifetime, int valid,
             int preferred) throws Exception {
-        final String dnsServer = "2001:4860:4860::64";
         final ByteBuffer pio = buildPioOption(valid, preferred, "2001:db8:1::/64");
-        final ByteBuffer rdnss = buildRdnssOption(3600, dnsServer);
+        final ByteBuffer rdnss = buildRdnssOption(3600, IPV6_OFF_LINK_DNS_SERVER);
         sendRouterAdvertisement(waitForRs, lifetime, pio, rdnss);
     }
 
@@ -1908,9 +1908,8 @@ public abstract class IpClientIntegrationTestCommon {
 
     private LinkProperties doIpv6OnlyProvisioning() throws Exception {
         final InOrder inOrder = inOrder(mCb);
-        final String dnsServer = "2001:4860:4860::64";
         final ByteBuffer pio = buildPioOption(3600, 1800, "2001:db8:1::/64");
-        final ByteBuffer rdnss = buildRdnssOption(3600, dnsServer);
+        final ByteBuffer rdnss = buildRdnssOption(3600, IPV6_OFF_LINK_DNS_SERVER);
         final ByteBuffer slla = buildSllaOption();
         final ByteBuffer ra = buildRaPacket(pio, rdnss, slla);
 
@@ -2022,12 +2021,11 @@ public abstract class IpClientIntegrationTestCommon {
                 .build();
         startIpClientProvisioning(config);
 
-        final String dnsServer = "2001:4860:4860::64";
         final IpPrefix prefix = new IpPrefix("64:ff9b::/96");
         final IpPrefix otherPrefix = new IpPrefix("2001:db8:64::/96");
 
         final ByteBuffer pio = buildPioOption(600, 300, "2001:db8:1::/64");
-        ByteBuffer rdnss = buildRdnssOption(600, dnsServer);
+        ByteBuffer rdnss = buildRdnssOption(600, IPV6_OFF_LINK_DNS_SERVER);
         ByteBuffer pref64 = new StructNdOptPref64(prefix, 600).toByteBuffer();
         ByteBuffer ra = buildRaPacket(pio, rdnss, pref64);
 
@@ -2830,9 +2828,8 @@ public abstract class IpClientIntegrationTestCommon {
     private void performDualStackProvisioning() throws Exception {
         final InOrder inOrder = inOrder(mCb);
         final CompletableFuture<LinkProperties> lpFuture = new CompletableFuture<>();
-        final String dnsServer = "2001:4860:4860::64";
         final ByteBuffer pio = buildPioOption(3600, 1800, "2001:db8:1::/64");
-        final ByteBuffer rdnss = buildRdnssOption(3600, dnsServer);
+        final ByteBuffer rdnss = buildRdnssOption(3600, IPV6_OFF_LINK_DNS_SERVER);
         final ByteBuffer slla = buildSllaOption();
         final ByteBuffer ra = buildRaPacket(pio, rdnss, slla);
 
@@ -2849,7 +2846,7 @@ public abstract class IpClientIntegrationTestCommon {
 
         final LinkProperties lp = lpFuture.get(TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         assertNotNull(lp);
-        assertTrue(lp.getDnsServers().contains(InetAddress.getByName(dnsServer)));
+        assertTrue(lp.getDnsServers().contains(InetAddress.getByName(IPV6_OFF_LINK_DNS_SERVER)));
         assertTrue(lp.getDnsServers().contains(SERVER_ADDR));
 
         clearInvocations(mCb);
@@ -4083,10 +4080,9 @@ public abstract class IpClientIntegrationTestCommon {
 
         // Send another RA with a different IPv6 global prefix. This PIO option should be dropped
         // due to the ENOBUFS happens, it means IpClient shouldn't see the new IPv6 global prefix.
-        final String dnsServer = "2001:4860:4860::64";
         final String prefix = "2001:db8:dead:beef::/64";
         final ByteBuffer pio = buildPioOption(3600, 1800, prefix);
-        ByteBuffer rdnss = buildRdnssOption(3600, dnsServer);
+        ByteBuffer rdnss = buildRdnssOption(3600, IPV6_OFF_LINK_DNS_SERVER);
         sendRouterAdvertisement(false /* waitForRs */, (short) 1800, pio, rdnss);
 
         // Unblock the IpClient handler and ENOBUFS should happen then.
