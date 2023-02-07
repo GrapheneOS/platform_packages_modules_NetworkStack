@@ -22,6 +22,8 @@ import static android.net.metrics.IpReachabilityEvent.PROVISIONING_LOST;
 import static android.net.metrics.IpReachabilityEvent.PROVISIONING_LOST_ORGANIC;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
+import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION;
+import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_MCAST_RESOLICIT_VERSION;
 
 import android.content.Context;
@@ -233,6 +235,8 @@ public class IpReachabilityMonitor {
     @NonNull
     private final Callback mCallback;
     private final boolean mMulticastResolicitEnabled;
+    private final boolean mIgnoreIncompleteIpv6DnsServerEnabled;
+    private final boolean mIgnoreIncompleteIpv6DefaultRouterEnabled;
 
     public IpReachabilityMonitor(
             Context context, InterfaceParams ifParams, Handler h, SharedLog log, Callback callback,
@@ -256,6 +260,12 @@ public class IpReachabilityMonitor {
         mDependencies = dependencies;
         mMulticastResolicitEnabled = dependencies.isFeatureEnabled(context,
                 IP_REACHABILITY_MCAST_RESOLICIT_VERSION, false /* defaultEnabled */);
+        mIgnoreIncompleteIpv6DnsServerEnabled = dependencies.isFeatureEnabled(context,
+                IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION,
+                false /* defaultEnabled */);
+        mIgnoreIncompleteIpv6DefaultRouterEnabled = dependencies.isFeatureEnabled(context,
+                IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION,
+                false /* defaultEnabled */);
         mMetricsLog = metricsLog;
         mNetd = netd;
         Preconditions.checkNotNull(mNetd);
@@ -286,7 +296,7 @@ public class IpReachabilityMonitor {
                         // After both unicast probe and multicast probe(if mcast_resolicit is not 0)
                         // attempts fail, trigger the neighbor lost event and disconnect.
                         mLog.w("ALERT neighbor went from: " + prev + " to: " + event);
-                        handleNeighborLost(event);
+                        handleNeighborLost(prev, event);
                     } else if (event.nudState == StructNdMsg.NUD_REACHABLE) {
                         handleNeighborReachable(prev, event);
                     }
@@ -423,7 +433,22 @@ public class IpReachabilityMonitor {
         maybeRestoreNeighborParameters();
     }
 
-    private void handleNeighborLost(NeighborEvent event) {
+    private boolean shouldIgnoreIncompleteIpv6Neighbor(@Nullable final NeighborEvent prev,
+            @NonNull final NeighborEvent event) {
+        // If it isn't IPv6 neighbor, return false.
+        if (!(event.ip instanceof Inet6Address)) return false;
+
+        // If neighbor isn't in the watch list, return false.
+        if (!mNeighborWatchList.containsKey(event.ip)) return false;
+
+        // For on-link IPv6 DNS server or default router that never ever responds to address
+        // resolution, kernel will send RTM_NEWNEIGH with NUD_FAILED to user space directly,
+        // and there is no netlink neighbor events related to this neighbor received before.
+        return (prev == null || event.nudState == StructNdMsg.NUD_FAILED);
+    }
+
+    private void handleNeighborLost(@Nullable final NeighborEvent prev,
+            @NonNull final NeighborEvent event) {
         final LinkProperties whatIfLp = new LinkProperties(mLinkProperties);
 
         InetAddress ip = null;
@@ -453,9 +478,39 @@ public class IpReachabilityMonitor {
             }
         }
 
+        final boolean ignoreIncompleteIpv6DnsServer =
+                mIgnoreIncompleteIpv6DnsServerEnabled
+                        && isNeighborDnsServer(event)
+                        && shouldIgnoreIncompleteIpv6Neighbor(prev, event);
+
+        // Generally Router Advertisement should take SLLA option, then device won't do address
+        // resolution for default router's IPv6 link-local address automatically. But sometimes
+        // it may miss SLLA option, also add a flag to check these cases.
+        final boolean ignoreIncompleteIpv6DefaultRouter =
+                mIgnoreIncompleteIpv6DefaultRouterEnabled
+                        && isNeighborDefaultRouter(event)
+                        && shouldIgnoreIncompleteIpv6Neighbor(prev, event);
+
+        // Only ignore the incomplete IPv6 neighbor iff IPv4 is still provisioned. For IPv6-only
+        // networks, we MUST not ignore any incomplete IPv6 neighbor.
+        final boolean ignoreIncompleteIpv6Neighbor =
+                (ignoreIncompleteIpv6DnsServer || ignoreIncompleteIpv6DefaultRouter)
+                        && whatIfLp.isIpv4Provisioned();
+
+        // It's better to remove the incompleted on-link IPv6 DNS server or default router from
+        // watch list, otherwise, when wifi invokes probeAll later (e.g. post roam) to send probe
+        // to an incompleted on-link DNS server or default router, it should fail to send netlink
+        // message to kernel as there is no neighbor cache entry for it at all.
+        if (ignoreIncompleteIpv6Neighbor) {
+            Log.d(TAG, "remove incomplete IPv6 neighbor " + event.ip
+                    + " which fails to respond to address resolution from watch list.");
+            mNeighborWatchList.remove(event.ip);
+        }
+
         final boolean lostProvisioning =
                 (mLinkProperties.isIpv4Provisioned() && !whatIfLp.isIpv4Provisioned())
-                || (mLinkProperties.isIpv6Provisioned() && !whatIfLp.isIpv6Provisioned());
+                        || (mLinkProperties.isIpv6Provisioned() && !whatIfLp.isIpv6Provisioned()
+                                && !ignoreIncompleteIpv6Neighbor);
         final NudEventType type = getNudFailureEventType(isFromProbe(),
                 isNudFailureDueToRoam(), lostProvisioning);
 
