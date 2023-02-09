@@ -2865,7 +2865,6 @@ public abstract class IpClientIntegrationTestCommon {
         assertTrue(lp.getDnsServers().contains(dnsServer));
         assertTrue(lp.getDnsServers().contains(SERVER_ADDR));
 
-        clearInvocations(mCb);
         return lp;
     }
 
@@ -3180,6 +3179,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     private void shutdownAndRecreateIpClient() throws Exception {
+        clearInvocations(mCb);
         mIpc.shutdown();
         awaitIpClientShutdown();
         mIpc = makeIpClient();
