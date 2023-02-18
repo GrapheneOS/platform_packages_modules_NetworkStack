@@ -54,6 +54,7 @@ import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.modules.utils.build.SdkLevel;
+import com.android.net.module.util.netlink.NetlinkUtils;
 import com.android.net.module.util.netlink.StructNlMsgHdr;
 import com.android.networkstack.apishim.ConstantsShim;
 import com.android.testutils.DevSdkIgnoreRule;
@@ -189,13 +190,13 @@ public class TcpSocketTrackerTest {
         final ByteBuffer buffer = ByteBuffer.allocate(TEST_BUFFER_SIZE);
 
         buffer.position(TEST_BUFFER_SIZE - StructNlMsgHdr.STRUCT_SIZE);
-        assertTrue(TcpSocketTracker.enoughBytesRemainForValidNlMsg(buffer));
+        assertTrue(NetlinkUtils.enoughBytesRemainForValidNlMsg(buffer));
         // Remaining buffer size is less than a valid StructNlMsgHdr size.
         buffer.position(TEST_BUFFER_SIZE - StructNlMsgHdr.STRUCT_SIZE + 1);
-        assertFalse(TcpSocketTracker.enoughBytesRemainForValidNlMsg(buffer));
+        assertFalse(NetlinkUtils.enoughBytesRemainForValidNlMsg(buffer));
 
         buffer.position(TEST_BUFFER_SIZE);
-        assertFalse(TcpSocketTracker.enoughBytesRemainForValidNlMsg(buffer));
+        assertFalse(NetlinkUtils.enoughBytesRemainForValidNlMsg(buffer));
     }
 
     @Test @IgnoreUpTo(Build.VERSION_CODES.Q) // TCP info parsing is not supported on Q
