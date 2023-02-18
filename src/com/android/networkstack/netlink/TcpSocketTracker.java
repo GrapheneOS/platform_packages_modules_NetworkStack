@@ -240,7 +240,7 @@ public class TcpSocketTracker {
 
     // Return true if there are more pending messages to read
     private boolean parseMessage(ByteBuffer bytes, int family, TcpStat stat, long time) {
-        if (!enoughBytesRemainForValidNlMsg(bytes)) {
+        if (!NetlinkUtils.enoughBytesRemainForValidNlMsg(bytes)) {
             // This is unlikely to happen in real cases. Check this first for testing.
             Log.e(TAG, "Size is less than header size. Ignored.");
             return false;
@@ -283,7 +283,7 @@ public class TcpSocketTracker {
                             calculateLatestPacketsStat(info, mSocketInfos.get(cookie)));
                     mSocketInfos.put(cookie, info);
                 }
-            } while (enoughBytesRemainForValidNlMsg(bytes));
+            } while (NetlinkUtils.enoughBytesRemainForValidNlMsg(bytes));
         } catch (IllegalArgumentException | BufferUnderflowException e) {
             Log.wtf(TAG, "Unexpected socket info parsing, family " + family
                     + " buffer:" + bytes + " "
@@ -433,12 +433,6 @@ public class TcpSocketTracker {
     public int getLatestReceivedCount() {
         if (!mDependencies.isTcpInfoParsingSupported()) return -1;
         return mLatestReceivedCount;
-    }
-
-    /** Check if the length and position of the given ByteBuffer is valid for a nlmsghdr message. */
-    @VisibleForTesting
-    static boolean enoughBytesRemainForValidNlMsg(@NonNull final ByteBuffer bytes) {
-        return bytes.remaining() >= StructNlMsgHdr.STRUCT_SIZE;
     }
 
     private static boolean isValidInetDiagMsgSize(final int nlMsgLen) {
