@@ -16,6 +16,7 @@
 
 package com.android.networkstack.apishim;
 
+import android.content.pm.PackageManager;
 import android.os.Build;
 
 import androidx.annotation.RequiresApi;
@@ -35,4 +36,8 @@ public class ConstantsShim extends com.android.networkstack.apishim.api33.Consta
      */
     @VisibleForTesting
     public static final int VERSION = 34;
+
+    // Constants defined in android.content.pm.PackageManager
+    public static final String PROPERTY_SELF_CERTIFIED_NETWORK_CAPABILITIES =
+            PackageManager.PROPERTY_SELF_CERTIFIED_NETWORK_CAPABILITIES;
 }
