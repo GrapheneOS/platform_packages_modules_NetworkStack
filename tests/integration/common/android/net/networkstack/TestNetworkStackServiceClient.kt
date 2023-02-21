@@ -35,8 +35,8 @@ class TestNetworkStackServiceClient private constructor() : NetworkStackClientBa
         private val TAG = "TestNetworkStackServiceClient"
         private val testNetworkStackServiceAction = "android.net.INetworkStackConnector.Test"
         private val context by lazy { InstrumentationRegistry.getInstrumentation().context }
+        private val component = getNetworkStackComponent(testNetworkStackServiceAction)
         private val networkStackVersion by lazy {
-            val component = getNetworkStackComponent(testNetworkStackServiceAction)
             val info = context.packageManager.getPackageInfo(component.packageName, 0 /* flags */)
             info.longVersionCode
         }
@@ -87,5 +87,9 @@ class TestNetworkStackServiceClient private constructor() : NetworkStackClientBa
 
     fun disconnect() {
         InstrumentationRegistry.getInstrumentation().context.unbindService(serviceConnection)
+    }
+
+    fun getNetworkStackPackageName(): String {
+        return component.packageName
     }
 }
