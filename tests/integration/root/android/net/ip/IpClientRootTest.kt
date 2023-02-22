@@ -22,8 +22,8 @@ import android.Manifest.permission.WRITE_DEVICE_CONFIG
 import android.net.IIpMemoryStore
 import android.net.IIpMemoryStoreCallbacks
 import android.net.NetworkStackIpMemoryStore
-import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener
 import android.net.ipmemorystore.NetworkAttributes
+import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener
 import android.net.ipmemorystore.Status
 import android.net.networkstack.TestNetworkStackServiceClient
 import android.os.Process
@@ -264,5 +264,20 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
 
     override fun storeNetworkAttributes(l2Key: String, na: NetworkAttributes) {
         mStore.storeNetworkAttributes(l2Key, na, null /* listener */)
+    }
+
+    private fun readNudSolicitNumFromResource(name: String): Int {
+        val packageName = nsClient.getNetworkStackPackageName()
+        val resource = mContext.createPackageContext(packageName, 0).getResources()
+        val id = resource.getIdentifier(name, "integer", packageName)
+        return resource.getInteger(id)
+    }
+
+    override fun readNudSolicitNumInSteadyStateFromResource(): Int {
+        return readNudSolicitNumFromResource("config_nud_steadystate_solicit_num")
+    }
+
+    override fun readNudSolicitNumPostRoamingFromResource(): Int {
+        return readNudSolicitNumFromResource("config_nud_postroaming_solicit_num")
     }
 }

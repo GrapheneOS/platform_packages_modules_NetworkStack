@@ -21,9 +21,9 @@ import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener
 import android.net.ipmemorystore.Status
 import android.net.ipmemorystore.Status.SUCCESS
 import android.util.ArrayMap
+import org.mockito.ArgumentCaptor
 import org.mockito.Mockito.any
 import org.mockito.Mockito.doAnswer
-import org.mockito.ArgumentCaptor
 import org.mockito.Mockito.eq
 import org.mockito.Mockito.never
 import org.mockito.Mockito.timeout
@@ -33,6 +33,9 @@ import org.mockito.Mockito.verify
  * Tests for IpClient, run with signature permissions.
  */
 class IpClientSignatureTest : IpClientIntegrationTestCommon() {
+    private val DEFAULT_NUD_SOLICIT_NUM_POST_ROAM = 5
+    private val DEFAULT_NUD_SOLICIT_NUM_STEADY_STATE = 10
+
     private val mEnabledFeatures = ArrayMap<String, Boolean>()
 
     override fun makeIIpClient(ifaceName: String, cb: IIpClientCallbacks): IIpClient {
@@ -67,5 +70,13 @@ class IpClientSignatureTest : IpClientIntegrationTestCommon() {
             listener.onNetworkAttributesRetrieved(Status(SUCCESS), l2Key, na)
             true
         }.`when`(mIpMemoryStore).retrieveNetworkAttributes(eq(l2Key), any())
+    }
+
+    override fun readNudSolicitNumInSteadyStateFromResource(): Int {
+        return DEFAULT_NUD_SOLICIT_NUM_STEADY_STATE
+    }
+
+    override fun readNudSolicitNumPostRoamingFromResource(): Int {
+        return DEFAULT_NUD_SOLICIT_NUM_POST_ROAM
     }
 }
