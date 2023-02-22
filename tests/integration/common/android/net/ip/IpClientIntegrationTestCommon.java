@@ -37,7 +37,6 @@ import static android.net.dhcp.DhcpPacket.MIN_V6ONLY_WAIT_MS;
 import static android.net.dhcp.DhcpResultsParcelableUtil.fromStableParcelable;
 import static android.net.ip.IpClientLinkObserver.CLAT_PREFIX;
 import static android.net.ip.IpClientLinkObserver.CONFIG_SOCKET_RECV_BUFSIZE;
-import static android.net.ip.IpReachabilityMonitor.MIN_NUD_SOLICIT_NUM;
 import static android.net.ip.IpReachabilityMonitor.NUD_MCAST_RESOLICIT_NUM;
 import static android.net.ip.IpReachabilityMonitor.nudEventTypeToInt;
 import static android.net.ipmemorystore.Status.SUCCESS;
@@ -576,6 +575,10 @@ public abstract class IpClientIntegrationTestCommon {
     protected abstract void storeNetworkAttributes(String l2Key, NetworkAttributes na);
 
     protected abstract void assertIpMemoryNeverStoreNetworkAttributes(String l2Key, long timeout);
+
+    protected abstract int readNudSolicitNumInSteadyStateFromResource();
+
+    protected abstract int readNudSolicitNumPostRoamingFromResource();
 
     protected final boolean testSkipped() {
         if (!useNetworkStackSignature() && !TestNetworkStackServiceClient.isSupported()) {
@@ -3806,7 +3809,8 @@ public abstract class IpClientIntegrationTestCommon {
         prepareIpReachabilityMonitorTest();
 
         final List<NeighborSolicitation> nsList = waitForMultipleNeighborSolicitations();
-        assertEquals(MIN_NUD_SOLICIT_NUM, nsList.size());
+        final int expectedNudSolicitNum = readNudSolicitNumPostRoamingFromResource();
+        assertEquals(expectedNudSolicitNum, nsList.size());
         for (NeighborSolicitation ns : nsList) {
             assertUnicastNeighborSolicitation(ns, ROUTER_MAC /* dstMac */,
                     ROUTER_LINK_LOCAL /* dstIp */, ROUTER_LINK_LOCAL /* targetIp */);
@@ -3849,13 +3853,14 @@ public abstract class IpClientIntegrationTestCommon {
         prepareIpReachabilityMonitorTest(true /* isMulticastResolicitEnabled */);
 
         final List<NeighborSolicitation> nsList = waitForMultipleNeighborSolicitations();
-        int expectedSize = MIN_NUD_SOLICIT_NUM + NUD_MCAST_RESOLICIT_NUM;
-        assertEquals(expectedSize, nsList.size()); // 5 unicast NSes + 3 multicast NSes
-        for (NeighborSolicitation ns : nsList.subList(0, MIN_NUD_SOLICIT_NUM)) {
+        final int expectedNudSolicitNum = readNudSolicitNumPostRoamingFromResource();
+        int expectedSize = expectedNudSolicitNum + NUD_MCAST_RESOLICIT_NUM;
+        assertEquals(expectedSize, nsList.size());
+        for (NeighborSolicitation ns : nsList.subList(0, expectedNudSolicitNum)) {
             assertUnicastNeighborSolicitation(ns, ROUTER_MAC /* dstMac */,
                     ROUTER_LINK_LOCAL /* dstIp */, ROUTER_LINK_LOCAL /* targetIp */);
         }
-        for (NeighborSolicitation ns : nsList.subList(MIN_NUD_SOLICIT_NUM, nsList.size())) {
+        for (NeighborSolicitation ns : nsList.subList(expectedNudSolicitNum, nsList.size())) {
             assertMulticastNeighborSolicitation(ns, ROUTER_LINK_LOCAL /* targetIp */);
         }
     }
