@@ -4065,12 +4065,8 @@ public abstract class IpClientIntegrationTestCommon {
         assertEquals(0, lp.getDnsServers().size());
         final List<LinkAddress> addresses = lp.getLinkAddresses();
         assertEquals(1, addresses.size());
-        assertTrue(addresses.get(0).getAddress().isLinkLocalAddress());
-        assertEquals(1, lp.getRoutes().size());
-        final RouteInfo route = lp.getRoutes().get(0);
-        assertNotNull(route);
-        assertTrue(route.getDestination().equals(new IpPrefix("fe80::/64")));
-        assertTrue(route.getGateway().isAnyLocalAddress());
+        assertTrue(addresses.get(0).getAddress().isLinkLocalAddress()); // only IPv6 link-local
+        assertTrue(hasRouteTo(lp, IPV6_LINK_LOCAL_PREFIX)); // fe80::/64 -> :: iface mtu 0
 
         // Check that if an RA is received, no IP addresses, routes, or DNS servers are configured.
         // Instead of waiting some period of time for the RA to be received and checking the
