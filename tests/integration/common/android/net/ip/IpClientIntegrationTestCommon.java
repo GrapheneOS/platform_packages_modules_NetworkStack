@@ -4218,7 +4218,7 @@ public abstract class IpClientIntegrationTestCommon {
         });
 
         // Send large amount of RAs to overflow the netlink socket receive buffer.
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < 200; i++) {
             sendBasicRouterAdvertisement(false /* waitRs */);
         }
 
