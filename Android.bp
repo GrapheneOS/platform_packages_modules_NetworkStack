@@ -188,6 +188,7 @@ java_library {
         "framework-connectivity",
         "framework-connectivity-t.stubs.module_lib",
         "framework-tethering",
+        "android.net.ipsec.ike.stubs.module_lib",
     ],
     sdk_version: "module_33",
     visibility: ["//visibility:private"],
@@ -216,6 +217,7 @@ java_library {
         "framework-connectivity",
         "framework-connectivity-t.stubs.module_lib",
         "framework-tethering",
+        "android.net.ipsec.ike.stubs.module_lib"
     ],
     sdk_version: "module_current",
     visibility: ["//visibility:private"],
