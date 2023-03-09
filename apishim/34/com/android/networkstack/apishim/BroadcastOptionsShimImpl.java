@@ -64,11 +64,11 @@ public class BroadcastOptionsShimImpl extends
         return this;
     }
 
-    /** See android.app.BroadcastOptions#setDeferUntilActive */
+    /** See android.app.BroadcastOptions#setDeferralPolicy */
     @Override
-    public BroadcastOptionsShim setDeferUntilActive(boolean shouldDefer)
+    public BroadcastOptionsShim setDeferralPolicy(int deferralPolicy)
             throws UnsupportedApiLevelException {
-        mOptions.setDeferUntilActive(shouldDefer);
+        mOptions.setDeferralPolicy(deferralPolicy);
         return this;
     }
 }
