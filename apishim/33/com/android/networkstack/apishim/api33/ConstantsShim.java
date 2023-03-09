@@ -31,6 +31,15 @@ public class ConstantsShim extends com.android.networkstack.apishim.api31.Consta
     @VisibleForTesting
     public static final int VERSION = 33;
 
-    // Constants defined in android.app.BroadcastOptions.
+    // Constant defined in android.app.BroadcastOptions.
+    public static final int DELIVERY_GROUP_POLICY_ALL = 0;
+    // Constant defined in android.app.BroadcastOptions.
     public static final int DELIVERY_GROUP_POLICY_MOST_RECENT = 1;
+
+    // Constant defined in android.app.BroadcastOptions.
+    public static final int DEFERRAL_POLICY_DEFAULT = 0;
+    // Constant defined in android.app.BroadcastOptions.
+    public static final int DEFERRAL_POLICY_NONE = 1;
+    // Constant defined in android.app.BroadcastOptions.
+    public static final int DEFERRAL_POLICY_UNTIL_ACTIVE = 2;
 }
