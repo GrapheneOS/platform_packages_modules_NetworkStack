@@ -37,8 +37,8 @@ public interface BroadcastOptionsShim {
         throw new UnsupportedApiLevelException("Only supported starting from API 34");
     }
 
-    /** See android.app.BroadcastOptions#setDeferUntilActive */
-    default BroadcastOptionsShim setDeferUntilActive(boolean shouldDefer)
+    /** See android.app.BroadcastOptions#setDeferralPolicy */
+    default BroadcastOptionsShim setDeferralPolicy(int deferralPolicy)
             throws UnsupportedApiLevelException {
         throw new UnsupportedApiLevelException("Only supported starting from API 34");
     }
