@@ -500,6 +500,9 @@ public class IpClient extends StateMachine {
     // IpClient shares a handler with DhcpClient: commands must not overlap
     public static final int DHCPCLIENT_CMD_BASE = 1000;
 
+    // IpClient shares a handler with Dhcp6Client: commands must not overlap
+    public static final int DHCP6CLIENT_CMD_BASE = 2000;
+
     // Settings and default values.
     private static final int MAX_LOG_RECORDS = 500;
     private static final int MAX_PACKET_RECORDS = 100;
