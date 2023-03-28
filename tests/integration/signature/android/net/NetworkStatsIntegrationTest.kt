@@ -29,9 +29,12 @@ import com.android.testutils.TestableNetworkCallback
 import com.android.testutils.runAsShell
 import fi.iki.elonen.NanoHTTPD
 import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
 import java.net.HttpURLConnection
+import java.net.HttpURLConnection.HTTP_OK
 import java.net.InetSocketAddress
 import java.net.URL
+import java.nio.charset.Charset
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.After
@@ -54,6 +57,7 @@ class NetworkStatsIntegrationTest {
         LinkAddress(InetAddresses.parseNumericAddress("8.8.8.8"), 32)
     private val DEFAULT_BUFFER_SIZE = 1000
     private val TEST_DOWNLOAD_SIZE = 10000L
+    private val TEST_UPLOAD_SIZE = 20000L
     private val HTTP_SERVER_NAME = "test.com"
     private val DNS_SERVER_PORT = 53
 
@@ -124,39 +128,60 @@ class NetworkStatsIntegrationTest {
      * the packets originated from the mocked v6 address, and destined to a local v6 address.
      */
     @Test
-    fun test464XlatDownloadStats() {
+    fun test464XlatTcpStats() {
         // Wait for 464Xlat to be ready.
         val internalInterfaceName = waitFor464XlatReady(packetBridge.internalNetwork)
 
         val (_, rxBytesBeforeTest) = getTotalTxRxBytes(internalInterfaceName)
 
         // Generate the download traffic.
-        genHttpDownloadTraffic(packetBridge.internalNetwork, TEST_DOWNLOAD_SIZE)
+        genHttpTraffic(packetBridge.internalNetwork, uploadSize = 0L, TEST_DOWNLOAD_SIZE)
 
         // In practice, for one way 10k download payload, the download usage is about
         // 11222~12880 bytes. And the upload usage is about 1279~1626 bytes, which is majorly
         // contributed by TCP ACK packets.
-        val (_, rxBytesAfterDownload) = getTotalTxRxBytes(internalInterfaceName)
+        val (txBytesAfterDownload, rxBytesAfterDownload) = getTotalTxRxBytes(internalInterfaceName)
         assertTrue(
             rxBytesAfterDownload - rxBytesBeforeTest in
                     TEST_DOWNLOAD_SIZE..(TEST_DOWNLOAD_SIZE * 1.3).toLong(),
             "Download size on $internalInterfaceName"
         )
+
+        genHttpTraffic(packetBridge.internalNetwork, TEST_UPLOAD_SIZE, downloadSize = 0L)
+
+        // Verify upload data usage accounting.
+        val (txBytesAfterUpload, _) = getTotalTxRxBytes(internalInterfaceName)
+        assertTrue(
+            txBytesAfterUpload - txBytesAfterDownload in
+                    TEST_UPLOAD_SIZE..(TEST_UPLOAD_SIZE * 1.3).toLong(),
+            "Upload size on $internalInterfaceName"
+        )
     }
 
-    private fun genHttpDownloadTraffic(network: Network, expectedSize: Long) {
-        val path = "/test_download"
-        httpServer.addResponse(
-            TestHttpServer.Request(path), NanoHTTPD.Response.Status.OK,
-            content = getRandomString(expectedSize)
-        )
+    private fun genHttpTraffic(network: Network, uploadSize: Long, downloadSize: Long) {
+        val path = "/test_upload_download"
         val buf = ByteArray(DEFAULT_BUFFER_SIZE)
+
+        httpServer.addResponse(
+            TestHttpServer.Request(path, NanoHTTPD.Method.POST), NanoHTTPD.Response.Status.OK,
+            content = getRandomString(downloadSize)
+        )
         val spec = "http://$HTTP_SERVER_NAME:${httpServer.listeningPort}$path"
         val url = URL(spec)
         val httpConnection = network.openConnection(url) as HttpURLConnection
+        httpConnection.requestMethod = "POST"
+        httpConnection.doOutput = true
         // Tell the server that the response should not be compressed. Otherwise, the data usage
         // accounted will be less than expected.
         httpConnection.setRequestProperty("Accept-Encoding", "identity")
+
+        // Send http body.
+        val outputStream = BufferedOutputStream(httpConnection.outputStream)
+        outputStream.write(getRandomString(uploadSize).toByteArray(Charset.forName("UTF-8")))
+        outputStream.close()
+        assertEquals(HTTP_OK, httpConnection.responseCode)
+
+        // Receive response from the server.
         val inputStream = BufferedInputStream(httpConnection.getInputStream())
         var total = 0L
         while (true) {
@@ -164,7 +189,7 @@ class NetworkStatsIntegrationTest {
             if (count == -1) break // End-of-Stream
             total += count
         }
-        assertEquals(expectedSize, total)
+        assertEquals(downloadSize, total)
         httpConnection.getInputStream().close()
     }
 
