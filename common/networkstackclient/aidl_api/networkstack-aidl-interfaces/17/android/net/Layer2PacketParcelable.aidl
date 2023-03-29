@@ -31,28 +31,9 @@
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
 
-package android.net.ip;
-/* @hide */
-interface IIpClient {
-  oneway void completedPreDhcpAction();
-  oneway void confirmConfiguration();
-  oneway void readPacketFilterComplete(in byte[] data);
-  oneway void shutdown();
-  oneway void startProvisioning(in android.net.ProvisioningConfigurationParcelable req);
-  oneway void stop();
-  oneway void setTcpBufferSizes(in String tcpBufferSizes);
-  oneway void setHttpProxy(in android.net.ProxyInfo proxyInfo);
-  oneway void setMulticastFilter(boolean enabled);
-  oneway void addKeepalivePacketFilter(int slot, in android.net.TcpKeepalivePacketDataParcelable pkt);
-  oneway void removeKeepalivePacketFilter(int slot);
-  oneway void setL2KeyAndGroupHint(in String l2Key, in String cluster);
-  oneway void addNattKeepalivePacketFilter(int slot, in android.net.NattKeepalivePacketDataParcelable pkt);
-  oneway void notifyPreconnectionComplete(boolean success);
-  oneway void updateLayer2Information(in android.net.Layer2InformationParcelable info);
-  const int PROV_IPV4_DISABLED = 0x00;
-  const int PROV_IPV4_STATIC = 0x01;
-  const int PROV_IPV4_DHCP = 0x02;
-  const int PROV_IPV6_DISABLED = 0x00;
-  const int PROV_IPV6_SLAAC = 0x01;
-  const int PROV_IPV6_LINKLOCAL = 0x02;
+package android.net;
+@JavaDerive(toString=true)
+parcelable Layer2PacketParcelable {
+  android.net.MacAddress dstMacAddress;
+  byte[] payload;
 }
