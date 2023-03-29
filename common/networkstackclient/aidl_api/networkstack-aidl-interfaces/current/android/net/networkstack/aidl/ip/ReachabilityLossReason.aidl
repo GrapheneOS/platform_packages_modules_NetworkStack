@@ -34,7 +34,7 @@
 package android.net.networkstack.aidl.ip;
 @Backing(type="int")
 enum ReachabilityLossReason {
-  ROAM = 0,
-  CONFIRM = 1,
-  ORGANIC = 2,
+  ROAM,
+  CONFIRM,
+  ORGANIC,
 }
