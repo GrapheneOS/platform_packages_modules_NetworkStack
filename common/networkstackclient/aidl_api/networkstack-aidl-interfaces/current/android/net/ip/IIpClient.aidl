@@ -49,10 +49,10 @@ interface IIpClient {
   oneway void addNattKeepalivePacketFilter(int slot, in android.net.NattKeepalivePacketDataParcelable pkt);
   oneway void notifyPreconnectionComplete(boolean success);
   oneway void updateLayer2Information(in android.net.Layer2InformationParcelable info);
-  const int PROV_IPV4_DISABLED = 0;
-  const int PROV_IPV4_STATIC = 1;
-  const int PROV_IPV4_DHCP = 2;
-  const int PROV_IPV6_DISABLED = 0;
-  const int PROV_IPV6_SLAAC = 1;
-  const int PROV_IPV6_LINKLOCAL = 2;
+  const int PROV_IPV4_DISABLED = 0x00;
+  const int PROV_IPV4_STATIC = 0x01;
+  const int PROV_IPV4_DHCP = 0x02;
+  const int PROV_IPV6_DISABLED = 0x00;
+  const int PROV_IPV6_SLAAC = 0x01;
+  const int PROV_IPV6_LINKLOCAL = 0x02;
 }
