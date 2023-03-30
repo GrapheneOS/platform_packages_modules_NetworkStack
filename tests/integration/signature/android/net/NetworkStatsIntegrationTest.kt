@@ -18,8 +18,10 @@ package android.net
 
 import android.Manifest.permission.MANAGE_TEST_NETWORKS
 import android.app.usage.NetworkStats
+import android.app.usage.NetworkStats.Bucket.TAG_NONE
 import android.app.usage.NetworkStatsManager
 import android.net.NetworkTemplate.MATCH_TEST
+import android.os.Process
 import androidx.test.platform.app.InstrumentationRegistry
 import com.android.testutils.PacketBridge
 import com.android.testutils.RecorderCallback.CallbackEntry.LinkPropertiesChanged
@@ -56,10 +58,12 @@ class NetworkStatsIntegrationTest {
     private val REMOTE_V4ADDR =
         LinkAddress(InetAddresses.parseNumericAddress("8.8.8.8"), 32)
     private val DEFAULT_BUFFER_SIZE = 1000
+    private val CONNECTION_TIMEOUT_MILLIS = 15000
     private val TEST_DOWNLOAD_SIZE = 10000L
     private val TEST_UPLOAD_SIZE = 20000L
     private val HTTP_SERVER_NAME = "test.com"
     private val DNS_SERVER_PORT = 53
+    private val TEST_TAG = 0xF00D
 
     // Set up the packet bridge with two IPv6 address only test networks.
     private val inst = InstrumentationRegistry.getInstrumentation()
@@ -133,6 +137,7 @@ class NetworkStatsIntegrationTest {
         val internalInterfaceName = waitFor464XlatReady(packetBridge.internalNetwork)
 
         val (_, rxBytesBeforeTest) = getTotalTxRxBytes(internalInterfaceName)
+        val (_, rxTaggedBytesBeforeTest) = getTaggedTxRxBytes(internalInterfaceName, TEST_TAG)
 
         // Generate the download traffic.
         genHttpTraffic(packetBridge.internalNetwork, uploadSize = 0L, TEST_DOWNLOAD_SIZE)
@@ -140,25 +145,58 @@ class NetworkStatsIntegrationTest {
         // In practice, for one way 10k download payload, the download usage is about
         // 11222~12880 bytes. And the upload usage is about 1279~1626 bytes, which is majorly
         // contributed by TCP ACK packets.
-        val (txBytesAfterDownload, rxBytesAfterDownload) = getTotalTxRxBytes(internalInterfaceName)
-        assertTrue(
-            rxBytesAfterDownload - rxBytesBeforeTest in
-                    TEST_DOWNLOAD_SIZE..(TEST_DOWNLOAD_SIZE * 1.3).toLong(),
-            "Download size on $internalInterfaceName"
+        val (txBytesAfterDownload, rxBytesAfterDownload) =
+            getTotalTxRxBytes(internalInterfaceName)
+        val (txTaggedBytesAfterDownload, rxTaggedBytesAfterDownload) = getTaggedTxRxBytes(
+            internalInterfaceName,
+            TEST_TAG
+        )
+        assertInRange(
+            "Download size", internalInterfaceName,
+            rxBytesAfterDownload - rxBytesBeforeTest,
+            TEST_DOWNLOAD_SIZE, (TEST_DOWNLOAD_SIZE * 1.3).toLong()
+        )
+        // Increment of tagged data should be zero since no tagged traffic was generated.
+        assertEquals(
+            rxTaggedBytesBeforeTest,
+            rxTaggedBytesAfterDownload,
+            "Tagged download size of uid ${Process.myUid()} on $internalInterfaceName"
         )
 
-        genHttpTraffic(packetBridge.internalNetwork, TEST_UPLOAD_SIZE, downloadSize = 0L)
+        // Generate upload traffic with tag to verify tagged data accounting as well.
+        genHttpTrafficWithTag(
+            packetBridge.internalNetwork,
+            TEST_UPLOAD_SIZE,
+            downloadSize = 0L,
+            TEST_TAG
+        )
 
         // Verify upload data usage accounting.
         val (txBytesAfterUpload, _) = getTotalTxRxBytes(internalInterfaceName)
-        assertTrue(
-            txBytesAfterUpload - txBytesAfterDownload in
-                    TEST_UPLOAD_SIZE..(TEST_UPLOAD_SIZE * 1.3).toLong(),
-            "Upload size on $internalInterfaceName"
+        val (txTaggedBytesAfterUpload, _) = getTaggedTxRxBytes(internalInterfaceName, TEST_TAG)
+        assertInRange(
+            "Upload size", internalInterfaceName,
+            txBytesAfterUpload - txBytesAfterDownload,
+            TEST_UPLOAD_SIZE, (TEST_UPLOAD_SIZE * 1.3).toLong()
+        )
+        assertInRange(
+            "Tagged upload size of uid ${Process.myUid()}",
+            internalInterfaceName,
+            txTaggedBytesAfterUpload - txTaggedBytesAfterDownload,
+            TEST_UPLOAD_SIZE,
+            (TEST_UPLOAD_SIZE * 1.3).toLong()
         )
     }
 
-    private fun genHttpTraffic(network: Network, uploadSize: Long, downloadSize: Long) {
+    private fun genHttpTraffic(network: Network, uploadSize: Long, downloadSize: Long) =
+        genHttpTrafficWithTag(network, uploadSize, downloadSize, NetworkStats.Bucket.TAG_NONE)
+
+    private fun genHttpTrafficWithTag(
+        network: Network,
+        uploadSize: Long,
+        downloadSize: Long,
+        tag: Int
+    ) {
         val path = "/test_upload_download"
         val buf = ByteArray(DEFAULT_BUFFER_SIZE)
 
@@ -166,49 +204,83 @@ class NetworkStatsIntegrationTest {
             TestHttpServer.Request(path, NanoHTTPD.Method.POST), NanoHTTPD.Response.Status.OK,
             content = getRandomString(downloadSize)
         )
-        val spec = "http://$HTTP_SERVER_NAME:${httpServer.listeningPort}$path"
-        val url = URL(spec)
-        val httpConnection = network.openConnection(url) as HttpURLConnection
-        httpConnection.requestMethod = "POST"
-        httpConnection.doOutput = true
-        // Tell the server that the response should not be compressed. Otherwise, the data usage
-        // accounted will be less than expected.
-        httpConnection.setRequestProperty("Accept-Encoding", "identity")
+        var httpConnection: HttpURLConnection? = null
+        try {
+            TrafficStats.setThreadStatsTag(tag)
+            val spec = "http://$HTTP_SERVER_NAME:${httpServer.listeningPort}$path"
+            val url = URL(spec)
+            httpConnection = network.openConnection(url) as HttpURLConnection
+            httpConnection.connectTimeout = CONNECTION_TIMEOUT_MILLIS
+            httpConnection.requestMethod = "POST"
+            httpConnection.doOutput = true
+            // Tell the server that the response should not be compressed. Otherwise, the data usage
+            // accounted will be less than expected.
+            httpConnection.setRequestProperty("Accept-Encoding", "identity")
+            // Tell the server that to close connection after this request, this is needed to
+            // prevent from reusing the same socket that has different tagging requirement.
+            httpConnection.setRequestProperty("Connection", "close")
 
-        // Send http body.
-        val outputStream = BufferedOutputStream(httpConnection.outputStream)
-        outputStream.write(getRandomString(uploadSize).toByteArray(Charset.forName("UTF-8")))
-        outputStream.close()
-        assertEquals(HTTP_OK, httpConnection.responseCode)
+            // Send http body.
+            val outputStream = BufferedOutputStream(httpConnection.outputStream)
+            outputStream.write(getRandomString(uploadSize).toByteArray(Charset.forName("UTF-8")))
+            outputStream.close()
+            assertEquals(HTTP_OK, httpConnection.responseCode)
 
-        // Receive response from the server.
-        val inputStream = BufferedInputStream(httpConnection.getInputStream())
-        var total = 0L
-        while (true) {
-            val count = inputStream.read(buf)
-            if (count == -1) break // End-of-Stream
-            total += count
+            // Receive response from the server.
+            val inputStream = BufferedInputStream(httpConnection.getInputStream())
+            var total = 0L
+            while (true) {
+                val count = inputStream.read(buf)
+                if (count == -1) break // End-of-Stream
+                total += count
+            }
+            assertEquals(downloadSize, total)
+        } finally {
+            httpConnection?.inputStream?.close()
+            TrafficStats.clearThreadStatsTag()
         }
-        assertEquals(downloadSize, total)
-        httpConnection.getInputStream().close()
     }
 
     private fun getTotalTxRxBytes(iface: String): Pair<Long, Long> {
+        return getNetworkStatsThat(iface, TAG_NONE) { nsm, template ->
+            nsm.querySummary(template, Long.MIN_VALUE, Long.MAX_VALUE)
+        }
+    }
+
+    private fun getTaggedTxRxBytes(iface: String, tag: Int): Pair<Long, Long> {
+        return getNetworkStatsThat(iface, tag) { nsm, template ->
+            nsm.queryTaggedSummary(template, Long.MIN_VALUE, Long.MAX_VALUE)
+        }
+    }
+
+    private fun getNetworkStatsThat(
+        iface: String,
+        tag: Int,
+        queryApi: (nsm: NetworkStatsManager, template: NetworkTemplate) -> NetworkStats
+    ): Pair<Long, Long> {
         val nsm = context.getSystemService(NetworkStatsManager::class.java)
         nsm.forceUpdate()
         val testTemplate = NetworkTemplate.Builder(MATCH_TEST)
             .setWifiNetworkKeys(setOf(iface)).build()
-        val xtStats = nsm.querySummary(testTemplate, Long.MIN_VALUE, Long.MAX_VALUE)
+        val stats = queryApi.invoke(nsm, testTemplate)
         val recycled = NetworkStats.Bucket()
         var rx = 0L
         var tx = 0L
-        while (xtStats.hasNextBucket()) {
-            xtStats.getNextBucket(recycled)
+        while (stats.hasNextBucket()) {
+            stats.getNextBucket(recycled)
+            if (recycled.uid != Process.myUid() || recycled.tag != tag) continue
             rx += recycled.rxBytes
             tx += recycled.txBytes
         }
         return tx to rx
     }
+
+    /** Verify the given value is in range [lower, upper]  */
+    private fun assertInRange(tag: String, iface: String, value: Long, lower: Long, upper: Long) =
+        assertTrue(
+            value in lower..upper,
+            "$tag on $iface: $value is not within range [$lower, $upper]"
+        )
 
     fun getRandomString(length: Long): String {
         val allowedChars = ('A'..'Z') + ('a'..'z') + ('0'..'9')
