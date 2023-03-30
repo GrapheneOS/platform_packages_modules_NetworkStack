@@ -37,8 +37,7 @@ import java.util.List;
  */
 @RequiresApi(Build.VERSION_CODES.R)
 public class Ikev2VpnProfileBuilderShimImpl
-        extends com.android.networkstack.apishim.api29.Ikev2VpnProfileBuilderShimImpl<
-        Ikev2VpnProfile.Builder> {
+        implements Ikev2VpnProfileBuilderShim<Ikev2VpnProfile.Builder> {
     protected final Ikev2VpnProfile.Builder mBuilder;
 
     protected Ikev2VpnProfileBuilderShimImpl(@NonNull Ikev2VpnProfile.Builder builder) {
