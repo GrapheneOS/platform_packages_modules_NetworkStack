@@ -67,6 +67,7 @@ import java.util.Arrays
 import kotlin.reflect.KClass
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
 import org.junit.After
@@ -240,6 +241,24 @@ class NetworkStackUtilsIntegrationTest {
                 0xFE.toByte(), 0x67.toByte(), 0x89.toByte(), 0x0A.toByte())
         val targetEui64 = NetworkStackUtils.macAddressToEui64(TEST_TARGET_MAC)
         assertArrayEquals(expected, targetEui64)
+    }
+
+    @Test
+    fun testGenerateIpv6AddressFromEui64() {
+        val eui64 = NetworkStackUtils.macAddressToEui64(TEST_SRC_MAC)
+        var prefix = IpPrefix("2001:db8:1::/80")
+        // Don't accept the prefix length larger than 64.
+        assertNull(NetworkStackUtils.createInet6AddressFromEui64(prefix, eui64))
+
+        prefix = IpPrefix("2001:db8:1::/48")
+        // Don't accept the prefix length less than 64.
+        assertNull(NetworkStackUtils.createInet6AddressFromEui64(prefix, eui64))
+
+        prefix = IpPrefix("2001:db8:1::/64")
+        // IPv6 address string is formed by combining the IPv6 prefix("2001:db8:1::") and
+        // EUI64 converted from TEST_SRC_MAC, see above test for the output EUI64 example.
+        val expected = parseNumericAddress("2001:db8:1::b898:76ff:fe54:3210") as Inet6Address
+        assertEquals(expected, NetworkStackUtils.createInet6AddressFromEui64(prefix, eui64))
     }
 
     private fun assertSocketReadErrno(msg: String, fd: FileDescriptor, errno: Int) {
