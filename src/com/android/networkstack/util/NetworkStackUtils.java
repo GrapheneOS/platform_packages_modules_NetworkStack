@@ -326,6 +326,22 @@ public class NetworkStackUtils {
     }
 
     /**
+     * Convert 48bits MAC address to 64bits link-layer address(EUI64).
+     *     1. insert the 0xFFFE in the middle of mac address
+     *     2. flip the 7th bit(universal/local) of the first byte.
+     */
+    public static byte[] macAddressToEui64(final MacAddress hwAddr) {
+        final byte[] eui64 = new byte[8];
+        final byte[] mac48 = hwAddr.toByteArray();
+        System.arraycopy(mac48, 0, eui64, 0, 3);
+        eui64[3] = (byte) 0xFF;
+        eui64[4] = (byte) 0xFE;
+        System.arraycopy(mac48, 3, eui64, 5, 3);
+        eui64[0] = (byte) (eui64[0] ^ 0x02); // flip 7th bit
+        return eui64;
+    }
+
+    /**
      * Attaches a socket filter that accepts DHCP packets to the given socket.
      */
     public static native void attachDhcpFilter(FileDescriptor fd, boolean dropMF)
