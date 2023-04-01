@@ -17,6 +17,7 @@
 package com.android.networkstack.util;
 
 import android.content.Context;
+import android.net.IpPrefix;
 import android.net.LinkAddress;
 import android.net.MacAddress;
 import android.system.ErrnoException;
@@ -26,6 +27,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.android.net.module.util.DeviceConfigUtils;
+import com.android.net.module.util.HexDump;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -323,6 +325,47 @@ public class NetworkStackUtils {
      */
     public static boolean isIPv6GUA(@NonNull final LinkAddress address) {
         return address.isIpv6() && address.isGlobalPreferred();
+    }
+
+    /**
+     * Convert 48bits MAC address to 64bits link-layer address(EUI64).
+     *     1. insert the 0xFFFE in the middle of mac address
+     *     2. flip the 7th bit(universal/local) of the first byte.
+     */
+    public static byte[] macAddressToEui64(@NonNull final MacAddress hwAddr) {
+        final byte[] eui64 = new byte[8];
+        final byte[] mac48 = hwAddr.toByteArray();
+        System.arraycopy(mac48 /* src */, 0 /* srcPos */, eui64 /* dest */, 0 /* destPos */,
+                3 /* length */);
+        eui64[3] = (byte) 0xFF;
+        eui64[4] = (byte) 0xFE;
+        System.arraycopy(mac48 /* src */, 3 /* srcPos */, eui64 /* dest */, 5 /* destPos */,
+                3 /* length */);
+        eui64[0] = (byte) (eui64[0] ^ 0x02); // flip 7th bit
+        return eui64;
+    }
+
+    /**
+     * Generate an IPv6 address based on the given prefix(/64) and stable interface
+     * identifier(EUI64).
+     */
+    public static Inet6Address createInet6AddressFromEui64(@NonNull final IpPrefix prefix,
+            @NonNull final byte[] eui64) {
+        if (prefix.getPrefixLength() != 64) {
+            Log.e(TAG, "Invalid IPv6 prefix length " + prefix.getPrefixLength());
+            return null;
+        }
+        final byte[] address = new byte[16];
+        System.arraycopy(prefix.getRawAddress() /* src */, 0 /* srcPos */, address /* dest */,
+                0 /* destPos*/, 8 /* length */);
+        System.arraycopy(eui64 /* src */, 0 /* srcPos */, address /* dest */, 8 /* destPos */,
+                eui64.length);
+        try {
+            return (Inet6Address) InetAddress.getByAddress(address);
+        } catch (UnknownHostException e) {
+            Log.e(TAG, "Invalid IPv6 address " + HexDump.toHexString(address), e);
+            return null;
+        }
     }
 
     /**
