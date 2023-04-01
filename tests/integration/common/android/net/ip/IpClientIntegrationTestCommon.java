@@ -640,6 +640,10 @@ public abstract class IpClientIntegrationTestCommon {
         }
 
         mIIpClient = makeIIpClient(mIfaceName, mCb);
+
+        // Enable multicast filtering after creating IpClient instance, make the integration test
+        // more realistic.
+        mIIpClient.setMulticastFilter(true);
     }
 
     protected void setUpMocks() throws Exception {
@@ -979,7 +983,7 @@ public abstract class IpClientIntegrationTestCommon {
 
         startIpClientProvisioning(prov.build());
         if (!isPreconnectionEnabled) {
-            verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
+            verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(true);
         }
         verify(mCb, never()).onProvisioningFailure(any());
     }
@@ -1287,7 +1291,7 @@ public abstract class IpClientIntegrationTestCommon {
                 mDependencies.mDhcpClient.sendMessage(DhcpClient.CMD_TIMEOUT);
             }
         }
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(true);
 
         final LinkAddress ipAddress = new LinkAddress(CLIENT_ADDR, PREFIX_LENGTH);
         verify(mNetd, timeout(TEST_TIMEOUT_MS).times(1)).interfaceSetCfg(ifConfig.capture());
@@ -2352,7 +2356,7 @@ public abstract class IpClientIntegrationTestCommon {
         // Force IpClient transition to RunningState from PreconnectionState.
         mIIpClient.notifyPreconnectionComplete(false /* success */);
         HandlerUtils.waitForIdle(mDependencies.mDhcpClient.getHandler(), TEST_TIMEOUT_MS);
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(true);
     }
 
     @Test
@@ -3063,7 +3067,7 @@ public abstract class IpClientIntegrationTestCommon {
         // Force IpClient transition to RunningState from PreconnectionState.
         mIpc.notifyPreconnectionComplete(true /* success */);
         HandlerUtils.waitForIdle(mDependencies.mDhcpClient.getHandler(), TEST_TIMEOUT_MS);
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(true);
 
         // DHCP server SHOULD NOT honor the Rapid-Commit option if the response would
         // contain the IPv6-only Preferred option to the client, instead respond with
@@ -3246,7 +3250,7 @@ public abstract class IpClientIntegrationTestCommon {
                 false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
 
         startIpClientProvisioning(prov.build());
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(true);
         verify(mCb, never()).onProvisioningFailure(any());
 
         return getNextDhcpPacket();
@@ -3798,7 +3802,7 @@ public abstract class IpClientIntegrationTestCommon {
         setFeatureEnabled(NetworkStackUtils.IP_REACHABILITY_MCAST_RESOLICIT_VERSION,
                 isMulticastResolicitEnabled);
         startIpClientProvisioning(config);
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(true);
         doIpv6OnlyProvisioning();
 
         // Simulate the roaming.
@@ -3957,7 +3961,7 @@ public abstract class IpClientIntegrationTestCommon {
         final ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .build();
         startIpClientProvisioning(config);
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(false);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(true);
 
         final List<ByteBuffer> options = new ArrayList<ByteBuffer>();
         options.add(buildPioOption(3600, 1800, "2001:db8:1::/64")); // PIO
