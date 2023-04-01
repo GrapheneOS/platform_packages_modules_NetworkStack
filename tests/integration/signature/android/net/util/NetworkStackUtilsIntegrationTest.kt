@@ -47,9 +47,9 @@ import com.android.net.module.util.Ipv6Utils
 import com.android.net.module.util.NetworkStackConstants.ETHER_ADDR_LEN
 import com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ANY
 import com.android.net.module.util.NetworkStackConstants.IPV4_CHECKSUM_OFFSET
+import com.android.net.module.util.NetworkStackConstants.IPV4_FLAGS_OFFSET
 import com.android.net.module.util.NetworkStackConstants.IPV4_FLAG_DF
 import com.android.net.module.util.NetworkStackConstants.IPV4_FLAG_MF
-import com.android.net.module.util.NetworkStackConstants.IPV4_FLAGS_OFFSET
 import com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_NODES_MULTICAST
 import com.android.net.module.util.structs.PrefixInformationOption
 import com.android.networkstack.util.NetworkStackUtils
@@ -59,10 +59,6 @@ import com.android.testutils.IPV4_HEADER_LENGTH
 import com.android.testutils.IPv4UdpFilter
 import com.android.testutils.TapPacketReader
 import com.android.testutils.UDP_HEADER_LENGTH
-import org.junit.After
-import org.junit.Assert.assertArrayEquals
-import org.junit.Before
-import org.junit.Test
 import java.io.FileDescriptor
 import java.net.Inet4Address
 import java.net.Inet6Address
@@ -71,8 +67,13 @@ import java.util.Arrays
 import kotlin.reflect.KClass
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
+import org.junit.After
+import org.junit.Assert.assertArrayEquals
+import org.junit.Before
+import org.junit.Test
 
 class NetworkStackUtilsIntegrationTest {
     private val inst by lazy { InstrumentationRegistry.getInstrumentation() }
@@ -223,6 +224,41 @@ class NetworkStackUtilsIntegrationTest {
 
         val addr3 = NetworkStackUtils.ipv6AddressToSolicitedNodeMulticast(TEST_INET6ADDR_3)
         assertSolicitedNodeMulticastAddress(addr3, TEST_INET6ADDR_3)
+    }
+
+    @Test
+    fun testConvertMacAddressToEui64() {
+        // MAC address with universal/local bit set (the first byte: 0xBA)
+        var expected = byteArrayOf(
+                0xB8.toByte(), 0x98.toByte(), 0x76.toByte(), 0xFF.toByte(),
+                0xFE.toByte(), 0x54.toByte(), 0x32.toByte(), 0x10.toByte())
+        val srcEui64 = NetworkStackUtils.macAddressToEui64(TEST_SRC_MAC)
+        assertArrayEquals(expected, srcEui64)
+
+        // MAC address with universal/local bit unset (the first byte: 0x01).
+        expected = byteArrayOf(
+                0x03.toByte(), 0x23.toByte(), 0x45.toByte(), 0xFF.toByte(),
+                0xFE.toByte(), 0x67.toByte(), 0x89.toByte(), 0x0A.toByte())
+        val targetEui64 = NetworkStackUtils.macAddressToEui64(TEST_TARGET_MAC)
+        assertArrayEquals(expected, targetEui64)
+    }
+
+    @Test
+    fun testGenerateIpv6AddressFromEui64() {
+        val eui64 = NetworkStackUtils.macAddressToEui64(TEST_SRC_MAC)
+        var prefix = IpPrefix("2001:db8:1::/80")
+        // Don't accept the prefix length larger than 64.
+        assertNull(NetworkStackUtils.createInet6AddressFromEui64(prefix, eui64))
+
+        prefix = IpPrefix("2001:db8:1::/48")
+        // Don't accept the prefix length less than 64.
+        assertNull(NetworkStackUtils.createInet6AddressFromEui64(prefix, eui64))
+
+        prefix = IpPrefix("2001:db8:1::/64")
+        // IPv6 address string is formed by combining the IPv6 prefix("2001:db8:1::") and
+        // EUI64 converted from TEST_SRC_MAC, see above test for the output EUI64 example.
+        val expected = parseNumericAddress("2001:db8:1::b898:76ff:fe54:3210") as Inet6Address
+        assertEquals(expected, NetworkStackUtils.createInet6AddressFromEui64(prefix, eui64))
     }
 
     private fun assertSocketReadErrno(msg: String, fd: FileDescriptor, errno: Int) {
