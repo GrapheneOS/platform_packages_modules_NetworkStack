@@ -19,8 +19,15 @@ package android.net.dhcp6;
 import static com.android.net.module.util.NetworkStackConstants.DHCP_MAX_OPTION_LEN;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.VisibleForTesting;
 
+import com.android.net.module.util.Struct;
+import com.android.net.module.util.structs.IaPrefixOption;
+
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Defines basic data and operations needed to build and use packets for the
@@ -89,6 +96,8 @@ public class Dhcp6Packet {
     public static final byte DHCP6_IA_PD = 25;
     @NonNull
     protected final byte[] mIaPd;
+    @NonNull
+    protected PrefixDelegation mPrefixDelegation;
 
     /**
      * The transaction identifier used in this particular DHCPv6 negotiation
@@ -139,6 +148,203 @@ public class Dhcp6Packet {
     }
 
     /**
+     * A class to take DHCPv6 IA_PD option allocated from server.
+     * https://www.rfc-editor.org/rfc/rfc8415.html#section-21.21
+     */
+    public static class PrefixDelegation {
+        public int iaid;
+        public int t1;
+        public int t2;
+        public final IaPrefixOption ipo;
+
+        PrefixDelegation(int iaid, int t1, int t2, final IaPrefixOption ipo) {
+            this.iaid = iaid;
+            this.t1 = t1;
+            this.t2 = t2;
+            this.ipo = ipo;
+        }
+
+        @Override
+        public String toString() {
+            return "Prefix Delegation: iaid " + iaid + ", t1 " + t1 + ", t2 " + t2
+                    + ", prefix " + ipo;
+        }
+    }
+
+    /**
+     * DHCPv6 packet parsing exception.
+     */
+    public static class ParseException extends Exception {
+        ParseException(String msg) {
+            super(msg);
+        }
+    }
+
+    private static void skipOption(final ByteBuffer packet, int optionLen)
+            throws BufferUnderflowException {
+        for (int i = 0; i < optionLen; i++) {
+            packet.get();
+        }
+    }
+
+    /**
+     * Reads a string of specified length from the buffer.
+     *
+     * TODO: move to a common place which can be shared with DhcpClient.
+     */
+    private static String readAsciiString(@NonNull final ByteBuffer buf, int byteCount,
+            boolean isNullOk) {
+        final byte[] bytes = new byte[byteCount];
+        buf.get(bytes);
+        return readAsciiString(bytes, isNullOk);
+    }
+
+    private static String readAsciiString(@NonNull final byte[] payload, boolean isNullOk) {
+        final byte[] bytes = payload;
+        int length = bytes.length;
+        if (!isNullOk) {
+            // Stop at the first null byte. This is because some DHCP options (e.g., the domain
+            // name) are passed to netd via FrameworkListener, which refuses arguments containing
+            // null bytes. We don't do this by default because vendorInfo is an opaque string which
+            // could in theory contain null bytes.
+            for (length = 0; length < bytes.length; length++) {
+                if (bytes[length] == 0) {
+                    break;
+                }
+            }
+        }
+        return new String(bytes, 0, length, StandardCharsets.US_ASCII);
+    }
+
+    /**
+     * Creates a concrete Dhcp6Packet from the supplied ByteBuffer.
+     *
+     * The buffer only starts with a UDP encapsulation (i.e. DHCPv6 message). A subset of the
+     * optional parameters are parsed and are stored in object fields. Client/Server message
+     * format:
+     *
+     *  0                   1                   2                   3
+     *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     * |    msg-type   |               transaction-id                  |
+     * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     * |                                                               |
+     * .                            options                            .
+     * .                 (variable number and length)                  .
+     * |                                                               |
+     * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     */
+    @VisibleForTesting
+    static Dhcp6Packet decodePacket(@NonNull final ByteBuffer packet) throws ParseException {
+        short secs = 0;
+        byte[] iapd = null;
+        byte[] serverDuid = null;
+        byte[] clientDuid = null;
+        short statusCode = STATUS_SUCCESS;
+        String statusMsg = null;
+
+        packet.order(ByteOrder.BIG_ENDIAN);
+
+        // DHCPv6 message contents.
+        final int msgTypeAndTransId = packet.getInt();
+        final byte messageType = (byte) (msgTypeAndTransId >> 24);
+        final int transId = msgTypeAndTransId & 0x0FFF;
+
+        /**
+         * Parse DHCPv6 options, option format:
+         *
+         * 0                   1                   2                   3
+         * 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+         * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         * |          option-code          |           option-len          |
+         * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         * |                          option-data                          |
+         * |                      (option-len octets)                      |
+         * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         */
+        while (packet.hasRemaining()) {
+            try {
+                final short optionType = packet.getShort();
+                final int optionLen = packet.getShort() & 0xFFFF;
+                int expectedLen = 0;
+
+                switch(optionType) {
+                    case DHCP6_SERVER_IDENTIFIER:
+                        expectedLen = optionLen;
+                        final byte[] sduid = new byte[expectedLen];
+                        packet.get(sduid, 0 /* offset */, expectedLen);
+                        serverDuid = sduid;
+                        break;
+                    case DHCP6_CLIENT_IDENTIFIER:
+                        expectedLen = optionLen;
+                        final byte[] cduid = new byte[expectedLen];
+                        packet.get(cduid, 0 /* offset */, expectedLen);
+                        clientDuid = cduid;
+                        break;
+                    case DHCP6_IA_PD:
+                        expectedLen = optionLen;
+                        final byte[] bytes = new byte[expectedLen];
+                        packet.get(bytes, 0 /* offset */, expectedLen);
+                        iapd = bytes;
+                        break;
+                    case DHCP6_ELAPSED_TIME:
+                        expectedLen = 2;
+                        secs = packet.getShort();
+                        break;
+                    case DHCP6_STATUS_CODE:
+                        expectedLen = optionLen;
+                        statusCode = packet.getShort();
+                        statusMsg = readAsciiString(packet, expectedLen - 2, false /* isNullOk */);
+                        break;
+                    default:
+                        skipOption(packet, optionLen);
+                        break;
+                }
+                if (expectedLen != optionLen) {
+                    throw new ParseException(
+                            "Invalid length " + optionLen + " for option " + optionType
+                                    + ", expected " + expectedLen);
+                }
+            } catch (BufferUnderflowException e) {
+                throw new ParseException(e.getMessage());
+            }
+        }
+
+        Dhcp6Packet newPacket;
+
+        switch(messageType) {
+            case DHCP6_MESSAGE_TYPE_SOLICIT:
+                newPacket = new Dhcp6SolicitPacket(transId, secs, clientDuid, iapd);
+                break;
+            case DHCP6_MESSAGE_TYPE_ADVERTISE:
+                newPacket = new Dhcp6AdvertisePacket(transId, clientDuid, serverDuid, iapd);
+                break;
+            case DHCP6_MESSAGE_TYPE_REQUEST:
+                newPacket = new Dhcp6RequestPacket(transId, secs, clientDuid, serverDuid, iapd);
+                break;
+            case DHCP6_MESSAGE_TYPE_REPLY:
+                newPacket = new Dhcp6ReplyPacket(transId, clientDuid, serverDuid, iapd);
+                break;
+            default:
+                throw new ParseException("Unimplemented DHCP6 message type %d" + messageType);
+        }
+
+        if (iapd != null) {
+            final ByteBuffer buffer = ByteBuffer.wrap(iapd);
+            final int iaid = buffer.getInt();
+            final int t1 = buffer.getInt();
+            final int t2 = buffer.getInt();
+            final IaPrefixOption ipo = Struct.parse(IaPrefixOption.class, buffer);
+            newPacket.mPrefixDelegation = new PrefixDelegation(iaid, t1, t2, ipo);
+            newPacket.mIaId = iaid;
+        }
+        newPacket.mStatusCode = statusCode;
+        newPacket.mStatusMsg = statusMsg;
+
+        return newPacket;
+    }
+
+    /**
      * Adds an optional parameter containing an array of bytes.
      */
     protected static void addTlv(ByteBuffer buf, short type, @NonNull byte[] payload) {
@@ -163,17 +369,17 @@ public class Dhcp6Packet {
     /**
      * Builds a DHCPv6 SOLICIT packet from the required specified parameters.
      */
-    public static ByteBuffer buildSolicitPacket(int transId, short secs, final byte[] iapd,
-            final byte[] duid) {
-        final Dhcp6SolicitPacket pkt = new Dhcp6SolicitPacket(transId, secs, duid, iapd);
+    public static ByteBuffer buildSolicitPacket(int transId, short secs, @NonNull final byte[] iapd,
+            @NonNull final byte[] clientDuid) {
+        final Dhcp6SolicitPacket pkt = new Dhcp6SolicitPacket(transId, secs, clientDuid, iapd);
         return pkt.buildPacket();
     }
 
     /**
      * Builds a DHCPv6 ADVERTISE packet from the required specified parameters.
      */
-    public static ByteBuffer buildAdvertisePacket(int transId, final byte[] iapd,
-            final byte[] clientDuid, final byte[] serverDuid) {
+    public static ByteBuffer buildAdvertisePacket(int transId, @NonNull final byte[] iapd,
+            @NonNull final byte[] clientDuid, @NonNull final byte[] serverDuid) {
         final Dhcp6AdvertisePacket pkt =
                 new Dhcp6AdvertisePacket(transId, clientDuid, serverDuid, iapd);
         return pkt.buildPacket();
@@ -182,8 +388,8 @@ public class Dhcp6Packet {
     /**
      * Builds a DHCPv6 REPLY packet from the required specified parameters.
      */
-    public static ByteBuffer buildReplyPacket(int transId, final byte[] iapd,
-            final byte[] clientDuid, final byte[] serverDuid) {
+    public static ByteBuffer buildReplyPacket(int transId, @NonNull final byte[] iapd,
+            @NonNull final byte[] clientDuid, @NonNull final byte[] serverDuid) {
         final Dhcp6ReplyPacket pkt = new Dhcp6ReplyPacket(transId, clientDuid, serverDuid, iapd);
         return pkt.buildPacket();
     }
@@ -191,8 +397,8 @@ public class Dhcp6Packet {
     /**
      * Builds a DHCPv6 REQUEST packet from the required specified parameters.
      */
-    public static ByteBuffer buildRequestPacket(int transId, short secs, final byte[] iapd,
-            final byte[] clientDuid, final byte[] serverDuid) {
+    public static ByteBuffer buildRequestPacket(int transId, short secs, @NonNull final byte[] iapd,
+            @NonNull final byte[] clientDuid, @NonNull final byte[] serverDuid) {
         final Dhcp6RequestPacket pkt =
                 new Dhcp6RequestPacket(transId, secs, clientDuid, serverDuid, iapd);
         return pkt.buildPacket();
