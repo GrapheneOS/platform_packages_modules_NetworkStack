@@ -1541,6 +1541,9 @@ public class ApfTest {
         doTestDnsParsing(true, ipv6, "googlecast.tcp.local",
                 "www.google.co.jp", "googlecast.tcp.local", "developer.android.com");
 
+        // Name with duplicate labels.
+        doTestDnsParsing(true, ipv6, "local.tcp.local", "local.tcp.local");
+
         final byte[] pkt = makeMdnsCompressedV6Packet();
         doTestDnsParsing(true, ipv6, "googlecast.tcp.local", pkt);
         doTestDnsParsing(true, ipv6, "matter.tcp.local", pkt);
