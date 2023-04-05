@@ -100,6 +100,7 @@ import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
@@ -189,7 +190,7 @@ public class ApfTest {
         final String msg = "Unexpected APF verdict. To debug:\n"
                 + "  apf_run --program " + HexDump.toHexString(program)
                 + " --packet " +  HexDump.toHexString(packet) + " --trace | less\n  ";
-        assertReturnCodesEqual(expected, apfSimulate(program, packet, null, filterAge));
+        assertReturnCodesEqual(msg, expected, apfSimulate(program, packet, null, filterAge));
     }
 
     private void assertVerdict(int expected, byte[] program, byte[] packet) {
@@ -1164,8 +1165,6 @@ public class ApfTest {
     private static final byte[] IPV4_MDNS_MULTICAST_ADDR = {(byte) 224, 0, 0, (byte) 251};
     private static final byte[] IPV6_MDNS_MULTICAST_ADDR =
             {(byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (byte) 0xfb};
-    private static final int DNS_HEADER_LEN = 12;
-    private static final int DNS_QDCOUNT_OFFSET = 4;
     private static final int IPV6_UDP_DEST_PORT_OFFSET = IPV6_PAYLOAD_OFFSET + 2;
     private static final int MDNS_UDP_PORT = 5353;
 
@@ -1304,8 +1303,17 @@ public class ApfTest {
         apfFilter.shutdown();
     }
 
-    private static byte[] makeMdnsV4Packet(String qname) throws IOException {
-        final ByteBuffer buf = ByteBuffer.wrap(new byte[100]);
+    private static void fillQuestionSection(ByteBuffer buf, String... qnames) throws IOException {
+        buf.put(new DnsPacket.DnsHeader(0 /* id */, 0 /* flags */, qnames.length, 0 /* ancount */)
+                .getBytes());
+        for (String qname : qnames) {
+            buf.put(DnsPacket.DnsRecord.makeQuestion(qname, 0 /* nsType */, 0 /* nsClass */)
+                    .getBytes());
+        }
+    }
+
+    private static byte[] makeMdnsV4Packet(String... qnames) throws IOException {
+        final ByteBuffer buf = ByteBuffer.wrap(new byte[256]);
         final PacketBuilder builder = new PacketBuilder(buf);
         builder.writeL2Header(MacAddress.fromString("11:22:33:44:55:66"),
                 MacAddress.fromBytes(ETH_MULTICAST_MDNS_v4_MAC_ADDRESS),
@@ -1315,13 +1323,12 @@ public class ApfTest {
                 (Inet4Address) Inet4Address.getByAddress(IPV4_SOURCE_ADDR),
                 (Inet4Address) Inet4Address.getByAddress(IPV4_MDNS_MULTICAST_ADDR));
         builder.writeUdpHeader((short) MDNS_UDP_PORT, (short) MDNS_UDP_PORT);
-        buf.put(new DnsPacket.DnsHeader(0, 0, 1, 0).getBytes());
-        buf.put(DnsPacket.DnsRecord.makeQuestion(qname, 0, 0).getBytes());
+        fillQuestionSection(buf, qnames);
         return builder.finalizePacket().array();
     }
 
-    private static byte[] makeMdnsV6Packet(String qname) throws IOException {
-        ByteBuffer buf = ByteBuffer.wrap(new byte[100]);
+    private static byte[] makeMdnsV6Packet(String... qnames) throws IOException {
+        ByteBuffer buf = ByteBuffer.wrap(new byte[256]);
         final PacketBuilder builder = new PacketBuilder(buf);
         builder.writeL2Header(MacAddress.fromString("11:22:33:44:55:66"),
                 MacAddress.fromBytes(ETH_MULTICAST_MDNS_V6_MAC_ADDRESS),
@@ -1330,8 +1337,61 @@ public class ApfTest {
                 (Inet6Address) InetAddress.getByAddress(IPV6_ANOTHER_ADDR),
                 (Inet6Address) Inet6Address.getByAddress(IPV6_MDNS_MULTICAST_ADDR));
         builder.writeUdpHeader((short) MDNS_UDP_PORT, (short) MDNS_UDP_PORT);
-        buf.put(new DnsPacket.DnsHeader(0, 0, 1, 0).getBytes());
-        buf.put(DnsPacket.DnsRecord.makeQuestion(qname, 0, 0).getBytes());
+        fillQuestionSection(buf, qnames);
+        return builder.finalizePacket().array();
+    }
+
+    private static void putLabel(ByteBuffer buf, String label) {
+        final byte[] bytes = label.getBytes(StandardCharsets.UTF_8);
+        buf.put((byte) bytes.length);
+        buf.put(bytes);
+    }
+
+    private static void putPointer(ByteBuffer buf, int offset) {
+        short pointer = (short) (offset | 0xc000);
+        buf.putShort(pointer);
+    }
+
+    private static byte[] makeMdnsCompressedV6Packet() throws IOException {
+        ByteBuffer buf = ByteBuffer.wrap(new byte[256]);
+        final PacketBuilder builder = new PacketBuilder(buf);
+        builder.writeL2Header(MacAddress.fromString("11:22:33:44:55:66"),
+                MacAddress.fromBytes(ETH_MULTICAST_MDNS_V6_MAC_ADDRESS),
+                (short) ETH_P_IPV6);
+        builder.writeIpv6Header(0x680515ca /* vtf */, (byte) IPPROTO_UDP, (short) 0 /* hopLimit */,
+                (Inet6Address) InetAddress.getByAddress(IPV6_ANOTHER_ADDR),
+                (Inet6Address) Inet6Address.getByAddress(IPV6_MDNS_MULTICAST_ADDR));
+        builder.writeUdpHeader((short) MDNS_UDP_PORT, (short) MDNS_UDP_PORT);
+
+        ByteBuffer questions = ByteBuffer.allocate(128);
+        questions.put(new DnsPacket.DnsHeader(123, 0, 4, 0).getBytes());
+
+        // myservice.tcp.local
+        putLabel(questions, "myservice");
+        final int offsetTcpLocal = questions.position();
+        putLabel(questions, "tcp");
+        final int offsetLocal = questions.position();
+        putLabel(questions, "local");
+        putLabel(questions, "");
+        questions.put(new byte[4]);
+
+        // googlecast.tcp.local
+        putLabel(questions, "googlecast");
+        putPointer(questions, offsetTcpLocal);
+        questions.put(new byte[4]);
+
+        // matter.tcp.local
+        putLabel(questions, "matter");
+        putPointer(questions, offsetTcpLocal);
+        questions.put(new byte[4]);
+
+        // myhostname.local
+        putLabel(questions, "myhostname");
+        putPointer(questions, offsetLocal);
+        questions.put(new byte[4]);
+
+        buf.put(questions.array());
+
         return builder.finalizePacket().array();
     }
 
@@ -1395,6 +1455,66 @@ public class ApfTest {
         assertDrop(program, mdnsv6packet);
 
         apfFilter.shutdown();
+    }
+
+    private void doTestDnsParsing(boolean expectPass, boolean ipv6, String filterName,
+            byte[] pkt) throws Exception {
+        ApfGenerator gen = new ApfGenerator(MIN_APF_VERSION);
+        final String[] labels = filterName.split(/*regex=*/ "[.]");
+        DnsUtils.generateFilter(gen, ipv6, labels);
+
+        // Hack to prevent the APF instruction limit triggering.
+        for (int i = 0; i < 500; i++) {
+            gen.addOr(0);
+        }
+
+        byte[] program = gen.generate();
+        Log.d(TAG, "prog_len=" + program.length);
+        if (expectPass) {
+            assertPass(program, pkt, 0);
+        } else {
+            assertDrop(program, pkt, 0);
+        }
+    }
+
+    private void doTestDnsParsing(boolean expectPass, boolean ipv6, String filterName,
+            String... packetNames) throws Exception {
+        final byte[] pkt = ipv6 ? makeMdnsV6Packet(packetNames) : makeMdnsV4Packet(packetNames);
+        doTestDnsParsing(expectPass, ipv6, filterName, pkt);
+    }
+
+    @Test
+    public void testDnsParsing() throws Exception {
+        final boolean ipv4 = false, ipv6 = true;
+
+        // Packets with one question.
+        doTestDnsParsing(true, ipv6, "googlecast.tcp.local", "googlecast.tcp.local");
+        doTestDnsParsing(true, ipv4, "googlecast.tcp.local", "googlecast.tcp.local");
+        doTestDnsParsing(false, ipv6, "googlecast.tcp.lozal", "googlecast.tcp.local");
+        doTestDnsParsing(false, ipv4, "googlecast.tcp.lozal", "googlecast.tcp.local");
+        doTestDnsParsing(false, ipv6, "googlecast.udp.local", "googlecast.tcp.local");
+        doTestDnsParsing(false, ipv4, "googlecast.udp.local", "googlecast.tcp.local");
+
+        // Packets with multiple questions that can't be compressed. Not realistic for MDNS since
+        // everything ends in .local, but useful to ensure only the non-compression code is tested.
+        doTestDnsParsing(true, ipv6, "googlecast.tcp.local",
+                "googlecast.tcp.local", "developer.android.com");
+        doTestDnsParsing(true, ipv4, "googlecast.tcp.local",
+                "developer.android.com", "googlecast.tcp.local");
+        doTestDnsParsing(false, ipv4, "googlecast.tcp.local",
+                "developer.android.com", "googlecast.tcp.invalid");
+        doTestDnsParsing(true, ipv6, "googlecast.tcp.local",
+                "developer.android.com", "www.google.co.jp", "googlecast.tcp.local");
+        doTestDnsParsing(false, ipv4, "veryverylongservicename.tcp.local",
+                "www.google.co.jp", "veryverylongservicename.tcp.invalid");
+        doTestDnsParsing(true, ipv6, "googlecast.tcp.local",
+                "www.google.co.jp", "googlecast.tcp.local", "developer.android.com");
+
+        final byte[] pkt = makeMdnsCompressedV6Packet();
+        doTestDnsParsing(true, ipv6, "googlecast.tcp.local", pkt);
+        doTestDnsParsing(true, ipv6, "matter.tcp.local", pkt);
+        doTestDnsParsing(true, ipv6, "myservice.tcp.local", pkt);
+        doTestDnsParsing(false, ipv6, "otherservice.tcp.local", pkt);
     }
 
     @Test
