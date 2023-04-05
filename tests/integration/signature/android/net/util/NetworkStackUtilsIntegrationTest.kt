@@ -293,11 +293,12 @@ class NetworkStackUtilsIntegrationTest {
         packet.putShort(checksumOffset, IpUtils.ipChecksum(packet, ETHER_HEADER_LENGTH))
     }
 
-    private fun doTestDhcpResponseWithMfBit(dropMf: Boolean) {
+    @Test
+    fun testDhcpResponseWithMfBitDropped() {
         val ifindex = InterfaceParams.getByName(iface.interfaceName).index
         val packetSock = Os.socket(AF_PACKET, SOCK_RAW or SOCK_NONBLOCK, /*protocol=*/0)
         try {
-            NetworkStackUtils.attachDhcpFilter(packetSock, dropMf)
+            NetworkStackUtils.attachDhcpFilter(packetSock)
             val addr = SocketUtils.makePacketSocketAddress(OsConstants.ETH_P_IP, ifindex)
             Os.bind(packetSock, addr)
             val packet = DhcpPacket.buildNakPacket(DhcpPacket.ENCAP_L2, 42,
@@ -306,31 +307,17 @@ class NetworkStackUtilsIntegrationTest {
             setMfBit(packet, true)
             reader.sendResponse(packet)
 
-            // Packet with MF bit set is received iff dropMf is false.
-            if (dropMf) {
-                assertSocketReadErrno("Packet with MF bit should have been dropped",
-                    packetSock, OsConstants.EAGAIN)
-            } else {
-                assertNextPacketOnSocket(packetSock, packet)
-            }
+            // Packet with MF bit set is not received.
+            assertSocketReadErrno("Packet with MF bit should have been dropped",
+                packetSock, OsConstants.EAGAIN)
 
-            // Identical packet, except with MF bit cleared, should always be received.
+            // Identical packet, except with MF bit cleared, should be received.
             setMfBit(packet, false)
             reader.sendResponse(packet)
             assertNextPacketOnSocket(packetSock, packet)
         } finally {
             Os.close(packetSock)
         }
-    }
-
-    @Test
-    fun testDhcpResponseWithMfBitDropped() {
-        doTestDhcpResponseWithMfBit(/*dropMf=*/ true)
-    }
-
-    @Test
-    fun testDhcpResponseWithMfBitReceived() {
-        doTestDhcpResponseWithMfBit(/*dropMf=*/ false)
     }
 }
 
