@@ -167,11 +167,6 @@ public class NetworkStackUtils {
     public static final String DHCP_RAPID_COMMIT_ENABLED = "dhcp_rapid_commit_enabled";
 
     /**
-     * Disable dropping DHCP packets with IPv4 MF flag set.
-     */
-    public static final String DHCP_DISABLE_DROP_MF = "dhcp_disable_drop_mf";
-
-    /**
      * Minimum module version at which to enable the DHCP INIT-REBOOT state.
      */
     public static final String DHCP_INIT_REBOOT_VERSION = "dhcp_init_reboot_version";
@@ -371,8 +366,7 @@ public class NetworkStackUtils {
     /**
      * Attaches a socket filter that accepts DHCP packets to the given socket.
      */
-    public static native void attachDhcpFilter(FileDescriptor fd, boolean dropMF)
-            throws ErrnoException;
+    public static native void attachDhcpFilter(FileDescriptor fd) throws ErrnoException;
 
     /**
      * Attaches a socket filter that accepts ICMPv6 router advertisements to the given socket.
