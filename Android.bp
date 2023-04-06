@@ -452,6 +452,7 @@ android_app {
     required: [
         "privapp_whitelist_com.android.networkstack",
     ],
+    updatable: true,
     lint: { strict_updatability_linting: true },
 }
 
