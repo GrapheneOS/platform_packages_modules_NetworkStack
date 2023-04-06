@@ -282,10 +282,6 @@ public class ApfGenerator {
             }
             // Calculate distance from end of this instruction to instruction.offset.
             final int targetLabelOffset = targetLabelInstruction.offset - (offset + size());
-            if (targetLabelOffset < 0) {
-                throw new IllegalInstructionException("backward branches disallowed; label: " +
-                        mTargetLabel);
-            }
             return targetLabelOffset;
         }
 
