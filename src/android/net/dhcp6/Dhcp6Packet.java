@@ -16,7 +16,11 @@
 
 package android.net.dhcp6;
 
+import static com.android.net.module.util.NetworkStackConstants.DHCP_MAX_OPTION_LEN;
+
 import androidx.annotation.NonNull;
+
+import java.nio.ByteBuffer;
 
 /**
  * Defines basic data and operations needed to build and use packets for the
@@ -132,5 +136,36 @@ public class Dhcp6Packet {
      */
     public byte[] getServerDuid() {
         return mServerDuid;
+    }
+
+    /**
+     * Adds an optional parameter containing an array of bytes.
+     */
+    protected static void addTlv(ByteBuffer buf, short type, @NonNull byte[] payload) {
+        if (payload.length > DHCP_MAX_OPTION_LEN) {
+            throw new IllegalArgumentException("DHCP option too long: "
+                    + payload.length + " vs. " + DHCP_MAX_OPTION_LEN);
+        }
+        buf.putShort(type);
+        buf.putShort((short) payload.length);
+        buf.put(payload);
+    }
+
+    /**
+     * Adds an optional parameter containing a short integer.
+     */
+    protected static void addTlv(ByteBuffer buf, short type, short value) {
+        buf.putShort(type);
+        buf.putShort((short) 2);
+        buf.putShort(value);
+    }
+
+    /**
+     * Builds a DHCPv6 SOLICIT packet from the required specified parameters.
+     */
+    public static ByteBuffer buildSolicitPacket(int transId, short secs, final byte[] iapd,
+            final byte[] duid) {
+        final Dhcp6SolicitPacket pkt = new Dhcp6SolicitPacket(transId, secs, duid, iapd);
+        return pkt.buildPacket();
     }
 }
