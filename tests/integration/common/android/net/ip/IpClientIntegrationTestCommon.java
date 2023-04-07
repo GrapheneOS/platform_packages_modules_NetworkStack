@@ -35,6 +35,7 @@ import static android.net.dhcp.DhcpPacket.INADDR_BROADCAST;
 import static android.net.dhcp.DhcpPacket.INFINITE_LEASE;
 import static android.net.dhcp.DhcpPacket.MIN_V6ONLY_WAIT_MS;
 import static android.net.dhcp.DhcpResultsParcelableUtil.fromStableParcelable;
+import static android.net.ip.IIpClientCallbacks.DTIM_MULTIPLIER_RESET;
 import static android.net.ip.IpClientLinkObserver.CLAT_PREFIX;
 import static android.net.ip.IpClientLinkObserver.CONFIG_SOCKET_RECV_BUFSIZE;
 import static android.net.ip.IpReachabilityMonitor.NUD_MCAST_RESOLICIT_NUM;
@@ -86,6 +87,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.longThat;
+import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.atLeastOnce;
@@ -566,6 +568,8 @@ public abstract class IpClientIntegrationTestCommon {
 
     protected abstract void setFeatureEnabled(String name, boolean enabled);
 
+    protected abstract void setDeviceConfigProperty(String name, int value);
+
     protected abstract boolean isFeatureEnabled(String name, boolean defaultEnabled);
 
     protected abstract boolean useNetworkStackSignature();
@@ -596,6 +600,21 @@ public abstract class IpClientIntegrationTestCommon {
                 isDhcpIpConflictDetectEnabled);
         setFeatureEnabled(NetworkStackUtils.DHCP_IPV6_ONLY_PREFERRED_VERSION,
                 isIPv6OnlyPreferredEnabled);
+    }
+
+    private void setDeviceConfigForMaxDtimMultiplier() {
+        setDeviceConfigProperty(IpClient.CONFIG_INITIAL_PROVISIONING_DTIM_DELAY_MS,
+                500 /* default value */);
+        setDeviceConfigProperty(IpClient.CONFIG_MULTICAST_LOCK_MAX_DTIM_MULTIPLIER,
+                IpClient.DEFAULT_MULTICAST_LOCK_MAX_DTIM_MULTIPLIER);
+        setDeviceConfigProperty(IpClient.CONFIG_IPV6_ONLY_NETWORK_MAX_DTIM_MULTIPLIER,
+                IpClient.DEFAULT_IPV6_ONLY_NETWORK_MAX_DTIM_MULTIPLIER);
+        setDeviceConfigProperty(IpClient.CONFIG_IPV4_ONLY_NETWORK_MAX_DTIM_MULTIPLIER,
+                IpClient.DEFAULT_IPV4_ONLY_NETWORK_MAX_DTIM_MULTIPLIER);
+        setDeviceConfigProperty(IpClient.CONFIG_DUAL_STACK_MAX_DTIM_MULTIPLIER,
+                IpClient.DEFAULT_DUAL_STACK_MAX_DTIM_MULTIPLIER);
+        setDeviceConfigProperty(IpClient.CONFIG_BEFORE_IPV6_PROV_MAX_DTIM_MULTIPLIER,
+                IpClient.DEFAULT_BEFORE_IPV6_PROV_MAX_DTIM_MULTIPLIER);
     }
 
     @Before
@@ -644,6 +663,7 @@ public abstract class IpClientIntegrationTestCommon {
         // Enable multicast filtering after creating IpClient instance, make the integration test
         // more realistic.
         mIIpClient.setMulticastFilter(true);
+        setDeviceConfigForMaxDtimMultiplier();
     }
 
     protected void setUpMocks() throws Exception {
@@ -664,6 +684,12 @@ public abstract class IpClientIntegrationTestCommon {
         when(mNetworkStackServiceManager.getIpMemoryStoreService())
                 .thenReturn(mIpMemoryStoreService);
         when(mCb.getInterfaceVersion()).thenReturn(IpClient.VERSION_ADDED_REACHABILITY_FAILURE);
+        // This mock is required, otherwise, ignoreIPv6ProvisioningLoss variable is always true,
+        // and IpReachabilityMonitor#avoidingBadLinks() will always return false as well, that
+        // results in the target tested IPv6 off-link DNS server won't be removed from LP and
+        // notifyLost won't be invoked, or the wrong code path when receiving RA with 0 router
+        // liftime.
+        when(mCm.shouldAvoidBadWifi()).thenReturn(true);
 
         mDependencies.setDeviceConfigProperty(IpClient.CONFIG_MIN_RDNSS_LIFETIME, 67);
         mDependencies.setDeviceConfigProperty(DhcpClient.DHCP_RESTART_CONFIG_DELAY, 10);
@@ -2856,11 +2882,14 @@ public abstract class IpClientIntegrationTestCommon {
         final InOrder inOrder = inOrder(mCb);
         final CompletableFuture<LinkProperties> lpFuture = new CompletableFuture<>();
 
-        doIpv6OnlyProvisioning(inOrder, ra);
-
-        // Start IPv4 provisioning and wait until entire provisioning completes.
+        // Start IPv4 provisioning first and then IPv6 provisioning, which is more realistic.
+        // And wait until entire provisioning completes.
         handleDhcpPackets(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* shouldReplyRapidCommitAck */, TEST_DEFAULT_MTU, null /* serverSentUrl */);
+
+        waitForRouterSolicitation();
+        mPacketReader.sendResponse(ra);
+
         verify(mCb, timeout(TEST_TIMEOUT_MS).atLeastOnce()).onLinkPropertiesChange(argThat(x -> {
             if (!x.isIpv4Provisioned() || !x.isIpv6Provisioned()) return false;
             lpFuture.complete(x);
@@ -2871,13 +2900,14 @@ public abstract class IpClientIntegrationTestCommon {
         assertNotNull(lp);
         assertTrue(lp.getDnsServers().contains(dnsServer));
         assertTrue(lp.getDnsServers().contains(SERVER_ADDR));
+        assertHasAddressThat("link-local address", lp, x -> x.getAddress().isLinkLocalAddress());
+        assertHasAddressThat("privacy address", lp, this::isPrivacyAddress);
+        assertHasAddressThat("stable privacy address", lp, this::isStablePrivacyAddress);
 
         return lp;
     }
 
     private void doDualStackProvisioning(boolean shouldDisableAcceptRa) throws Exception {
-        when(mCm.shouldAvoidBadWifi()).thenReturn(true);
-
         final ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
                 .build();
@@ -2888,7 +2918,12 @@ public abstract class IpClientIntegrationTestCommon {
         // not strictly necessary.
         setDhcpFeatures(false /* isDhcpLeaseCacheEnabled */, true /* isRapidCommitEnabled */,
                 false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
-        mIpc.startProvisioning(config);
+        // Both signature and root tests can use this function to do dual-stack provisioning.
+        if (useNetworkStackSignature()) {
+            mIpc.startProvisioning(config);
+        } else {
+            mIIpClient.startProvisioning(config.toStableParcelable());
+        }
 
         performDualStackProvisioning();
     }
@@ -3940,11 +3975,6 @@ public abstract class IpClientIntegrationTestCommon {
             final boolean isIgnoreIncompleteIpv6DnsServerEnabled,
             final boolean isIgnoreIncompleteIpv6DefaultRouterEnabled,
             final boolean expectNeighborLost) throws Exception {
-        // This mock is required, otherwise, IpReachabilityMonitor#avoidingBadLinks() will always
-        // return false, that results in the target tested IPv6 off-link DNS server won't be removed
-        // from LP and notifyLost won't be invoked.
-        when(mCm.shouldAvoidBadWifi()).thenReturn(true);
-
         mNetworkAgentThread =
                 new HandlerThread(IpClientIntegrationTestCommon.class.getSimpleName());
         mNetworkAgentThread.start();
@@ -4330,5 +4360,107 @@ public abstract class IpClientIntegrationTestCommon {
         lp = captor.getValue();
         assertFalse(lp.hasGlobalIpv6Address());
         assertEquals(1, lp.getLinkAddresses().size()); // only link-local
+    }
+
+    @Test
+    public void testMaxDtimMultiplier_IPv6OnlyNetwork() throws Exception {
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIPv4()
+                .build();
+        startIpClientProvisioning(config);
+
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).setMaxDtimMultiplier(
+                IpClient.DEFAULT_BEFORE_IPV6_PROV_MAX_DTIM_MULTIPLIER);
+
+        LinkProperties lp = doIpv6OnlyProvisioning();
+        assertNotNull(lp);
+        assertEquals(3, lp.getLinkAddresses().size()); // IPv6 privacy, stable privacy, link-local
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).setMaxDtimMultiplier(
+                IpClient.DEFAULT_IPV6_ONLY_NETWORK_MAX_DTIM_MULTIPLIER);
+    }
+
+    @Test
+    public void testMaxDtimMultiplier_IPv6LinkLocalOnlyMode() throws Exception {
+        final InOrder inOrder = inOrder(mCb);
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIPv4()
+                .withIpv6LinkLocalOnly()
+                .build();
+        startIpClientProvisioning(config);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(any());
+        inOrder.verify(mCb).setMaxDtimMultiplier(
+                IpClient.DEFAULT_BEFORE_IPV6_PROV_MAX_DTIM_MULTIPLIER);
+        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).setMaxDtimMultiplier(
+                DTIM_MULTIPLIER_RESET);
+    }
+
+    @Test
+    public void testMaxDtimMultiplier_IPv4OnlyNetwork() throws Exception {
+        final InOrder inOrder = inOrder(mCb);
+        performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
+                true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
+                TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
+        verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
+        inOrder.verify(mCb).setMaxDtimMultiplier(
+                IpClient.DEFAULT_BEFORE_IPV6_PROV_MAX_DTIM_MULTIPLIER);
+        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).setMaxDtimMultiplier(
+                IpClient.DEFAULT_IPV4_ONLY_NETWORK_MAX_DTIM_MULTIPLIER);
+    }
+
+    private void runDualStackNetworkDtimMultiplierSetting(final InOrder inOrder) throws Exception {
+        doDualStackProvisioning(false /* shouldDisableAcceptRa */);
+        inOrder.verify(mCb).setMaxDtimMultiplier(
+                IpClient.DEFAULT_BEFORE_IPV6_PROV_MAX_DTIM_MULTIPLIER);
+        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).setMaxDtimMultiplier(
+                IpClient.DEFAULT_DUAL_STACK_MAX_DTIM_MULTIPLIER);
+    }
+
+    @Test
+    public void testMaxDtimMultiplier_DualStackNetwork() throws Exception {
+        final InOrder inOrder = inOrder(mCb);
+        runDualStackNetworkDtimMultiplierSetting(inOrder);
+    }
+
+    @Test
+    public void testMaxDtimMultiplier_MulticastLock() throws Exception {
+        final InOrder inOrder = inOrder(mCb);
+        runDualStackNetworkDtimMultiplierSetting(inOrder);
+
+        // Simulate to hold the multicast lock by disabling the multicast filter.
+        mIIpClient.setMulticastFilter(false);
+        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).setMaxDtimMultiplier(
+                IpClient.DEFAULT_MULTICAST_LOCK_MAX_DTIM_MULTIPLIER);
+
+        // Simulate to disable the multicast lock again, then check the multiplier should be
+        // changed to 2 (dual-stack setting)
+        mIIpClient.setMulticastFilter(true);
+        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).setMaxDtimMultiplier(
+                IpClient.DEFAULT_DUAL_STACK_MAX_DTIM_MULTIPLIER);
+    }
+
+    @Test
+    public void testMaxDtimMultiplier_MulticastLockEnabled_StoppedState() throws Exception {
+        // Simulate to hold the multicast lock by disabling the multicast filter at StoppedState,
+        // verify no callback to be sent, start dual-stack provisioning and verify the multiplier
+        // to be set to 1 (multicast lock setting) later.
+        mIIpClient.setMulticastFilter(false);
+        verify(mCb, after(10).never()).setMaxDtimMultiplier(
+                IpClient.DEFAULT_MULTICAST_LOCK_MAX_DTIM_MULTIPLIER);
+
+        doDualStackProvisioning(false /* shouldDisableAcceptRa */);
+        verify(mCb, times(1)).setMaxDtimMultiplier(
+                IpClient.DEFAULT_MULTICAST_LOCK_MAX_DTIM_MULTIPLIER);
+    }
+
+    @Test
+    public void testMaxDtimMultiplier_resetMultiplier() throws Exception {
+        final InOrder inOrder = inOrder(mCb);
+        runDualStackNetworkDtimMultiplierSetting(inOrder);
+
+        verify(mCb, never()).setMaxDtimMultiplier(DTIM_MULTIPLIER_RESET);
+
+        // Stop IpClient and verify if the multiplier has been reset.
+        mIIpClient.stop();
+        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).setMaxDtimMultiplier(DTIM_MULTIPLIER_RESET);
     }
 }
