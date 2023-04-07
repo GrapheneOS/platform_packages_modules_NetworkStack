@@ -138,7 +138,7 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
         }
     }
 
-    private val originalFlagValues = ArrayMap<String, String>()
+    private val originalPropertyValues = ArrayMap<String, String>()
 
     /**
      * Wrapper class for IIpClientCallbacks.
@@ -154,11 +154,11 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
     }
 
     @After
-    fun tearDownFlags() {
+    fun tearDownDeviceConfigProperties() {
         if (testSkipped()) return
         automation.adoptShellPermissionIdentity(READ_DEVICE_CONFIG, WRITE_DEVICE_CONFIG)
         try {
-            for ((key, value) in originalFlagValues.entries) {
+            for ((key, value) in originalPropertyValues.entries) {
                 if (key == null) continue
                 DeviceConfig.setProperty(DeviceConfig.NAMESPACE_CONNECTIVITY, key,
                         value, false /* makeDefault */)
@@ -195,23 +195,32 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
         return ipClientCaptor.value
     }
 
-    override fun setFeatureEnabled(feature: String, enabled: Boolean) {
+    private fun setDeviceConfigProperty(name: String, value: String) {
         automation.adoptShellPermissionIdentity(READ_DEVICE_CONFIG, WRITE_DEVICE_CONFIG)
         try {
-            // Do not use computeIfAbsent as it would overwrite null values (flag originally unset)
-            if (!originalFlagValues.containsKey(feature)) {
-                originalFlagValues[feature] =
-                        DeviceConfig.getProperty(DeviceConfig.NAMESPACE_CONNECTIVITY, feature)
+            // Do not use computeIfAbsent as it would overwrite null values,
+            // property originally unset.
+            if (!originalPropertyValues.containsKey(name)) {
+                originalPropertyValues[name] =
+                        DeviceConfig.getProperty(DeviceConfig.NAMESPACE_CONNECTIVITY, name)
             }
-            // The feature is enabled if the flag is lower than the package version.
-            // Package versions follow a standard format with 9 digits.
-            // TODO: consider resetting flag values on reboot when set to special values like "1" or
-            // "999999999"
-            DeviceConfig.setProperty(DeviceConfig.NAMESPACE_CONNECTIVITY, feature,
-                    if (enabled) "1" else "999999999", false)
+            DeviceConfig.setProperty(DeviceConfig.NAMESPACE_CONNECTIVITY, name, value,
+                    false /* makeDefault */)
         } finally {
             automation.dropShellPermissionIdentity()
         }
+    }
+
+    override fun setFeatureEnabled(feature: String, enabled: Boolean) {
+        // The feature is enabled if the flag is lower than the package version.
+        // Package versions follow a standard format with 9 digits.
+        // TODO: consider resetting flag values on reboot when set to special values like "1" or
+        // "999999999"
+        setDeviceConfigProperty(feature, if (enabled) "1" else "999999999")
+    }
+
+    override fun setDeviceConfigProperty(name: String, value: Int) {
+        setDeviceConfigProperty(name, value.toString())
     }
 
     override fun isFeatureEnabled(name: String, defaultEnabled: Boolean): Boolean {
