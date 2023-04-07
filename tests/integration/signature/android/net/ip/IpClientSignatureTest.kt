@@ -52,6 +52,10 @@ class IpClientSignatureTest : IpClientIntegrationTestCommon() {
         mEnabledFeatures.put(name, enabled)
     }
 
+    override fun setDeviceConfigProperty(name: String, value: Int) {
+        mDependencies.setDeviceConfigProperty(name, value)
+    }
+
     override fun getStoredNetworkAttributes(l2Key: String, timeout: Long): NetworkAttributes {
         val networkAttributesCaptor = ArgumentCaptor.forClass(NetworkAttributes::class.java)
 
