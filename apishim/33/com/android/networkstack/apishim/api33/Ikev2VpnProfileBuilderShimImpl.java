@@ -32,7 +32,7 @@ import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
  */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 public class Ikev2VpnProfileBuilderShimImpl
-        extends com.android.networkstack.apishim.api31.Ikev2VpnProfileBuilderShimImpl {
+        extends com.android.networkstack.apishim.api30.Ikev2VpnProfileBuilderShimImpl {
     protected Ikev2VpnProfileBuilderShimImpl(@NonNull IkeTunnelConnectionParams params) {
         super(new Ikev2VpnProfile.Builder(params));
     }
