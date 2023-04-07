@@ -29,7 +29,7 @@ import com.android.networkstack.apishim.common.Ikev2VpnProfileShim;
  */
 @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 public class Ikev2VpnProfileShimImpl
-        extends com.android.networkstack.apishim.api30.Ikev2VpnProfileShimImpl {
+        extends com.android.networkstack.apishim.api33.Ikev2VpnProfileShimImpl {
     protected Ikev2VpnProfileShimImpl(Ikev2VpnProfile profile) {
         super(profile);
     }
@@ -41,7 +41,7 @@ public class Ikev2VpnProfileShimImpl
         if (SdkLevel.isAtLeastU()) {
             return new Ikev2VpnProfileShimImpl(profile);
         } else {
-            return com.android.networkstack.apishim.api30.Ikev2VpnProfileShimImpl
+            return com.android.networkstack.apishim.api33.Ikev2VpnProfileShimImpl
                     .newInstance(profile);
         }
     }
