@@ -25,11 +25,8 @@ import com.android.networkstack.apishim.common.Ikev2VpnProfileShim;
  * Implementation of Ikev2VpnProfileShim for API 30.
  */
 // TODO : when API29 is no longer supported, remove the type argument
-public class Ikev2VpnProfileShimImpl extends
-        com.android.networkstack.apishim.api29.Ikev2VpnProfileShimImpl<Ikev2VpnProfile> {
-    protected Ikev2VpnProfile mProfile;
-
-    protected Ikev2VpnProfileShimImpl() {}
+public class Ikev2VpnProfileShimImpl implements Ikev2VpnProfileShim<Ikev2VpnProfile> {
+    protected final Ikev2VpnProfile mProfile;
 
     protected Ikev2VpnProfileShimImpl(Ikev2VpnProfile profile) {
         mProfile = profile;
