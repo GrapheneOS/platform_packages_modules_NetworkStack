@@ -21,6 +21,7 @@ import static android.net.dhcp.DhcpResultsParcelableUtil.toStableParcelable;
 import static android.net.ip.IIpClient.PROV_IPV4_DISABLED;
 import static android.net.ip.IIpClient.PROV_IPV6_DISABLED;
 import static android.net.ip.IIpClient.PROV_IPV6_LINKLOCAL;
+import static android.net.ip.IIpClientCallbacks.DTIM_MULTIPLIER_RESET;
 import static android.net.ip.IpReachabilityMonitor.INVALID_REACHABILITY_LOSS_TYPE;
 import static android.net.ip.IpReachabilityMonitor.nudEventTypeToInt;
 import static android.net.util.SocketUtils.makePacketSocketAddress;
@@ -104,6 +105,7 @@ import com.android.internal.util.MessageUtils;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.internal.util.WakeupMessage;
+import com.android.net.module.util.CollectionUtils;
 import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.SharedLog;
@@ -483,6 +485,7 @@ public class IpClient extends StateMachine {
     private static final int CMD_UPDATE_L2KEY_CLUSTER = 15;
     private static final int CMD_COMPLETE_PRECONNECTION = 16;
     private static final int CMD_UPDATE_L2INFORMATION = 17;
+    private static final int CMD_SET_DTIM_MULTIPLIER_AFTER_DELAY = 18;
 
     private static final int ARG_LINKPROP_CHANGED_LINKSTATE_DOWN = 0;
     private static final int ARG_LINKPROP_CHANGED_LINKSTATE_UP = 1;
@@ -505,6 +508,47 @@ public class IpClient extends StateMachine {
     static final String CONFIG_MIN_RDNSS_LIFETIME = "ipclient_min_rdnss_lifetime";
     private static final int DEFAULT_MIN_RDNSS_LIFETIME =
             ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q) ? 120 : 0;
+
+    // Used to wait for the provisioning to complete eventually and then decide the target
+    // network type, which gives the accurate hint to set DTIM multiplier. Per current IPv6
+    // provisioning connection latency metrics, the latency of 95% can go up to 16s, so pick
+    // ProvisioningConfiguration.DEFAULT_TIMEOUT_MS value for this delay.
+    @VisibleForTesting
+    static final String CONFIG_INITIAL_PROVISIONING_DTIM_DELAY_MS =
+            "ipclient_initial_provisioning_dtim_delay";
+    private static final int DEFAULT_INITIAL_PROVISIONING_DTIM_DELAY_MS = 18000;
+
+    @VisibleForTesting
+    static final String CONFIG_MULTICAST_LOCK_MAX_DTIM_MULTIPLIER =
+            "ipclient_multicast_lock_max_dtim_multiplier";
+    @VisibleForTesting
+    static final int DEFAULT_MULTICAST_LOCK_MAX_DTIM_MULTIPLIER = 1;
+
+    @VisibleForTesting
+    static final String CONFIG_IPV6_ONLY_NETWORK_MAX_DTIM_MULTIPLIER =
+            "ipclient_ipv6_only_max_dtim_multiplier";
+    @VisibleForTesting
+    static final int DEFAULT_IPV6_ONLY_NETWORK_MAX_DTIM_MULTIPLIER = 2;
+
+    @VisibleForTesting
+    static final String CONFIG_IPV4_ONLY_NETWORK_MAX_DTIM_MULTIPLIER =
+            "ipclient_ipv4_only_max_dtim_multiplier";
+    @VisibleForTesting
+    static final int DEFAULT_IPV4_ONLY_NETWORK_MAX_DTIM_MULTIPLIER = 9;
+
+    @VisibleForTesting
+    static final String CONFIG_DUAL_STACK_MAX_DTIM_MULTIPLIER =
+            "ipclient_dual_stack_max_dtim_multiplier";
+    // The default value for dual-stack networks is the min of maximum DTIM multiplier to use for
+    // IPv4-only and IPv6-only networks.
+    @VisibleForTesting
+    static final int DEFAULT_DUAL_STACK_MAX_DTIM_MULTIPLIER = 2;
+
+    @VisibleForTesting
+    static final String CONFIG_BEFORE_IPV6_PROV_MAX_DTIM_MULTIPLIER =
+            "ipclient_before_ipv6_prov_max_dtim_multiplier";
+    @VisibleForTesting
+    static final int DEFAULT_BEFORE_IPV6_PROV_MAX_DTIM_MULTIPLIER = 1;
 
     private static final boolean NO_CALLBACKS = false;
     private static final boolean SEND_CALLBACKS = true;
@@ -595,9 +639,11 @@ public class IpClient extends StateMachine {
     private String mCluster; // The cluster for this network, for writing into the memory store
     private boolean mMulticastFiltering;
     private long mStartTimeMillis;
+    private long mInitialProvisioningEndTimeMillis;
     private MacAddress mCurrentBssid;
     private boolean mHasDisabledIpv6OrAcceptRaOnProvLoss;
     private Integer mDadTransmits = null;
+    private int mMaxDtimMultiplier = DTIM_MULTIPLIER_RESET;
 
     /**
      * Reading the snapshot is an asynchronous operation initiated by invoking
@@ -1817,6 +1863,10 @@ public class IpClient extends StateMachine {
         maybeSaveNetworkToIpMemoryStore();
         if (sendCallbacks) {
             dispatchCallback(delta, newLp);
+            // We cannot do this along with onProvisioningSuccess callback, because the network
+            // can become dual-stack after a success IPv6 provisioning, and the multiplier also
+            // needs to be updated upon the loss of IPv4 and/or IPv6 provisioning.
+            updateMaxDtimMultiplier();
         }
         return (delta != PROV_CHANGE_LOST_PROVISIONING);
     }
@@ -2208,6 +2258,12 @@ public class IpClient extends StateMachine {
             maybeRestoreInterfaceMtu();
             // Reset number of dad_transmits to default value if changed.
             maybeRestoreDadTransmits();
+            // Reset DTIM multiplier to default value if changed.
+            if (mMaxDtimMultiplier != DTIM_MULTIPLIER_RESET) {
+                mCallback.setMaxDtimMultiplier(DTIM_MULTIPLIER_RESET);
+                mMaxDtimMultiplier = DTIM_MULTIPLIER_RESET;
+                mInitialProvisioningEndTimeMillis = 0;
+            }
         }
 
         @Override
@@ -2386,11 +2442,19 @@ public class IpClient extends StateMachine {
         public void enter() {
             mIpProvisioningMetrics.reset();
             mStartTimeMillis = SystemClock.elapsedRealtime();
+            final int delay = mDependencies.getDeviceConfigPropertyInt(
+                    CONFIG_INITIAL_PROVISIONING_DTIM_DELAY_MS,
+                    DEFAULT_INITIAL_PROVISIONING_DTIM_DELAY_MS);
+            mInitialProvisioningEndTimeMillis = mStartTimeMillis + delay;
+
             if (mConfiguration.mProvisioningTimeoutMs > 0) {
                 final long alarmTime = SystemClock.elapsedRealtime()
                         + mConfiguration.mProvisioningTimeoutMs;
                 mProvisioningTimeoutAlarm.schedule(alarmTime);
             }
+            // Send a delay message to wait for IP provisioning to complete eventually and set the
+            // specific DTIM multiplier by checking the target network type.
+            sendMessageDelayed(CMD_SET_DTIM_MULTIPLIER_AFTER_DELAY, delay);
         }
 
         @Override
@@ -2627,6 +2691,7 @@ public class IpClient extends StateMachine {
                     } else {
                         mCallback.setFallbackMulticastFilter(mMulticastFiltering);
                     }
+                    updateMaxDtimMultiplier();
                     break;
                 }
 
@@ -2745,6 +2810,10 @@ public class IpClient extends StateMachine {
                     mDhcpClient = null;
                     break;
 
+                case CMD_SET_DTIM_MULTIPLIER_AFTER_DELAY:
+                    updateMaxDtimMultiplier();
+                    break;
+
                 default:
                     return NOT_HANDLED;
             }
@@ -2752,6 +2821,71 @@ public class IpClient extends StateMachine {
             mMsgStateLogger.handled(this, getCurrentState());
             return HANDLED;
         }
+    }
+
+    /**
+     * Set the maximum DTIM multiplier to hardware driver per network condition. Any multiplier
+     * larger than the maximum value must not be accepted, it will cause packet loss higher than
+     * what the system can accept, which will cause unexpected behavior for apps, and may interrupt
+     * the network connection.
+     *
+     * When Wifi STA is in the power saving mode and the system is suspended, the wakeup interval
+     * will be set to:
+     *    1) multiplier * AP's DTIM period if multiplier > 0.
+     *    2) the driver default value if multiplier <= 0.
+     * Some implementations may apply an additional cap to wakeup interval in the case of 1).
+     */
+    private void updateMaxDtimMultiplier() {
+        int multiplier = deriveDtimMultiplier();
+        if (mMaxDtimMultiplier == multiplier) return;
+
+        mMaxDtimMultiplier = multiplier;
+        log("set max DTIM multiplier to " + multiplier);
+        mCallback.setMaxDtimMultiplier(multiplier);
+    }
+
+    private int deriveDtimMultiplier() {
+        final boolean hasIpv4Addr = mLinkProperties.hasIpv4Address();
+        // For a host in the network that has only ULA and link-local but no GUA, consider
+        // that it also has IPv6 connectivity. LinkProperties#isIpv6Provisioned only returns
+        // true when it has a GUA, so we cannot use it for IPv6-only network case.
+        final boolean hasIpv6Addr = CollectionUtils.any(mLinkProperties.getLinkAddresses(),
+                la -> {
+                    final InetAddress address = la.getAddress();
+                    return (address instanceof Inet6Address) && !address.isLinkLocalAddress();
+                });
+
+        final int multiplier;
+        if (!mMulticastFiltering) {
+            multiplier = mDependencies.getDeviceConfigPropertyInt(
+                    CONFIG_MULTICAST_LOCK_MAX_DTIM_MULTIPLIER,
+                    DEFAULT_MULTICAST_LOCK_MAX_DTIM_MULTIPLIER);
+        } else if (!hasIpv6Addr
+                && (SystemClock.elapsedRealtime() < mInitialProvisioningEndTimeMillis)) {
+            // IPv6 provisioning may or may not complete soon in the future, we don't know when
+            // it will complete, however, setting multiplier to a high value will cause higher
+            // RA packet loss, that increases the overall IPv6 provisioning latency. So just set
+            // multiplier to 1 before device gains the IPv6 provisioning, make sure device won't
+            // miss any RA packet later.
+            multiplier = mDependencies.getDeviceConfigPropertyInt(
+                    CONFIG_BEFORE_IPV6_PROV_MAX_DTIM_MULTIPLIER,
+                    DEFAULT_BEFORE_IPV6_PROV_MAX_DTIM_MULTIPLIER);
+        } else if (hasIpv6Addr && !hasIpv4Addr) {
+            multiplier = mDependencies.getDeviceConfigPropertyInt(
+                    CONFIG_IPV6_ONLY_NETWORK_MAX_DTIM_MULTIPLIER,
+                    DEFAULT_IPV6_ONLY_NETWORK_MAX_DTIM_MULTIPLIER);
+        } else if (hasIpv4Addr && !hasIpv6Addr) {
+            multiplier = mDependencies.getDeviceConfigPropertyInt(
+                    CONFIG_IPV4_ONLY_NETWORK_MAX_DTIM_MULTIPLIER,
+                    DEFAULT_IPV4_ONLY_NETWORK_MAX_DTIM_MULTIPLIER);
+        } else if (hasIpv6Addr && hasIpv4Addr) {
+            multiplier = mDependencies.getDeviceConfigPropertyInt(
+                    CONFIG_DUAL_STACK_MAX_DTIM_MULTIPLIER,
+                    DEFAULT_DUAL_STACK_MAX_DTIM_MULTIPLIER);
+        } else {
+            multiplier = DTIM_MULTIPLIER_RESET;
+        }
+        return multiplier;
     }
 
     private static class MessageHandlingLogger {
