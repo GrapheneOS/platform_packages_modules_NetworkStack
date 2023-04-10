@@ -259,7 +259,7 @@ public class IpReachabilityMonitor {
         mCm = context.getSystemService(ConnectivityManager.class);
         mDependencies = dependencies;
         mMulticastResolicitEnabled = dependencies.isFeatureEnabled(context,
-                IP_REACHABILITY_MCAST_RESOLICIT_VERSION, false /* defaultEnabled */);
+                IP_REACHABILITY_MCAST_RESOLICIT_VERSION, true /* defaultEnabled */);
         mIgnoreIncompleteIpv6DnsServerEnabled = dependencies.isFeatureEnabled(context,
                 IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION,
                 false /* defaultEnabled */);
