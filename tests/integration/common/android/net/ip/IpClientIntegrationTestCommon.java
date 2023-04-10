@@ -2890,8 +2890,12 @@ public abstract class IpClientIntegrationTestCommon {
         waitForRouterSolicitation();
         mPacketReader.sendResponse(ra);
 
+        // Wait until we see both success IPv4 and IPv6 provisioning, then there would be 4
+        // addresses in LinkProperties, they are IPv4 address, IPv6 link-local address, stable
+        // privacy address and privacy address.
         verify(mCb, timeout(TEST_TIMEOUT_MS).atLeastOnce()).onLinkPropertiesChange(argThat(x -> {
             if (!x.isIpv4Provisioned() || !x.isIpv6Provisioned()) return false;
+            if (x.getLinkAddresses().size() != 4) return false;
             lpFuture.complete(x);
             return true;
         }));
