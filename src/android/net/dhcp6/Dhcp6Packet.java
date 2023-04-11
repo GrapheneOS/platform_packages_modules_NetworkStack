@@ -168,4 +168,14 @@ public class Dhcp6Packet {
         final Dhcp6SolicitPacket pkt = new Dhcp6SolicitPacket(transId, secs, duid, iapd);
         return pkt.buildPacket();
     }
+
+    /**
+     * Builds a DHCPv6 ADVERTISE packet from the required specified parameters.
+     */
+    public static ByteBuffer buildAdvertisePacket(int transId, final byte[] iapd,
+            final byte[] clientDuid, final byte[] serverDuid) {
+        final Dhcp6AdvertisePacket pkt =
+                new Dhcp6AdvertisePacket(transId, clientDuid, serverDuid, iapd);
+        return pkt.buildPacket();
+    }
 }
