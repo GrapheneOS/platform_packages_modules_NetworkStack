@@ -178,4 +178,13 @@ public class Dhcp6Packet {
                 new Dhcp6AdvertisePacket(transId, clientDuid, serverDuid, iapd);
         return pkt.buildPacket();
     }
+
+    /**
+     * Builds a DHCPv6 REPLY packet from the required specified parameters.
+     */
+    public static ByteBuffer buildReplyPacket(int transId, final byte[] iapd,
+            final byte[] clientDuid, final byte[] serverDuid) {
+        final Dhcp6ReplyPacket pkt = new Dhcp6ReplyPacket(transId, clientDuid, serverDuid, iapd);
+        return pkt.buildPacket();
+    }
 }
