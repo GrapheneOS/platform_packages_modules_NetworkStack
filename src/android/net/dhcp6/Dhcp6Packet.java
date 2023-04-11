@@ -187,4 +187,14 @@ public class Dhcp6Packet {
         final Dhcp6ReplyPacket pkt = new Dhcp6ReplyPacket(transId, clientDuid, serverDuid, iapd);
         return pkt.buildPacket();
     }
+
+    /**
+     * Builds a DHCPv6 REQUEST packet from the required specified parameters.
+     */
+    public static ByteBuffer buildRequestPacket(int transId, short secs, final byte[] iapd,
+            final byte[] clientDuid, final byte[] serverDuid) {
+        final Dhcp6RequestPacket pkt =
+                new Dhcp6RequestPacket(transId, secs, clientDuid, serverDuid, iapd);
+        return pkt.buildPacket();
+    }
 }
