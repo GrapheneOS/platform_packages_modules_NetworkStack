@@ -168,4 +168,33 @@ public class Dhcp6Packet {
         final Dhcp6SolicitPacket pkt = new Dhcp6SolicitPacket(transId, secs, duid, iapd);
         return pkt.buildPacket();
     }
+
+    /**
+     * Builds a DHCPv6 ADVERTISE packet from the required specified parameters.
+     */
+    public static ByteBuffer buildAdvertisePacket(int transId, final byte[] iapd,
+            final byte[] clientDuid, final byte[] serverDuid) {
+        final Dhcp6AdvertisePacket pkt =
+                new Dhcp6AdvertisePacket(transId, clientDuid, serverDuid, iapd);
+        return pkt.buildPacket();
+    }
+
+    /**
+     * Builds a DHCPv6 REPLY packet from the required specified parameters.
+     */
+    public static ByteBuffer buildReplyPacket(int transId, final byte[] iapd,
+            final byte[] clientDuid, final byte[] serverDuid) {
+        final Dhcp6ReplyPacket pkt = new Dhcp6ReplyPacket(transId, clientDuid, serverDuid, iapd);
+        return pkt.buildPacket();
+    }
+
+    /**
+     * Builds a DHCPv6 REQUEST packet from the required specified parameters.
+     */
+    public static ByteBuffer buildRequestPacket(int transId, short secs, final byte[] iapd,
+            final byte[] clientDuid, final byte[] serverDuid) {
+        final Dhcp6RequestPacket pkt =
+                new Dhcp6RequestPacket(transId, secs, clientDuid, serverDuid, iapd);
+        return pkt.buildPacket();
+    }
 }
