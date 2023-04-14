@@ -18,6 +18,8 @@ package android.net.dhcp6;
 
 import static com.android.net.module.util.NetworkStackConstants.DHCP_MAX_LENGTH;
 
+import androidx.annotation.NonNull;
+
 import java.nio.ByteBuffer;
 
 /**
@@ -30,8 +32,8 @@ public class Dhcp6RequestPacket extends Dhcp6Packet {
     /**
      * Generates a request packet with the specified parameters.
      */
-    Dhcp6RequestPacket(int transId, short secs, final byte[] clientDuid, final byte[] serverDuid,
-            final byte[] iapd) {
+    Dhcp6RequestPacket(int transId, short secs, @NonNull final byte[] clientDuid,
+            @NonNull final byte[] serverDuid, final byte[] iapd) {
         super(transId, secs, clientDuid, serverDuid, iapd);
     }
 
