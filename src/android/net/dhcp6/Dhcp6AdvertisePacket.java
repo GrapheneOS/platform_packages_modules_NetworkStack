@@ -18,6 +18,8 @@ package android.net.dhcp6;
 
 import static com.android.net.module.util.NetworkStackConstants.DHCP_MAX_LENGTH;
 
+import androidx.annotation.NonNull;
+
 import java.nio.ByteBuffer;
 
 /**
@@ -30,8 +32,8 @@ public class Dhcp6AdvertisePacket extends Dhcp6Packet {
     /**
      * Generates an advertise packet with the specified parameters.
      */
-    Dhcp6AdvertisePacket(int transId, final byte[] clientDuid, final byte[] serverDuid,
-            final byte[] iapd) {
+    Dhcp6AdvertisePacket(int transId, @NonNull final byte[] clientDuid,
+            @NonNull final byte[] serverDuid, final byte[] iapd) {
         super(transId, (short) 0 /* secs */, clientDuid, serverDuid, iapd);
     }
 
