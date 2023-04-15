@@ -992,7 +992,7 @@ public class IpClient extends StateMachine {
 
     private boolean isMulticastNsEnabled() {
         return mDependencies.isFeatureEnabled(mContext, IPCLIENT_MULTICAST_NS_VERSION,
-                false /* defaultEnabled */);
+                true /* defaultEnabled */);
     }
 
     @VisibleForTesting

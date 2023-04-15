@@ -3750,9 +3750,12 @@ public abstract class IpClientIntegrationTestCommon {
             final Inet6Address dstIp, final Inet6Address targetIp) throws Exception {
         NeighborSolicitation ns;
         while ((ns = getNextNeighborSolicitation()) != null) {
-            // Filter out the NSes used for duplicate address detetction, the target address
-            // is the global IPv6 address inside these NSes.
-            if (ns.nsHdr.target.isLinkLocalAddress()) break;
+            // Filter out the multicast NSes used for duplicate address detetction, the target
+            // address is the global IPv6 address inside these NSes, and multicast NSes sent from
+            // device's GUAs to force first-hop router to update the neighbor cache entry.
+            if (ns.ipv6Hdr.srcIp.isLinkLocalAddress() && ns.nsHdr.target.isLinkLocalAddress()) {
+                break;
+            }
         }
         assertNotNull("No unicast Neighbor solicitation received on interface within timeout", ns);
         assertUnicastNeighborSolicitation(ns, dstMac, dstIp, targetIp);
@@ -3763,9 +3766,10 @@ public abstract class IpClientIntegrationTestCommon {
         NeighborSolicitation ns;
         final List<NeighborSolicitation> nsList = new ArrayList<NeighborSolicitation>();
         while ((ns = getNextNeighborSolicitation()) != null) {
-            // Filter out the NSes used for duplicate address detetction, the target address
-            // is the global IPv6 address inside these NSes.
-            if (ns.nsHdr.target.isLinkLocalAddress()) {
+            // Filter out the multicast NSes used for duplicate address detetction, the target
+            // address is the global IPv6 address inside these NSes, and multicast NSes sent from
+            // device's GUAs to force first-hop router to update the neighbor cache entry.
+            if (ns.ipv6Hdr.srcIp.isLinkLocalAddress() && ns.nsHdr.target.isLinkLocalAddress()) {
                 nsList.add(ns);
             }
         }
