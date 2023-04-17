@@ -263,20 +263,26 @@ public class DnsUtils {
         gen.addJump(jumpTable.getStartLabel());
     }
 
-    /**
-     * Returns the name of a jump label used while parsing the specified DNS label.
-     * TODO: use another scheme to name the labels. Using the label name does not work if the name
-     * to be matched contains duplicate labels.
-     */
-    private static String getPostMatchJumpTargetForLabel(String label) {
-        return label + "_parsed";
+    /** @return jump label that points to the start of a DNS label's parsing code. */
+    private static String getStartMatchLabel(int labelIndex) {
+        return "dns_parse_" + labelIndex;
+    }
+
+    /** @return jump label used while parsing the specified DNS label. */
+    private static String getPostMatchJumpTargetForLabel(int labelIndex) {
+        return "dns_parsed_" + labelIndex;
+    }
+
+    /** @return jump label used when the match for the specified DNS label fails. */
+    private static String getNoMatchLabel(int labelIndex) {
+        return "dns_nomatch_" + labelIndex;
     }
 
     private static void addMatchLabel(@NonNull ApfGenerator gen, @NonNull JumpTable jumpTable,
-            @NonNull String label, @NonNull String nextLabel) throws Exception {
-        final String parsedLabel = getPostMatchJumpTargetForLabel(label);
-        final String noMatchLabel = label + "_nomatch";
-        gen.defineLabel(label);
+            int labelIndex, @NonNull String label, @NonNull String nextLabel) throws Exception {
+        final String parsedLabel = getPostMatchJumpTargetForLabel(labelIndex);
+        final String noMatchLabel = getNoMatchLabel(labelIndex);
+        gen.defineLabel(getStartMatchLabel(labelIndex));
 
         // Store return address.
         gen.addLoadImmediate(R0, jumpTable.getIndex(parsedLabel));
@@ -386,7 +392,7 @@ public class DnsUtils {
         // calls below) because otherwise all the jumps are backwards, and backwards jumps are more
         // expensive (5 bytes of bytecode)
         for (int i = 0; i < labels.length; i++) {
-            table.addLabel(getPostMatchJumpTargetForLabel(labels[i]));
+            table.addLabel(getPostMatchJumpTargetForLabel(i));
         }
         table.addLabel(LABEL_START_MATCH);
         table.generate(gen);
@@ -396,8 +402,8 @@ public class DnsUtils {
         for (int i = 0; i < labels.length; i++) {
             final String nextLabel = (i == labels.length - 1)
                     ? ApfGenerator.PASS_LABEL
-                    : labels[i + 1];
-            addMatchLabel(gen, table, labels[i], nextLabel);
+                    : getStartMatchLabel(i + 1);
+            addMatchLabel(gen, table, i, labels[i], nextLabel);
         }
         gen.addJump(ApfGenerator.DROP_LABEL);
     }
