@@ -65,6 +65,7 @@ import com.android.server.NetworkObserver;
 
 import java.net.Inet6Address;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -539,7 +540,17 @@ public class IpClientLinkObserver implements NetworkObserver {
             if (!mNetlinkEventParsingEnabled) return;
             final String[] addresses = new String[opt.servers.length];
             for (int i = 0; i < opt.servers.length; i++) {
-                addresses[i] = opt.servers[i].getHostAddress();
+                Inet6Address addr = (Inet6Address) opt.servers[i];
+                if (addr.isLinkLocalAddress()) {
+                    try {
+                        addr = Inet6Address.getByAddress(null /* hostname */, addr.getAddress(),
+                                mIfindex);
+                    } catch (UnknownHostException impossible) {
+                        Log.wtf("Cannot construct scoped Inet6Address with Inet6Address.getAddress("
+                                + addr.getHostAddress() + "): ", impossible);
+                    }
+                }
+                addresses[i] = addr.getHostAddress();
             }
             updateInterfaceDnsServerInfo(opt.header.lifetime, addresses);
         }
