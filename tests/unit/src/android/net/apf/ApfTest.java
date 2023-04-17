@@ -1481,11 +1481,17 @@ public class ApfTest {
         apfFilter.shutdown();
     }
 
+    private ApfGenerator generateDnsFilter(boolean ipv6, String... labels) throws Exception {
+        ApfGenerator gen = new ApfGenerator(MIN_APF_VERSION);
+        gen.addLoadImmediate(R1, ipv6 ? IPV6_HEADER_LEN : IPV4_HEADER_LEN);
+        DnsUtils.generateFilter(gen, labels);
+        return gen;
+    }
+
     private void doTestDnsParsing(boolean expectPass, boolean ipv6, String filterName,
             byte[] pkt) throws Exception {
-        ApfGenerator gen = new ApfGenerator(MIN_APF_VERSION);
         final String[] labels = filterName.split(/*regex=*/ "[.]");
-        DnsUtils.generateFilter(gen, ipv6, labels);
+        ApfGenerator gen = generateDnsFilter(ipv6, labels);
 
         // Hack to prevent the APF instruction limit triggering.
         for (int i = 0; i < 500; i++) {
@@ -1546,14 +1552,8 @@ public class ApfTest {
             String filterName) throws Exception {
         final String[] labels = filterName.split(/*regex=*/ "[.]");
 
-        ApfGenerator gen = new ApfGenerator(MIN_APF_VERSION);
-        DnsUtils.generateFilter(gen, true, labels);
-        assertEquals("IPv6 program for " + filterName + " had unexpected length:",
-                expectedLength, gen.generate().length);
-
-        gen = new ApfGenerator(MIN_APF_VERSION);
-        DnsUtils.generateFilter(gen, false, labels);
-        assertEquals("IPv4 program for " + filterName + " had unexpected length:",
+        ApfGenerator gen = generateDnsFilter(/*ipv6=*/ true, labels);
+        assertEquals("Program for " + filterName + " had unexpected length:",
                 expectedLength, gen.generate().length);
     }
 
@@ -1563,11 +1563,11 @@ public class ApfTest {
      */
     @Test
     public void testDnsParsingProgramLength() throws Exception {
-        doTestDnsParsingProgramLength(235, "MyDevice.local");
-        doTestDnsParsingProgramLength(283, "_googlecast.tcp.local");
-        doTestDnsParsingProgramLength(289, "_googlecast12345.tcp.local");
-        doTestDnsParsingProgramLength(242, "_googlecastZtcp.local");
-        doTestDnsParsingProgramLength(247, "_googlecastZtcp12345.local");
+        doTestDnsParsingProgramLength(237, "MyDevice.local");
+        doTestDnsParsingProgramLength(285, "_googlecast.tcp.local");
+        doTestDnsParsingProgramLength(291, "_googlecast12345.tcp.local");
+        doTestDnsParsingProgramLength(244, "_googlecastZtcp.local");
+        doTestDnsParsingProgramLength(249, "_googlecastZtcp12345.local");
     }
 
     private void doTestDnsParsingNecessaryOverhead(int expectedNecessaryOverhead,
@@ -1576,8 +1576,7 @@ public class ApfTest {
 
         // Check that the generated code, when the program contains the specified number of extra
         // bytes, is capable of dropping the packet.
-        ApfGenerator gen = new ApfGenerator(MIN_APF_VERSION);
-        DnsUtils.generateFilter(gen, /*ipv6=*/ true, labels);
+        ApfGenerator gen = generateDnsFilter(/*ipv6=*/ true, labels);
         for (int i = 0; i < expectedNecessaryOverhead; i++) {
             addOneByteNoop(gen);
         }
@@ -1591,8 +1590,7 @@ public class ApfTest {
 
         // Check that the generated code, without the specified number of extra program bytes,
         // cannot correctly drop the packet because it hits the interpreter instruction limit.
-        gen = new ApfGenerator(MIN_APF_VERSION);
-        DnsUtils.generateFilter(gen, /*ipv6=*/ true, labels);
+        gen = generateDnsFilter(/*ipv6=*/ true, labels);
         for (int i = 0; i < expectedNecessaryOverhead - 1; i++) {
             addOneByteNoop(gen);
         }
@@ -1631,17 +1629,17 @@ public class ApfTest {
         doTestDnsParsingNecessaryOverhead(0, "googlecast.tcp.local",
                 "developer.android.com", "matter.tcp.local", "www.google.co.jp");
 
-        doTestDnsParsingNecessaryOverhead(1, "googlecast.tcp.local",
+        doTestDnsParsingNecessaryOverhead(0, "googlecast.tcp.local",
                 "developer.android.com", "matter.tcp.local", "www.google.co.jp",
                 "example.org");
 
         // More complicated packets cause more instructions to be run and can only be dropped if
         // the program contains lots of extra code.
-        doTestDnsParsingNecessaryOverhead(58, "googlecast.tcp.local",
+        doTestDnsParsingNecessaryOverhead(57, "googlecast.tcp.local",
                 "developer.android.com", "matter.tcp.local", "www.google.co.jp",
                 "example.org", "otherexample.net");
 
-        doTestDnsParsingNecessaryOverhead(116, "googlecast.tcp.local",
+        doTestDnsParsingNecessaryOverhead(115, "googlecast.tcp.local",
                 "developer.android.com", "matter.tcp.local", "www.google.co.jp",
                 "example.org", "otherexample.net", "docs.new");
 
