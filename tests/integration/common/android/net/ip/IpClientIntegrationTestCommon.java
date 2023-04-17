@@ -2057,23 +2057,13 @@ public abstract class IpClientIntegrationTestCommon {
         waitForRouterSolicitation();
         mPacketReader.sendResponse(ra);
 
-        if (mIsNetlinkEventParseEnabled) {
-            verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(argThat(lp -> {
-                return lp.hasGlobalIpv6Address()
-                        && lp.hasIpv6DefaultRoute()
-                        && !lp.hasIpv6DnsServer();
-            }));
-            verify(mCb, never()).onProvisioningSuccess(any());
-        } else {
-            final ArgumentCaptor<LinkProperties> captor =
-                    ArgumentCaptor.forClass(LinkProperties.class);
-            verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
-            final LinkProperties lp = captor.getValue();
-            assertNotNull(lp);
-            assertEquals(1, lp.getDnsServers().size());
-            assertEquals(ROUTER_LINK_LOCAL, (Inet6Address) lp.getDnsServers().get(0));
-            assertTrue(lp.isIpv6Provisioned());
-        }
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        final LinkProperties lp = captor.getValue();
+        assertNotNull(lp);
+        assertEquals(1, lp.getDnsServers().size());
+        assertEquals(ROUTER_LINK_LOCAL, (Inet6Address) lp.getDnsServers().get(0));
+        assertTrue(lp.isIpv6Provisioned());
     }
 
     private void expectNat64PrefixUpdate(InOrder inOrder, IpPrefix expected) throws Exception {
