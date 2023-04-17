@@ -2882,10 +2882,12 @@ public abstract class IpClientIntegrationTestCommon {
         final InOrder inOrder = inOrder(mCb);
         final CompletableFuture<LinkProperties> lpFuture = new CompletableFuture<>();
 
-        // Start IPv4 provisioning first and then IPv6 provisioning, which is more realistic.
-        // And wait until entire provisioning completes.
+        // Start IPv4 provisioning first and wait IPv4 provisioning to succeed, and then start
+        // IPv6 provisioning, which is more realistic and avoid the flaky case of both IPv4 and
+        // IPv6 provisioning complete at the same time.
         handleDhcpPackets(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* shouldReplyRapidCommitAck */, TEST_DEFAULT_MTU, null /* serverSentUrl */);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(any());
 
         waitForRouterSolicitation();
         mPacketReader.sendResponse(ra);
