@@ -2039,6 +2039,43 @@ public abstract class IpClientIntegrationTestCommon {
         reset(mCb);
     }
 
+    @Test
+    public void testRaRdnss_Ipv6LinkLocalDns() throws Exception {
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIpReachabilityMonitor()
+                .withoutIPv4()
+                .build();
+        startIpClientProvisioning(config);
+
+        final ByteBuffer pio = buildPioOption(600, 300, "2001:db8:1::/64");
+        // put an IPv6 link-local DNS server
+        final ByteBuffer rdnss = buildRdnssOption(600, ROUTER_LINK_LOCAL.getHostAddress());
+        // put SLLA option to avoid address resolution for "fe80::1"
+        final ByteBuffer slla = buildSllaOption();
+        final ByteBuffer ra = buildRaPacket(pio, rdnss, slla);
+
+        waitForRouterSolicitation();
+        mPacketReader.sendResponse(ra);
+
+        if (mIsNetlinkEventParseEnabled) {
+            verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(argThat(lp -> {
+                return lp.hasGlobalIpv6Address()
+                        && lp.hasIpv6DefaultRoute()
+                        && !lp.hasIpv6DnsServer();
+            }));
+            verify(mCb, never()).onProvisioningSuccess(any());
+        } else {
+            final ArgumentCaptor<LinkProperties> captor =
+                    ArgumentCaptor.forClass(LinkProperties.class);
+            verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+            final LinkProperties lp = captor.getValue();
+            assertNotNull(lp);
+            assertEquals(1, lp.getDnsServers().size());
+            assertEquals(ROUTER_LINK_LOCAL, (Inet6Address) lp.getDnsServers().get(0));
+            assertTrue(lp.isIpv6Provisioned());
+        }
+    }
+
     private void expectNat64PrefixUpdate(InOrder inOrder, IpPrefix expected) throws Exception {
         inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(
                 argThat(lp -> Objects.equals(expected, lp.getNat64Prefix())));
