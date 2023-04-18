@@ -325,6 +325,12 @@ public class Dhcp6Packet {
             case DHCP6_MESSAGE_TYPE_REPLY:
                 newPacket = new Dhcp6ReplyPacket(transId, clientDuid, serverDuid, iapd);
                 break;
+            case DHCP6_MESSAGE_TYPE_RENEW:
+                newPacket = new Dhcp6RenewPacket(transId, secs, clientDuid, serverDuid, iapd);
+                break;
+            case DHCP6_MESSAGE_TYPE_REBIND:
+                newPacket = new Dhcp6RebindPacket(transId, secs, clientDuid, iapd);
+                break;
             default:
                 throw new ParseException("Unimplemented DHCP6 message type %d" + messageType);
         }
@@ -401,6 +407,25 @@ public class Dhcp6Packet {
             @NonNull final byte[] clientDuid, @NonNull final byte[] serverDuid) {
         final Dhcp6RequestPacket pkt =
                 new Dhcp6RequestPacket(transId, secs, clientDuid, serverDuid, iapd);
+        return pkt.buildPacket();
+    }
+
+    /**
+     * Builds a DHCPv6 RENEW packet from the required specified parameters.
+     */
+    public static ByteBuffer buildRenewPacket(int transId, short secs, @NonNull final byte[] iapd,
+            @NonNull final byte[] clientDuid, @NonNull final byte[] serverDuid) {
+        final Dhcp6RenewPacket pkt =
+                new Dhcp6RenewPacket(transId, secs, clientDuid, serverDuid, iapd);
+        return pkt.buildPacket();
+    }
+
+    /**
+     * Builds a DHCPv6 REBIND packet from the required specified parameters.
+     */
+    public static ByteBuffer buildRebindPacket(int transId, short secs, @NonNull final byte[] iapd,
+            @NonNull final byte[] clientDuid) {
+        final Dhcp6RebindPacket pkt = new Dhcp6RebindPacket(transId, secs, clientDuid, iapd);
         return pkt.buildPacket();
     }
 }

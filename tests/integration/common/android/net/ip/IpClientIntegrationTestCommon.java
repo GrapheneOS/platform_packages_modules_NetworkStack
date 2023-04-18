@@ -2039,6 +2039,33 @@ public abstract class IpClientIntegrationTestCommon {
         reset(mCb);
     }
 
+    @Test
+    public void testRaRdnss_Ipv6LinkLocalDns() throws Exception {
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIpReachabilityMonitor()
+                .withoutIPv4()
+                .build();
+        startIpClientProvisioning(config);
+
+        final ByteBuffer pio = buildPioOption(600, 300, "2001:db8:1::/64");
+        // put an IPv6 link-local DNS server
+        final ByteBuffer rdnss = buildRdnssOption(600, ROUTER_LINK_LOCAL.getHostAddress());
+        // put SLLA option to avoid address resolution for "fe80::1"
+        final ByteBuffer slla = buildSllaOption();
+        final ByteBuffer ra = buildRaPacket(pio, rdnss, slla);
+
+        waitForRouterSolicitation();
+        mPacketReader.sendResponse(ra);
+
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        final LinkProperties lp = captor.getValue();
+        assertNotNull(lp);
+        assertEquals(1, lp.getDnsServers().size());
+        assertEquals(ROUTER_LINK_LOCAL, (Inet6Address) lp.getDnsServers().get(0));
+        assertTrue(lp.isIpv6Provisioned());
+    }
+
     private void expectNat64PrefixUpdate(InOrder inOrder, IpPrefix expected) throws Exception {
         inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(
                 argThat(lp -> Objects.equals(expected, lp.getNat64Prefix())));
@@ -2882,10 +2909,12 @@ public abstract class IpClientIntegrationTestCommon {
         final InOrder inOrder = inOrder(mCb);
         final CompletableFuture<LinkProperties> lpFuture = new CompletableFuture<>();
 
-        // Start IPv4 provisioning first and then IPv6 provisioning, which is more realistic.
-        // And wait until entire provisioning completes.
+        // Start IPv4 provisioning first and wait IPv4 provisioning to succeed, and then start
+        // IPv6 provisioning, which is more realistic and avoid the flaky case of both IPv4 and
+        // IPv6 provisioning complete at the same time.
         handleDhcpPackets(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* shouldReplyRapidCommitAck */, TEST_DEFAULT_MTU, null /* serverSentUrl */);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(any());
 
         waitForRouterSolicitation();
         mPacketReader.sendResponse(ra);
