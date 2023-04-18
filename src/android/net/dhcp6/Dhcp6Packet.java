@@ -353,6 +353,15 @@ public class Dhcp6Packet {
     }
 
     /**
+     * Parse a packet from an array of bytes, stopping at the given length.
+     */
+    public static Dhcp6Packet decodePacket(@NonNull final byte[] packet, int length)
+            throws ParseException {
+        final ByteBuffer buffer = ByteBuffer.wrap(packet, 0, length).order(ByteOrder.BIG_ENDIAN);
+        return decodePacket(buffer);
+    }
+
+    /**
      * Adds an optional parameter containing an array of bytes.
      */
     protected static void addTlv(ByteBuffer buf, short type, @NonNull byte[] payload) {
