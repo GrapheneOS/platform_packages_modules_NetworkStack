@@ -180,7 +180,7 @@ public class Dhcp6Packet {
         }
     }
 
-    private static void skipOption(final ByteBuffer packet, int optionLen)
+    private static void skipOption(@NonNull final ByteBuffer packet, int optionLen)
             throws BufferUnderflowException {
         for (int i = 0; i < optionLen; i++) {
             packet.get();
@@ -297,6 +297,8 @@ public class Dhcp6Packet {
                         statusMsg = readAsciiString(packet, expectedLen - 2, false /* isNullOk */);
                         break;
                     default:
+                        expectedLen = optionLen;
+                        // BufferUnderflowException will be thrown if option is truncated.
                         skipOption(packet, optionLen);
                         break;
                 }
@@ -348,6 +350,15 @@ public class Dhcp6Packet {
         newPacket.mStatusMsg = statusMsg;
 
         return newPacket;
+    }
+
+    /**
+     * Parse a packet from an array of bytes, stopping at the given length.
+     */
+    public static Dhcp6Packet decodePacket(@NonNull final byte[] packet, int length)
+            throws ParseException {
+        final ByteBuffer buffer = ByteBuffer.wrap(packet, 0, length).order(ByteOrder.BIG_ENDIAN);
+        return decodePacket(buffer);
     }
 
     /**
