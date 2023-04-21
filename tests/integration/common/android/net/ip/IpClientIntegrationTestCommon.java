@@ -729,7 +729,14 @@ public abstract class IpClientIntegrationTestCommon {
         final TestNetworkInterface iface = runAsShell(MANAGE_TEST_NETWORKS, () -> {
             final TestNetworkManager tnm =
                     inst.getContext().getSystemService(TestNetworkManager.class);
-            return tnm.createTapInterface();
+            try {
+                return tnm.createTapInterface(true /* carrierUp */, true /* bringUp */,
+                        true /* disableIpv6ProvisioningDelay */);
+            } catch (NoSuchMethodError e) {
+                // createTapInterface(boolean, boolean, boolean) has been introduced since T,
+                // use the legancy API if the method is not found on previous platforms.
+                return tnm.createTapInterface();
+            }
         });
         mIfaceName = iface.getInterfaceName();
         mClientMac = getIfaceMacAddr(mIfaceName).toByteArray();
