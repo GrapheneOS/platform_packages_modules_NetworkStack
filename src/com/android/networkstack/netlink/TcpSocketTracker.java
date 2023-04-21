@@ -48,6 +48,7 @@ import android.provider.DeviceConfig;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.StructTimeval;
+import android.util.ArraySet;
 import android.util.Log;
 import android.util.LongSparseArray;
 import android.util.SparseArray;
@@ -102,6 +103,9 @@ public class TcpSocketTracker {
     private int mLatestPacketFailPercentage;
     // Number of packets received in the latest polling cycle.
     private int mLatestReceivedCount;
+    // Uids in the latest polling cycle.
+    private final ArraySet<Integer> mLatestReportedUids = new ArraySet<>();
+
     /**
      * Request to send to kernel to request tcp info.
      *
@@ -219,10 +223,14 @@ public class TcpSocketTracker {
 
             // Append TcpStats based on previous and current socket info.
             final TcpStat stat = new TcpStat();
+            mLatestReportedUids.clear();
             for (final SocketInfo newInfo : newSocketInfoList) {
                 final TcpStat diff = calculateLatestPacketsStat(newInfo,
                         mSocketInfos.get(newInfo.cookie));
-                stat.accumulate(diff);
+                if (diff != null) {
+                    mLatestReportedUids.add(newInfo.uid);
+                    stat.accumulate(diff);
+                }
                 mSocketInfos.put(newInfo.cookie, newInfo);
             }
 
@@ -377,8 +385,11 @@ public class TcpSocketTracker {
         synchronized (mDozeModeLock) {
             if (mInDozeMode) return false;
         }
-
-        return (getLatestPacketFailPercentage() >= getTcpPacketsFailRateThreshold());
+        final boolean ret = (getLatestPacketFailPercentage() >= getTcpPacketsFailRateThreshold());
+        if (ret) {
+            Log.d(TAG, "data stall suspected, uids: " + mLatestReportedUids.toString());
+        }
+        return ret;
     }
 
     /** Calculate the change between the {@param current} and {@param previous}. */
