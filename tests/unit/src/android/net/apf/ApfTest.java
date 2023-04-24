@@ -24,6 +24,7 @@ import static android.system.OsConstants.ETH_P_ARP;
 import static android.system.OsConstants.ETH_P_IP;
 import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
+import static android.system.OsConstants.IPPROTO_IPV6;
 import static android.system.OsConstants.IPPROTO_TCP;
 import static android.system.OsConstants.IPPROTO_UDP;
 import static android.system.OsConstants.SOCK_STREAM;
@@ -62,8 +63,10 @@ import android.os.Parcelable;
 import android.os.SystemClock;
 import android.system.ErrnoException;
 import android.system.Os;
+import android.text.TextUtils;
 import android.text.format.DateUtils;
 import android.util.Log;
+import android.util.Pair;
 
 import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
@@ -101,7 +104,9 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 
@@ -1357,8 +1362,111 @@ public class ApfTest {
         buf.putShort(pointer);
     }
 
-    private static byte[] makeMdnsCompressedV6Packet() throws IOException {
-        ByteBuffer buf = ByteBuffer.wrap(new byte[256]);
+
+    // Simplistic DNS compression code that intentionally does not depend on production code.
+    private static List<Pair<Integer, String>> getDnsLabels(int startOffset, String... names) {
+        // Maps all possible name suffixes to packet offsets.
+        final HashMap<String, Integer> mPointerOffsets = new HashMap<>();
+        final List<Pair<Integer, String>> out = new ArrayList<>();
+        int offset = startOffset;
+        for (int i = 0; i < names.length; i++) {
+            String name = names[i];
+            while (true) {
+                if (name.length() == 0) {
+                    out.add(label(""));
+                    offset += 1 + 4;  // 1-byte label, DNS query
+                    break;
+                }
+
+                final int pointerOffset = mPointerOffsets.getOrDefault(name, -1);
+                if (pointerOffset != -1) {
+                    out.add(pointer(pointerOffset));
+                    offset += 2 + 4; // 2-byte pointer, DNS query
+                    break;
+                }
+
+                mPointerOffsets.put(name, offset);
+
+                final int indexOfDot = name.indexOf(".");
+                final String label;
+                if (indexOfDot == -1) {
+                    label = name;
+                    name = "";
+                } else {
+                    label = name.substring(0, indexOfDot);
+                    name = name.substring(indexOfDot + 1);
+                }
+                out.add(label(label));
+                offset += 1 + label.length();
+            }
+        }
+        return out;
+    }
+
+    static Pair<Integer, String> label(String label) {
+        return Pair.create(label.length(), label);
+    }
+
+    static Pair<Integer, String> pointer(int offset) {
+        return Pair.create(0xc000 | offset, null);
+    }
+
+    @Test
+    public void testGetDnsLabels() throws Exception {
+        int startOffset = 12;
+        List<Pair<Integer, String>> actual = getDnsLabels(startOffset, "myservice.tcp.local");
+        assertEquals(4, actual.size());
+        assertEquals(label("myservice"), actual.get(0));
+        assertEquals(label("tcp"), actual.get(1));
+        assertEquals(label("local"), actual.get(2));
+        assertEquals(label(""), actual.get(3));
+
+        startOffset = 30;
+        actual = getDnsLabels(startOffset,
+                "myservice.tcp.local", "foo.tcp.local", "myhostname.local", "bar.udp.local",
+                "foo.myhostname.local");
+        final int tcpLocalOffset = startOffset + 1 + "myservice".length();
+        final int localOffset = startOffset + 1 + "myservice".length() + 1 + "tcp".length();
+        final int myhostnameLocalOffset = 30
+                + 1 + "myservice".length() + 1 + "tcp".length() + 1 + "local".length() + 1 + 4
+                + 1 + "foo".length() + 2 + 4;
+
+        assertEquals(13, actual.size());
+        assertEquals(label("myservice"), actual.get(0));
+        assertEquals(label("tcp"), actual.get(1));
+        assertEquals(label("local"), actual.get(2));
+        assertEquals(label(""), actual.get(3));
+        assertEquals(label("foo"), actual.get(4));
+        assertEquals(pointer(tcpLocalOffset), actual.get(5));
+        assertEquals(label("myhostname"), actual.get(6));
+        assertEquals(pointer(localOffset), actual.get(7));
+        assertEquals(label("bar"), actual.get(8));
+        assertEquals(label("udp"), actual.get(9));
+        assertEquals(pointer(localOffset), actual.get(10));
+        assertEquals(label("foo"), actual.get(11));
+        assertEquals(pointer(myhostnameLocalOffset), actual.get(12));
+
+    }
+
+    private static byte[] makeMdnsCompressedV6Packet(String... names) throws IOException {
+        ByteBuffer questions = ByteBuffer.allocate(1500);
+        questions.put(new DnsPacket.DnsHeader(123, 0, names.length, 0).getBytes());
+        final List<Pair<Integer, String>> labels = getDnsLabels(questions.position(), names);
+        for (Pair<Integer, String> label : labels) {
+            final String name = label.second;
+            if (name == null) {
+                putPointer(questions, label.first);
+            } else {
+                putLabel(questions, name);
+            }
+            if (TextUtils.isEmpty(name)) {
+                questions.put(new byte[4]);
+            }
+        }
+        questions.flip();
+
+        ByteBuffer buf = PacketBuilder.allocate(/*hasEther=*/ true, IPPROTO_IPV6, IPPROTO_UDP,
+                questions.limit());
         final PacketBuilder builder = new PacketBuilder(buf);
         builder.writeL2Header(MacAddress.fromString("11:22:33:44:55:66"),
                 MacAddress.fromBytes(ETH_MULTICAST_MDNS_V6_MAC_ADDRESS),
@@ -1368,36 +1476,21 @@ public class ApfTest {
                 (Inet6Address) Inet6Address.getByAddress(IPV6_MDNS_MULTICAST_ADDR));
         builder.writeUdpHeader((short) MDNS_UDP_PORT, (short) MDNS_UDP_PORT);
 
-        ByteBuffer questions = ByteBuffer.allocate(128);
-        questions.put(new DnsPacket.DnsHeader(123, 0, 4, 0).getBytes());
-
-        // myservice.tcp.local
-        putLabel(questions, "myservice");
-        final int offsetTcpLocal = questions.position();
-        putLabel(questions, "tcp");
-        final int offsetLocal = questions.position();
-        putLabel(questions, "local");
-        putLabel(questions, "");
-        questions.put(new byte[4]);
-
-        // googlecast.tcp.local
-        putLabel(questions, "googlecast");
-        putPointer(questions, offsetTcpLocal);
-        questions.put(new byte[4]);
-
-        // matter.tcp.local
-        putLabel(questions, "matter");
-        putPointer(questions, offsetTcpLocal);
-        questions.put(new byte[4]);
-
-        // myhostname.local
-        putLabel(questions, "myhostname");
-        putPointer(questions, offsetLocal);
-        questions.put(new byte[4]);
-
-        buf.put(questions.array());
+        buf.put(questions);
 
         return builder.finalizePacket().array();
+    }
+
+    private static byte[] makeMdnsCompressedV6Packet() throws IOException {
+        return makeMdnsCompressedV6Packet("myservice.tcp.local", "googlecast.tcp.local",
+                "matter.tcp.local", "myhostname.local");
+    }
+
+    private static byte[] makeMdnsCompressedV6PacketWithManyNames() throws IOException {
+        return makeMdnsCompressedV6Packet("myservice.tcp.local", "googlecast.tcp.local",
+                "matter.tcp.local", "myhostname.local", "myhostname2.local", "myhostname3.local",
+                "myhostname4.local", "myhostname5.local", "myhostname6.local", "myhostname7.local");
+
     }
 
     /** Adds to the program a no-op instruction that is one byte long. */
@@ -1649,6 +1742,8 @@ public class ApfTest {
         doTestDnsParsingNecessaryOverhead(0, "foo.tcp.local",
                 makeMdnsCompressedV6Packet(), "compressed packet");
 
+        doTestDnsParsingNecessaryOverhead(235, "foo.tcp.local",
+                makeMdnsCompressedV6PacketWithManyNames(), "compressed packet with many names");
     }
 
     @Test
