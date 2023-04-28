@@ -48,6 +48,7 @@ import android.provider.DeviceConfig;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.StructTimeval;
+import android.util.ArraySet;
 import android.util.Log;
 import android.util.LongSparseArray;
 import android.util.SparseArray;
@@ -87,8 +88,6 @@ public class TcpSocketTracker {
     private static final boolean DBG = Log.isLoggable(TAG, Log.DEBUG);
     private static final int[] ADDRESS_FAMILIES = new int[] {AF_INET6, AF_INET};
 
-    /** Cookie offset of an InetMagMessage header. */
-    private static final int IDIAG_COOKIE_OFFSET = 44;
     private static final int END_OF_PARSING = -1;
     /**
      *  Gather the socket info.
@@ -104,6 +103,9 @@ public class TcpSocketTracker {
     private int mLatestPacketFailPercentage;
     // Number of packets received in the latest polling cycle.
     private int mLatestReceivedCount;
+    // Uids in the latest polling cycle.
+    private final ArraySet<Integer> mLatestReportedUids = new ArraySet<>();
+
     /**
      * Request to send to kernel to request tcp info.
      *
@@ -210,13 +212,26 @@ public class TcpSocketTracker {
             final long time = SystemClock.elapsedRealtime();
             fd = mDependencies.connectToKernel();
 
-            final TcpStat stat = new TcpStat();
+            final ArrayList<SocketInfo> newSocketInfoList = new ArrayList<>();
             for (final int family : ADDRESS_FAMILIES) {
                 mDependencies.sendPollingRequest(fd, mSockDiagMsg.get(family));
-
-                while (parseMessage(mDependencies.recvMessage(fd), family, stat, time)) {
+                while (parseMessage(mDependencies.recvMessage(fd),
+                        family, newSocketInfoList, time)) {
                     log("Pending info exist. Attempt to read more");
                 }
+            }
+
+            // Append TcpStats based on previous and current socket info.
+            final TcpStat stat = new TcpStat();
+            mLatestReportedUids.clear();
+            for (final SocketInfo newInfo : newSocketInfoList) {
+                final TcpStat diff = calculateLatestPacketsStat(newInfo,
+                        mSocketInfos.get(newInfo.cookie));
+                if (diff != null) {
+                    mLatestReportedUids.add(newInfo.uid);
+                    stat.accumulate(diff);
+                }
+                mSocketInfos.put(newInfo.cookie, newInfo);
             }
 
             // Calculate mLatestReceiveCount, mSentSinceLastRecv and mLatestPacketFailPercentage.
@@ -239,7 +254,9 @@ public class TcpSocketTracker {
     }
 
     // Return true if there are more pending messages to read
-    private boolean parseMessage(ByteBuffer bytes, int family, TcpStat stat, long time) {
+    @VisibleForTesting
+    static boolean parseMessage(ByteBuffer bytes, int family,
+            ArrayList<SocketInfo> outputSocketInfoList, long time) {
         if (!NetlinkUtils.enoughBytesRemainForValidNlMsg(bytes)) {
             // This is unlikely to happen in real cases. Check this first for testing.
             Log.e(TAG, "Size is less than header size. Ignored.");
@@ -262,30 +279,25 @@ public class TcpSocketTracker {
                 final int nlmsgLen = getLengthAndVerifyMsgHeader(bytes, family);
                 if (nlmsgLen == END_OF_PARSING) return false;
 
-                if (isValidInetDiagMsgSize(nlmsgLen)) {
-                    // Get the socket cookie value. Composed by two Integers value.
-                    // Corresponds to inet_diag_sockid in
-                    // &lt;linux_src&gt;/include/uapi/linux/inet_diag.h
-                    bytes.position(bytes.position() + IDIAG_COOKIE_OFFSET);
-
-                    // It's stored in native with 2 int. Parse it as long for
-                    // convenience.
-                    final long cookie = bytes.getLong();
-                    log("cookie=" + cookie);
-                    // Skip the rest part of StructInetDiagMsg.
-                    bytes.position(bytes.position()
-                            + StructInetDiagMsg.STRUCT_SIZE - IDIAG_COOKIE_OFFSET
-                            - Long.BYTES);
-                    final SocketInfo info = parseSockInfo(bytes, family, nlmsgLen,
-                            time);
-                    // Update TcpStats based on previous and current socket info.
-                    stat.accumulate(
-                            calculateLatestPacketsStat(info, mSocketInfos.get(cookie)));
-                    mSocketInfos.put(cookie, info);
+                if (!isValidInetDiagMsgSize(nlmsgLen)) {
+                    throw new IllegalStateException("Invalid netlink message length: " + nlmsgLen);
                 }
+                // Get the socket cookie value and uid from inet_diag_msg struct.
+                final StructInetDiagMsg inetDiagMsg = StructInetDiagMsg.parse(bytes);
+                if (inetDiagMsg == null) {
+                    throw new IllegalStateException("Failed to parse StructInetDiagMsg");
+                }
+                final SocketInfo info = parseSockInfo(bytes, family, nlmsgLen, time,
+                        inetDiagMsg.idiag_uid, inetDiagMsg.id.cookie);
+                outputSocketInfoList.add(info);
             } while (NetlinkUtils.enoughBytesRemainForValidNlMsg(bytes));
         } catch (IllegalArgumentException | BufferUnderflowException e) {
             Log.wtf(TAG, "Unexpected socket info parsing, family " + family
+                    + " buffer:" + bytes + " "
+                    + Base64.getEncoder().encodeToString(bytes.array()), e);
+            return false;
+        } catch (IllegalStateException e) {
+            Log.e(TAG, "Unexpected socket info parsing, family " + family
                     + " buffer:" + bytes + " "
                     + Base64.getEncoder().encodeToString(bytes.array()), e);
             return false;
@@ -294,7 +306,7 @@ public class TcpSocketTracker {
         return true;
     }
 
-    private int getLengthAndVerifyMsgHeader(@NonNull ByteBuffer bytes, int family) {
+    private static int getLengthAndVerifyMsgHeader(@NonNull ByteBuffer bytes, int family) {
         final StructNlMsgHdr nlmsghdr = StructNlMsgHdr.parse(bytes);
         if (nlmsghdr == null) {
             Log.e(TAG, "Badly formatted data.");
@@ -332,10 +344,9 @@ public class TcpSocketTracker {
     }
 
     /** Parse a {@code SocketInfo} from the given position of the given byte buffer. */
-    @VisibleForTesting
     @NonNull
-    SocketInfo parseSockInfo(@NonNull final ByteBuffer bytes, final int family,
-            final int nlmsgLen, final long time) {
+    private static SocketInfo parseSockInfo(@NonNull final ByteBuffer bytes, final int family,
+            final int nlmsgLen, final long time, final int uid, final long cookie) {
         final int remainingDataSize = bytes.position() + nlmsgLen - SOCKDIAG_MSG_HEADER_SIZE;
         TcpInfo tcpInfo = null;
         int mark = NetlinkUtils.INIT_MARK_VALUE;
@@ -355,7 +366,7 @@ public class TcpSocketTracker {
                 skipRemainingAttributesBytesAligned(bytes, dataLen);
             }
         }
-        final SocketInfo info = new SocketInfo(tcpInfo, family, mark, time);
+        final SocketInfo info = new SocketInfo(tcpInfo, family, mark, time, uid, cookie);
         log("parseSockInfo, " + info);
         return info;
     }
@@ -374,8 +385,11 @@ public class TcpSocketTracker {
         synchronized (mDozeModeLock) {
             if (mInDozeMode) return false;
         }
-
-        return (getLatestPacketFailPercentage() >= getTcpPacketsFailRateThreshold());
+        final boolean ret = (getLatestPacketFailPercentage() >= getTcpPacketsFailRateThreshold());
+        if (ret) {
+            Log.d(TAG, "data stall suspected, uids: " + mLatestReportedUids.toString());
+        }
+        return ret;
     }
 
     /** Calculate the change between the {@param current} and {@param previous}. */
@@ -454,7 +468,7 @@ public class TcpSocketTracker {
      * @param buffer the target ByteBuffer
      * @param len the remaining length to skip.
      */
-    private void skipRemainingAttributesBytesAligned(@NonNull final ByteBuffer buffer,
+    private static void skipRemainingAttributesBytesAligned(@NonNull final ByteBuffer buffer,
             final short len) {
         // Data in {@Code RoutingAttribute} is followed after header with size {@Code NLA_ALIGNTO}
         // bytes long for each block. Next attribute will start after the padding bytes if any.
@@ -472,7 +486,7 @@ public class TcpSocketTracker {
         buffer.position(cur + NetlinkConstants.alignedLengthOf(len));
     }
 
-    private void log(final String str) {
+    private static void log(final String str) {
         if (DBG) Log.d(TAG, str);
     }
 
@@ -495,7 +509,7 @@ public class TcpSocketTracker {
      *    // Data follows
      * };
      */
-    class RoutingAttribute {
+    static class RoutingAttribute {
         public static final int HEADER_LENGTH = 4;
 
         public final short rtaLen;  // The whole valid size of the struct.
@@ -514,7 +528,7 @@ public class TcpSocketTracker {
      * Data class for keeping the socket info.
      */
     @VisibleForTesting
-    class SocketInfo {
+    static class SocketInfo {
         @Nullable
         public final TcpInfo tcpInfo;
         // One of {@code AF_INET6, AF_INET}.
@@ -523,19 +537,26 @@ public class TcpSocketTracker {
         public final int fwmark;
         // Socket information updated elapsed real time.
         public final long updateTime;
+        // Uid which associated with this Socket.
+        public final int uid;
+        // Cookie which associated with this Socket.
+        public final long cookie;
 
         SocketInfo(@Nullable final TcpInfo info, final int family, final int mark,
-                final long time) {
+                final long time, final int uid, final long cookie) {
             tcpInfo = info;
             ipFamily = family;
             updateTime = time;
             fwmark = mark;
+            this.uid = uid;
+            this.cookie = cookie;
         }
 
         @Override
         public String toString() {
-            return "SocketInfo {Type:" + ipTypeToString(ipFamily) + ", "
-                    + tcpInfo + ", mark:" + fwmark + " updated at " + updateTime + "}";
+            return "SocketInfo {Type:" + ipTypeToString(ipFamily) + ", uid:" + uid
+                    + ", cookie:" + cookie + ", " + tcpInfo + ", mark:" + fwmark
+                    + " updated at " + updateTime + "}";
         }
 
         private String ipTypeToString(final int type) {
