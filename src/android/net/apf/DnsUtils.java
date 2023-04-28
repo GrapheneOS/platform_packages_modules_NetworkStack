@@ -20,7 +20,6 @@ import static android.net.apf.ApfGenerator.Register.R0;
 import static android.net.apf.ApfGenerator.Register.R1;
 
 import static com.android.net.module.util.NetworkStackConstants.ETHER_HEADER_LEN;
-import static com.android.net.module.util.NetworkStackConstants.IPV6_HEADER_LEN;
 import static com.android.net.module.util.NetworkStackConstants.UDP_HEADER_LEN;
 
 import androidx.annotation.NonNull;
@@ -264,20 +263,26 @@ public class DnsUtils {
         gen.addJump(jumpTable.getStartLabel());
     }
 
-    /**
-     * Returns the name of a jump label used while parsing the specified DNS label.
-     * TODO: use another scheme to name the labels. Using the label name does not work if the name
-     * to be matched contains duplicate labels.
-     */
-    private static String getPostMatchJumpTargetForLabel(String label) {
-        return label + "_parsed";
+    /** @return jump label that points to the start of a DNS label's parsing code. */
+    private static String getStartMatchLabel(int labelIndex) {
+        return "dns_parse_" + labelIndex;
+    }
+
+    /** @return jump label used while parsing the specified DNS label. */
+    private static String getPostMatchJumpTargetForLabel(int labelIndex) {
+        return "dns_parsed_" + labelIndex;
+    }
+
+    /** @return jump label used when the match for the specified DNS label fails. */
+    private static String getNoMatchLabel(int labelIndex) {
+        return "dns_nomatch_" + labelIndex;
     }
 
     private static void addMatchLabel(@NonNull ApfGenerator gen, @NonNull JumpTable jumpTable,
-            @NonNull String label, @NonNull String nextLabel) throws Exception {
-        final String parsedLabel = getPostMatchJumpTargetForLabel(label);
-        final String noMatchLabel = label + "_nomatch";
-        gen.defineLabel(label);
+            int labelIndex, @NonNull String label, @NonNull String nextLabel) throws Exception {
+        final String parsedLabel = getPostMatchJumpTargetForLabel(labelIndex);
+        final String noMatchLabel = getNoMatchLabel(labelIndex);
+        gen.defineLabel(getStartMatchLabel(labelIndex));
 
         // Store return address.
         gen.addLoadImmediate(R0, jumpTable.getIndex(parsedLabel));
@@ -319,45 +324,46 @@ public class DnsUtils {
      * packet, e.g., as used by MDNS. However, it currently only supports one DNS name.
      *
      * Limitations:
-     * - Filter size is just under 300 bytes for a typical question.
-     * - Because the bytecode extensively uses backwards jumps, it can hit the APF interpreter
+     * <ul>
+     * <li>Filter size is just under 300 bytes for a typical question.
+     * <li>Because the bytecode extensively uses backwards jumps, it can hit the APF interpreter
      *   instruction limit. This limit causes the APF interpreter to accept the packet once it has
      *   executed a number of instructions equal to the program length in bytes.
      *   A program that consists *only* of this filter will be able to execute just under 300
      *   instructions, and will be able to correctly drop packets with two questions but not three
      *   questions. In a real APF setup, there will be other code (e.g., RA filtering) which counts
      *   against the limit, so the filter should be able to parse packets with more questions.
-     * - Matches are case-sensitive. This is due to the use of JNEBS to match DNS labels and is
+     * <li>Matches are case-sensitive. This is due to the use of JNEBS to match DNS labels and is
      *   likely impossible to overcome without interpreter changes.
+     * </ul>
      *
      * TODO:
-     * - Add unit tests for the parse_dns_label and find_next_dns_question functions.
-     * - Add an efficient way to parse the first question in the packet. This can be done much more
-     *   efficiently because the first name cannot be compressed.
-     * - Support accepting more than one name.
-     * - For devices where power saving is a priority (e.g., flat panel TVs), add support for
+     * <ul>
+     * <li>Add unit tests for the parse_dns_label and find_next_dns_question functions.
+     * <li>Support accepting more than one name.
+     * <li>For devices where power saving is a priority (e.g., flat panel TVs), add support for
      *   dropping packets with more than X queries, to ensure the filter will drop the packet rather
      *   than hit the instruction limit.
+     * </ul>
      */
-    public static void generateFilter(ApfGenerator gen, boolean ipv6, String[] labels)
-            throws Exception {
+    public static void generateFilter(ApfGenerator gen, String[] labels) throws Exception {
         final int etherPlusUdpLen = ETHER_HEADER_LEN + UDP_HEADER_LEN;
 
         final String labelJumpTable = "jump_table";
 
         // Initialize parsing
         /**
+         * - R1: length of IP header.
          * - m[SLOT_DNS_HEADER_OFFSET]: offset of DNS header
          * - m[SLOT_CURRENT_PARSE_OFFSET]: current parsing offset (start of question section)
          * - m[SLOT_AFTER_POINTER_OFFSET]: offset after first pointer in name, must be 0 when
          *                                 starting a new name
          * - m[SLOT_NEGATIVE_QDCOUNT_REMAINING]: negative qdcount
          */
-        if (ipv6) {
-            gen.addLoadImmediate(R0, IPV6_HEADER_LEN);
-        } else {
-            gen.addLoadFromMemory(R0, ApfGenerator.IPV4_HEADER_SIZE_MEMORY_SLOT);
-        }
+        // Move IP header length to R0 and use it to find the DNS header offset.
+        // TODO: this uses R1 for consistency with ApfFilter#generateMdnsFilterLocked. Evaluate
+        // using R0 instead.
+        gen.addMove(R0);
         gen.addAdd(etherPlusUdpLen);
         gen.addStoreToMemory(R0, SLOT_DNS_HEADER_OFFSET);
 
@@ -386,7 +392,7 @@ public class DnsUtils {
         // calls below) because otherwise all the jumps are backwards, and backwards jumps are more
         // expensive (5 bytes of bytecode)
         for (int i = 0; i < labels.length; i++) {
-            table.addLabel(getPostMatchJumpTargetForLabel(labels[i]));
+            table.addLabel(getPostMatchJumpTargetForLabel(i));
         }
         table.addLabel(LABEL_START_MATCH);
         table.generate(gen);
@@ -396,8 +402,8 @@ public class DnsUtils {
         for (int i = 0; i < labels.length; i++) {
             final String nextLabel = (i == labels.length - 1)
                     ? ApfGenerator.PASS_LABEL
-                    : labels[i + 1];
-            addMatchLabel(gen, table, labels[i], nextLabel);
+                    : getStartMatchLabel(i + 1);
+            addMatchLabel(gen, table, i, labels[i], nextLabel);
         }
         gen.addJump(ApfGenerator.DROP_LABEL);
     }

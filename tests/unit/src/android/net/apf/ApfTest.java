@@ -24,6 +24,7 @@ import static android.system.OsConstants.ETH_P_ARP;
 import static android.system.OsConstants.ETH_P_IP;
 import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
+import static android.system.OsConstants.IPPROTO_IPV6;
 import static android.system.OsConstants.IPPROTO_TCP;
 import static android.system.OsConstants.IPPROTO_UDP;
 import static android.system.OsConstants.SOCK_STREAM;
@@ -62,8 +63,10 @@ import android.os.Parcelable;
 import android.os.SystemClock;
 import android.system.ErrnoException;
 import android.system.Os;
+import android.text.TextUtils;
 import android.text.format.DateUtils;
 import android.util.Log;
+import android.util.Pair;
 
 import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
@@ -101,7 +104,9 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 
@@ -189,7 +194,12 @@ public class ApfTest {
     private void assertVerdict(int expected, byte[] program, byte[] packet, int filterAge) {
         final String msg = "Unexpected APF verdict. To debug:\n"
                 + "  apf_run --program " + HexDump.toHexString(program)
-                + " --packet " +  HexDump.toHexString(packet) + " --trace | less\n  ";
+                + " --packet " + HexDump.toHexString(packet) + " --trace | less\n  ";
+        assertReturnCodesEqual(msg, expected, apfSimulate(program, packet, null, filterAge));
+    }
+
+    private void assertVerdict(String msg, int expected, byte[] program, byte[] packet,
+            int filterAge) {
         assertReturnCodesEqual(msg, expected, apfSimulate(program, packet, null, filterAge));
     }
 
@@ -1352,8 +1362,111 @@ public class ApfTest {
         buf.putShort(pointer);
     }
 
-    private static byte[] makeMdnsCompressedV6Packet() throws IOException {
-        ByteBuffer buf = ByteBuffer.wrap(new byte[256]);
+
+    // Simplistic DNS compression code that intentionally does not depend on production code.
+    private static List<Pair<Integer, String>> getDnsLabels(int startOffset, String... names) {
+        // Maps all possible name suffixes to packet offsets.
+        final HashMap<String, Integer> mPointerOffsets = new HashMap<>();
+        final List<Pair<Integer, String>> out = new ArrayList<>();
+        int offset = startOffset;
+        for (int i = 0; i < names.length; i++) {
+            String name = names[i];
+            while (true) {
+                if (name.length() == 0) {
+                    out.add(label(""));
+                    offset += 1 + 4;  // 1-byte label, DNS query
+                    break;
+                }
+
+                final int pointerOffset = mPointerOffsets.getOrDefault(name, -1);
+                if (pointerOffset != -1) {
+                    out.add(pointer(pointerOffset));
+                    offset += 2 + 4; // 2-byte pointer, DNS query
+                    break;
+                }
+
+                mPointerOffsets.put(name, offset);
+
+                final int indexOfDot = name.indexOf(".");
+                final String label;
+                if (indexOfDot == -1) {
+                    label = name;
+                    name = "";
+                } else {
+                    label = name.substring(0, indexOfDot);
+                    name = name.substring(indexOfDot + 1);
+                }
+                out.add(label(label));
+                offset += 1 + label.length();
+            }
+        }
+        return out;
+    }
+
+    static Pair<Integer, String> label(String label) {
+        return Pair.create(label.length(), label);
+    }
+
+    static Pair<Integer, String> pointer(int offset) {
+        return Pair.create(0xc000 | offset, null);
+    }
+
+    @Test
+    public void testGetDnsLabels() throws Exception {
+        int startOffset = 12;
+        List<Pair<Integer, String>> actual = getDnsLabels(startOffset, "myservice.tcp.local");
+        assertEquals(4, actual.size());
+        assertEquals(label("myservice"), actual.get(0));
+        assertEquals(label("tcp"), actual.get(1));
+        assertEquals(label("local"), actual.get(2));
+        assertEquals(label(""), actual.get(3));
+
+        startOffset = 30;
+        actual = getDnsLabels(startOffset,
+                "myservice.tcp.local", "foo.tcp.local", "myhostname.local", "bar.udp.local",
+                "foo.myhostname.local");
+        final int tcpLocalOffset = startOffset + 1 + "myservice".length();
+        final int localOffset = startOffset + 1 + "myservice".length() + 1 + "tcp".length();
+        final int myhostnameLocalOffset = 30
+                + 1 + "myservice".length() + 1 + "tcp".length() + 1 + "local".length() + 1 + 4
+                + 1 + "foo".length() + 2 + 4;
+
+        assertEquals(13, actual.size());
+        assertEquals(label("myservice"), actual.get(0));
+        assertEquals(label("tcp"), actual.get(1));
+        assertEquals(label("local"), actual.get(2));
+        assertEquals(label(""), actual.get(3));
+        assertEquals(label("foo"), actual.get(4));
+        assertEquals(pointer(tcpLocalOffset), actual.get(5));
+        assertEquals(label("myhostname"), actual.get(6));
+        assertEquals(pointer(localOffset), actual.get(7));
+        assertEquals(label("bar"), actual.get(8));
+        assertEquals(label("udp"), actual.get(9));
+        assertEquals(pointer(localOffset), actual.get(10));
+        assertEquals(label("foo"), actual.get(11));
+        assertEquals(pointer(myhostnameLocalOffset), actual.get(12));
+
+    }
+
+    private static byte[] makeMdnsCompressedV6Packet(String... names) throws IOException {
+        ByteBuffer questions = ByteBuffer.allocate(1500);
+        questions.put(new DnsPacket.DnsHeader(123, 0, names.length, 0).getBytes());
+        final List<Pair<Integer, String>> labels = getDnsLabels(questions.position(), names);
+        for (Pair<Integer, String> label : labels) {
+            final String name = label.second;
+            if (name == null) {
+                putPointer(questions, label.first);
+            } else {
+                putLabel(questions, name);
+            }
+            if (TextUtils.isEmpty(name)) {
+                questions.put(new byte[4]);
+            }
+        }
+        questions.flip();
+
+        ByteBuffer buf = PacketBuilder.allocate(/*hasEther=*/ true, IPPROTO_IPV6, IPPROTO_UDP,
+                questions.limit());
         final PacketBuilder builder = new PacketBuilder(buf);
         builder.writeL2Header(MacAddress.fromString("11:22:33:44:55:66"),
                 MacAddress.fromBytes(ETH_MULTICAST_MDNS_V6_MAC_ADDRESS),
@@ -1363,36 +1476,40 @@ public class ApfTest {
                 (Inet6Address) Inet6Address.getByAddress(IPV6_MDNS_MULTICAST_ADDR));
         builder.writeUdpHeader((short) MDNS_UDP_PORT, (short) MDNS_UDP_PORT);
 
-        ByteBuffer questions = ByteBuffer.allocate(128);
-        questions.put(new DnsPacket.DnsHeader(123, 0, 4, 0).getBytes());
-
-        // myservice.tcp.local
-        putLabel(questions, "myservice");
-        final int offsetTcpLocal = questions.position();
-        putLabel(questions, "tcp");
-        final int offsetLocal = questions.position();
-        putLabel(questions, "local");
-        putLabel(questions, "");
-        questions.put(new byte[4]);
-
-        // googlecast.tcp.local
-        putLabel(questions, "googlecast");
-        putPointer(questions, offsetTcpLocal);
-        questions.put(new byte[4]);
-
-        // matter.tcp.local
-        putLabel(questions, "matter");
-        putPointer(questions, offsetTcpLocal);
-        questions.put(new byte[4]);
-
-        // myhostname.local
-        putLabel(questions, "myhostname");
-        putPointer(questions, offsetLocal);
-        questions.put(new byte[4]);
-
-        buf.put(questions.array());
+        buf.put(questions);
 
         return builder.finalizePacket().array();
+    }
+
+    private static byte[] makeMdnsCompressedV6Packet() throws IOException {
+        return makeMdnsCompressedV6Packet("myservice.tcp.local", "googlecast.tcp.local",
+                "matter.tcp.local", "myhostname.local");
+    }
+
+    private static byte[] makeMdnsCompressedV6PacketWithManyNames() throws IOException {
+        return makeMdnsCompressedV6Packet("myservice.tcp.local", "googlecast.tcp.local",
+                "matter.tcp.local", "myhostname.local", "myhostname2.local", "myhostname3.local",
+                "myhostname4.local", "myhostname5.local", "myhostname6.local", "myhostname7.local");
+
+    }
+
+    /** Adds to the program a no-op instruction that is one byte long. */
+    private void addOneByteNoop(ApfGenerator gen) {
+        gen.addOr(0);
+    }
+
+    @Test
+    public void testAddOneByteNoopAddsOneByte() throws Exception {
+        ApfGenerator gen = new ApfGenerator(MIN_APF_VERSION);
+        addOneByteNoop(gen);
+        assertEquals(1, gen.generate().length);
+
+        final int count = 42;
+        gen = new ApfGenerator(MIN_APF_VERSION);
+        for (int i = 0; i < count; i++) {
+            addOneByteNoop(gen);
+        }
+        assertEquals(count, gen.generate().length);
     }
 
     @Test
@@ -1457,15 +1574,21 @@ public class ApfTest {
         apfFilter.shutdown();
     }
 
+    private ApfGenerator generateDnsFilter(boolean ipv6, String... labels) throws Exception {
+        ApfGenerator gen = new ApfGenerator(MIN_APF_VERSION);
+        gen.addLoadImmediate(R1, ipv6 ? IPV6_HEADER_LEN : IPV4_HEADER_LEN);
+        DnsUtils.generateFilter(gen, labels);
+        return gen;
+    }
+
     private void doTestDnsParsing(boolean expectPass, boolean ipv6, String filterName,
             byte[] pkt) throws Exception {
-        ApfGenerator gen = new ApfGenerator(MIN_APF_VERSION);
         final String[] labels = filterName.split(/*regex=*/ "[.]");
-        DnsUtils.generateFilter(gen, ipv6, labels);
+        ApfGenerator gen = generateDnsFilter(ipv6, labels);
 
         // Hack to prevent the APF instruction limit triggering.
         for (int i = 0; i < 500; i++) {
-            gen.addOr(0);
+            addOneByteNoop(gen);
         }
 
         byte[] program = gen.generate();
@@ -1488,6 +1611,7 @@ public class ApfTest {
         final boolean ipv4 = false, ipv6 = true;
 
         // Packets with one question.
+        // Names don't start with _ because DnsPacket thinks such names are invalid.
         doTestDnsParsing(true, ipv6, "googlecast.tcp.local", "googlecast.tcp.local");
         doTestDnsParsing(true, ipv4, "googlecast.tcp.local", "googlecast.tcp.local");
         doTestDnsParsing(false, ipv6, "googlecast.tcp.lozal", "googlecast.tcp.local");
@@ -1510,11 +1634,116 @@ public class ApfTest {
         doTestDnsParsing(true, ipv6, "googlecast.tcp.local",
                 "www.google.co.jp", "googlecast.tcp.local", "developer.android.com");
 
+        // Name with duplicate labels.
+        doTestDnsParsing(true, ipv6, "local.tcp.local", "local.tcp.local");
+
         final byte[] pkt = makeMdnsCompressedV6Packet();
         doTestDnsParsing(true, ipv6, "googlecast.tcp.local", pkt);
         doTestDnsParsing(true, ipv6, "matter.tcp.local", pkt);
         doTestDnsParsing(true, ipv6, "myservice.tcp.local", pkt);
         doTestDnsParsing(false, ipv6, "otherservice.tcp.local", pkt);
+    }
+
+    private void doTestDnsParsingProgramLength(int expectedLength,
+            String filterName) throws Exception {
+        final String[] labels = filterName.split(/*regex=*/ "[.]");
+
+        ApfGenerator gen = generateDnsFilter(/*ipv6=*/ true, labels);
+        assertEquals("Program for " + filterName + " had unexpected length:",
+                expectedLength, gen.generate().length);
+    }
+
+    /**
+     * Rough metric of code size. Checks how large the generated filter is in various scenarios.
+     * Helps ensure any changes to the code do not substantially increase APF code size.
+     */
+    @Test
+    public void testDnsParsingProgramLength() throws Exception {
+        doTestDnsParsingProgramLength(237, "MyDevice.local");
+        doTestDnsParsingProgramLength(285, "_googlecast.tcp.local");
+        doTestDnsParsingProgramLength(291, "_googlecast12345.tcp.local");
+        doTestDnsParsingProgramLength(244, "_googlecastZtcp.local");
+        doTestDnsParsingProgramLength(249, "_googlecastZtcp12345.local");
+    }
+
+    private void doTestDnsParsingNecessaryOverhead(int expectedNecessaryOverhead,
+            String filterName, byte[] pkt, String description) throws Exception {
+        final String[] labels = filterName.split(/*regex=*/ "[.]");
+
+        // Check that the generated code, when the program contains the specified number of extra
+        // bytes, is capable of dropping the packet.
+        ApfGenerator gen = generateDnsFilter(/*ipv6=*/ true, labels);
+        for (int i = 0; i < expectedNecessaryOverhead; i++) {
+            addOneByteNoop(gen);
+        }
+        final byte[] programWithJustEnoughOverhead = gen.generate();
+        assertVerdict(
+                "Overhead too low: filter for " + filterName + " with " + expectedNecessaryOverhead
+                        + " extra instructions unexpectedly passed " + description,
+                DROP, programWithJustEnoughOverhead, pkt, 0);
+
+        if (expectedNecessaryOverhead == 0) return;
+
+        // Check that the generated code, without the specified number of extra program bytes,
+        // cannot correctly drop the packet because it hits the interpreter instruction limit.
+        gen = generateDnsFilter(/*ipv6=*/ true, labels);
+        for (int i = 0; i < expectedNecessaryOverhead - 1; i++) {
+            addOneByteNoop(gen);
+        }
+        final byte[] programWithNotEnoughOverhead = gen.generate();
+
+        assertVerdict(
+                "Overhead too high: filter for " + filterName + " with " + expectedNecessaryOverhead
+                        + " extra instructions unexpectedly dropped " + description,
+                PASS, programWithNotEnoughOverhead, pkt, 0);
+    }
+
+    private void doTestDnsParsingNecessaryOverhead(int expectedNecessaryOverhead,
+            String filterName, String... packetNames) throws Exception {
+        doTestDnsParsingNecessaryOverhead(expectedNecessaryOverhead, filterName,
+                makeMdnsV6Packet(packetNames),
+                "IPv6 MDNS packet containing: " + Arrays.toString(packetNames));
+    }
+
+    /**
+     * Rough metric of filter efficiency. Because the filter uses backwards jumps, on complex
+     * packets it will not finish running before the interpreter hits the maximum number of allowed
+     * instructions (== number of bytes in the program) and unconditionally accepts the packet.
+     * This test checks much extra code the program must contain in order for the generated filter
+     * to successfully drop the packet. It helps ensure any changes to the code do not reduce the
+     * complexity of packets that the APF code can drop.
+     */
+    @Test
+    public void testDnsParsingNecessaryOverhead() throws Exception {
+        // Simple packets can be parsed with zero extra code.
+        doTestDnsParsingNecessaryOverhead(0, "googlecast.tcp.local",
+                "matter.tcp.local", "developer.android.com");
+
+        doTestDnsParsingNecessaryOverhead(0, "googlecast.tcp.local",
+                "developer.android.com", "matter.tcp.local");
+
+        doTestDnsParsingNecessaryOverhead(0, "googlecast.tcp.local",
+                "developer.android.com", "matter.tcp.local", "www.google.co.jp");
+
+        doTestDnsParsingNecessaryOverhead(0, "googlecast.tcp.local",
+                "developer.android.com", "matter.tcp.local", "www.google.co.jp",
+                "example.org");
+
+        // More complicated packets cause more instructions to be run and can only be dropped if
+        // the program contains lots of extra code.
+        doTestDnsParsingNecessaryOverhead(57, "googlecast.tcp.local",
+                "developer.android.com", "matter.tcp.local", "www.google.co.jp",
+                "example.org", "otherexample.net");
+
+        doTestDnsParsingNecessaryOverhead(115, "googlecast.tcp.local",
+                "developer.android.com", "matter.tcp.local", "www.google.co.jp",
+                "example.org", "otherexample.net", "docs.new");
+
+        doTestDnsParsingNecessaryOverhead(0, "foo.tcp.local",
+                makeMdnsCompressedV6Packet(), "compressed packet");
+
+        doTestDnsParsingNecessaryOverhead(235, "foo.tcp.local",
+                makeMdnsCompressedV6PacketWithManyNames(), "compressed packet with many names");
     }
 
     @Test
