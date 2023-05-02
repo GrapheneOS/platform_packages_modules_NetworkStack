@@ -86,6 +86,7 @@ import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -183,6 +184,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
@@ -2304,6 +2306,31 @@ public class NetworkMonitorTest {
         verifyNetworkTested(NETWORK_VALIDATION_RESULT_VALID, PROBES_PRIVDNS_VALID);
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1)).notifyProbeStatusChanged(
                 eq(PROBES_PRIVDNS_VALID), eq(PROBES_PRIVDNS_VALID));
+    }
+
+    @Test
+    public void testDataStall_setOpportunisticMode() {
+        setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
+        doReturn(true).when(mTstDependencies).isTcpInfoParsingSupported();
+        WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
+        InOrder inOrder = inOrder(mTst);
+        // Initialized with default value.
+        inOrder.verify(mTst).setOpportunisticMode(false);
+
+        // Strict mode.
+        wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig("dns.google", new InetAddress[0]));
+        HandlerUtils.waitForIdle(wnm.getHandler(), HANDLER_TIMEOUT_MS);
+        inOrder.verify(mTst).setOpportunisticMode(false);
+
+        // Opportunistic mode.
+        wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig(true /* useTls */));
+        HandlerUtils.waitForIdle(wnm.getHandler(), HANDLER_TIMEOUT_MS);
+        inOrder.verify(mTst).setOpportunisticMode(true);
+
+        // Off mode.
+        wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig(false /* useTls */));
+        HandlerUtils.waitForIdle(wnm.getHandler(), HANDLER_TIMEOUT_MS);
+        inOrder.verify(mTst).setOpportunisticMode(false);
     }
 
     @Test
