@@ -288,7 +288,8 @@ public class TcpSocketTracker {
                     throw new IllegalStateException("Failed to parse StructInetDiagMsg");
                 }
                 final SocketInfo info = parseSockInfo(bytes, family, nlmsgLen, time,
-                        inetDiagMsg.idiag_uid, inetDiagMsg.id.cookie);
+                        inetDiagMsg.idiag_uid, inetDiagMsg.id.cookie,
+                        inetDiagMsg.id.remSocketAddress.getPort());
                 outputSocketInfoList.add(info);
             } while (NetlinkUtils.enoughBytesRemainForValidNlMsg(bytes));
         } catch (IllegalArgumentException | BufferUnderflowException e) {
@@ -346,7 +347,8 @@ public class TcpSocketTracker {
     /** Parse a {@code SocketInfo} from the given position of the given byte buffer. */
     @NonNull
     private static SocketInfo parseSockInfo(@NonNull final ByteBuffer bytes, final int family,
-            final int nlmsgLen, final long time, final int uid, final long cookie) {
+            final int nlmsgLen, final long time, final int uid, final long cookie,
+            final int dstPort) {
         final int remainingDataSize = bytes.position() + nlmsgLen - SOCKDIAG_MSG_HEADER_SIZE;
         TcpInfo tcpInfo = null;
         int mark = NetlinkUtils.INIT_MARK_VALUE;
@@ -366,7 +368,7 @@ public class TcpSocketTracker {
                 skipRemainingAttributesBytesAligned(bytes, dataLen);
             }
         }
-        final SocketInfo info = new SocketInfo(tcpInfo, family, mark, time, uid, cookie);
+        final SocketInfo info = new SocketInfo(tcpInfo, family, mark, time, uid, cookie, dstPort);
         log("parseSockInfo, " + info);
         return info;
     }
@@ -541,22 +543,25 @@ public class TcpSocketTracker {
         public final int uid;
         // Cookie which associated with this Socket.
         public final long cookie;
+        // Destination port number of this Socket.
+        public final int dstPort;
 
         SocketInfo(@Nullable final TcpInfo info, final int family, final int mark,
-                final long time, final int uid, final long cookie) {
+                final long time, final int uid, final long cookie, final int dstPort) {
             tcpInfo = info;
             ipFamily = family;
             updateTime = time;
             fwmark = mark;
             this.uid = uid;
             this.cookie = cookie;
+            this.dstPort = dstPort;
         }
 
         @Override
         public String toString() {
             return "SocketInfo {Type:" + ipTypeToString(ipFamily) + ", uid:" + uid
                     + ", cookie:" + cookie + ", " + tcpInfo + ", mark:" + fwmark
-                    + " updated at " + updateTime + "}";
+                    + ", dstPort:" + dstPort + " updated at " + updateTime + "}";
         }
 
         private String ipTypeToString(final int type) {
