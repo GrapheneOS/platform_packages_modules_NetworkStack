@@ -45,6 +45,10 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
+// In some branches, this may be module_current instead of module_34 if the SDK prebuilts are not
+// yet dropped there, meaning module_34 cannot be used yet.
+module_34_version = "module_34"
+
 // TODO: remove this default and replace with ConnectivityNextEnableDefaults. This will need to be
 // done separately in each branch due to merge conflicts.
 // Defaults to enable/disable java targets that depend on
@@ -76,14 +80,15 @@ java_defaults {
 java_defaults {
     name: "NetworkStackReleaseTargetSdk",
     min_sdk_version: "29",
-    target_sdk_version: "33",
+    target_sdk_version: "34",
 }
 
 java_defaults {
     name: "NetworkStackReleaseApiLevel",
     defaults:["NetworkStackReleaseTargetSdk"],
-    sdk_version: "module_33",
+    sdk_version: module_34_version,
     libs: [
+        "framework-configinfrastructure",
         "framework-connectivity",
         "framework-connectivity-t",
         "framework-statsd",
@@ -194,16 +199,9 @@ java_library {
     visibility: ["//visibility:private"],
 }
 
-// Shims for APIs being added to the current development version of Android. These APIs are not
-// stable and have no defined version number. These could be called 10000, but they use the next
-// integer so if the next SDK release happens to use that integer, we don't need to rename them.
-// Jarjar rules are generated based on the stable shims, which do not contain this library. As a
-// result, no static_lib that needs jarjar should be used here. In general, static_libs should not
-// be used in this library at all; instead they can be in one of the earlier, shim libraries which
-// are part of the stable shims and scanned when generating jarjar rules.
 java_library {
     name: "NetworkStackApi34Shims",
-    defaults: ["NetworkStackShimsDefaults", "ConnectivityNextEnableDefaults"],
+    defaults: ["NetworkStackShimsDefaults"],
     srcs: [
         "apishim/34/**/*.java",
     ],
@@ -213,6 +211,36 @@ java_library {
         "NetworkStackApi30Shims",
         "NetworkStackApi31Shims",
         "NetworkStackApi33Shims",
+        "framework-bluetooth",
+        "framework-connectivity",
+        "framework-connectivity-t.stubs.module_lib",
+        "framework-tethering",
+        "android.net.ipsec.ike.stubs.module_lib"
+    ],
+    sdk_version: module_34_version,
+    visibility: ["//visibility:private"],
+}
+
+// Shims for APIs being added to the current development version of Android. These APIs are not
+// stable and have no defined version number. These could be called 10000, but they use the next
+// integer so if the next SDK release happens to use that integer, we don't need to rename them.
+// Jarjar rules are generated based on the stable shims, which do not contain this library. As a
+// result, no static_lib that needs jarjar should be used here. In general, static_libs should not
+// be used in this library at all; instead they can be in one of the earlier, shim libraries which
+// are part of the stable shims and scanned when generating jarjar rules.
+java_library {
+    name: "NetworkStackApi35Shims",
+    defaults: ["NetworkStackShimsDefaults", "ConnectivityNextEnableDefaults"],
+    srcs: [
+        "apishim/35/**/*.java",
+    ],
+    libs: [
+        "NetworkStackShimsCommon",
+        "NetworkStackApi29Shims",
+        "NetworkStackApi30Shims",
+        "NetworkStackApi31Shims",
+        "NetworkStackApi33Shims",
+        "NetworkStackApi34Shims",
         "framework-bluetooth",
         "framework-connectivity",
         "framework-connectivity-t.stubs.module_lib",
@@ -240,6 +268,7 @@ java_library {
         "NetworkStackApi31Shims",
         "NetworkStackApi33Shims",
         "NetworkStackApi34Shims",
+        "NetworkStackApi35Shims",
     ],
     visibility: [
         "//packages/modules/Connectivity/Tethering",
@@ -261,6 +290,7 @@ java_library {
         "NetworkStackApi30Shims",
         "NetworkStackApi31Shims",
         "NetworkStackApi33Shims",
+        "NetworkStackApi34Shims",
     ],
     jarjar_rules: "apishim/jarjar-rules-compat.txt",
     visibility: [
