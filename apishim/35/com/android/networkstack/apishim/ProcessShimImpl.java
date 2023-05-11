@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +21,10 @@ import androidx.annotation.RequiresApi;
 
 import com.android.networkstack.apishim.common.ProcessShim;
 
-/** Implementation of {@link ProcessShim} for API 34. */
-// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+/** Implementation of {@link ProcessShim} for API 35. */
+// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
 @RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
-public class ProcessShimImpl extends com.android.networkstack.apishim.api33.ProcessShimImpl {
+public class ProcessShimImpl extends com.android.networkstack.apishim.api34.ProcessShimImpl {
+    // Currently identical to the API 34 shim, so inherit everything
     protected ProcessShimImpl() {}
 }
