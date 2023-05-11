@@ -21,8 +21,11 @@ import android.app.usage.NetworkStats
 import android.app.usage.NetworkStats.Bucket.TAG_NONE
 import android.app.usage.NetworkStatsManager
 import android.net.NetworkTemplate.MATCH_TEST
+import android.os.Build
 import android.os.Process
 import androidx.test.platform.app.InstrumentationRegistry
+import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo
+import com.android.testutils.DevSdkIgnoreRunner
 import com.android.testutils.PacketBridge
 import com.android.testutils.RecorderCallback.CallbackEntry.LinkPropertiesChanged
 import com.android.testutils.TestDnsServer
@@ -42,9 +45,9 @@ import kotlin.test.assertTrue
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.junit.runners.JUnit4
 
-@RunWith(JUnit4::class)
+@RunWith(DevSdkIgnoreRunner::class)
+@IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
 class NetworkStatsIntegrationTest {
     private val INTERNAL_V6ADDR =
         LinkAddress(InetAddresses.parseNumericAddress("2001:db8::1234"), 64)
