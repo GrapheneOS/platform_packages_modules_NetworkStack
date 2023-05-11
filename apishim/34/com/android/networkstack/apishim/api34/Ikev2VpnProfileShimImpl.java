@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.networkstack.apishim;
+package com.android.networkstack.apishim.api34;
 
 import android.net.Ikev2VpnProfile;
 import android.os.Build;
