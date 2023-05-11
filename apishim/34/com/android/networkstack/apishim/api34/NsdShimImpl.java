@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.networkstack.apishim;
+package com.android.networkstack.apishim.api34;
 
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
@@ -38,8 +38,7 @@ import java.util.concurrent.Executor;
 /**
  * Implementation of {@link NsdShim}.
  */
-// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-@RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 public class NsdShimImpl extends com.android.networkstack.apishim.api33.NsdShimImpl {
     private final Map<ServiceInfoCallbackShim, ServiceInfoCallbackWrapper> mCbWrappers =
             Collections.synchronizedMap(new ArrayMap<>());
