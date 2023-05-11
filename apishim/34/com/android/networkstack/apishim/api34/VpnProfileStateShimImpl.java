@@ -13,23 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.android.networkstack.apishim.api34;
 
-package com.android.networkstack.apishim;
-
-import android.net.NetworkAgentConfig;
+import android.net.VpnProfileState;
 import android.os.Build;
 
-import androidx.annotation.Nullable;
+import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
-/**
- * A shim for NetworkAgentConfig
- */
-// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-@RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
-public class NetworkAgentConfigShimImpl
-        extends com.android.networkstack.apishim.api33.NetworkAgentConfigShimImpl {
-    protected NetworkAgentConfigShimImpl(@Nullable final NetworkAgentConfig config) {
-        super(config);
+import com.android.networkstack.apishim.common.VpnProfileStateShim;
+
+/** Implementation of {@link VpnProfileStateShim} for API 34. */
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+public class VpnProfileStateShimImpl
+        extends com.android.networkstack.apishim.api33.VpnProfileStateShimImpl {
+    protected VpnProfileStateShimImpl(@NonNull VpnProfileState profileState) {
+        super(profileState);
     }
 }
