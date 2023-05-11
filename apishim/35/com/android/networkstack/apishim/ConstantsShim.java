@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,7 @@
 
 package com.android.networkstack.apishim;
 
-import android.content.pm.PackageManager;
 import android.os.Build;
-import android.system.OsConstants;
 
 import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
@@ -26,9 +24,9 @@ import androidx.annotation.VisibleForTesting;
 /**
  * Utility class for defining and importing constants from the Android platform.
  */
-// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
 @RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
-public class ConstantsShim extends com.android.networkstack.apishim.api33.ConstantsShim {
+public class ConstantsShim extends com.android.networkstack.apishim.api34.ConstantsShim {
     /**
      * Constant that callers can use to determine what version of the shim they are using.
      * Must be the same as the version of the shims.
@@ -36,13 +34,5 @@ public class ConstantsShim extends com.android.networkstack.apishim.api33.Consta
      * the shimmed objects and methods themselves.
      */
     @VisibleForTesting
-    public static final int VERSION = 34;
-
-    // Constants defined in android.content.pm.PackageManager
-    public static final String PROPERTY_SELF_CERTIFIED_NETWORK_CAPABILITIES =
-            PackageManager.PROPERTY_SELF_CERTIFIED_NETWORK_CAPABILITIES;
-
-    // Constants defined in android.system.OsConstants
-    public static final int IFA_F_MANAGETEMPADDR = OsConstants.IFA_F_MANAGETEMPADDR;
-    public static final int IFA_F_NOPREFIXROUTE = OsConstants.IFA_F_NOPREFIXROUTE;
+    public static final int VERSION = 35;
 }
