@@ -14,22 +14,19 @@
  * limitations under the License.
  */
 
-package com.android.networkstack.apishim;
+package com.android.networkstack.apishim.api34;
 
-import android.net.Network;
 import android.os.Build;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
+import com.android.networkstack.apishim.common.VpnServiceBuilderShim;
+
 /**
- * Compatibility implementation of {@link com.android.networkstack.apishim.common.NetworkShim}.
+ * Implementation of {@link VpnServiceBuilderShim}.
  */
-// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-@RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
-public class NetworkShimImpl extends com.android.networkstack.apishim.api33.NetworkShimImpl {
-    // Currently, this is the same as the API 33 shim, so inherit everything from that.
-    protected NetworkShimImpl(@NonNull Network network) {
-        super(network);
-    }
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+public class VpnServiceBuilderShimImpl extends
+        com.android.networkstack.apishim.api33.VpnServiceBuilderShimImpl {
+    protected VpnServiceBuilderShimImpl() {}
 }
