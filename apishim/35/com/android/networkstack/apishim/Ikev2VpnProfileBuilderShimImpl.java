@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,18 +16,21 @@
 
 package com.android.networkstack.apishim;
 
+import android.net.ipsec.ike.IkeTunnelConnectionParams;
 import android.os.Build;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
-import com.android.networkstack.apishim.common.VpnServiceBuilderShim;
-
 /**
- * Implementation of {@link VpnServiceBuilderShim}.
+ * A shim for Ikev2VpnProfile.Builder
  */
-// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
 @RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
-public class VpnServiceBuilderShimImpl extends
-        com.android.networkstack.apishim.api33.VpnServiceBuilderShimImpl {
-    protected VpnServiceBuilderShimImpl() {}
+public class Ikev2VpnProfileBuilderShimImpl
+        extends com.android.networkstack.apishim.api34.Ikev2VpnProfileBuilderShimImpl {
+    // Currently identical to the API 34 shim, so inherit everything
+    protected Ikev2VpnProfileBuilderShimImpl(@NonNull IkeTunnelConnectionParams params) {
+        super(params);
+    }
 }

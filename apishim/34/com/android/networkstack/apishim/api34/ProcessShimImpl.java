@@ -13,23 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.android.networkstack.apishim.api34;
 
-package com.android.networkstack.apishim;
-
-import android.bluetooth.BluetoothPan;
 import android.os.Build;
 
 import androidx.annotation.RequiresApi;
 
-/**
- * Implementation of {@link BluetoothPanShimImpl} for API 34.
- */
-// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-@RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
-public class BluetoothPanShimImpl extends
-        com.android.networkstack.apishim.api33.BluetoothPanShimImpl {
-    // Currently identical to the API 33 shim, so inherit everything
-    protected BluetoothPanShimImpl(BluetoothPan pan) {
-        super(pan);
-    }
+import com.android.networkstack.apishim.common.ProcessShim;
+
+/** Implementation of {@link ProcessShim} for API 34. */
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+public class ProcessShimImpl extends com.android.networkstack.apishim.api33.ProcessShimImpl {
+    protected ProcessShimImpl() {}
 }
