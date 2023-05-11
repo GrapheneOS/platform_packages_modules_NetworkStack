@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.networkstack.apishim;
+package com.android.networkstack.apishim.api34;
 
 import static com.android.modules.utils.build.SdkLevel.isAtLeastU;
 
@@ -30,8 +30,7 @@ import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 /**
  * Implementation of {@link BroadcastOptionsShim} for API 34.
  */
-// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-@RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 public class BroadcastOptionsShimImpl extends
         com.android.networkstack.apishim.api33.BroadcastOptionsShimImpl {
     protected BroadcastOptionsShimImpl(@NonNull BroadcastOptions options) {
