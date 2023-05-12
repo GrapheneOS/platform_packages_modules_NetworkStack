@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,15 +20,17 @@ import android.os.Build;
 
 import androidx.annotation.RequiresApi;
 
-import com.android.networkstack.apishim.common.ConnectivityFrameworkInitShim;
+import com.android.networkstack.apishim.common.NetworkRequestShim;
 
 /**
- * Implementation of {@link ConnectivityFrameworkInitShim}.
+ * Implementation of {@link NetworkRequestShim} for API 35.
  */
-// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
 @RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
-public class ConnectivityFrameworkInitShimImpl extends
-        com.android.networkstack.apishim.api33.ConnectivityFrameworkInitShimImpl {
-    // Currently identical to the API 33 shim, so inherit everything
-    protected ConnectivityFrameworkInitShimImpl() {}
+public class NetworkRequestShimImpl
+        extends com.android.networkstack.apishim.api34.NetworkRequestShimImpl {
+    // Currently identical to the API 34 shim, so inherit everything
+    protected NetworkRequestShimImpl() {
+        super();
+    }
 }

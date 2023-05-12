@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,13 +20,13 @@ import android.os.Build;
 
 import androidx.annotation.RequiresApi;
 
+import com.android.networkstack.apishim.common.NsdShim;
+
 /**
- * Implementation of {@link com.android.networkstack.apishim.common.SocketUtilsShim}.
+ * Implementation of {@link NsdShim}.
  */
-// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
 @RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
-public class SocketUtilsShimImpl
-        extends com.android.networkstack.apishim.api33.SocketUtilsShimImpl {
-    // Currently, this is the same as the API 33 shim, so inherit everything from that.
-    protected SocketUtilsShimImpl() {}
+public class NsdShimImpl extends com.android.networkstack.apishim.api34.NsdShimImpl {
+    // Inherit everything from API34 shim
 }
