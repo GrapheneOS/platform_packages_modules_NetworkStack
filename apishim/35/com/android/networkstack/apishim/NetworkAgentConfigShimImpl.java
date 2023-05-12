@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +16,21 @@
 
 package com.android.networkstack.apishim;
 
+import android.net.NetworkAgentConfig;
 import android.os.Build;
 
+import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
-import com.android.networkstack.apishim.common.NetworkRequestShim;
-
 /**
- * Implementation of {@link NetworkRequestShim} for API 34.
+ * A shim for NetworkAgentConfig
  */
-// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
 @RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
-public class NetworkRequestShimImpl
-        extends com.android.networkstack.apishim.api33.NetworkRequestShimImpl {
-    // Currently identical to the API 33 shim, so inherit everything
-    protected NetworkRequestShimImpl() {
-        super();
+public class NetworkAgentConfigShimImpl
+        extends com.android.networkstack.apishim.api34.NetworkAgentConfigShimImpl {
+    // Currently identical to the API 34 shim, so inherit everything
+    protected NetworkAgentConfigShimImpl(@Nullable final NetworkAgentConfig config) {
+        super(config);
     }
 }

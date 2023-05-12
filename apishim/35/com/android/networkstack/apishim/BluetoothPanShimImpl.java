@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,23 +16,20 @@
 
 package com.android.networkstack.apishim;
 
-import android.net.CaptivePortalData;
+import android.bluetooth.BluetoothPan;
 import android.os.Build;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
-import com.android.networkstack.apishim.common.CaptivePortalDataShim;
-
 /**
- * Compatibility implementation of {@link CaptivePortalDataShim}.
+ * Implementation of {@link BluetoothPanShimImpl} for API 35.
  */
-// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
 @RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
-public class CaptivePortalDataShimImpl
-        extends com.android.networkstack.apishim.api33.CaptivePortalDataShimImpl {
-    // Currently identical to the API 33 shim, so inherit everything
-    public CaptivePortalDataShimImpl(@NonNull CaptivePortalData data) {
-        super(data);
+public class BluetoothPanShimImpl extends
+        com.android.networkstack.apishim.api34.BluetoothPanShimImpl {
+    // Currently identical to the API 34 shim, so inherit everything
+    protected BluetoothPanShimImpl(BluetoothPan pan) {
+        super(pan);
     }
 }

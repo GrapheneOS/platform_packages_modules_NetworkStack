@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,18 +16,23 @@
 
 package com.android.networkstack.apishim;
 
+import android.net.CaptivePortalData;
 import android.os.Build;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
-import com.android.networkstack.apishim.common.NetworkInformationShim;
+import com.android.networkstack.apishim.common.CaptivePortalDataShim;
 
 /**
- * Compatibility implementation of {@link NetworkInformationShim}.
+ * Compatibility implementation of {@link CaptivePortalDataShim}.
  */
-// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
 @RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
-public class NetworkInformationShimImpl
-        extends com.android.networkstack.apishim.api33.NetworkInformationShimImpl {
-    protected NetworkInformationShimImpl() {}
+public class CaptivePortalDataShimImpl
+        extends com.android.networkstack.apishim.api34.CaptivePortalDataShimImpl {
+    // Currently identical to the API 34 shim, so inherit everything
+    public CaptivePortalDataShimImpl(@NonNull CaptivePortalData data) {
+        super(data);
+    }
 }
