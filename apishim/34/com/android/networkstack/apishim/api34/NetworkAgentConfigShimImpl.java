@@ -14,24 +14,21 @@
  * limitations under the License.
  */
 
-package com.android.networkstack.apishim;
+package com.android.networkstack.apishim.api34;
 
-import android.content.Context;
+import android.net.NetworkAgentConfig;
 import android.os.Build;
 
+import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
-import com.android.networkstack.apishim.common.ConnectivityManagerShim;
-
 /**
- * Compatibility implementation of {@link ConnectivityManagerShim}.
+ * A shim for NetworkAgentConfig
  */
-// TODO: when available in all active branches: @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-@RequiresApi(Build.VERSION_CODES.CUR_DEVELOPMENT)
-public class ConnectivityManagerShimImpl
-        extends com.android.networkstack.apishim.api33.ConnectivityManagerShimImpl  {
-    // Currently identical to the API 33 shim, so inherit everything
-    protected ConnectivityManagerShimImpl(Context context) {
-        super(context);
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+public class NetworkAgentConfigShimImpl
+        extends com.android.networkstack.apishim.api33.NetworkAgentConfigShimImpl {
+    protected NetworkAgentConfigShimImpl(@Nullable final NetworkAgentConfig config) {
+        super(config);
     }
 }
