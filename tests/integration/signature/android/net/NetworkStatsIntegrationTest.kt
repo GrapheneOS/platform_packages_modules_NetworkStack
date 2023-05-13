@@ -20,9 +20,13 @@ import android.Manifest.permission.MANAGE_TEST_NETWORKS
 import android.app.usage.NetworkStats
 import android.app.usage.NetworkStats.Bucket.TAG_NONE
 import android.app.usage.NetworkStatsManager
+import android.net.ConnectivityManager.TYPE_TEST
 import android.net.NetworkTemplate.MATCH_TEST
+import android.os.Build
 import android.os.Process
 import androidx.test.platform.app.InstrumentationRegistry
+import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo
+import com.android.testutils.DevSdkIgnoreRunner
 import com.android.testutils.PacketBridge
 import com.android.testutils.RecorderCallback.CallbackEntry.LinkPropertiesChanged
 import com.android.testutils.TestDnsServer
@@ -40,11 +44,13 @@ import java.nio.charset.Charset
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.After
+import org.junit.Assume.assumeTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.junit.runners.JUnit4
 
-@RunWith(JUnit4::class)
+@RunWith(DevSdkIgnoreRunner::class)
+@IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
 class NetworkStatsIntegrationTest {
     private val INTERNAL_V6ADDR =
         LinkAddress(InetAddresses.parseNumericAddress("2001:db8::1234"), 64)
@@ -73,6 +79,7 @@ class NetworkStatsIntegrationTest {
     }.apply {
         start()
     }
+    private val cm = context.getSystemService(ConnectivityManager::class.java)
 
     // Set up DNS server for testing server and DNS64.
     private val fakeDns = TestDnsServer(
@@ -91,6 +98,19 @@ class NetworkStatsIntegrationTest {
         start()
     }
 
+    @Before
+    fun setUp() {
+        assumeTrue(shouldRunTests())
+    }
+
+    // For networkstack tests, it is not guaranteed that the tethering module will be
+    // updated at the same time. If the tethering module is not new enough, it may not contain
+    // the necessary abilities to run these tests. For example, The tests depends on test
+    // network stats being counted, which can only be achieved when they are marked as TYPE_TEST.
+    // If the tethering module does not support TYPE_TEST stats, then these tests will need
+    // to be skipped.
+    fun shouldRunTests() = cm.getNetworkInfo(packetBridge.internalNetwork).type == TYPE_TEST
+
     @After
     fun tearDown() {
         packetBridge.stop()
@@ -99,7 +119,6 @@ class NetworkStatsIntegrationTest {
     }
 
     private fun waitFor464XlatReady(network: Network): String {
-        val cm = context.getSystemService(ConnectivityManager::class.java)
         val iface = cm.getLinkProperties(network).interfaceName
 
         // Make a network request to listen to the specific test network.
