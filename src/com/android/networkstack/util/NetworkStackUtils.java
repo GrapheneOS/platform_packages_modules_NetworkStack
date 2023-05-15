@@ -240,6 +240,14 @@ public class NetworkStackUtils {
             "ipclient_parse_netlink_events_version";
 
     /**
+     * Experiment flag to check if an on-link IPv6 link local DNS is acceptable. The default flag
+     * value is true, just add this flag for A/B testing to see if this fix works as expected via
+     * experiment rollout.
+     */
+    public static final String IPCLIENT_ACCEPT_IPV6_LINK_LOCAL_DNS_VERSION =
+            "ipclient_accept_ipv6_link_local_dns_version";
+
+    /**
      * Experiment flag to disable accept_ra parameter when IPv6 provisioning loss happens due to
      * the default route has gone.
      */
