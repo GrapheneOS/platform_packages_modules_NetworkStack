@@ -108,7 +108,7 @@ java_defaults {
     ],
     apex_available: [
         "com.android.tethering",
-        "//apex_available:platform",  // For InProcessNetworkStack and InProcessTethering
+        "//apex_available:platform",  // For InProcessNetworkStack
     ],
     min_sdk_version: "29",
 }
