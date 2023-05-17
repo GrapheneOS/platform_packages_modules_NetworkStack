@@ -51,7 +51,7 @@ abstract class DhcpPacketListener extends FdEventsReader<DhcpPacketListener.Payl
 
     @Override
     protected final void handlePacket(@NonNull Payload recvbuf, int length) {
-        if (recvbuf.mSrcAddr == null) {
+        if (recvbuf.mSrcAddr == null || length == 0) {
             return;
         }
 
@@ -77,6 +77,14 @@ abstract class DhcpPacketListener extends FdEventsReader<DhcpPacketListener.Payl
         packetBuffer.mSrcAddr = inet4AddrOrNull(addr);
         packetBuffer.mSrcPort = addr.getPort();
         return read;
+    }
+
+    @Override
+    protected boolean shouldProcessZeroLengthPacket() {
+        // DHCP server may receive zero-length DHCP packet in some cases, that will close DHCP
+        // server listening socket and stop reading packets(see b/269692093 for details). Still
+        // process the zero-length DHCP packet and continue reading instead.
+        return true;
     }
 
     @Nullable
