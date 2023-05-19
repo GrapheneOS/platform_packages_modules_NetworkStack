@@ -76,8 +76,6 @@ class NetworkStatsIntegrationTest {
     private val context = inst.getContext()
     private val packetBridge = runAsShell(MANAGE_TEST_NETWORKS) {
         PacketBridge(context, INTERNAL_V6ADDR, EXTERNAL_V6ADDR, REMOTE_V6ADDR.address)
-    }.apply {
-        start()
     }
     private val cm = context.getSystemService(ConnectivityManager::class.java)
 
@@ -101,6 +99,7 @@ class NetworkStatsIntegrationTest {
     @Before
     fun setUp() {
         assumeTrue(shouldRunTests())
+        packetBridge.start()
     }
 
     // For networkstack tests, it is not guaranteed that the tethering module will be
