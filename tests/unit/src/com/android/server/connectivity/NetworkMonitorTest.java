@@ -84,6 +84,7 @@ import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -606,11 +607,11 @@ public class NetworkMonitorTest {
         }
     }
 
-    private void resetCallbacks() {
+    private void resetCallbacks() throws Exception {
         resetCallbacks(11);
     }
 
-    private void resetCallbacks(int interfaceVersion) {
+    private void resetCallbacks(int interfaceVersion) throws Exception {
         reset(mCallbacks);
         try {
             doReturn(interfaceVersion).when(mCallbacks).getInterfaceVersion();
@@ -618,6 +619,17 @@ public class NetworkMonitorTest {
             // Can't happen as mCallbacks is a mock
             fail("Error mocking getInterfaceVersion" + e);
         }
+        // Explicitly set the callback methods so that these will not interact with real methods
+        // to prevent threading issue in the test. Really this should be a mock but this is not
+        // possible currently ; see comments on the member for the reasons.
+        doNothing().when(mCallbacks).notifyNetworkTestedWithExtras(any());
+        doNothing().when(mCallbacks).showProvisioningNotification(any(), any());
+        doNothing().when(mCallbacks).hideProvisioningNotification();
+        doNothing().when(mCallbacks).notifyProbeStatusChanged(anyInt(), anyInt());
+        doNothing().when(mCallbacks).notifyDataStallSuspected(any());
+        doNothing().when(mCallbacks).notifyCaptivePortalDataChanged(any());
+        doNothing().when(mCallbacks).notifyPrivateDnsConfigResolved(any());
+        doNothing().when(mCallbacks).notifyNetworkTested(anyInt(), any());
     }
 
     private boolean getIsCaptivePortalCheckEnabled(Context context,
@@ -1541,21 +1553,21 @@ public class NetworkMonitorTest {
                 NETWORK_VALIDATION_RESULT_VALID,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS, null);
 
-        reset(mCallbacks);
+        resetCallbacks();
         // Underlying network changed.
         notifyUnderlyingNetworkChange(nm, nc , List.of(new Network(TEST_NETID)));
         // The underlying network change should cause a re-validation
         verifyNetworkTested(NETWORK_VALIDATION_RESULT_VALID,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS);
 
-        reset(mCallbacks);
+        resetCallbacks();
         notifyUnderlyingNetworkChange(nm, nc , List.of(new Network(TEST_NETID)));
         // Identical networks should not cause revalidation.
         verify(mCallbacks, never()).notifyNetworkTestedWithExtras(matchNetworkTestResultParcelable(
                 NETWORK_VALIDATION_RESULT_VALID,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS));
 
-        reset(mCallbacks);
+        resetCallbacks();
         // Change to another network
         notifyUnderlyingNetworkChange(nm, nc , List.of(new Network(TEST_NETID2)));
         verifyNetworkTested(NETWORK_VALIDATION_RESULT_VALID,
