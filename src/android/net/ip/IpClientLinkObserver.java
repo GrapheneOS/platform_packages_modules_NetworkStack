@@ -546,11 +546,10 @@ public class IpClientLinkObserver implements NetworkObserver {
             if (!mNetlinkEventParsingEnabled) return;
             final String[] addresses = new String[opt.servers.length];
             for (int i = 0; i < opt.servers.length; i++) {
-                final Inet6Address addr = InetAddressUtils.withScopeId(opt.servers[i], mIfindex);
-                if (!addr.isLinkLocalAddress()
-                        || (addr.isLinkLocalAddress() && isIpv6LinkLocalDnsAccepted())) {
-                    addresses[i] = addr.getHostAddress();
-                }
+                final Inet6Address addr = isIpv6LinkLocalDnsAccepted()
+                        ? InetAddressUtils.withScopeId(opt.servers[i], mIfindex)
+                        : opt.servers[i];
+                addresses[i] = addr.getHostAddress();
             }
             updateInterfaceDnsServerInfo(opt.header.lifetime, addresses);
         }
