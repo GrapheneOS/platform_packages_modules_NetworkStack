@@ -84,8 +84,6 @@ import static com.android.networkstack.util.NetworkStackUtils.CAPTIVE_PORTAL_USE
 import static com.android.networkstack.util.NetworkStackUtils.CAPTIVE_PORTAL_USE_HTTPS;
 import static com.android.networkstack.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_DNS_PROBE_TIMEOUT;
 import static com.android.networkstack.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_FALLBACK_PROBE_SPECS;
-import static com.android.networkstack.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_HTTPS_URLS;
-import static com.android.networkstack.util.NetworkStackUtils.DEFAULT_CAPTIVE_PORTAL_HTTP_URLS;
 import static com.android.networkstack.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION;
 
 import android.app.PendingIntent;
@@ -96,6 +94,7 @@ import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.ext.settings.ConnChecksSetting;
 import android.net.ConnectivityManager;
 import android.net.DataStallReportParcelable;
 import android.net.DnsResolver;
@@ -447,10 +446,6 @@ public class NetworkMonitor extends StateMachine {
     private final String mCaptivePortalHttpsUrlFromSetting;
     private final String mCaptivePortalHttpUrlFromSetting;
     @Nullable
-    private final URL mTestCaptivePortalHttpsUrl;
-    @Nullable
-    private final URL mTestCaptivePortalHttpUrl;
-    @Nullable
     private final CaptivePortalProbeSpec[] mCaptivePortalFallbackSpecs;
 
     // The probing URLs may be updated after constructor if system notifies configuration changed.
@@ -622,9 +617,6 @@ public class NetworkMonitor extends StateMachine {
                 mDependencies.getSetting(context, CAPTIVE_PORTAL_HTTPS_URL, null);
         mCaptivePortalHttpUrlFromSetting =
                 mDependencies.getSetting(context, CAPTIVE_PORTAL_HTTP_URL, null);
-        mTestCaptivePortalHttpsUrl =
-                getTestUrl(TEST_CAPTIVE_PORTAL_HTTPS_URL, validationLogs, deps);
-        mTestCaptivePortalHttpUrl = getTestUrl(TEST_CAPTIVE_PORTAL_HTTP_URL, validationLogs, deps);
         mIsCaptivePortalCheckEnabled = getIsCaptivePortalCheckEnabled(context, deps);
         mPrivateIpNoInternetEnabled = getIsPrivateIpNoInternetEnabled();
         mMetricsEnabled = deps.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY,
@@ -1961,10 +1953,7 @@ public class NetworkMonitor extends StateMachine {
 
     private static boolean getIsCaptivePortalCheckEnabled(@NonNull Context context,
             @NonNull Dependencies dependencies) {
-        String symbol = CAPTIVE_PORTAL_MODE;
-        int defaultValue = CAPTIVE_PORTAL_MODE_PROMPT;
-        int mode = dependencies.getSetting(context, symbol, defaultValue);
-        return mode != CAPTIVE_PORTAL_MODE_IGNORE;
+        return ConnChecksSetting.get() != ConnChecksSetting.VAL_DISABLED;
     }
 
     private boolean getIsPrivateIpNoInternetEnabled() {
@@ -2080,43 +2069,6 @@ public class NetworkMonitor extends StateMachine {
         return getContextByMccMnc(Integer.parseInt(mcc), UNSET_MCC_OR_MNC);
     }
 
-    @Nullable
-    private static URL getTestUrl(@NonNull String key, @NonNull SharedLog log,
-            @NonNull Dependencies deps) {
-        final String strExpiration = deps.getDeviceConfigProperty(NAMESPACE_CONNECTIVITY,
-                TEST_URL_EXPIRATION_TIME, null);
-        if (strExpiration == null) return null;
-
-        final long expTime;
-        try {
-            expTime = Long.parseUnsignedLong(strExpiration);
-        } catch (NumberFormatException e) {
-            log.e("Invalid test URL expiration time format", e);
-            return null;
-        }
-
-        final long now = System.currentTimeMillis();
-        if (expTime < now || (expTime - now) > TEST_URL_EXPIRATION_MS) {
-            log.w("Skipping test URL with expiration " + expTime + ", now " + now);
-            return null;
-        }
-
-        final String strUrl = deps.getDeviceConfigProperty(NAMESPACE_CONNECTIVITY,
-                key, null /* defaultValue */);
-        if (!isValidTestUrl(strUrl)) {
-            log.w("Skipping invalid test URL " + strUrl);
-            return null;
-        }
-        return makeURL(strUrl, log);
-    }
-
-    private String getCaptivePortalServerHttpsUrl(@NonNull Context context) {
-        return getSettingFromResource(context,
-                R.string.config_captive_portal_https_url, mCaptivePortalHttpsUrlFromSetting,
-                context.getResources().getString(
-                R.string.default_captive_portal_https_url));
-    }
-
     private static boolean isValidTestUrl(@Nullable String url) {
         if (TextUtils.isEmpty(url)) return false;
 
@@ -2183,20 +2135,6 @@ public class NetworkMonitor extends StateMachine {
         }
     }
 
-    /**
-     * Get the captive portal server HTTP URL that is configured on the device.
-     *
-     * NetworkMonitor does not use {@link ConnectivityManager#getCaptivePortalServerUrl()} as
-     * it has its own updatable strategies to detect captive portals. The framework only advises
-     * on one URL that can be used, while NetworkMonitor may implement more complex logic.
-     */
-    public String getCaptivePortalServerHttpUrl(@NonNull Context context) {
-        return getSettingFromResource(context,
-                R.string.config_captive_portal_http_url, mCaptivePortalHttpUrlFromSetting,
-                context.getResources().getString(
-                R.string.default_captive_portal_http_url));
-    }
-
     private int getConsecutiveDnsTimeoutThreshold() {
         return mDependencies.getDeviceConfigPropertyInt(NAMESPACE_CONNECTIVITY,
                 CONFIG_DATA_STALL_CONSECUTIVE_DNS_TIMEOUT_THRESHOLD,
@@ -2230,167 +2168,52 @@ public class NetworkMonitor extends StateMachine {
 
     @VisibleForTesting
     URL[] makeCaptivePortalFallbackUrls(@NonNull Context context) {
-        try {
-            final String firstUrl = mDependencies.getSetting(mContext, CAPTIVE_PORTAL_FALLBACK_URL,
-                    null);
-            final URL[] settingProviderUrls =
-                combineCaptivePortalUrls(firstUrl, CAPTIVE_PORTAL_OTHER_FALLBACK_URLS);
-            return getProbeUrlArrayConfig(context, settingProviderUrls,
-                    R.array.config_captive_portal_fallback_urls,
-                    R.array.default_captive_portal_fallback_urls,
-                    this::makeURL);
-        } catch (Exception e) {
-            // Don't let a misconfiguration bootloop the system.
-            Log.e(TAG, "Error parsing configured fallback URLs", e);
-            return new URL[0];
+        int resId;
+        switch (ConnChecksSetting.get()) {
+            case ConnChecksSetting.VAL_GRAPHENEOS:
+                resId = R.array.default_captive_portal_fallback_urls_grapheneos;
+                break;
+            case ConnChecksSetting.VAL_STANDARD:
+                resId = R.array.default_captive_portal_fallback_urls;
+                break;
+            default:
+                return EMPTY_URL_ARRAY;
         }
+        return makeUrls(context.getResources().getStringArray(resId));
     }
 
     private CaptivePortalProbeSpec[] makeCaptivePortalFallbackProbeSpecs(@NonNull Context context) {
-        try {
-            final String settingsValue = mDependencies.getDeviceConfigProperty(
-                    NAMESPACE_CONNECTIVITY, CAPTIVE_PORTAL_FALLBACK_PROBE_SPECS, null);
-
-            final CaptivePortalProbeSpec[] emptySpecs = new CaptivePortalProbeSpec[0];
-            final CaptivePortalProbeSpec[] providerValue = TextUtils.isEmpty(settingsValue)
-                    ? emptySpecs
-                    : parseCaptivePortalProbeSpecs(settingsValue).toArray(emptySpecs);
-
-            return getProbeUrlArrayConfig(context, providerValue,
-                    R.array.config_captive_portal_fallback_probe_specs,
-                    DEFAULT_CAPTIVE_PORTAL_FALLBACK_PROBE_SPECS,
-                    CaptivePortalProbeSpec::parseSpecOrNull);
-        } catch (Exception e) {
-            // Don't let a misconfiguration bootloop the system.
-            Log.e(TAG, "Error parsing configured fallback probe specs", e);
-            return null;
-        }
+        return new CaptivePortalProbeSpec[0];
     }
 
     private URL[] makeCaptivePortalHttpsUrls(@NonNull Context context) {
-        if (mTestCaptivePortalHttpsUrl != null) return new URL[] { mTestCaptivePortalHttpsUrl };
-
-        final String firstUrl = getCaptivePortalServerHttpsUrl(context);
-        try {
-            final URL[] settingProviderUrls =
-                combineCaptivePortalUrls(firstUrl, CAPTIVE_PORTAL_OTHER_HTTPS_URLS);
-            // firstUrl will at least be default configuration, so default value in
-            // getProbeUrlArrayConfig is actually never used.
-            return getProbeUrlArrayConfig(context, settingProviderUrls,
-                    R.array.config_captive_portal_https_urls,
-                    DEFAULT_CAPTIVE_PORTAL_HTTPS_URLS, this::makeURL);
-        } catch (Exception e) {
-            // Don't let a misconfiguration bootloop the system.
-            Log.e(TAG, "Error parsing configured https URLs", e);
-            // Ensure URL aligned with legacy configuration.
-            return new URL[]{makeURL(firstUrl)};
+        int resId;
+        switch (ConnChecksSetting.get()) {
+            case ConnChecksSetting.VAL_GRAPHENEOS:
+                resId = R.string.default_captive_portal_https_url_grapheneos;
+                break;
+            case ConnChecksSetting.VAL_STANDARD:
+                resId = R.string.default_captive_portal_https_url;
+                break;
+            default:
+                return EMPTY_URL_ARRAY;
         }
+        return makeUrls(context.getString(resId));
     }
 
     private URL[] makeCaptivePortalHttpUrls(@NonNull Context context) {
-        if (mTestCaptivePortalHttpUrl != null) return new URL[] { mTestCaptivePortalHttpUrl };
-
-        final String firstUrl = getCaptivePortalServerHttpUrl(context);
-        try {
-            final URL[] settingProviderUrls =
-                    combineCaptivePortalUrls(firstUrl, CAPTIVE_PORTAL_OTHER_HTTP_URLS);
-            // firstUrl will at least be default configuration, so default value in
-            // getProbeUrlArrayConfig is actually never used.
-            return getProbeUrlArrayConfig(context, settingProviderUrls,
-                    R.array.config_captive_portal_http_urls,
-                    DEFAULT_CAPTIVE_PORTAL_HTTP_URLS, this::makeURL);
-        } catch (Exception e) {
-            // Don't let a misconfiguration bootloop the system.
-            Log.e(TAG, "Error parsing configured http URLs", e);
-            // Ensure URL aligned with legacy configuration.
-            return new URL[]{makeURL(firstUrl)};
+        int resId;
+        switch (ConnChecksSetting.get()) {
+            case ConnChecksSetting.VAL_GRAPHENEOS:
+                resId = R.string.default_captive_portal_http_url_grapheneos;
+                break;
+            case ConnChecksSetting.VAL_STANDARD:
+                resId = R.string.default_captive_portal_http_url;
+                break;
+            default:
+                return EMPTY_URL_ARRAY;
         }
-    }
-
-    private URL[] combineCaptivePortalUrls(final String firstUrl, final String propertyName) {
-        if (TextUtils.isEmpty(firstUrl)) return new URL[0];
-
-        final String otherUrls = mDependencies.getDeviceConfigProperty(
-                NAMESPACE_CONNECTIVITY, propertyName, "");
-        // otherUrls may be empty, but .split() ignores trailing empty strings
-        final String separator = ",";
-        final String[] urls = (firstUrl + separator + otherUrls).split(separator);
-        return convertStrings(urls, this::makeURL, new URL[0]);
-    }
-
-    /**
-     * Read a setting from a resource or the settings provider.
-     *
-     * <p>The configuration resource is prioritized, then the provider value.
-     * @param context The context
-     * @param configResource The resource id for the configuration parameter
-     * @param settingValue The value in the settings provider
-     * @param defaultValue The default value
-     * @return The best available value
-     */
-    @Nullable
-    private String getSettingFromResource(@NonNull final Context context,
-            @StringRes int configResource, @NonNull String settingValue,
-            @NonNull String defaultValue) {
-        final Resources res = context.getResources();
-        String setting = res.getString(configResource);
-
-        if (!TextUtils.isEmpty(setting)) return setting;
-
-        if (!TextUtils.isEmpty(settingValue)) return settingValue;
-
-        return defaultValue;
-    }
-
-    /**
-     * Get an array configuration from resources or the settings provider.
-     *
-     * <p>The configuration resource is prioritized, then the provider values, then the default
-     * resource values.
-     *
-     * @param context The Context
-     * @param providerValue Values obtained from the setting provider.
-     * @param configResId ID of the configuration resource.
-     * @param defaultResId ID of the default resource.
-     * @param resourceConverter Converter from the resource strings to stored setting class. Null
-     *                          return values are ignored.
-     */
-    private <T> T[] getProbeUrlArrayConfig(@NonNull Context context, @NonNull T[] providerValue,
-            @ArrayRes int configResId, @ArrayRes int defaultResId,
-            @NonNull Function<String, T> resourceConverter) {
-        final Resources res = context.getResources();
-        return getProbeUrlArrayConfig(context, providerValue, configResId,
-                res.getStringArray(defaultResId), resourceConverter);
-    }
-
-    /**
-     * Get an array configuration from resources or the settings provider.
-     *
-     * <p>The configuration resource is prioritized, then the provider values, then the default
-     * resource values.
-     *
-     * @param context The Context
-     * @param providerValue Values obtained from the setting provider.
-     * @param configResId ID of the configuration resource.
-     * @param defaultConfig Values of default configuration.
-     * @param resourceConverter Converter from the resource strings to stored setting class. Null
-     *                          return values are ignored.
-     */
-    private <T> T[] getProbeUrlArrayConfig(@NonNull Context context, @NonNull T[] providerValue,
-            @ArrayRes int configResId, String[] defaultConfig,
-            @NonNull Function<String, T> resourceConverter) {
-        final Resources res = context.getResources();
-        String[] configValue = res.getStringArray(configResId);
-
-        if (configValue.length == 0) {
-            if (providerValue.length > 0) {
-                return providerValue;
-            }
-
-            configValue = defaultConfig;
-        }
-
-        return convertStrings(configValue, resourceConverter, Arrays.copyOf(providerValue, 0));
+        return makeUrls(context.getString(resId));
     }
 
     /**
@@ -3770,5 +3593,11 @@ public class NetworkMonitor extends StateMachine {
         }
 
         return reevaluationNeeded;
+    }
+
+    private static final URL[] EMPTY_URL_ARRAY = new URL[0];
+
+    private URL[] makeUrls(String... urlStrings) {
+        return convertStrings(urlStrings, this::makeURL, EMPTY_URL_ARRAY);
     }
 }
