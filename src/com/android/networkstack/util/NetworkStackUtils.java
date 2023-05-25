@@ -138,19 +138,6 @@ public class NetworkStackUtils {
             new String[] {};
 
     /**
-     * The default list of HTTP URLs to use for detecting captive portals.
-     */
-    public static final String[] DEFAULT_CAPTIVE_PORTAL_HTTP_URLS =
-            new String [] {"http://connectivitycheck.gstatic.com/generate_204"};
-
-    /**
-     * The default list of HTTPS URLs for network validation, to use for confirming internet
-     * connectivity.
-     */
-    public static final String[] DEFAULT_CAPTIVE_PORTAL_HTTPS_URLS =
-            new String [] {"https://www.google.com/generate_204"};
-
-    /**
      * Minimum module version at which to enable the DHCP Rapid Commit option.
      */
     public static final String DHCP_RAPID_COMMIT_VERSION = "dhcp_rapid_commit_version";
