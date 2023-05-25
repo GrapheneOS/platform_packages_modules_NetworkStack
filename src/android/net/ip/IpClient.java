@@ -21,6 +21,7 @@ import static android.net.dhcp.DhcpResultsParcelableUtil.toStableParcelable;
 import static android.net.ip.IIpClient.PROV_IPV4_DISABLED;
 import static android.net.ip.IIpClient.PROV_IPV6_DISABLED;
 import static android.net.ip.IIpClient.PROV_IPV6_LINKLOCAL;
+import static android.net.ip.IIpClient.PROV_IPV6_SLAAC;
 import static android.net.ip.IIpClientCallbacks.DTIM_MULTIPLIER_RESET;
 import static android.net.ip.IpReachabilityMonitor.INVALID_REACHABILITY_LOSS_TYPE;
 import static android.net.ip.IpReachabilityMonitor.nudEventTypeToInt;
@@ -2445,19 +2446,24 @@ public class IpClient extends StateMachine {
         public void enter() {
             mIpProvisioningMetrics.reset();
             mStartTimeMillis = SystemClock.elapsedRealtime();
-            final int delay = mDependencies.getDeviceConfigPropertyInt(
-                    CONFIG_INITIAL_PROVISIONING_DTIM_DELAY_MS,
-                    DEFAULT_INITIAL_PROVISIONING_DTIM_DELAY_MS);
-            mInitialProvisioningEndTimeMillis = mStartTimeMillis + delay;
 
             if (mConfiguration.mProvisioningTimeoutMs > 0) {
                 final long alarmTime = SystemClock.elapsedRealtime()
                         + mConfiguration.mProvisioningTimeoutMs;
                 mProvisioningTimeoutAlarm.schedule(alarmTime);
             }
-            // Send a delay message to wait for IP provisioning to complete eventually and set the
-            // specific DTIM multiplier by checking the target network type.
-            sendMessageDelayed(CMD_SET_DTIM_MULTIPLIER_AFTER_DELAY, delay);
+
+            // There is no need to temporarlily lower the DTIM multiplier in IPv6 link-local
+            // only mode or when IPv6 is disabled.
+            if (mConfiguration.mIPv6ProvisioningMode == PROV_IPV6_SLAAC) {
+                // Send a delay message to wait for IP provisioning to complete eventually and
+                // set the specific DTIM multiplier by checking the target network type.
+                final int delay = mDependencies.getDeviceConfigPropertyInt(
+                        CONFIG_INITIAL_PROVISIONING_DTIM_DELAY_MS,
+                        DEFAULT_INITIAL_PROVISIONING_DTIM_DELAY_MS);
+                mInitialProvisioningEndTimeMillis = mStartTimeMillis + delay;
+                sendMessageDelayed(CMD_SET_DTIM_MULTIPLIER_AFTER_DELAY, delay);
+            }
         }
 
         @Override
