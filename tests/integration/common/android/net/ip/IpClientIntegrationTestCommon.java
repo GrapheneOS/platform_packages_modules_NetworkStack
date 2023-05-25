@@ -4452,23 +4452,25 @@ public abstract class IpClientIntegrationTestCommon {
                 .build();
         startIpClientProvisioning(config);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(any());
-        inOrder.verify(mCb).setMaxDtimMultiplier(
+        // IPv6 DTIM grace period doesn't apply to IPv6 link-local only mode and the multiplier
+        // has been initialized to DTIM_MULTIPLIER_RESET before starting provisioning, therefore,
+        // the multiplier should not be updated neither.
+        verify(mCb, never()).setMaxDtimMultiplier(
                 IpClient.DEFAULT_BEFORE_IPV6_PROV_MAX_DTIM_MULTIPLIER);
-        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).setMaxDtimMultiplier(
-                DTIM_MULTIPLIER_RESET);
+        verify(mCb, never()).setMaxDtimMultiplier(DTIM_MULTIPLIER_RESET);
     }
 
     @Test
     public void testMaxDtimMultiplier_IPv4OnlyNetwork() throws Exception {
-        final InOrder inOrder = inOrder(mCb);
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */);
         verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
-        inOrder.verify(mCb).setMaxDtimMultiplier(
-                IpClient.DEFAULT_BEFORE_IPV6_PROV_MAX_DTIM_MULTIPLIER);
-        inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).setMaxDtimMultiplier(
+        verify(mCb, timeout(TEST_TIMEOUT_MS).times(1)).setMaxDtimMultiplier(
                 IpClient.DEFAULT_IPV4_ONLY_NETWORK_MAX_DTIM_MULTIPLIER);
+        // IPv6 DTIM grace period doesn't apply to IPv4-only networks.
+        verify(mCb, never()).setMaxDtimMultiplier(
+                IpClient.DEFAULT_BEFORE_IPV6_PROV_MAX_DTIM_MULTIPLIER);
     }
 
     private void runDualStackNetworkDtimMultiplierSetting(final InOrder inOrder) throws Exception {
