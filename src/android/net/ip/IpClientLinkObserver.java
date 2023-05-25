@@ -28,6 +28,7 @@ import static com.android.net.module.util.netlink.NetlinkConstants.RTN_UNICAST;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTPROT_KERNEL;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTPROT_RA;
 import static com.android.net.module.util.netlink.NetlinkConstants.RT_SCOPE_UNIVERSE;
+import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_ACCEPT_IPV6_LINK_LOCAL_DNS_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_PARSE_NETLINK_EVENTS_VERSION;
 
 import android.app.AlarmManager;
@@ -201,6 +202,11 @@ public class IpClientLinkObserver implements NetworkObserver {
 
     public void shutdown() {
         mHandler.post(mNetlinkMonitor::stop);
+    }
+
+    private boolean isIpv6LinkLocalDnsAccepted() {
+        return mDependencies.isFeatureEnabled(mContext,
+                IPCLIENT_ACCEPT_IPV6_LINK_LOCAL_DNS_VERSION, true /* default value */);
     }
 
     private void maybeLog(String operation, String iface, LinkAddress address) {
@@ -540,8 +546,10 @@ public class IpClientLinkObserver implements NetworkObserver {
             if (!mNetlinkEventParsingEnabled) return;
             final String[] addresses = new String[opt.servers.length];
             for (int i = 0; i < opt.servers.length; i++) {
-                final Inet6Address addr = opt.servers[i];
-                addresses[i] = InetAddressUtils.withScopeId(addr, mIfindex).getHostAddress();
+                final Inet6Address addr = isIpv6LinkLocalDnsAccepted()
+                        ? InetAddressUtils.withScopeId(opt.servers[i], mIfindex)
+                        : opt.servers[i];
+                addresses[i] = addr.getHostAddress();
             }
             updateInterfaceDnsServerInfo(opt.header.lifetime, addresses);
         }
