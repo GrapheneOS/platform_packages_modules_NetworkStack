@@ -72,7 +72,9 @@ import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DN
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_TCP_METRICS;
 import static com.android.networkstack.apishim.ConstantsShim.RECEIVER_NOT_EXPORTED;
 import static com.android.networkstack.apishim.ConstantsShim.TRANSPORT_TEST;
-import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
+import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX_DEFAULT;
+import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX_GRAPHENEOS;
+import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX_STANDARD;
 import static com.android.networkstack.util.DnsUtils.TYPE_ADDRCONFIG;
 import static com.android.networkstack.util.NetworkStackUtils.CAPTIVE_PORTAL_FALLBACK_PROBE_SPECS;
 import static com.android.networkstack.util.NetworkStackUtils.CAPTIVE_PORTAL_FALLBACK_URL;
@@ -1631,6 +1633,21 @@ public class NetworkMonitor extends StateMachine {
         }
     }
 
+    static String getPrivateDnsHostSuffix() {
+        switch (ConnChecksSetting.get()) {
+            case ConnChecksSetting.VAL_STANDARD:
+                return PRIVATE_DNS_PROBE_HOST_SUFFIX_STANDARD;
+            case ConnChecksSetting.VAL_GRAPHENEOS:
+                return PRIVATE_DNS_PROBE_HOST_SUFFIX_GRAPHENEOS;
+            case ConnChecksSetting.VAL_DISABLED:
+                // skipping the check would break detection of broken DoT
+                Log.d(TAG, "getPrivateDnsHostSuffix: ConnChecksSetting.DISABLED, falling back to default hostname");
+                // fallthrough
+            default:
+                return PRIVATE_DNS_PROBE_HOST_SUFFIX_DEFAULT;
+        }
+    }
+
     private class EvaluatingPrivateDnsState extends State {
         private int mPrivateDnsReevalDelayMs;
         private PrivateDnsConfig mPrivateDnsConfig;
@@ -1755,7 +1772,7 @@ public class NetworkMonitor extends StateMachine {
 
         private boolean sendPrivateDnsProbe() {
             final String host = UUID.randomUUID().toString().substring(0, 8)
-                    + PRIVATE_DNS_PROBE_HOST_SUFFIX;
+                    + getPrivateDnsHostSuffix();
             final Stopwatch watch = new Stopwatch().start();
             boolean success = false;
             long time;
@@ -2039,7 +2056,7 @@ public class NetworkMonitor extends StateMachine {
         @NonNull
         @Override
         String getQueryName() {
-            return UUID.randomUUID().toString().substring(0, 8) + PRIVATE_DNS_PROBE_HOST_SUFFIX;
+            return UUID.randomUUID().toString().substring(0, 8) + getPrivateDnsHostSuffix();
         }
     }
 
