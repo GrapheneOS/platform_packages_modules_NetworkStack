@@ -48,7 +48,7 @@ package {
 
 // In some branches, this may be module_current instead of module_34 if the SDK prebuilts are not
 // yet dropped there, meaning module_34 cannot be used yet.
-module_34_version = "module_34"
+module_34_version = "module_current"
 
 // TODO: remove this default and replace with ConnectivityNextEnableDefaults. This will need to be
 // done separately in each branch due to merge conflicts.
