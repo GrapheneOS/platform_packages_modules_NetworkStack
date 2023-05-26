@@ -4174,8 +4174,14 @@ public abstract class IpClientIntegrationTestCommon {
         teardownTapInterface();
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(any());
         verify(mCb, never()).onLinkPropertiesChange(argThat(newLp ->
+                // Ideally there should be only one route(fe80::/64 -> :: iface mtu 0) in the
+                // LinkProperties, however, the multicast route(ff00::/8 -> :: iface mtu 0) may
+                // appear on some old platforms where the kernel is still notifying the userspace
+                // the multicast route. Therefore, we cannot assert that size of routes in the
+                // LinkProperties is more than one, but other properties such as DNS or IPv6
+                // default route or global IPv6 address should never appear in the IPv6 link-local
+                // only mode.
                 newLp.getDnsServers().size() != 0
-                        || newLp.getRoutes().size() > 1
                         || newLp.hasIpv6DefaultRoute()
                         || newLp.hasGlobalIpv6Address()
         ));
