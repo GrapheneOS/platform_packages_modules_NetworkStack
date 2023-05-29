@@ -73,6 +73,7 @@ import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DN
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_TCP_METRICS;
 import static com.android.networkstack.apishim.ConstantsShim.RECEIVER_NOT_EXPORTED;
 import static com.android.networkstack.apishim.ConstantsShim.TRANSPORT_TEST;
+import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX_DEFAULT;
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX_GRAPHENEOS;
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX_STANDARD;
 import static com.android.networkstack.util.DnsUtils.TYPE_ADDRCONFIG;
@@ -1630,16 +1631,19 @@ public class NetworkMonitor extends StateMachine {
         private boolean sendPrivateDnsProbe() {
             final String hostSuffix;
             switch (ConnChecksSetting.get()) {
-                case ConnChecksSetting.VAL_GRAPHENEOS:
-                    hostSuffix = PRIVATE_DNS_PROBE_HOST_SUFFIX_GRAPHENEOS;
-                    break;
                 case ConnChecksSetting.VAL_STANDARD:
                     hostSuffix = PRIVATE_DNS_PROBE_HOST_SUFFIX_STANDARD;
                     break;
+                case ConnChecksSetting.VAL_GRAPHENEOS:
+                    hostSuffix = PRIVATE_DNS_PROBE_HOST_SUFFIX_GRAPHENEOS;
+                    break;
+                case ConnChecksSetting.VAL_DISABLED:
+                    // skipping the check would break detection of broken DoT
+                    Log.d(TAG, "sendPrivateDnsProbe: ConnChecksSetting.DISABLED, falling back to default hostname");
+                    // fallthrough
                 default:
-                    // do not probe, assume to be successful
-                    Log.d(TAG, "connectivity checks are disabled, skipping sendPrivateDnsProbe()");
-                    return true;
+                    hostSuffix = PRIVATE_DNS_PROBE_HOST_SUFFIX_DEFAULT;
+                    break;
             }
 
             final String host = UUID.randomUUID().toString().substring(0, 8)

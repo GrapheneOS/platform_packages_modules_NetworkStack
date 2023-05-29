@@ -51,6 +51,7 @@ public class DnsUtils {
     // A one time host name suffix of private dns probe.
     // q.v. system/netd/server/dns/DnsTlsTransport.cpp
     public static final String PRIVATE_DNS_PROBE_HOST_SUFFIX_GRAPHENEOS = "-dnsotls-ds.dnscheck.grapheneos.org";
+    public static final String PRIVATE_DNS_PROBE_HOST_SUFFIX_DEFAULT = PRIVATE_DNS_PROBE_HOST_SUFFIX_GRAPHENEOS;
     // renamed from PRIVATE_DNS_PROBE_HOST_SUFFIX to make sure compilation breaks if it's used
     // in more places
     public static final String PRIVATE_DNS_PROBE_HOST_SUFFIX_STANDARD = "-dnsotls-ds.metric.gstatic.com";
