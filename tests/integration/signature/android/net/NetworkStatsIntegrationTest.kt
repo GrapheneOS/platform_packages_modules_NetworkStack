@@ -21,6 +21,8 @@ import android.app.usage.NetworkStats
 import android.app.usage.NetworkStats.Bucket.TAG_NONE
 import android.app.usage.NetworkStatsManager
 import android.net.ConnectivityManager.TYPE_TEST
+import android.net.NetworkStatsIntegrationTest.Direction.DOWNLOAD
+import android.net.NetworkStatsIntegrationTest.Direction.UPLOAD
 import android.net.NetworkTemplate.MATCH_TEST
 import android.os.Build
 import android.os.Process
@@ -41,6 +43,7 @@ import java.net.HttpURLConnection.HTTP_OK
 import java.net.InetSocketAddress
 import java.net.URL
 import java.nio.charset.Charset
+import kotlin.math.ceil
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.After
@@ -63,13 +66,24 @@ class NetworkStatsIntegrationTest {
         LinkAddress(InetAddresses.parseNumericAddress("dead:beef::808:808"), 64)
     private val REMOTE_V4ADDR =
         LinkAddress(InetAddresses.parseNumericAddress("8.8.8.8"), 32)
-    private val DEFAULT_BUFFER_SIZE = 1000
+    private val DEFAULT_MTU = 1500
+    private val DEFAULT_BUFFER_SIZE = 1500 // Any size greater than or equal to mtu
     private val CONNECTION_TIMEOUT_MILLIS = 15000
     private val TEST_DOWNLOAD_SIZE = 10000L
     private val TEST_UPLOAD_SIZE = 20000L
     private val HTTP_SERVER_NAME = "test.com"
     private val DNS_SERVER_PORT = 53
     private val TEST_TAG = 0xF00D
+    private val TCP_ACK_SIZE = 72
+
+    // Packet overheads that are not part of the actual data transmission, these
+    // include DNS packets, TCP handshake/termination packets, and HTTP header
+    // packets. These overheads were gathered from real samples and may not
+    // be perfectly accurate because of DNS caches and TCP retransmissions, etc.
+    private val CONSTANT_PACKET_OVERHEAD = 8
+    // 130 is an observed average.
+    private val CONSTANT_BYTES_OVERHEAD = 130 * CONSTANT_PACKET_OVERHEAD
+    private val TOLERANCE = 1.3
 
     // Set up the packet bridge with two IPv6 address only test networks.
     private val inst = InstrumentationRegistry.getInstrumentation()
@@ -129,11 +143,20 @@ class NetworkStatsIntegrationTest {
             .build()
         val testCb = TestableNetworkCallback()
         cm.registerNetworkCallback(nr, testCb)
+
         // Wait for the stacked address to be available.
         testCb.eventuallyExpect<LinkPropertiesChanged> {
             it.lp.stackedLinks?.getOrNull(0)?.linkAddresses?.getOrNull(0) != null
         }
+
         return iface
+    }
+
+    private val Network.mtu: Int get() {
+        val lp = cm.getLinkProperties(this)
+        val mtuStacked = if (lp.stackedLinks[0]?.mtu != 0) lp.stackedLinks[0].mtu else DEFAULT_MTU
+        val mtuInterface = if (lp.mtu != 0) lp.mtu else DEFAULT_MTU
+        return mtuInterface.coerceAtMost(mtuStacked)
     }
 
     /**
@@ -154,6 +177,7 @@ class NetworkStatsIntegrationTest {
     fun test464XlatTcpStats() {
         // Wait for 464Xlat to be ready.
         val internalInterfaceName = waitFor464XlatReady(packetBridge.internalNetwork)
+        val mtu = packetBridge.internalNetwork.mtu
 
         val statsBeforeTest = getNetworkSummary(internalInterfaceName)
         val taggedStatsBeforeTest = getTaggedNetworkSummary(internalInterfaceName, TEST_TAG)
@@ -162,19 +186,23 @@ class NetworkStatsIntegrationTest {
         genHttpTraffic(packetBridge.internalNetwork, uploadSize = 0L, TEST_DOWNLOAD_SIZE)
 
         // In practice, for one way 10k download payload, the download usage is about
-        // 11222~12880 bytes. And the upload usage is about 1279~1626 bytes, which is majorly
-        // contributed by TCP ACK packets.
+        // 11222~12880 bytes, with 14~17 packets. And the upload usage is about 1279~1626 bytes
+        // with 14~17 packets, which is majorly contributed by TCP ACK packets.
         val statsAfterDownload = getNetworkSummary(internalInterfaceName)
         val taggedStatsAfterDownload = getTaggedNetworkSummary(internalInterfaceName, TEST_TAG)
+        val (expectedDownloadLower, expectedDownloadUpper) = getExpectedStatsBounds(
+            TEST_DOWNLOAD_SIZE,
+            mtu,
+            DOWNLOAD
+        )
         assertInRange(
             "Download size", internalInterfaceName,
-            statsAfterDownload.rxBytes - statsBeforeTest.rxBytes,
-            TEST_DOWNLOAD_SIZE, (TEST_DOWNLOAD_SIZE * 1.3).toLong()
+            statsAfterDownload - statsBeforeTest, expectedDownloadLower, expectedDownloadUpper
         )
         // Increment of tagged data should be zero since no tagged traffic was generated.
         assertEquals(
-            taggedStatsBeforeTest.rxBytes,
-            taggedStatsAfterDownload.rxBytes,
+            taggedStatsBeforeTest,
+            taggedStatsAfterDownload,
             "Tagged download size of uid ${Process.myUid()} on $internalInterfaceName"
         )
 
@@ -189,18 +217,59 @@ class NetworkStatsIntegrationTest {
         // Verify upload data usage accounting.
         val statsAfterUpload = getNetworkSummary(internalInterfaceName)
         val taggedStatsAfterUpload = getTaggedNetworkSummary(internalInterfaceName, TEST_TAG)
+        val (expectedUploadLower, expectedUploadUpper) = getExpectedStatsBounds(
+            TEST_UPLOAD_SIZE,
+            mtu,
+            UPLOAD
+        )
         assertInRange(
             "Upload size", internalInterfaceName,
-            statsAfterUpload.txBytes - statsAfterDownload.txBytes,
-            TEST_UPLOAD_SIZE, (TEST_UPLOAD_SIZE * 1.3).toLong()
+            statsAfterUpload - statsAfterDownload,
+            expectedUploadLower, expectedUploadUpper
         )
         assertInRange(
             "Tagged upload size of uid ${Process.myUid()}",
             internalInterfaceName,
-            taggedStatsAfterUpload.txBytes - taggedStatsAfterDownload.txBytes,
-            TEST_UPLOAD_SIZE,
-            (TEST_UPLOAD_SIZE * 1.3).toLong()
+            taggedStatsAfterUpload - taggedStatsAfterDownload,
+            expectedUploadLower,
+            expectedUploadUpper
         )
+    }
+
+    private enum class Direction {
+        DOWNLOAD,
+        UPLOAD
+    }
+
+    private fun getExpectedStatsBounds(
+        transmittedSize: Long,
+        mtu: Int,
+        direction: Direction
+    ): Pair<BareStats, BareStats> {
+        // This is already an underestimated value since the input doesn't include TCP/IP
+        // layer overhead.
+        val txBytesLower = transmittedSize
+        // Include TCP/IP header overheads and retransmissions in the upper bound.
+        val txBytesUpper = (transmittedSize * TOLERANCE).toLong()
+        val txPacketsLower = txBytesLower / mtu + (CONSTANT_PACKET_OVERHEAD / TOLERANCE).toLong()
+        val estTransmissionPacketsUpper = ceil(txBytesUpper / mtu.toDouble()).toLong()
+        val txPacketsUpper = estTransmissionPacketsUpper +
+                (CONSTANT_PACKET_OVERHEAD * TOLERANCE).toLong()
+        // Assume ACK only sent once for the entire transmission.
+        val rxPacketsLower = 1L + (CONSTANT_PACKET_OVERHEAD / TOLERANCE).toLong()
+        // Assume ACK sent for every RX packet.
+        val rxPacketsUpper = txPacketsUpper
+        val rxBytesLower = 1L * TCP_ACK_SIZE + (CONSTANT_BYTES_OVERHEAD / TOLERANCE).toLong()
+        val rxBytesUpper = estTransmissionPacketsUpper * TCP_ACK_SIZE +
+                (CONSTANT_BYTES_OVERHEAD * TOLERANCE).toLong()
+
+        return if (direction == UPLOAD) {
+            BareStats(rxBytesLower, rxPacketsLower, txBytesLower, txPacketsLower) to
+                    BareStats(rxBytesUpper, rxPacketsUpper, txBytesUpper, txPacketsUpper)
+        } else {
+            BareStats(txBytesLower, txPacketsLower, rxBytesLower, rxPacketsLower) to
+                    BareStats(txBytesUpper, txPacketsUpper, rxBytesUpper, rxPacketsUpper)
+        }
     }
 
     private fun genHttpTraffic(network: Network, uploadSize: Long, downloadSize: Long) =
@@ -271,7 +340,34 @@ class NetworkStatsIntegrationTest {
             )
         }
 
-        companion object{
+        operator fun minus(other: BareStats): BareStats {
+            return BareStats(
+                this.rxBytes - other.rxBytes, this.rxPackets - other.rxPackets,
+                this.txBytes - other.txBytes, this.txPackets - other.txPackets
+            )
+        }
+
+        override fun toString(): String {
+            return "BareStats{rx/txBytes=$rxBytes/$txBytes, rx/txPackets=$rxPackets/$txPackets}"
+        }
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is BareStats) return false
+
+            if (rxBytes != other.rxBytes) return false
+            if (rxPackets != other.rxPackets) return false
+            if (txBytes != other.txBytes) return false
+            if (txPackets != other.txPackets) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            return (rxBytes * 11 + rxPackets * 13 + txBytes * 17 + txPackets * 19).toInt()
+        }
+
+        companion object {
             val EMPTY = BareStats(0L, 0L, 0L, 0L)
         }
     }
@@ -318,12 +414,20 @@ class NetworkStatsIntegrationTest {
         }
     }
 
-    /** Verify the given value is in range [lower, upper]  */
-    private fun assertInRange(tag: String, iface: String, value: Long, lower: Long, upper: Long) =
-        assertTrue(
-            value in lower..upper,
-            "$tag on $iface: $value is not within range [$lower, $upper]"
-        )
+    /** Verify the given BareStats is in range [lower, upper] */
+    private fun assertInRange(
+        tag: String,
+        iface: String,
+        value: BareStats,
+        lower: BareStats,
+        upper: BareStats
+    ) = assertTrue(
+        value.rxBytes in lower.rxBytes..upper.rxBytes &&
+                value.rxPackets in lower.rxPackets..upper.rxPackets &&
+                value.txBytes in lower.txBytes..upper.txBytes &&
+                value.txPackets in lower.txPackets..upper.txPackets,
+        "$tag on $iface: $value is not within range [$lower, $upper]"
+    )
 
     fun getRandomString(length: Long): String {
         val allowedChars = ('A'..'Z') + ('a'..'z') + ('0'..'9')
