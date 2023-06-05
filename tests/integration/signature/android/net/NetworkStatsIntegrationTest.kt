@@ -18,6 +18,7 @@ package android.net
 
 import android.Manifest.permission.MANAGE_TEST_NETWORKS
 import android.app.usage.NetworkStats
+import android.app.usage.NetworkStats.Bucket
 import android.app.usage.NetworkStats.Bucket.TAG_NONE
 import android.app.usage.NetworkStatsManager
 import android.net.ConnectivityManager.TYPE_TEST
@@ -179,8 +180,10 @@ class NetworkStatsIntegrationTest {
         val internalInterfaceName = waitFor464XlatReady(packetBridge.internalNetwork)
         val mtu = packetBridge.internalNetwork.mtu
 
-        val statsBeforeTest = getNetworkSummary(internalInterfaceName)
-        val taggedStatsBeforeTest = getTaggedNetworkSummary(internalInterfaceName, TEST_TAG)
+        val statsSummaryBeforeTest = getNetworkSummary(internalInterfaceName)
+        val statsUidBeforeTest = getUidDetail(internalInterfaceName, TAG_NONE)
+        val taggedSummaryBeforeTest = getTaggedNetworkSummary(internalInterfaceName, TEST_TAG)
+        val taggedUidBeforeTest = getUidDetail(internalInterfaceName, TEST_TAG)
 
         // Generate the download traffic.
         genHttpTraffic(packetBridge.internalNetwork, uploadSize = 0L, TEST_DOWNLOAD_SIZE)
@@ -188,22 +191,34 @@ class NetworkStatsIntegrationTest {
         // In practice, for one way 10k download payload, the download usage is about
         // 11222~12880 bytes, with 14~17 packets. And the upload usage is about 1279~1626 bytes
         // with 14~17 packets, which is majorly contributed by TCP ACK packets.
-        val statsAfterDownload = getNetworkSummary(internalInterfaceName)
-        val taggedStatsAfterDownload = getTaggedNetworkSummary(internalInterfaceName, TEST_TAG)
+        val statsSummaryAfterDownload = getNetworkSummary(internalInterfaceName)
+        val statsUidAfterDownload = getUidDetail(internalInterfaceName, TAG_NONE)
+        val taggedSummaryAfterDownload = getTaggedNetworkSummary(internalInterfaceName, TEST_TAG)
+        val taggedUidAfterDownload = getUidDetail(internalInterfaceName, TEST_TAG)
         val (expectedDownloadLower, expectedDownloadUpper) = getExpectedStatsBounds(
             TEST_DOWNLOAD_SIZE,
             mtu,
             DOWNLOAD
         )
         assertInRange(
-            "Download size", internalInterfaceName,
-            statsAfterDownload - statsBeforeTest, expectedDownloadLower, expectedDownloadUpper
+            "Unexpected non-tagged summary stats", internalInterfaceName,
+            statsSummaryBeforeTest, statsSummaryAfterDownload,
+            expectedDownloadLower, expectedDownloadUpper
+        )
+        assertInRange(
+            "Unexpected non-tagged uid stats", internalInterfaceName,
+            statsUidBeforeTest, statsUidAfterDownload, expectedDownloadLower, expectedDownloadUpper
         )
         // Increment of tagged data should be zero since no tagged traffic was generated.
         assertEquals(
-            taggedStatsBeforeTest,
-            taggedStatsAfterDownload,
-            "Tagged download size of uid ${Process.myUid()} on $internalInterfaceName"
+            taggedSummaryBeforeTest,
+            taggedSummaryAfterDownload,
+            "Unexpected tagged summary stats: $internalInterfaceName"
+        )
+        assertEquals(
+            taggedUidBeforeTest,
+            taggedUidAfterDownload,
+            "Unexpected tagged uid stats: ${Process.myUid()} on $internalInterfaceName"
         )
 
         // Generate upload traffic with tag to verify tagged data accounting as well.
@@ -215,22 +230,35 @@ class NetworkStatsIntegrationTest {
         )
 
         // Verify upload data usage accounting.
-        val statsAfterUpload = getNetworkSummary(internalInterfaceName)
-        val taggedStatsAfterUpload = getTaggedNetworkSummary(internalInterfaceName, TEST_TAG)
+        val statsSummaryAfterUpload = getNetworkSummary(internalInterfaceName)
+        val statsUidAfterUpload = getUidDetail(internalInterfaceName, TAG_NONE)
+        val taggedSummaryAfterUpload = getTaggedNetworkSummary(internalInterfaceName, TEST_TAG)
+        val taggedUidAfterUpload = getUidDetail(internalInterfaceName, TEST_TAG)
         val (expectedUploadLower, expectedUploadUpper) = getExpectedStatsBounds(
             TEST_UPLOAD_SIZE,
             mtu,
             UPLOAD
         )
         assertInRange(
-            "Upload size", internalInterfaceName,
-            statsAfterUpload - statsAfterDownload,
+            "Unexpected non-tagged summary stats", internalInterfaceName,
+            statsSummaryAfterDownload, statsSummaryAfterUpload,
             expectedUploadLower, expectedUploadUpper
         )
         assertInRange(
-            "Tagged upload size of uid ${Process.myUid()}",
+            "Unexpected non-tagged uid stats: ${Process.myUid()}", internalInterfaceName,
+            statsUidAfterDownload, statsUidAfterUpload, expectedUploadLower, expectedUploadUpper
+        )
+        assertInRange(
+            "Unexpected tagged summary stats",
             internalInterfaceName,
-            taggedStatsAfterUpload - taggedStatsAfterDownload,
+            taggedSummaryAfterDownload, taggedSummaryAfterUpload,
+            expectedUploadLower,
+            expectedUploadUpper
+        )
+        assertInRange(
+            "Unexpected tagged uid stats: ${Process.myUid()}",
+            internalInterfaceName,
+            taggedUidAfterDownload, taggedUidAfterUpload,
             expectedUploadLower,
             expectedUploadUpper
         )
@@ -381,6 +409,13 @@ class NetworkStatsIntegrationTest {
         }
     }
 
+    private fun getUidDetail(iface: String, tag: Int): BareStats {
+        return getNetworkStatsThat(iface, tag) { nsm, template ->
+            nsm.queryDetailsForUidTagState(template, Long.MIN_VALUE, Long.MAX_VALUE,
+                Process.myUid(), tag, Bucket.STATE_ALL)
+        }
+    }
+
     private fun getNetworkSummary(iface: String): BareStats {
         return getNetworkStatsThat(iface, TAG_NONE) { nsm, template ->
             nsm.querySummary(template, Long.MIN_VALUE, Long.MAX_VALUE)
@@ -418,16 +453,22 @@ class NetworkStatsIntegrationTest {
     private fun assertInRange(
         tag: String,
         iface: String,
-        value: BareStats,
+        before: BareStats,
+        after: BareStats,
         lower: BareStats,
         upper: BareStats
-    ) = assertTrue(
-        value.rxBytes in lower.rxBytes..upper.rxBytes &&
-                value.rxPackets in lower.rxPackets..upper.rxPackets &&
-                value.txBytes in lower.txBytes..upper.txBytes &&
-                value.txPackets in lower.txPackets..upper.txPackets,
-        "$tag on $iface: $value is not within range [$lower, $upper]"
-    )
+    ) {
+        // Passing the value after operation and the value before operation to dump the actual
+        // numbers if it fails.
+        val value = after - before
+        assertTrue(
+            value.rxBytes in lower.rxBytes..upper.rxBytes &&
+                    value.rxPackets in lower.rxPackets..upper.rxPackets &&
+                    value.txBytes in lower.txBytes..upper.txBytes &&
+                    value.txPackets in lower.txPackets..upper.txPackets,
+            "$tag on $iface: $after - $before is not within range [$lower, $upper]"
+        )
+    }
 
     fun getRandomString(length: Long): String {
         val allowedChars = ('A'..'Z') + ('a'..'z') + ('0'..'9')
