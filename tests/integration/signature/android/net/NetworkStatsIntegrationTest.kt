@@ -17,10 +17,12 @@
 package android.net
 
 import android.Manifest.permission.MANAGE_TEST_NETWORKS
+import android.annotation.TargetApi
 import android.app.usage.NetworkStats
 import android.app.usage.NetworkStats.Bucket
 import android.app.usage.NetworkStats.Bucket.TAG_NONE
 import android.app.usage.NetworkStatsManager
+import android.content.Context
 import android.net.ConnectivityManager.TYPE_TEST
 import android.net.NetworkStatsIntegrationTest.Direction.DOWNLOAD
 import android.net.NetworkStatsIntegrationTest.Direction.UPLOAD
@@ -53,7 +55,10 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
+private const val TEST_TAG = 0xF00D
+
 @RunWith(DevSdkIgnoreRunner::class)
+@TargetApi(Build.VERSION_CODES.S)
 @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
 class NetworkStatsIntegrationTest {
     private val INTERNAL_V6ADDR =
@@ -74,7 +79,6 @@ class NetworkStatsIntegrationTest {
     private val TEST_UPLOAD_SIZE = 20000L
     private val HTTP_SERVER_NAME = "test.com"
     private val DNS_SERVER_PORT = 53
-    private val TEST_TAG = 0xF00D
     private val TCP_ACK_SIZE = 72
 
     // Packet overheads that are not part of the actual data transmission, these
@@ -82,6 +86,7 @@ class NetworkStatsIntegrationTest {
     // packets. These overheads were gathered from real samples and may not
     // be perfectly accurate because of DNS caches and TCP retransmissions, etc.
     private val CONSTANT_PACKET_OVERHEAD = 8
+
     // 130 is an observed average.
     private val CONSTANT_BYTES_OVERHEAD = 130 * CONSTANT_PACKET_OVERHEAD
     private val TOLERANCE = 1.3
@@ -180,10 +185,7 @@ class NetworkStatsIntegrationTest {
         val internalInterfaceName = waitFor464XlatReady(packetBridge.internalNetwork)
         val mtu = packetBridge.internalNetwork.mtu
 
-        val statsSummaryBeforeTest = getNetworkSummary(internalInterfaceName)
-        val statsUidBeforeTest = getUidDetail(internalInterfaceName, TAG_NONE)
-        val taggedSummaryBeforeTest = getTaggedNetworkSummary(internalInterfaceName, TEST_TAG)
-        val taggedUidBeforeTest = getUidDetail(internalInterfaceName, TEST_TAG)
+        val snapshotBeforeTest = StatsSnapshot(context, internalInterfaceName)
 
         // Generate the download traffic.
         genHttpTraffic(packetBridge.internalNetwork, uploadSize = 0L, TEST_DOWNLOAD_SIZE)
@@ -191,34 +193,17 @@ class NetworkStatsIntegrationTest {
         // In practice, for one way 10k download payload, the download usage is about
         // 11222~12880 bytes, with 14~17 packets. And the upload usage is about 1279~1626 bytes
         // with 14~17 packets, which is majorly contributed by TCP ACK packets.
-        val statsSummaryAfterDownload = getNetworkSummary(internalInterfaceName)
-        val statsUidAfterDownload = getUidDetail(internalInterfaceName, TAG_NONE)
-        val taggedSummaryAfterDownload = getTaggedNetworkSummary(internalInterfaceName, TEST_TAG)
-        val taggedUidAfterDownload = getUidDetail(internalInterfaceName, TEST_TAG)
+        val snapshotAfterDownload = StatsSnapshot(context, internalInterfaceName)
         val (expectedDownloadLower, expectedDownloadUpper) = getExpectedStatsBounds(
             TEST_DOWNLOAD_SIZE,
             mtu,
             DOWNLOAD
         )
-        assertInRange(
-            "Unexpected non-tagged summary stats", internalInterfaceName,
-            statsSummaryBeforeTest, statsSummaryAfterDownload,
-            expectedDownloadLower, expectedDownloadUpper
-        )
-        assertInRange(
-            "Unexpected non-tagged uid stats", internalInterfaceName,
-            statsUidBeforeTest, statsUidAfterDownload, expectedDownloadLower, expectedDownloadUpper
-        )
-        // Increment of tagged data should be zero since no tagged traffic was generated.
-        assertEquals(
-            taggedSummaryBeforeTest,
-            taggedSummaryAfterDownload,
-            "Unexpected tagged summary stats: $internalInterfaceName"
-        )
-        assertEquals(
-            taggedUidBeforeTest,
-            taggedUidAfterDownload,
-            "Unexpected tagged uid stats: ${Process.myUid()} on $internalInterfaceName"
+        assertOnlyNonTaggedStatsIncreases(
+            snapshotBeforeTest,
+            snapshotAfterDownload,
+            expectedDownloadLower,
+            expectedDownloadUpper
         )
 
         // Generate upload traffic with tag to verify tagged data accounting as well.
@@ -230,35 +215,15 @@ class NetworkStatsIntegrationTest {
         )
 
         // Verify upload data usage accounting.
-        val statsSummaryAfterUpload = getNetworkSummary(internalInterfaceName)
-        val statsUidAfterUpload = getUidDetail(internalInterfaceName, TAG_NONE)
-        val taggedSummaryAfterUpload = getTaggedNetworkSummary(internalInterfaceName, TEST_TAG)
-        val taggedUidAfterUpload = getUidDetail(internalInterfaceName, TEST_TAG)
+        val snapshotAfterUpload = StatsSnapshot(context, internalInterfaceName)
         val (expectedUploadLower, expectedUploadUpper) = getExpectedStatsBounds(
             TEST_UPLOAD_SIZE,
             mtu,
             UPLOAD
         )
-        assertInRange(
-            "Unexpected non-tagged summary stats", internalInterfaceName,
-            statsSummaryAfterDownload, statsSummaryAfterUpload,
-            expectedUploadLower, expectedUploadUpper
-        )
-        assertInRange(
-            "Unexpected non-tagged uid stats: ${Process.myUid()}", internalInterfaceName,
-            statsUidAfterDownload, statsUidAfterUpload, expectedUploadLower, expectedUploadUpper
-        )
-        assertInRange(
-            "Unexpected tagged summary stats",
-            internalInterfaceName,
-            taggedSummaryAfterDownload, taggedSummaryAfterUpload,
-            expectedUploadLower,
-            expectedUploadUpper
-        )
-        assertInRange(
-            "Unexpected tagged uid stats: ${Process.myUid()}",
-            internalInterfaceName,
-            taggedUidAfterDownload, taggedUidAfterUpload,
+        assertAllStatsIncreases(
+            snapshotAfterDownload,
+            snapshotAfterUpload,
             expectedUploadLower,
             expectedUploadUpper
         )
@@ -355,7 +320,7 @@ class NetworkStatsIntegrationTest {
 
     // NetworkStats.Bucket cannot be written. So another class is needed to
     // perform arithmetic operations.
-    private data class BareStats(
+    data class BareStats(
         val rxBytes: Long,
         val rxPackets: Long,
         val txBytes: Long,
@@ -374,6 +339,14 @@ class NetworkStatsIntegrationTest {
                 this.txBytes - other.txBytes, this.txPackets - other.txPackets
             )
         }
+
+        fun reverse(): BareStats =
+            BareStats(
+                rxBytes = txBytes,
+                rxPackets = txPackets,
+                txBytes = rxBytes,
+                txPackets = rxPackets
+            )
 
         override fun toString(): String {
             return "BareStats{rx/txBytes=$rxBytes/$txBytes, rx/txPackets=$rxPackets/$txPackets}"
@@ -400,53 +373,169 @@ class NetworkStatsIntegrationTest {
         }
     }
 
-    // Helper function to iterate buckets in app.usage.NetworkStats.
-    private fun NetworkStats.buckets() = object : Iterable<NetworkStats.Bucket> {
-        override fun iterator() = object : Iterator<NetworkStats.Bucket> {
-            override operator fun hasNext() = hasNextBucket()
-            override operator fun next() =
-                NetworkStats.Bucket().also { assertTrue(getNextBucket(it)) }
+    data class StatsSnapshot(val context: Context, val iface: String) {
+        val statsSummary = getNetworkSummary(iface)
+        val statsUid = getUidDetail(iface, TAG_NONE)
+        val taggedSummary = getTaggedNetworkSummary(iface, TEST_TAG)
+        val taggedUid = getUidDetail(iface, TEST_TAG)
+        val trafficStatsIface = getTrafficStatsIface(iface)
+        val trafficStatsUid = getTrafficStatsUid(Process.myUid())
+
+        private fun getUidDetail(iface: String, tag: Int): BareStats {
+            return getNetworkStatsThat(iface, tag) { nsm, template ->
+                nsm.queryDetailsForUidTagState(
+                    template, Long.MIN_VALUE, Long.MAX_VALUE,
+                    Process.myUid(), tag, Bucket.STATE_ALL
+                )
+            }
         }
+
+        private fun getNetworkSummary(iface: String): BareStats {
+            return getNetworkStatsThat(iface, TAG_NONE) { nsm, template ->
+                nsm.querySummary(template, Long.MIN_VALUE, Long.MAX_VALUE)
+            }
+        }
+
+        private fun getTaggedNetworkSummary(iface: String, tag: Int): BareStats {
+            return getNetworkStatsThat(iface, tag) { nsm, template ->
+                nsm.queryTaggedSummary(template, Long.MIN_VALUE, Long.MAX_VALUE)
+            }
+        }
+
+        private fun getNetworkStatsThat(
+            iface: String,
+            tag: Int,
+            queryApi: (nsm: NetworkStatsManager, template: NetworkTemplate) -> NetworkStats
+        ): BareStats {
+            val nsm = context.getSystemService(NetworkStatsManager::class.java)
+            nsm.forceUpdate()
+            val testTemplate = NetworkTemplate.Builder(MATCH_TEST)
+                .setWifiNetworkKeys(setOf(iface)).build()
+            val stats = queryApi.invoke(nsm, testTemplate)
+            val filteredBuckets =
+                stats.buckets().filter { it.uid == Process.myUid() && it.tag == tag }
+            return filteredBuckets.fold(BareStats.EMPTY) { acc, it ->
+                acc + BareStats(
+                    it.rxBytes,
+                    it.rxPackets,
+                    it.txBytes,
+                    it.txPackets
+                )
+            }
+        }
+
+        // Helper function to iterate buckets in app.usage.NetworkStats.
+        private fun NetworkStats.buckets() = object : Iterable<NetworkStats.Bucket> {
+            override fun iterator() = object : Iterator<NetworkStats.Bucket> {
+                override operator fun hasNext() = hasNextBucket()
+                override operator fun next() =
+                    NetworkStats.Bucket().also { assertTrue(getNextBucket(it)) }
+            }
+        }
+
+        private fun getTrafficStatsIface(iface: String): BareStats = BareStats(
+            TrafficStats.getRxBytes(iface),
+            TrafficStats.getRxPackets(iface),
+            TrafficStats.getTxBytes(iface),
+            TrafficStats.getTxPackets(iface)
+        )
+
+        private fun getTrafficStatsUid(uid: Int): BareStats = BareStats(
+            TrafficStats.getUidRxBytes(uid),
+            TrafficStats.getUidRxPackets(uid),
+            TrafficStats.getUidTxBytes(uid),
+            TrafficStats.getUidTxPackets(uid)
+        )
     }
 
-    private fun getUidDetail(iface: String, tag: Int): BareStats {
-        return getNetworkStatsThat(iface, tag) { nsm, template ->
-            nsm.queryDetailsForUidTagState(template, Long.MIN_VALUE, Long.MAX_VALUE,
-                Process.myUid(), tag, Bucket.STATE_ALL)
-        }
+    private fun assertAllStatsIncreases(
+        before: StatsSnapshot,
+        after: StatsSnapshot,
+        lower: BareStats,
+        upper: BareStats
+    ) {
+        assertNonTaggedStatsIncreases(before, after, lower, upper)
+        assertTaggedStatsIncreases(before, after, lower, upper)
     }
 
-    private fun getNetworkSummary(iface: String): BareStats {
-        return getNetworkStatsThat(iface, TAG_NONE) { nsm, template ->
-            nsm.querySummary(template, Long.MIN_VALUE, Long.MAX_VALUE)
-        }
+    private fun assertOnlyNonTaggedStatsIncreases(
+        before: StatsSnapshot,
+        after: StatsSnapshot,
+        lower: BareStats,
+        upper: BareStats
+    ) {
+        assertNonTaggedStatsIncreases(before, after, lower, upper)
+        assertTaggedStatsEquals(before, after)
     }
 
-    private fun getTaggedNetworkSummary(iface: String, tag: Int): BareStats {
-        return getNetworkStatsThat(iface, tag) { nsm, template ->
-            nsm.queryTaggedSummary(template, Long.MIN_VALUE, Long.MAX_VALUE)
-        }
+    private fun assertNonTaggedStatsIncreases(
+        before: StatsSnapshot,
+        after: StatsSnapshot,
+        lower: BareStats,
+        upper: BareStats
+    ) {
+        assertInRange(
+            "Unexpected iface traffic stats",
+            after.iface,
+            before.trafficStatsIface, after.trafficStatsIface,
+            lower, upper
+        )
+        // Uid traffic stats are counted in both direction because the external network
+        // traffic is also attributed to the test uid.
+        assertInRange(
+            "Unexpected uid traffic stats",
+            after.iface,
+            before.trafficStatsUid, after.trafficStatsUid,
+            lower + lower.reverse(), upper + upper.reverse()
+        )
+        assertInRange(
+            "Unexpected non-tagged summary stats",
+            after.iface,
+            before.statsSummary, after.statsSummary,
+            lower, upper
+        )
+        assertInRange(
+            "Unexpected non-tagged uid stats",
+            after.iface,
+            before.statsUid, after.statsUid,
+            lower, upper
+        )
     }
 
-    private fun getNetworkStatsThat(
-        iface: String,
-        tag: Int,
-        queryApi: (nsm: NetworkStatsManager, template: NetworkTemplate) -> NetworkStats
-    ): BareStats {
-        val nsm = context.getSystemService(NetworkStatsManager::class.java)
-        nsm.forceUpdate()
-        val testTemplate = NetworkTemplate.Builder(MATCH_TEST)
-            .setWifiNetworkKeys(setOf(iface)).build()
-        val stats = queryApi.invoke(nsm, testTemplate)
-        val filteredBuckets = stats.buckets().filter { it.uid == Process.myUid() && it.tag == tag }
-        return filteredBuckets.fold(BareStats.EMPTY) { acc, it ->
-            acc + BareStats(
-                it.rxBytes,
-                it.rxPackets,
-                it.txBytes,
-                it.txPackets
-            )
-        }
+    private fun assertTaggedStatsEquals(before: StatsSnapshot, after: StatsSnapshot) {
+        // Increment of tagged data should be zero since no tagged traffic was generated.
+        assertEquals(
+            before.taggedSummary,
+            after.taggedSummary,
+            "Unexpected tagged summary stats: ${after.iface}"
+        )
+        assertEquals(
+            before.taggedUid,
+            after.taggedUid,
+            "Unexpected tagged uid stats: ${Process.myUid()} on ${after.iface}"
+        )
+    }
+
+    private fun assertTaggedStatsIncreases(
+        before: StatsSnapshot,
+        after: StatsSnapshot,
+        lower: BareStats,
+        upper: BareStats
+    ) {
+        assertInRange(
+            "Unexpected tagged summary stats",
+            after.iface,
+            before.taggedSummary, after.taggedSummary,
+            lower,
+            upper
+        )
+        assertInRange(
+            "Unexpected tagged uid stats: ${Process.myUid()}",
+            after.iface,
+            before.taggedUid, after.taggedUid,
+            lower,
+            upper
+        )
     }
 
     /** Verify the given BareStats is in range [lower, upper] */
