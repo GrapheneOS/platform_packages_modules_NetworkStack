@@ -23,12 +23,14 @@ import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_PARSE_NET
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyBoolean;
 import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.never;
@@ -686,17 +688,18 @@ public class IpClientTest {
         return out;
     }
 
-    private ApfConfiguration verifyApfFilterCreatedOnStart(IpClient ipc) {
-        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+    private ApfConfiguration verifyApfFilterCreatedOnStart(IpClient ipc, boolean isApfSupported) {
+        ProvisioningConfiguration.Builder config = new ProvisioningConfiguration.Builder()
                 .withoutIPv4()
                 .withoutIpReachabilityMonitor()
                 .withInitialConfiguration(
-                        conf(links(TEST_LOCAL_ADDRESSES), prefixes(TEST_PREFIXES), ips()))
-                .withApfCapabilities(new ApfCapabilities(
-                        4 /* version */, 4096 /* maxProgramSize */, 4 /* format */))
-                .build();
+                        conf(links(TEST_LOCAL_ADDRESSES), prefixes(TEST_PREFIXES), ips()));
+        if (isApfSupported) {
+            config.withApfCapabilities(new ApfCapabilities(4 /* version */,
+                    4096 /* maxProgramSize */, 4 /* format */));
+        }
 
-        ipc.startProvisioning(config);
+        ipc.startProvisioning(config.build());
         final ArgumentCaptor<ApfConfiguration> configCaptor = ArgumentCaptor.forClass(
                 ApfConfiguration.class);
         verify(mDependencies, timeout(TEST_TIMEOUT_MS)).maybeCreateApfFilter(
@@ -708,7 +711,8 @@ public class IpClientTest {
     @Test @IgnoreAfter(Build.VERSION_CODES.R)
     public void testApfConfiguration_R() throws Exception {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
-        final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc);
+        final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
+                true /* isApfSupported */);
 
         assertEquals(ApfCapabilities.getApfDrop8023Frames(), config.ieee802_3Filter);
         assertArrayEquals(ApfCapabilities.getApfEtherTypeBlackList(), config.ethTypeBlackList);
@@ -727,7 +731,8 @@ public class IpClientTest {
                 R.array.config_apfEthTypeDenyList);
 
         final IpClient ipc = makeIpClient(TEST_IFNAME);
-        final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc);
+        final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
+                true /* isApfSupported */);
 
         assertTrue(config.ieee802_3Filter);
         assertArrayEquals(ethTypeDenyList, config.ethTypeBlackList);
@@ -743,11 +748,67 @@ public class IpClientTest {
                 R.array.config_apfEthTypeDenyList);
 
         final IpClient ipc = makeIpClient(TEST_IFNAME);
-        final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc);
+        final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
+                true /* isApfSupported */);
 
         assertFalse(config.ieee802_3Filter);
         assertArrayEquals(ethTypeDenyList, config.ethTypeBlackList);
 
+        verifyShutdown(ipc);
+    }
+
+    @Test
+    public void testApfUpdateCapabilities() throws Exception {
+        final IpClient ipc = makeIpClient(TEST_IFNAME);
+        final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
+                false /* isApfSupported */);
+        assertNull(config.apfCapabilities);
+        clearInvocations(mDependencies);
+
+        ipc.updateApfCapabilities(new ApfCapabilities(4 /* version */, 4096 /* maxProgramSize */,
+                4 /* format */));
+        HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
+
+        final ArgumentCaptor<ApfConfiguration> configCaptor = ArgumentCaptor.forClass(
+                ApfConfiguration.class);
+        verify(mDependencies, timeout(TEST_TIMEOUT_MS)).maybeCreateApfFilter(
+                any(), configCaptor.capture(), any(), any());
+        final ApfConfiguration actual = configCaptor.getValue();
+        assertNotNull(actual);
+        assertEquals(4, actual.apfCapabilities.apfVersionSupported);
+        assertEquals(4096, actual.apfCapabilities.maximumApfProgramSize);
+        assertEquals(4, actual.apfCapabilities.apfPacketFormat);
+
+        verifyShutdown(ipc);
+    }
+
+    @Test
+    public void testApfUpdateCapabilities_nonNullInitialApfCapabilities() throws Exception {
+        final IpClient ipc = makeIpClient(TEST_IFNAME);
+        final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
+                true /* isApfSupported */);
+        assertNotNull(config.apfCapabilities);
+        clearInvocations(mDependencies);
+
+        final ApfCapabilities newApfCapabilities = new ApfCapabilities(4 /* version */,
+                8192 /* maxProgramSize */, 4 /* format */);
+        ipc.updateApfCapabilities(newApfCapabilities);
+        HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
+        verify(mDependencies, never()).maybeCreateApfFilter(any(), any(), any(), any());
+        verifyShutdown(ipc);
+    }
+
+    @Test
+    public void testApfUpdateCapabilities_nullNewApfCapabilities() throws Exception {
+        final IpClient ipc = makeIpClient(TEST_IFNAME);
+        final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
+                true /* isApfSupported */);
+        assertNotNull(config.apfCapabilities);
+        clearInvocations(mDependencies);
+
+        ipc.updateApfCapabilities(null /* apfCapabilities */);
+        HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
+        verify(mDependencies, never()).maybeCreateApfFilter(any(), any(), any(), any());
         verifyShutdown(ipc);
     }
 
