@@ -486,6 +486,7 @@ public class IpClient extends StateMachine {
     private static final int CMD_COMPLETE_PRECONNECTION = 16;
     private static final int CMD_UPDATE_L2INFORMATION = 17;
     private static final int CMD_SET_DTIM_MULTIPLIER_AFTER_DELAY = 18;
+    private static final int CMD_UPDATE_APF_CAPABILITIES = 19;
 
     private static final int ARG_LINKPROP_CHANGED_LINKSTATE_DOWN = 0;
     private static final int ARG_LINKPROP_CHANGED_LINKSTATE_UP = 1;
@@ -647,6 +648,7 @@ public class IpClient extends StateMachine {
     private boolean mHasDisabledIpv6OrAcceptRaOnProvLoss;
     private Integer mDadTransmits = null;
     private int mMaxDtimMultiplier = DTIM_MULTIPLIER_RESET;
+    private ApfCapabilities mCurrentApfCapabilities;
 
     /**
      * Reading the snapshot is an asynchronous operation initiated by invoking
@@ -942,6 +944,11 @@ public class IpClient extends StateMachine {
             enforceNetworkStackCallingPermission();
             IpClient.this.updateLayer2Information(info);
         }
+        @Override
+        public void updateApfCapabilities(ApfCapabilities apfCapabilities) {
+            enforceNetworkStackCallingPermission();
+            IpClient.this.updateApfCapabilities(apfCapabilities);
+        }
 
         @Override
         public int getInterfaceVersion() {
@@ -1052,6 +1059,7 @@ public class IpClient extends StateMachine {
 
         mCurrentBssid = getInitialBssid(req.mLayer2Info, req.mScanResultInfo,
                 ShimUtils.isAtLeastS());
+        mCurrentApfCapabilities = req.mApfCapabilities;
         if (req.mLayer2Info != null) {
             mL2Key = req.mLayer2Info.mL2Key;
             mCluster = req.mLayer2Info.mCluster;
@@ -1173,6 +1181,19 @@ public class IpClient extends StateMachine {
      */
     public void updateLayer2Information(@NonNull Layer2InformationParcelable info) {
         sendMessage(CMD_UPDATE_L2INFORMATION, info);
+    }
+
+    /**
+     * Update the APF capabilities.
+     *
+     * This method will update the APF capabilities used in IpClient and decide if a new APF
+     * program should be installed to filter the incoming packets based on that. So far this
+     * method only allows for the APF capabilities to go from null to non-null, and no other
+     * changes are allowed. One use case is when WiFi interface switches from secondary to
+     * primary in STA+STA mode.
+     */
+    public void updateApfCapabilities(@NonNull ApfCapabilities apfCapabilities) {
+        sendMessage(CMD_UPDATE_APF_CAPABILITIES, apfCapabilities);
     }
 
     /**
@@ -2173,6 +2194,45 @@ public class IpClient extends StateMachine {
         mCurrentBssid = info.bssid;
     }
 
+    @Nullable
+    private ApfFilter maybeCreateApfFilter(final ApfCapabilities apfCapabilities) {
+        ApfFilter.ApfConfiguration apfConfig = new ApfFilter.ApfConfiguration();
+        apfConfig.apfCapabilities = apfCapabilities;
+        apfConfig.multicastFilter = mMulticastFiltering;
+        // Get the Configuration for ApfFilter from Context
+        // Resource settings were moved from ApfCapabilities APIs to NetworkStack resources in S
+        if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.R)) {
+            final Resources res = mContext.getResources();
+            apfConfig.ieee802_3Filter = res.getBoolean(R.bool.config_apfDrop802_3Frames);
+            apfConfig.ethTypeBlackList = res.getIntArray(R.array.config_apfEthTypeDenyList);
+        } else {
+            apfConfig.ieee802_3Filter = ApfCapabilities.getApfDrop8023Frames();
+            apfConfig.ethTypeBlackList = ApfCapabilities.getApfEtherTypeBlackList();
+        }
+
+        apfConfig.minRdnssLifetimeSec = mMinRdnssLifetimeSec;
+        return mDependencies.maybeCreateApfFilter(mContext, apfConfig, mInterfaceParams,
+                mCallback);
+    }
+
+    private boolean handleUpdateApfCapabilities(@NonNull final ApfCapabilities apfCapabilities) {
+        // For the use case where the wifi interface switches from secondary to primary, the
+        // secondary interface does not support APF by default see the overlay config about
+        // {@link config_wifiEnableApfOnNonPrimarySta}. so we should see empty ApfCapabilities
+        // in {@link ProvisioningConfiguration} when wifi starts provisioning on the secondary
+        // interface. For other cases, we should not accept the updateApfCapabilities call.
+        if (mCurrentApfCapabilities != null || apfCapabilities == null) {
+            Log.wtf(mTag, "current ApfCapabilities " + mCurrentApfCapabilities
+                    + " is not null or new ApfCapabilities " + apfCapabilities + " is null");
+            return false;
+        }
+        if (mApfFilter != null) {
+            mApfFilter.shutdown();
+        }
+        mCurrentApfCapabilities = apfCapabilities;
+        return apfCapabilities != null;
+    }
+
     class StoppedState extends State {
         @Override
         public void enter() {
@@ -2463,6 +2523,7 @@ public class IpClient extends StateMachine {
         @Override
         public void exit() {
             mProvisioningTimeoutAlarm.cancel();
+            mCurrentApfCapabilities = null;
 
             // Record metrics information once this provisioning has completed due to certain
             // reason (normal termination, provisioning timeout, lost provisioning and etc).
@@ -2494,6 +2555,13 @@ public class IpClient extends StateMachine {
                     handleUpdateL2Information((Layer2InformationParcelable) msg.obj);
                     break;
 
+                // Only update the current ApfCapabilities but do not create and start APF
+                // filter until transition to RunningState, actually we should always do that
+                // in RunningState.
+                case CMD_UPDATE_APF_CAPABILITIES:
+                    handleUpdateApfCapabilities((ApfCapabilities) msg.obj);
+                    break;
+
                 case EVENT_PROVISIONING_TIMEOUT:
                     handleProvisioningFailure(DisconnectCode.DC_PROVISIONING_TIMEOUT);
                     break;
@@ -2521,23 +2589,7 @@ public class IpClient extends StateMachine {
 
         @Override
         public void enter() {
-            ApfFilter.ApfConfiguration apfConfig = new ApfFilter.ApfConfiguration();
-            apfConfig.apfCapabilities = mConfiguration.mApfCapabilities;
-            apfConfig.multicastFilter = mMulticastFiltering;
-            // Get the Configuration for ApfFilter from Context
-            // Resource settings were moved from ApfCapabilities APIs to NetworkStack resources in S
-            if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.R)) {
-                final Resources res = mContext.getResources();
-                apfConfig.ieee802_3Filter = res.getBoolean(R.bool.config_apfDrop802_3Frames);
-                apfConfig.ethTypeBlackList = res.getIntArray(R.array.config_apfEthTypeDenyList);
-            } else {
-                apfConfig.ieee802_3Filter = ApfCapabilities.getApfDrop8023Frames();
-                apfConfig.ethTypeBlackList = ApfCapabilities.getApfEtherTypeBlackList();
-            }
-
-            apfConfig.minRdnssLifetimeSec = mMinRdnssLifetimeSec;
-            mApfFilter = mDependencies.maybeCreateApfFilter(mContext, apfConfig, mInterfaceParams,
-                    mCallback);
+            mApfFilter = maybeCreateApfFilter(mCurrentApfCapabilities);
             // TODO: investigate the effects of any multicast filtering racing/interfering with the
             // rest of this IP configuration startup.
             if (mApfFilter == null) {
@@ -2815,6 +2867,13 @@ public class IpClient extends StateMachine {
 
                 case CMD_SET_DTIM_MULTIPLIER_AFTER_DELAY:
                     updateMaxDtimMultiplier();
+                    break;
+
+                case CMD_UPDATE_APF_CAPABILITIES:
+                    final ApfCapabilities apfCapabilities = (ApfCapabilities) msg.obj;
+                    if (handleUpdateApfCapabilities(apfCapabilities)) {
+                        mApfFilter = maybeCreateApfFilter(apfCapabilities);
+                    }
                     break;
 
                 default:
