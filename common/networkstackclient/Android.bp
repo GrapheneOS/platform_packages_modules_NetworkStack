@@ -156,6 +156,10 @@ aidl_interface {
             version: "17",
             imports: ["ipmemorystore-aidl-interfaces-V10"],
         },
+        {
+            version: "18",
+            imports: ["ipmemorystore-aidl-interfaces-V10"],
+        },
 
     ],
 
@@ -170,7 +174,7 @@ java_library {
     min_sdk_version: "29",
     static_libs: [
         "ipmemorystore-aidl-interfaces-V10-java",
-        "networkstack-aidl-interfaces-V17-java",
+        "networkstack-aidl-interfaces-V18-java",
     ],
     visibility: ["//packages/modules/NetworkStack:__subpackages__"],
     apex_available: [
