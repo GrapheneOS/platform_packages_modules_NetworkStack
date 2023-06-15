@@ -1552,7 +1552,6 @@ public class DhcpClient extends StateMachine {
         @Override
         protected FileDescriptor createFd() {
             try {
-                // TODO: attach ARP packet only filter.
                 mArpSock = Os.socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, 0 /* protocol */);
                 SocketAddress addr = makePacketSocketAddress(ETH_P_ARP, mIface.index);
                 Os.bind(mArpSock, addr);
