@@ -23,9 +23,9 @@ import static android.net.dhcp.DhcpResultsParcelableUtil.toStableParcelable;
 import static com.android.testutils.MiscAsserts.assertFieldCountEquals;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import android.net.DhcpResults;
-import android.net.DhcpResultsParcelable;
 import android.net.LinkAddress;
 import android.net.shared.IpConfigurationParcelableUtil;
 
@@ -124,14 +124,14 @@ public class DhcpResultsParcelableUtilTest {
 
     @Test
     public void testToString() {
-        final String expected = ""
-                + DhcpResultsParcelable.class.getName()
-                + "{baseConfiguration: IP address 192.168.42.19/25"
-                + " Gateway 192.168.42.42  DNS servers: [ 8.8.8.8 192.168.43.43 ]"
-                + " Domains example.com, leaseDuration: 3600, mtu: 1450,"
-                + " serverAddress: 192.168.44.44, vendorInfo: TEST_VENDOR_INFO,"
-                + " serverHostName: dhcp.example.com,"
-                + " captivePortalApiUrl: https://example.com/testapi}";
-        assertEquals(expected, toStableParcelable(mDhcpResults).toString());
+        final String str = toStableParcelable(mDhcpResults).toString();
+
+        // check a few fields. Comprehensive toString tests exist in aidl_integration_test,
+        // but we want to make sure that the toString function requested in the AIDL file
+        // is there
+        assertTrue(str, str.contains("baseConfiguration"));
+        assertTrue(str, str.contains("IP address 192.168.42.19/25"));
+        assertTrue(str, str.contains("serverAddress"));
+        assertTrue(str, str.contains("192.168.44.44"));
     }
 }
