@@ -34,14 +34,10 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
-import android.net.InformationElementParcelable;
-import android.net.InitialConfigurationParcelable;
-import android.net.Layer2InformationParcelable;
 import android.net.LinkAddress;
 import android.net.MacAddress;
 import android.net.Network;
 import android.net.ProvisioningConfigurationParcelable;
-import android.net.ScanResultInfoParcelable;
 import android.net.StaticIpConfiguration;
 import android.net.apf.ApfCapabilities;
 import android.net.networkstack.aidl.dhcp.DhcpOption;
@@ -294,41 +290,21 @@ public class ProvisioningConfigurationTest {
         assertNotEquals(mConfig, newConfig);
     }
 
-    private static final String TEMPLATE = ""
-            + ProvisioningConfigurationParcelable.class.getName()
-            + "{enableIPv4: true, enableIPv6: true,"
-            + " usingMultinetworkPolicyTracker: true,"
-            + " usingIpReachabilityMonitor: true, requestedPreDhcpActionMs: 42,"
-            + " initialConfig: "
-            + InitialConfigurationParcelable.class.getName()
-            + "{ipAddresses: [192.168.42.42/24],"
-            + " directlyConnectedRoutes: [], dnsServers: [], gateway: null},"
-            + " staticIpConfig: IP address 2001:db8::42/90 Gateway  DNS servers: [ ] Domains ,"
-            + " apfCapabilities: ApfCapabilities{version: 1, maxSize: 2, format: 3},"
-            + " provisioningTimeoutMs: 4200, ipv6AddrGenMode: 123, network: 321,"
-            + " displayName: test_config, enablePreconnection: false, scanResultInfo: "
-            + ScanResultInfoParcelable.class.getName()
-            + "{ssid: ssid, bssid: 01:02:03:04:05:06,"
-            + " informationElements: ["
-            + InformationElementParcelable.class.getName()
-            + "{id: 221, payload: [0, 23, -14, 6, 1, 1, 3, 1, 0, 0]}]}, layer2Info: "
-            + Layer2InformationParcelable.class.getName()
-            + "{l2Key: some l2key, cluster: some cluster, bssid: %s},"
-            + " options: ["
-            + DhcpOption.class.getName()
-            + "{type: 60,"
-            + " value: [97, 110, 100, 114, 111, 105, 100, 45, 100, 104, 99, 112, 45, 49, 49]}],"
-            + " ipv4ProvisioningMode: 2, ipv6ProvisioningMode: 1, uniqueEui64AddressesOnly: false}";
-
     @Test
     public void testParcelableToString() {
-        String expected = String.format(TEMPLATE, "00:01:02:03:04:05");
-        assertEquals(expected, mConfig.toStableParcelable().toString());
+        String str = mConfig.toStableParcelable().toString();
+
+        // check a few fields. Comprehensive toString tests exist in aidl_integration_test,
+        // but we want to make sure that the toString function requested in the AIDL file
+        // is there
+        assertTrue(str, str.contains("00:01:02:03:04:05"));
+        assertTrue(str, str.contains("some l2key, cluster: some cluster"));
 
         final ProvisioningConfigurationParcelable parcelWithNull = mConfig.toStableParcelable();
         parcelWithNull.layer2Info.bssid = null;
-        expected = String.format(TEMPLATE, "null");
-        assertEquals(expected, parcelWithNull.toString());
+        str = parcelWithNull.toString();
+
+        assertTrue(str, str.contains("bssid: null"));
     }
 
     @Test
