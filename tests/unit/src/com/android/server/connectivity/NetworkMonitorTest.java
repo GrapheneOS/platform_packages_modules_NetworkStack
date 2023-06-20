@@ -2179,16 +2179,16 @@ public class NetworkMonitorTest {
         // selecting this option through the options menu.
         nm.notifyCaptivePortalAppFinished(APP_RETURN_WANTED_AS_IS);
         // The captive portal is still closed, but the network validates since the user said so.
-        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).atLeastOnce())
+        // One interaction is triggered when APP_RETURN_WANTED_AS_IS response is received.
+        // Another interaction is triggered when state machine gets into ValidatedState.
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(2))
                 .notifyNetworkTestedWithExtras(matchNetworkTestResultParcelable(
                         NETWORK_VALIDATION_RESULT_VALID, 0 /* probesSucceeded */));
-        resetCallbacks();
-
         // Revalidate.
         nm.forceReevaluation(0 /* responsibleUid */);
 
         // The network should still be valid.
-        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).atLeastOnce())
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(3))
                 .notifyNetworkTestedWithExtras(matchNetworkTestResultParcelable(
                         NETWORK_VALIDATION_RESULT_VALID, 0 /* probesSucceeded */));
     }
