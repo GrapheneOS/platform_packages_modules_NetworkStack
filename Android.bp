@@ -64,7 +64,7 @@ java_defaults {
 
 java_defaults {
     name: "NetworkStackDevApiLevel",
-    min_sdk_version: "29",
+    min_sdk_version: "30",
     sdk_version: "module_current",
     libs: [
         "framework-configinfrastructure",
@@ -79,7 +79,7 @@ java_defaults {
 // to keep tests always running against the same target sdk version with NetworkStack.
 java_defaults {
     name: "NetworkStackReleaseTargetSdk",
-    min_sdk_version: "29",
+    min_sdk_version: "30",
     target_sdk_version: "34",
 }
 
@@ -110,14 +110,14 @@ java_defaults {
         "com.android.tethering",
         "//apex_available:platform",  // For InProcessNetworkStack
     ],
-    min_sdk_version: "29",
+    min_sdk_version: "30",
 }
 
 // Common shim code. This includes the shim interface definitions themselves, and things like
 // ShimUtils and UnsupportedApiLevelException. Compiles against system_current because ShimUtils
 // needs access to all Build.VERSION_CODES.*, which by definition are only in the newest SDK.
 // TODO: consider moving ShimUtils into a library (or removing it in favour of SdkLevel) and compile
-// this target against the lowest-supported SDK (currently 29).
+// this target against the lowest-supported SDK (currently 30).
 java_library {
     name: "NetworkStackShimsCommon",
     defaults: ["NetworkStackShimsDefaults"],
@@ -505,8 +505,8 @@ cc_library_shared {
     srcs: [
         "jni/network_stack_utils_jni.cpp"
     ],
-    sdk_version: "29",
-    min_sdk_version: "29",
+    sdk_version: "30",
+    min_sdk_version: "30",
     shared_libs: [
         "liblog",
         "libnativehelper_compat_libc++",
@@ -539,7 +539,7 @@ genrule {
     tools: ["stats-log-api-gen"],
     cmd: "$(location stats-log-api-gen) --java $(out) --module network_stack" +
          " --javaPackage com.android.networkstack.metrics --javaClass NetworkStackStatsLog" +
-         " --minApiLevel 29",
+         " --minApiLevel 30",
     out: ["com/android/networkstack/metrics/NetworkStackStatsLog.java"],
 }
 
@@ -548,7 +548,7 @@ genrule {
     tools: ["stats-log-api-gen"],
     cmd: "$(location stats-log-api-gen) --java $(out) --module network_stack" +
          " --javaPackage com.android.networkstack.metrics --javaClass NetworkStackStatsLog" +
-         " --minApiLevel 29 --compileApiLevel 30",
+         " --minApiLevel 30 --compileApiLevel 30",
     out: ["com/android/networkstack/metrics/NetworkStackStatsLog.java"],
 }
 

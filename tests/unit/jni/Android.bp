@@ -39,6 +39,6 @@ cc_library_shared {
         "libapf",
         "libpcap",
     ],
-    sdk_version: "29",
+    sdk_version: "30",
     stl: "c++_static",
 }
