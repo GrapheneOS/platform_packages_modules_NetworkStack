@@ -55,7 +55,7 @@ java_defaults {
 android_test {
     name: "NetworkStackNextTests",
     target_sdk_version: "current",
-    min_sdk_version: "29",
+    min_sdk_version: "30",
     srcs: [], // TODO: tests that only apply to the current, non-stable API can be added here
     test_suites: ["general-tests"],
     defaults: [
@@ -73,7 +73,7 @@ android_test {
 // configuration needed by the tests is in the NetworkStackTestsDefaults rule.
 android_library {
     name: "NetworkStackTestsLib",
-    min_sdk_version: "29",
+    min_sdk_version: "30",
     defaults: ["NetworkStackTestsDefaults"],
     static_libs: ["NetworkStackApiStableLib"],
     visibility: [
@@ -85,8 +85,7 @@ android_library {
 
 android_test {
     name: "NetworkStackTests",
-    min_sdk_version: "29",
-    target_sdk_version: "30",
+    min_sdk_version: "30",
     test_suites: ["general-tests", "mts"],
     defaults: [
         "NetworkStackTestsDefaults",
