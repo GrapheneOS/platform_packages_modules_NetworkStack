@@ -64,7 +64,7 @@ android_library {
         "signature/**/*.java",
         "signature/**/*.kt",
     ],
-    min_sdk_version: "29",
+    min_sdk_version: "30",
     static_libs: [
         "NetworkStackApiStableLib",
     ],

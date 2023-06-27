@@ -38,8 +38,8 @@ aidl_interface {
                 "com.android.wifi",
                 "com.android.tethering",
             ],
-            // this is part of updatable modules(NetworkStack) which targets 29(Q)
-            min_sdk_version: "29",
+            // this is part of updatable modules(NetworkStack) which targets 30(R)
+            min_sdk_version: "30",
         },
         ndk: {
             enabled: false,
@@ -114,8 +114,8 @@ aidl_interface {
                 "com.android.wifi",
                 "com.android.tethering",
             ],
-            // this is part of updatable modules(NetworkStack) which targets 29(Q)
-            min_sdk_version: "29",
+            // this is part of updatable modules(NetworkStack) which targets 30(R)
+            min_sdk_version: "30",
             lint: {
                 enabled: false,
             },
@@ -171,7 +171,7 @@ aidl_interface {
 java_library {
     name: "networkstack-aidl-latest",
     sdk_version: "system_current",
-    min_sdk_version: "29",
+    min_sdk_version: "30",
     static_libs: [
         "ipmemorystore-aidl-interfaces-V10-java",
         "networkstack-aidl-interfaces-V18-java",
@@ -188,8 +188,8 @@ java_library {
 java_library {
     name: "networkstack-client",
     sdk_version: "module_current",
-    // this is part of updatable modules(NetworkStack) which runs on Q and above
-    min_sdk_version: "29",
+    // this is part of updatable modules(NetworkStack) which runs on R and above
+    min_sdk_version: "30",
     srcs: [
         "src/android/net/ip/**/*.java",
         "src/android/net/IpMemoryStore.java",
