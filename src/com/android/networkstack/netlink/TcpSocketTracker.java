@@ -25,6 +25,7 @@ import static android.system.OsConstants.AF_INET6;
 import static android.system.OsConstants.SOL_SOCKET;
 import static android.system.OsConstants.SO_SNDTIMEO;
 
+import static com.android.net.module.util.NetworkStackConstants.DNS_OVER_TLS_PORT;
 import static com.android.net.module.util.netlink.NetlinkConstants.NLMSG_DONE;
 import static com.android.net.module.util.netlink.NetlinkConstants.SOCKDIAG_MSG_HEADER_SIZE;
 import static com.android.net.module.util.netlink.NetlinkConstants.SOCK_DIAG_BY_FAMILY;
@@ -36,6 +37,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.INetd;
+import android.net.LinkProperties;
 import android.net.MarkMaskParcel;
 import android.net.Network;
 import android.os.AsyncTask;
@@ -87,8 +89,8 @@ public class TcpSocketTracker {
     private static final String TAG = TcpSocketTracker.class.getSimpleName();
     private static final boolean DBG = Log.isLoggable(TAG, Log.DEBUG);
     private static final int[] ADDRESS_FAMILIES = new int[] {AF_INET6, AF_INET};
-
     private static final int END_OF_PARSING = -1;
+
     /**
      *  Gather the socket info.
      *
@@ -126,6 +128,14 @@ public class TcpSocketTracker {
     private final Object mDozeModeLock = new Object();
     @GuardedBy("mDozeModeLock")
     private boolean mInDozeMode = false;
+
+    // These variables are initialized when the NetworkMonitor enters DefaultState,
+    // and can only be accessed on the NetworkMonitor state machine thread after
+    // the NetworkMonitor state machine has been started.
+    private boolean mInOpportunisticMode;
+    @NonNull
+    private LinkProperties mLinkProperties;
+
     @VisibleForTesting
     protected final DeviceConfig.OnPropertiesChangedListener mConfigListener =
             new DeviceConfig.OnPropertiesChangedListener() {
@@ -227,11 +237,25 @@ public class TcpSocketTracker {
             for (final SocketInfo newInfo : newSocketInfoList) {
                 final TcpStat diff = calculateLatestPacketsStat(newInfo,
                         mSocketInfos.get(newInfo.cookie));
+                mSocketInfos.put(newInfo.cookie, newInfo);
+
+                // When in Opportunistic Mode, exclude destination port 853 for private DNS to
+                // avoid misleading data stall signals if the probing is not done.
+                // In private DNS opportunistic mode, the resolver will try to establish
+                // TCP connections with the DNS servers. However, if the target DNS server
+                // does not support private DNS, this would result in no response traffic,
+                // which could trigger a false alarm of data stall.
+                // TODO: Fix the false alarms where the private DNS servers are validated by
+                //  DoH instead of DoT. In this case the DoT probing traffic should be ignored.
+                if (newInfo.dstPort == DNS_OVER_TLS_PORT && mInOpportunisticMode &&
+                        !areAllPrivateDnsServersValidated(mLinkProperties)) {
+                    continue;
+                }
+
                 if (diff != null) {
                     mLatestReportedUids.add(newInfo.uid);
                     stat.accumulate(diff);
                 }
-                mSocketInfos.put(newInfo.cookie, newInfo);
             }
 
             // Calculate mLatestReceiveCount, mSentSinceLastRecv and mLatestPacketFailPercentage.
@@ -251,6 +275,10 @@ public class TcpSocketTracker {
         }
 
         return false;
+    }
+
+    private static boolean areAllPrivateDnsServersValidated(@NonNull LinkProperties lp) {
+        return lp.getDnsServers().size() == lp.getValidatedPrivateDnsServers().size();
     }
 
     // Return true if there are more pending messages to read
@@ -607,6 +635,17 @@ public class TcpSocketTracker {
             mInDozeMode = isEnabled;
             log("Doze mode enabled=" + mInDozeMode);
         }
+    }
+
+    public void setOpportunisticMode(boolean isEnabled) {
+        if (mInOpportunisticMode == isEnabled) return;
+        mInOpportunisticMode = isEnabled;
+
+        log("Private DNS Opportunistic mode enabled=" + mInOpportunisticMode);
+    }
+
+    public void setLinkProperties(@NonNull LinkProperties lp) {
+        mLinkProperties = lp;
     }
 
     /**
