@@ -21,6 +21,8 @@ import static android.net.util.DataStallUtils.DEFAULT_TCP_PACKETS_FAIL_PERCENTAG
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_INET;
 
+import static com.android.net.module.util.NetworkStackConstants.DNS_OVER_TLS_PORT;
+
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
 import static junit.framework.Assert.assertTrue;
@@ -41,6 +43,8 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.net.INetd;
+import android.net.InetAddresses;
+import android.net.LinkProperties;
 import android.net.MarkMaskParcel;
 import android.net.Network;
 import android.os.Build;
@@ -71,6 +75,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.io.FileDescriptor;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
@@ -117,8 +122,10 @@ public class TcpSocketTrackerTest {
     private static final int TEST_NETID2_FWMARK = 0x1A85;
     private static final int NETID_MASK = 0xffff;
     private static final int TEST_UID1 = 1234;
-    private static final int TEST_DST_PORT = 29113;
+    private static final short TEST_DST_PORT = 29113;
     private static final long TEST_COOKIE1 = 43387759684916L;
+    private static final long TEST_COOKIE2 = TEST_COOKIE1 + 1;
+    private static final InetAddress TEST_DNS1 = InetAddresses.parseNumericAddress("8.8.8.8");
     @Mock private TcpSocketTracker.Dependencies mDependencies;
     @Mock private INetd mNetd;
     private final Network mNetwork = new Network(TEST_NETID1);
@@ -245,6 +252,69 @@ public class TcpSocketTrackerTest {
     }
 
     @Test
+    public void testPollSocketsInfo_ignorePrivateDnsPort() throws Exception {
+        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
+        // Simulate 1 message with data stall happened.
+        doReturn(getByteBufferFromHexString(
+                        composeSockDiagTcpHex(4, 10) + NLMSG_DONE_HEX))
+                .when(mDependencies).recvMessage(any());
+        assertTrue(tst.pollSocketsInfo());
+
+        // ( Lost 4 + default 5 retransmits in the sample ) / 10 sent = 90 percent.
+        assertEquals(90, tst.getLatestPacketFailPercentage());
+        assertEquals(10, tst.getSentSinceLastRecv());
+        assertTrue(tst.isDataStallSuspected());
+
+        // Append another message with private dns port which is generated
+        // in opportunistic mode. Also simulated the private dns probe is not finished.
+        tst.setOpportunisticMode(true);
+        final LinkProperties testLp = new LinkProperties();
+        testLp.addDnsServer(TEST_DNS1);
+        tst.setLinkProperties(testLp);
+        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(4, 10)
+                + composeSockDiagTcpHex(5, 10, DNS_OVER_TLS_PORT, TEST_COOKIE2)
+                + NLMSG_DONE_HEX))
+                .when(mDependencies).recvMessage(any());
+        assertTrue(tst.pollSocketsInfo());
+
+        // Verify that when in opportunistic mode, the message with private dns
+        // port won't get involved with the calculation.
+        // While there is no packet sent in this polling cycle, 0 percentage is expected while the
+        // sent counter remains the same.
+        assertEquals(0, tst.getLatestPacketFailPercentage());
+        assertEquals(10, tst.getSentSinceLastRecv());
+        assertFalse(tst.isDataStallSuspected());
+
+        // Verify that when private dns servers are all validated, the message with private dns port
+        // will be counted.
+        testLp.addValidatedPrivateDnsServer(TEST_DNS1);
+        tst.setLinkProperties(testLp);
+        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(5, 12)
+                + composeSockDiagTcpHex(7, 12, DNS_OVER_TLS_PORT, TEST_COOKIE2)
+                + NLMSG_DONE_HEX))
+                .when(mDependencies).recvMessage(any());
+        assertTrue(tst.pollSocketsInfo());
+        // Lost ( 1 + 2 ) / ( 2 + 2 ) sent = 75 percent.
+        assertEquals(75, tst.getLatestPacketFailPercentage());
+        assertEquals(14, tst.getSentSinceLastRecv());
+        assertFalse(tst.isDataStallSuspected());
+
+        // Verify that when exited opportunistic mode, the message with private dns port will be
+        // counted. And the stat is correctly subtracted from the stat ignored in the previous
+        // polling cycle.
+        tst.setOpportunisticMode(false);
+        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(6, 14)
+                + composeSockDiagTcpHex(9, 14, DNS_OVER_TLS_PORT, TEST_COOKIE2)
+                + NLMSG_DONE_HEX))
+                .when(mDependencies).recvMessage(any());
+        assertTrue(tst.pollSocketsInfo());
+        // Lost ( 1 + 2 ) / ( 2 + 2 ) sent = 75 percent.
+        assertEquals(75, tst.getLatestPacketFailPercentage());
+        assertEquals(18, tst.getSentSinceLastRecv());
+        assertFalse(tst.isDataStallSuspected());
+    }
+
+    @Test
     public void testTcpInfoParsingUnsupported() {
         doReturn(false).when(mDependencies).isTcpInfoParsingSupported();
         final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
@@ -289,6 +359,8 @@ public class TcpSocketTrackerTest {
         // Verify that code reads all the messages. (3 times for IPv4, 3 times for IPv6)
         verify(mDependencies, times(6)).recvMessage(any());
         // Calculated from (retransmits + lost) / segsout.
+        // Note that the counters cannot be verified given that the cookie of the mocked sockets
+        // are the same, the latest SocketInfo would overwrite previous reported ones.
         assertEquals(50, tst.getLatestPacketFailPercentage());
         // Lower than the 80% threshold
         assertFalse(tst.isDataStallSuspected());
@@ -391,10 +463,28 @@ public class TcpSocketTrackerTest {
     }
 
     private static String getHexStringFromInt(int v) {
-        final ByteBuffer bb = ByteBuffer.allocate(4);
         // Android is always little-endian. Refer to https://developer.android.com/ndk/guides/abis.
-        bb.order(ByteOrder.nativeOrder());
-        bb.putInt(v);
+        return getHexStringOfSize(v, ByteOrder.nativeOrder(), Integer.BYTES);
+    }
+
+    private static String getHexStringFromShort(short v, ByteOrder order) {
+        return getHexStringOfSize(v, order, Short.BYTES);
+    }
+
+    private static String getHexStringFromLong(long v) {
+        // Android is always little-endian. Refer to https://developer.android.com/ndk/guides/abis.
+        return getHexStringOfSize(v, ByteOrder.nativeOrder(), Long.BYTES);
+    }
+
+    private static String getHexStringOfSize(long v, ByteOrder order, int size) {
+        final ByteBuffer bb = ByteBuffer.allocate(size);
+        bb.order(order);
+        switch (size) {
+            case Short.BYTES -> bb.putShort((short) v);
+            case Integer.BYTES -> bb.putInt((int) v);
+            case Long.BYTES -> bb.putLong(v);
+            default -> throw new IllegalArgumentException("Unsupported size: " + size);
+        }
         String s = "";
         for (byte b : bb.array()) {
             s += String.format("%02X", b);
@@ -403,6 +493,10 @@ public class TcpSocketTrackerTest {
     }
 
     private static String composeSockDiagTcpHex(int lost, int sent) {
+        return composeSockDiagTcpHex(lost, sent, TEST_DST_PORT, TEST_COOKIE1);
+    }
+
+    private static String composeSockDiagTcpHex(int lost, int sent, short dstPort, long cookie) {
         return // struct nlmsghdr.
                 "14010000" +        // length = 276
                 "1400" +            // type = SOCK_DIAG_BY_FAMILY
@@ -414,18 +508,19 @@ public class TcpSocketTrackerTest {
                 "06" +              // state
                 "00" +              // timer
                 "00" +              // retrans
-                // inet_diag_sockid
-                "DEA5" +            // idiag_sport = 56997
-                "71B9" +            // idiag_dport = 29113
-                "0a006402000000000000000000000000" + // idiag_src = 10.0.100.2
-                "08080808000000000000000000000000" + // idiag_dst = 8.8.8.8
-                "00000000" +            // idiag_if
-                "34ED000076270000" +    // idiag_cookie = 43387759684916
-                "00000000" +            // idiag_expires
-                "00000000" +            // idiag_rqueue
-                "00000000" +            // idiag_wqueue
-                "D2040000" +            // idiag_uid = 1234
-                "00000000" +            // idiag_inode
+                // inet_diag_sockid: ports and addresses are always in big endian,
+                // see StructInetDiagSockId.
+                "DEA5" +                                               // idiag_sport = 56997
+                getHexStringFromShort(dstPort, ByteOrder.BIG_ENDIAN) + // idiag_dport
+                "0a006402000000000000000000000000" +                   // idiag_src = 10.0.100.2
+                "08080808000000000000000000000000" +                   // idiag_dst = 8.8.8.8
+                "00000000" +                                           // idiag_if
+                getHexStringFromLong(cookie) +                         // idiag_cookie
+                "00000000" +                                           // idiag_expires
+                "00000000" +                                           // idiag_rqueue
+                "00000000" +                                           // idiag_wqueue
+                getHexStringFromInt(TEST_UID1) +                       // idiag_uid
+                "00000000" +                                           // idiag_inode
                 // rtattr
                 "0500" +            // len = 5
                 "0800" +            // type = 8

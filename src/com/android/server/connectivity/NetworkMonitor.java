@@ -701,7 +701,7 @@ public class NetworkMonitor extends StateMachine {
      * Send a notification to NetworkMonitor indicating that private DNS settings have changed.
      * @param newCfg The new private DNS configuration.
      */
-    public void notifyPrivateDnsSettingsChanged(PrivateDnsConfig newCfg) {
+    public void notifyPrivateDnsSettingsChanged(@NonNull PrivateDnsConfig newCfg) {
         // Cancel any outstanding resolutions.
         removeMessages(CMD_PRIVATE_DNS_SETTINGS_CHANGED);
         // Send the update to the proper thread.
@@ -934,6 +934,12 @@ public class NetworkMonitor extends StateMachine {
             mContext.registerReceiver(mConfigurationReceiver,
                     new IntentFilter(ACTION_CONFIGURATION_CHANGED));
             checkAndRenewResourceConfig();
+            final TcpSocketTracker tst = getTcpSocketTracker();
+            if (tst != null) {
+                // Initialization.
+                tst.setOpportunisticMode(false);
+                tst.setLinkProperties(mLinkProperties);
+            }
             Log.d(TAG, "Starting on network " + mNetwork
                     + " with capport HTTPS URL " + Arrays.toString(mCaptivePortalHttpsUrls)
                     + " and HTTP URL " + Arrays.toString(mCaptivePortalHttpUrls));
@@ -1026,7 +1032,8 @@ public class NetworkMonitor extends StateMachine {
                     return HANDLED;
                 case CMD_PRIVATE_DNS_SETTINGS_CHANGED: {
                     final PrivateDnsConfig cfg = (PrivateDnsConfig) message.obj;
-                    if (!isPrivateDnsValidationRequired() || cfg == null || !cfg.inStrictMode()) {
+                    final TcpSocketTracker tst = getTcpSocketTracker();
+                    if (!isPrivateDnsValidationRequired() || !cfg.inStrictMode()) {
                         // No DNS resolution required.
                         //
                         // We don't force any validation in opportunistic mode
@@ -1035,10 +1042,16 @@ public class NetworkMonitor extends StateMachine {
                         //
                         // Reset Private DNS settings state.
                         mPrivateDnsProviderHostname = "";
+                        if (tst != null) {
+                            tst.setOpportunisticMode(cfg.inOpportunisticMode());
+                        }
                         break;
                     }
 
                     mPrivateDnsProviderHostname = cfg.hostname;
+                    if (tst != null) {
+                        tst.setOpportunisticMode(false);
+                    }
 
                     // DNS resolutions via Private DNS strict mode block for a
                     // few seconds (~4.2) checking for any IP addresses to
@@ -1082,6 +1095,10 @@ public class NetworkMonitor extends StateMachine {
                     final Uri newCapportUrl = getCaptivePortalApiUrl(mLinkProperties);
                     if (!Objects.equals(oldCapportUrl, newCapportUrl)) {
                         sendMessage(CMD_FORCE_REEVALUATION, NO_UID, 0);
+                    }
+                    final TcpSocketTracker tst = getTcpSocketTracker();
+                    if (tst != null) {
+                        tst.setLinkProperties(mLinkProperties);
                     }
                     break;
                 case EVENT_NETWORK_CAPABILITIES_CHANGED:
