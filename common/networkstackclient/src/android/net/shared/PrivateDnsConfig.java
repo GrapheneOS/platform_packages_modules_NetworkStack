@@ -60,6 +60,13 @@ public class PrivateDnsConfig {
         return useTls && !TextUtils.isEmpty(hostname);
     }
 
+    /**
+     * Indicates whether this is an opportunistic mode private DNS configuration.
+     */
+    public boolean inOpportunisticMode() {
+        return useTls && TextUtils.isEmpty(hostname);
+    }
+
     @Override
     public String toString() {
         return PrivateDnsConfig.class.getSimpleName()
