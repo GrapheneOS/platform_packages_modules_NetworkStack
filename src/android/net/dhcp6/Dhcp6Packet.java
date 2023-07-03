@@ -18,16 +18,21 @@ package android.net.dhcp6;
 
 import static com.android.net.module.util.NetworkStackConstants.DHCP_MAX_OPTION_LEN;
 
+import android.util.Log;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 
+import com.android.internal.util.HexDump;
 import com.android.net.module.util.Struct;
+import com.android.net.module.util.structs.IaPdOption;
 import com.android.net.module.util.structs.IaPrefixOption;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 /**
  * Defines basic data and operations needed to build and use packets for the
@@ -37,7 +42,7 @@ import java.nio.charset.StandardCharsets;
  * @hide
  */
 public class Dhcp6Packet {
-
+    private static final String TAG = Dhcp6Packet.class.getSimpleName();
     /**
      * DHCPv6 Message Type.
      */
@@ -71,6 +76,7 @@ public class Dhcp6Packet {
 
     /**
      * DHCPv6 Optional Type: Elapsed time.
+     * This time is expressed in hundredths of a second.
      */
     public static final byte DHCP6_ELAPSED_TIME = 8;
     protected final short mSecs;
@@ -89,6 +95,13 @@ public class Dhcp6Packet {
     public static final short STATUS_PREFIX_NOT_ONLINK = 4;
     public static final short STATUS_USE_MULTICAST     = 5;
     public static final short STATUS_NO_PREFIX_AVAI    = 6;
+
+    /**
+     * DHCPv6 zero-length Optional Type: Rapid Commit. Per RFC4039, both DHCPDISCOVER and DHCPACK
+     * packet may include this option.
+     */
+    public static final byte DHCP6_RAPID_COMMIT = 14;
+    public boolean mRapidCommit;
 
     /**
      * DHCPv6 Optional Type: IA_PD.
@@ -242,13 +255,14 @@ public class Dhcp6Packet {
         byte[] clientDuid = null;
         short statusCode = STATUS_SUCCESS;
         String statusMsg = null;
+        boolean rapidCommit = false;
 
         packet.order(ByteOrder.BIG_ENDIAN);
 
         // DHCPv6 message contents.
         final int msgTypeAndTransId = packet.getInt();
         final byte messageType = (byte) (msgTypeAndTransId >> 24);
-        final int transId = msgTypeAndTransId & 0x0FFF;
+        final int transId = msgTypeAndTransId & 0xffffff;
 
         /**
          * Parse DHCPv6 options, option format:
@@ -287,6 +301,10 @@ public class Dhcp6Packet {
                         packet.get(bytes, 0 /* offset */, expectedLen);
                         iapd = bytes;
                         break;
+                    case DHCP6_RAPID_COMMIT:
+                        expectedLen = 0;
+                        rapidCommit = true;
+                        break;
                     case DHCP6_ELAPSED_TIME:
                         expectedLen = 2;
                         secs = packet.getShort();
@@ -316,7 +334,7 @@ public class Dhcp6Packet {
 
         switch(messageType) {
             case DHCP6_MESSAGE_TYPE_SOLICIT:
-                newPacket = new Dhcp6SolicitPacket(transId, secs, clientDuid, iapd);
+                newPacket = new Dhcp6SolicitPacket(transId, secs, clientDuid, iapd, rapidCommit);
                 break;
             case DHCP6_MESSAGE_TYPE_ADVERTISE:
                 newPacket = new Dhcp6AdvertisePacket(transId, clientDuid, serverDuid, iapd);
@@ -325,7 +343,8 @@ public class Dhcp6Packet {
                 newPacket = new Dhcp6RequestPacket(transId, secs, clientDuid, serverDuid, iapd);
                 break;
             case DHCP6_MESSAGE_TYPE_REPLY:
-                newPacket = new Dhcp6ReplyPacket(transId, clientDuid, serverDuid, iapd);
+                newPacket = new Dhcp6ReplyPacket(transId, clientDuid, serverDuid, iapd,
+                        rapidCommit);
                 break;
             case DHCP6_MESSAGE_TYPE_RENEW:
                 newPacket = new Dhcp6RenewPacket(transId, secs, clientDuid, serverDuid, iapd);
@@ -348,6 +367,7 @@ public class Dhcp6Packet {
         }
         newPacket.mStatusCode = statusCode;
         newPacket.mStatusMsg = statusMsg;
+        newPacket.mRapidCommit = rapidCommit;
 
         return newPacket;
     }
@@ -359,6 +379,69 @@ public class Dhcp6Packet {
             throws ParseException {
         final ByteBuffer buffer = ByteBuffer.wrap(packet, 0, length).order(ByteOrder.BIG_ENDIAN);
         return decodePacket(buffer);
+    }
+
+    /**
+     * Follow RFC8415 section 18.2.9 and 18.2.10 to check if the received DHCPv6 message is valid.
+     */
+    public boolean isValid(int transId, @NonNull final byte[] clientDuid) {
+        if (mClientDuid == null) {
+            Log.e(TAG, "DHCPv6 message without Client DUID option");
+            return false;
+        }
+        if (!Arrays.equals(mClientDuid, clientDuid)) {
+            Log.e(TAG, "Unexpected client DUID " + HexDump.toHexString(mClientDuid)
+                    + ", expected " + HexDump.toHexString(clientDuid));
+            return false;
+        }
+        if (mTransId != transId) {
+            Log.e(TAG, "Unexpected transaction ID " + mTransId + ", expected " + transId);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Check whether or not the delegated prefix in DHCPv6 packet is valid.
+     *
+     * TODO: ensure that the prefix has a reasonable lifetime, and the timers aren't too short.
+     */
+    public static boolean hasValidPrefixDelegation(@NonNull final PrefixDelegation pd) {
+        if (pd == null) {
+            Log.e(TAG, "DHCPv6 packet without IA_PD option, ignoring");
+            return false;
+        }
+        if (pd.ipo.prefixLen > 64) {
+            Log.e(TAG, "IA_PD option with prefix length " + pd.ipo.prefixLen + " longer than 64");
+            return false;
+        }
+        final long t1 = pd.t1;
+        final long t2 = pd.t2;
+        if (t1 < 0 || t2 < 0) {
+            Log.e(TAG, "IA_PD option with invalid T1 " + t1 + " or T2 " + t2);
+            return false;
+        }
+        if (t1 > t2) {
+            Log.e(TAG, "IA_PD option with T1 " + t1 + " greater than T2 " + t2);
+            return false;
+        }
+        final long preferred = pd.ipo.preferred;
+        final long valid = pd.ipo.valid;
+        if (preferred < 0 || valid < 0) {
+            Log.e(TAG, "IA_PD option with invalid lifetime, preferred lifetime " + preferred
+                    + ", valid lifetime " + valid);
+            return false;
+        }
+        if (preferred > valid) {
+            Log.e(TAG, "IA_PD option with preferred lifetime " + preferred
+                    + " greater than valid lifetime " + valid);
+            return false;
+        }
+        if (preferred < t2) {
+            Log.e(TAG, "preferred lifetime " + preferred + " is samller than T2 " + t2);
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -384,11 +467,37 @@ public class Dhcp6Packet {
     }
 
     /**
+     * Adds an optional parameter containing zero-length value.
+     */
+    protected static void addTlv(ByteBuffer buf, short type) {
+        buf.putShort(type);
+        buf.putShort((short) 0);
+    }
+
+    /**
+     * Build an IA_PD option from given specific parameters, including IA_PREFIX option.
+     */
+    public static ByteBuffer buildIaPdOption(int iaid, int t1, int t2, long preferred, long valid,
+            final byte[] prefix, byte prefixLen) {
+        final ByteBuffer iapd = ByteBuffer.allocate(IaPdOption.LENGTH
+                + Struct.getSize(IaPrefixOption.class));
+        iapd.putInt(iaid);
+        iapd.putInt(t1);
+        iapd.putInt(t2);
+        final ByteBuffer prefixOption = IaPrefixOption.build((short) IaPrefixOption.LENGTH,
+                preferred, valid, prefixLen, prefix);
+        iapd.put(prefixOption);
+        iapd.flip();
+        return iapd;
+    }
+
+    /**
      * Builds a DHCPv6 SOLICIT packet from the required specified parameters.
      */
     public static ByteBuffer buildSolicitPacket(int transId, short secs, @NonNull final byte[] iapd,
-            @NonNull final byte[] clientDuid) {
-        final Dhcp6SolicitPacket pkt = new Dhcp6SolicitPacket(transId, secs, clientDuid, iapd);
+            @NonNull final byte[] clientDuid, boolean rapidCommit) {
+        final Dhcp6SolicitPacket pkt =
+                new Dhcp6SolicitPacket(transId, secs, clientDuid, iapd, rapidCommit);
         return pkt.buildPacket();
     }
 
@@ -406,8 +515,10 @@ public class Dhcp6Packet {
      * Builds a DHCPv6 REPLY packet from the required specified parameters.
      */
     public static ByteBuffer buildReplyPacket(int transId, @NonNull final byte[] iapd,
-            @NonNull final byte[] clientDuid, @NonNull final byte[] serverDuid) {
-        final Dhcp6ReplyPacket pkt = new Dhcp6ReplyPacket(transId, clientDuid, serverDuid, iapd);
+            @NonNull final byte[] clientDuid, @NonNull final byte[] serverDuid,
+            boolean rapidCommit) {
+        final Dhcp6ReplyPacket pkt =
+                new Dhcp6ReplyPacket(transId, clientDuid, serverDuid, iapd, rapidCommit);
         return pkt.buildPacket();
     }
 
