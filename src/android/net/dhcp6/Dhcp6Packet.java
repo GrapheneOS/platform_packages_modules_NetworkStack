@@ -18,6 +18,7 @@ package android.net.dhcp6;
 
 import static com.android.net.module.util.NetworkStackConstants.DHCP_MAX_OPTION_LEN;
 
+import android.net.MacAddress;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -442,6 +443,35 @@ public class Dhcp6Packet {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Returns the client DUID, follows RFC 8415 and creates a client DUID
+     * based on the link-layer address(DUID-LL).
+     *
+     * TODO: use Struct to build and parse DUID.
+     *
+     * 0                   1                   2                   3
+     * 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     * |         DUID-Type (3)         |    hardware type (16 bits)    |
+     * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     * .                                                               .
+     * .             link-layer address (variable length)              .
+     * .                                                               .
+     * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     */
+    public static byte[] createClientDuid(@NonNull final MacAddress macAddress) {
+        final byte[] duid = new byte[10];
+        // type: Link-layer address(3)
+        duid[0] = (byte) 0x00;
+        duid[1] = (byte) 0x03;
+        // hardware type: Ethernet(1)
+        duid[2] = (byte) 0x00;
+        duid[3] = (byte) 0x01;
+        System.arraycopy(macAddress.toByteArray() /* src */, 0 /* srcPos */, duid /* dest */,
+                4 /* destPos */, 6 /* length */);
+        return duid;
     }
 
     /**
