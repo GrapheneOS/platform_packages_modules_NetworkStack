@@ -43,7 +43,7 @@ public class Dhcp6RebindPacket extends Dhcp6Packet {
      */
     public ByteBuffer buildPacket() {
         final ByteBuffer packet = ByteBuffer.allocate(DHCP_MAX_LENGTH);
-        final int msgTypeAndTransId = (DHCP6_MESSAGE_TYPE_REBIND << 24) | (mTransId & 0x0FFF);
+        final int msgTypeAndTransId = (DHCP6_MESSAGE_TYPE_REBIND << 24) | mTransId;
         packet.putInt(msgTypeAndTransId);
 
         addTlv(packet, DHCP6_CLIENT_IDENTIFIER, getClientDuid());
