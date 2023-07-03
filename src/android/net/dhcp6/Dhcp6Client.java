@@ -124,6 +124,7 @@ public class Dhcp6Client extends StateMachine {
     @NonNull private final WakeupMessage mExpiryAlarm;
     @NonNull private final InterfaceParams mIface;
     @NonNull private final Dhcp6PacketHandler mDhcp6PacketHandler;
+    @NonNull private final byte[] mClientDuid;
 
     // States.
     private State mStoppedState = new StoppedState();
@@ -147,6 +148,7 @@ public class Dhcp6Client extends StateMachine {
         mContext = context;
         mController = controller;
         mIface = iface;
+        mClientDuid = Dhcp6Packet.createClientDuid(iface.macAddr);
         mDhcp6PacketHandler = new Dhcp6PacketHandler(getHandler());
 
         addState(mStoppedState);
@@ -284,39 +286,10 @@ public class Dhcp6Client extends StateMachine {
         return (short) ((SystemClock.elapsedRealtime() - mTransStartMillis) / 10);
     }
 
-    /**
-     * Returns the client DUID, follows RFC 8415 and creates a client DUID
-     * based on the link-layer address(DUID-LL).
-     *
-     * TODO: use structs to build and parse DUID.
-     *
-     * 0                   1                   2                   3
-     * 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-     * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-     * |         DUID-Type (3)         |    hardware type (16 bits)    |
-     * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-     * .                                                               .
-     * .             link-layer address (variable length)              .
-     * .                                                               .
-     * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-     */
-    private byte[] getClientDuid() {
-        final byte[] duid = new byte[10];
-        // type: Link-layer address(3)
-        duid[0] = (byte) 0x00;
-        duid[1] = (byte) 0x03;
-        // hardware type: Ethernet(1)
-        duid[2] = (byte) 0x00;
-        duid[3] = (byte) 0x01;
-        System.arraycopy(mIface.macAddr.toByteArray() /* src */, 0 /* srcPos */, duid /* dest */,
-                4 /* destPos */, 6 /* length */);
-        return duid;
-    }
-
     @SuppressWarnings("ByteBufferBackingArray")
     private boolean sendSolicitPacket(final ByteBuffer iapd) {
         final ByteBuffer packet = Dhcp6Packet.buildSolicitPacket(mTransId,
-                getHundredthsOfSec() /* elapsed time */, iapd.array(), getClientDuid(),
+                getHundredthsOfSec() /* elapsed time */, iapd.array(), mClientDuid,
                 true /* rapidCommit */);
         return transmitPacket(packet, "solicit");
     }
@@ -324,7 +297,7 @@ public class Dhcp6Client extends StateMachine {
     @SuppressWarnings("ByteBufferBackingArray")
     private boolean sendRequestPacket(final ByteBuffer iapd) {
         final ByteBuffer packet = Dhcp6Packet.buildRequestPacket(mTransId,
-                getHundredthsOfSec() /* elapsed time */, iapd.array(), getClientDuid(),
+                getHundredthsOfSec() /* elapsed time */, iapd.array(), mClientDuid,
                 mServerDuid);
         return transmitPacket(packet, "request");
     }
@@ -332,14 +305,14 @@ public class Dhcp6Client extends StateMachine {
     @SuppressWarnings("ByteBufferBackingArray")
     private boolean sendRenewPacket(final ByteBuffer iapd) {
         final ByteBuffer packet = Dhcp6Packet.buildRenewPacket(mTransId,
-                getHundredthsOfSec() /* elapsed time*/, iapd.array(), getClientDuid(), mServerDuid);
+                getHundredthsOfSec() /* elapsed time*/, iapd.array(), mClientDuid, mServerDuid);
         return transmitPacket(packet, "renew");
     }
 
     @SuppressWarnings("ByteBufferBackingArray")
     private boolean sendRebindPacket(final ByteBuffer iapd) {
         final ByteBuffer packet = Dhcp6Packet.buildRebindPacket(mTransId,
-                getHundredthsOfSec() /* elapsed time */, iapd.array(), getClientDuid());
+                getHundredthsOfSec() /* elapsed time */, iapd.array(), mClientDuid);
         return transmitPacket(packet, "rebind");
     }
 
@@ -426,7 +399,7 @@ public class Dhcp6Client extends StateMachine {
 
         // TODO: support multiple prefixes.
         protected void receivePacket(Dhcp6Packet packet) {
-            if (!packet.isValid(mTransId, getClientDuid())) return;
+            if (!packet.isValid(mTransId, mClientDuid)) return;
             if (packet instanceof Dhcp6AdvertisePacket) {
                 mAdvertise = packet.mPrefixDelegation;
                 if (mAdvertise != null && mAdvertise.iaid == mIaId) {
@@ -462,7 +435,7 @@ public class Dhcp6Client extends StateMachine {
 
         protected void receivePacket(Dhcp6Packet packet) {
             if (!(packet instanceof Dhcp6ReplyPacket)) return;
-            if (!packet.isValid(mTransId, getClientDuid())) return;
+            if (!packet.isValid(mTransId, mClientDuid)) return;
             final PrefixDelegation pd = packet.mPrefixDelegation;
             if (pd != null && pd.iaid == mIaId) {
                 Log.d(TAG, "Get prefix delegation option from Reply: " + pd);
@@ -577,7 +550,7 @@ public class Dhcp6Client extends StateMachine {
 
         protected void receivePacket(Dhcp6Packet packet) {
             if (!(packet instanceof Dhcp6ReplyPacket)) return;
-            if (!packet.isValid(mTransId, getClientDuid())) return;
+            if (!packet.isValid(mTransId, mClientDuid)) return;
             final PrefixDelegation pd = packet.mPrefixDelegation;
             if (pd != null) {
                 if (pd.iaid != mIaId
