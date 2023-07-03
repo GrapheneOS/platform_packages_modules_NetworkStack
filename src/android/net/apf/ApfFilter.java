@@ -2114,9 +2114,12 @@ public class ApfFilter {
         if (null != mKeepalivePackets.get(slot)) {
             throw new IllegalArgumentException("NAT-T Keepalive slot " + slot + " is occupied");
         }
+
+        // TODO : update ApfFilter to support dropping v6 keepalives
         if (sentKeepalivePacket.srcAddress.length != 4) {
-            throw new IllegalArgumentException("NAT-T keepalive is only supported on IPv4");
+            return;
         }
+
         mKeepalivePackets.put(slot, new NattKeepaliveResponse(sentKeepalivePacket));
         installNewProgramLocked();
     }
