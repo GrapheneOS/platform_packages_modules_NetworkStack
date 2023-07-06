@@ -17,7 +17,9 @@
 package android.net.ip;
 
 import static android.net.RouteInfo.RTN_UNICAST;
+import static android.net.RouteInfo.RTN_UNREACHABLE;
 import static android.net.dhcp.DhcpResultsParcelableUtil.toStableParcelable;
+import static android.net.dhcp6.Dhcp6Packet.PrefixDelegation;
 import static android.net.ip.IIpClient.PROV_IPV4_DISABLED;
 import static android.net.ip.IIpClient.PROV_IPV6_DISABLED;
 import static android.net.ip.IIpClient.PROV_IPV6_LINKLOCAL;
@@ -25,6 +27,7 @@ import static android.net.ip.IIpClient.PROV_IPV6_SLAAC;
 import static android.net.ip.IIpClientCallbacks.DTIM_MULTIPLIER_RESET;
 import static android.net.ip.IpReachabilityMonitor.INVALID_REACHABILITY_LOSS_TYPE;
 import static android.net.ip.IpReachabilityMonitor.nudEventTypeToInt;
+import static android.net.util.NetworkConstants.RFC7421_PREFIX_LENGTH;
 import static android.net.util.SocketUtils.makePacketSocketAddress;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_PACKET;
@@ -37,6 +40,7 @@ import static com.android.net.module.util.NetworkStackConstants.ARP_REPLY;
 import static com.android.net.module.util.NetworkStackConstants.ETHER_BROADCAST;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_ROUTERS_MULTICAST;
 import static com.android.net.module.util.NetworkStackConstants.VENDOR_SPECIFIC_IE_ID;
+import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DISABLE_ACCEPT_RA_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GRATUITOUS_NA_VERSION;
@@ -66,6 +70,7 @@ import android.net.apf.ApfCapabilities;
 import android.net.apf.ApfFilter;
 import android.net.dhcp.DhcpClient;
 import android.net.dhcp.DhcpPacket;
+import android.net.dhcp6.Dhcp6Client;
 import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.IpManagerEvent;
 import android.net.networkstack.aidl.dhcp.DhcpOption;
@@ -112,6 +117,7 @@ import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.SharedLog;
 import com.android.net.module.util.SocketUtils;
 import com.android.net.module.util.ip.InterfaceController;
+import com.android.net.module.util.netlink.NetlinkUtils;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.networkstack.apishim.SocketUtilsShimImpl;
@@ -135,6 +141,7 @@ import java.net.MalformedURLException;
 import java.net.SocketAddress;
 import java.net.SocketException;
 import java.net.URL;
+import java.net.UnknownHostException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -488,6 +495,7 @@ public class IpClient extends StateMachine {
     private static final int CMD_UPDATE_L2INFORMATION = 17;
     private static final int CMD_SET_DTIM_MULTIPLIER_AFTER_DELAY = 18;
     private static final int CMD_UPDATE_APF_CAPABILITIES = 19;
+    private static final int EVENT_IPV6_AUTOCONF_TIMEOUT = 20;
 
     private static final int ARG_LINKPROP_CHANGED_LINKSTATE_DOWN = 0;
     private static final int ARG_LINKPROP_CHANGED_LINKSTATE_UP = 1;
@@ -554,6 +562,12 @@ public class IpClient extends StateMachine {
             "ipclient_before_ipv6_prov_max_dtim_multiplier";
     @VisibleForTesting
     static final int DEFAULT_BEFORE_IPV6_PROV_MAX_DTIM_MULTIPLIER = 1;
+
+    // Timeout to wait for IPv6 autoconf via SLAAC to complete before starting DHCPv6
+    // prefix delegation.
+    @VisibleForTesting
+    static final String CONFIG_IPV6_AUTOCONF_TIMEOUT = "ipclient_ipv6_autoconf_timeout";
+    private static final int DEFAULT_IPV6_AUTOCONF_TIMEOUT_MS = 5000;
 
     private static final boolean NO_CALLBACKS = false;
     private static final boolean SEND_CALLBACKS = true;
@@ -627,6 +641,9 @@ public class IpClient extends StateMachine {
     // Ignore nonzero RDNSS option lifetimes below this value. 0 = disabled.
     private final int mMinRdnssLifetimeSec;
 
+    // Experiment flag read from device config.
+    private final boolean mDhcp6PrefixDelegationEnabled;
+
     private InterfaceParams mInterfaceParams;
 
     /**
@@ -636,6 +653,7 @@ public class IpClient extends StateMachine {
     private android.net.shared.ProvisioningConfiguration mConfiguration;
     private IpReachabilityMonitor mIpReachabilityMonitor;
     private DhcpClient mDhcpClient;
+    private Dhcp6Client mDhcp6Client;
     private DhcpResults mDhcpResults;
     private String mTcpBufferSizes;
     private ProxyInfo mHttpProxy;
@@ -650,6 +668,8 @@ public class IpClient extends StateMachine {
     private Integer mDadTransmits = null;
     private int mMaxDtimMultiplier = DTIM_MULTIPLIER_RESET;
     private ApfCapabilities mCurrentApfCapabilities;
+    private PrefixDelegation mPrefixDelegation;
+    private WakeupMessage mIpv6AutoconfTimeoutAlarm = null;
 
     /**
      * Reading the snapshot is an asynchronous operation initiated by invoking
@@ -688,6 +708,14 @@ public class IpClient extends StateMachine {
         public DhcpClient makeDhcpClient(Context context, StateMachine controller,
                 InterfaceParams ifParams, DhcpClient.Dependencies deps) {
             return DhcpClient.makeDhcpClient(context, controller, ifParams, deps);
+        }
+
+        /**
+         * Get a Dhcp6Client instance.
+         */
+        public Dhcp6Client makeDhcp6Client(Context context, StateMachine controller,
+                InterfaceParams ifParams) {
+            return Dhcp6Client.makeDhcp6Client(context, controller, ifParams);
         }
 
         /**
@@ -796,6 +824,9 @@ public class IpClient extends StateMachine {
         // InterfaceController.Dependencies class.
         mNetd = deps.getNetd(mContext);
         mInterfaceCtrl = new InterfaceController(mInterfaceName, mNetd, mLog);
+
+        mDhcp6PrefixDelegationEnabled = mDependencies.isFeatureEnabled(mContext,
+                IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION, false /* defaultEnabled */);
 
         mMinRdnssLifetimeSec = mDependencies.getDeviceConfigPropertyInt(
                 CONFIG_MIN_RDNSS_LIFETIME, DEFAULT_MIN_RDNSS_LIFETIME);
@@ -1330,6 +1361,7 @@ public class IpClient extends StateMachine {
         mDhcpResults = null;
         mTcpBufferSizes = "";
         mHttpProxy = null;
+        mPrefixDelegation = null;
 
         mLinkProperties = new LinkProperties();
         mLinkProperties.setInterfaceName(mInterfaceName);
@@ -1657,7 +1689,30 @@ public class IpClient extends StateMachine {
             // TODO: also look at the IPv6 RA (netlink) for captive portal URL
         }
 
-        // [4] Add in TCP buffer sizes and HTTP Proxy config, if available.
+        // [4] Add in data from DHCPv6 Prefix Delegation, if available.
+        if (mPrefixDelegation != null) {
+            try {
+                final IpPrefix destination =
+                        new IpPrefix(Inet6Address.getByAddress(mPrefixDelegation.ipo.prefix),
+                                mPrefixDelegation.ipo.prefixLen);
+                // Direct-connected route to delegated prefix. Add RTN_UNREACHABLE to this route
+                // based on the delegated prefix. To prevent the traffic loop between host and
+                // upstream delegated router. Because we specify the IFA_F_NOPREFIXROUTE when adding
+                // the IPv6 address, the kernel does not create a delegated prefix route, as a
+                // result, the user space won't receive any RTM_NEWROUTE message about the delegated
+                // prefix, we still need to install an unreachable route for the delegated prefix
+                // manually in LinkProperties to notify the caller this update.
+                // TODO: support RTN_BLACKHOLE in netd and use that on newer Android versions.
+                final RouteInfo route = new RouteInfo(destination, null /* gateway */,
+                        mInterfaceName, RTN_UNREACHABLE);
+                newLp.addRoute(route);
+            } catch (UnknownHostException e) {
+                Log.wtf(mTag, "Invalid delegated prefix "
+                        + HexDump.toHexString(mPrefixDelegation.ipo.prefix));
+            }
+        }
+
+        // [5] Add in TCP buffer sizes and HTTP Proxy config, if available.
         if (!TextUtils.isEmpty(mTcpBufferSizes)) {
             newLp.setTcpBufferSizes(mTcpBufferSizes);
         }
@@ -1665,7 +1720,7 @@ public class IpClient extends StateMachine {
             newLp.setHttpProxy(mHttpProxy);
         }
 
-        // [5] Add data from InitialConfiguration
+        // [6] Add data from InitialConfiguration
         if (mConfiguration != null && mConfiguration.mInitialConfig != null) {
             InitialConfiguration config = mConfiguration.mInitialConfig;
             // Add InitialConfiguration routes and dns server addresses once all addresses
@@ -1856,6 +1911,26 @@ public class IpClient extends StateMachine {
         final LinkProperties newLp = assembleLinkProperties();
         if (Objects.equals(newLp, mLinkProperties)) {
             return true;
+        }
+
+        // Set an alarm to wait for IPv6 autoconf via SLAAC to succeed after receiving an RA,
+        // if we don't see global IPv6 address within timeout then start DHCPv6 Prefix Delegation
+        // for provisioning. We cannot just check if there is an available on-link IPv6 DNS server
+        // in the LinkProperties, because on-link IPv6 DNS server won't be updated to LP until
+        // we have a global IPv6 address via PD. Instead, we have to check if the IPv6 default
+        // route exists and start DHCPv6 Prefix Delegation process if IPv6 provisioning still
+        // doesn't complete with success after timeout. This check also handles IPv6-only link
+        // local mode case, since there will be no IPv6 default route in that mode even with Prefix
+        // Delegation experiment flag enabled.
+        if (mDhcp6PrefixDelegationEnabled
+                && newLp.hasIpv6DefaultRoute()
+                && mIpv6AutoconfTimeoutAlarm == null) {
+            mIpv6AutoconfTimeoutAlarm = new WakeupMessage(mContext, getHandler(),
+                    mTag + ".EVENT_IPV6_AUTOCONF_TIMEOUT", EVENT_IPV6_AUTOCONF_TIMEOUT);
+            final long alarmTime = SystemClock.elapsedRealtime()
+                    + mDependencies.getDeviceConfigPropertyInt(CONFIG_IPV6_AUTOCONF_TIMEOUT,
+                            DEFAULT_IPV6_AUTOCONF_TIMEOUT_MS);
+            mIpv6AutoconfTimeoutAlarm.schedule(alarmTime);
         }
 
         // Check if new assigned IPv6 GUA is available in the LinkProperties now. If so, initiate
@@ -2056,6 +2131,16 @@ public class IpClient extends StateMachine {
         return mInterfaceCtrl.setIPv6PrivacyExtensions(true)
                 && mInterfaceCtrl.setIPv6AddrGenModeIfSupported(mConfiguration.mIPv6AddrGenMode)
                 && mInterfaceCtrl.enableIPv6();
+    }
+
+    private void startDhcp6PrefixDelegation() {
+        if (!mDhcp6PrefixDelegationEnabled) return;
+        if (mDhcp6Client != null) {
+            Log.wtf(mTag, "Dhcp6Client should never be non-null in startDhcp6PrefixDelegation");
+            return;
+        }
+        mDhcp6Client = mDependencies.makeDhcp6Client(mContext, IpClient.this, mInterfaceParams);
+        mDhcp6Client.sendMessage(Dhcp6Client.CMD_START_DHCP6);
     }
 
     private boolean applyInitialConfig(InitialConfiguration config) {
@@ -2297,6 +2382,7 @@ public class IpClient extends StateMachine {
                     break;
 
                 case DhcpClient.CMD_ON_QUIT:
+                case Dhcp6Client.CMD_ON_QUIT:
                     // Everything is already stopped.
                     logError("Unexpected CMD_ON_QUIT (already stopped).");
                     break;
@@ -2313,12 +2399,18 @@ public class IpClient extends StateMachine {
     class StoppingState extends State {
         @Override
         public void enter() {
-            if (mDhcpClient == null) {
-                // There's no DHCPv4 for which to wait; proceed to stopped.
+            if (mDhcpClient == null && mDhcp6Client == null) {
+                // There's no DHCPv4 as well as DHCPv6 for which to wait; proceed to stopped
                 deferMessage(obtainMessage(CMD_JUMP_STOPPING_TO_STOPPED));
             } else {
-                mDhcpClient.sendMessage(DhcpClient.CMD_STOP_DHCP);
-                mDhcpClient.doQuit();
+                if (mDhcpClient != null) {
+                    mDhcpClient.sendMessage(DhcpClient.CMD_STOP_DHCP);
+                    mDhcpClient.doQuit();
+                }
+                if (mDhcp6Client != null) {
+                    mDhcp6Client.sendMessage(Dhcp6Client.CMD_STOP_DHCP6);
+                    mDhcp6Client.doQuit();
+                }
             }
 
             // Restore the interface MTU to initial value if it has changed.
@@ -2349,7 +2441,20 @@ public class IpClient extends StateMachine {
 
                 case DhcpClient.CMD_ON_QUIT:
                     mDhcpClient = null;
-                    transitionTo(mStoppedState);
+                    // DhcpClient always starts no matter of target network type, however, we have
+                    // to make sure both of DHCPv4 and DHCPv6 client have quit from state machine
+                    // before transition to StoppedState, otherwise, we may miss CMD_ON_QUIT cmd
+                    // that arrives later and transit to StoppedState before that.
+                    if (mDhcp6Client == null) {
+                        transitionTo(mStoppedState);
+                    }
+                    break;
+
+                case Dhcp6Client.CMD_ON_QUIT:
+                    mDhcp6Client = null;
+                    if (mDhcpClient == null) {
+                        transitionTo(mStoppedState);
+                    }
                     break;
 
                 default:
@@ -2642,6 +2747,11 @@ public class IpClient extends StateMachine {
         public void exit() {
             stopDhcpAction();
 
+            if (mIpv6AutoconfTimeoutAlarm != null) {
+                mIpv6AutoconfTimeoutAlarm.cancel();
+                mIpv6AutoconfTimeoutAlarm = null;
+            }
+
             if (mIpReachabilityMonitor != null) {
                 mIpReachabilityMonitor.stop();
                 mIpReachabilityMonitor = null;
@@ -2688,6 +2798,28 @@ public class IpClient extends StateMachine {
             if (mDhcpActionInFlight) {
                 mCallback.onPostDhcpAction();
                 mDhcpActionInFlight = false;
+            }
+        }
+
+        private void clearIpv6PrefixDelegationAddresses() {
+            final IpPrefix prefix;
+            try {
+                prefix = new IpPrefix(Inet6Address.getByAddress(mPrefixDelegation.ipo.prefix),
+                        RFC7421_PREFIX_LENGTH);
+            } catch (UnknownHostException e) {
+                Log.wtf(TAG, "Invalid delegated prefix "
+                        + HexDump.toHexString(mPrefixDelegation.ipo.prefix));
+                return;
+            }
+
+            // Delete the global IPv6 address based on delegated prefix from interface.
+            for (LinkAddress la : mLinkProperties.getLinkAddresses()) {
+                if (!la.isIpv6()) continue;
+                final Inet6Address address = (Inet6Address) la.getAddress();
+                if (la.isIpv6() && prefix.contains(address)) {
+                    NetlinkUtils.sendRtmDelAddressRequest(mInterfaceParams.index, address,
+                            (short) la.getPrefixLength());
+                }
             }
         }
 
@@ -2794,6 +2926,13 @@ public class IpClient extends StateMachine {
                     stopDhcpAction();
                     break;
 
+                case EVENT_IPV6_AUTOCONF_TIMEOUT:
+                    if (mLinkProperties.isIpv6Provisioned()) break;
+                    Log.d(mTag, "Fail to get IPv6 address via autoconf, "
+                            + "start DHCPv6 Prefix Delegation");
+                    startDhcp6PrefixDelegation();
+                    break;
+
                 case DhcpClient.CMD_PRE_DHCP_ACTION:
                     if (mConfiguration.mRequestedPreDhcpActionMs > 0) {
                         ensureDhcpAction();
@@ -2868,10 +3007,35 @@ public class IpClient extends StateMachine {
                     }
                     break;
 
+                case Dhcp6Client.CMD_DHCP6_RESULT:
+                    switch(msg.arg1) {
+                        case Dhcp6Client.DHCP6_PD_SUCCESS:
+                            mPrefixDelegation = (PrefixDelegation) msg.obj;
+                            handleLinkPropertiesUpdate(SEND_CALLBACKS);
+                            break;
+
+                        case Dhcp6Client.DHCP6_PD_PREFIX_EXPIRED:
+                        case Dhcp6Client.DHCP6_PD_PREFIX_CHANGED:
+                            clearIpv6PrefixDelegationAddresses();
+                            mPrefixDelegation = null;
+                            handleLinkPropertiesUpdate(SEND_CALLBACKS);
+                            break;
+
+                        default:
+                            logError("Unknown CMD_DHCP6_RESULT status: %s", msg.arg1);
+                    }
+                    break;
+
                 case DhcpClient.CMD_ON_QUIT:
                     // DHCPv4 quit early for some reason.
-                    logError("Unexpected CMD_ON_QUIT.");
+                    logError("Unexpected CMD_ON_QUIT from DHCPv4.");
                     mDhcpClient = null;
+                    break;
+
+                case Dhcp6Client.CMD_ON_QUIT:
+                    // DHCPv6 quit early for some reason.
+                    logError("Unexpected CMD_ON_QUIT from DHCPv6.");
+                    mDhcp6Client = null;
                     break;
 
                 case CMD_SET_DTIM_MULTIPLIER_AFTER_DELAY:
