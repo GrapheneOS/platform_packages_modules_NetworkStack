@@ -175,7 +175,17 @@ public class Dhcp6Client extends StateMachine {
     }
 
     /**
-     * Quit the Dhcp6Client state machine.
+     * Make a Dhcp6Client instance.
+     */
+    public static Dhcp6Client makeDhcp6Client(@NonNull final Context context,
+            @NonNull final StateMachine controller, @NonNull final InterfaceParams ifParams) {
+        final Dhcp6Client client = new Dhcp6Client(context, controller, ifParams);
+        client.start();
+        return client;
+    }
+
+    /**
+     * Quit the Dhcp6 StateMachine.
      *
      * @hide
      */
