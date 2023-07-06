@@ -24,6 +24,8 @@ import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_SUSPENDED;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_TRUSTED;
 import static android.net.NetworkCapabilities.TRANSPORT_TEST;
+import static android.net.RouteInfo.RTN_UNICAST;
+import static android.net.RouteInfo.RTN_UNREACHABLE;
 import static android.net.dhcp.DhcpClient.EXPIRED_LEASE;
 import static android.net.dhcp.DhcpPacket.DHCP_BOOTREQUEST;
 import static android.net.dhcp.DhcpPacket.DHCP_CLIENT;
@@ -36,6 +38,7 @@ import static android.net.dhcp.DhcpPacket.INFINITE_LEASE;
 import static android.net.dhcp.DhcpPacket.MIN_V6ONLY_WAIT_MS;
 import static android.net.dhcp.DhcpResultsParcelableUtil.fromStableParcelable;
 import static android.net.ip.IIpClientCallbacks.DTIM_MULTIPLIER_RESET;
+import static android.net.ip.IpClient.CONFIG_IPV6_AUTOCONF_TIMEOUT;
 import static android.net.ip.IpClientLinkObserver.CLAT_PREFIX;
 import static android.net.ip.IpClientLinkObserver.CONFIG_SOCKET_RECV_BUFSIZE;
 import static android.net.ip.IpReachabilityMonitor.NUD_MCAST_RESOLICIT_NUM;
@@ -44,11 +47,16 @@ import static android.net.ipmemorystore.Status.SUCCESS;
 import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.IFA_F_TEMPORARY;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
+import static android.system.OsConstants.IPPROTO_IPV6;
+import static android.system.OsConstants.IPPROTO_UDP;
 
 import static com.android.net.module.util.Inet4AddressUtils.getBroadcastAddress;
 import static com.android.net.module.util.Inet4AddressUtils.getPrefixMaskAsInet4Address;
+import static com.android.net.module.util.NetworkStackConstants.ALL_DHCP_RELAY_AGENTS_AND_SERVERS;
 import static com.android.net.module.util.NetworkStackConstants.ARP_REPLY;
 import static com.android.net.module.util.NetworkStackConstants.ARP_REQUEST;
+import static com.android.net.module.util.NetworkStackConstants.DHCP6_CLIENT_PORT;
+import static com.android.net.module.util.NetworkStackConstants.DHCP6_SERVER_PORT;
 import static com.android.net.module.util.NetworkStackConstants.ETHER_ADDR_LEN;
 import static com.android.net.module.util.NetworkStackConstants.ETHER_BROADCAST;
 import static com.android.net.module.util.NetworkStackConstants.ETHER_HEADER_LEN;
@@ -139,6 +147,12 @@ import android.net.dhcp.DhcpDiscoverPacket;
 import android.net.dhcp.DhcpPacket;
 import android.net.dhcp.DhcpPacket.ParseException;
 import android.net.dhcp.DhcpRequestPacket;
+import android.net.dhcp6.Dhcp6Client;
+import android.net.dhcp6.Dhcp6Packet;
+import android.net.dhcp6.Dhcp6RebindPacket;
+import android.net.dhcp6.Dhcp6RenewPacket;
+import android.net.dhcp6.Dhcp6RequestPacket;
+import android.net.dhcp6.Dhcp6SolicitPacket;
 import android.net.ipmemorystore.NetworkAttributes;
 import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener;
 import android.net.ipmemorystore.Status;
@@ -172,10 +186,14 @@ import com.android.internal.util.StateMachine;
 import com.android.net.module.util.ArrayTrackRecord;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.Ipv6Utils;
+import com.android.net.module.util.PacketBuilder;
 import com.android.net.module.util.SharedLog;
+import com.android.net.module.util.Struct;
 import com.android.net.module.util.ip.IpNeighborMonitor;
 import com.android.net.module.util.ip.IpNeighborMonitor.NeighborEventConsumer;
 import com.android.net.module.util.netlink.StructNdOptPref64;
+import com.android.net.module.util.structs.EthernetHeader;
+import com.android.net.module.util.structs.Ipv6Header;
 import com.android.net.module.util.structs.LlaOption;
 import com.android.net.module.util.structs.PrefixInformationOption;
 import com.android.net.module.util.structs.RdnssOption;
@@ -339,6 +357,7 @@ public abstract class IpClientIntegrationTestCommon {
     private TapPacketReader mPacketReader;
     private FileDescriptor mTapFd;
     private byte[] mClientMac;
+    private InetAddress mClientIpAddress;
     private TestableNetworkAgent mNetworkAgent;
     private HandlerThread mNetworkAgentThread;
 
@@ -352,12 +371,15 @@ public abstract class IpClientIntegrationTestCommon {
             LazyKt.lazy(() -> mPacketReader.getReceivedPackets().newReadHead());
     private Lazy<ArrayTrackRecord<byte[]>.ReadHead> mArpPacketReadHead =
             LazyKt.lazy(() -> mPacketReader.getReceivedPackets().newReadHead());
+    private Lazy<ArrayTrackRecord<byte[]>.ReadHead> mDhcp6PacketReadHead =
+            LazyKt.lazy(() -> mPacketReader.getReceivedPackets().newReadHead());
 
     // Ethernet header
     private static final int ETH_HEADER_LEN = 14;
 
     // IP header
     private static final int IPV4_HEADER_LEN = 20;
+    private static final int IPV6_HEADER_LEN = 40;
     private static final int IPV4_SRC_ADDR_OFFSET = ETH_HEADER_LEN + 12;
     private static final int IPV4_DST_ADDR_OFFSET = IPV4_SRC_ADDR_OFFSET + 4;
 
@@ -372,6 +394,10 @@ public abstract class IpClientIntegrationTestCommon {
     private static final int DHCP_MESSAGE_OP_CODE_OFFSET = DHCP_HEADER_OFFSET + 0;
     private static final int DHCP_TRANSACTION_ID_OFFSET = DHCP_HEADER_OFFSET + 4;
     private static final int DHCP_OPTION_MAGIC_COOKIE_OFFSET = DHCP_HEADER_OFFSET + 236;
+
+    // DHCPv6 header
+    private static final int DHCP6_HEADER_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN
+            + UDP_HEADER_LEN;
 
     private static final Inet4Address SERVER_ADDR =
             (Inet4Address) InetAddresses.parseNumericAddress("192.168.1.100");
@@ -397,6 +423,15 @@ public abstract class IpClientIntegrationTestCommon {
     private static final byte[] ROUTER_MAC_BYTES = ROUTER_MAC.toByteArray();
     private static final Inet6Address ROUTER_LINK_LOCAL =
                 (Inet6Address) InetAddresses.parseNumericAddress("fe80::1");
+    private static final byte[] ROUTER_DUID = new byte[] {
+            // type: Link-layer address, hardware type: EUI64(27)
+            (byte) 0x00, (byte) 0x03, (byte) 0x00, (byte) 0x1b,
+            // set 7th bit, and copy the first 3 bytes of mac address
+            (byte) 0x02, (byte) 0x1A, (byte) 0x11,
+            (byte) 0xFF, (byte) 0xFE,
+            // copy the last 3 bytes of mac address
+            (byte) 0x22, (byte) 0x33, (byte) 0x44,
+    };
     private static final String TEST_HOST_NAME = "AOSP on Crosshatch";
     private static final String TEST_HOST_NAME_TRANSLITERATION = "AOSP-on-Crosshatch";
     private static final String TEST_CAPTIVE_PORTAL_URL = "https://example.com/capportapi";
@@ -425,6 +460,7 @@ public abstract class IpClientIntegrationTestCommon {
         // Can't use SparseIntArray, it doesn't have an easy way to know if a key is not present.
         private HashMap<String, Integer> mIntConfigProperties = new HashMap<>();
         private DhcpClient mDhcpClient;
+        private Dhcp6Client mDhcp6Client;
         private boolean mIsHostnameConfigurationEnabled;
         private String mHostname;
         private boolean mIsInterfaceRecovered;
@@ -467,6 +503,13 @@ public abstract class IpClientIntegrationTestCommon {
                 InterfaceParams ifParams, DhcpClient.Dependencies deps) {
             mDhcpClient = DhcpClient.makeDhcpClient(context, controller, ifParams, deps);
             return mDhcpClient;
+        }
+
+        @Override
+        public Dhcp6Client makeDhcp6Client(Context context, StateMachine controller,
+                InterfaceParams ifParams) {
+            mDhcp6Client = Dhcp6Client.makeDhcp6Client(context, controller, ifParams);
+            return mDhcp6Client;
         }
 
         @Override
@@ -641,6 +684,10 @@ public abstract class IpClientIntegrationTestCommon {
         setFeatureEnabled(NetworkStackUtils.IPCLIENT_PARSE_NETLINK_EVENTS_VERSION,
                 mIsNetlinkEventParseEnabled /* default value */);
 
+        // Enable DHCPv6 Prefix Delegation.
+        setFeatureEnabled(NetworkStackUtils.IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION,
+                true /* isDhcp6PrefixDelegationEnabled */);
+
         setUpTapInterface();
         // It turns out that Router Solicitation will also be sent out even after the tap interface
         // is brought up, however, we want to wait for RS which is sent due to IPv6 stack is enabled
@@ -656,6 +703,8 @@ public abstract class IpClientIntegrationTestCommon {
             setUpIpClient();
             // Enable packet retransmit alarm in DhcpClient.
             enableRealAlarm("DhcpClient." + mIfaceName + ".KICK");
+            // Enable alarm for IPv6 autoconf via SLAAC in IpClient.
+            enableRealAlarm("IpClient." + mIfaceName + ".EVENT_IPV6_AUTOCONF_TIMEOUT");
         }
 
         mIIpClient = makeIIpClient(mIfaceName, mCb);
@@ -664,6 +713,8 @@ public abstract class IpClientIntegrationTestCommon {
         // more realistic.
         mIIpClient.setMulticastFilter(true);
         setDeviceConfigForMaxDtimMultiplier();
+        // Set IPv6 autoconfi timeout.
+        setDeviceConfigProperty(IpClient.CONFIG_IPV6_AUTOCONF_TIMEOUT, 500 /* default value */);
     }
 
     protected void setUpMocks() throws Exception {
@@ -703,6 +754,9 @@ public abstract class IpClientIntegrationTestCommon {
         // cases are still working, meanwhile in order to easily overflow the receive buffer by
         // sending as few RAs as possible for test case where it's used to verify ENOBUFS.
         mDependencies.setDeviceConfigProperty(CONFIG_SOCKET_RECV_BUFSIZE, 100 * 1024);
+
+        // Set the timeout to wait IPv6 autoconf to complete.
+        mDependencies.setDeviceConfigProperty(CONFIG_IPV6_AUTOCONF_TIMEOUT, 500);
     }
 
     private void awaitIpClientShutdown() throws Exception {
@@ -905,6 +959,38 @@ public abstract class IpClientIntegrationTestCommon {
         return true;
     }
 
+    private boolean isDhcp6Packet(final byte[] packet) {
+        final ByteBuffer buffer = ByteBuffer.wrap(packet);
+
+        // check the packet length
+        if (packet.length < DHCP6_HEADER_OFFSET) return false;
+
+        // check Ethernet header
+        final EthernetHeader ethHdr = Struct.parse(EthernetHeader.class, buffer);
+        if (ethHdr.etherType != ETH_P_IPV6) {
+            return false;
+        }
+
+        // check IPv6 header
+        final Ipv6Header ipv6Hdr = Struct.parse(Ipv6Header.class, buffer);
+        final int version = (ipv6Hdr.vtf >> 28) & 0x0F;
+        if (version != 6) {
+            return false;
+        }
+        if (ipv6Hdr.nextHeader != IPPROTO_UDP) {
+            return false;
+        }
+        if (!ipv6Hdr.dstIp.equals(ALL_DHCP_RELAY_AGENTS_AND_SERVERS)) {
+            return false;
+        }
+        mClientIpAddress = ipv6Hdr.srcIp;
+
+        // check the source port and dest port in UDP header
+        final short udpSrcPort = buffer.getShort();
+        final short udpDstPort = buffer.getShort();
+        return (udpSrcPort == DHCP6_CLIENT_PORT && udpDstPort == DHCP6_SERVER_PORT);
+    }
+
     private ArpPacket parseArpPacketOrNull(final byte[] packet) {
         try {
             return ArpPacket.parseArpPacket(packet, packet.length);
@@ -974,6 +1060,37 @@ public abstract class IpClientIntegrationTestCommon {
         return DhcpPacket.buildNakPacket(DhcpPacket.ENCAP_L2, packet.getTransactionId(),
             SERVER_ADDR /* serverIp */, INADDR_ANY /* relayIp */, packet.getClientMac(),
             false /* broadcast */, message);
+    }
+
+    private static ByteBuffer buildDhcp6Packet(final ByteBuffer payload, final MacAddress clientMac,
+            final Inet6Address clientIp) throws Exception {
+        final ByteBuffer buffer = PacketBuilder.allocate(true /* hasEther */, IPPROTO_IPV6,
+                IPPROTO_UDP, payload.limit());
+        final PacketBuilder pb = new PacketBuilder(buffer);
+
+        pb.writeL2Header(ROUTER_MAC /* srcMac */, clientMac /* dstMac */, (short) ETH_P_IPV6);
+        pb.writeIpv6Header(0x60000000 /* version=6, traffic class=0, flow label=0 */,
+                (byte) IPPROTO_UDP, (short) 64 /* hop limit */, ROUTER_LINK_LOCAL /* srcIp */,
+                clientIp /* dstIp */);
+        pb.writeUdpHeader((short) DHCP6_SERVER_PORT /*src port */,
+                (short) DHCP6_CLIENT_PORT /* dst port */);
+        buffer.put(payload);
+        return pb.finalizePacket();
+    }
+
+    private static ByteBuffer buildDhcp6Advertise(final Dhcp6Packet solicit, final byte[] iapd,
+            final byte[] clientMac, final Inet6Address clientIp) throws Exception {
+        final ByteBuffer advertise = Dhcp6Packet.buildAdvertisePacket(solicit.getTransactionId(),
+                iapd, solicit.getClientDuid(), ROUTER_DUID);
+        return buildDhcp6Packet(advertise, MacAddress.fromBytes(clientMac), clientIp);
+    }
+
+    private static ByteBuffer buildDhcp6Reply(final Dhcp6Packet request, final byte[] iapd,
+            final byte[] clientMac, final Inet6Address clientIp, boolean rapidCommit)
+            throws Exception {
+        final ByteBuffer reply = Dhcp6Packet.buildReplyPacket(request.getTransactionId(),
+                iapd, request.getClientDuid(), ROUTER_DUID, rapidCommit);
+        return buildDhcp6Packet(reply, MacAddress.fromBytes(clientMac), clientIp);
     }
 
     private void sendArpReply(final byte[] dstMac, final byte[] srcMac, final Inet4Address targetIp,
@@ -1156,6 +1273,25 @@ public abstract class IpClientIntegrationTestCommon {
     private DhcpPacket getNextDhcpPacket() throws Exception {
         final DhcpPacket packet = getNextDhcpPacket(PACKET_TIMEOUT_MS);
         assertNotNull("No expected DHCP packet received on interface within timeout", packet);
+        return packet;
+    }
+
+    private Dhcp6Packet getNextDhcp6Packet(final long timeout) throws Exception {
+        byte[] packet;
+        while ((packet = mDhcp6PacketReadHead.getValue()
+                .poll(timeout, this::isDhcp6Packet)) != null) {
+            // Strip the Ethernet/IPv6/UDP headers, only keep DHCPv6 message payload for decode.
+            final byte[] payload =
+                    Arrays.copyOfRange(packet, DHCP6_HEADER_OFFSET, packet.length);
+            final Dhcp6Packet dhcp6Packet = Dhcp6Packet.decodePacket(payload, payload.length);
+            if (dhcp6Packet != null) return dhcp6Packet;
+        }
+        return null;
+    }
+
+    private Dhcp6Packet getNextDhcp6Packet() throws Exception {
+        final Dhcp6Packet packet = getNextDhcp6Packet(PACKET_TIMEOUT_MS);
+        assertNotNull("No expected DHCPv6 packet received on interface within timeout", packet);
         return packet;
     }
 
@@ -3020,8 +3156,24 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     private boolean hasRouteTo(@NonNull final LinkProperties lp, @NonNull final String prefix) {
+        return hasRouteTo(lp, prefix, RTN_UNICAST);
+    }
+
+    private boolean hasRouteTo(@NonNull final LinkProperties lp, @NonNull final String prefix,
+            int type) {
         for (RouteInfo r : lp.getRoutes()) {
-            if (r.getDestination().equals(new IpPrefix(prefix))) return true;
+            if (r.getDestination().equals(new IpPrefix(prefix))) return r.getType() == type;
+        }
+        return false;
+    }
+
+    private boolean hasIpv6AddressPrefixedWith(@NonNull final LinkProperties lp,
+            @NonNull final IpPrefix prefix) {
+        for (LinkAddress la : lp.getLinkAddresses()) {
+            final InetAddress addr = la.getAddress();
+            if ((addr instanceof Inet6Address) && !addr.isLinkLocalAddress()) {
+                return prefix.contains(addr);
+            }
         }
         return false;
     }
@@ -4534,5 +4686,223 @@ public abstract class IpClientIntegrationTestCommon {
         // Stop IpClient and verify if the multiplier has been reset.
         mIIpClient.stop();
         inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).setMaxDtimMultiplier(DTIM_MULTIPLIER_RESET);
+    }
+
+    private void handleDhcp6Packets(final IpPrefix prefix, boolean shouldReplyRapidCommit)
+            throws Exception {
+        handleDhcp6Packets(prefix, 3600 /* t1 */, 4500 /* t2 */, 4500 /* preferred */,
+                7200 /* valid */, shouldReplyRapidCommit);
+    }
+
+    private void handleDhcp6Packets(final IpPrefix prefix, int t1, int t2, int preferred, int valid,
+            boolean shouldReplyRapidCommit) throws Exception {
+        Dhcp6Packet packet;
+        while ((packet = getNextDhcp6Packet()) != null) {
+            final ByteBuffer iapd = Dhcp6Packet.buildIaPdOption(packet.getIaId(), t1, t2,
+                    preferred, valid, prefix.getRawAddress(), (byte) prefix.getPrefixLength());
+            if (packet instanceof Dhcp6SolicitPacket) {
+                if (shouldReplyRapidCommit) {
+                    mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
+                            (Inet6Address) mClientIpAddress, true /* rapidCommit */));
+                } else {
+                    mPacketReader.sendResponse(buildDhcp6Advertise(packet, iapd.array(), mClientMac,
+                            (Inet6Address) mClientIpAddress));
+                }
+            } else if (packet instanceof Dhcp6RequestPacket) {
+                mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
+                          (Inet6Address) mClientIpAddress, false /* rapidCommit */));
+            } else {
+                fail("invalid DHCPv6 Packet");
+            }
+
+            if ((packet instanceof Dhcp6RequestPacket) || shouldReplyRapidCommit) {
+                return;
+            }
+        }
+        fail("No DHCPv6 packet received on interface within timeout");
+    }
+
+    private void prepareDhcp6PdTest() throws Exception {
+        final String dnsServer = "2001:4860:4860::64";
+        final ByteBuffer rdnss = buildRdnssOption(3600, dnsServer);
+        final ByteBuffer ra = buildRaPacket(rdnss);
+
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIPv4()
+                .build();
+        startIpClientProvisioning(config);
+
+        waitForRouterSolicitation();
+        mPacketReader.sendResponse(ra);
+    }
+
+    @Test
+    public void testDhcp6Pd() throws Exception {
+        final IpPrefix prefix = new IpPrefix("2001:db8:1::/64");
+        prepareDhcp6PdTest();
+        handleDhcp6Packets(prefix, true /* shouldReplyRapidCommit */);
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        assertTrue(hasIpv6AddressPrefixedWith(captor.getValue(), prefix));
+    }
+
+    @Test
+    public void testDhcp6Pd_disableRapidCommit() throws Exception {
+        final IpPrefix prefix = new IpPrefix("2001:db8:1::/64");
+        prepareDhcp6PdTest();
+        handleDhcp6Packets(prefix, false /* shouldReplyRapidCommit */);
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        assertTrue(hasIpv6AddressPrefixedWith(captor.getValue(), prefix));
+    }
+
+    @Test
+    public void testDhcp6Pd_longPrefixLength() throws Exception {
+        prepareDhcp6PdTest();
+        handleDhcp6Packets(new IpPrefix("2001:db8:1::/80"), true /* shouldReplyRapidCommit */);
+        verify(mCb, never()).onProvisioningSuccess(any());
+    }
+
+    @Test
+    public void testDhcp6Pd_shortPrefixLength() throws Exception {
+        final IpPrefix prefix = new IpPrefix("2001:db8:1::/56");
+        prepareDhcp6PdTest();
+        handleDhcp6Packets(prefix, true /* shouldReplyRapidCommit */);
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        assertTrue(hasIpv6AddressPrefixedWith(captor.getValue(), prefix));
+    }
+
+    @Test
+    public void testDhcp6Pd_T1GreaterThanT2() throws Exception {
+        prepareDhcp6PdTest();
+        handleDhcp6Packets(new IpPrefix("2001:db8:1::/80"), 4500 /* t1 */, 3600 /* t2 */,
+                4500 /* preferred */, 7200 /* valid */, true /* shouldReplyRapidCommit */);
+        verify(mCb, never()).onProvisioningSuccess(any());
+    }
+
+    @Test
+    public void testDhcp6Pd_preferredLifetimeGreaterThanValidLifetime() throws Exception {
+        prepareDhcp6PdTest();
+        handleDhcp6Packets(new IpPrefix("2001:db8:1::/80"), 3600 /* t1 */, 4500 /* t2 */,
+                7200 /* preferred */, 4500 /* valid */, true /* shouldReplyRapidCommit */);
+        verify(mCb, never()).onProvisioningSuccess(any());
+    }
+
+    @Test
+    public void testDhcp6Pd_preferredLifetimeLessThanT2() throws Exception {
+        prepareDhcp6PdTest();
+        handleDhcp6Packets(new IpPrefix("2001:db8:1::/80"), 3600 /* t1 */, 4500 /* t2 */,
+                3600 /* preferred */, 4000 /* valid */, true /* shouldReplyRapidCommit */);
+        verify(mCb, never()).onProvisioningSuccess(any());
+    }
+
+    @Test
+    public void testDhcp6Pd_notStart() throws Exception {
+        final ByteBuffer pio = buildPioOption(3600, 1800, "2001:db8:1::/64");
+        final ByteBuffer rdnss = buildRdnssOption(3600, "2001:4860:4860::64");
+        final ByteBuffer slla = buildSllaOption();
+        final ByteBuffer ra = buildRaPacket(pio, rdnss, slla);
+
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIPv4()
+                .build();
+        startIpClientProvisioning(config);
+
+        waitForRouterSolicitation();
+        mPacketReader.sendResponse(ra);
+
+        // Response an normal RA for IPv6 provisioning, then DHCPv6 prefix delegation
+        // should not start.
+        assertNull(getNextDhcp6Packet(TEST_TIMEOUT_MS));
+        verify(mCb).onProvisioningSuccess(any());
+    }
+
+    @Test
+    public void testDhcp6Pd_dualstack() throws Exception {
+        final String dnsServer = "2001:4860:4860::64";
+        final ByteBuffer rdnss = buildRdnssOption(3600, dnsServer);
+        final ByteBuffer ra = buildRaPacket(rdnss);
+
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .build();
+        setDhcpFeatures(false /* isDhcpLeaseCacheEnabled */, true /* isRapidCommitEnabled */,
+                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+        startIpClientProvisioning(config);
+
+        waitForRouterSolicitation();
+        mPacketReader.sendResponse(ra);
+
+        // Start IPv4 provisioning and wait until entire provisioning completes.
+        handleDhcpPackets(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
+                true /* shouldReplyRapidCommitAck */, TEST_DEFAULT_MTU, null /* serverSentUrl */);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(any());
+
+        // Start DHCPv6 Prefix Delegation.
+        final IpPrefix prefix = new IpPrefix("2001:db8:1::/64");
+        handleDhcp6Packets(prefix, false /* shouldReplyRapidCommit */);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(argThat(
+                x -> x.isIpv6Provisioned()
+                        && hasIpv6AddressPrefixedWith(x, prefix)
+                        && hasRouteTo(x, "2001:db8:1::/64", RTN_UNREACHABLE)
+        ));
+    }
+
+    private void prepareDhcp6PdRenewTest() throws Exception {
+        final IpPrefix prefix = new IpPrefix("2001:db8:1::/64");
+        prepareDhcp6PdTest();
+        handleDhcp6Packets(prefix, true /* shouldReplyRapidCommit */);
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        assertTrue(hasIpv6AddressPrefixedWith(captor.getValue(), prefix));
+    }
+
+    @Test
+    @SignatureRequiredTest(reason = "Need to mock the DHCP6 renew/rebind alarms")
+    public void testDhcp6Pd_renewAndRebind() throws Exception {
+        prepareDhcp6PdRenewTest();
+
+        final InOrder inOrder = inOrder(mAlarm);
+        final Handler handler = mDependencies.mDhcp6Client.getHandler();
+        final OnAlarmListener renewAlarm = expectAlarmSet(inOrder, "RENEW", 3600, handler);
+        final OnAlarmListener rebindAlarm = expectAlarmSet(inOrder, "REBIND", 4500, handler);
+
+        handler.post(() -> renewAlarm.onAlarm());
+        HandlerUtils.waitForIdle(handler, TEST_TIMEOUT_MS);
+
+        Dhcp6Packet packet = getNextDhcp6Packet();
+        assertTrue(packet instanceof Dhcp6RenewPacket);
+
+        handler.post(() -> rebindAlarm.onAlarm());
+        HandlerUtils.waitForIdle(handler, TEST_TIMEOUT_MS);
+
+        packet = getNextDhcp6Packet();
+        assertTrue(packet instanceof Dhcp6RebindPacket);
+    }
+
+    @Test
+    @SignatureRequiredTest(reason = "Need to mock the DHCP6 renew/rebind alarms")
+    public void testDhcp6Pd_prefixMismatchOnRenew() throws Exception {
+        prepareDhcp6PdRenewTest();
+
+        final InOrder inOrder = inOrder(mAlarm);
+        final Handler handler = mDependencies.mDhcp6Client.getHandler();
+        final OnAlarmListener renewAlarm = expectAlarmSet(inOrder, "RENEW", 3600, handler);
+
+        handler.post(() -> renewAlarm.onAlarm());
+        HandlerUtils.waitForIdle(handler, TEST_TIMEOUT_MS);
+
+        Dhcp6Packet packet = getNextDhcp6Packet();
+        assertTrue(packet instanceof Dhcp6RenewPacket);
+
+        // Reply with a different prefix with requested one, check if all global IPv6 addresses
+        // will be deleted and loss the IPv6 provisioning.
+        final IpPrefix prefix1 = new IpPrefix("2001:db8:2::/64");
+        final ByteBuffer iapd = Dhcp6Packet.buildIaPdOption(packet.getIaId(), 3600 /* t1*/,
+                4500 /* t2 */, 4500 /* preferred */, 7200 /* valid */, prefix1.getRawAddress(),
+                (byte) 64 /* prefix length */);
+        mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
+                (Inet6Address) mClientIpAddress, false /* rapidCommit */));
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(any());
     }
 }
