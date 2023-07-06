@@ -281,6 +281,12 @@ public class NetworkStackUtils {
     public static final String APF_USE_RA_LIFETIME_CALCULATION_FIX_VERSION =
             "apf_use_ra_lifetime_calculation_fix_version";
 
+    /**
+     * Experiment flag to enable DHCPv6 Prefix Delegation(RFC8415) in IpClient.
+     */
+    public static final String IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION =
+            "ipclient_dhcpv6_prefix_delegation_version";
+
     static {
         System.loadLibrary("networkstackutilsjni");
     }
