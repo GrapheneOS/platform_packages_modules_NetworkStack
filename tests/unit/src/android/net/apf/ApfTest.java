@@ -1552,6 +1552,16 @@ public class ApfTest {
         program = ipClientCallback.getApfProgram();
         assertPass(program, mdnsv4packet);
         assertPass(program, mdnsv6packet);
+        // If packet contains more than one qname, pass the packet
+        mdnsv4packet = makeMdnsV4Packet("cccc.local", "dddd.local");
+        mdnsv6packet = makeMdnsV6Packet("cccc.local", "dddd.local");
+        assertPass(program, mdnsv4packet);
+        assertPass(program, mdnsv6packet);
+        // If packet doesn't contain any qname, pass the packet
+        mdnsv4packet = makeMdnsV4Packet();
+        mdnsv6packet = makeMdnsV6Packet();
+        assertPass(program, mdnsv4packet);
+        assertPass(program, mdnsv6packet);
 
         mdnsv4packet = makeMdnsV4Packet("abcd.local");
         mdnsv6packet = makeMdnsV6Packet("abcd.local");
