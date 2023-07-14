@@ -1594,7 +1594,9 @@ public class ApfFilter {
         // Here's a basic summary of what the mDNS filter program does:
         //
         // if it is a multicast mDNS packet
-        //    if QDCOUNT > 1 and the first QNAME is in the allowlist
+        //    if QDCOUNT != 1
+        //       pass
+        //    else if the QNAME is in the allowlist
         //       pass
         //    else:
         //       drop
@@ -1645,11 +1647,11 @@ public class ApfFilter {
         gen.addLoad16Indexed(Register.R0, UDP_DESTINATION_PORT_OFFSET);
         gen.addJumpIfR0NotEquals(MDNS_PORT, skipMdnsFilter);
 
-        // Only do the QNAME check if the QDCOUNT is more than 0.
-        // If there is more than one query (QDCOUNT > 1), we only matches the first QNAME.
         gen.addLoad16Indexed(Register.R0, MDNS_QDCOUNT_OFFSET);
-        gen.addJumpIfR0Equals(0, mDnsDropPacket);
+        // If QDCOUNT != 1, pass the packet
+        gen.addJumpIfR0NotEquals(1, mDnsAcceptPacket);
 
+        // If QDCOUNT == 1, matches the QNAME with allowlist.
         // Load offset for the first QNAME.
         gen.addLoadImmediate(Register.R0, MDNS_QNAME_OFFSET);
         gen.addAddR1();
