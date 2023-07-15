@@ -322,6 +322,8 @@ public class ApfFilter {
 
     private static final int ICMP6_TYPE_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN;
 
+    private static final int IPPROTO_HOPOPTS = 0;
+
     // NOTE: this must be added to the IPv4 header length in IPV4_HEADER_SIZE_MEMORY_SLOT
     private static final int UDP_DESTINATION_PORT_OFFSET = ETH_HEADER_LEN + 2;
     private static final int UDP_HEADER_LEN = 8;
@@ -1486,6 +1488,8 @@ public class ApfFilter {
     private void generateIPv6FilterLocked(ApfGenerator gen) throws IllegalInstructionException {
         // Here's a basic summary of what the IPv6 filter program does:
         //
+        // if there is a hop-by-hop option present (e.g. MLD query)
+        //   pass
         // if we're dropping multicast
         //   if it's not IPCMv6 or it's ICMPv6 but we're in doze mode:
         //     if it's multicast:
@@ -1499,6 +1503,10 @@ public class ApfFilter {
         //   drop
 
         gen.addLoad8(Register.R0, IPV6_NEXT_HEADER_OFFSET);
+
+        // MLD packets set the router-alert hop-by-hop option.
+        // TODO: be smarter about not blindly passing every packet with HBH options.
+        gen.addJumpIfR0Equals(IPPROTO_HOPOPTS, mCountAndPassLabel);
 
         // Drop multicast if the multicast filter is enabled.
         if (mMulticastFilter) {
