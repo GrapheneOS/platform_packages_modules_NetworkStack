@@ -32,9 +32,9 @@ public class Dhcp6RequestPacket extends Dhcp6Packet {
     /**
      * Generates a request packet with the specified parameters.
      */
-    Dhcp6RequestPacket(int transId, short secs, @NonNull final byte[] clientDuid,
+    Dhcp6RequestPacket(int transId, int elapsedTime, @NonNull final byte[] clientDuid,
             @NonNull final byte[] serverDuid, final byte[] iapd) {
-        super(transId, secs, clientDuid, serverDuid, iapd);
+        super(transId, elapsedTime, clientDuid, serverDuid, iapd);
     }
 
     /**
@@ -47,7 +47,7 @@ public class Dhcp6RequestPacket extends Dhcp6Packet {
 
         addTlv(packet, DHCP6_SERVER_IDENTIFIER, mServerDuid);
         addTlv(packet, DHCP6_CLIENT_IDENTIFIER, mClientDuid);
-        addTlv(packet, DHCP6_ELAPSED_TIME, mSecs);
+        addTlv(packet, DHCP6_ELAPSED_TIME, (short) (mElapsedTime & 0xFFFF));
         addTlv(packet, DHCP6_IA_PD, mIaPd);
 
         packet.flip();
