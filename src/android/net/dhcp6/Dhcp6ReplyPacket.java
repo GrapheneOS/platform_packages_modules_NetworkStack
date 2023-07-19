@@ -35,7 +35,7 @@ public class Dhcp6ReplyPacket extends Dhcp6Packet {
      */
     Dhcp6ReplyPacket(int transId, @NonNull final byte[] clientDuid,
             @NonNull final byte[] serverDuid, final byte[] iapd, boolean rapidCommit) {
-        super(transId, (short) 0 /* secs */, clientDuid, serverDuid, iapd);
+        super(transId, 0 /* elapsedTime */, clientDuid, serverDuid, iapd);
         mRapidCommit = rapidCommit;
     }
 
