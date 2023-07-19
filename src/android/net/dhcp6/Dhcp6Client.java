@@ -292,37 +292,35 @@ public class Dhcp6Client extends StateMachine {
         mTransStartMillis = SystemClock.elapsedRealtime();
     }
 
-    private short getHundredthsOfSec() {
-        return (short) ((SystemClock.elapsedRealtime() - mTransStartMillis) / 10);
+    private long getElapsedTimeMs() {
+        return SystemClock.elapsedRealtime() - mTransStartMillis;
     }
 
     @SuppressWarnings("ByteBufferBackingArray")
     private boolean sendSolicitPacket(final ByteBuffer iapd) {
         final ByteBuffer packet = Dhcp6Packet.buildSolicitPacket(mTransId,
-                getHundredthsOfSec() /* elapsed time */, iapd.array(), mClientDuid,
-                true /* rapidCommit */);
+                getElapsedTimeMs(), iapd.array(), mClientDuid, true /* rapidCommit */);
         return transmitPacket(packet, "solicit");
     }
 
     @SuppressWarnings("ByteBufferBackingArray")
     private boolean sendRequestPacket(final ByteBuffer iapd) {
-        final ByteBuffer packet = Dhcp6Packet.buildRequestPacket(mTransId,
-                getHundredthsOfSec() /* elapsed time */, iapd.array(), mClientDuid,
-                mServerDuid);
+        final ByteBuffer packet = Dhcp6Packet.buildRequestPacket(mTransId, getElapsedTimeMs(),
+                iapd.array(), mClientDuid, mServerDuid);
         return transmitPacket(packet, "request");
     }
 
     @SuppressWarnings("ByteBufferBackingArray")
     private boolean sendRenewPacket(final ByteBuffer iapd) {
-        final ByteBuffer packet = Dhcp6Packet.buildRenewPacket(mTransId,
-                getHundredthsOfSec() /* elapsed time*/, iapd.array(), mClientDuid, mServerDuid);
+        final ByteBuffer packet = Dhcp6Packet.buildRenewPacket(mTransId, getElapsedTimeMs(),
+                iapd.array(), mClientDuid, mServerDuid);
         return transmitPacket(packet, "renew");
     }
 
     @SuppressWarnings("ByteBufferBackingArray")
     private boolean sendRebindPacket(final ByteBuffer iapd) {
-        final ByteBuffer packet = Dhcp6Packet.buildRebindPacket(mTransId,
-                getHundredthsOfSec() /* elapsed time */, iapd.array(), mClientDuid);
+        final ByteBuffer packet = Dhcp6Packet.buildRebindPacket(mTransId, getElapsedTimeMs(),
+                iapd.array(), mClientDuid);
         return transmitPacket(packet, "rebind");
     }
 
