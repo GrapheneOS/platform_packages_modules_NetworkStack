@@ -2814,11 +2814,10 @@ public class IpClient extends StateMachine {
 
             // Delete the global IPv6 address based on delegated prefix from interface.
             for (LinkAddress la : mLinkProperties.getLinkAddresses()) {
-                if (!la.isIpv6()) continue;
-                final Inet6Address address = (Inet6Address) la.getAddress();
-                if (la.isIpv6() && prefix.contains(address)) {
-                    NetlinkUtils.sendRtmDelAddressRequest(mInterfaceParams.index, address,
-                            (short) la.getPrefixLength());
+                final InetAddress address = la.getAddress();
+                if (prefix.contains(address)) {
+                    NetlinkUtils.sendRtmDelAddressRequest(mInterfaceParams.index,
+                            (Inet6Address) address, (short) la.getPrefixLength());
                 }
             }
         }
