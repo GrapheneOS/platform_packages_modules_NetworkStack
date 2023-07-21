@@ -537,7 +537,7 @@ public class ApfFilter {
             socket = Os.socket(AF_PACKET, SOCK_RAW, ETH_P_IPV6);
             SocketAddress addr = makePacketSocketAddress(ETH_P_IPV6, mInterfaceParams.index);
             Os.bind(socket, addr);
-            NetworkStackUtils.attachRaFilter(socket, mApfCapabilities.apfPacketFormat);
+            NetworkStackUtils.attachRaFilter(socket);
         } catch(SocketException|ErrnoException e) {
             Log.e(TAG, "Error starting filter", e);
             return;
