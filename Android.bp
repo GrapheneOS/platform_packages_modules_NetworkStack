@@ -506,6 +506,9 @@ cc_library_shared {
     srcs: [
         "jni/network_stack_utils_jni.cpp"
     ],
+    header_libs: [
+        "bpf_headers",
+    ],
     sdk_version: "30",
     min_sdk_version: "30",
     shared_libs: [
