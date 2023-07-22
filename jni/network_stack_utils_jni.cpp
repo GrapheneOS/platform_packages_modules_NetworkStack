@@ -36,6 +36,7 @@
 #include <netjniutils/netjniutils.h>
 
 #include <android/log.h>
+#include <bpf/BpfClassic.h>
 
 namespace android {
 constexpr const char NETWORKSTACKUTILS_PKG_NAME[] =
@@ -116,11 +117,9 @@ static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jclass clazz, jobj
         BPF_STMT(BPF_LD  | BPF_H    | BPF_IND, kUDPDstPortIndirectOffset),
         BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   kDhcpClientPort, 0, 1),
 
-        // Accept.
-        BPF_STMT(BPF_RET | BPF_K,              0xffff),
+        BPF_ACCEPT,
 
-        // Reject.
-        BPF_STMT(BPF_RET | BPF_K,              0)
+        BPF_REJECT,
     };
     const sock_fprog filter = {
         sizeof(filter_code) / sizeof(filter_code[0]),
@@ -150,11 +149,9 @@ static void network_stack_utils_attachRaFilter(JNIEnv *env, jclass clazz, jobjec
         BPF_STMT(BPF_LD  | BPF_B   | BPF_ABS,  kICMPv6TypeOffset),
         BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K,    ND_ROUTER_ADVERT, 0, 1),
 
-        // Accept.
-        BPF_STMT(BPF_RET | BPF_K,              0xffff),
+        BPF_ACCEPT,
 
-        // Reject.
-        BPF_STMT(BPF_RET | BPF_K,              0)
+        BPF_REJECT,
     };
     static const sock_fprog filter = {
         sizeof(filter_code) / sizeof(filter_code[0]),
@@ -227,11 +224,9 @@ static void network_stack_utils_attachControlPacketFilter(
         BPF_JUMP(BPF_JMP | BPF_JGE  | BPF_K,   ND_ROUTER_SOLICIT, 0, 2),
         BPF_JUMP(BPF_JMP | BPF_JGT  | BPF_K,   ND_NEIGHBOR_ADVERT, 1, 0),
 
-        // Accept.
-        BPF_STMT(BPF_RET | BPF_K,              0xffff),
+        BPF_ACCEPT,
 
-        // Reject.
-        BPF_STMT(BPF_RET | BPF_K,              0)
+        BPF_REJECT,
     };
     static const sock_fprog filter = {
         sizeof(filter_code) / sizeof(filter_code[0]),
