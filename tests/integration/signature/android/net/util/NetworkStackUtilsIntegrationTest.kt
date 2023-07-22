@@ -176,7 +176,7 @@ class NetworkStackUtilsIntegrationTest {
         echo.rewind()
         assertNextPacketEquals(socket, echo.readAsArray(), "ICMPv6 echo")
 
-        NetworkStackUtils.attachRaFilter(socket, ARPHRD_ETHER)
+        NetworkStackUtils.attachRaFilter(socket)
         // Send another echo, then an RA. After setting the filter expect only the RA.
         echo.rewind()
         reader.sendResponse(echo)
