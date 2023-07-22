@@ -103,23 +103,22 @@ static void network_stack_utils_addArpEntry(JNIEnv *env, jclass clazz, jbyteArra
 static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jclass clazz, jobject javaFd) {
     static sock_filter filter_code[] = {
         // Check the protocol is UDP.
-        BPF_STMT(BPF_LD  | BPF_B    | BPF_ABS, kIPv4Protocol),
-        BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   IPPROTO_UDP, 0, 6),
+        BPF_LOAD_IPV4_U8(protocol),
+        BPF2_REJECT_IF_NOT_EQUAL(IPPROTO_UDP),
 
         // Check this is not a fragment.
-        BPF_STMT(BPF_LD  | BPF_H    | BPF_ABS, kIPv4FlagsOffset),
-        BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K,   IP_MF | IP_OFFMASK, 4, 0),
+        BPF_LOAD_IPV4_BE16(frag_off),
+        BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K,   IP_MF | IP_OFFMASK, 0, 1),
+        BPF_REJECT,
 
         // Get the IP header length.
         BPF_STMT(BPF_LDX | BPF_B    | BPF_MSH, kEtherHeaderLen),
 
         // Check the destination port.
         BPF_STMT(BPF_LD  | BPF_H    | BPF_IND, kUDPDstPortIndirectOffset),
-        BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   kDhcpClientPort, 0, 1),
+        BPF2_REJECT_IF_NOT_EQUAL(kDhcpClientPort),
 
         BPF_ACCEPT,
-
-        BPF_REJECT,
     };
     const sock_fprog filter = {
         sizeof(filter_code) / sizeof(filter_code[0]),
