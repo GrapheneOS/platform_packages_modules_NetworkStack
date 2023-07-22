@@ -132,26 +132,17 @@ static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jclass clazz, jobj
     }
 }
 
-static void network_stack_utils_attachRaFilter(JNIEnv *env, jclass clazz, jobject javaFd,
-        jint hardwareAddressType) {
-    if (hardwareAddressType != ARPHRD_ETHER) {
-        jniThrowExceptionFmt(env, "java/net/SocketException",
-                "attachRaFilter only supports ARPHRD_ETHER");
-        return;
-    }
-
+static void network_stack_utils_attachRaFilter(JNIEnv *env, jclass clazz, jobject javaFd) {
     static sock_filter filter_code[] = {
         // Check IPv6 Next Header is ICMPv6.
-        BPF_STMT(BPF_LD  | BPF_B   | BPF_ABS,  kIPv6NextHeader),
-        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K,    IPPROTO_ICMPV6, 0, 3),
+        BPF_LOAD_IPV6_U8(nexthdr),
+        BPF2_REJECT_IF_NOT_EQUAL(IPPROTO_ICMPV6),
 
         // Check ICMPv6 type is Router Advertisement.
-        BPF_STMT(BPF_LD  | BPF_B   | BPF_ABS,  kICMPv6TypeOffset),
-        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K,    ND_ROUTER_ADVERT, 0, 1),
+        BPF_LOAD_NET_RELATIVE_U8(sizeof(ipv6hdr) + offsetof(icmp6_hdr, icmp6_type)),
+        BPF2_REJECT_IF_NOT_EQUAL(ND_ROUTER_ADVERT),
 
         BPF_ACCEPT,
-
-        BPF_REJECT,
     };
     static const sock_fprog filter = {
         sizeof(filter_code) / sizeof(filter_code[0]),
@@ -247,7 +238,7 @@ static const JNINativeMethod gNetworkStackUtilsMethods[] = {
     /* name, signature, funcPtr */
     { "addArpEntry", "([B[BLjava/lang/String;Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_addArpEntry },
     { "attachDhcpFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_attachDhcpFilter },
-    { "attachRaFilter", "(Ljava/io/FileDescriptor;I)V", (void*) network_stack_utils_attachRaFilter },
+    { "attachRaFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_attachRaFilter },
     { "attachControlPacketFilter", "(Ljava/io/FileDescriptor;I)V", (void*) network_stack_utils_attachControlPacketFilter },
 };
 
