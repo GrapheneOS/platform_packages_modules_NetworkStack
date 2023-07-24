@@ -1025,7 +1025,6 @@ public class NetworkMonitorTest {
         verify(mContext, times(1)).registerReceiver(receiverCaptor.capture(),
                 argThat(receiver -> ACTION_CONFIGURATION_CHANGED.equals(receiver.getAction(0))));
 
-        resetCallbacks();
         // New URLs with partial connectivity
         doReturn(TEST_HTTPS_OTHER_URL1).when(mResources).getString(
                 R.string.config_captive_portal_https_url);
@@ -2246,7 +2245,6 @@ public class NetworkMonitorTest {
                 eq(PROBES_PRIVDNS_VALID), eq(NETWORK_VALIDATION_PROBE_DNS
                 | NETWORK_VALIDATION_PROBE_HTTPS));
         // Fix DNS and retry, expect validation to succeed.
-        resetCallbacks();
         mFakeDns.setAnswer("dns.google", new String[]{"2001:db8::1"}, TYPE_AAAA);
 
         wnm.forceReevaluation(Process.myUid());
@@ -2633,7 +2631,6 @@ public class NetworkMonitorTest {
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTP,
                 null /* redirectUrl */);
 
-        resetCallbacks();
         nm.setAcceptPartialConnectivity();
         // Expect to update evaluation result notifications to CS.
         verifyNetworkTested(NETWORK_VALIDATION_RESULT_PARTIAL | NETWORK_VALIDATION_RESULT_VALID,
@@ -2710,7 +2707,6 @@ public class NetworkMonitorTest {
         final NetworkMonitor nm = runValidatedNetworkTest();
         // Verify forceReevaluation will not reset the validation result but only probe result until
         // getting the validation result.
-        resetCallbacks();
         setSslException(mHttpsConnection);
         setStatus(mHttpConnection, 500);
         setStatus(mFallbackConnection, 204);
@@ -2812,8 +2808,6 @@ public class NetworkMonitorTest {
     public void testEvaluationState_reportProbeResult() throws Exception {
         setValidProbes();
         final NetworkMonitor nm = runValidatedNetworkTest();
-
-        resetCallbacks();
 
         nm.reportHttpProbeResult(NETWORK_VALIDATION_PROBE_HTTP,
                 CaptivePortalProbeResult.success(1 << PROBE_HTTP));
@@ -3001,7 +2995,6 @@ public class NetworkMonitorTest {
 
         // Force reevaluation and confirm that the network is still captive
         HandlerUtils.waitForIdle(monitor.getHandler(), HANDLER_TIMEOUT_MS);
-        resetCallbacks();
         monitor.forceReevaluation(Process.myUid());
         assertEquals(monitor.getEvaluationState().getProbeCompletedResult(), 0);
         verifyNetworkTested(VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */, TEST_LOGIN_URL);
