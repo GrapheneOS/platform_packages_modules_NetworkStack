@@ -34,6 +34,7 @@ import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo
 import com.android.testutils.DevSdkIgnoreRunner
 import com.android.testutils.PacketBridge
 import com.android.testutils.RecorderCallback.CallbackEntry.LinkPropertiesChanged
+import com.android.testutils.SkipPresubmit
 import com.android.testutils.TestDnsServer
 import com.android.testutils.TestHttpServer
 import com.android.testutils.TestableNetworkCallback
@@ -178,6 +179,7 @@ class NetworkStatsIntegrationTest {
      * While the packets are being forwarded to the external interface, the servers will see
      * the packets originated from the mocked v6 address, and destined to a local v6 address.
      */
+    @SkipPresubmit(reason = "Out of SLO flakiness")
     @Test
     fun test464XlatTcpStats() {
         // Wait for 464Xlat to be ready.

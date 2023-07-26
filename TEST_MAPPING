@@ -7,7 +7,12 @@
       "name": "NetworkStackNextTests"
     },
     {
-      "name": "NetworkStackIntegrationTests"
+      "name": "NetworkStackIntegrationTests",
+      "options": [
+        {
+          "exclude-annotation": "com.android.testutils.SkipPresubmit"
+        }
+      ]
     },
     {
       "name": "NetworkStackRootTests"
@@ -30,6 +35,11 @@
     // backwards compatibility of APIs).
     {
       "name": "NetworkStackRootTests[CaptivePortalLoginGoogle.apk+NetworkStackGoogle.apk]"
+    }
+  ],
+  "postsubmit": [
+    {
+      "name": "NetworkStackIntegrationTests"
     }
   ],
   "imports": [
