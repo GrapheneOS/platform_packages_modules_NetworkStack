@@ -218,6 +218,7 @@ import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
 import com.android.testutils.HandlerUtils;
+import com.android.testutils.SkipPresubmit;
 import com.android.testutils.TapPacketReader;
 import com.android.testutils.TestableNetworkAgent;
 import com.android.testutils.TestableNetworkCallback;
@@ -4886,8 +4887,9 @@ public abstract class IpClientIntegrationTestCommon {
         assertTrue(packet instanceof Dhcp6RebindPacket);
     }
 
-    @Test
     @SignatureRequiredTest(reason = "Need to mock the DHCP6 renew/rebind alarms")
+    @SkipPresubmit(reason = "Out of SLO flakiness")
+    @Test
     public void testDhcp6Pd_prefixMismatchOnRenew() throws Exception {
         prepareDhcp6PdRenewTest();
 
