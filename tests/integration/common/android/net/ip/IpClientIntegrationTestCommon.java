@@ -4851,6 +4851,8 @@ public abstract class IpClientIntegrationTestCommon {
                 x -> x.isIpv6Provisioned()
                         && hasIpv6AddressPrefixedWith(x, prefix)
                         && hasRouteTo(x, "2001:db8:1::/64", RTN_UNREACHABLE)
+                        // IPv4 address, IPv6 link-local, two global delegated IPv6 addresses
+                        && x.getLinkAddresses().size() == 4
         ));
     }
 
