@@ -630,7 +630,7 @@ public class Dhcp6Client extends StateMachine {
         @Override
         protected void handlePacket(byte[] recvbuf, int length) {
             try {
-                final Dhcp6Packet packet = Dhcp6Packet.decodePacket(recvbuf, length);
+                final Dhcp6Packet packet = Dhcp6Packet.decode(recvbuf, length);
                 if (DBG) Log.d(TAG, "Received packet: " + packet);
                 sendMessage(CMD_RECEIVED_PACKET, packet);
             } catch (Dhcp6Packet.ParseException e) {
