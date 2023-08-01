@@ -42,7 +42,7 @@ class Dhcp6PacketTest {
                 // IA prefix option(option_len=25)
                 "001A001900000000000000004000000000000000000000000000000000"
         val bytes = HexDump.hexStringToByteArray(solicitHex)
-        val packet = Dhcp6Packet.decodePacket(ByteBuffer.wrap(bytes))
+        val packet = Dhcp6Packet.decode(ByteBuffer.wrap(bytes))
         assertTrue(packet is Dhcp6SolicitPacket)
     }
 
@@ -61,7 +61,7 @@ class Dhcp6PacketTest {
                 "001A001900000000000000004000000000000000000000000000000000"
         val bytes = HexDump.hexStringToByteArray(solicitHex)
         assertThrows(Dhcp6Packet.ParseException::class.java) {
-                Dhcp6Packet.decodePacket(ByteBuffer.wrap(bytes))
+                Dhcp6Packet.decode(ByteBuffer.wrap(bytes))
         }
     }
 
@@ -80,7 +80,7 @@ class Dhcp6PacketTest {
                 "001A0019000000000000000040000000000000000000000000000000"
         val bytes = HexDump.hexStringToByteArray(solicitHex)
         assertThrows(Dhcp6Packet.ParseException::class.java) {
-                Dhcp6Packet.decodePacket(ByteBuffer.wrap(bytes))
+                Dhcp6Packet.decode(ByteBuffer.wrap(bytes))
         }
     }
 
@@ -99,7 +99,7 @@ class Dhcp6PacketTest {
                 "001A001900000000000000004000000000000000000000000000000000"
         val bytes = HexDump.hexStringToByteArray(solicitHex)
         assertThrows(Dhcp6Packet.ParseException::class.java) {
-                Dhcp6Packet.decodePacket(ByteBuffer.wrap(bytes))
+                Dhcp6Packet.decode(ByteBuffer.wrap(bytes))
         }
     }
 
@@ -119,7 +119,7 @@ class Dhcp6PacketTest {
                 // IA prefix option(option_len=25, prefix="fdfd:9ed6:7950:2::/64")
                 "001A00190000019F0000A8C040FDFD9ED6795000010000000000000000"
         val bytes = HexDump.hexStringToByteArray(advertiseHex)
-        val packet = Dhcp6Packet.decodePacket(ByteBuffer.wrap(bytes))
+        val packet = Dhcp6Packet.decode(ByteBuffer.wrap(bytes))
         assertTrue(packet is Dhcp6AdvertisePacket)
     }
 
@@ -142,7 +142,7 @@ class Dhcp6PacketTest {
                 "001A00190000019F0000A8C040FDFD9ED6795000010000000000000000"
         val bytes = HexDump.hexStringToByteArray(advertiseHex)
         // The unsupported option will be skipped normally and won't throw ParseException.
-        val packet = Dhcp6Packet.decodePacket(ByteBuffer.wrap(bytes))
+        val packet = Dhcp6Packet.decode(ByteBuffer.wrap(bytes))
         assertTrue(packet is Dhcp6AdvertisePacket)
     }
 }
