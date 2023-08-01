@@ -249,7 +249,7 @@ public class Dhcp6Packet {
      * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
      */
     @VisibleForTesting
-    static Dhcp6Packet decodePacket(@NonNull final ByteBuffer packet) throws ParseException {
+    static Dhcp6Packet decode(@NonNull final ByteBuffer packet) throws ParseException {
         int elapsedTime = 0;
         byte[] iapd = null;
         byte[] serverDuid = null;
@@ -379,10 +379,10 @@ public class Dhcp6Packet {
     /**
      * Parse a packet from an array of bytes, stopping at the given length.
      */
-    public static Dhcp6Packet decodePacket(@NonNull final byte[] packet, int length)
+    public static Dhcp6Packet decode(@NonNull final byte[] packet, int length)
             throws ParseException {
         final ByteBuffer buffer = ByteBuffer.wrap(packet, 0, length).order(ByteOrder.BIG_ENDIAN);
-        return decodePacket(buffer);
+        return decode(buffer);
     }
 
     /**
