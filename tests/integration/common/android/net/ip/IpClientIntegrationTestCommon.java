@@ -1290,7 +1290,7 @@ public abstract class IpClientIntegrationTestCommon {
             // Strip the Ethernet/IPv6/UDP headers, only keep DHCPv6 message payload for decode.
             final byte[] payload =
                     Arrays.copyOfRange(packet, DHCP6_HEADER_OFFSET, packet.length);
-            final Dhcp6Packet dhcp6Packet = Dhcp6Packet.decodePacket(payload, payload.length);
+            final Dhcp6Packet dhcp6Packet = Dhcp6Packet.decode(payload, payload.length);
             if (dhcp6Packet != null) return dhcp6Packet;
         }
         return null;
