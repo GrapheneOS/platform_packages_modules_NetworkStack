@@ -262,7 +262,7 @@ public class IpReachabilityMonitor {
                 IP_REACHABILITY_MCAST_RESOLICIT_VERSION, true /* defaultEnabled */);
         mIgnoreIncompleteIpv6DnsServerEnabled = dependencies.isFeatureEnabled(context,
                 IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION,
-                false /* defaultEnabled */);
+                true /* defaultEnabled */);
         mIgnoreIncompleteIpv6DefaultRouterEnabled = dependencies.isFeatureEnabled(context,
                 IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION,
                 false /* defaultEnabled */);
