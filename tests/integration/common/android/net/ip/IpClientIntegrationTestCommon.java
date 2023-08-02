@@ -5034,6 +5034,44 @@ public abstract class IpClientIntegrationTestCommon {
         ));
     }
 
+    @Test
+    public void testDhcp6Pd_multiplePrefixesWithInvalidPrefix() throws Exception {
+        final IpPrefix valid = new IpPrefix("2001:db8:1::/64");
+        final IpPrefix invalid = new IpPrefix("2001:db8:2::/64"); // preferred lft > valid lft
+        final IaPrefixOption validIpo = buildIaPrefixOption(valid, 4500 /* preferred */,
+                7200 /* valid */);
+        final IaPrefixOption invalidIpo = buildIaPrefixOption(invalid, 4500 /* preferred */,
+                3000 /* valid */);
+
+        prepareDhcp6PdTest();
+        handleDhcp6Packets(Arrays.asList(invalidIpo, validIpo), 3600 /* t1 */, 4500 /* t2 */,
+                true /* shouldReplyRapidCommit */);
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        final LinkProperties lp = captor.getValue();
+        assertTrue(hasIpv6AddressPrefixedWith(lp, valid));
+        assertFalse(hasIpv6AddressPrefixedWith(lp, invalid));
+    }
+
+    @Test
+    public void testDhcp6Pd_multiplePrefixesWithPrefixValidLifetimeOfZero() throws Exception {
+        final IpPrefix valid = new IpPrefix("2001:db8:1::/64");
+        final IpPrefix invalid = new IpPrefix("2001:db8:2::/64"); // preferred/valid lft 0
+        final IaPrefixOption validIpo = buildIaPrefixOption(valid, 4500 /* preferred */,
+                7200 /* valid */);
+        final IaPrefixOption invalidIpo = buildIaPrefixOption(invalid, 0 /* preferred */,
+                0 /* valid */);
+
+        prepareDhcp6PdTest();
+        handleDhcp6Packets(Arrays.asList(invalidIpo, validIpo), 3600 /* t1 */, 4500 /* t2 */,
+                true /* shouldReplyRapidCommit */);
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        final LinkProperties lp = captor.getValue();
+        assertTrue(hasIpv6AddressPrefixedWith(lp, valid));
+        assertFalse(hasIpv6AddressPrefixedWith(lp, invalid));
+    }
+
     private void prepareDhcp6PdRenewTest() throws Exception {
         final IpPrefix prefix = new IpPrefix("2001:db8:1::/64");
         prepareDhcp6PdTest();
