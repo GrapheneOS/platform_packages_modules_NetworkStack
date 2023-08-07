@@ -42,4 +42,7 @@ public class ConstantsShim extends com.android.networkstack.apishim.api31.Consta
     public static final int DEFERRAL_POLICY_NONE = 1;
     // Constant defined in android.app.BroadcastOptions.
     public static final int DEFERRAL_POLICY_UNTIL_ACTIVE = 2;
+    // Const defined in  android.Manifest.permission
+    public static final String REGISTER_NSD_OFFLOAD_ENGINE =
+            "android.permission.REGISTER_NSD_OFFLOAD_ENGINE";
 }
