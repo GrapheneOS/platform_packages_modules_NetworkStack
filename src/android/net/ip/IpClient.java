@@ -2802,6 +2802,10 @@ public class IpClient extends StateMachine {
         }
 
         private void clearIpv6PrefixDelegationAddresses() {
+            if (mPrefixDelegation == null) {
+                Log.wtf(mTag, "PrefixDelegation shouldn't be null when DHCPv6 PD fails.");
+                return;
+            }
             final IpPrefix prefix;
             try {
                 prefix = new IpPrefix(Inet6Address.getByAddress(mPrefixDelegation.ipo.prefix),
