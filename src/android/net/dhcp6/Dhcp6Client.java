@@ -17,7 +17,6 @@
 package android.net.dhcp6;
 
 import static android.net.dhcp6.Dhcp6Packet.PrefixDelegation;
-import static android.net.util.NetworkConstants.RFC7421_PREFIX_LENGTH;
 import static android.system.OsConstants.AF_INET6;
 import static android.system.OsConstants.IPPROTO_UDP;
 import static android.system.OsConstants.RT_SCOPE_UNIVERSE;
@@ -28,6 +27,7 @@ import static com.android.net.module.util.NetworkStackConstants.ALL_DHCP_RELAY_A
 import static com.android.net.module.util.NetworkStackConstants.DHCP6_CLIENT_PORT;
 import static com.android.net.module.util.NetworkStackConstants.DHCP6_SERVER_PORT;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ANY;
+import static com.android.net.module.util.NetworkStackConstants.RFC7421_PREFIX_LENGTH;
 import static com.android.networkstack.apishim.ConstantsShim.IFA_F_MANAGETEMPADDR;
 import static com.android.networkstack.apishim.ConstantsShim.IFA_F_NOPREFIXROUTE;
 import static com.android.networkstack.util.NetworkStackUtils.createInet6AddressFromEui64;
