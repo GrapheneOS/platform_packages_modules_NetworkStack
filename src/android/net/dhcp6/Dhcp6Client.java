@@ -107,8 +107,11 @@ public class Dhcp6Client extends StateMachine {
     private static final int FIRST_TIMEOUT_MS  =   1 * SECONDS;
     private static final int MAX_TIMEOUT_MS    = 512 * SECONDS;
 
+    // Per rfc8415#section-12, the IAID MUST be consistent across restarts.
+    // Since currently only one IAID is supported, a well-known value can be used (0).
+    private static final int IAID = 0;
+
     private int mTransId;
-    private int mIaId;
     private long mTransStartMillis;
     @Nullable private PrefixDelegation mAdvertise;
     @Nullable private PrefixDelegation mReply;
@@ -325,7 +328,7 @@ public class Dhcp6Client extends StateMachine {
     }
 
     private ByteBuffer buildEmptyIaPdOption() {
-        return Dhcp6Packet.buildIaPdOption(mIaId, 0 /* t1 */, 0 /* t2 */, 0 /* preferred */,
+        return Dhcp6Packet.buildIaPdOption(IAID, 0 /* t1 */, 0 /* t2 */, 0 /* preferred */,
                 0 /* valid */, new byte[16] /* empty prefix */, (byte) RFC7421_PREFIX_LENGTH);
     }
 
@@ -398,7 +401,6 @@ public class Dhcp6Client extends StateMachine {
         public void enter() {
             super.enter();
             startNewTransaction();
-            mIaId = mRandom.nextInt();
         }
 
         protected boolean sendPacket() {
@@ -410,7 +412,7 @@ public class Dhcp6Client extends StateMachine {
             if (!packet.isValid(mTransId, mClientDuid)) return;
             if (packet instanceof Dhcp6AdvertisePacket) {
                 mAdvertise = packet.mPrefixDelegation;
-                if (mAdvertise != null && mAdvertise.iaid == mIaId) {
+                if (mAdvertise != null && mAdvertise.iaid == IAID) {
                     Log.d(TAG, "Get prefix delegation option from Advertise: " + mAdvertise);
                     mServerDuid = packet.mServerDuid;
                     transitionTo(mRequestState);
@@ -422,7 +424,7 @@ public class Dhcp6Client extends StateMachine {
                     return;
                 }
                 final PrefixDelegation pd = packet.mPrefixDelegation;
-                if (pd != null && pd.iaid == mIaId) {
+                if (pd != null && pd.iaid == IAID) {
                     Log.d(TAG, "Get prefix delegation option from RapidCommit Reply: " + pd);
                     mReply = pd;
                     mServerDuid = packet.mServerDuid;
@@ -445,7 +447,7 @@ public class Dhcp6Client extends StateMachine {
             if (!(packet instanceof Dhcp6ReplyPacket)) return;
             if (!packet.isValid(mTransId, mClientDuid)) return;
             final PrefixDelegation pd = packet.mPrefixDelegation;
-            if (pd != null && pd.iaid == mIaId) {
+            if (pd != null && pd.iaid == IAID) {
                 Log.d(TAG, "Get prefix delegation option from Reply: " + pd);
                 mReply = pd;
                 transitionTo(mBoundState);
@@ -561,7 +563,7 @@ public class Dhcp6Client extends StateMachine {
             if (!packet.isValid(mTransId, mClientDuid)) return;
             final PrefixDelegation pd = packet.mPrefixDelegation;
             if (pd != null) {
-                if (pd.iaid != mIaId
+                if (pd.iaid != IAID
                         || !(Arrays.equals(pd.ipo.prefix, mReply.ipo.prefix)
                                 && pd.ipo.prefixLen == mReply.ipo.prefixLen)) {
                     Log.i(TAG, "Renewal prefix " + HexDump.toHexString(pd.ipo.prefix)
