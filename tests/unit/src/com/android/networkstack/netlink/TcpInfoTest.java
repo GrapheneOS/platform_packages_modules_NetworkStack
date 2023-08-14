@@ -17,6 +17,7 @@
 package com.android.networkstack.netlink;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 
 import androidx.test.filters.SmallTest;
@@ -108,18 +109,25 @@ public class TcpInfoTest {
         buffer.order(ByteOrder.nativeOrder());
         // Length is less than required
         assertNull(TcpInfo.parse(buffer, SHORT_TEST_TCP_INFO));
+        assertEquals(TEST_TCPINFO, TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1));
 
-        final TcpInfo parsedInfo = TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1);
-        assertEquals(TEST_TCPINFO, parsedInfo);
+        // Make a data that TcpInfo is not started from the beginning of the buffer.
+        final ByteBuffer buffer2 = ByteBuffer.wrap(TCP_INFO_BYTES);
+        buffer2.order(ByteOrder.nativeOrder());
+        // Move to certain position.
+        buffer2.position(2);
+        // Parsing is started in an incorrect position. This results in a failed parsing.
+        assertNotEquals(TEST_TCPINFO, TcpInfo.parse(buffer2, TCP_INFO_LENGTH_V1));
 
-        // Make a data that TcpInfo is not started from the begining of the buffer.
-        final ByteBuffer bufferWithHeader =
+        // Make a TcpInfo with extra tcp info fields. Parsing is only performed with
+        // TCP_INFO_LENGTH_V1 length. Result is the same as parsing with TCP_INFO_BYTES.
+        final ByteBuffer bufferExtraInfo =
                 ByteBuffer.allocate(EXPANDED_TCP_INFO_BYTES.length + TCP_INFO_BYTES.length);
-        bufferWithHeader.put(EXPANDED_TCP_INFO_BYTES);
-        bufferWithHeader.put(TCP_INFO_BYTES);
-        final TcpInfo infoWithHeader = TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1);
-        bufferWithHeader.position(EXPANDED_TCP_INFO_BYTES.length);
-        assertEquals(TEST_TCPINFO, parsedInfo);
+        bufferExtraInfo.order(ByteOrder.nativeOrder());
+        bufferExtraInfo.put(TCP_INFO_BYTES);
+        bufferExtraInfo.put(EXPANDED_TCP_INFO_BYTES);
+        bufferExtraInfo.position(0);
+        assertEquals(TEST_TCPINFO, TcpInfo.parse(bufferExtraInfo, TCP_INFO_LENGTH_V1));
     }
 
     @Test
