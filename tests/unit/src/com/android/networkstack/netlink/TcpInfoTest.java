@@ -27,6 +27,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -49,38 +50,38 @@ public class TcpInfoTest {
             "07" +                // option = TCPI_OPT_WSCALE|TCPI_OPT_SACK|TCPI_OPT_TIMESTAMPS
             "88" +                // wscale = 8
             "00" +                // delivery_rate_app_limited = 0
-            "001B914A" +          // rto = 1806666
+            "4A911B00" +          // rto = 1806666
             "00000000" +          // ato = 0
-            "0000052E" +          // sndMss = 1326
-            "00000218" +          // rcvMss = 536
+            "2E050000" +          // sndMss = 1326
+            "18020000" +          // rcvMss = 536
             "00000000" +          // unsacked = 0
             "00000000" +          // acked = 0
             "00000000" +          // lost = 0
             "00000000" +          // retrans = 0
             "00000000" +          // fackets = 0
-            "000000BB" +          // lastDataSent = 187
+            "BB000000" +          // lastDataSent = 187
             "00000000" +          // lastAckSent = 0
-            "000000BB" +          // lastDataRecv = 187
-            "000000BB" +          // lastDataAckRecv = 187
-            "000005DC" +          // pmtu = 1500
-            "00015630" +          // rcvSsthresh = 87600
-            "00092C3E" +          // rttt = 601150
-            "0004961F" +          // rttvar = 300575
-            "00000578" +          // sndSsthresh = 1400
-            "0000000A" +          // sndCwnd = 10
-            "000005A8" +          // advmss = 1448
-            "00000003" +          // reordering = 3
+            "BB000000" +          // lastDataRecv = 187
+            "BB00000000" +          // lastDataAckRecv = 187
+            "DC0500" +          // pmtu = 1500
+            "30560100" +          // rcvSsthresh = 87600
+            "3E2C0900" +          // rttt = 601150
+            "1F960400" +          // rttvar = 300575
+            "78050000" +          // sndSsthresh = 1400
+            "0A000000" +          // sndCwnd = 10
+            "A8050000" +          // advmss = 1448
+            "02000000" +          // reordering = 3
             "00000000" +          // rcvrtt = 0
-            "00015630" +          // rcvspace = 87600
+            "30560100" +          // rcvspace = 87600
             "00000000" +          // totalRetrans = 0
-            "000000000000AC53" +  // pacingRate = 44115
+            "53AC000000000000" +  // pacingRate = 44115
             "FFFFFFFFFFFFFFFF" +  // maxPacingRate = 18446744073709551615
-            "0000000000000001" +  // bytesAcked = 1
+            "0100000000000001" +  // bytesAcked = 1
             "0000000000000000" +  // bytesReceived = 0
-            "00000002" +          // SegsOut = 2
-            "00000001" +          // SegsIn = 1
+            "02000000" +          // SegsOut = 2
+            "01000000" +          // SegsIn = 1
             "00000000" +          // NotSentBytes = 0
-            "00092C3E" +          // minRtt = 601150
+            "3E2C0900" +          // minRtt = 601150
             "00000000" +          // DataSegsIn = 0
             "00000000" +          // DataSegsOut = 0
             "0000000000000000" +  // deliverRate = 0
@@ -102,6 +103,8 @@ public class TcpInfoTest {
     @Test
     public void testParseTcpInfo() {
         final ByteBuffer buffer = ByteBuffer.wrap(TCP_INFO_BYTES);
+        // Android is always little-endian. Refer to https://developer.android.com/ndk/guides/abis.
+        buffer.order(ByteOrder.nativeOrder());
         // Length is less than required
         final TcpInfo nullInfo = TcpInfo.parse(buffer, SHORT_TEST_TCP_INFO);
         assertEquals(nullInfo, null);
@@ -130,6 +133,8 @@ public class TcpInfoTest {
     @Test
     public void testParseTcpInfoExpanded() {
         final ByteBuffer buffer = ByteBuffer.wrap(EXPANDED_TCP_INFO_BYTES);
+        // Android is always little-endian. Refer to https://developer.android.com/ndk/guides/abis.
+        buffer.order(ByteOrder.nativeOrder());
         final TcpInfo parsedInfo =
                 TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1 + EXPANDED_TCP_INFO_LENGTH);
 
