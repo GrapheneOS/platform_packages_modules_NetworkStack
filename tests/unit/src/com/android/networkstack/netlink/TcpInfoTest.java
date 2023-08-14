@@ -17,6 +17,7 @@
 package com.android.networkstack.netlink;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
@@ -106,11 +107,10 @@ public class TcpInfoTest {
         // Android is always little-endian. Refer to https://developer.android.com/ndk/guides/abis.
         buffer.order(ByteOrder.nativeOrder());
         // Length is less than required
-        final TcpInfo nullInfo = TcpInfo.parse(buffer, SHORT_TEST_TCP_INFO);
-        assertEquals(nullInfo, null);
+        assertNull(TcpInfo.parse(buffer, SHORT_TEST_TCP_INFO));
 
         final TcpInfo parsedInfo = TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1);
-        assertEquals(parsedInfo, TEST_TCPINFO);
+        assertEquals(TEST_TCPINFO, parsedInfo);
 
         // Make a data that TcpInfo is not started from the begining of the buffer.
         final ByteBuffer bufferWithHeader =
@@ -119,7 +119,7 @@ public class TcpInfoTest {
         bufferWithHeader.put(TCP_INFO_BYTES);
         final TcpInfo infoWithHeader = TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1);
         bufferWithHeader.position(EXPANDED_TCP_INFO_BYTES.length);
-        assertEquals(parsedInfo, TEST_TCPINFO);
+        assertEquals(TEST_TCPINFO, parsedInfo);
     }
 
     @Test
@@ -138,22 +138,22 @@ public class TcpInfoTest {
         final TcpInfo parsedInfo =
                 TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1 + EXPANDED_TCP_INFO_LENGTH);
 
-        assertEquals(parsedInfo, TEST_TCPINFO);
+        assertEquals(TEST_TCPINFO, parsedInfo);
         assertEquals(buffer.limit(), buffer.position());
 
         // reset the index.
         buffer.position(0);
         final TcpInfo parsedInfoShorterLen = TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1);
-        assertEquals(parsedInfoShorterLen, TEST_TCPINFO);
+        assertEquals(TEST_TCPINFO, parsedInfoShorterLen);
         assertEquals(TCP_INFO_LENGTH_V1, buffer.position());
     }
 
     @Test
     public void testTcpStateName() {
-        assertEquals(TcpInfo.getTcpStateName(4), TCP_FIN_WAIT1);
-        assertEquals(TcpInfo.getTcpStateName(1), TCP_ESTABLISHED);
-        assertEquals(TcpInfo.getTcpStateName(2), TCP_SYN_SENT);
-        assertEquals(TcpInfo.getTcpStateName(20), UNKNOWN_20);
+        assertEquals(TCP_FIN_WAIT1, TcpInfo.getTcpStateName(4));
+        assertEquals(TCP_ESTABLISHED, TcpInfo.getTcpStateName(1));
+        assertEquals(TCP_SYN_SENT, TcpInfo.getTcpStateName(2));
+        assertEquals(UNKNOWN_20, TcpInfo.getTcpStateName(20));
     }
 
     private static final String MALFORMED_TCP_INFO_HEX =
@@ -171,12 +171,8 @@ public class TcpInfoTest {
     @Test
     public void testMalformedTcpInfo() {
         final ByteBuffer buffer = ByteBuffer.wrap(MALFORMED_TCP_INFO_BYTES);
-
-        TcpInfo parsedInfo = TcpInfo.parse(buffer, SHORT_TEST_TCP_INFO);
-        assertEquals(parsedInfo, null);
-
-        parsedInfo = TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1);
-        assertEquals(parsedInfo, null);
+        assertNull(TcpInfo.parse(buffer, SHORT_TEST_TCP_INFO));
+        assertNull(TcpInfo.parse(buffer, TCP_INFO_LENGTH_V1));
     }
 
     // Make a TcpInfo contains only first 8 bytes.
