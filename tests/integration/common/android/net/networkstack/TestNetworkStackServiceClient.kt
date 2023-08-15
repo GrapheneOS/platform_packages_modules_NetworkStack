@@ -58,7 +58,7 @@ class TestNetworkStackServiceClient private constructor() : NetworkStackClientBa
             return networkStackVersion == 300000000L || networkStackVersion >= 301100000L
         }
 
-        private fun getNetworkStackComponent(connectorAction: String): ComponentName {
+        private fun getNetworkStackComponent(connectorAction: String?): ComponentName {
             val connectorIntent = Intent(connectorAction)
             return connectorIntent.resolveSystemService(context.packageManager, MATCH_SYSTEM_ONLY)
                     ?: fail("TestNetworkStackService not found")
