@@ -21,10 +21,13 @@ import static android.net.util.DataStallUtils.DEFAULT_TCP_PACKETS_FAIL_PERCENTAG
 import static android.os.PowerManager.ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_INET;
+
 import static com.android.net.module.util.NetworkStackConstants.DNS_OVER_TLS_PORT;
+
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
 import static junit.framework.Assert.assertTrue;
+
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -92,8 +95,8 @@ public class TcpSocketTrackerTest {
             composeSockDiagTcpHex(0 /* lost */, 10 /* sent */);
     private static final byte[] SOCK_DIAG_TCP_INET_ZERO_LOST_BYTES =
             HexEncoding.decode(SOCK_DIAG_TCP_ZERO_LOST_HEX.toCharArray(), false);
-    private static final TcpInfo TEST_TCPINFO =
-            new TcpInfo(5 /* retransmits */, 0 /* lost */, 10 /* segsOut */, 0 /* segsIn */);
+    private static final TcpInfo TEST_TCPINFO = new TcpInfo(5 /* retransmits */, 0 /* lost */,
+            10 /* segsOut */, 0 /* segsIn */, 5 /* totalRetrans */);
     private static final String NLMSG_DONE_HEX =
             // struct nlmsghdr
             "14000000"     // length = 20
@@ -535,7 +538,7 @@ public class TcpSocketTrackerTest {
                 "03000000" +        // reordering = 3
                 "00000000" +        // rcvrtt = 0
                 "30560100" +        // rcvspace = 87600
-                "00000000" +        // totalRetrans = 0
+                "05000000" +        // totalRetrans = 5
                 "53AC000000000000" +    // pacingRate = 44115
                 "FFFFFFFFFFFFFFFF" +    // maxPacingRate = 18446744073709551615
                 "0100000000000000" +    // bytesAcked = 1
