@@ -17,8 +17,8 @@
 package android.net.dhcp;
 
 import static android.net.InetAddresses.parseNumericAddress;
-import static android.net.dhcp.DhcpResultsParcelableUtil.fromStableParcelable;
 import static android.net.dhcp.DhcpResultsParcelableUtil.toStableParcelable;
+import static android.net.shared.IpConfigurationParcelableUtil.unparcelAddress;
 
 import static com.android.testutils.MiscAsserts.assertFieldCountEquals;
 
@@ -26,9 +26,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import android.net.DhcpResults;
+import android.net.DhcpResultsParcelable;
 import android.net.LinkAddress;
 import android.net.shared.IpConfigurationParcelableUtil;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
@@ -65,61 +68,88 @@ public class DhcpResultsParcelableUtilTest {
     }
 
     @Test
-    public void testParcelUnparcelDhcpResults() {
-        doDhcpResultsParcelUnparcelTest();
+    public void testParcelDhcpResults() {
+        doDhcpResultsParcelTest();
     }
 
     @Test
     public void testParcelUnparcelDhcpResults_NullIpAddress() {
         mDhcpResults.ipAddress = null;
-        doDhcpResultsParcelUnparcelTest();
+        doDhcpResultsParcelTest();
     }
 
     @Test
     public void testParcelUnparcelDhcpResults_NullGateway() {
         mDhcpResults.gateway = null;
-        doDhcpResultsParcelUnparcelTest();
+        doDhcpResultsParcelTest();
     }
 
     @Test
     public void testParcelUnparcelDhcpResults_NullDomains() {
         mDhcpResults.domains = null;
-        doDhcpResultsParcelUnparcelTest();
+        doDhcpResultsParcelTest();
     }
 
     @Test
     public void testParcelUnparcelDhcpResults_EmptyDomains() {
         mDhcpResults.domains = "";
-        doDhcpResultsParcelUnparcelTest();
+        doDhcpResultsParcelTest();
     }
 
     @Test
     public void testParcelUnparcelDhcpResults_NullServerAddress() {
         mDhcpResults.serverAddress = null;
-        doDhcpResultsParcelUnparcelTest();
+        doDhcpResultsParcelTest();
     }
 
     @Test
     public void testParcelUnparcelDhcpResults_NullVendorInfo() {
         mDhcpResults.vendorInfo = null;
-        doDhcpResultsParcelUnparcelTest();
+        doDhcpResultsParcelTest();
     }
 
     @Test
     public void testParcelUnparcelDhcpResults_NullServerHostName() {
         mDhcpResults.serverHostName = null;
-        doDhcpResultsParcelUnparcelTest();
+        doDhcpResultsParcelTest();
     }
 
     @Test
     public void testParcelUnparcelDhcpResults_NullCaptivePortalApiUrl() {
         mDhcpResults.captivePortalApiUrl = null;
-        doDhcpResultsParcelUnparcelTest();
+        doDhcpResultsParcelTest();
     }
 
-    private void doDhcpResultsParcelUnparcelTest() {
+    private void doDhcpResultsParcelTest() {
         final DhcpResults unparceled = fromStableParcelable(toStableParcelable(mDhcpResults));
+        setFieldsLostWhileParceling(unparceled);
         assertEquals(mDhcpResults, unparceled);
+    }
+
+    private static void setFieldsLostWhileParceling(@NonNull DhcpResults unparceledResults) {
+        // TODO: add other fields that are not part of DhcpResultsParcelable here
+        // e.g. if the dmnsrchList field is added,
+        // parceledResults.dmnsrchList.addAll(mDhcpResults.dmnSrchList);
+    }
+
+    /**
+     * Convert a DhcpResultsParcelable to DhcpResults.
+     */
+    private static DhcpResults fromStableParcelable(@Nullable DhcpResultsParcelable p) {
+        if (p == null) return null;
+        final DhcpResults results = new DhcpResults(p.baseConfiguration);
+        results.leaseDuration = p.leaseDuration;
+        results.mtu = p.mtu;
+        results.serverAddress = (Inet4Address) unparcelAddress(p.serverAddress);
+        results.vendorInfo = p.vendorInfo;
+        results.serverHostName = p.serverHostName;
+        results.captivePortalApiUrl = p.captivePortalApiUrl;
+        // DhcpResultsParcelable is only used to fill the legacy DhcpInfo class in Wifi, so it
+        // should not be extended with any new field. Some fields maybe part of DhcpResults, but
+        // not DhcpResultsParcelable, as DhcpResults is used internally in NetworkStack, but
+        // DhcpResultsParcelable is used to provide info to wifi (for building DhcpInfo)
+
+        return results;
     }
 
     @Test
