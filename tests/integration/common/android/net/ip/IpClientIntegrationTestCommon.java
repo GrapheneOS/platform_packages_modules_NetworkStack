@@ -36,7 +36,6 @@ import static android.net.dhcp.DhcpPacket.ENCAP_L2;
 import static android.net.dhcp.DhcpPacket.INADDR_BROADCAST;
 import static android.net.dhcp.DhcpPacket.INFINITE_LEASE;
 import static android.net.dhcp.DhcpPacket.MIN_V6ONLY_WAIT_MS;
-import static android.net.dhcp.DhcpResultsParcelableUtil.fromStableParcelable;
 import static android.net.ip.IIpClientCallbacks.DTIM_MULTIPLIER_RESET;
 import static android.net.ip.IpClient.CONFIG_IPV6_AUTOCONF_TIMEOUT;
 import static android.net.ip.IpClientLinkObserver.CLAT_PREFIX;
@@ -120,7 +119,6 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.content.res.Resources;
 import android.net.ConnectivityManager;
-import android.net.DhcpResults;
 import android.net.DhcpResultsParcelable;
 import android.net.INetd;
 import android.net.InetAddresses;
@@ -2859,14 +2857,14 @@ public abstract class IpClientIntegrationTestCommon {
         ArgumentCaptor<DhcpResultsParcelable> captor =
                 ArgumentCaptor.forClass(DhcpResultsParcelable.class);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onNewDhcpResults(captor.capture());
-        DhcpResults lease = fromStableParcelable(captor.getValue());
+        final DhcpResultsParcelable lease = captor.getValue();
         assertNotNull(lease);
-        assertEquals(lease.getIpAddress().getAddress(), CLIENT_ADDR);
-        assertEquals(lease.getGateway(), SERVER_ADDR);
-        assertEquals(1, lease.getDnsServers().size());
-        assertTrue(lease.getDnsServers().contains(SERVER_ADDR));
-        assertEquals(lease.getServerAddress(), SERVER_ADDR);
-        assertEquals(lease.getMtu(), TEST_DEFAULT_MTU);
+        assertEquals(CLIENT_ADDR, lease.baseConfiguration.getIpAddress().getAddress());
+        assertEquals(SERVER_ADDR, lease.baseConfiguration.getGateway());
+        assertEquals(1, lease.baseConfiguration.getDnsServers().size());
+        assertTrue(lease.baseConfiguration.getDnsServers().contains(SERVER_ADDR));
+        assertEquals(SERVER_ADDR, InetAddresses.parseNumericAddress(lease.serverAddress));
+        assertEquals(TEST_DEFAULT_MTU, lease.mtu);
 
         if (expectMetered) {
             assertEquals(lease.vendorInfo, DhcpPacket.VENDOR_INFO_ANDROID_METERED);
@@ -3010,7 +3008,7 @@ public abstract class IpClientIntegrationTestCommon {
             ArgumentCaptor<DhcpResultsParcelable> resultsCaptor =
                     ArgumentCaptor.forClass(DhcpResultsParcelable.class);
             verify(mCb, timeout(TEST_TIMEOUT_MS)).onNewDhcpResults(resultsCaptor.capture());
-            DhcpResults lease = fromStableParcelable(resultsCaptor.getValue());
+            final DhcpResultsParcelable lease = resultsCaptor.getValue();
             assertNull(lease);
 
             // DhcpClient rolls back to StoppedState instead of INIT state after calling
