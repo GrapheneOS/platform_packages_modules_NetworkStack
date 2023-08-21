@@ -17,14 +17,11 @@
 package android.net.dhcp;
 
 import static android.net.shared.IpConfigurationParcelableUtil.parcelAddress;
-import static android.net.shared.IpConfigurationParcelableUtil.unparcelAddress;
 
 import android.net.DhcpResults;
 import android.net.DhcpResultsParcelable;
 
 import androidx.annotation.Nullable;
-
-import java.net.Inet4Address;
 
 /**
  * A utility class to convert DhcpResults to DhcpResultsParcelable.
@@ -44,20 +41,5 @@ public final class DhcpResultsParcelableUtil {
         p.serverHostName = results.serverHostName;
         p.captivePortalApiUrl = results.captivePortalApiUrl;
         return p;
-    }
-
-    /**
-     * Convert a DhcpResultsParcelable to DhcpResults.
-     */
-    public static DhcpResults fromStableParcelable(@Nullable DhcpResultsParcelable p) {
-        if (p == null) return null;
-        final DhcpResults results = new DhcpResults(p.baseConfiguration);
-        results.leaseDuration = p.leaseDuration;
-        results.mtu = p.mtu;
-        results.serverAddress = (Inet4Address) unparcelAddress(p.serverAddress);
-        results.vendorInfo = p.vendorInfo;
-        results.serverHostName = p.serverHostName;
-        results.captivePortalApiUrl = p.captivePortalApiUrl;
-        return results;
     }
 }
