@@ -76,6 +76,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeFalse;
 import static org.junit.Assume.assumeTrue;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.after;
@@ -550,8 +551,8 @@ public class NetworkMonitorTest {
                     return null;
             }
         }).when(mCleartextDnsNetwork).openConnection(any());
-        doReturn(new ArrayMap<>()).when(mHttpConnection).getRequestProperties();
-        doReturn(new ArrayMap<>()).when(mHttpsConnection).getRequestProperties();
+        initHttpConnection(mHttpConnection);
+        initHttpConnection(mHttpsConnection);
 
         mFakeDns = new FakeDns();
         mFakeDns.startMocking();
@@ -606,6 +607,18 @@ public class NetworkMonitorTest {
             verify(mTstDependencies, times(networkMonitors.length))
                     .removeDeviceConfigChangedListener(any());
         }
+    }
+
+    private void initHttpConnection(HttpURLConnection connection) {
+        doReturn(new ArrayMap<>()).when(connection).getRequestProperties();
+        // Explicitly set the HttpURLConnection methods so that these will not interact with real
+        // methods to prevent threading issue in the test.
+        doReturn(new HashMap<>()).when(connection).getHeaderFields();
+        doNothing().when(connection).setInstanceFollowRedirects(anyBoolean());
+        doNothing().when(connection).setConnectTimeout(anyInt());
+        doNothing().when(connection).setReadTimeout(anyInt());
+        doNothing().when(connection).setRequestProperty(any(), any());
+        doNothing().when(connection).setUseCaches(anyBoolean());
     }
 
     private void initCallbacks(int interfaceVersion) throws Exception {
