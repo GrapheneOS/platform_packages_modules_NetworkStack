@@ -41,7 +41,6 @@ import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_RO
 import static com.android.net.module.util.NetworkStackConstants.RFC7421_PREFIX_LENGTH;
 import static com.android.net.module.util.NetworkStackConstants.VENDOR_SPECIFIC_IE_ID;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION;
-import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DISABLE_ACCEPT_RA_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GRATUITOUS_NA_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_MULTICAST_NS_VERSION;
@@ -1065,11 +1064,6 @@ public class IpClient extends StateMachine {
         return bssid;
     }
 
-    private boolean shouldDisableAcceptRaOnProvisioningLoss() {
-        return mDependencies.isFeatureEnabled(mContext, IPCLIENT_DISABLE_ACCEPT_RA_VERSION,
-                true /* defaultEnabled */);
-    }
-
     @Override
     protected void onQuitting() {
         mCallback.onQuit();
@@ -1560,19 +1554,12 @@ public class IpClient extends StateMachine {
             // local address left on the interface, so applications will be able to reconnect
             // immediately over IPv4 and keep IPv6 link-local capable.
             if (newLp.isIpv4Provisioned()) {
-                if (shouldDisableAcceptRaOnProvisioningLoss()) {
-                    restartIpv6WithAcceptRaDisabled();
-                } else {
-                    mInterfaceCtrl.disableIPv6();
-                }
+                restartIpv6WithAcceptRaDisabled();
                 mNetworkQuirkMetrics.setEvent(NetworkQuirkEvent.QE_IPV6_PROVISIONING_ROUTER_LOST);
                 mNetworkQuirkMetrics.statsWrite();
                 mHasDisabledIpv6OrAcceptRaOnProvLoss = true;
                 delta = PROV_CHANGE_STILL_PROVISIONED;
-                mLog.log(shouldDisableAcceptRaOnProvisioningLoss()
-                        ? "Disabled accept_ra parameter "
-                        : "Disabled IPv6 stack completely "
-                        + "when the IPv6 default router has gone");
+                mLog.log("Disabled accept_ra parameter on loss of IPv6 default router");
             } else {
                 delta = PROV_CHANGE_LOST_PROVISIONING;
             }
