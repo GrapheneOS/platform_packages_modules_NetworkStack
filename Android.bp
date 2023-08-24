@@ -388,7 +388,10 @@ java_library {
     ],
     // If this library is ever used outside of tests, it should not use "Dhcp*Packet", and specify
     // its contents explicitly.
-    visibility: ["//packages/modules/Connectivity/tests/cts/net"],
+    visibility: [
+        "//packages/modules/Connectivity/Tethering/tests/integration",
+        "//packages/modules/Connectivity/tests/cts/net",
+    ],
 }
 
 java_genrule {
