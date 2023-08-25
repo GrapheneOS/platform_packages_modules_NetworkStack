@@ -403,11 +403,13 @@ public class Dhcp6Client extends StateMachine {
             startNewTransaction();
         }
 
+        @Override
         protected boolean sendPacket() {
             return sendSolicitPacket(buildEmptyIaPdOption());
         }
 
         // TODO: support multiple prefixes.
+        @Override
         protected void receivePacket(Dhcp6Packet packet) {
             if (!packet.isValid(mTransId, mClientDuid)) return;
             if (packet instanceof Dhcp6AdvertisePacket) {
@@ -439,10 +441,12 @@ public class Dhcp6Client extends StateMachine {
      * process the Reply message in this state.
      */
     class RequestState extends PacketRetransmittingState {
+        @Override
         protected boolean sendPacket() {
             return sendRequestPacket(buildIaPdOption(mAdvertise));
         }
 
+        @Override
         protected void receivePacket(Dhcp6Packet packet) {
             if (!(packet instanceof Dhcp6ReplyPacket)) return;
             if (!packet.isValid(mTransId, mClientDuid)) return;
@@ -558,6 +562,7 @@ public class Dhcp6Client extends StateMachine {
             startNewTransaction();
         }
 
+        @Override
         protected void receivePacket(Dhcp6Packet packet) {
             if (!(packet instanceof Dhcp6ReplyPacket)) return;
             if (!packet.isValid(mTransId, mClientDuid)) return;
@@ -606,6 +611,7 @@ public class Dhcp6Client extends StateMachine {
             }
         }
 
+        @Override
         protected boolean sendPacket() {
             return sendRenewPacket(buildIaPdOption(mReply));
         }
@@ -617,6 +623,7 @@ public class Dhcp6Client extends StateMachine {
      * update other configuration parameters.
      */
     class RebindState extends ReacquireState {
+        @Override
         protected boolean sendPacket() {
             return sendRebindPacket(buildIaPdOption(mReply));
         }
