@@ -475,6 +475,7 @@ public class IpClient extends StateMachine {
 
     // Sysctl parameter strings.
     private static final String ACCEPT_RA = "accept_ra";
+    private static final String ACCEPT_RA_DEFRTR = "accept_ra_defrtr";
     private static final String DAD_TRANSMITS = "dad_transmits";
 
     // Below constants are picked up by MessageUtils and exempt from ProGuard optimization.
@@ -667,7 +668,7 @@ public class IpClient extends StateMachine {
     private long mStartTimeMillis;
     private long mIPv6ProvisioningDtimGracePeriodMillis;
     private MacAddress mCurrentBssid;
-    private boolean mHasDisabledIpv6OrAcceptRaOnProvLoss;
+    private boolean mHasDisabledAcceptRaDefrtrOnProvLoss;
     private Integer mDadTransmits = null;
     private int mMaxDtimMultiplier = DTIM_MULTIPLIER_RESET;
     private ApfCapabilities mCurrentApfCapabilities;
@@ -1453,16 +1454,11 @@ public class IpClient extends StateMachine {
     private Integer getIpv6DadTransmits() {
         try {
             return Integer.parseUnsignedInt(mNetd.getProcSysNet(INetd.IPV6, INetd.CONF,
-                    mInterfaceName, "dad_transmits"));
+                    mInterfaceName, DAD_TRANSMITS));
         } catch (RemoteException | ServiceSpecificException e) {
             logError("Couldn't read dad_transmits on " + mInterfaceName, e);
             return null;
         }
-    }
-
-    private void restartIpv6WithAcceptRaDisabled() {
-        mInterfaceCtrl.disableIPv6();
-        startIPv6(0 /* acceptRa */);
     }
 
     // TODO: Investigate folding all this into the existing static function
@@ -1514,7 +1510,7 @@ public class IpClient extends StateMachine {
         // Note that we can still be disconnected by IpReachabilityMonitor
         // if the IPv6 default gateway (but not the IPv6 DNS servers; see
         // accompanying code in IpReachabilityMonitor) is unreachable.
-        final boolean ignoreIPv6ProvisioningLoss = mHasDisabledIpv6OrAcceptRaOnProvLoss
+        final boolean ignoreIPv6ProvisioningLoss = mHasDisabledAcceptRaDefrtrOnProvLoss
                 || (mConfiguration != null && mConfiguration.mUsingMultinetworkPolicyTracker
                         && !mCm.shouldAvoidBadWifi());
 
@@ -1542,24 +1538,27 @@ public class IpClient extends StateMachine {
         if (oldLp.hasGlobalIpv6Address() && (lostIPv6Router && !ignoreIPv6ProvisioningLoss)) {
             // Although link properties have lost IPv6 default route in this case, if IPv4 is still
             // working with appropriate routes and DNS servers, we can keep the current connection
-            // without disconnecting from the network, just disable IPv6 or accept_ra parameter on
-            // that given network until to the next provisioning.
+            // without disconnecting from the network, just disable accept_ra_defrtr sysctl on that
+            // given network until to the next provisioning.
             //
             // Disabling IPv6 stack will result in all IPv6 connectivity torn down and all IPv6
             // sockets being closed, the non-routable IPv6 DNS servers will be stripped out, so
             // applications will be able to reconnect immediately over IPv4. See b/131781810.
             //
-            // Sometimes disabling IPv6 stack might introduce other issues(see b/179222860),
-            // instead disabling accept_ra will result in only IPv4 provisioning and IPv6 link
-            // local address left on the interface, so applications will be able to reconnect
-            // immediately over IPv4 and keep IPv6 link-local capable.
+            // Sometimes disabling IPv6 stack can cause other problems(see b/179222860), conversely,
+            // disabling accept_ra_defrtr can still keep the interface IPv6 capable, but no longer
+            // learns the default router from incoming RA, partial IPv6 connectivity will remain on
+            // the interface, through which applications can still communicate locally.
             if (newLp.isIpv4Provisioned()) {
-                restartIpv6WithAcceptRaDisabled();
+                // Restart ipv6 with accept_ra_defrtr set to 0.
+                mInterfaceCtrl.disableIPv6();
+                startIPv6(0 /* accept_ra_defrtr */);
+
                 mNetworkQuirkMetrics.setEvent(NetworkQuirkEvent.QE_IPV6_PROVISIONING_ROUTER_LOST);
                 mNetworkQuirkMetrics.statsWrite();
-                mHasDisabledIpv6OrAcceptRaOnProvLoss = true;
+                mHasDisabledAcceptRaDefrtrOnProvLoss = true;
                 delta = PROV_CHANGE_STILL_PROVISIONED;
-                mLog.log("Disabled accept_ra parameter on loss of IPv6 default router");
+                mLog.log("Disabled accept_ra_defrtr sysctl on loss of IPv6 default router");
             } else {
                 delta = PROV_CHANGE_LOST_PROVISIONING;
             }
@@ -2102,8 +2101,10 @@ public class IpClient extends StateMachine {
                         == ProvisioningConfiguration.IPV6_ADDR_GEN_MODE_EUI64;
     }
 
-    private boolean startIPv6(int acceptRa) {
-        setIpv6Sysctl(ACCEPT_RA, acceptRa);
+    private boolean startIPv6(int acceptRaDefrtr) {
+        setIpv6Sysctl(ACCEPT_RA,
+                mConfiguration.mIPv6ProvisioningMode == PROV_IPV6_LINKLOCAL ? 0 : 2);
+        setIpv6Sysctl(ACCEPT_RA_DEFRTR, acceptRaDefrtr);
         if (shouldDisableDad()) {
             final Integer dadTransmits = getIpv6DadTransmits();
             if (dadTransmits != null) {
@@ -2309,7 +2310,7 @@ public class IpClient extends StateMachine {
         @Override
         public void enter() {
             stopAllIP();
-            mHasDisabledIpv6OrAcceptRaOnProvLoss = false;
+            mHasDisabledAcceptRaDefrtrOnProvLoss = false;
             mGratuitousNaTargetAddresses.clear();
             mMulticastNsSourceAddresses.clear();
 
@@ -2696,9 +2697,7 @@ public class IpClient extends StateMachine {
             mPacketTracker = createPacketTracker();
             if (mPacketTracker != null) mPacketTracker.start(mConfiguration.mDisplayName);
 
-            final int acceptRa =
-                    mConfiguration.mIPv6ProvisioningMode == PROV_IPV6_LINKLOCAL ? 0 : 2;
-            if (isIpv6Enabled() && !startIPv6(acceptRa)) {
+            if (isIpv6Enabled() && !startIPv6(1 /* acceptRaDefrtr */)) {
                 doImmediateProvisioningFailure(IpManagerEvent.ERROR_STARTING_IPV6);
                 enqueueJumpToStoppingState(DisconnectCode.DC_ERROR_STARTING_IPV6);
                 return;
