@@ -274,6 +274,15 @@ public class NetworkStackUtils {
     public static final String IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION =
             "ipclient_dhcpv6_prefix_delegation_version";
 
+    /**** BEGIN Feature Kill Switch Flags ****/
+
+    /**
+     * Kill switch flag to disable the feature of parsing netlink events from kernel directly
+     * instead from netd aidl interface by flag push.
+     */
+    public static final String IPCLIENT_PARSE_NETLINK_EVENTS_FORCE_DISABLE =
+            "ipclient_parse_netlink_events_force_disable";
+
     static {
         System.loadLibrary("networkstackutilsjni");
     }

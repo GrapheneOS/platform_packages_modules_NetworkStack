@@ -667,7 +667,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     private void setFeatureChickenedOut(String name, boolean chickenedOut) {
-        setDeviceConfigProperty(name, chickenedOut ? 1 : 0);
+        setDeviceConfigProperty(name, chickenedOut ? "1" : "0");
     }
 
     protected void setDhcpFeatures(final boolean isDhcpLeaseCacheEnabled,
@@ -717,8 +717,12 @@ public abstract class IpClientIntegrationTestCommon {
         // in IpClientLinkObserver will use mIsNetlinkEventParseEnabled to decide the proper
         // bindGroups, otherwise, the parameterized value got from ArrayMap(integration test) is
         // always false.
-        setFeatureEnabled(NetworkStackUtils.IPCLIENT_PARSE_NETLINK_EVENTS_VERSION,
-                mIsNetlinkEventParseEnabled /* default value */);
+        //
+        // Set feature kill switch flag with the parameterized value to keep running test cases on
+        // both code paths. Once we clean up the old code path (i.e.when the parameterized variable
+        // is false), then we can also delete this code.
+        setFeatureChickenedOut(NetworkStackUtils.IPCLIENT_PARSE_NETLINK_EVENTS_FORCE_DISABLE,
+                !mIsNetlinkEventParseEnabled);
 
         // Enable DHCPv6 Prefix Delegation.
         setFeatureEnabled(NetworkStackUtils.IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION,
