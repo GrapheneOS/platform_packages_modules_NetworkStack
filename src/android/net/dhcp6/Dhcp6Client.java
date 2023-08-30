@@ -18,6 +18,7 @@ package android.net.dhcp6;
 
 import static android.net.dhcp6.Dhcp6Packet.PrefixDelegation;
 import static android.system.OsConstants.AF_INET6;
+import static android.system.OsConstants.IFA_F_NODAD;
 import static android.system.OsConstants.IPPROTO_UDP;
 import static android.system.OsConstants.RT_SCOPE_UNIVERSE;
 import static android.system.OsConstants.SOCK_DGRAM;
@@ -521,7 +522,7 @@ public class Dhcp6Client extends StateMachine {
             // time it enters BoundState.
             final Inet6Address address = createInet6AddressFromEui64(prefix,
                     mIface.macAddr.toByteArray());
-            final int flags = IFA_F_NOPREFIXROUTE | IFA_F_MANAGETEMPADDR;
+            final int flags = IFA_F_NOPREFIXROUTE | IFA_F_MANAGETEMPADDR | IFA_F_NODAD;
             final long now = SystemClock.elapsedRealtime();
             final long deprecationTime = now + mReply.ipo.preferred;
             final long expirationTime = now + mReply.ipo.valid;
