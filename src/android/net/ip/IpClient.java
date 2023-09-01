@@ -718,8 +718,8 @@ public class IpClient extends StateMachine {
          * Get a Dhcp6Client instance.
          */
         public Dhcp6Client makeDhcp6Client(Context context, StateMachine controller,
-                InterfaceParams ifParams) {
-            return Dhcp6Client.makeDhcp6Client(context, controller, ifParams);
+                InterfaceParams ifParams, Dhcp6Client.Dependencies deps) {
+            return Dhcp6Client.makeDhcp6Client(context, controller, ifParams, deps);
         }
 
         /**
@@ -728,6 +728,13 @@ public class IpClient extends StateMachine {
         public DhcpClient.Dependencies getDhcpClientDependencies(
                 NetworkStackIpMemoryStore ipMemoryStore, IpProvisioningMetrics metrics) {
             return new DhcpClient.Dependencies(ipMemoryStore, metrics);
+        }
+
+        /**
+         * Get a Dhcp6Client Dependencies instance.
+         */
+        public Dhcp6Client.Dependencies getDhcp6ClientDependencies() {
+            return new Dhcp6Client.Dependencies();
         }
 
         /**
@@ -2123,7 +2130,8 @@ public class IpClient extends StateMachine {
             Log.wtf(mTag, "Dhcp6Client should never be non-null in startDhcp6PrefixDelegation");
             return;
         }
-        mDhcp6Client = mDependencies.makeDhcp6Client(mContext, IpClient.this, mInterfaceParams);
+        mDhcp6Client = mDependencies.makeDhcp6Client(mContext, IpClient.this, mInterfaceParams,
+                mDependencies.getDhcp6ClientDependencies());
         mDhcp6Client.sendMessage(Dhcp6Client.CMD_START_DHCP6);
     }
 
