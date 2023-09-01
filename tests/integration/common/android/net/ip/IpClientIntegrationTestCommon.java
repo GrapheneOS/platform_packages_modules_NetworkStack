@@ -505,8 +505,8 @@ public abstract class IpClientIntegrationTestCommon {
 
         @Override
         public Dhcp6Client makeDhcp6Client(Context context, StateMachine controller,
-                InterfaceParams ifParams) {
-            mDhcp6Client = Dhcp6Client.makeDhcp6Client(context, controller, ifParams);
+                InterfaceParams ifParams, Dhcp6Client.Dependencies deps) {
+            mDhcp6Client = Dhcp6Client.makeDhcp6Client(context, controller, ifParams, deps);
             return mDhcp6Client;
         }
 
@@ -523,6 +523,17 @@ public abstract class IpClientIntegrationTestCommon {
         public boolean isFeatureEnabled(final Context context, final String name,
                 final boolean defaultEnabled) {
             return IpClientIntegrationTestCommon.this.isFeatureEnabled(name, defaultEnabled);
+        }
+
+        @Override
+        public Dhcp6Client.Dependencies getDhcp6ClientDependencies() {
+            return new Dhcp6Client.Dependencies() {
+                @Override
+                public int getDeviceConfigPropertyInt(String name, int defaultValue) {
+                    return Dependencies.this.getDeviceConfigPropertyInt(name,
+                            0 /* default value */);
+                }
+            };
         }
 
         @Override
