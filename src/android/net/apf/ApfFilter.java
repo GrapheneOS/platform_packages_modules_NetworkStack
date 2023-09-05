@@ -881,7 +881,10 @@ public class ApfFilter {
                     default:
                         // RFC4861 section 4.2 dictates we ignore unknown options for forwards
                         // compatibility.
-                        mPacket.position(position + optionLength);
+                        // However, make sure the option's type and length match.
+                        addMatchSection(2); // option type & length
+                        // optionLength is guaranteed to be >= 8.
+                        mPacket.position(position + optionLength - 2);
                         break;
                 }
             }
