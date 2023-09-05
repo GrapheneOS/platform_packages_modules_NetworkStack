@@ -48,7 +48,6 @@ import static android.system.OsConstants.IFA_F_TEMPORARY;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
 import static android.system.OsConstants.IPPROTO_IPV6;
 import static android.system.OsConstants.IPPROTO_UDP;
-
 import static com.android.net.module.util.Inet4AddressUtils.getBroadcastAddress;
 import static com.android.net.module.util.Inet4AddressUtils.getPrefixMaskAsInet4Address;
 import static com.android.net.module.util.NetworkStackConstants.ALL_DHCP_RELAY_AGENTS_AND_SERVERS;
@@ -77,9 +76,7 @@ import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_ON_LINK
 import static com.android.testutils.MiscAsserts.assertThrows;
 import static com.android.testutils.ParcelUtils.parcelingRoundTrip;
 import static com.android.testutils.TestPermissionUtil.runAsShell;
-
 import static junit.framework.Assert.fail;
-
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
