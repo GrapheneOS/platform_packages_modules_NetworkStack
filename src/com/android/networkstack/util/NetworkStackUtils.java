@@ -233,13 +233,6 @@ public class NetworkStackUtils {
             "ipclient_garp_na_roaming_version";
 
     /**
-     * Experiment flag to enable parsing netlink events from kernel directly instead from netd aidl
-     * interface.
-     */
-    public static final String IPCLIENT_PARSE_NETLINK_EVENTS_VERSION =
-            "ipclient_parse_netlink_events_version";
-
-    /**
      * Experiment flag to check if an on-link IPv6 link local DNS is acceptable. The default flag
      * value is true, just add this flag for A/B testing to see if this fix works as expected via
      * experiment rollout.
