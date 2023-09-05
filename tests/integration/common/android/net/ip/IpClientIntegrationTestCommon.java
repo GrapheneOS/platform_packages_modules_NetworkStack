@@ -666,6 +666,10 @@ public abstract class IpClientIntegrationTestCommon {
         setDeviceConfigProperty(name, Integer.toString(value));
     }
 
+    private void setFeatureChickenedOut(String name, boolean chickenedOut) {
+        setDeviceConfigProperty(name, chickenedOut ? 1 : 0);
+    }
+
     protected void setDhcpFeatures(final boolean isDhcpLeaseCacheEnabled,
             final boolean isRapidCommitEnabled, final boolean isDhcpIpConflictDetectEnabled,
             final boolean isIPv6OnlyPreferredEnabled) {
