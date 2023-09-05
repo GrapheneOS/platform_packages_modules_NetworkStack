@@ -21,6 +21,8 @@ import android.os.Build;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
 
+import com.android.modules.utils.build.SdkLevel;
+
 /**
  * Utility class for defining and importing constants from the Android platform.
  */
@@ -35,4 +37,11 @@ public class ConstantsShim extends com.android.networkstack.apishim.api34.Consta
      */
     @VisibleForTesting
     public static final int VERSION = 35;
+
+    // When building against the latest shims but running on U (for example building from main
+    // and running mainline tests), this shim class will be used. The linter wouldn't be happy
+    // about the newer constant being used without a SDK check.
+    public static final String REGISTER_NSD_OFFLOAD_ENGINE =
+            SdkLevel.isAtLeastV() ? android.Manifest.permission.REGISTER_NSD_OFFLOAD_ENGINE
+                 : com.android.networkstack.apishim.api34.ConstantsShim.REGISTER_NSD_OFFLOAD_ENGINE;
 }
