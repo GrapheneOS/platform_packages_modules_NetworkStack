@@ -502,7 +502,7 @@ public class ApfGenerator {
      */
     public ApfGenerator addAdd(int value) {
         Instruction instruction = new Instruction(Opcodes.ADD);
-        instruction.setSignedImm(value);
+        instruction.setUnsignedImm(value);
         addInstruction(instruction);
         return this;
     }
@@ -512,7 +512,7 @@ public class ApfGenerator {
      */
     public ApfGenerator addMul(int value) {
         Instruction instruction = new Instruction(Opcodes.MUL);
-        instruction.setSignedImm(value);
+        instruction.setUnsignedImm(value);
         addInstruction(instruction);
         return this;
     }
@@ -522,7 +522,7 @@ public class ApfGenerator {
      */
     public ApfGenerator addDiv(int value) {
         Instruction instruction = new Instruction(Opcodes.DIV);
-        instruction.setSignedImm(value);
+        instruction.setUnsignedImm(value);
         addInstruction(instruction);
         return this;
     }
