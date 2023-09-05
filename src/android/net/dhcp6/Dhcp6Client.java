@@ -292,13 +292,53 @@ public class Dhcp6Client extends StateMachine {
     }
 
     private void scheduleLeaseTimers() {
+        // TODO: validate t1, t2, valid and preferred lifetimes before the timers are scheduled to
+        // prevent packet storms due to low timeouts.
+        int renewTimeout = mReply.t1;
+        int rebindTimeout = mReply.t2;
+        final long expirationTimeout = mReply.ipo.valid;
+
+        // rfc8415#section-14.2: if t1 and / or t2 are 0, the client chooses an appropriate value.
+        // rfc8415#section-21.21: Recommended values for T1 and T2 are 0.5 and 0.8 times the
+        // shortest preferred lifetime of the prefixes in the IA_PD that the server is willing to
+        // extend, respectively.
+        if (renewTimeout == 0) {
+            renewTimeout = (int) (mReply.ipo.preferred * 0.5);
+        }
+        if (rebindTimeout == 0) {
+            rebindTimeout = (int) (mReply.ipo.preferred * 0.8);
+        }
+
+        // Note: message validation asserts that the received t1 <= t2 if both t1 > 0 and t2 > 0.
+        // However, if t1 or t2 are 0, it is possible for renewTimeout to become larger than
+        // rebindTimeout (and similarly, rebindTimeout to become larger than expirationTimeout).
+        // For example: t1 = 0, t2 = 40, valid lft = 100 results in renewTimeout = 50, and
+        // rebindTimeout = 40. Hence, their correct order must be asserted below.
+
+        // If timeouts happen to coincide or are out of order, the former (in respect to the
+        // specified provisioning lifecycle) can be skipped. This also takes care of the case where
+        // the server sets t1 == t2 == valid lft, which indicates that the IA cannot be renewed, so
+        // there is no point in trying.
+        if (renewTimeout >= rebindTimeout) {
+            // skip RENEW
+            renewTimeout = 0;
+        }
+        if (rebindTimeout >= expirationTimeout) {
+            // skip REBIND
+            rebindTimeout = 0;
+        }
+
         final long now = SystemClock.elapsedRealtime();
-        mRenewAlarm.schedule(now + mReply.t1 * (long) SECONDS);
-        mRebindAlarm.schedule(now + mReply.t2 * (long) SECONDS);
-        mExpiryAlarm.schedule(now + mReply.ipo.valid * (long) SECONDS);
-        Log.d(TAG, "Scheduling IA_PD renewal in " + mReply.t1 + "s");
-        Log.d(TAG, "Scheduling IA_PD rebind in " + mReply.t2 + "s");
-        Log.d(TAG, "Scheduling IA_PD expiry in " + mReply.ipo.valid + "s");
+        if (renewTimeout > 0) {
+            mRenewAlarm.schedule(now + renewTimeout * (long) SECONDS);
+            Log.d(TAG, "Scheduling IA_PD renewal in " + renewTimeout + "s");
+        }
+        if (rebindTimeout > 0) {
+            mRebindAlarm.schedule(now + rebindTimeout * (long) SECONDS);
+            Log.d(TAG, "Scheduling IA_PD rebind in " + rebindTimeout + "s");
+        }
+        mExpiryAlarm.schedule(now + expirationTimeout * (long) SECONDS);
+        Log.d(TAG, "Scheduling IA_PD expiry in " + expirationTimeout + "s");
     }
 
     private void notifyPrefixDelegation(int result, @Nullable final PrefixDelegation pd) {
