@@ -33,6 +33,7 @@ import static com.android.net.module.util.NetworkStackConstants.RFC7421_PREFIX_L
 import static com.android.networkstack.apishim.ConstantsShim.IFA_F_MANAGETEMPADDR;
 import static com.android.networkstack.apishim.ConstantsShim.IFA_F_NOPREFIXROUTE;
 import static com.android.networkstack.util.NetworkStackUtils.createInet6AddressFromEui64;
+import static com.android.networkstack.util.NetworkStackUtils.macAddressToEui64;
 
 import android.content.Context;
 import android.net.IpPrefix;
@@ -540,7 +541,7 @@ public class Dhcp6Client extends StateMachine {
             // We don't need to remember IPv6 addresses that need to extend the lifetime every
             // time it enters BoundState.
             final Inet6Address address = createInet6AddressFromEui64(prefix,
-                    mIface.macAddr.toByteArray());
+                    macAddressToEui64(mIface.macAddr));
             final int flags = IFA_F_NOPREFIXROUTE | IFA_F_MANAGETEMPADDR | IFA_F_NODAD;
             final long now = SystemClock.elapsedRealtime();
             final long deprecationTime = now + mReply.ipo.preferred;
