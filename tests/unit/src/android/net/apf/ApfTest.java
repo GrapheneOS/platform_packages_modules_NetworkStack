@@ -335,6 +335,12 @@ public class ApfTest {
         gen.addJumpIfR0Equals(1234567890, gen.DROP_LABEL);
         assertDrop(gen);
 
+        // Test add with a small signed negative value.
+        gen = new ApfGenerator(MIN_APF_VERSION);
+        gen.addAdd(-1);
+        gen.addJumpIfR0Equals(-1, gen.DROP_LABEL);
+        assertDrop(gen);
+
         // Test subtract.
         gen = new ApfGenerator(MIN_APF_VERSION);
         gen.addAdd(-1234567890);
