@@ -884,7 +884,7 @@ public class ApfFilter {
                         // However, make sure the option's type and length match.
                         addMatchSection(2); // option type & length
                         // optionLength is guaranteed to be >= 8.
-                        mPacket.position(position + optionLength - 2);
+                        addIgnoreSection(optionLength - 2);
                         break;
                 }
             }
