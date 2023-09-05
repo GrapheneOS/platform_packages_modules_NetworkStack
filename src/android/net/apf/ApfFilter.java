@@ -836,6 +836,11 @@ public class ApfFilter {
                 final int position = mPacket.position();
                 final int optionType = getUint8(mPacket, position);
                 final int optionLength = getUint8(mPacket, position + 1) * 8;
+                if (optionLength <= 0) {
+                    throw new InvalidRaException(String.format(
+                        "Invalid option length opt=%d len=%d", optionType, optionLength));
+                }
+
                 long lifetime;
                 switch (optionType) {
                     case ICMP6_PREFIX_OPTION_TYPE:
@@ -878,10 +883,6 @@ public class ApfFilter {
                         // compatibility.
                         mPacket.position(position + optionLength);
                         break;
-                }
-                if (optionLength <= 0) {
-                    throw new InvalidRaException(String.format(
-                        "Invalid option length opt=%d len=%d", optionType, optionLength));
                 }
             }
             mMinLifetime = minLifetime();
