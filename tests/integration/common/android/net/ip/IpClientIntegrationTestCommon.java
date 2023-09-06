@@ -4848,25 +4848,68 @@ public abstract class IpClientIntegrationTestCommon {
         verify(mCb, never()).onProvisioningSuccess(any());
     }
 
-    @Test
-    public void testDhcp6Pd_notStart() throws Exception {
-        final ByteBuffer pio = buildPioOption(3600, 1800, "2001:db8:1::/64");
-        final ByteBuffer rdnss = buildRdnssOption(3600, "2001:4860:4860::64");
-        final ByteBuffer slla = buildSllaOption();
-        final ByteBuffer ra = buildRaPacket(pio, rdnss, slla);
+    private void runDhcp6PdNotStartInDualStackTest(final String prefix, final String dnsServer)
+            throws Exception {
+        final List<ByteBuffer> options = new ArrayList<>();
+        if (prefix != null) {
+            options.add(buildPioOption(3600, 1800, prefix));
+        }
+        if (dnsServer != null) {
+            options.add(buildRdnssOption(3600, dnsServer));
+        }
+        options.add(buildSllaOption());
+        final ByteBuffer ra = buildRaPacket(options.toArray(new ByteBuffer[options.size()]));
 
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
-                .withoutIPv4()
                 .build();
+        setDhcpFeatures(false /* isDhcpLeaseCacheEnabled */, true /* isRapidCommitEnabled */,
+                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
         startIpClientProvisioning(config);
 
         waitForRouterSolicitation();
         mPacketReader.sendResponse(ra);
 
-        // Response an normal RA for IPv6 provisioning, then DHCPv6 prefix delegation
-        // should not start.
+        // Start IPv4 provisioning and wait until entire provisioning completes.
+        handleDhcpPackets(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
+                true /* shouldReplyRapidCommitAck */, TEST_DEFAULT_MTU, null /* serverSentUrl */);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(any());
+    }
+
+    @Test
+    public void testDhcp6Pd_notStartWithGlobalPio() throws Exception {
+        runDhcp6PdNotStartInDualStackTest("2001:db8:1::/64" /* prefix */,
+                "2001:4860:4860::64" /* dnsServer */);
+        // Reply with a normal RA with global prefix and an off-link DNS for IPv6 provisioning,
+        // DHCPv6 prefix delegation should not start.
         assertNull(getNextDhcp6Packet(PACKET_TIMEOUT_MS));
-        verify(mCb).onProvisioningSuccess(any());
+    }
+
+    @Test
+    public void testDhcp6Pd_notStartWithUlaPioAndDns() throws Exception {
+        runDhcp6PdNotStartInDualStackTest("fd7c:9df8:7f39:dc89::/64" /* prefix */,
+                "fd7c:9df8:7f39:dc89::1"  /* dnsServer */);
+        // Reply with a normal RA even with ULA prefix and on-link ULA DNS for IPv6 provisioning,
+        // DHCPv6 prefix delegation should not start.
+        assertNull(getNextDhcp6Packet(PACKET_TIMEOUT_MS));
+    }
+
+    @Test
+    public void testDhcp6Pd_notStartWithUlaPioAndOffLinkDns() throws Exception {
+        runDhcp6PdNotStartInDualStackTest("fd7c:9df8:7f39:dc89::/64" /* prefix */,
+                "2001:4860:4860::64"  /* dnsServer */);
+        // Reply with a normal RA even with ULA prefix and off-link DNS for IPv6 provisioning,
+        // DHCPv6 prefix delegation should not start.
+        assertNull(getNextDhcp6Packet(PACKET_TIMEOUT_MS));
+    }
+
+    @Test
+    public void testDhcp6Pd_startWithNoNonIpv6LinkLocalAddresses() throws Exception {
+        runDhcp6PdNotStartInDualStackTest(null /* prefix */,
+                "2001:4860:4860::64"  /* dnsServer */);
+        // Reply with a normal RA with only RDNSS but no PIO for IPv6 provisioning,
+        // DHCPv6 prefix delegation should start.
+        final Dhcp6Packet packet = getNextDhcp6Packet(PACKET_TIMEOUT_MS);
+        assertTrue(packet instanceof Dhcp6SolicitPacket);
     }
 
     @Test
