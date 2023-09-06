@@ -836,6 +836,11 @@ public class ApfFilter {
                 final int position = mPacket.position();
                 final int optionType = getUint8(mPacket, position);
                 final int optionLength = getUint8(mPacket, position + 1) * 8;
+                if (optionLength <= 0) {
+                    throw new InvalidRaException(String.format(
+                        "Invalid option length opt=%d len=%d", optionType, optionLength));
+                }
+
                 long lifetime;
                 switch (optionType) {
                     case ICMP6_PREFIX_OPTION_TYPE:
@@ -876,12 +881,11 @@ public class ApfFilter {
                     default:
                         // RFC4861 section 4.2 dictates we ignore unknown options for forwards
                         // compatibility.
-                        mPacket.position(position + optionLength);
+                        // However, make sure the option's type and length match.
+                        addMatchSection(2); // option type & length
+                        // optionLength is guaranteed to be >= 8.
+                        addIgnoreSection(optionLength - 2);
                         break;
-                }
-                if (optionLength <= 0) {
-                    throw new InvalidRaException(String.format(
-                        "Invalid option length opt=%d len=%d", optionType, optionLength));
                 }
             }
             mMinLifetime = minLifetime();
