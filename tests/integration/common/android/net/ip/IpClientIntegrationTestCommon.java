@@ -17,6 +17,8 @@
 package android.net.ip;
 
 import static android.Manifest.permission.MANAGE_TEST_NETWORKS;
+import static android.Manifest.permission.READ_DEVICE_CONFIG;
+import static android.Manifest.permission.WRITE_DEVICE_CONFIG;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING;
@@ -48,7 +50,6 @@ import static android.system.OsConstants.IFA_F_TEMPORARY;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
 import static android.system.OsConstants.IPPROTO_IPV6;
 import static android.system.OsConstants.IPPROTO_UDP;
-
 import static com.android.net.module.util.Inet4AddressUtils.getBroadcastAddress;
 import static com.android.net.module.util.Inet4AddressUtils.getPrefixMaskAsInet4Address;
 import static com.android.net.module.util.NetworkStackConstants.ALL_DHCP_RELAY_AGENTS_AND_SERVERS;
@@ -77,9 +78,7 @@ import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_ON_LINK
 import static com.android.testutils.MiscAsserts.assertThrows;
 import static com.android.testutils.ParcelUtils.parcelingRoundTrip;
 import static com.android.testutils.TestPermissionUtil.runAsShell;
-
 import static junit.framework.Assert.fail;
-
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -114,6 +113,7 @@ import static org.mockito.Mockito.when;
 import android.app.AlarmManager;
 import android.app.AlarmManager.OnAlarmListener;
 import android.app.Instrumentation;
+import android.app.UiAutomation;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.res.Resources;
@@ -169,9 +169,11 @@ import android.os.PowerManager;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.SystemProperties;
+import android.provider.DeviceConfig;
 import android.stats.connectivity.NudEventType;
 import android.system.ErrnoException;
 import android.system.Os;
+import android.util.ArrayMap;
 
 import androidx.annotation.NonNull;
 import androidx.test.InstrumentationRegistry;
@@ -620,8 +622,6 @@ public abstract class IpClientIntegrationTestCommon {
 
     protected abstract void setFeatureEnabled(String name, boolean enabled);
 
-    protected abstract void setDeviceConfigProperty(String name, int value);
-
     protected abstract boolean isFeatureEnabled(String name, boolean defaultEnabled);
 
     protected abstract boolean useNetworkStackSignature();
@@ -641,6 +641,33 @@ public abstract class IpClientIntegrationTestCommon {
             fail("Device running root tests doesn't support TestNetworkStackServiceClient.");
         }
         return !useNetworkStackSignature() && mIsSignatureRequiredTest;
+    }
+
+    private ArrayMap<String, String> mOriginalPropertyValues = new ArrayMap<>();
+
+    protected void setDeviceConfigProperty(String name, String value) {
+        final UiAutomation am = InstrumentationRegistry.getInstrumentation().getUiAutomation();
+        am.adoptShellPermissionIdentity(READ_DEVICE_CONFIG, WRITE_DEVICE_CONFIG);
+        try {
+            // Do not use computeIfAbsent as it would overwrite null values,
+            // property originally unset.
+            if (!mOriginalPropertyValues.containsKey(name)) {
+                mOriginalPropertyValues.put(name,
+                        DeviceConfig.getProperty(DeviceConfig.NAMESPACE_CONNECTIVITY, name));
+            }
+            DeviceConfig.setProperty(DeviceConfig.NAMESPACE_CONNECTIVITY, name, value,
+                    false /* makeDefault */);
+        } finally {
+            am.dropShellPermissionIdentity();
+        }
+    }
+
+    protected void setDeviceConfigProperty(String name, int value) {
+        setDeviceConfigProperty(name, Integer.toString(value));
+    }
+
+    private void setFeatureChickenedOut(String name, boolean chickenedOut) {
+        setDeviceConfigProperty(name, chickenedOut ? "1" : "0");
     }
 
     protected void setDhcpFeatures(final boolean isDhcpLeaseCacheEnabled,
@@ -690,8 +717,12 @@ public abstract class IpClientIntegrationTestCommon {
         // in IpClientLinkObserver will use mIsNetlinkEventParseEnabled to decide the proper
         // bindGroups, otherwise, the parameterized value got from ArrayMap(integration test) is
         // always false.
-        setFeatureEnabled(NetworkStackUtils.IPCLIENT_PARSE_NETLINK_EVENTS_VERSION,
-                mIsNetlinkEventParseEnabled /* default value */);
+        //
+        // Set feature kill switch flag with the parameterized value to keep running test cases on
+        // both code paths. Once we clean up the old code path (i.e.when the parameterized variable
+        // is false), then we can also delete this code.
+        setFeatureChickenedOut(NetworkStackUtils.IPCLIENT_PARSE_NETLINK_EVENTS_FORCE_DISABLE,
+                !mIsNetlinkEventParseEnabled);
 
         // Enable DHCPv6 Prefix Delegation.
         setFeatureEnabled(NetworkStackUtils.IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION,
@@ -790,6 +821,22 @@ public abstract class IpClientIntegrationTestCommon {
         teardownTapInterface();
         mIIpClient.shutdown();
         awaitIpClientShutdown();
+    }
+
+    @After
+    public void tearDownDeviceConfigProperties() {
+        if (testSkipped()) return;
+        final UiAutomation am = InstrumentationRegistry.getInstrumentation().getUiAutomation();
+        am.adoptShellPermissionIdentity(READ_DEVICE_CONFIG, WRITE_DEVICE_CONFIG);
+        try {
+            for (String key : mOriginalPropertyValues.keySet()) {
+                if (key == null) continue;
+                DeviceConfig.setProperty(DeviceConfig.NAMESPACE_CONNECTIVITY, key,
+                        mOriginalPropertyValues.get(key), false /* makeDefault */);
+            }
+        } finally {
+            am.dropShellPermissionIdentity();
+        }
     }
 
     private void setUpTapInterface() throws Exception {
