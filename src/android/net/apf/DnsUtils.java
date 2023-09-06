@@ -105,7 +105,7 @@ public class DnsUtils {
 
         /**
          * // Now parse the label.
-         * LDBX R0, [R1+0]                  // R0 = label length, R1 = parsing offset
+         * LDBX R0, [R1]                    // R0 = label length, R1 = parsing offset
          * AND R0, 0xc0                     // Is this a pointer?
          *
          * JEQ R0, 0, :parse_dns_label_real
@@ -132,7 +132,7 @@ public class DnsUtils {
 
         /**
          * :pointer_offset_stored
-         * LDHX R0, [R1+0]                  // R0 = 2-byte pointer value
+         * LDHX R0, [R1]                    // R0 = 2-byte pointer value
          * AND R0, 0x3ff                    // R0 = pointer destination offset (from DNS header)
          * LDM R1, 1                        // R1 = offset in packet of DNS header
          * ADD R0, R1                       // R0 = pointer destination offset
@@ -162,7 +162,7 @@ public class DnsUtils {
          * // This is where the real (non-pointer) label starts.
          * // Load label length into R1, and return to caller.
          * // m[SLOT_CURRENT_PARSE_OFFSET] already contains label offset.
-         * LDHX R1 [R1+0]                   // R1 = label length
+         * LDHX R1, [R1]                    // R1 = label length
          */
         gen.defineLabel(labelParseDnsLabelReal);
         gen.addLoad8Indexed(R1, 0);
