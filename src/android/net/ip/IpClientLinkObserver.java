@@ -19,8 +19,6 @@ package android.net.ip;
 import static android.system.OsConstants.AF_INET6;
 import static android.system.OsConstants.AF_UNSPEC;
 import static android.system.OsConstants.IFF_LOOPBACK;
-
-import static com.android.modules.utils.build.SdkLevel.isAtLeastT;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
 import static com.android.net.module.util.netlink.NetlinkConstants.IFF_LOWER_UP;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTM_F_CLONED;
@@ -29,7 +27,7 @@ import static com.android.net.module.util.netlink.NetlinkConstants.RTPROT_KERNEL
 import static com.android.net.module.util.netlink.NetlinkConstants.RTPROT_RA;
 import static com.android.net.module.util.netlink.NetlinkConstants.RT_SCOPE_UNIVERSE;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_ACCEPT_IPV6_LINK_LOCAL_DNS_VERSION;
-import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_PARSE_NETLINK_EVENTS_VERSION;
+import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_PARSE_NETLINK_EVENTS_FORCE_DISABLE;
 
 import android.app.AlarmManager;
 import android.content.Context;
@@ -190,8 +188,8 @@ public class IpClientLinkObserver implements NetworkObserver {
         mDnsServerRepository = new DnsServerRepository(config.minRdnssLifetime);
         mAlarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         mDependencies = deps;
-        mNetlinkEventParsingEnabled = deps.isFeatureEnabled(context,
-                IPCLIENT_PARSE_NETLINK_EVENTS_VERSION, isAtLeastT() /* default value */);
+        mNetlinkEventParsingEnabled = deps.isNetworkStackFeatureNotChickenedOut(
+                IPCLIENT_PARSE_NETLINK_EVENTS_FORCE_DISABLE);
         mNetlinkMonitor = new MyNetlinkMonitor(h, log, mTag);
         mHandler.post(() -> {
             if (!mNetlinkMonitor.start()) {
