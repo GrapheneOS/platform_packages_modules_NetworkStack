@@ -34,7 +34,6 @@ import static android.system.OsConstants.ETH_P_ARP;
 import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.SOCK_NONBLOCK;
 import static android.system.OsConstants.SOCK_RAW;
-
 import static com.android.net.module.util.NetworkStackConstants.ARP_REPLY;
 import static com.android.net.module.util.NetworkStackConstants.ETHER_BROADCAST;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_ROUTERS_MULTICAST;
@@ -796,6 +795,15 @@ public class IpClient extends StateMachine {
         public ApfFilter maybeCreateApfFilter(Context context, ApfFilter.ApfConfiguration config,
                 InterfaceParams ifParams, IpClientCallbacksWrapper cb) {
             return ApfFilter.maybeCreate(context, config, ifParams, cb);
+        }
+
+        /**
+         * Check whether one specific experimental feature in NetworkStack module from
+         * {@link DeviceConfig} is not disabled.
+         * @see DeviceConfigUtils#isNetworkStackFeatureNotChickenedOut(String)
+         */
+        public boolean isNetworkStackFeatureNotChickenedOut(final String name) {
+            return DeviceConfigUtils.isNetworkStackFeatureNotChickenedOut(name);
         }
     }
 
