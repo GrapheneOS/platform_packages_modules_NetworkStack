@@ -611,7 +611,7 @@ public class ApfFilter {
         private final ArrayList<PacketSection> mPacketSections = new ArrayList<>();
 
         // Minimum lifetime in packet
-        long mMinLifetime;
+        int mMinLifetime;
         // When the packet was last captured, in seconds since Unix Epoch
         long mLastSeen;
 
@@ -912,11 +912,15 @@ public class ApfFilter {
 
         // What is the minimum of all lifetimes within {@code packet} in seconds?
         // Precondition: matches(packet, length) already returned true.
-        long minLifetime() {
-            long minLifetime = Long.MAX_VALUE;
+        int minLifetime() {
+            // While technically most lifetimes in the RA are u32s, as far as the RA filter is
+            // concerned, INT_MAX is still a *much* longer lifetime than any filter would ever
+            // reasonably be active for.
+            // Clamp minLifetime at INT_MAX.
+            int minLifetime = Integer.MAX_VALUE;
             for (PacketSection section : mPacketSections) {
                 if (isRelevantLifetime(section)) {
-                    minLifetime = Math.min(minLifetime, section.lifetime);
+                    minLifetime = (int) Math.min(minLifetime, section.lifetime);
                 }
             }
             return minLifetime;
@@ -937,8 +941,8 @@ public class ApfFilter {
         // Filter for a fraction of the lifetime and adjust for the age of the RA.
         @GuardedBy("ApfFilter.this")
         int filterLifetime() {
-            return (int) (mMinLifetime / FRACTION_OF_LIFETIME_TO_FILTER)
-                    - (int) (mProgramBaseTime - mLastSeen);
+            return (int) ((mMinLifetime / FRACTION_OF_LIFETIME_TO_FILTER)
+                    - (mProgramBaseTime - mLastSeen));
         }
 
         @GuardedBy("ApfFilter.this")
