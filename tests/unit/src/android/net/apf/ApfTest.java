@@ -2642,7 +2642,7 @@ public class ApfTest {
         dnsslOptionPacket.putInt(
                 ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_LIFETIME_OFFSET, DNSSL_LIFETIME);
         verifyRaLifetime(apfFilter, ipClientCallback, dnsslOptionPacket, ROUTER_LIFETIME);
-        verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, -1, -1, DNSSL_LIFETIME));
+        verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, -1, -1, -1));
 
         ByteBuffer largeRaPacket = ByteBuffer.wrap(buildLargeRa());
         verifyRaLifetime(apfFilter, ipClientCallback, largeRaPacket, 300);
