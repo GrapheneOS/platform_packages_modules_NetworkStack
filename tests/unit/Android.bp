@@ -76,6 +76,7 @@ android_library {
     min_sdk_version: "30",
     defaults: ["NetworkStackTestsDefaults"],
     static_libs: ["NetworkStackApiStableLib"],
+    lint: { test: true },
     visibility: [
         "//packages/modules/NetworkStack/tests/integration",
         "//packages/modules/Connectivity/tests:__subpackages__",
