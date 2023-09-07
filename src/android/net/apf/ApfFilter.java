@@ -878,14 +878,11 @@ public class ApfFilter {
                         lifetime = add4ByteLifetimeOption(optionType, optionLength);
                         builder.updateRouteInfoLifetime(lifetime);
                         break;
-                    case ICMP6_DNSSL_OPTION_TYPE:
-                        lifetime = add4ByteLifetimeOption(optionType, optionLength);
-                        builder.updateDnsslLifetime(lifetime);
-                        break;
                     case ICMP6_MTU_OPTION_TYPE:
                     case ICMP6_PREF64_OPTION_TYPE:
                         addMatchSection(optionLength);
                         break;
+                    case ICMP6_DNSSL_OPTION_TYPE: // currently unsupported in userspace.
                     default:
                         // RFC4861 section 4.2 dictates we ignore unknown options for forwards
                         // compatibility.
