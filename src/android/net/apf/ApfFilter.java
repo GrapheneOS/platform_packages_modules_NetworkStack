@@ -941,8 +941,9 @@ public class ApfFilter {
         // Filter for a fraction of the lifetime and adjust for the age of the RA.
         @GuardedBy("ApfFilter.this")
         int filterLifetime() {
-            return (int) ((mMinLifetime / FRACTION_OF_LIFETIME_TO_FILTER)
+            final int filterLifetime = (int) ((mMinLifetime / FRACTION_OF_LIFETIME_TO_FILTER)
                     - (mProgramBaseTime - mLastSeen));
+            return Math.max(0, filterLifetime);
         }
 
         @GuardedBy("ApfFilter.this")
