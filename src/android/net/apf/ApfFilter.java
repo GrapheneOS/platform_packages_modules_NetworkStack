@@ -589,10 +589,14 @@ public class ApfFilter {
         private static final int ICMP6_PREFIX_OPTION_PREFERRED_LIFETIME_OFFSET = 8;
         private static final int ICMP6_PREFIX_OPTION_PREFERRED_LIFETIME_LEN = 4;
 
+        // From RFC4861: mtu size option
+        private static final int ICMP6_MTU_OPTION_TYPE = 5;
         // From RFC6106: Recursive DNS Server option
         private static final int ICMP6_RDNSS_OPTION_TYPE = 25;
         // From RFC6106: DNS Search List option
         private static final int ICMP6_DNSSL_OPTION_TYPE = 31;
+        // From RFC8781: PREF64 option
+        private static final int ICMP6_PREF64_OPTION_TYPE = 38;
 
         // From RFC4191: Route Information option
         private static final int ICMP6_ROUTE_INFO_OPTION_TYPE = 24;
@@ -877,6 +881,10 @@ public class ApfFilter {
                     case ICMP6_DNSSL_OPTION_TYPE:
                         lifetime = add4ByteLifetimeOption(optionType, optionLength);
                         builder.updateDnsslLifetime(lifetime);
+                        break;
+                    case ICMP6_MTU_OPTION_TYPE:
+                    case ICMP6_PREF64_OPTION_TYPE:
+                        addMatchSection(optionLength);
                         break;
                     default:
                         // RFC4861 section 4.2 dictates we ignore unknown options for forwards
