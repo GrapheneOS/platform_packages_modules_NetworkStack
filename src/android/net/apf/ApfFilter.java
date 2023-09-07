@@ -595,6 +595,8 @@ public class ApfFilter {
         private static final int ICMP6_RDNSS_OPTION_TYPE = 25;
         // From RFC6106: DNS Search List option
         private static final int ICMP6_DNSSL_OPTION_TYPE = 31;
+        // From RFC8910: Captive-Portal option
+        private static final int ICMP6_CAPTIVE_PORTAL_OPTION_TYPE = 37;
         // From RFC8781: PREF64 option
         private static final int ICMP6_PREF64_OPTION_TYPE = 38;
 
@@ -882,6 +884,7 @@ public class ApfFilter {
                     case ICMP6_PREF64_OPTION_TYPE:
                         addMatchSection(optionLength);
                         break;
+                    case ICMP6_CAPTIVE_PORTAL_OPTION_TYPE: // unlikely to ever change.
                     case ICMP6_DNSSL_OPTION_TYPE: // currently unsupported in userspace.
                     default:
                         // RFC4861 section 4.2 dictates we ignore unknown options for forwards
