@@ -18,16 +18,15 @@ package com.android.networkstack.netlink;
 
 import static android.net.util.DataStallUtils.CONFIG_TCP_PACKETS_FAIL_PERCENTAGE;
 import static android.net.util.DataStallUtils.DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE;
+import static android.os.PowerManager.ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_INET;
-
 import static com.android.net.module.util.NetworkStackConstants.DNS_OVER_TLS_PORT;
-
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
 import static junit.framework.Assert.assertTrue;
-
 import static org.junit.Assume.assumeTrue;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
@@ -151,6 +150,7 @@ public class TcpSocketTrackerTest {
                 eq(NAMESPACE_CONNECTIVITY),
                 eq(CONFIG_TCP_PACKETS_FAIL_PERCENTAGE),
                 anyInt())).thenReturn(DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE);
+        when(mDependencies.shouldDisableInLightDoze()).thenReturn(true);
 
         when(mNetd.getFwmarkForNetwork(eq(TEST_NETID1)))
                 .thenReturn(makeMarkMaskParcel(NETID_MASK, TEST_NETID1_FWMARK));
@@ -327,6 +327,7 @@ public class TcpSocketTrackerTest {
         assertFalse(tst.isDataStallSuspected());
 
         verify(mDependencies, atLeastOnce()).isTcpInfoParsingSupported();
+        verify(mDependencies, atLeastOnce()).shouldDisableInLightDoze();
         verifyNoMoreInteractions(mDependencies);
 
         // Verify that no un-registration for the device configuration listener and broadcast
@@ -480,10 +481,17 @@ public class TcpSocketTrackerTest {
         final ByteBuffer bb = ByteBuffer.allocate(size);
         bb.order(order);
         switch (size) {
-            case Short.BYTES -> bb.putShort((short) v);
-            case Integer.BYTES -> bb.putInt((int) v);
-            case Long.BYTES -> bb.putLong(v);
-            default -> throw new IllegalArgumentException("Unsupported size: " + size);
+            case Short.BYTES:
+                bb.putShort((short) v);
+                break;
+            case Integer.BYTES:
+                bb.putInt((int) v);
+                break;
+            case Long.BYTES:
+                bb.putLong(v);
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported size: " + size);
         }
         String s = "";
         for (byte b : bb.array()) {
@@ -585,7 +593,7 @@ public class TcpSocketTrackerTest {
         final ArgumentCaptor<BroadcastReceiver> receiverCaptor =
                 ArgumentCaptor.forClass(BroadcastReceiver.class);
 
-        verify(mDependencies).addDeviceIdleReceiver(receiverCaptor.capture());
+        verify(mDependencies).addDeviceIdleReceiver(receiverCaptor.capture(), anyBoolean());
         setupNormalTestTcpInfo();
         assertTrue(tst.pollSocketsInfo());
 
@@ -593,18 +601,73 @@ public class TcpSocketTrackerTest {
         when(mDependencies.getDeviceConfigPropertyInt(any(), eq(CONFIG_TCP_PACKETS_FAIL_PERCENTAGE),
                 anyInt())).thenReturn(40);
 
-        // Trigger a config update
+        // Trigger a config update.
         tst.mConfigListener.onPropertiesChanged(null /* properties */);
         assertEquals(10, tst.getSentSinceLastRecv());
         assertEquals(50, tst.getLatestPacketFailPercentage());
         assertTrue(tst.isDataStallSuspected());
 
-        // Enable doze mode
+        // Enable doze mode, verify counters are not updated.
         doReturn(true).when(mPowerManager).isDeviceIdleMode();
         final BroadcastReceiver receiver = receiverCaptor.getValue();
         receiver.onReceive(mContext, new Intent(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED));
         assertFalse(tst.pollSocketsInfo());
+        assertEquals(10, tst.getSentSinceLastRecv());
+        assertEquals(50, tst.getLatestPacketFailPercentage());
         assertFalse(tst.isDataStallSuspected());
+    }
+
+    @Test @IgnoreUpTo(Build.VERSION_CODES.S_V2)
+    public void testTcpInfoDisableParsingWithLightDozeMode_enabled() throws Exception {
+        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
+        final ArgumentCaptor<BroadcastReceiver> receiverCaptor =
+                ArgumentCaptor.forClass(BroadcastReceiver.class);
+
+        // Enable light doze mode with 1 netlink message.
+        verify(mDependencies).addDeviceIdleReceiver(receiverCaptor.capture(), anyBoolean());
+        final BroadcastReceiver receiver = receiverCaptor.getValue();
+        doReturn(true).when(mPowerManager).isDeviceLightIdleMode();
+        receiver.onReceive(mContext, new Intent(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED));
+        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(4, 10)
+                + NLMSG_DONE_HEX)).when(mDependencies).recvMessage(any());
+
+        // Verify counters are not updated.
+        assertFalse(tst.pollSocketsInfo());
+        assertEquals(0, tst.getSentSinceLastRecv());
+        // -1 if not enough packets.
+        assertEquals(-1, tst.getLatestPacketFailPercentage());
+        assertFalse(tst.isDataStallSuspected());
+
+        // Disable light doze mode, verify polling are processed and counters are updated.
+        doReturn(false).when(mPowerManager).isDeviceLightIdleMode();
+        receiver.onReceive(mContext, new Intent(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED));
+        assertTrue(tst.pollSocketsInfo());
+        assertEquals(10, tst.getSentSinceLastRecv());
+        // Lost 4 + default 5 retrans / 10 sent.
+        assertEquals(90, tst.getLatestPacketFailPercentage());
+        assertTrue(tst.isDataStallSuspected());
+    }
+
+    @Test @IgnoreUpTo(Build.VERSION_CODES.S_V2)
+    public void testTcpInfoDisableParsingWithLightDozeMode_disabled() throws Exception {
+        when(mDependencies.shouldDisableInLightDoze()).thenReturn(false);
+        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
+        final ArgumentCaptor<BroadcastReceiver> receiverCaptor =
+                ArgumentCaptor.forClass(BroadcastReceiver.class);
+
+        // Enable light doze mode with 1 netlink message.
+        verify(mDependencies).addDeviceIdleReceiver(receiverCaptor.capture(), anyBoolean());
+        final BroadcastReceiver receiver = receiverCaptor.getValue();
+        doReturn(true).when(mPowerManager).isDeviceLightIdleMode();
+        receiver.onReceive(mContext, new Intent(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED));
+        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(4, 10)
+                + NLMSG_DONE_HEX)).when(mDependencies).recvMessage(any());
+
+        // Verify TcpInfo is still processed.
+        assertTrue(tst.pollSocketsInfo());
+        assertEquals(10, tst.getSentSinceLastRecv());
+        assertEquals(90, tst.getLatestPacketFailPercentage());
+        assertTrue(tst.isDataStallSuspected());
     }
 
     private void setupNormalTestTcpInfo() throws Exception {
