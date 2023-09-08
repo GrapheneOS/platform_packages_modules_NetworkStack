@@ -627,7 +627,7 @@ public class NetworkMonitor extends StateMachine {
         mTestCaptivePortalHttpUrl = getTestUrl(TEST_CAPTIVE_PORTAL_HTTP_URL, validationLogs, deps);
         mIsCaptivePortalCheckEnabled = getIsCaptivePortalCheckEnabled(context, deps);
         mPrivateIpNoInternetEnabled = getIsPrivateIpNoInternetEnabled();
-        mMetricsEnabled = deps.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY,
+        mMetricsEnabled = deps.isFeatureEnabled(context,
                 NetworkStackUtils.VALIDATION_METRICS_VERSION, true /* defaultEnabled */);
         mUseHttps = getUseHttpsValidation();
         mCaptivePortalUserAgent = getCaptivePortalUserAgent();
@@ -3325,10 +3325,10 @@ public class NetworkMonitor extends StateMachine {
          * Check whether or not one experimental feature in the connectivity namespace is
          * enabled.
          * @param name Flag name of the experiment in the connectivity namespace.
-         * @see DeviceConfigUtils#isFeatureEnabled(Context, String, String)
+         * @see DeviceConfigUtils#isNetworkStackFeatureEnabled(Context, String)
          */
         public boolean isFeatureEnabled(@NonNull Context context, @NonNull String name) {
-            return DeviceConfigUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name);
+            return DeviceConfigUtils.isNetworkStackFeatureEnabled(context, name);
         }
 
         /**
@@ -3337,15 +3337,14 @@ public class NetworkMonitor extends StateMachine {
          * {@link NetworkStack} with current version of property. If this property version is valid,
          * the corresponding experimental feature would be enabled, otherwise disabled.
          * @param context The global context information about an app environment.
-         * @param namespace The namespace containing the property to look up.
          * @param name The name of the property to look up.
          * @param defaultEnabled The value to return if the property does not exist or its value is
          *                       null.
          * @return true if this feature is enabled, or false if disabled.
          */
-        public boolean isFeatureEnabled(@NonNull Context context, @NonNull String namespace,
-                @NonNull String name, boolean defaultEnabled) {
-            return DeviceConfigUtils.isFeatureEnabled(context, namespace, name, defaultEnabled);
+        public boolean isFeatureEnabled(@NonNull Context context, @NonNull String name,
+                boolean defaultEnabled) {
+            return DeviceConfigUtils.isNetworkStackFeatureEnabled(context, name, defaultEnabled);
         }
 
         /**

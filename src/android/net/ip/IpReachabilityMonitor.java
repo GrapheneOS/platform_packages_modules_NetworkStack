@@ -20,7 +20,6 @@ import static android.net.metrics.IpReachabilityEvent.NUD_FAILED;
 import static android.net.metrics.IpReachabilityEvent.NUD_FAILED_ORGANIC;
 import static android.net.metrics.IpReachabilityEvent.PROVISIONING_LOST;
 import static android.net.metrics.IpReachabilityEvent.PROVISIONING_LOST_ORGANIC;
-import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION;
@@ -202,7 +201,7 @@ public class IpReachabilityMonitor {
 
                 public boolean isFeatureEnabled(final Context context, final String name,
                         boolean defaultEnabled) {
-                    return DeviceConfigUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name,
+                    return DeviceConfigUtils.isNetworkStackFeatureEnabled(context, name,
                             defaultEnabled);
                 }
 
