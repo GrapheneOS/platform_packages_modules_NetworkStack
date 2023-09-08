@@ -446,12 +446,11 @@ public class DhcpClient extends StateMachine {
 
         /**
          * Return whether a feature guarded by a feature flag is enabled.
-         * @see DeviceConfigUtils#isFeatureEnabled(Context, String, String)
+         * @see DeviceConfigUtils#isNetworkStackFeatureEnabled(Context, String, boolean)
          */
         public boolean isFeatureEnabled(final Context context, final String name,
                 boolean defaultEnabled) {
-            return DeviceConfigUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name,
-                    defaultEnabled);
+            return DeviceConfigUtils.isNetworkStackFeatureEnabled(context, name, defaultEnabled);
         }
 
         /**
