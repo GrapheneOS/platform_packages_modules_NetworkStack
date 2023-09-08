@@ -734,9 +734,28 @@ public class ApfFilter {
             // check to prevent doing so in the presence of bugs or malformed or
             // truncated packets.
             if (length == 0) return;
+
+            // we need to add a MATCH section 'from, length, MATCH, 0, 0'
+            int from = mPacket.position();
+
+            // if possible try to increase the length of the previous match section
+            int lastIdx = mPacketSections.size() - 1;
+            if (lastIdx >= 0) {  // there had to be a previous section
+                PacketSection prev = mPacketSections.get(lastIdx);
+                if (prev.type == PacketSection.Type.MATCH) {  // of type match
+                    if (prev.option == 0 && prev.lifetime == 0) {  // technically guaranteed
+                        if (prev.start + prev.length == from) {  // ending where we start
+                            from -= prev.length;
+                            length += prev.length;
+                            mPacketSections.remove(lastIdx);
+                        }
+                    }
+                }
+            }
+
             mPacketSections.add(
-                    new PacketSection(mPacket.position(), length, PacketSection.Type.MATCH, 0, 0));
-            mPacket.position(mPacket.position() + length);
+                    new PacketSection(from, length, PacketSection.Type.MATCH, 0, 0));
+            mPacket.position(from + length);
         }
 
         /**
