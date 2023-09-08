@@ -5030,4 +5030,34 @@ public abstract class IpClientIntegrationTestCommon {
         }
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(any());
     }
+
+    @Test
+    @SignatureRequiredTest(reason = "requires mocked netd to read/write IPv6 sysctl")
+    public void testIpv6SysctlsRestAfterStoppingIpClient() throws Exception {
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIPv4()
+                .build();
+        // dad_transmits has been set to 0 in disableIpv6ProvisioningDelays, re-enable
+        // dad_transmits for testing, production code will restore all IPv6 sysctls at
+        // StoppedState#enter anyway, read this parameter value after IpClient shutdown
+        // to check if that's default value 1.
+        mNetd.setProcSysNet(INetd.IPV6, INetd.CONF, mIfaceName, "dad_transmits", "1");
+        startIpClientProvisioning(config);
+        verify(mNetd, timeout(TEST_TIMEOUT_MS)).interfaceSetEnableIPv6(mIfaceName, true);
+        doIpv6OnlyProvisioning();
+
+        // Shutdown IpClient and check if the IPv6 sysctls: accept_ra, accept_ra_defrtr and
+        // dad_transmits have been reset to the default values.
+        mIpc.shutdown();
+        awaitIpClientShutdown();
+        final int dadTransmits = Integer.parseUnsignedInt(
+                mNetd.getProcSysNet(INetd.IPV6, INetd.CONF, mIfaceName, "dad_transmits"));
+        assertEquals(1, dadTransmits);
+        final int acceptRa = Integer.parseUnsignedInt(
+                mNetd.getProcSysNet(INetd.IPV6, INetd.CONF, mIfaceName, "accept_ra"));
+        assertEquals(2, acceptRa);
+        final int acceptRaDefRtr = Integer.parseUnsignedInt(
+                mNetd.getProcSysNet(INetd.IPV6, INetd.CONF, mIfaceName, "accept_ra_defrtr"));
+        assertEquals(1, acceptRaDefRtr);
+    }
 }
