@@ -1459,10 +1459,10 @@ public class IpClient extends StateMachine {
     // Set "/proc/sys/net/ipv6/conf/${iface}/${name}" with the given specific value.
     private void setIpv6Sysctl(@NonNull final String name, int value) {
         try {
-            mNetd.setProcSysNet(INetd.IPV6, INetd.CONF, mInterfaceParams.name,
+            mNetd.setProcSysNet(INetd.IPV6, INetd.CONF, mInterfaceName,
                     name, Integer.toString(value));
         } catch (Exception e) {
-            Log.e(mTag, "Failed to set " + name + " to  + " + value + ": " + e);
+            Log.e(mTag, "Failed to set " + name + " to " + value + ": " + e);
         }
     }
 
