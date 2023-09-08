@@ -188,8 +188,7 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
     override fun isFeatureEnabled(name: String, defaultEnabled: Boolean): Boolean {
         automation.adoptShellPermissionIdentity(READ_DEVICE_CONFIG, WRITE_DEVICE_CONFIG)
         try {
-            return DeviceConfigUtils.isFeatureEnabled(mContext, DeviceConfig.NAMESPACE_CONNECTIVITY,
-                    name, defaultEnabled)
+            return DeviceConfigUtils.isNetworkStackFeatureEnabled(mContext, name, defaultEnabled)
         } finally {
             automation.dropShellPermissionIdentity()
         }
