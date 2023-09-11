@@ -654,6 +654,9 @@ public class IpClient extends StateMachine {
     private final int mMinRdnssLifetimeSec;
 
     // Ignore any nonzero RA section with lifetime below this value.
+    // TODO: remove mMinRdnssLifetimeSec and use accept_ra_min_lft for all individual RA
+    // sections such as router lifetime, PIO preferred lifetime, RIO lifetime and RDNSS
+    // lifetime.
     private final int mAcceptRaMinLft;
 
     // Experiment flag read from device config.
@@ -2342,6 +2345,7 @@ public class IpClient extends StateMachine {
         }
 
         apfConfig.minRdnssLifetimeSec = mMinRdnssLifetimeSec;
+        apfConfig.acceptRaMinLft = mAcceptRaMinLft;
         return mDependencies.maybeCreateApfFilter(mContext, apfConfig, mInterfaceParams,
                 mCallback);
     }
