@@ -1465,12 +1465,13 @@ public class IpClient extends StateMachine {
         }
     }
 
-    private Integer getIpv6DadTransmits() {
+    // Read "/proc/sys/net/ipv6/conf/${iface}/${name}".
+    private Integer getIpv6Sysctl(@NonNull final String name) {
         try {
-            return Integer.parseUnsignedInt(mNetd.getProcSysNet(INetd.IPV6, INetd.CONF,
-                    mInterfaceName, DAD_TRANSMITS));
+            return Integer.parseInt(mNetd.getProcSysNet(INetd.IPV6, INetd.CONF,
+                    mInterfaceName, name));
         } catch (RemoteException | ServiceSpecificException e) {
-            logError("Couldn't read dad_transmits on " + mInterfaceName, e);
+            logError("Couldn't read " + name + " on " + mInterfaceName, e);
             return null;
         }
     }
@@ -2120,7 +2121,7 @@ public class IpClient extends StateMachine {
                 mConfiguration.mIPv6ProvisioningMode == PROV_IPV6_LINKLOCAL ? 0 : 2);
         setIpv6Sysctl(ACCEPT_RA_DEFRTR, acceptRaDefrtr);
         if (shouldDisableDad()) {
-            final Integer dadTransmits = getIpv6DadTransmits();
+            final Integer dadTransmits = getIpv6Sysctl(DAD_TRANSMITS);
             if (dadTransmits != null) {
                 mDadTransmits = dadTransmits;
                 setIpv6Sysctl(DAD_TRANSMITS, 0 /* dad_transmits */);
