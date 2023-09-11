@@ -627,7 +627,7 @@ public class ApfFilter {
         private final ArrayList<Integer> mRioOptionOffsets = new ArrayList<>();
 
         // For debugging only. How many times this RA was seen.
-        int seenCount = 0;
+        int seenCount = 1;
 
         // For debugging only. Returns the hex representation of the last matching packet.
         String getLastMatchingPacket() {
