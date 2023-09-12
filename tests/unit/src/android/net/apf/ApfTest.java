@@ -2409,6 +2409,35 @@ public class ApfTest {
             mPacket.write(buffer.array(), 0, buffer.capacity());
         }
 
+        public void addDnsslOption(int lifetime, String... domains) {
+            ByteArrayOutputStream dnssl = new ByteArrayOutputStream();
+            for (String domain : domains) {
+                for (String label : domain.split(".")) {
+                    final byte[] bytes = label.getBytes(StandardCharsets.UTF_8);
+                    dnssl.write((byte) bytes.length);
+                    dnssl.write(bytes, 0, bytes.length);
+                }
+                dnssl.write((byte) 0);
+            }
+
+            // Extend with 0s to make it 8-byte aligned.
+            while (dnssl.size() % 8 != 0) {
+                dnssl.write((byte) 0);
+            }
+
+            final int length = ICMP6_4_BYTE_OPTION_LEN + dnssl.size();
+            ByteBuffer buffer = ByteBuffer.allocate(length);
+
+            buffer.put((byte) ICMP6_DNSSL_OPTION_TYPE);  // Type
+            buffer.put((byte) (length / 8));             // Length
+            // skip past reserved bytes
+            buffer.position(buffer.position() + 2);
+            buffer.putInt(lifetime);                     // Lifetime
+            buffer.put(dnssl.toByteArray());             // Domain names
+
+            mPacket.write(buffer.array(), 0, buffer.capacity());
+        }
+
         public void addRdnssOption(int lifetime, String... servers) throws Exception {
             int optionLength = 1 + 2 * servers.length;   // In 8-byte units
             ByteBuffer buffer = ByteBuffer.allocate(optionLength * 8);
@@ -2648,14 +2677,9 @@ public class ApfTest {
         program = ipClientCallback.getApfProgram();
         assertPass(program, ra.build());
 
-        ByteBuffer dnsslOptionPacket = ByteBuffer.wrap(
-                new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_OPTION_LEN]);
-        basePacket.clear();
-        dnsslOptionPacket.put(basePacket);
-        dnsslOptionPacket.put((byte)ICMP6_DNSSL_OPTION_TYPE);
-        dnsslOptionPacket.put((byte)(ICMP6_4_BYTE_OPTION_LEN / 8));
-        dnsslOptionPacket.putInt(
-                ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_LIFETIME_OFFSET, DNSSL_LIFETIME);
+        ra = new RaPacketBuilder(ROUTER_LIFETIME);
+        ra.addDnsslOption(DNSSL_LIFETIME, "test.example.com", "one.more.example.com");
+        ByteBuffer dnsslOptionPacket = ByteBuffer.wrap(ra.build());
         verifyRaLifetime(apfFilter, ipClientCallback, dnsslOptionPacket, ROUTER_LIFETIME);
         verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, -1, -1, -1));
 
