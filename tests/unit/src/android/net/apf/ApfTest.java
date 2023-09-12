@@ -89,6 +89,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
@@ -2375,6 +2376,99 @@ public class ApfTest {
         packet.putInt(preferred);
         packet.putInt(0);                             // Reserved
         packet.put(prefix.getRawAddress());
+    }
+
+    private static class RaPacketBuilder {
+        final ByteArrayOutputStream mPacket = new ByteArrayOutputStream();
+
+        public RaPacketBuilder(int routerLft) throws Exception {
+            InetAddress src = InetAddress.getByName("fe80::1234:abcd");
+            ByteBuffer buffer = ByteBuffer.allocate(ICMP6_RA_OPTION_OFFSET);
+
+            buffer.putShort(ETH_ETHERTYPE_OFFSET, (short) ETH_P_IPV6);
+            buffer.position(ETH_HEADER_LEN);
+
+            buffer.putInt(0x60012345);                      // Version, tclass, flowlabel
+            buffer.putShort((short) 0);                     // Payload length; updated later
+            buffer.put((byte) IPPROTO_ICMPV6);              // Next header
+            buffer.put((byte) 0xff);                        // Hop limit
+            buffer.put(src.getAddress());                   // Source address
+            buffer.put(IPV6_ALL_NODES_ADDRESS);             // Destination address
+
+            buffer.put((byte) ICMP6_ROUTER_ADVERTISEMENT);  // Type
+            buffer.put((byte) 0);                           // Code (0)
+            buffer.putShort((short) 0);                     // Checksum (ignored)
+            buffer.put((byte) 64);                          // Hop limit
+            buffer.put((byte) 0);                           // M/O, reserved
+            buffer.putShort((short) routerLft);             // Router lifetime
+            buffer.putInt(30_000);                          // Reachable time
+            buffer.putInt(1000);                            // Retrans timer
+
+            mPacket.write(buffer.array(), 0, buffer.capacity());
+        }
+
+        public void addPioOption(int valid, int preferred, String prefixString) throws Exception {
+            ByteBuffer buffer = ByteBuffer.allocate(ICMP6_PREFIX_OPTION_LEN);
+
+            IpPrefix prefix = new IpPrefix(prefixString);
+            buffer.put((byte) ICMP6_PREFIX_OPTION_TYPE);  // Type
+            buffer.put((byte) 4);                         // Length in 8-byte units
+            buffer.put((byte) prefix.getPrefixLength());  // Prefix length
+            buffer.put((byte) 0b11000000);                // L = 1, A = 1
+            buffer.putInt(valid);
+            buffer.putInt(preferred);
+            buffer.putInt(0);                             // Reserved
+            buffer.put(prefix.getRawAddress());
+
+            mPacket.write(buffer.array(), 0, buffer.capacity());
+        }
+
+        public void addRioOption(int lifetime, String prefixString) throws Exception {
+            IpPrefix prefix = new IpPrefix(prefixString);
+
+            int optionLength;
+            if (prefix.getPrefixLength() == 0) {
+                optionLength = 1;
+            } else if (prefix.getPrefixLength() <= 64) {
+                optionLength = 2;
+            } else {
+                optionLength = 3;
+            }
+
+            ByteBuffer buffer = ByteBuffer.allocate(optionLength * 8);
+
+            buffer.put((byte) ICMP6_ROUTE_INFO_OPTION_TYPE);  // Type
+            buffer.put((byte) optionLength);                  // Length in 8-byte units
+            buffer.put((byte) prefix.getPrefixLength());      // Prefix length
+            buffer.put((byte) 0b00011000);                    // Pref = high
+            buffer.putInt(lifetime);                          // Lifetime
+
+            byte[] prefixBytes = prefix.getRawAddress();
+            buffer.put(prefixBytes, 0, (optionLength - 1) * 8);
+
+            mPacket.write(buffer.array(), 0, buffer.capacity());
+        }
+
+        public void addRdnssOption(int lifetime, String... servers) throws Exception {
+            int optionLength = 1 + 2 * servers.length;   // In 8-byte units
+            ByteBuffer buffer = ByteBuffer.allocate(optionLength * 8);
+
+            buffer.put((byte) ICMP6_RDNSS_OPTION_TYPE);  // Type
+            buffer.put((byte) optionLength);             // Length
+            buffer.putShort((short) 0);                  // Reserved
+            buffer.putInt(lifetime);                     // Lifetime
+            for (String server : servers) {
+                buffer.put(InetAddress.getByName(server).getAddress());
+            }
+
+            mPacket.write(buffer.array(), 0, buffer.capacity());
+        }
+
+        public byte[] build() {
+            ByteBuffer buffer = ByteBuffer.wrap(mPacket.toByteArray());
+            buffer.putShort(IPV6_PAYLOAD_LENGTH_OFFSET, (short) buffer.capacity());
+            return buffer.array();
+        }
     }
 
     private byte[] buildLargeRa() throws Exception {
