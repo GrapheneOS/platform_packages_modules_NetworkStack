@@ -2331,53 +2331,6 @@ public class ApfTest {
         return packet.array();
     }
 
-    private void addRdnssOption(ByteBuffer packet, int lifetime, String... servers)
-            throws Exception {
-        int optionLength = 1 + 2 * servers.length;   // In 8-byte units
-        packet.put((byte) ICMP6_RDNSS_OPTION_TYPE);  // Type
-        packet.put((byte) optionLength);             // Length
-        packet.putShort((short) 0);                  // Reserved
-        packet.putInt(lifetime);                     // Lifetime
-        for (String server : servers) {
-            packet.put(InetAddress.getByName(server).getAddress());
-        }
-    }
-
-    private void addRioOption(ByteBuffer packet, int lifetime, String prefixString)
-            throws Exception {
-        IpPrefix prefix = new IpPrefix(prefixString);
-
-        int optionLength;
-        if (prefix.getPrefixLength() == 0) {
-            optionLength = 1;
-        } else if (prefix.getPrefixLength() <= 64) {
-            optionLength = 2;
-        } else {
-            optionLength = 3;
-        }
-
-        packet.put((byte) ICMP6_ROUTE_INFO_OPTION_TYPE);  // Type
-        packet.put((byte) optionLength);                  // Length in 8-byte units
-        packet.put((byte) prefix.getPrefixLength());      // Prefix length
-        packet.put((byte) 0b00011000);                    // Pref = high
-        packet.putInt(lifetime);                          // Lifetime
-
-        byte[] prefixBytes = prefix.getRawAddress();
-        packet.put(prefixBytes, 0, (optionLength - 1) * 8);
-    }
-
-    private void addPioOption(ByteBuffer packet, int valid, int preferred, String prefixString) {
-        IpPrefix prefix = new IpPrefix(prefixString);
-        packet.put((byte) ICMP6_PREFIX_OPTION_TYPE);  // Type
-        packet.put((byte) 4);                         // Length in 8-byte units
-        packet.put((byte) prefix.getPrefixLength());  // Prefix length
-        packet.put((byte) 0b11000000);                // L = 1, A = 1
-        packet.putInt(valid);
-        packet.putInt(preferred);
-        packet.putInt(0);                             // Reserved
-        packet.put(prefix.getRawAddress());
-    }
-
     private static class RaPacketBuilder {
         final ByteArrayOutputStream mPacket = new ByteArrayOutputStream();
 
@@ -2651,53 +2604,40 @@ public class ApfTest {
         // Generate several RAs with different options and lifetimes, and verify when
         // ApfFilter is shown these packets, it generates programs to filter them for the
         // appropriate lifetime.
-        ByteBuffer prefixOptionPacket = ByteBuffer.wrap(
-                new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_PREFIX_OPTION_LEN]);
-        basePacket.clear();
-        prefixOptionPacket.put(basePacket);
-        addPioOption(prefixOptionPacket, PREFIX_VALID_LIFETIME, PREFIX_PREFERRED_LIFETIME,
-                "2001:db8::/64");
+        RaPacketBuilder ra = new RaPacketBuilder(ROUTER_LIFETIME);
+        ra.addPioOption(PREFIX_VALID_LIFETIME, PREFIX_PREFERRED_LIFETIME, "2001:db8::/64");
+        ByteBuffer prefixOptionPacket = ByteBuffer.wrap(ra.build());
         verifyRaLifetime(
                 apfFilter, ipClientCallback, prefixOptionPacket, PREFIX_PREFERRED_LIFETIME);
         verifyRaEvent(new RaEvent(
                 ROUTER_LIFETIME, PREFIX_VALID_LIFETIME, PREFIX_PREFERRED_LIFETIME, -1, -1, -1));
 
-        ByteBuffer rdnssOptionPacket = ByteBuffer.wrap(
-                new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_OPTION_LEN + 2 * IPV6_ADDR_LEN]);
-        basePacket.clear();
-        rdnssOptionPacket.put(basePacket);
-        addRdnssOption(rdnssOptionPacket, RDNSS_LIFETIME,
-                "2001:4860:4860::8888", "2001:4860:4860::8844");
+        ra = new RaPacketBuilder(ROUTER_LIFETIME);
+        ra.addRdnssOption(RDNSS_LIFETIME, "2001:4860:4860::8888", "2001:4860:4860::8844");
+        ByteBuffer rdnssOptionPacket = ByteBuffer.wrap(ra.build());
         verifyRaLifetime(apfFilter, ipClientCallback, rdnssOptionPacket, RDNSS_LIFETIME);
         verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, -1, RDNSS_LIFETIME, -1));
 
         final int lowLifetime = 60;
-        ByteBuffer lowLifetimeRdnssOptionPacket = ByteBuffer.wrap(
-                new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_OPTION_LEN + IPV6_ADDR_LEN]);
-        basePacket.clear();
-        lowLifetimeRdnssOptionPacket.put(basePacket);
-        addRdnssOption(lowLifetimeRdnssOptionPacket, lowLifetime, "2620:fe::9");
+        ra = new RaPacketBuilder(ROUTER_LIFETIME);
+        ra.addRdnssOption(lowLifetime, "2620:fe::9");
+        ByteBuffer lowLifetimeRdnssOptionPacket = ByteBuffer.wrap(ra.build());
         verifyRaLifetime(apfFilter, ipClientCallback, lowLifetimeRdnssOptionPacket,
                 ROUTER_LIFETIME);
         verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, -1, lowLifetime, -1));
 
-        ByteBuffer routeInfoOptionPacket = ByteBuffer.wrap(
-                new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_OPTION_LEN + IPV6_ADDR_LEN]);
-        basePacket.clear();
-        routeInfoOptionPacket.put(basePacket);
-        addRioOption(routeInfoOptionPacket, ROUTE_LIFETIME, "64:ff9b::/96");
+        ra = new RaPacketBuilder(ROUTER_LIFETIME);
+        ra.addRioOption(ROUTE_LIFETIME, "64:ff9b::/96");
+        ByteBuffer routeInfoOptionPacket = ByteBuffer.wrap(ra.build());
         verifyRaLifetime(apfFilter, ipClientCallback, routeInfoOptionPacket, ROUTE_LIFETIME);
         verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, ROUTE_LIFETIME, -1, -1));
 
         // Check that RIOs differing only in the first 4 bytes are different.
-        ByteBuffer similarRouteInfoOptionPacket = ByteBuffer.wrap(
-                new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_OPTION_LEN + IPV6_ADDR_LEN]);
-        basePacket.clear();
-        similarRouteInfoOptionPacket.put(basePacket);
-        addRioOption(similarRouteInfoOptionPacket, ROUTE_LIFETIME, "64:ff9b::/64");
+        ra = new RaPacketBuilder(ROUTER_LIFETIME);
+        ra.addRioOption(ROUTE_LIFETIME, "64:ff9b::/64");
         // Packet should be passed because it is different.
         program = ipClientCallback.getApfProgram();
-        assertPass(program, similarRouteInfoOptionPacket.array());
+        assertPass(program, ra.build());
 
         ByteBuffer dnsslOptionPacket = ByteBuffer.wrap(
                 new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_OPTION_LEN]);
