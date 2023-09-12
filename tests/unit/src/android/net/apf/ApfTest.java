@@ -2724,7 +2724,7 @@ public class ApfTest {
 
         // Verify that when the program is generated and installed some time after RA is last seen
         // it should be installed with the correct remaining lifetime.
-        ByteBuffer basePacket = makeBaseRaPacket();
+        ByteBuffer basePacket = ByteBuffer.wrap(new RaPacketBuilder(routerLifetime).build());
         verifyRaLifetime(apfFilter, ipClientCallback, basePacket, routerLifetime);
         apfFilter.increaseCurrentTimeSeconds(timePassedSeconds);
         synchronized (apfFilter) {
