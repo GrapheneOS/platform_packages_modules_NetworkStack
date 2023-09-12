@@ -2334,6 +2334,7 @@ public class ApfTest {
     private static class RaPacketBuilder {
         final ByteArrayOutputStream mPacket = new ByteArrayOutputStream();
         int mFlowLabel = 0x12345;
+        int mReachableTime = 30_000;
 
         public RaPacketBuilder(int routerLft) throws Exception {
             InetAddress src = InetAddress.getByName("fe80::1234:abcd");
@@ -2357,7 +2358,8 @@ public class ApfTest {
             buffer.put((byte) 64);                          // Hop limit
             buffer.put((byte) 0);                           // M/O, reserved
             buffer.putShort((short) routerLft);             // Router lifetime
-            buffer.putInt(30_000);                          // Reachable time
+            // skip reachable time; set in build()
+            buffer.position(buffer.position() + 4);
             buffer.putInt(1000);                            // Retrans timer
 
             mPacket.write(buffer.array(), 0, buffer.capacity());
@@ -2365,6 +2367,10 @@ public class ApfTest {
 
         public void setFlowLabel(int flowLabel) {
             mFlowLabel = flowLabel;
+        }
+
+        public void setReachableTime(int reachable) {
+            mReachableTime = reachable;
         }
 
         public void addPioOption(int valid, int preferred, String prefixString) throws Exception {
@@ -2466,6 +2472,7 @@ public class ApfTest {
             // IPv6, traffic class = 0, flow label = mFlowLabel
             buffer.putInt(IP_HEADER_OFFSET, 0x60000000 | (0xFFFFF & mFlowLabel));
             buffer.putShort(IPV6_PAYLOAD_LENGTH_OFFSET, (short) buffer.capacity());
+            buffer.putInt(ICMP6_RA_REACHABLE_TIME_OFFSET, mReachableTime);
             return buffer.array();
         }
     }
