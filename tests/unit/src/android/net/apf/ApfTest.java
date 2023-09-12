@@ -2424,6 +2424,14 @@ public class ApfTest {
             mPacket.write(buffer.array(), 0, buffer.capacity());
         }
 
+        public void addZeroLengthOption() throws Exception {
+            ByteBuffer buffer = ByteBuffer.allocate(ICMP6_4_BYTE_OPTION_LEN);
+            buffer.put((byte) ICMP6_PREFIX_OPTION_TYPE);
+            buffer.put((byte) 0);
+
+            mPacket.write(buffer.array(), 0, buffer.capacity());
+        }
+
         public byte[] build() {
             ByteBuffer buffer = ByteBuffer.wrap(mPacket.toByteArray());
             // IPv6, traffic class = 0, flow label = mFlowLabel
@@ -2597,12 +2605,9 @@ public class ApfTest {
 
         // Ensure zero-length options cause the packet to be silently skipped.
         // Do this before we test other packets. http://b/29586253
-        ByteBuffer zeroLengthOptionPacket = ByteBuffer.wrap(
-                new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_OPTION_LEN]);
-        basePacket.clear();
-        zeroLengthOptionPacket.put(basePacket);
-        zeroLengthOptionPacket.put((byte)ICMP6_PREFIX_OPTION_TYPE);
-        zeroLengthOptionPacket.put((byte)0);
+        ra = new RaPacketBuilder(ROUTER_LIFETIME);
+        ra.addZeroLengthOption();
+        ByteBuffer zeroLengthOptionPacket = ByteBuffer.wrap(ra.build());
         assertInvalidRa(apfFilter, ipClientCallback, zeroLengthOptionPacket);
 
         // Generate several RAs with different options and lifetimes, and verify when
