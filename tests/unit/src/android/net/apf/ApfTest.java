@@ -2472,45 +2472,17 @@ public class ApfTest {
     }
 
     private byte[] buildLargeRa() throws Exception {
-        InetAddress src = InetAddress.getByName("fe80::1234:abcd");
+        RaPacketBuilder builder = new RaPacketBuilder(1800 /* router lft */);
 
-        ByteBuffer packet = ByteBuffer.wrap(new byte[1514]);
-        packet.putShort(ETH_ETHERTYPE_OFFSET, (short) ETH_P_IPV6);
-        packet.position(ETH_HEADER_LEN);
+        builder.addRioOption(1200, "64:ff9b::/96");
+        builder.addRdnssOption(7200, "2001:db8:1::1", "2001:db8:1::2");
+        builder.addRioOption(2100, "2000::/3");
+        builder.addRioOption(2400, "::/0");
+        builder.addPioOption(600, 300, "2001:db8:a::/64");
+        builder.addRioOption(1500, "2001:db8:c:d::/64");
+        builder.addPioOption(86400, 43200, "fd95:d1e:12::/64");
 
-        packet.putInt(0x60012345);                                  // Version, tclass, flowlabel
-        packet.putShort((short) 0);                                 // Payload length; updated later
-        packet.put((byte) IPPROTO_ICMPV6);                          // Next header
-        packet.put((byte) 0xff);                                    // Hop limit
-        packet.put(src.getAddress());                               // Source address
-        packet.put(IPV6_ALL_NODES_ADDRESS);                         // Destination address
-
-        packet.put((byte) ICMP6_ROUTER_ADVERTISEMENT);              // Type
-        packet.put((byte) 0);                                       // Code (0)
-        packet.putShort((short) 0);                                 // Checksum (ignored)
-        packet.put((byte) 64);                                      // Hop limit
-        packet.put((byte) 0);                                       // M/O, reserved
-        packet.putShort((short) 1800);                              // Router lifetime
-        packet.putInt(30_000);                                      // Reachable time
-        packet.putInt(1000);                                        // Retrans timer
-
-        addRioOption(packet, 1200, "64:ff9b::/96");
-        addRdnssOption(packet, 7200, "2001:db8:1::1", "2001:db8:1::2");
-        addRioOption(packet, 2100, "2000::/3");
-        addRioOption(packet, 2400, "::/0");
-        addPioOption(packet, 600, 300, "2001:db8:a::/64");
-        addRioOption(packet, 1500, "2001:db8:c:d::/64");
-        addPioOption(packet, 86400, 43200, "fd95:d1e:12::/64");
-
-        int length = packet.position();
-        packet.putShort(IPV6_PAYLOAD_LENGTH_OFFSET, (short) length);
-
-        // Don't pass the Ra constructor a packet that is longer than the actual RA.
-        // This relies on the fact that all the relative writes to the byte buffer are at the end.
-        byte[] packetArray = new byte[length];
-        packet.rewind();
-        packet.get(packetArray);
-        return packetArray;
+        return builder.build();
     }
 
     @Test
