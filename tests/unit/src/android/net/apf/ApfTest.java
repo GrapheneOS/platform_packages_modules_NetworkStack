@@ -2599,25 +2599,6 @@ public class ApfTest {
         ipClientCallback.assertNoProgramUpdate();
     }
 
-    private ByteBuffer makeBaseRaPacket() {
-        ByteBuffer basePacket = ByteBuffer.wrap(new byte[ICMP6_RA_OPTION_OFFSET]);
-        final int ROUTER_LIFETIME = 1000;
-        final int VERSION_TRAFFIC_CLASS_FLOW_LABEL_OFFSET = ETH_HEADER_LEN;
-        // IPv6, traffic class = 0, flow label = 0x12345
-        final int VERSION_TRAFFIC_CLASS_FLOW_LABEL = 0x60012345;
-
-        basePacket.putShort(ETH_ETHERTYPE_OFFSET, (short) ETH_P_IPV6);
-        basePacket.putInt(VERSION_TRAFFIC_CLASS_FLOW_LABEL_OFFSET,
-                VERSION_TRAFFIC_CLASS_FLOW_LABEL);
-        basePacket.put(IPV6_NEXT_HEADER_OFFSET, (byte) IPPROTO_ICMPV6);
-        basePacket.put(ICMP6_TYPE_OFFSET, (byte) ICMP6_ROUTER_ADVERTISEMENT);
-        basePacket.putShort(ICMP6_RA_ROUTER_LIFETIME_OFFSET, (short) ROUTER_LIFETIME);
-        basePacket.position(IPV6_DEST_ADDR_OFFSET);
-        basePacket.put(IPV6_ALL_NODES_ADDRESS);
-
-        return basePacket;
-    }
-
     @Test
     public void testApfFilterRa() throws Exception {
         MockIpClientCallback ipClientCallback = new MockIpClientCallback();
@@ -2730,31 +2711,31 @@ public class ApfTest {
 
         // Create an Ra packet without options
         // Reachable time = 1800, retransmission timer = 1234
-        ByteBuffer raPacket = makeBaseRaPacket();
-        raPacket.position(ICMP6_RA_REACHABLE_TIME_OFFSET);
-        raPacket.putInt(RA_REACHABLE_TIME);
-        raPacket.putInt(RA_RETRANSMISSION_TIMER);
+        RaPacketBuilder ra = new RaPacketBuilder(1800 /* router lft */);
+        ra.setReachableTime(RA_REACHABLE_TIME);
+        ra.setRetransmissionTimer(RA_RETRANSMISSION_TIMER);
+        byte[] raPacket = ra.build();
         // First RA passes filter
-        assertPass(program, raPacket.array());
+        assertPass(program, raPacket);
 
         // Assume apf is shown the given RA, it generates program to filter it.
         ipClientCallback.resetApfProgramWait();
-        apfFilter.pretendPacketReceived(raPacket.array());
+        apfFilter.pretendPacketReceived(raPacket);
         program = ipClientCallback.getApfProgram();
-        assertDrop(program, raPacket.array());
+        assertDrop(program, raPacket);
 
         // A packet with different reachable time should be passed.
         // Reachable time = 2300, retransmission timer = 1234
-        raPacket.clear();
-        raPacket.putInt(ICMP6_RA_REACHABLE_TIME_OFFSET, RA_REACHABLE_TIME + 500);
-        assertPass(program, raPacket.array());
+        ra.setReachableTime(RA_REACHABLE_TIME + 500);
+        raPacket = ra.build();
+        assertPass(program, raPacket);
 
         // A packet with different retransmission timer should be passed.
         // Reachable time = 1800, retransmission timer = 2234
-        raPacket.clear();
-        raPacket.putInt(ICMP6_RA_REACHABLE_TIME_OFFSET, RA_REACHABLE_TIME);
-        raPacket.putInt(ICMP6_RA_RETRANSMISSION_TIMER_OFFSET, RA_RETRANSMISSION_TIMER + 1000);
-        assertPass(program, raPacket.array());
+        ra.setReachableTime(RA_REACHABLE_TIME);
+        ra.setRetransmissionTimer(RA_RETRANSMISSION_TIMER + 1000);
+        raPacket = ra.build();
+        assertPass(program, raPacket);
     }
 
     // The ByteBuffer is always created by ByteBuffer#wrap in the helper functions
