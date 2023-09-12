@@ -2621,13 +2621,14 @@ public class ApfTest {
         final int DNSSL_LIFETIME  = 2000;
 
         // Verify RA is passed the first time
-        ByteBuffer basePacket = makeBaseRaPacket();
+        RaPacketBuilder ra = new RaPacketBuilder(ROUTER_LIFETIME);
+        ByteBuffer basePacket = ByteBuffer.wrap(ra.build());
         assertPass(program, basePacket.array());
 
         verifyRaLifetime(apfFilter, ipClientCallback, basePacket, ROUTER_LIFETIME);
         verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, -1, -1, -1));
 
-        RaPacketBuilder ra = new RaPacketBuilder(ROUTER_LIFETIME);
+        ra = new RaPacketBuilder(ROUTER_LIFETIME);
         // Check that changes are ignored in every byte of the flow label.
         ra.setFlowLabel(0x56789);
         ByteBuffer newFlowLabelPacket = ByteBuffer.wrap(ra.build());
@@ -2690,8 +2691,7 @@ public class ApfTest {
         // Verify that current program filters all the RAs (note: ApfFilter.MAX_RAS == 10).
         program = ipClientCallback.getApfProgram();
         verifyRaLifetime(program, basePacket, ROUTER_LIFETIME);
-        // TODO: reenable assertion once basePacket is based on RaPacketBuilder.
-        //verifyRaLifetime(program, newFlowLabelPacket, ROUTER_LIFETIME);
+        verifyRaLifetime(program, newFlowLabelPacket, ROUTER_LIFETIME);
         verifyRaLifetime(program, prefixOptionPacket, PREFIX_PREFERRED_LIFETIME);
         verifyRaLifetime(program, rdnssOptionPacket, RDNSS_LIFETIME);
         verifyRaLifetime(program, lowLifetimeRdnssOptionPacket, ROUTER_LIFETIME);
