@@ -607,8 +607,7 @@ public class ApfFilter {
         private static final int ICMP6_4_BYTE_LIFETIME_LEN = 4;
 
         // Note: mPacket's position() cannot be assumed to be reset.
-        // TODO: mark as private once matches() accepts an Ra argument.
-        final ByteBuffer mPacket;
+        private final ByteBuffer mPacket;
 
         // List of sections in the packet.
         private final ArrayList<PacketSection> mPacketSections = new ArrayList<>();
@@ -921,13 +920,17 @@ public class ApfFilter {
         }
 
         // Considering only the MATCH sections, does {@code packet} match this RA?
-        boolean matches(byte[] packet, int length) {
-            if (length != mPacket.capacity()) return false;
-            byte[] referencePacket = mPacket.array();
+        boolean matches(Ra newRa) {
+            // Does their size match?
+            if (newRa.mPacket.capacity() != mPacket.capacity()) return false;
+
+            // Check if all MATCH sections are byte-identical.
+            final byte[] newPacket = newRa.mPacket.array();
+            final byte[] oldPacket = mPacket.array();
             for (PacketSection section : mPacketSections) {
                 if (section.type != PacketSection.Type.MATCH) continue;
                 for (int i = section.start; i < (section.start + section.length); i++) {
-                    if (packet[i] != referencePacket[i]) return false;
+                    if (newPacket[i] != oldPacket[i]) return false;
                 }
             }
             return true;
@@ -1955,7 +1958,7 @@ public class ApfFilter {
         // Have we seen this RA before?
         for (int i = 0; i < mRas.size(); i++) {
             Ra oldRa = mRas.get(i);
-            if (oldRa.matches(ra.mPacket.array(), ra.mPacket.capacity())) {
+            if (oldRa.matches(ra)) {
                 ra.seenCount += oldRa.seenCount;
                 if (VDBG) log("matched RA " + ra);
 
