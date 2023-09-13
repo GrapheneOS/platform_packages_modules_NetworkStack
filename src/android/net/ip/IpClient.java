@@ -42,6 +42,7 @@ import static com.android.net.module.util.NetworkStackConstants.VENDOR_SPECIFIC_
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GRATUITOUS_NA_VERSION;
+import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_IGNORE_LOW_RA_LIFETIME_FORCE_DISABLE;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_MULTICAST_NS_VERSION;
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
@@ -130,6 +131,7 @@ import com.android.networkstack.util.NetworkStackUtils;
 import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
 
+import java.io.File;
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.net.Inet4Address;
@@ -475,6 +477,8 @@ public class IpClient extends StateMachine {
     // Sysctl parameter strings.
     private static final String ACCEPT_RA = "accept_ra";
     private static final String ACCEPT_RA_DEFRTR = "accept_ra_defrtr";
+    @VisibleForTesting
+    static final String ACCEPT_RA_MIN_LFT = "accept_ra_min_lft";
     private static final String DAD_TRANSMITS = "dad_transmits";
 
     // Below constants are picked up by MessageUtils and exempt from ProGuard optimization.
@@ -524,6 +528,11 @@ public class IpClient extends StateMachine {
     static final String CONFIG_MIN_RDNSS_LIFETIME = "ipclient_min_rdnss_lifetime";
     private static final int DEFAULT_MIN_RDNSS_LIFETIME =
             ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q) ? 120 : 0;
+
+    @VisibleForTesting
+    static final String CONFIG_ACCEPT_RA_MIN_LFT = "ipclient_accept_ra_min_lft";
+    @VisibleForTesting
+    static final int DEFAULT_ACCEPT_RA_MIN_LFT = 180;
 
     // Used to wait for the provisioning to complete eventually and then decide the target
     // network type, which gives the accurate hint to set DTIM multiplier. Per current IPv6
@@ -643,6 +652,9 @@ public class IpClient extends StateMachine {
 
     // Ignore nonzero RDNSS option lifetimes below this value. 0 = disabled.
     private final int mMinRdnssLifetimeSec;
+
+    // Ignore any nonzero RA section with lifetime below this value.
+    private final int mAcceptRaMinLft;
 
     // Experiment flag read from device config.
     private final boolean mDhcp6PrefixDelegationEnabled;
@@ -804,6 +816,15 @@ public class IpClient extends StateMachine {
         public boolean isNetworkStackFeatureNotChickenedOut(final String name) {
             return DeviceConfigUtils.isNetworkStackFeatureNotChickenedOut(name);
         }
+
+        /**
+         * Check if a specific IPv6 sysctl file exists or not.
+         */
+        public boolean hasIpv6Sysctl(final String ifname, final String name) {
+            final String path = "/proc/sys/net/ipv6/conf/" + ifname + "/" + name;
+            final File sysctl = new File(path);
+            return sysctl.exists();
+        }
     }
 
     public IpClient(Context context, String ifName, IIpClientCallbacks callback,
@@ -848,6 +869,8 @@ public class IpClient extends StateMachine {
 
         mMinRdnssLifetimeSec = mDependencies.getDeviceConfigPropertyInt(
                 CONFIG_MIN_RDNSS_LIFETIME, DEFAULT_MIN_RDNSS_LIFETIME);
+        mAcceptRaMinLft = mDependencies.getDeviceConfigPropertyInt(CONFIG_ACCEPT_RA_MIN_LFT,
+                DEFAULT_ACCEPT_RA_MIN_LFT);
 
         IpClientLinkObserver.Configuration config = new IpClientLinkObserver.Configuration(
                 mMinRdnssLifetimeSec);
@@ -2127,6 +2150,13 @@ public class IpClient extends StateMachine {
                 setIpv6Sysctl(DAD_TRANSMITS, 0 /* dad_transmits */);
             }
         }
+        // Check chickened out flag first before reading IPv6 sysctl, which can prevent from
+        // triggering a potential kernel bug about the sysctl.
+        if (mDependencies.isNetworkStackFeatureNotChickenedOut(
+                IPCLIENT_IGNORE_LOW_RA_LIFETIME_FORCE_DISABLE)
+                && mDependencies.hasIpv6Sysctl(mInterfaceName, ACCEPT_RA_MIN_LFT)) {
+            setIpv6Sysctl(ACCEPT_RA_MIN_LFT, mAcceptRaMinLft);
+        }
         return mInterfaceCtrl.setIPv6PrivacyExtensions(true)
                 && mInterfaceCtrl.setIPv6AddrGenModeIfSupported(mConfiguration.mIPv6AddrGenMode)
                 && mInterfaceCtrl.enableIPv6();
@@ -2204,6 +2234,11 @@ public class IpClient extends StateMachine {
         setIpv6Sysctl(ACCEPT_RA, 2);
         setIpv6Sysctl(ACCEPT_RA_DEFRTR, 1);
         maybeRestoreDadTransmits();
+        if (mDependencies.isNetworkStackFeatureNotChickenedOut(
+                IPCLIENT_IGNORE_LOW_RA_LIFETIME_FORCE_DISABLE)
+                && mDependencies.hasIpv6Sysctl(mInterfaceName, ACCEPT_RA_MIN_LFT)) {
+            setIpv6Sysctl(ACCEPT_RA_MIN_LFT, 0 /* sysctl default */);
+        }
     }
 
     private void maybeSaveNetworkToIpMemoryStore() {
