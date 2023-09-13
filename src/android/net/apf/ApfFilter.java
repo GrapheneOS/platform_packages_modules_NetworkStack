@@ -536,7 +536,6 @@ public class ApfFilter {
     private static class PacketSection {
         public enum Type {
             MATCH,     // A field that should be matched (e.g., the router IP address).
-            IGNORE,    // An ignored field such as the checksum of the flow label. Not matched.
             LIFETIME,  // A lifetime. Not matched, and generally counts toward minimum RA lifetime.
         }
 
@@ -771,8 +770,6 @@ public class ApfFilter {
          * @param length the length of the section in bytes
          */
         private void addIgnoreSection(int length) {
-            mPacketSections.add(
-                    new PacketSection(mPacket.position(), length, PacketSection.Type.IGNORE, 0, 0));
             mPacket.position(mPacket.position() + length);
         }
 
