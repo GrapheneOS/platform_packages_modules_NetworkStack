@@ -844,6 +844,10 @@ public class ApfFilter {
             addMatchUntil(IPV6_FLOW_LABEL_OFFSET);
             addIgnoreSection(IPV6_FLOW_LABEL_LEN);
 
+            // Ignore IPv6 destination address.
+            addMatchUntil(IPV6_DEST_ADDR_OFFSET);
+            addIgnoreSection(IPV6_ADDR_LEN);
+
             // Ignore checksum.
             addMatchUntil(ICMP6_RA_CHECKSUM_OFFSET);
             addIgnoreSection(ICMP6_RA_CHECKSUM_LEN);
