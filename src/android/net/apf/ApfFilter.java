@@ -118,7 +118,6 @@ public class ApfFilter {
     // Enums describing the outcome of receiving an RA packet.
     private static enum ProcessRaResult {
         MATCH,          // Received RA matched a known RA
-        DROPPED,        // Received RA ignored due to MAX_RAS
         PARSE_ERROR,    // Received RA could not be parsed
         ZERO_LIFETIME,  // Received RA had 0 lifetime
         UPDATE_NEW_RA,  // APF program updated for new RA
@@ -204,7 +203,6 @@ public class ApfFilter {
 
         private int mReceivedRas = 0;
         private int mMatchingRas = 0;
-        private int mDroppedRas = 0;
         private int mParseErrors = 0;
         private int mZeroLifetimeRas = 0;
         private int mProgramUpdates = 0;
@@ -243,9 +241,6 @@ public class ApfFilter {
                 case MATCH:
                     mMatchingRas++;
                     return;
-                case DROPPED:
-                    mDroppedRas++;
-                    return;
                 case PARSE_ERROR:
                     mParseErrors++;
                     return;
@@ -268,7 +263,6 @@ public class ApfFilter {
                 final ApfStats stats = new ApfStats.Builder()
                         .setReceivedRas(mReceivedRas)
                         .setMatchingRas(mMatchingRas)
-                        .setDroppedRas(mDroppedRas)
                         .setParseErrors(mParseErrors)
                         .setZeroLifetimeRas(mZeroLifetimeRas)
                         .setProgramUpdates(mProgramUpdates)
