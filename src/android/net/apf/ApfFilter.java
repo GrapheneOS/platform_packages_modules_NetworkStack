@@ -589,6 +589,8 @@ public class ApfFilter {
         private static final int ICMP6_PREFIX_OPTION_PREFERRED_LIFETIME_OFFSET = 8;
         private static final int ICMP6_PREFIX_OPTION_PREFERRED_LIFETIME_LEN = 4;
 
+        // From RFC4861: source link-layer address
+        private static final int ICMP6_SOURCE_LL_ADDRESS_OPTION_TYPE = 1;
         // From RFC4861: mtu size option
         private static final int ICMP6_MTU_OPTION_TYPE = 5;
         // From RFC6106: Recursive DNS Server option
@@ -899,6 +901,7 @@ public class ApfFilter {
                         lifetime = add4ByteLifetimeOption(optionType, optionLength);
                         builder.updateRouteInfoLifetime(lifetime);
                         break;
+                    case ICMP6_SOURCE_LL_ADDRESS_OPTION_TYPE:
                     case ICMP6_MTU_OPTION_TYPE:
                     case ICMP6_PREF64_OPTION_TYPE:
                         addMatchSection(optionLength);
