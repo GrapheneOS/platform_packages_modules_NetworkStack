@@ -615,7 +615,7 @@ public class ApfFilter {
         // Minimum lifetime in packet
         int mMinLifetime;
         // When the packet was last captured, in seconds since Unix Epoch
-        long mLastSeen;
+        private final long mLastSeen;
 
         // For debugging only. Offsets into the packet where PIOs are.
         private final ArrayList<Integer> mPrefixOptionOffsets = new ArrayList<>();
@@ -627,7 +627,7 @@ public class ApfFilter {
         private final ArrayList<Integer> mRioOptionOffsets = new ArrayList<>();
 
         // For debugging only. How many times this RA was seen.
-        int seenCount = 0;
+        int seenCount = 1;
 
         // For debugging only. Returns the hex representation of the last matching packet.
         String getLastMatchingPacket() {
@@ -920,13 +920,17 @@ public class ApfFilter {
         }
 
         // Considering only the MATCH sections, does {@code packet} match this RA?
-        boolean matches(byte[] packet, int length) {
-            if (length != mPacket.capacity()) return false;
-            byte[] referencePacket = mPacket.array();
+        boolean matches(Ra newRa) {
+            // Does their size match?
+            if (newRa.mPacket.capacity() != mPacket.capacity()) return false;
+
+            // Check if all MATCH sections are byte-identical.
+            final byte[] newPacket = newRa.mPacket.array();
+            final byte[] oldPacket = mPacket.array();
             for (PacketSection section : mPacketSections) {
                 if (section.type != PacketSection.Type.MATCH) continue;
                 for (int i = section.start; i < (section.start + section.length); i++) {
-                    if (packet[i] != referencePacket[i]) return false;
+                    if (newPacket[i] != oldPacket[i]) return false;
                 }
             }
             return true;
@@ -1944,14 +1948,19 @@ public class ApfFilter {
     public synchronized ProcessRaResult processRa(byte[] packet, int length) {
         if (VDBG) hexDump("Read packet = ", packet, length);
 
+        final Ra ra;
+        try {
+            ra = new Ra(packet, length);
+        } catch (Exception e) {
+            Log.e(TAG, "Error parsing RA", e);
+            return ProcessRaResult.PARSE_ERROR;
+        }
         // Have we seen this RA before?
         for (int i = 0; i < mRas.size(); i++) {
-            Ra ra = mRas.get(i);
-            if (ra.matches(packet, length)) {
+            Ra oldRa = mRas.get(i);
+            if (oldRa.matches(ra)) {
+                ra.seenCount += oldRa.seenCount;
                 if (VDBG) log("matched RA " + ra);
-                // Update lifetimes.
-                ra.mLastSeen = currentTimeSeconds();
-                ra.seenCount++;
 
                 // Keep mRas in LRU order so as to prioritize generating filters for recently seen
                 // RAs. LRU prioritizes this because RA filters are generated in order from mRas
@@ -1960,7 +1969,8 @@ public class ApfFilter {
                 // filter program.
                 // TODO: consider sorting the RAs in order of increasing expiry time as well.
                 // Swap to front of array.
-                mRas.add(0, mRas.remove(i));
+                mRas.remove(i);
+                mRas.add(0, ra);
 
                 // If the current program doesn't expire for a while, don't update.
                 if (shouldInstallnewProgram()) {
@@ -1974,13 +1984,6 @@ public class ApfFilter {
         // TODO: figure out how to proceed when we've received more then MAX_RAS RAs.
         if (mRas.size() >= MAX_RAS) {
             return ProcessRaResult.DROPPED;
-        }
-        final Ra ra;
-        try {
-            ra = new Ra(packet, length);
-        } catch (Exception e) {
-            Log.e(TAG, "Error parsing RA", e);
-            return ProcessRaResult.PARSE_ERROR;
         }
         // Ignore 0 lifetime RAs.
         if (ra.isExpired()) {
