@@ -671,7 +671,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     private void setFeatureChickenedOut(String name, boolean chickenedOut) {
-        setDeviceConfigProperty(name, chickenedOut ? "1" : "0");
+        setDeviceConfigProperty(name, chickenedOut ? "-1" : "0");
     }
 
     protected void setDhcpFeatures(final boolean isDhcpLeaseCacheEnabled,
