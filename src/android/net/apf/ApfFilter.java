@@ -1985,9 +1985,9 @@ public class ApfFilter {
             }
         }
         purgeExpiredRasLocked();
-        // TODO: figure out how to proceed when we've received more then MAX_RAS RAs.
         if (mRas.size() >= MAX_RAS) {
-            return ProcessRaResult.DROPPED;
+            // Remove the last (i.e. oldest) RA.
+            mRas.remove(mRas.size() - 1);
         }
         // Ignore 0 lifetime RAs.
         if (ra.isExpired()) {
