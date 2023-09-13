@@ -1994,7 +1994,7 @@ public class ApfFilter {
             return ProcessRaResult.ZERO_LIFETIME;
         }
         log("Adding " + ra);
-        mRas.add(ra);
+        mRas.add(0, ra);
         installNewProgramLocked();
         return ProcessRaResult.UPDATE_NEW_RA;
     }
