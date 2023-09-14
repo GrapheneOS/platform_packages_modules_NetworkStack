@@ -1029,18 +1029,64 @@ public class ApfFilter {
                         case 4: gen.addLoad32(Register.R0, section.start); break;
                     }
 
+                    // For more information on lifetime comparisons in the APF bytecode, see
+                    // go/apf-ra-filter.
                     if (section.lifetime == 0) {
+                        // Case 1) old lft == 0
+                        //
+                        // a) in the presence of a min value.
+                        // if lft >= min -> PASS
+                        //
+                        // b) if min is 0 / there is no min value.
                         // if lft > 0 -> PASS
-                        gen.addJumpIfR0GreaterThan(0, nextFilterLabel);
-                    } else {
+                        int minLft = Math.max(section.min, 1);
+                        gen.addJumpIfR0GreaterThan(minLft - 1, nextFilterLabel);
+                    } else if (section.min == 0) {
+                        // Case 2b) section is not affected by any minimum.
+                        //
                         // if lft < (oldLft + 2) // 3 -> PASS
                         // if lft > oldLft            -> PASS
                         gen.addJumpIfR0LessThan((int) ((section.lifetime + 2) / 3),
                                 nextFilterLabel);
                         gen.addJumpIfR0GreaterThan((int) section.lifetime, nextFilterLabel);
+                    } else if (section.lifetime < section.min) {
+                        // Case 2a) 0 < old lft < min
+                        //
+                        // if lft == 0   -> PASS
+                        // if lft >= min -> PASS
+                        gen.addJumpIfR0Equals(0, nextFilterLabel);
+                        gen.addJumpIfR0GreaterThan(section.min - 1, nextFilterLabel);
+                    } else if (section.lifetime <= 3 * section.min) {
+                        // Case 3a) min <= old lft <= 3 * min
+                        // Note that:
+                        // "(old lft + 2) / 3 <= min" is equivalent to "old lft <= 3 * min"
+                        //
+                        // Essentially, in this range there is no "renumbering support", as the
+                        // renumbering constant of 1/3 * old lft is smaller than the minimum
+                        // lifetime accepted by the kernel / userspace.
+                        //
+                        // if lft == 0     -> PASS
+                        // if lft > oldLft -> PASS
+                        gen.addJumpIfR0Equals(0, nextFilterLabel);
+                        gen.addJumpIfR0GreaterThan((int) section.lifetime, nextFilterLabel);
+                    } else {
+                        final String continueLabel = "Continue" + getUniqueNumberLocked();
+                        // Case 4a) otherwise
+                        //
+                        // if lft == 0                  -> PASS
+                        // if lft < min                 -> CONTINUE
+                        // if lft < (oldLft + 2) // 3   -> PASS
+                        // if lft > oldLft              -> PASS
+                        gen.addJumpIfR0Equals(0, nextFilterLabel);
+                        gen.addJumpIfR0LessThan(section.min, continueLabel);
+                        gen.addJumpIfR0LessThan((int) ((section.lifetime + 2) / 3),
+                                nextFilterLabel);
+                        gen.addJumpIfR0GreaterThan((int) section.lifetime, nextFilterLabel);
+
+                        // CONTINUE
+                        gen.defineLabel(continueLabel);
                     }
                 }
-
             }
             maybeSetupCounter(gen, Counter.DROPPED_RA);
             gen.addJump(mCountAndDropLabel);
