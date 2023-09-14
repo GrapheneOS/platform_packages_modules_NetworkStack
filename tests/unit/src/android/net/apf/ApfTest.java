@@ -2333,6 +2333,9 @@ public class ApfTest {
 
     private static class RaPacketBuilder {
         final ByteArrayOutputStream mPacket = new ByteArrayOutputStream();
+        int mFlowLabel = 0x12345;
+        int mReachableTime = 30_000;
+        int mRetransmissionTimer = 1000;
 
         public RaPacketBuilder(int routerLft) throws Exception {
             InetAddress src = InetAddress.getByName("fe80::1234:abcd");
@@ -2341,7 +2344,9 @@ public class ApfTest {
             buffer.putShort(ETH_ETHERTYPE_OFFSET, (short) ETH_P_IPV6);
             buffer.position(ETH_HEADER_LEN);
 
-            buffer.putInt(0x60012345);                      // Version, tclass, flowlabel
+            // skip version, tclass, flowlabel; set in build()
+            buffer.position(buffer.position() + 4);
+
             buffer.putShort((short) 0);                     // Payload length; updated later
             buffer.put((byte) IPPROTO_ICMPV6);              // Next header
             buffer.put((byte) 0xff);                        // Hop limit
@@ -2354,10 +2359,22 @@ public class ApfTest {
             buffer.put((byte) 64);                          // Hop limit
             buffer.put((byte) 0);                           // M/O, reserved
             buffer.putShort((short) routerLft);             // Router lifetime
-            buffer.putInt(30_000);                          // Reachable time
-            buffer.putInt(1000);                            // Retrans timer
+            // skip reachable time; set in build()
+            // skip retransmission timer; set in build();
 
             mPacket.write(buffer.array(), 0, buffer.capacity());
+        }
+
+        public void setFlowLabel(int flowLabel) {
+            mFlowLabel = flowLabel;
+        }
+
+        public void setReachableTime(int reachable) {
+            mReachableTime = reachable;
+        }
+
+        public void setRetransmissionTimer(int retrans) {
+            mRetransmissionTimer = retrans;
         }
 
         public void addPioOption(int valid, int preferred, String prefixString) throws Exception {
@@ -2402,6 +2419,35 @@ public class ApfTest {
             mPacket.write(buffer.array(), 0, buffer.capacity());
         }
 
+        public void addDnsslOption(int lifetime, String... domains) {
+            ByteArrayOutputStream dnssl = new ByteArrayOutputStream();
+            for (String domain : domains) {
+                for (String label : domain.split(".")) {
+                    final byte[] bytes = label.getBytes(StandardCharsets.UTF_8);
+                    dnssl.write((byte) bytes.length);
+                    dnssl.write(bytes, 0, bytes.length);
+                }
+                dnssl.write((byte) 0);
+            }
+
+            // Extend with 0s to make it 8-byte aligned.
+            while (dnssl.size() % 8 != 0) {
+                dnssl.write((byte) 0);
+            }
+
+            final int length = ICMP6_4_BYTE_OPTION_LEN + dnssl.size();
+            ByteBuffer buffer = ByteBuffer.allocate(length);
+
+            buffer.put((byte) ICMP6_DNSSL_OPTION_TYPE);  // Type
+            buffer.put((byte) (length / 8));             // Length
+            // skip past reserved bytes
+            buffer.position(buffer.position() + 2);
+            buffer.putInt(lifetime);                     // Lifetime
+            buffer.put(dnssl.toByteArray());             // Domain names
+
+            mPacket.write(buffer.array(), 0, buffer.capacity());
+        }
+
         public void addRdnssOption(int lifetime, String... servers) throws Exception {
             int optionLength = 1 + 2 * servers.length;   // In 8-byte units
             ByteBuffer buffer = ByteBuffer.allocate(optionLength * 8);
@@ -2417,9 +2463,24 @@ public class ApfTest {
             mPacket.write(buffer.array(), 0, buffer.capacity());
         }
 
+        public void addZeroLengthOption() throws Exception {
+            ByteBuffer buffer = ByteBuffer.allocate(ICMP6_4_BYTE_OPTION_LEN);
+            buffer.put((byte) ICMP6_PREFIX_OPTION_TYPE);
+            buffer.put((byte) 0);
+
+            mPacket.write(buffer.array(), 0, buffer.capacity());
+        }
+
         public byte[] build() {
             ByteBuffer buffer = ByteBuffer.wrap(mPacket.toByteArray());
+            // IPv6, traffic class = 0, flow label = mFlowLabel
+            buffer.putInt(IP_HEADER_OFFSET, 0x60000000 | (0xFFFFF & mFlowLabel));
             buffer.putShort(IPV6_PAYLOAD_LENGTH_OFFSET, (short) buffer.capacity());
+
+            buffer.position(ICMP6_RA_REACHABLE_TIME_OFFSET);
+            buffer.putInt(mReachableTime);
+            buffer.putInt(mRetransmissionTimer);
+
             return buffer.array();
         }
     }
@@ -2538,25 +2599,6 @@ public class ApfTest {
         ipClientCallback.assertNoProgramUpdate();
     }
 
-    private ByteBuffer makeBaseRaPacket() {
-        ByteBuffer basePacket = ByteBuffer.wrap(new byte[ICMP6_RA_OPTION_OFFSET]);
-        final int ROUTER_LIFETIME = 1000;
-        final int VERSION_TRAFFIC_CLASS_FLOW_LABEL_OFFSET = ETH_HEADER_LEN;
-        // IPv6, traffic class = 0, flow label = 0x12345
-        final int VERSION_TRAFFIC_CLASS_FLOW_LABEL = 0x60012345;
-
-        basePacket.putShort(ETH_ETHERTYPE_OFFSET, (short) ETH_P_IPV6);
-        basePacket.putInt(VERSION_TRAFFIC_CLASS_FLOW_LABEL_OFFSET,
-                VERSION_TRAFFIC_CLASS_FLOW_LABEL);
-        basePacket.put(IPV6_NEXT_HEADER_OFFSET, (byte) IPPROTO_ICMPV6);
-        basePacket.put(ICMP6_TYPE_OFFSET, (byte) ICMP6_ROUTER_ADVERTISEMENT);
-        basePacket.putShort(ICMP6_RA_ROUTER_LIFETIME_OFFSET, (short) ROUTER_LIFETIME);
-        basePacket.position(IPV6_DEST_ADDR_OFFSET);
-        basePacket.put(IPV6_ALL_NODES_ADDRESS);
-
-        return basePacket;
-    }
-
     @Test
     public void testApfFilterRa() throws Exception {
         MockIpClientCallback ipClientCallback = new MockIpClientCallback();
@@ -2573,38 +2615,31 @@ public class ApfTest {
         final int ROUTE_LIFETIME  = 400;
         // Note that lifetime of 2000 will be ignored in favor of shorter route lifetime of 1000.
         final int DNSSL_LIFETIME  = 2000;
-        final int VERSION_TRAFFIC_CLASS_FLOW_LABEL_OFFSET = ETH_HEADER_LEN;
-        // IPv6, traffic class = 0, flow label = 0x12345
-        final int VERSION_TRAFFIC_CLASS_FLOW_LABEL = 0x60012345;
 
         // Verify RA is passed the first time
-        ByteBuffer basePacket = makeBaseRaPacket();
+        RaPacketBuilder ra = new RaPacketBuilder(ROUTER_LIFETIME);
+        ByteBuffer basePacket = ByteBuffer.wrap(ra.build());
         assertPass(program, basePacket.array());
 
         verifyRaLifetime(apfFilter, ipClientCallback, basePacket, ROUTER_LIFETIME);
         verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, -1, -1, -1));
 
-        ByteBuffer newFlowLabelPacket = ByteBuffer.wrap(new byte[ICMP6_RA_OPTION_OFFSET]);
-        basePacket.clear();
-        newFlowLabelPacket.put(basePacket);
+        ra = new RaPacketBuilder(ROUTER_LIFETIME);
         // Check that changes are ignored in every byte of the flow label.
-        newFlowLabelPacket.putInt(VERSION_TRAFFIC_CLASS_FLOW_LABEL_OFFSET,
-                VERSION_TRAFFIC_CLASS_FLOW_LABEL + 0x11111);
+        ra.setFlowLabel(0x56789);
+        ByteBuffer newFlowLabelPacket = ByteBuffer.wrap(ra.build());
 
         // Ensure zero-length options cause the packet to be silently skipped.
         // Do this before we test other packets. http://b/29586253
-        ByteBuffer zeroLengthOptionPacket = ByteBuffer.wrap(
-                new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_OPTION_LEN]);
-        basePacket.clear();
-        zeroLengthOptionPacket.put(basePacket);
-        zeroLengthOptionPacket.put((byte)ICMP6_PREFIX_OPTION_TYPE);
-        zeroLengthOptionPacket.put((byte)0);
+        ra = new RaPacketBuilder(ROUTER_LIFETIME);
+        ra.addZeroLengthOption();
+        ByteBuffer zeroLengthOptionPacket = ByteBuffer.wrap(ra.build());
         assertInvalidRa(apfFilter, ipClientCallback, zeroLengthOptionPacket);
 
         // Generate several RAs with different options and lifetimes, and verify when
         // ApfFilter is shown these packets, it generates programs to filter them for the
         // appropriate lifetime.
-        RaPacketBuilder ra = new RaPacketBuilder(ROUTER_LIFETIME);
+        ra = new RaPacketBuilder(ROUTER_LIFETIME);
         ra.addPioOption(PREFIX_VALID_LIFETIME, PREFIX_PREFERRED_LIFETIME, "2001:db8::/64");
         ByteBuffer prefixOptionPacket = ByteBuffer.wrap(ra.build());
         verifyRaLifetime(
@@ -2639,14 +2674,9 @@ public class ApfTest {
         program = ipClientCallback.getApfProgram();
         assertPass(program, ra.build());
 
-        ByteBuffer dnsslOptionPacket = ByteBuffer.wrap(
-                new byte[ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_OPTION_LEN]);
-        basePacket.clear();
-        dnsslOptionPacket.put(basePacket);
-        dnsslOptionPacket.put((byte)ICMP6_DNSSL_OPTION_TYPE);
-        dnsslOptionPacket.put((byte)(ICMP6_4_BYTE_OPTION_LEN / 8));
-        dnsslOptionPacket.putInt(
-                ICMP6_RA_OPTION_OFFSET + ICMP6_4_BYTE_LIFETIME_OFFSET, DNSSL_LIFETIME);
+        ra = new RaPacketBuilder(ROUTER_LIFETIME);
+        ra.addDnsslOption(DNSSL_LIFETIME, "test.example.com", "one.more.example.com");
+        ByteBuffer dnsslOptionPacket = ByteBuffer.wrap(ra.build());
         verifyRaLifetime(apfFilter, ipClientCallback, dnsslOptionPacket, ROUTER_LIFETIME);
         verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, -1, -1, -1));
 
@@ -2681,31 +2711,31 @@ public class ApfTest {
 
         // Create an Ra packet without options
         // Reachable time = 1800, retransmission timer = 1234
-        ByteBuffer raPacket = makeBaseRaPacket();
-        raPacket.position(ICMP6_RA_REACHABLE_TIME_OFFSET);
-        raPacket.putInt(RA_REACHABLE_TIME);
-        raPacket.putInt(RA_RETRANSMISSION_TIMER);
+        RaPacketBuilder ra = new RaPacketBuilder(1800 /* router lft */);
+        ra.setReachableTime(RA_REACHABLE_TIME);
+        ra.setRetransmissionTimer(RA_RETRANSMISSION_TIMER);
+        byte[] raPacket = ra.build();
         // First RA passes filter
-        assertPass(program, raPacket.array());
+        assertPass(program, raPacket);
 
         // Assume apf is shown the given RA, it generates program to filter it.
         ipClientCallback.resetApfProgramWait();
-        apfFilter.pretendPacketReceived(raPacket.array());
+        apfFilter.pretendPacketReceived(raPacket);
         program = ipClientCallback.getApfProgram();
-        assertDrop(program, raPacket.array());
+        assertDrop(program, raPacket);
 
         // A packet with different reachable time should be passed.
         // Reachable time = 2300, retransmission timer = 1234
-        raPacket.clear();
-        raPacket.putInt(ICMP6_RA_REACHABLE_TIME_OFFSET, RA_REACHABLE_TIME + 500);
-        assertPass(program, raPacket.array());
+        ra.setReachableTime(RA_REACHABLE_TIME + 500);
+        raPacket = ra.build();
+        assertPass(program, raPacket);
 
         // A packet with different retransmission timer should be passed.
         // Reachable time = 1800, retransmission timer = 2234
-        raPacket.clear();
-        raPacket.putInt(ICMP6_RA_REACHABLE_TIME_OFFSET, RA_REACHABLE_TIME);
-        raPacket.putInt(ICMP6_RA_RETRANSMISSION_TIMER_OFFSET, RA_RETRANSMISSION_TIMER + 1000);
-        assertPass(program, raPacket.array());
+        ra.setReachableTime(RA_REACHABLE_TIME);
+        ra.setRetransmissionTimer(RA_RETRANSMISSION_TIMER + 1000);
+        raPacket = ra.build();
+        assertPass(program, raPacket);
     }
 
     // The ByteBuffer is always created by ByteBuffer#wrap in the helper functions
