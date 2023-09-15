@@ -1346,11 +1346,6 @@ public class ApfFilter {
     @GuardedBy("this")
     private final List<String[]> mMdnsAllowList = new ArrayList<>();
 
-    // There is always some marginal benefit to updating the installed APF program when an RA is
-    // seen because we can extend the program's lifetime slightly, but there is some cost to
-    // updating the program, so don't bother unless the program is going to expire soon. This
-    // constant defines "soon" in seconds.
-    private static final long MAX_PROGRAM_LIFETIME_WORTH_REFRESHING = 30;
     // We don't want to filter an RA for it's whole lifetime as it'll be expired by the time we ever
     // see a refresh.  Using half the lifetime might be a good idea except for the fact that
     // packets may be dropped, so let's use 6.
@@ -2013,14 +2008,6 @@ public class ApfFilter {
         mMetricsLog.log(ev.build());
     }
 
-    /**
-     * Returns {@code true} if a new program should be installed because the current one dies soon.
-     */
-    private boolean shouldInstallnewProgram() {
-        long expiry = mLastTimeInstalledProgram + mLastInstalledProgramMinLifetime;
-        return expiry < currentTimeSeconds() + MAX_PROGRAM_LIFETIME_WORTH_REFRESHING;
-    }
-
     private void hexDump(String msg, byte[] packet, int length) {
         log(msg + HexDump.toHexString(packet, 0, length, false /* lowercase */));
     }
@@ -2073,11 +2060,8 @@ public class ApfFilter {
                 mRas.remove(i);
                 mRas.add(0, ra);
 
-                // If the current program doesn't expire for a while, don't update.
-                if (shouldInstallnewProgram()) {
-                    installNewProgramLocked();
-                    return ProcessRaResult.UPDATE_EXPIRY;
-                }
+                installNewProgramLocked();
+                // TODO: clean up ProcessRaResults and update metrics collection.
                 return ProcessRaResult.MATCH;
             } else if (result == Ra.MatchType.MATCH_DROP) {
                 log("Ignoring RA " + ra + " which matches " + oldRa);
