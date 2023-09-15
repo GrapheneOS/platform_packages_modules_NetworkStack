@@ -113,6 +113,7 @@ public class ApfFilter {
         public boolean ieee802_3Filter;
         public int[] ethTypeBlackList;
         public int minRdnssLifetimeSec;
+        public int acceptRaMinLft;
     }
 
     // Enums describing the outcome of receiving an RA packet.
