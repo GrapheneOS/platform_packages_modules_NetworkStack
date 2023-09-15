@@ -382,6 +382,10 @@ public class ApfFilter {
     // Ignore non-zero RDNSS lifetimes below this value.
     private final int mMinRdnssLifetimeSec;
 
+    // Tracks the value of /proc/sys/ipv6/conf/$iface/accept_ra_min_lft which affects router, RIO,
+    // and PIO valid lifetimes.
+    private final int mAcceptRaMinLft;
+
     // Detects doze mode state transitions.
     private final BroadcastReceiver mDeviceIdleReceiver = new BroadcastReceiver() {
         @Override
@@ -413,6 +417,7 @@ public class ApfFilter {
         mMulticastFilter = config.multicastFilter;
         mDrop802_3Frames = config.ieee802_3Filter;
         mMinRdnssLifetimeSec = config.minRdnssLifetimeSec;
+        mAcceptRaMinLft = config.acceptRaMinLft;
         mContext = context;
 
         if (mApfCapabilities.hasDataAccess()) {
