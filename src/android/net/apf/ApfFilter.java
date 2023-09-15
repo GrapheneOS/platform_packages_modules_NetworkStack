@@ -84,6 +84,7 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -949,7 +950,31 @@ public class ApfFilter {
                     if (newPacket[i] != oldPacket[i]) return MatchType.NO_MATCH;
                 }
             }
-            return MatchType.MATCH_PASS;
+
+            final Iterator<PacketSection> itNew = newRa.mPacketSections.iterator();
+            final Iterator<PacketSection> itOld = mPacketSections.iterator();
+
+            // Consider if APF would drop this RA if it were active to see whether the tracked RA
+            // and program should be updated. This essentially duplicates the logic of the APF
+            // bytecode.
+            while (itNew.hasNext() && itOld.hasNext()) {
+                final PacketSection newSec = itNew.next();
+                final PacketSection oldSec = itOld.next();
+
+                if (newSec.type != oldSec.type) return MatchType.NO_MATCH;
+                if (newSec.type != PacketSection.Type.LIFETIME) continue;
+
+                // if lft == 0 && oldLft != 0   -> PASS
+                if (newSec.lifetime == 0 && oldSec.lifetime != 0) return MatchType.MATCH_PASS;
+                // if lft < sysctl              -> CONTINUE
+                if (newSec.lifetime < newSec.min) continue;
+                // if lft < (oldLft + 2) // 3   -> PASS
+                if (newSec.lifetime < (oldSec.lifetime + 2) / 3) return MatchType.MATCH_PASS;
+                // if lft > oldLft              -> PASS
+                if (newSec.lifetime > oldSec.lifetime) return MatchType.MATCH_PASS;
+                // CONTINUE
+            }
+            return MatchType.MATCH_DROP;
         }
 
         // What is the minimum of all lifetimes within {@code packet} in seconds?
