@@ -16,11 +16,7 @@
 
 package android.net.ip;
 
-import static android.net.ip.IpClient.ACCEPT_RA_MIN_LFT;
-import static android.net.ip.IpClient.CONFIG_ACCEPT_RA_MIN_LFT;
-import static android.net.ip.IpClient.DEFAULT_ACCEPT_RA_MIN_LFT;
 import static android.system.OsConstants.RT_SCOPE_UNIVERSE;
-import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_IGNORE_LOW_RA_LIFETIME_FORCE_DISABLE;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -98,6 +94,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+
 
 /**
  * Tests for IpClient.
@@ -918,49 +915,6 @@ public class IpClientTest {
         final MacAddress bssid = ipc.getInitialBssid(null /* layer2Info */,
                 null /* scanResultInfo */, false /* isAtLeastS */);
         assertNull(bssid);
-    }
-
-    private void runSetIpv6SysctlAcceptRaMinLftTest(final boolean hasIpv6Sysctl,
-            final boolean isFeatureNotChickenedOut) throws Exception {
-        doReturn(hasIpv6Sysctl).when(mDependencies)
-                .hasIpv6Sysctl(TEST_IFNAME, ACCEPT_RA_MIN_LFT);
-        doReturn(isFeatureNotChickenedOut).when(mDependencies).isNetworkStackFeatureNotChickenedOut(
-                IPCLIENT_IGNORE_LOW_RA_LIFETIME_FORCE_DISABLE);
-        doReturn(DEFAULT_ACCEPT_RA_MIN_LFT).when(mDependencies).getDeviceConfigPropertyInt(
-                CONFIG_ACCEPT_RA_MIN_LFT, DEFAULT_ACCEPT_RA_MIN_LFT);
-
-        final IpClient ipc = makeIpClient(TEST_IFNAME);
-        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
-                .withoutIPv4()
-                .withoutIpReachabilityMonitor()
-                .build();
-        ipc.startProvisioning(config);
-        verify(mCb, timeout(TEST_TIMEOUT_MS).times(1)).setNeighborDiscoveryOffload(true);
-        verify(mCb, timeout(TEST_TIMEOUT_MS).times(1)).setFallbackMulticastFilter(false);
-    }
-
-    @Test
-    public void testSetIpv6SysctlAcceptRaMinLft() throws Exception {
-        runSetIpv6SysctlAcceptRaMinLftTest(true /* hasIpv6Sysctl */,
-                true /* isFeatureNotChickenedOut */);
-        verify(mNetd, timeout(TEST_TIMEOUT_MS).times(1))
-                .setProcSysNet(INetd.IPV6, INetd.CONF, TEST_IFNAME, ACCEPT_RA_MIN_LFT, "180");
-    }
-
-    @Test
-    public void testSetIpv6SysctlAcceptRaMinRtrLft_featureChickenedOut() throws Exception {
-        runSetIpv6SysctlAcceptRaMinLftTest(true /* hasIpv6Sysctl */,
-                false /* isFeatureNotChickenedOut */);
-        verify(mNetd, never())
-                .setProcSysNet(INetd.IPV6, INetd.CONF, TEST_IFNAME, ACCEPT_RA_MIN_LFT, "180");
-    }
-
-    @Test
-    public void testSetIpv6SysctlAcceptRaMinRtrLft_sysctlIsNotPresent() throws Exception {
-        runSetIpv6SysctlAcceptRaMinLftTest(false /* hasIpv6Sysctl */,
-                true /* isFeatureNotChickenedOut */);
-        verify(mNetd, never())
-                .setProcSysNet(INetd.IPV6, INetd.CONF, TEST_IFNAME, ACCEPT_RA_MIN_LFT, "180");
     }
 
     interface Fn<A,B> {
