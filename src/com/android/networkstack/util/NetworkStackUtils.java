@@ -276,13 +276,6 @@ public class NetworkStackUtils {
     public static final String IPCLIENT_PARSE_NETLINK_EVENTS_FORCE_DISABLE =
             "ipclient_parse_netlink_events_force_disable";
 
-    /**
-     * Kill switch flag to disable the feature of ignoring any individual RA section with lifetime
-     * below accept_ra_min_lft sysctl.
-     */
-    public static final String IPCLIENT_IGNORE_LOW_RA_LIFETIME_FORCE_DISABLE =
-            "ipclient_ignore_low_ra_lifetime_force_disable";
-
     static {
         System.loadLibrary("networkstackutilsjni");
     }
