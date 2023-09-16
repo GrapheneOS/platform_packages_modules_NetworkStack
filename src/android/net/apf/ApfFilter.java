@@ -536,7 +536,7 @@ public class ApfFilter {
     private static class PacketSection {
         public enum Type {
             MATCH,     // A field that should be matched (e.g., the router IP address).
-            LIFETIME,  // A lifetime. Not matched, and generally counts toward minimum RA lifetime.
+            LIFETIME,  // A lifetime. Not matched, and counts toward minimum RA lifetime if >= min.
         }
 
         /** The type of section. */
@@ -549,8 +549,10 @@ public class ApfFilter {
         public final int option;
         /** If this is a lifetime, the lifetime value. */
         public final long lifetime;
+        /** If this is a lifetime, the value below which the lifetime is ignored */
+        public final int min;
 
-        PacketSection(int start, int length, Type type, int option, long lifetime) {
+        PacketSection(int start, int length, Type type, int option, long lifetime, int min) {
             this.start = start;
 
             if (type == Type.LIFETIME && length != 2 && length != 4) {
@@ -559,16 +561,24 @@ public class ApfFilter {
             this.length = length;
             this.type = type;
 
-            if (type == Type.MATCH && (option != 0 || lifetime != 0)) {
-                throw new IllegalArgumentException("option, lifetime must be 0 for MATCH sections");
+            if (type == Type.MATCH && (option != 0 || lifetime != 0 || min != 0)) {
+                throw new IllegalArgumentException(
+                        "option, lifetime, min must be 0 for MATCH sections");
             }
             this.option = option;
             this.lifetime = lifetime;
+
+            // It has already been asserted that min is 0 for MATCH sections.
+            if (min < 0) {
+                throw new IllegalArgumentException("min must be >= 0 for LIFETIME sections");
+            }
+            this.min = min;
         }
 
         public String toString() {
             if (type == Type.LIFETIME) {
-                return String.format("%s: (%d, %d) %d %d", type, start, length, option, lifetime);
+                return String.format("%s: (%d, %d) %d %d %d", type, start, length, option, lifetime,
+                        min);
             } else {
                 return String.format("%s: (%d, %d)", type, start, length);
             }
@@ -744,7 +754,7 @@ public class ApfFilter {
             // truncated packets.
             if (length == 0) return;
 
-            // we need to add a MATCH section 'from, length, MATCH, 0, 0'
+            // we need to add a MATCH section 'from, length, MATCH, 0, 0, 0'
             int from = mPacket.position();
 
             // if possible try to increase the length of the previous match section
@@ -761,7 +771,7 @@ public class ApfFilter {
             }
 
             mPacketSections.add(
-                    new PacketSection(from, length, PacketSection.Type.MATCH, 0, 0));
+                    new PacketSection(from, length, PacketSection.Type.MATCH, 0, 0, 0));
             mPacket.position(from + length);
         }
 
@@ -788,9 +798,10 @@ public class ApfFilter {
          * @param lifetime the lifetime
          */
         private void addLifetimeSection(int length, int optionType, long lifetime) {
+            // TODO: initialize min value.
             mPacketSections.add(
                     new PacketSection(mPacket.position(), length, PacketSection.Type.LIFETIME,
-                            optionType, lifetime));
+                            optionType, lifetime, 0));
             mPacket.position(mPacket.position() + length);
         }
 
