@@ -934,9 +934,9 @@ public class ApfFilter {
         }
 
         // Considering only the MATCH sections, does {@code packet} match this RA?
-        boolean matches(Ra newRa) {
+        MatchType matches(Ra newRa) {
             // Does their size match?
-            if (newRa.mPacket.capacity() != mPacket.capacity()) return false;
+            if (newRa.mPacket.capacity() != mPacket.capacity()) return MatchType.NO_MATCH;
 
             // Check if all MATCH sections are byte-identical.
             final byte[] newPacket = newRa.mPacket.array();
@@ -944,10 +944,10 @@ public class ApfFilter {
             for (PacketSection section : mPacketSections) {
                 if (section.type != PacketSection.Type.MATCH) continue;
                 for (int i = section.start; i < (section.start + section.length); i++) {
-                    if (newPacket[i] != oldPacket[i]) return false;
+                    if (newPacket[i] != oldPacket[i]) return MatchType.NO_MATCH;
                 }
             }
-            return true;
+            return MatchType.MATCH_PASS;
         }
 
         // What is the minimum of all lifetimes within {@code packet} in seconds?
@@ -1982,10 +1982,13 @@ public class ApfFilter {
         }
         // Have we seen this RA before?
         for (int i = 0; i < mRas.size(); i++) {
-            Ra oldRa = mRas.get(i);
-            if (oldRa.matches(ra)) {
+            final Ra oldRa = mRas.get(i);
+            final Ra.MatchType result = oldRa.matches(ra);
+            if (result == Ra.MatchType.MATCH_PASS) {
+                // Only update RA seenCount (or anything related to the RA for a MATCH_PASS, so
+                // behavior is independent of APF program state.
                 ra.seenCount += oldRa.seenCount;
-                if (VDBG) log("matched RA " + ra);
+                log("Updating RA from " + oldRa + " to " + ra);
 
                 // Keep mRas in LRU order so as to prioritize generating filters for recently seen
                 // RAs. LRU prioritizes this because RA filters are generated in order from mRas
@@ -2003,6 +2006,9 @@ public class ApfFilter {
                     return ProcessRaResult.UPDATE_EXPIRY;
                 }
                 return ProcessRaResult.MATCH;
+            } else if (result == Ra.MatchType.MATCH_DROP) {
+                log("Ignoring RA " + ra + " which matches " + oldRa);
+                return ProcessRaResult.IGNORED;
             }
         }
         purgeExpiredRasLocked();
