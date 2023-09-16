@@ -922,6 +922,12 @@ public class ApfFilter {
             mMetricsLog.log(builder.build());
         }
 
+        public enum MatchType {
+            NO_MATCH, // the RAs do not match
+            MATCH_PASS, // the RAS match, and the APF program would pass.
+            MATCH_DROP, // the RAs match, but the APF program would drop.
+        }
+
         // Considering only the MATCH sections, does {@code packet} match this RA?
         boolean matches(Ra newRa) {
             // Does their size match?
