@@ -122,6 +122,7 @@ public class ApfFilter {
         PARSE_ERROR,    // Received RA could not be parsed
         ZERO_LIFETIME,  // Received RA had 0 lifetime
         UPDATE_NEW_RA,  // APF program updated for new RA
+        IGNORED,        // Received RA would be dropped by APF bytecode
         UPDATE_EXPIRY   // APF program updated for expiry
     }
 
@@ -254,6 +255,10 @@ public class ApfFilter {
                     return;
                 case UPDATE_NEW_RA:
                     mProgramUpdates++;
+                    return;
+                case IGNORED:
+                    // Do nothing. Ignored RAs aren't particularly interesting as they mark the RAs
+                    // that would normally be dropped when the program is active.
                     return;
             }
         }
