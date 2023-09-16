@@ -545,14 +545,12 @@ public class ApfFilter {
         public final int start;
         /** Length of this section in bytes. */
         public final int length;
-        /** If this is a lifetime, the ICMP option that defined it. 0 for router lifetime. */
-        public final int option;
         /** If this is a lifetime, the lifetime value. */
         public final long lifetime;
         /** If this is a lifetime, the value below which the lifetime is ignored */
         public final int min;
 
-        PacketSection(int start, int length, Type type, int option, long lifetime, int min) {
+        PacketSection(int start, int length, Type type, long lifetime, int min) {
             this.start = start;
 
             if (type == Type.LIFETIME && length != 2 && length != 4) {
@@ -561,11 +559,9 @@ public class ApfFilter {
             this.length = length;
             this.type = type;
 
-            if (type == Type.MATCH && (option != 0 || lifetime != 0 || min != 0)) {
-                throw new IllegalArgumentException(
-                        "option, lifetime, min must be 0 for MATCH sections");
+            if (type == Type.MATCH && (lifetime != 0 || min != 0)) {
+                throw new IllegalArgumentException("lifetime, min must be 0 for MATCH sections");
             }
-            this.option = option;
             this.lifetime = lifetime;
 
             // It has already been asserted that min is 0 for MATCH sections.
@@ -577,8 +573,7 @@ public class ApfFilter {
 
         public String toString() {
             if (type == Type.LIFETIME) {
-                return String.format("%s: (%d, %d) %d %d %d", type, start, length, option, lifetime,
-                        min);
+                return String.format("%s: (%d, %d) %d %d", type, start, length, lifetime, min);
             } else {
                 return String.format("%s: (%d, %d)", type, start, length);
             }
@@ -754,7 +749,7 @@ public class ApfFilter {
             // truncated packets.
             if (length == 0) return;
 
-            // we need to add a MATCH section 'from, length, MATCH, 0, 0, 0'
+            // we need to add a MATCH section 'from, length, MATCH, 0, 0'
             int from = mPacket.position();
 
             // if possible try to increase the length of the previous match section
@@ -770,8 +765,7 @@ public class ApfFilter {
                 }
             }
 
-            mPacketSections.add(
-                    new PacketSection(from, length, PacketSection.Type.MATCH, 0, 0, 0));
+            mPacketSections.add(new PacketSection(from, length, PacketSection.Type.MATCH, 0, 0));
             mPacket.position(from + length);
         }
 
@@ -794,43 +788,28 @@ public class ApfFilter {
         /**
          * Add a packet section that represents a lifetime, starting from the current position.
          * @param length the length of the section in bytes
-         * @param optionType the RA option containing this lifetime, or 0 for router lifetime
          * @param lifetime the lifetime
          * @param min the minimum acceptable lifetime
          */
-        private void addLifetimeSection(int length, int optionType, long lifetime, int min) {
+        private void addLifetimeSection(int length, long lifetime, int min) {
             mPacketSections.add(
                     new PacketSection(mPacket.position(), length, PacketSection.Type.LIFETIME,
-                            optionType, lifetime, min));
+                            lifetime, min));
             mPacket.position(mPacket.position() + length);
         }
 
         /**
          * Adds packet sections for an RA option with a 4-byte lifetime 4 bytes into the option
-         * @param optionType the RA option that is being added
          * @param optionLength the length of the option in bytes
          * @param min the minimum acceptable lifetime
          */
-        private long add4ByteLifetimeOption(int optionType, int optionLength, int min) {
+        private long add4ByteLifetimeOption(int optionLength, int min) {
             addMatchSection(ICMP6_4_BYTE_LIFETIME_OFFSET);
             final long lifetime = getUint32(mPacket, mPacket.position());
-            addLifetimeSection(ICMP6_4_BYTE_LIFETIME_LEN, optionType, lifetime, min);
+            addLifetimeSection(ICMP6_4_BYTE_LIFETIME_LEN, lifetime, min);
             addMatchSection(optionLength - ICMP6_4_BYTE_LIFETIME_OFFSET
                     - ICMP6_4_BYTE_LIFETIME_LEN);
             return lifetime;
-        }
-
-        // http://b/66928272 http://b/65056012
-        // DnsServerRepository ignores RDNSS servers with lifetimes that are too low. Ignore these
-        // lifetimes for the purpose of filter lifetime calculations.
-        private boolean shouldIgnoreLifetime(int optionType, long lifetime) {
-            return optionType == ICMP6_RDNSS_OPTION_TYPE
-                    && lifetime != 0 && lifetime < mMinRdnssLifetimeSec;
-        }
-
-        private boolean isRelevantLifetime(PacketSection section) {
-            return section.type == PacketSection.Type.LIFETIME
-                    && !shouldIgnoreLifetime(section.option, section.lifetime);
         }
 
         // Note that this parses RA and may throw InvalidRaException (from
@@ -872,7 +851,7 @@ public class ApfFilter {
             // Parse router lifetime
             addMatchUntil(ICMP6_RA_ROUTER_LIFETIME_OFFSET);
             final long routerLifetime = getUint16(mPacket, ICMP6_RA_ROUTER_LIFETIME_OFFSET);
-            addLifetimeSection(ICMP6_RA_ROUTER_LIFETIME_LEN, 0, routerLifetime, mAcceptRaMinLft);
+            addLifetimeSection(ICMP6_RA_ROUTER_LIFETIME_LEN, routerLifetime, mAcceptRaMinLft);
             builder.updateRouterLifetime(routerLifetime);
 
             // Add remaining fields (reachable time and retransmission timer) to match section.
@@ -896,7 +875,7 @@ public class ApfFilter {
                         addMatchSection(ICMP6_PREFIX_OPTION_VALID_LIFETIME_OFFSET);
                         lifetime = getUint32(mPacket, mPacket.position());
                         addLifetimeSection(ICMP6_PREFIX_OPTION_VALID_LIFETIME_LEN,
-                                ICMP6_PREFIX_OPTION_TYPE, lifetime, mAcceptRaMinLft);
+                                lifetime, mAcceptRaMinLft);
                         builder.updatePrefixValidLifetime(lifetime);
 
                         // Parse preferred lifetime
@@ -904,7 +883,7 @@ public class ApfFilter {
                         // The PIO preferred lifetime is not affected by accept_ra_min_lft and
                         // therefore does not have a minimum.
                         addLifetimeSection(ICMP6_PREFIX_OPTION_PREFERRED_LIFETIME_LEN,
-                                ICMP6_PREFIX_OPTION_TYPE, lifetime, 0 /* min lifetime */);
+                                lifetime, 0 /* min lifetime */);
                         builder.updatePrefixPreferredLifetime(lifetime);
 
                         addMatchSection(4);       // Reserved bytes
@@ -914,14 +893,12 @@ public class ApfFilter {
                     // are processed with the same specialized add4ByteLifetimeOption:
                     case ICMP6_RDNSS_OPTION_TYPE:
                         mRdnssOptionOffsets.add(position);
-                        lifetime = add4ByteLifetimeOption(optionType, optionLength,
-                                mMinRdnssLifetimeSec);
+                        lifetime = add4ByteLifetimeOption(optionLength, mMinRdnssLifetimeSec);
                         builder.updateRdnssLifetime(lifetime);
                         break;
                     case ICMP6_ROUTE_INFO_OPTION_TYPE:
                         mRioOptionOffsets.add(position);
-                        lifetime = add4ByteLifetimeOption(optionType, optionLength,
-                                mAcceptRaMinLft);
+                        lifetime = add4ByteLifetimeOption(optionLength, mAcceptRaMinLft);
                         builder.updateRouteInfoLifetime(lifetime);
                         break;
                     case ICMP6_SOURCE_LL_ADDRESS_OPTION_TYPE:
