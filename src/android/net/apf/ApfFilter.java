@@ -937,6 +937,8 @@ public class ApfFilter {
         MatchType matches(Ra newRa) {
             // Does their size match?
             if (newRa.mPacket.capacity() != mPacket.capacity()) return MatchType.NO_MATCH;
+            // Unlikely, but cheap.
+            if (newRa.mPacketSections.size() != mPacketSections.size()) return MatchType.NO_MATCH;
 
             // Check if all MATCH sections are byte-identical.
             final byte[] newPacket = newRa.mPacket.array();
