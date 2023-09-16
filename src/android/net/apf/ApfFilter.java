@@ -63,6 +63,7 @@ import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.HexDump;
 import com.android.internal.util.IndentingPrintWriter;
+import com.android.internal.util.TokenBucket;
 import com.android.net.module.util.CollectionUtils;
 import com.android.net.module.util.ConnectivityUtils;
 import com.android.net.module.util.InterfaceParams;
@@ -371,6 +372,7 @@ public class ApfFilter {
     private final IpClientCallbacksWrapper mIpClientCallback;
     private final InterfaceParams mInterfaceParams;
     private final IpConnectivityLog mMetricsLog;
+    private final TokenBucket mTokenBucket;
 
     @VisibleForTesting
     public byte[] mHardwareAddress;
@@ -440,6 +442,15 @@ public class ApfFilter {
         mEthTypeBlackList = filterEthTypeBlackList(config.ethTypeBlackList);
 
         mMetricsLog = log;
+
+        // TokenBucket for rate limiting filter installation. APF filtering relies on the filter
+        // always being up-to-date and APF bytecode being in sync with userspace. The TokenBucket
+        // merely prevents illconfigured / abusive networks from impacting the system, so it does
+        // not need to be very restrictive.
+        // The TokenBucket starts with its full capacity of 20 tokens (= 20 filter updates). A new
+        // token is generated every 3 seconds limiting the filter update rate to at most once every
+        // 3 seconds.
+        mTokenBucket = new TokenBucket(3_000 /* deltaMs */, 20 /* capacity */, 20 /* tokens */);
 
         // TODO: ApfFilter should not generate programs until IpClient sends provisioning success.
         maybeStartFilter();
@@ -2060,7 +2071,12 @@ public class ApfFilter {
                 mRas.remove(i);
                 mRas.add(0, ra);
 
-                installNewProgramLocked();
+                // Rate limit program installation
+                if (mTokenBucket.get()) {
+                    installNewProgramLocked();
+                } else {
+                    Log.wtf(TAG, "Failed to install prog for tracked RA, too many updates. " + ra);
+                }
                 // TODO: clean up ProcessRaResults and update metrics collection.
                 return ProcessRaResult.MATCH;
             } else if (result == Ra.MatchType.MATCH_DROP) {
@@ -2079,7 +2095,13 @@ public class ApfFilter {
         }
         log("Adding " + ra);
         mRas.add(0, ra);
-        installNewProgramLocked();
+        // Rate limit program installation
+        if (mTokenBucket.get()) {
+            installNewProgramLocked();
+        } else {
+            Log.wtf(TAG, "Failed to install prog for new RA, too many updates. " + ra);
+        }
+        // TODO: clean up ProcessRaResults and update metrics collection.
         return ProcessRaResult.UPDATE_NEW_RA;
     }
 
