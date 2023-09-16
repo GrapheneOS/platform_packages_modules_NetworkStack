@@ -552,8 +552,16 @@ public class ApfFilter {
 
         PacketSection(int start, int length, Type type, int option, long lifetime) {
             this.start = start;
+
+            if (type == Type.LIFETIME && length != 2 && length != 4) {
+                throw new IllegalArgumentException("LIFETIME section length must be 2 or 4 bytes");
+            }
             this.length = length;
             this.type = type;
+
+            if (type == Type.MATCH && (option != 0 || lifetime != 0)) {
+                throw new IllegalArgumentException("option, lifetime must be 0 for MATCH sections");
+            }
             this.option = option;
             this.lifetime = lifetime;
         }
@@ -744,12 +752,10 @@ public class ApfFilter {
             if (lastIdx >= 0) {  // there had to be a previous section
                 PacketSection prev = mPacketSections.get(lastIdx);
                 if (prev.type == PacketSection.Type.MATCH) {  // of type match
-                    if (prev.option == 0 && prev.lifetime == 0) {  // technically guaranteed
-                        if (prev.start + prev.length == from) {  // ending where we start
-                            from -= prev.length;
-                            length += prev.length;
-                            mPacketSections.remove(lastIdx);
-                        }
+                    if (prev.start + prev.length == from) {  // ending where we start
+                        from -= prev.length;
+                        length += prev.length;
+                        mPacketSections.remove(lastIdx);
                     }
                 }
             }
@@ -1010,11 +1016,9 @@ public class ApfFilter {
                 // The packet is accepted if any non-ignored lifetime is lower than filterLifetime.
                 if (isRelevantLifetime(section)) {
                     switch (section.length) {
-                        case 4: gen.addLoad32(Register.R0, section.start); break;
+                        // length asserted to be either 2 or 4 on PacketSection construction
                         case 2: gen.addLoad16(Register.R0, section.start); break;
-                        default:
-                            throw new IllegalStateException(
-                                    "bogus lifetime size " + section.length);
+                        case 4: gen.addLoad32(Register.R0, section.start); break;
                     }
                     gen.addJumpIfR0LessThan(filterLifetime(), nextFilterLabel);
                 }
