@@ -1026,18 +1026,25 @@ public class ApfFilter {
                             Arrays.copyOfRange(mPacket.array(), section.start,
                                     section.start + section.length),
                             nextFilterLabel);
-                }
-
-                // Generate code to test the lifetimes haven't gone down too far.
-                // The packet is accepted if any non-ignored lifetime is lower than filterLifetime.
-                if (isRelevantLifetime(section)) {
+                } else {
                     switch (section.length) {
                         // length asserted to be either 2 or 4 on PacketSection construction
                         case 2: gen.addLoad16(Register.R0, section.start); break;
                         case 4: gen.addLoad32(Register.R0, section.start); break;
                     }
-                    gen.addJumpIfR0LessThan(filterLifetime(), nextFilterLabel);
+
+                    if (section.lifetime == 0) {
+                        // if lft > 0 -> PASS
+                        gen.addJumpIfR0GreaterThan(0, nextFilterLabel);
+                    } else {
+                        // if lft < (oldLft + 2) // 3 -> PASS
+                        // if lft > oldLft            -> PASS
+                        gen.addJumpIfR0LessThan((int) ((section.lifetime + 2) / 3),
+                                nextFilterLabel);
+                        gen.addJumpIfR0GreaterThan((int) section.lifetime, nextFilterLabel);
+                    }
                 }
+
             }
             maybeSetupCounter(gen, Counter.DROPPED_RA);
             gen.addJump(mCountAndDropLabel);
