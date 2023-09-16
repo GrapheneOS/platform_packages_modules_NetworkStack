@@ -971,9 +971,15 @@ public class ApfFilter {
             // Clamp minLifetime at INT_MAX.
             int minLifetime = Integer.MAX_VALUE;
             for (PacketSection section : mPacketSections) {
-                if (isRelevantLifetime(section)) {
-                    minLifetime = (int) Math.min(minLifetime, section.lifetime);
+                if (section.type != PacketSection.Type.LIFETIME) {
+                    continue;
                 }
+                // Ignore lifetimes below section.min and always ignore 0 lifetimes.
+                if (section.lifetime < Math.max(section.min, 1)) {
+                    continue;
+                }
+
+                minLifetime = (int) Math.min(minLifetime, section.lifetime);
             }
             return minLifetime;
         }
