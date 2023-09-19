@@ -596,11 +596,11 @@ public class IpClient extends StateMachine {
     // Maps each DHCP option code to a list of IEs, any of which will allow that option.
     private static final Map<Byte, List<byte[]>> DHCP_OPTIONS_ALLOWED = Map.of(
             (byte) 60, Collections.singletonList(
-                    // KT OUI: 00:17:C3, type: 17. See b/170928882.
-                    new byte[]{ (byte) 0x00, (byte) 0x17, (byte) 0xc3, (byte) 0x11 }),
+                    // KT OUI: 00:17:C3, type: 33(0x21). See b/236745261.
+                    new byte[]{ (byte) 0x00, (byte) 0x17, (byte) 0xc3, (byte) 0x21 }),
             (byte) 77, Collections.singletonList(
-                    // KT OUI: 00:17:C3, type: 17. See b/170928882.
-                    new byte[]{ (byte) 0x00, (byte) 0x17, (byte) 0xc3, (byte) 0x11 })
+                    // KT OUI: 00:17:C3, type: 33(0x21). See b/236745261.
+                    new byte[]{ (byte) 0x00, (byte) 0x17, (byte) 0xc3, (byte) 0x21 })
     );
 
     // Initialize configurable particular SSID set supporting DHCP Roaming feature. See
