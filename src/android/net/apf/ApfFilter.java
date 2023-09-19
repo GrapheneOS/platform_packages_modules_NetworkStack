@@ -2089,10 +2089,6 @@ public class ApfFilter {
             // Remove the last (i.e. oldest) RA.
             mRas.remove(mRas.size() - 1);
         }
-        // Ignore 0 lifetime RAs.
-        if (ra.isExpired()) {
-            return ProcessRaResult.ZERO_LIFETIME;
-        }
         log("Adding " + ra);
         mRas.add(0, ra);
         // Rate limit program installation
