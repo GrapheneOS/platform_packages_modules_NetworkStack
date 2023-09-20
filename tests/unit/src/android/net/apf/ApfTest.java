@@ -2848,6 +2848,31 @@ public class ApfTest {
         }
     }
 
+    @Test
+    public void testMatchedRaUpdatesLifetime() throws Exception {
+        final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
+        final TestApfFilter apfFilter = new TestApfFilter(mContext, getDefaultConfig(),
+                ipClientCallback, mLog);
+
+        // Create an RA and build an APF program
+        byte[] ra = new RaPacketBuilder(1800 /* router lifetime */).build();
+        ipClientCallback.resetApfProgramWait();
+        apfFilter.pretendPacketReceived(ra);
+        byte[] program = ipClientCallback.getApfProgram();
+
+        // lifetime dropped significantly, assert pass
+        ra = new RaPacketBuilder(200 /* router lifetime */).build();
+        assertPass(program, ra);
+
+        // update program with the new RA
+        ipClientCallback.resetApfProgramWait();
+        apfFilter.pretendPacketReceived(ra);
+        program = ipClientCallback.getApfProgram();
+
+        // assert program was updated and new lifetimes were taken into account.
+        assertDrop(program, ra);
+    }
+
     /**
      * Call the APF interpreter to run {@code program} on {@code packet} with persistent memory
      * segment {@data} pretending the filter was installed {@code filter_age} seconds ago.
