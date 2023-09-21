@@ -72,7 +72,6 @@ import com.android.net.module.util.netlink.NetlinkUtils;
 import com.android.net.module.util.netlink.StructInetDiagMsg;
 import com.android.net.module.util.netlink.StructNlMsgHdr;
 import com.android.networkstack.apishim.NetworkShimImpl;
-import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 
 import java.io.FileDescriptor;
@@ -199,9 +198,6 @@ public class TcpSocketTracker {
         mNetworkMark = (parcel != null) ? parcel.mark : NetlinkUtils.UNKNOWN_MARK;
         mNetworkMask = (parcel != null) ? parcel.mask : NetlinkUtils.NULL_MASK;
 
-        // Request tcp info from NetworkStack directly needs extra SELinux permission added after Q
-        // release.
-        if (!mDependencies.isTcpInfoParsingSupported()) return;
         // Build SocketDiag messages.
         for (final int family : ADDRESS_FAMILIES) {
             mSockDiagMsg.put(
@@ -231,7 +227,6 @@ public class TcpSocketTracker {
      * @Return if this polling request is sent to kernel and executes successfully or not.
      */
     public boolean pollSocketsInfo() {
-        if (!mDependencies.isTcpInfoParsingSupported()) return false;
         // Traffic will be restricted in doze mode. TCP info may not reflect the correct network
         // behavior.
         // TODO: Traffic may be restricted by other reason. Get the restriction info from bpf in T+.
@@ -430,8 +425,6 @@ public class TcpSocketTracker {
      * statemachine thread of NetworkMonitor.
      */
     public boolean isDataStallSuspected() {
-        if (!mDependencies.isTcpInfoParsingSupported()) return false;
-
         // Skip checking data stall since the traffic will be restricted and it will not be real
         // network stall.
         // TODO: Traffic may be restricted by other reason. Get the restriction info from bpf in T+.
@@ -481,7 +474,6 @@ public class TcpSocketTracker {
      * @return the latest packet fail percentage. -1 denotes that there is no available data.
      */
     public int getLatestPacketFailPercentage() {
-        if (!mDependencies.isTcpInfoParsingSupported()) return -1;
         // Only return fail rate if device sent enough packets.
         if (getSentSinceLastRecv() < getMinPacketsThreshold()) return -1;
         return mLatestPacketFailPercentage;
@@ -492,13 +484,11 @@ public class TcpSocketTracker {
      * between each polling period, not an accurate number.
      */
     public int getSentSinceLastRecv() {
-        if (!mDependencies.isTcpInfoParsingSupported()) return -1;
         return mSentSinceLastRecv;
     }
 
     /** Return the number of the packets received in the latest polling cycle. */
     public int getLatestReceivedCount() {
-        if (!mDependencies.isTcpInfoParsingSupported()) return -1;
         return mLatestReceivedCount;
     }
 
@@ -545,10 +535,6 @@ public class TcpSocketTracker {
 
     /** Stops monitoring and releases resources. */
     public void quit() {
-        // Do not need to unregister receiver and listener since registration is skipped
-        // in the constructor.
-        if (!mDependencies.isTcpInfoParsingSupported()) return;
-
         mDependencies.removeDeviceConfigChangedListener(mConfigListener);
         mDependencies.removeBroadcastReceiver(mDeviceIdleReceiver);
     }
@@ -719,15 +705,6 @@ public class TcpSocketTracker {
         public int getDeviceConfigPropertyInt(@NonNull final String namespace,
                 @NonNull final String name, final int defaultValue) {
             return DeviceConfigUtils.getDeviceConfigPropertyInt(namespace, name, defaultValue);
-        }
-
-        /**
-         * Return if request tcp info via netlink socket is supported or not.
-         */
-        public boolean isTcpInfoParsingSupported() {
-            // Request tcp info from NetworkStack directly needs extra SELinux permission added
-            // after Q release.
-            return ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q);
         }
 
         /**
