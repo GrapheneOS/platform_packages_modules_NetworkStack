@@ -1069,14 +1069,15 @@ public class ApfFilter {
                     // go/apf-ra-filter.
                     if (section.lifetime == 0) {
                         // Case 1) old lft == 0
-                        //
-                        // a) in the presence of a min value.
-                        // if lft >= min -> PASS
-                        //
-                        // b) if min is 0 / there is no min value.
-                        // if lft > 0 -> PASS
-                        int minLft = Math.max(section.min, 1);
-                        gen.addJumpIfR0GreaterThan(minLft - 1, nextFilterLabel);
+                        if (section.min > 0) {
+                            // a) in the presence of a min value.
+                            // if lft >= min -> PASS
+                            gen.addJumpIfR0GreaterThan(section.min - 1, nextFilterLabel);
+                        } else {
+                            // b) if min is 0 / there is no min value.
+                            // if lft > 0 -> PASS
+                            gen.addJumpIfR0GreaterThan(0, nextFilterLabel);
+                        }
                     } else if (section.min == 0) {
                         // Case 2b) section is not affected by any minimum.
                         //
