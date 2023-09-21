@@ -17,7 +17,9 @@
 package android.net.dhcp6;
 
 import static android.net.dhcp6.Dhcp6Packet.PrefixDelegation;
+import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_INET6;
+import static android.system.OsConstants.IFA_F_NODAD;
 import static android.system.OsConstants.IPPROTO_UDP;
 import static android.system.OsConstants.RT_SCOPE_UNIVERSE;
 import static android.system.OsConstants.SOCK_DGRAM;
@@ -31,6 +33,7 @@ import static com.android.net.module.util.NetworkStackConstants.RFC7421_PREFIX_L
 import static com.android.networkstack.apishim.ConstantsShim.IFA_F_MANAGETEMPADDR;
 import static com.android.networkstack.apishim.ConstantsShim.IFA_F_NOPREFIXROUTE;
 import static com.android.networkstack.util.NetworkStackUtils.createInet6AddressFromEui64;
+import static com.android.networkstack.util.NetworkStackUtils.macAddressToEui64;
 
 import android.content.Context;
 import android.net.IpPrefix;
@@ -51,6 +54,7 @@ import com.android.internal.util.HexDump;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.internal.util.WakeupMessage;
+import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.PacketReader;
 import com.android.net.module.util.netlink.NetlinkUtils;
@@ -118,6 +122,7 @@ public class Dhcp6Client extends StateMachine {
     @Nullable private byte[] mServerDuid;
 
     // State variables.
+    @NonNull private final Dependencies mDependencies;
     @NonNull private final Context mContext;
     @NonNull private final Random mRandom;
     @NonNull private final StateMachine mController;
@@ -139,15 +144,30 @@ public class Dhcp6Client extends StateMachine {
     private State mRenewState = new RenewState();
     private State mRebindState = new RebindState();
 
+    /**
+     * Encapsulates Dhcp6Client depencencies that's used for unit testing and
+     * integration testing.
+     */
+    public static class Dependencies {
+        /**
+         * Read an integer DeviceConfig property.
+         */
+        public int getDeviceConfigPropertyInt(String name, int defaultValue) {
+            return DeviceConfigUtils.getDeviceConfigPropertyInt(NAMESPACE_CONNECTIVITY, name,
+                    defaultValue);
+        }
+    }
+
     private WakeupMessage makeWakeupMessage(String cmdName, int cmd) {
         cmdName = Dhcp6Client.class.getSimpleName() + "." + mIface.name + "." + cmdName;
         return new WakeupMessage(mContext, getHandler(), cmdName, cmd);
     }
 
     private Dhcp6Client(@NonNull final Context context, @NonNull final StateMachine controller,
-            @NonNull final InterfaceParams iface) {
+            @NonNull final InterfaceParams iface, @NonNull final Dependencies deps) {
         super(TAG, controller.getHandler());
 
+        mDependencies = deps;
         mContext = context;
         mController = controller;
         mIface = iface;
@@ -181,8 +201,9 @@ public class Dhcp6Client extends StateMachine {
      * Make a Dhcp6Client instance.
      */
     public static Dhcp6Client makeDhcp6Client(@NonNull final Context context,
-            @NonNull final StateMachine controller, @NonNull final InterfaceParams ifParams) {
-        final Dhcp6Client client = new Dhcp6Client(context, controller, ifParams);
+            @NonNull final StateMachine controller, @NonNull final InterfaceParams ifParams,
+            @NonNull final Dependencies deps) {
+        final Dhcp6Client client = new Dhcp6Client(context, controller, ifParams, deps);
         client.start();
         return client;
     }
@@ -271,13 +292,53 @@ public class Dhcp6Client extends StateMachine {
     }
 
     private void scheduleLeaseTimers() {
+        // TODO: validate t1, t2, valid and preferred lifetimes before the timers are scheduled to
+        // prevent packet storms due to low timeouts.
+        int renewTimeout = mReply.t1;
+        int rebindTimeout = mReply.t2;
+        final long expirationTimeout = mReply.ipo.valid;
+
+        // rfc8415#section-14.2: if t1 and / or t2 are 0, the client chooses an appropriate value.
+        // rfc8415#section-21.21: Recommended values for T1 and T2 are 0.5 and 0.8 times the
+        // shortest preferred lifetime of the prefixes in the IA_PD that the server is willing to
+        // extend, respectively.
+        if (renewTimeout == 0) {
+            renewTimeout = (int) (mReply.ipo.preferred * 0.5);
+        }
+        if (rebindTimeout == 0) {
+            rebindTimeout = (int) (mReply.ipo.preferred * 0.8);
+        }
+
+        // Note: message validation asserts that the received t1 <= t2 if both t1 > 0 and t2 > 0.
+        // However, if t1 or t2 are 0, it is possible for renewTimeout to become larger than
+        // rebindTimeout (and similarly, rebindTimeout to become larger than expirationTimeout).
+        // For example: t1 = 0, t2 = 40, valid lft = 100 results in renewTimeout = 50, and
+        // rebindTimeout = 40. Hence, their correct order must be asserted below.
+
+        // If timeouts happen to coincide or are out of order, the former (in respect to the
+        // specified provisioning lifecycle) can be skipped. This also takes care of the case where
+        // the server sets t1 == t2 == valid lft, which indicates that the IA cannot be renewed, so
+        // there is no point in trying.
+        if (renewTimeout >= rebindTimeout) {
+            // skip RENEW
+            renewTimeout = 0;
+        }
+        if (rebindTimeout >= expirationTimeout) {
+            // skip REBIND
+            rebindTimeout = 0;
+        }
+
         final long now = SystemClock.elapsedRealtime();
-        mRenewAlarm.schedule(now + mReply.t1 * (long) SECONDS);
-        mRebindAlarm.schedule(now + mReply.t2 * (long) SECONDS);
-        mExpiryAlarm.schedule(now + mReply.ipo.valid * (long) SECONDS);
-        Log.d(TAG, "Scheduling IA_PD renewal in " + mReply.t1 + "s");
-        Log.d(TAG, "Scheduling IA_PD rebind in " + mReply.t2 + "s");
-        Log.d(TAG, "Scheduling IA_PD expiry in " + mReply.ipo.valid + "s");
+        if (renewTimeout > 0) {
+            mRenewAlarm.schedule(now + renewTimeout * (long) SECONDS);
+            Log.d(TAG, "Scheduling IA_PD renewal in " + renewTimeout + "s");
+        }
+        if (rebindTimeout > 0) {
+            mRebindAlarm.schedule(now + rebindTimeout * (long) SECONDS);
+            Log.d(TAG, "Scheduling IA_PD rebind in " + rebindTimeout + "s");
+        }
+        mExpiryAlarm.schedule(now + expirationTimeout * (long) SECONDS);
+        Log.d(TAG, "Scheduling IA_PD expiry in " + expirationTimeout + "s");
     }
 
     private void notifyPrefixDelegation(int result, @Nullable final PrefixDelegation pd) {
@@ -403,11 +464,13 @@ public class Dhcp6Client extends StateMachine {
             startNewTransaction();
         }
 
+        @Override
         protected boolean sendPacket() {
             return sendSolicitPacket(buildEmptyIaPdOption());
         }
 
         // TODO: support multiple prefixes.
+        @Override
         protected void receivePacket(Dhcp6Packet packet) {
             if (!packet.isValid(mTransId, mClientDuid)) return;
             if (packet instanceof Dhcp6AdvertisePacket) {
@@ -439,10 +502,12 @@ public class Dhcp6Client extends StateMachine {
      * process the Reply message in this state.
      */
     class RequestState extends PacketRetransmittingState {
+        @Override
         protected boolean sendPacket() {
             return sendRequestPacket(buildIaPdOption(mAdvertise));
         }
 
+        @Override
         protected void receivePacket(Dhcp6Packet packet) {
             if (!(packet instanceof Dhcp6ReplyPacket)) return;
             if (!packet.isValid(mTransId, mClientDuid)) return;
@@ -516,8 +581,8 @@ public class Dhcp6Client extends StateMachine {
             // We don't need to remember IPv6 addresses that need to extend the lifetime every
             // time it enters BoundState.
             final Inet6Address address = createInet6AddressFromEui64(prefix,
-                    mIface.macAddr.toByteArray());
-            final int flags = IFA_F_NOPREFIXROUTE | IFA_F_MANAGETEMPADDR;
+                    macAddressToEui64(mIface.macAddr));
+            final int flags = IFA_F_NOPREFIXROUTE | IFA_F_MANAGETEMPADDR | IFA_F_NODAD;
             final long now = SystemClock.elapsedRealtime();
             final long deprecationTime = now + mReply.ipo.preferred;
             final long expirationTime = now + mReply.ipo.valid;
@@ -558,6 +623,7 @@ public class Dhcp6Client extends StateMachine {
             startNewTransaction();
         }
 
+        @Override
         protected void receivePacket(Dhcp6Packet packet) {
             if (!(packet instanceof Dhcp6ReplyPacket)) return;
             if (!packet.isValid(mTransId, mClientDuid)) return;
@@ -606,6 +672,7 @@ public class Dhcp6Client extends StateMachine {
             }
         }
 
+        @Override
         protected boolean sendPacket() {
             return sendRenewPacket(buildIaPdOption(mReply));
         }
@@ -617,6 +684,7 @@ public class Dhcp6Client extends StateMachine {
      * update other configuration parameters.
      */
     class RebindState extends ReacquireState {
+        @Override
         protected boolean sendPacket() {
             return sendRebindPacket(buildIaPdOption(mReply));
         }

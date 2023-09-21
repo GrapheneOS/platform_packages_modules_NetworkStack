@@ -18,25 +18,20 @@ package com.android.networkstack.netlink;
 
 import static android.net.util.DataStallUtils.CONFIG_TCP_PACKETS_FAIL_PERCENTAGE;
 import static android.net.util.DataStallUtils.DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE;
+import static android.os.PowerManager.ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_INET;
-
 import static com.android.net.module.util.NetworkStackConstants.DNS_OVER_TLS_PORT;
-
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
 import static junit.framework.Assert.assertTrue;
-
-import static org.junit.Assume.assumeTrue;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import android.content.BroadcastReceiver;
@@ -58,9 +53,7 @@ import androidx.test.runner.AndroidJUnit4;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.netlink.NetlinkUtils;
 import com.android.net.module.util.netlink.StructNlMsgHdr;
-import com.android.networkstack.apishim.ConstantsShim;
 import com.android.testutils.DevSdkIgnoreRule;
-import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
 
 import libcore.util.HexEncoding;
@@ -145,12 +138,12 @@ public class TcpSocketTrackerTest {
         mOldWtfHandler =
                 Log.setWtfHandler((tag, what, system) -> Log.e(tag, what.getMessage(), what));
         when(mDependencies.getNetd()).thenReturn(mNetd);
-        when(mDependencies.isTcpInfoParsingSupported()).thenReturn(true);
         when(mDependencies.connectToKernel()).thenReturn(new FileDescriptor());
         when(mDependencies.getDeviceConfigPropertyInt(
                 eq(NAMESPACE_CONNECTIVITY),
                 eq(CONFIG_TCP_PACKETS_FAIL_PERCENTAGE),
                 anyInt())).thenReturn(DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE);
+        when(mDependencies.shouldDisableInLightDoze()).thenReturn(true);
 
         when(mNetd.getFwmarkForNetwork(eq(TEST_NETID1)))
                 .thenReturn(makeMarkMaskParcel(NETID_MASK, TEST_NETID1_FWMARK));
@@ -211,15 +204,10 @@ public class TcpSocketTrackerTest {
         assertFalse(NetlinkUtils.enoughBytesRemainForValidNlMsg(buffer));
     }
 
-    @Test @IgnoreUpTo(Build.VERSION_CODES.Q) // TCP info parsing is not supported on Q
+    @Test
     public void testPollSocketsInfo() throws Exception {
-        // This test requires shims that provide API 30 access
-        assumeTrue(ConstantsShim.VERSION >= Build.VERSION_CODES.R);
-        when(mDependencies.isTcpInfoParsingSupported()).thenReturn(false);
         final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
-        assertFalse(tst.pollSocketsInfo());
 
-        when(mDependencies.isTcpInfoParsingSupported()).thenReturn(true);
         // No enough bytes remain for a valid NlMsg.
         final ByteBuffer invalidBuffer = ByteBuffer.allocate(1);
         invalidBuffer.order(ByteOrder.nativeOrder());
@@ -315,28 +303,6 @@ public class TcpSocketTrackerTest {
     }
 
     @Test
-    public void testTcpInfoParsingUnsupported() {
-        doReturn(false).when(mDependencies).isTcpInfoParsingSupported();
-        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
-        verify(mDependencies).getNetd();
-
-        assertFalse(tst.pollSocketsInfo());
-        assertEquals(-1, tst.getLatestPacketFailPercentage());
-        assertEquals(-1, tst.getLatestReceivedCount());
-        assertEquals(-1, tst.getSentSinceLastRecv());
-        assertFalse(tst.isDataStallSuspected());
-
-        verify(mDependencies, atLeastOnce()).isTcpInfoParsingSupported();
-        verifyNoMoreInteractions(mDependencies);
-
-        // Verify that no un-registration for the device configuration listener and broadcast
-        // receiver if TcpInfo parsing is not supported.
-        tst.quit();
-        verify(mDependencies, never()).removeDeviceConfigChangedListener(any());
-        verify(mDependencies, never()).removeBroadcastReceiver(any());
-    }
-
-    @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
     public void testTcpInfoParsingWithMultipleMsgs() throws Exception {
         final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
 
@@ -480,10 +446,17 @@ public class TcpSocketTrackerTest {
         final ByteBuffer bb = ByteBuffer.allocate(size);
         bb.order(order);
         switch (size) {
-            case Short.BYTES -> bb.putShort((short) v);
-            case Integer.BYTES -> bb.putInt((int) v);
-            case Long.BYTES -> bb.putLong(v);
-            default -> throw new IllegalArgumentException("Unsupported size: " + size);
+            case Short.BYTES:
+                bb.putShort((short) v);
+                break;
+            case Integer.BYTES:
+                bb.putInt((int) v);
+                break;
+            case Long.BYTES:
+                bb.putLong(v);
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported size: " + size);
         }
         String s = "";
         for (byte b : bb.array()) {
@@ -576,16 +549,13 @@ public class TcpSocketTrackerTest {
                 "0000000000000000"; // deliverRate = 0
     }
 
-    @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
+    @Test
     public void testTcpInfoParsingWithDozeMode() throws Exception {
-        // This test requires shims that provide API 30 access
-        assumeTrue(ConstantsShim.VERSION >= Build.VERSION_CODES.R);
-
         final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
         final ArgumentCaptor<BroadcastReceiver> receiverCaptor =
                 ArgumentCaptor.forClass(BroadcastReceiver.class);
 
-        verify(mDependencies).addDeviceIdleReceiver(receiverCaptor.capture());
+        verify(mDependencies).addDeviceIdleReceiver(receiverCaptor.capture(), anyBoolean());
         setupNormalTestTcpInfo();
         assertTrue(tst.pollSocketsInfo());
 
@@ -593,36 +563,79 @@ public class TcpSocketTrackerTest {
         when(mDependencies.getDeviceConfigPropertyInt(any(), eq(CONFIG_TCP_PACKETS_FAIL_PERCENTAGE),
                 anyInt())).thenReturn(40);
 
-        // Trigger a config update
+        // Trigger a config update.
         tst.mConfigListener.onPropertiesChanged(null /* properties */);
         assertEquals(10, tst.getSentSinceLastRecv());
         assertEquals(50, tst.getLatestPacketFailPercentage());
         assertTrue(tst.isDataStallSuspected());
 
-        // Enable doze mode
+        // Enable doze mode, verify counters are not updated.
         doReturn(true).when(mPowerManager).isDeviceIdleMode();
         final BroadcastReceiver receiver = receiverCaptor.getValue();
         receiver.onReceive(mContext, new Intent(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED));
         assertFalse(tst.pollSocketsInfo());
+        assertEquals(10, tst.getSentSinceLastRecv());
+        assertEquals(50, tst.getLatestPacketFailPercentage());
         assertFalse(tst.isDataStallSuspected());
+    }
+
+    @Test @IgnoreUpTo(Build.VERSION_CODES.S_V2)
+    public void testTcpInfoDisableParsingWithLightDozeMode_enabled() throws Exception {
+        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
+        final ArgumentCaptor<BroadcastReceiver> receiverCaptor =
+                ArgumentCaptor.forClass(BroadcastReceiver.class);
+
+        // Enable light doze mode with 1 netlink message.
+        verify(mDependencies).addDeviceIdleReceiver(receiverCaptor.capture(), anyBoolean());
+        final BroadcastReceiver receiver = receiverCaptor.getValue();
+        doReturn(true).when(mPowerManager).isDeviceLightIdleMode();
+        receiver.onReceive(mContext, new Intent(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED));
+        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(4, 10)
+                + NLMSG_DONE_HEX)).when(mDependencies).recvMessage(any());
+
+        // Verify counters are not updated.
+        assertFalse(tst.pollSocketsInfo());
+        assertEquals(0, tst.getSentSinceLastRecv());
+        // -1 if not enough packets.
+        assertEquals(-1, tst.getLatestPacketFailPercentage());
+        assertFalse(tst.isDataStallSuspected());
+
+        // Disable light doze mode, verify polling are processed and counters are updated.
+        doReturn(false).when(mPowerManager).isDeviceLightIdleMode();
+        receiver.onReceive(mContext, new Intent(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED));
+        assertTrue(tst.pollSocketsInfo());
+        assertEquals(10, tst.getSentSinceLastRecv());
+        // Lost 4 + default 5 retrans / 10 sent.
+        assertEquals(90, tst.getLatestPacketFailPercentage());
+        assertTrue(tst.isDataStallSuspected());
+    }
+
+    @Test @IgnoreUpTo(Build.VERSION_CODES.S_V2)
+    public void testTcpInfoDisableParsingWithLightDozeMode_disabled() throws Exception {
+        when(mDependencies.shouldDisableInLightDoze()).thenReturn(false);
+        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
+        final ArgumentCaptor<BroadcastReceiver> receiverCaptor =
+                ArgumentCaptor.forClass(BroadcastReceiver.class);
+
+        // Enable light doze mode with 1 netlink message.
+        verify(mDependencies).addDeviceIdleReceiver(receiverCaptor.capture(), anyBoolean());
+        final BroadcastReceiver receiver = receiverCaptor.getValue();
+        doReturn(true).when(mPowerManager).isDeviceLightIdleMode();
+        receiver.onReceive(mContext, new Intent(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED));
+        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(4, 10)
+                + NLMSG_DONE_HEX)).when(mDependencies).recvMessage(any());
+
+        // Verify TcpInfo is still processed.
+        assertTrue(tst.pollSocketsInfo());
+        assertEquals(10, tst.getSentSinceLastRecv());
+        assertEquals(90, tst.getLatestPacketFailPercentage());
+        assertTrue(tst.isDataStallSuspected());
     }
 
     private void setupNormalTestTcpInfo() throws Exception {
         final ByteBuffer tcpBufferV6 = getByteBuffer(TEST_RESPONSE_BYTES);
         final ByteBuffer tcpBufferV4 = getByteBuffer(TEST_RESPONSE_BYTES);
         doReturn(tcpBufferV6, tcpBufferV4).when(mDependencies).recvMessage(any());
-    }
-
-    @Test @IgnoreAfter(Build.VERSION_CODES.Q)
-    public void testTcpInfoParsingNotSupportedOnQ() {
-        assertFalse(new TcpSocketTracker.Dependencies(mContext)
-                .isTcpInfoParsingSupported());
-    }
-
-    @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
-    public void testTcpInfoParsingSupportedFromR() {
-        assertTrue(new TcpSocketTracker.Dependencies(mContext)
-                .isTcpInfoParsingSupported());
     }
 
     private static final String BAD_DIAG_MSG_HEX =
@@ -652,10 +665,8 @@ public class TcpSocketTrackerTest {
     private static final byte[] BAD_SOCK_DIAG_MSG_BYTES =
         HexEncoding.decode(BAD_DIAG_MSG_HEX.toCharArray(), false);
 
-    @Test @IgnoreUpTo(Build.VERSION_CODES.Q) // TCP info parsing is not supported on Q
+    @Test
     public void testPollSocketsInfo_BadFormat() throws Exception {
-        // This test requires shims that provide API 30 access
-        assumeTrue(ConstantsShim.VERSION >= Build.VERSION_CODES.R);
         final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
         setupNormalTestTcpInfo();
         assertTrue(tst.pollSocketsInfo());

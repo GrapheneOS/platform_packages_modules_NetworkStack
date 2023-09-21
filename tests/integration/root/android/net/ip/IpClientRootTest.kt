@@ -28,7 +28,6 @@ import android.net.ipmemorystore.Status
 import android.net.networkstack.TestNetworkStackServiceClient
 import android.os.Process
 import android.provider.DeviceConfig
-import android.util.ArrayMap
 import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
 import com.android.net.module.util.DeviceConfigUtils
@@ -138,8 +137,6 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
         }
     }
 
-    private val originalPropertyValues = ArrayMap<String, String>()
-
     /**
      * Wrapper class for IIpClientCallbacks.
      *
@@ -151,21 +148,6 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
         // asBinder is implemented by both base class and delegate: specify explicitly
         override fun asBinder() = super.asBinder()
         override fun getInterfaceVersion() = IIpClientCallbacks.VERSION
-    }
-
-    @After
-    fun tearDownDeviceConfigProperties() {
-        if (testSkipped()) return
-        automation.adoptShellPermissionIdentity(READ_DEVICE_CONFIG, WRITE_DEVICE_CONFIG)
-        try {
-            for ((key, value) in originalPropertyValues.entries) {
-                if (key == null) continue
-                DeviceConfig.setProperty(DeviceConfig.NAMESPACE_CONNECTIVITY, key,
-                        value, false /* makeDefault */)
-            }
-        } finally {
-            automation.dropShellPermissionIdentity()
-        }
     }
 
     @After
@@ -195,22 +177,6 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
         return ipClientCaptor.value
     }
 
-    private fun setDeviceConfigProperty(name: String, value: String) {
-        automation.adoptShellPermissionIdentity(READ_DEVICE_CONFIG, WRITE_DEVICE_CONFIG)
-        try {
-            // Do not use computeIfAbsent as it would overwrite null values,
-            // property originally unset.
-            if (!originalPropertyValues.containsKey(name)) {
-                originalPropertyValues[name] =
-                        DeviceConfig.getProperty(DeviceConfig.NAMESPACE_CONNECTIVITY, name)
-            }
-            DeviceConfig.setProperty(DeviceConfig.NAMESPACE_CONNECTIVITY, name, value,
-                    false /* makeDefault */)
-        } finally {
-            automation.dropShellPermissionIdentity()
-        }
-    }
-
     override fun setFeatureEnabled(feature: String, enabled: Boolean) {
         // The feature is enabled if the flag is lower than the package version.
         // Package versions follow a standard format with 9 digits.
@@ -219,15 +185,10 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
         setDeviceConfigProperty(feature, if (enabled) "1" else "999999999")
     }
 
-    override fun setDeviceConfigProperty(name: String, value: Int) {
-        setDeviceConfigProperty(name, value.toString())
-    }
-
     override fun isFeatureEnabled(name: String, defaultEnabled: Boolean): Boolean {
         automation.adoptShellPermissionIdentity(READ_DEVICE_CONFIG, WRITE_DEVICE_CONFIG)
         try {
-            return DeviceConfigUtils.isFeatureEnabled(mContext, DeviceConfig.NAMESPACE_CONNECTIVITY,
-                    name, defaultEnabled)
+            return DeviceConfigUtils.isNetworkStackFeatureEnabled(mContext, name, defaultEnabled)
         } finally {
             automation.dropShellPermissionIdentity()
         }

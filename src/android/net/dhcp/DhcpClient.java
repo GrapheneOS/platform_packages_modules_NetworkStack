@@ -101,11 +101,11 @@ import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.NetworkStackConstants;
 import com.android.net.module.util.PacketReader;
+import com.android.net.module.util.arp.ArpPacket;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.apishim.SocketUtilsShimImpl;
 import com.android.networkstack.apishim.common.ShimUtils;
-import com.android.networkstack.arp.ArpPacket;
 import com.android.networkstack.metrics.IpProvisioningMetrics;
 import com.android.networkstack.util.NetworkStackUtils;
 
@@ -446,12 +446,11 @@ public class DhcpClient extends StateMachine {
 
         /**
          * Return whether a feature guarded by a feature flag is enabled.
-         * @see DeviceConfigUtils#isFeatureEnabled(Context, String, String)
+         * @see DeviceConfigUtils#isNetworkStackFeatureEnabled(Context, String, boolean)
          */
         public boolean isFeatureEnabled(final Context context, final String name,
                 boolean defaultEnabled) {
-            return DeviceConfigUtils.isFeatureEnabled(context, NAMESPACE_CONNECTIVITY, name,
-                    defaultEnabled);
+            return DeviceConfigUtils.isNetworkStackFeatureEnabled(context, name, defaultEnabled);
         }
 
         /**

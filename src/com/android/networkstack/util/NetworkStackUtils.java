@@ -233,25 +233,12 @@ public class NetworkStackUtils {
             "ipclient_garp_na_roaming_version";
 
     /**
-     * Experiment flag to enable parsing netlink events from kernel directly instead from netd aidl
-     * interface.
-     */
-    public static final String IPCLIENT_PARSE_NETLINK_EVENTS_VERSION =
-            "ipclient_parse_netlink_events_version";
-
-    /**
      * Experiment flag to check if an on-link IPv6 link local DNS is acceptable. The default flag
      * value is true, just add this flag for A/B testing to see if this fix works as expected via
      * experiment rollout.
      */
     public static final String IPCLIENT_ACCEPT_IPV6_LINK_LOCAL_DNS_VERSION =
             "ipclient_accept_ipv6_link_local_dns_version";
-
-    /**
-     * Experiment flag to disable accept_ra parameter when IPv6 provisioning loss happens due to
-     * the default route has gone.
-     */
-    public static final String IPCLIENT_DISABLE_ACCEPT_RA_VERSION = "ipclient_disable_accept_ra";
 
     /**
      * Experiment flag to enable "mcast_resolicit" neighbor parameter in IpReachabilityMonitor,
@@ -275,17 +262,32 @@ public class NetworkStackUtils {
             "ip_reachability_ignore_incompleted_ipv6_default_router_version";
 
     /**
-     * Experiment flag to use the RA lifetime calculation fix in aosp/2276160. It can be disabled
-     * if OEM finds additional battery usage and want to use the old buggy behavior again.
-     */
-    public static final String APF_USE_RA_LIFETIME_CALCULATION_FIX_VERSION =
-            "apf_use_ra_lifetime_calculation_fix_version";
-
-    /**
      * Experiment flag to enable DHCPv6 Prefix Delegation(RFC8415) in IpClient.
      */
     public static final String IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION =
             "ipclient_dhcpv6_prefix_delegation_version";
+
+    /**** BEGIN Feature Kill Switch Flags ****/
+
+    /**
+     * Kill switch flag to disable the feature of parsing netlink events from kernel directly
+     * instead from netd aidl interface by flag push.
+     */
+    public static final String IPCLIENT_PARSE_NETLINK_EVENTS_FORCE_DISABLE =
+            "ipclient_parse_netlink_events_force_disable";
+
+    /**
+     * Kill switch flag to disable the feature of ignoring any individual RA section with lifetime
+     * below accept_ra_min_lft sysctl.
+     */
+    public static final String IPCLIENT_IGNORE_LOW_RA_LIFETIME_FORCE_DISABLE =
+            "ipclient_ignore_low_ra_lifetime_force_disable";
+
+    /**
+     * Kill switch flag to disable the feature of skipping Tcp socket info polling when light
+     * doze mode is enabled.
+     */
+    public static final String SKIP_TCP_POLL_IN_LIGHT_DOZE = "skip_tcp_poll_in_light_doze_mode";
 
     static {
         System.loadLibrary("networkstackutilsjni");
