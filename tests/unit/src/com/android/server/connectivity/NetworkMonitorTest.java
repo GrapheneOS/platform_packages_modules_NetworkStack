@@ -49,7 +49,6 @@ import static android.net.util.DataStallUtils.DATA_STALL_EVALUATION_TYPE_TCP;
 import static android.net.util.DataStallUtils.DEFAULT_DATA_STALL_EVALUATION_TYPES;
 import static android.os.Build.VERSION_CODES.S_V2;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
-
 import static com.android.net.module.util.NetworkStackConstants.TEST_CAPTIVE_PORTAL_HTTPS_URL;
 import static com.android.net.module.util.NetworkStackConstants.TEST_CAPTIVE_PORTAL_HTTP_URL;
 import static com.android.net.module.util.NetworkStackConstants.TEST_URL_EXPIRATION_TIME;
@@ -64,10 +63,11 @@ import static com.android.networkstack.util.NetworkStackUtils.DEFAULT_CAPTIVE_PO
 import static com.android.networkstack.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION;
 import static com.android.server.connectivity.NetworkMonitor.INITIAL_REEVALUATE_DELAY_MS;
 import static com.android.server.connectivity.NetworkMonitor.extractCharset;
-
+import static java.lang.System.currentTimeMillis;
+import static java.util.Collections.singletonList;
+import static java.util.stream.Collectors.toList;
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
-
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
@@ -95,10 +95,6 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-
-import static java.lang.System.currentTimeMillis;
-import static java.util.Collections.singletonList;
-import static java.util.stream.Collectors.toList;
 
 import android.annotation.NonNull;
 import android.annotation.SuppressLint;
@@ -603,10 +599,6 @@ public class NetworkMonitorTest {
                 0, mCreatedNetworkMonitors.size());
         assertEquals("BroadcastReceiver still registered after disconnect",
                 0, mRegisteredReceivers.size());
-        if (mTstDependencies.isTcpInfoParsingSupported()) {
-            verify(mTstDependencies, times(networkMonitors.length))
-                    .removeDeviceConfigChangedListener(any());
-        }
     }
 
     private void initHttpConnection(HttpURLConnection connection) {
@@ -707,7 +699,6 @@ public class NetworkMonitorTest {
         setNetworkCapabilities(nm, nc);
         HandlerUtils.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
         mCreatedNetworkMonitors.add(nm);
-        doReturn(false).when(mTstDependencies).isTcpInfoParsingSupported();
 
         return nm;
     }
@@ -1859,7 +1850,6 @@ public class NetworkMonitorTest {
     public void testIsDataStall_SkipEvaluateOnValidationNotRequiredNetwork() {
         // Make DNS and TCP stall condition satisfied.
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_DNS | DATA_STALL_EVALUATION_TYPE_TCP);
-        doReturn(true).when(mTstDependencies).isTcpInfoParsingSupported();
         doReturn(0).when(mTst).getLatestReceivedCount();
         doReturn(true).when(mTst).isDataStallSuspected();
         final WrappedNetworkMonitor nm = makeMonitor(CELL_NO_INTERNET_CAPABILITIES);
@@ -1894,7 +1884,6 @@ public class NetworkMonitorTest {
 
     @Test
     public void testIsDataStall_EvaluationTcp() throws Exception {
-        doReturn(true).when(mTstDependencies).isTcpInfoParsingSupported();
         // Evaluate TCP only. Expect ignoring DNS signal.
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
         WrappedNetworkMonitor wrappedMonitor = makeMonitor(CELL_METERED_CAPABILITIES);
@@ -2296,7 +2285,6 @@ public class NetworkMonitorTest {
     @Test
     public void testDataStall_setOpportunisticMode() {
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
-        doReturn(true).when(mTstDependencies).isTcpInfoParsingSupported();
         WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         InOrder inOrder = inOrder(mTst);
         // Initialized with default value.
@@ -2402,7 +2390,6 @@ public class NetworkMonitorTest {
     }
 
     private void setupTcpDataStall() {
-        doReturn(true).when(mTstDependencies).isTcpInfoParsingSupported();
         doReturn(0).when(mTst).getLatestReceivedCount();
         doReturn(TEST_TCP_FAIL_RATE).when(mTst).getLatestPacketFailPercentage();
         doReturn(TEST_TCP_PACKET_COUNT).when(mTst).getSentSinceLastRecv();
