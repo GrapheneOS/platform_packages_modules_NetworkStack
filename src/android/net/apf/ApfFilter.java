@@ -85,7 +85,6 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -949,8 +948,6 @@ public class ApfFilter {
         MatchType matches(Ra newRa) {
             // Does their size match?
             if (newRa.mPacket.capacity() != mPacket.capacity()) return MatchType.NO_MATCH;
-            // Unlikely, but cheap.
-            if (newRa.mPacketSections.size() != mPacketSections.size()) return MatchType.NO_MATCH;
 
             // Check if all MATCH sections are byte-identical.
             final byte[] newPacket = newRa.mPacket.array();
@@ -962,29 +959,89 @@ public class ApfFilter {
                 }
             }
 
-            final Iterator<PacketSection> itNew = newRa.mPacketSections.iterator();
-            final Iterator<PacketSection> itOld = mPacketSections.iterator();
+            // Apply APF lifetime matching to LIFETIME sections and decide whether a packet should
+            // be processed (MATCH_PASS) or ignored (MATCH_DROP). This logic is needed to
+            // consistently process / ignore packets no matter the current state of the APF program.
+            // Note that userspace has no control (or knowledge) over when the APF program is
+            // running.
+            for (PacketSection section : mPacketSections) {
+                if (section.type != PacketSection.Type.LIFETIME) continue;
 
-            // Consider if APF would drop this RA if it were active to see whether the tracked RA
-            // and program should be updated. This essentially duplicates the logic of the APF
-            // bytecode.
-            while (itNew.hasNext() && itOld.hasNext()) {
-                final PacketSection newSec = itNew.next();
-                final PacketSection oldSec = itOld.next();
+                // the lifetime of the new RA.
+                long lft = 0;
+                switch (section.length) {
+                    // section.length is guaranteed to be 2 or 4.
+                    case 2: lft = getUint16(newRa.mPacket, section.start); break;
+                    case 4: lft = getUint32(newRa.mPacket, section.start); break;
+                }
 
-                if (newSec.type != oldSec.type) return MatchType.NO_MATCH;
-                if (newSec.type != PacketSection.Type.LIFETIME) continue;
-
-                // if lft == 0 && oldLft != 0   -> PASS
-                if (newSec.lifetime == 0 && oldSec.lifetime != 0) return MatchType.MATCH_PASS;
-                // if lft < sysctl              -> CONTINUE
-                if (newSec.lifetime < newSec.min) continue;
-                // if lft < (oldLft + 2) // 3   -> PASS
-                if (newSec.lifetime < (oldSec.lifetime + 2) / 3) return MatchType.MATCH_PASS;
-                // if lft > oldLft              -> PASS
-                if (newSec.lifetime > oldSec.lifetime) return MatchType.MATCH_PASS;
-                // CONTINUE
+                // WARNING: keep this in sync with Ra#generateFilterLocked()!
+                if (section.lifetime == 0) {
+                    // Case 1) old lft == 0
+                    if (section.min > 0) {
+                        // a) in the presence of a min value.
+                        // if lft >= min -> PASS
+                        // gen.addJumpIfR0GreaterThan(section.min - 1, nextFilterLabel);
+                        if (lft >= section.min) return MatchType.MATCH_PASS;
+                    } else {
+                        // b) if min is 0 / there is no min value.
+                        // if lft > 0 -> PASS
+                        // gen.addJumpIfR0GreaterThan(0, nextFilterLabel);
+                        if (lft > 0) return MatchType.MATCH_PASS;
+                    }
+                } else if (section.min == 0) {
+                    // Case 2b) section is not affected by any minimum.
+                    //
+                    // if lft < (oldLft + 2) // 3 -> PASS
+                    // if lft > oldLft            -> PASS
+                    // gen.addJumpIfR0LessThan((int) ((section.lifetime + 2) / 3),
+                    //        nextFilterLabel);
+                    if (lft < (section.lifetime + 2) / 3) return MatchType.MATCH_PASS;
+                    // gen.addJumpIfR0GreaterThan((int) section.lifetime, nextFilterLabel);
+                    if (lft > section.lifetime) return MatchType.MATCH_PASS;
+                } else if (section.lifetime < section.min) {
+                    // Case 2a) 0 < old lft < min
+                    //
+                    // if lft == 0   -> PASS
+                    // if lft >= min -> PASS
+                    // gen.addJumpIfR0Equals(0, nextFilterLabel);
+                    if (lft == 0) return MatchType.MATCH_PASS;
+                    // gen.addJumpIfR0GreaterThan(section.min - 1, nextFilterLabel);
+                    if (lft >= section.min) return MatchType.MATCH_PASS;
+                } else if (section.lifetime <= 3 * section.min) {
+                    // Case 3a) min <= old lft <= 3 * min
+                    // Note that:
+                    // "(old lft + 2) / 3 <= min" is equivalent to "old lft <= 3 * min"
+                    //
+                    // Essentially, in this range there is no "renumbering support", as the
+                    // renumbering constant of 1/3 * old lft is smaller than the minimum
+                    // lifetime accepted by the kernel / userspace.
+                    //
+                    // if lft == 0     -> PASS
+                    // if lft > oldLft -> PASS
+                    // gen.addJumpIfR0Equals(0, nextFilterLabel);
+                    if (lft == 0) return MatchType.MATCH_PASS;
+                    // gen.addJumpIfR0GreaterThan((int) section.lifetime, nextFilterLabel);
+                    if (lft > section.lifetime) return MatchType.MATCH_PASS;
+                } else {
+                    // Case 4a) otherwise
+                    //
+                    // if lft == 0                  -> PASS
+                    // if lft < min                 -> CONTINUE
+                    // if lft < (oldLft + 2) // 3   -> PASS
+                    // if lft > oldLft              -> PASS
+                    // gen.addJumpIfR0Equals(0, nextFilterLabel);
+                    if (lft == 0) return MatchType.MATCH_PASS;
+                    // gen.addJumpIfR0LessThan(section.min, continueLabel);
+                    if (lft < section.min) continue;
+                    // gen.addJumpIfR0LessThan((int) ((section.lifetime + 2) / 3),
+                    //         nextFilterLabel);
+                    if (lft < (section.lifetime + 2) / 3) return MatchType.MATCH_PASS;
+                    // gen.addJumpIfR0GreaterThan((int) section.lifetime, nextFilterLabel);
+                    if (lft > section.lifetime) return MatchType.MATCH_PASS;
+                }
             }
+
             return MatchType.MATCH_DROP;
         }
 
@@ -1065,6 +1122,7 @@ public class ApfFilter {
                         case 4: gen.addLoad32(Register.R0, section.start); break;
                     }
 
+                    // WARNING: keep this in sync with matches()!
                     // For more information on lifetime comparisons in the APF bytecode, see
                     // go/apf-ra-filter.
                     if (section.lifetime == 0) {
