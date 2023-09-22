@@ -611,6 +611,7 @@ public class NetworkMonitorTest {
         doNothing().when(connection).setReadTimeout(anyInt());
         doNothing().when(connection).setRequestProperty(any(), any());
         doNothing().when(connection).setUseCaches(anyBoolean());
+        doNothing().when(connection).disconnect();
     }
 
     private void initCallbacks(int interfaceVersion) throws Exception {
