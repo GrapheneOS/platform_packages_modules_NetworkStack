@@ -1448,7 +1448,7 @@ public class ApfTest {
 
     /** Adds to the program a no-op instruction that is one byte long. */
     private void addOneByteNoop(ApfGenerator gen) {
-        gen.addOr(0);
+        gen.addLeftShift(0);
     }
 
     @Test
