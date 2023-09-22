@@ -279,6 +279,15 @@ public class Dhcp6Client extends StateMachine {
             return baseTimer + jitter;
         }
 
+        /**
+         * Per RFC8415 section 15, each of the computations of a new RT includes a randomization
+         * factor (RAND), which is a random number chosen with a uniform distribution between -0.1
+         * and +0.1.
+         */
+        private double rand() {
+            return mRandom.nextDouble() / 5 - 0.1;
+        }
+
         protected void scheduleKick() {
             long now = SystemClock.elapsedRealtime();
             long timeout = jitterTimer(mTimer);
