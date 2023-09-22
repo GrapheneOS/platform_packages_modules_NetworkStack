@@ -105,7 +105,7 @@ import java.util.List;
  *
  * @hide
  */
-public class ApfFilter {
+public class ApfFilter implements AndroidPacketFilter {
 
     // Helper class for specifying functional filter parameters.
     public static class ApfConfiguration {

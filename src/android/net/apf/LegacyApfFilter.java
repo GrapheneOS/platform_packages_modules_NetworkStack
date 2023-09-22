@@ -104,16 +104,7 @@ import java.util.List;
  *
  * @hide
  */
-public class LegacyApfFilter {
-
-    // Helper class for specifying functional filter parameters.
-    public static class ApfConfiguration {
-        public ApfCapabilities apfCapabilities;
-        public boolean multicastFilter;
-        public boolean ieee802_3Filter;
-        public int[] ethTypeBlackList;
-        public int minRdnssLifetimeSec;
-    }
+public class LegacyApfFilter implements AndroidPacketFilter {
 
     // Enums describing the outcome of receiving an RA packet.
     private static enum ProcessRaResult {
@@ -410,8 +401,9 @@ public class LegacyApfFilter {
     private int mIPv4PrefixLength;
 
     @VisibleForTesting
-    public LegacyApfFilter(Context context, ApfConfiguration config, InterfaceParams ifParams,
-            IpClientCallbacksWrapper ipClientCallback, IpConnectivityLog log) {
+    public LegacyApfFilter(Context context, ApfFilter.ApfConfiguration config,
+            InterfaceParams ifParams, IpClientCallbacksWrapper ipClientCallback,
+            IpConnectivityLog log) {
         mApfCapabilities = config.apfCapabilities;
         mIpClientCallback = ipClientCallback;
         mInterfaceParams = ifParams;
@@ -1960,7 +1952,7 @@ public class LegacyApfFilter {
      * Create an {@link LegacyApfFilter} if {@code apfCapabilities} indicates support for packet
      * filtering using APF programs.
      */
-    public static LegacyApfFilter maybeCreate(Context context, ApfConfiguration config,
+    public static LegacyApfFilter maybeCreate(Context context, ApfFilter.ApfConfiguration config,
             InterfaceParams ifParams, IpClientCallbacksWrapper ipClientCallback) {
         if (context == null || config == null || ifParams == null) return null;
         ApfCapabilities apfCapabilities =  config.apfCapabilities;
