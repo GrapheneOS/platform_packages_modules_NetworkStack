@@ -49,6 +49,7 @@ import static android.net.util.DataStallUtils.DATA_STALL_EVALUATION_TYPE_TCP;
 import static android.net.util.DataStallUtils.DEFAULT_DATA_STALL_EVALUATION_TYPES;
 import static android.os.Build.VERSION_CODES.S_V2;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
+
 import static com.android.net.module.util.NetworkStackConstants.TEST_CAPTIVE_PORTAL_HTTPS_URL;
 import static com.android.net.module.util.NetworkStackConstants.TEST_CAPTIVE_PORTAL_HTTP_URL;
 import static com.android.net.module.util.NetworkStackConstants.TEST_URL_EXPIRATION_TIME;
@@ -63,11 +64,10 @@ import static com.android.networkstack.util.NetworkStackUtils.DEFAULT_CAPTIVE_PO
 import static com.android.networkstack.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION;
 import static com.android.server.connectivity.NetworkMonitor.INITIAL_REEVALUATE_DELAY_MS;
 import static com.android.server.connectivity.NetworkMonitor.extractCharset;
-import static java.lang.System.currentTimeMillis;
-import static java.util.Collections.singletonList;
-import static java.util.stream.Collectors.toList;
+
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
@@ -95,6 +95,10 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+
+import static java.lang.System.currentTimeMillis;
+import static java.util.Collections.singletonList;
+import static java.util.stream.Collectors.toList;
 
 import android.annotation.NonNull;
 import android.annotation.SuppressLint;
@@ -611,6 +615,7 @@ public class NetworkMonitorTest {
         doNothing().when(connection).setReadTimeout(anyInt());
         doNothing().when(connection).setRequestProperty(any(), any());
         doNothing().when(connection).setUseCaches(anyBoolean());
+        doNothing().when(connection).disconnect();
     }
 
     private void initCallbacks(int interfaceVersion) throws Exception {
@@ -1575,7 +1580,7 @@ public class NetworkMonitorTest {
         HandlerUtils.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
     }
 
-    @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
+    @Test
     public void testIsCaptivePortal_CapportApiNotSupported() throws Exception {
         // Test that on a R+ device, if NetworkStack was compiled without CaptivePortalData support
         // (built against Q), NetworkMonitor behaves as expected.
