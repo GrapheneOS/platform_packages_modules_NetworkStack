@@ -30,7 +30,6 @@ import static android.system.OsConstants.IPPROTO_UDP;
 import static android.system.OsConstants.SOCK_STREAM;
 
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ECHO_REQUEST_TYPE;
-import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_LEN;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -65,8 +64,6 @@ import android.util.Log;
 import android.util.Pair;
 
 import androidx.test.InstrumentationRegistry;
-import androidx.test.filters.SmallTest;
-import androidx.test.runner.AndroidJUnit4;
 
 import com.android.internal.util.HexDump;
 import com.android.net.module.util.DnsPacket;
@@ -84,7 +81,6 @@ import libcore.io.Streams;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -109,24 +105,25 @@ import java.util.Random;
 
 /**
  * Tests for APF program generator and interpreter.
- *
- * Build, install and run with:
- *  runtest frameworks-net -c android.net.apf.ApfTest
  */
-@RunWith(AndroidJUnit4.class)
-@SmallTest
-public class ApfTest {
+public abstract class ApfTest {
     private static final int TIMEOUT_MS = 500;
     private static final int MIN_APF_VERSION = 2;
 
     @Mock IpConnectivityLog mLog;
     @Mock Context mContext;
 
+    /**
+     * Specify which interpreter version to test.
+     */
+    protected abstract int getApfVersionToTest();
+
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         // Load up native shared library containing APF interpreter exposed via JNI.
         System.loadLibrary("networkstacktestsjni");
+        ApfTest.setApfVersion(getApfVersionToTest());
     }
 
     private static final String TAG = "ApfTest";
@@ -2895,6 +2892,11 @@ public class ApfTest {
     private native static boolean compareBpfApf(String filter, String pcap_filename,
             byte[] apf_program);
 
+
+    /**
+     * Set the APF interpreter version that used to run the program.
+     */
+    public static native void setApfVersion(int version);
 
     /**
      * Open packet capture file {@code pcapFilename} and run it through APF filter. Then
