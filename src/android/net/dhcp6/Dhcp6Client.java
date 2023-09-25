@@ -106,9 +106,10 @@ public class Dhcp6Client extends StateMachine {
     private static final int CMD_DHCP6_PD_REBIND = PRIVATE_BASE + 4;
     private static final int CMD_DHCP6_PD_EXPIRE = PRIVATE_BASE + 5;
 
-    // Timers and timeouts.
-    // TODO: comply with RFC8415 section 15(Reliability of Client-Initiated Message Exchanges)
-    private static final int SECONDS           = 1000;
+    // Transmission and Retransmission parameters in milliseconds.
+    private static final int SECONDS            = 1000;
+    private static final long SOL_TIMEOUT       =    1 * SECONDS;
+    private static final long SOL_MAX_RT        = 3600 * SECONDS;
 
     // Per rfc8415#section-12, the IAID MUST be consistent across restarts.
     // Since currently only one IAID is supported, a well-known value can be used (0).
@@ -496,8 +497,11 @@ public class Dhcp6Client extends StateMachine {
      */
     class SolicitState extends PacketRetransmittingState {
         SolicitState() {
-            // TODO: use the actual constants.
-            super((long) 0 /* delay */, (long) 0/* IRT */, (long) 0 /* MRT */, 0 /* MRC */);
+            // First Solicit message should be delayed by a random amount of time between 0
+            // and SOL_MAX_DELAY(1s).
+            // TODO: request SOL_MAX_RT option from server.
+            super((long) (new Random().nextDouble() * SECONDS) /* delay */, SOL_TIMEOUT /* IRT */,
+                    SOL_MAX_RT /* MRT */, 0 /* MRC */);
         }
 
         @Override
