@@ -236,11 +236,13 @@ public class Dhcp6Client extends StateMachine {
         private long mRetransTimeout = -1;
         private int mRetransCount = 0;
         private long mMaxRetransDurationMillis = 0;
+        private final long mInitialDelayMillis;
         private final long mInitialRetransTimeMillis;
         private final long mMaxRetransTimeMillis;
         private final int mMaxRetransCount;
 
-        PacketRetransmittingState(final long irt, final long mrt, final int mrc) {
+        PacketRetransmittingState(final long delay, final long irt, final long mrt, final int mrc) {
+            mInitialDelayMillis = delay;
             mInitialRetransTimeMillis = irt;
             mMaxRetransTimeMillis = mrt;
             mMaxRetransCount = mrc;
@@ -249,7 +251,7 @@ public class Dhcp6Client extends StateMachine {
         @Override
         public void enter() {
             super.enter();
-            sendMessage(CMD_KICK);
+            sendMessageDelayed(CMD_KICK, mInitialDelayMillis);
         }
 
         @Override
@@ -495,7 +497,7 @@ public class Dhcp6Client extends StateMachine {
     class SolicitState extends PacketRetransmittingState {
         SolicitState() {
             // TODO: use the actual constants.
-            super((long) 0/* IRT */, (long) 0 /* MRT */, 0 /* MRC */);
+            super((long) 0 /* delay */, (long) 0/* IRT */, (long) 0 /* MRT */, 0 /* MRC */);
         }
 
         @Override
@@ -544,7 +546,7 @@ public class Dhcp6Client extends StateMachine {
     class RequestState extends PacketRetransmittingState {
         RequestState() {
             // TODO: use the actual constants.
-            super((long) 0/* IRT */, (long) 0 /* MRT */, 0 /* MRC */);
+            super((long) 0 /* delay */, (long) 0/* IRT */, (long) 0 /* MRT */, 0 /* MRC */);
         }
 
         @Override
@@ -669,7 +671,7 @@ public class Dhcp6Client extends StateMachine {
     abstract class ReacquireState extends PacketRetransmittingState {
         ReacquireState() {
             // TODO: use the actual constants.
-            super((long) 0/* IRT */, (long) 0 /* MRT */, 0 /* MRC */);
+            super((long) 0 /* delay */, (long) 0/* IRT */, (long) 0 /* MRT */, 0 /* MRC */);
         }
 
         @Override
