@@ -110,6 +110,9 @@ public class Dhcp6Client extends StateMachine {
     private static final int SECONDS            = 1000;
     private static final long SOL_TIMEOUT       =    1 * SECONDS;
     private static final long SOL_MAX_RT        = 3600 * SECONDS;
+    private static final long REQ_TIMEOUT       =    1 * SECONDS;
+    private static final long REQ_MAX_RT        =   30 * SECONDS;
+    private static final int REQ_MAX_RC         =   10;
 
     // Per rfc8415#section-12, the IAID MUST be consistent across restarts.
     // Since currently only one IAID is supported, a well-known value can be used (0).
@@ -549,8 +552,8 @@ public class Dhcp6Client extends StateMachine {
      */
     class RequestState extends PacketRetransmittingState {
         RequestState() {
-            // TODO: use the actual constants.
-            super((long) 0 /* delay */, (long) 0/* IRT */, (long) 0 /* MRT */, 0 /* MRC */);
+            super((long) 0 /* delay */, REQ_TIMEOUT /* IRT */, REQ_MAX_RT /* MRT */,
+                    REQ_MAX_RC /* MRC */);
         }
 
         @Override
