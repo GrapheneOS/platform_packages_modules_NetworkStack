@@ -93,6 +93,7 @@ public class Dhcp6Client extends StateMachine {
     public static final int DHCP6_PD_SUCCESS = 1;
     public static final int DHCP6_PD_PREFIX_EXPIRED = 2;
     public static final int DHCP6_PD_PREFIX_CHANGED = 3;
+    public static final int DHCP6_PD_PREFIX_MSG_EXCHANGE_TERMINATED = 4;
 
     // Notification from DHCPv6 state machine before quitting
     public static final int CMD_ON_QUIT = PUBLIC_BASE + 4;
@@ -108,8 +109,6 @@ public class Dhcp6Client extends StateMachine {
     // Timers and timeouts.
     // TODO: comply with RFC8415 section 15(Reliability of Client-Initiated Message Exchanges)
     private static final int SECONDS           = 1000;
-    private static final int FIRST_TIMEOUT_MS  =   1 * SECONDS;
-    private static final int MAX_TIMEOUT_MS    = 512 * SECONDS;
 
     // Per rfc8415#section-12, the IAID MUST be consistent across restarts.
     // Since currently only one IAID is supported, a well-known value can be used (0).
@@ -225,23 +224,31 @@ public class Dhcp6Client extends StateMachine {
     }
 
     /**
-     * Retransmits packets using jittered exponential backoff with an optional timeout. Packet
-     * transmission is triggered by CMD_KICK, which is sent by an AlarmManager alarm. Kicks are
-     * cancelled when leaving the state.
+     * Retransmits packets per algorithm defined in RFC8415 section 15. Packet transmission is
+     * triggered by CMD_KICK, which is sent by an AlarmManager alarm. Kicks are cancelled when
+     * leaving the state.
      *
-     * Concrete subclasses must implement sendPacket, which is called when the alarm fires and a
-     * packet needs to be transmitted, and receivePacket, which is triggered by CMD_RECEIVED_PACKET
-     * sent by the receive thread.
-     *
-     * TODO: deduplicate with the similar code in DhcpClient.java
+     * Concrete subclasses must initialize retransmission parameters and implement sendPacket,
+     * which is called when the alarm fires and a packet needs to be transmitted, and receivePacket,
+     * which is triggered by CMD_RECEIVED_PACKET sent by the receive thread.
      */
     abstract class PacketRetransmittingState extends State {
-        private int mTimer;
+        private long mRetransTimeout = -1;
+        private int mRetransCount = 0;
+        private long mMaxRetransDurationMillis = 0;
+        private final long mInitialRetransTimeMillis;
+        private final long mMaxRetransTimeMillis;
+        private final int mMaxRetransCount;
+
+        PacketRetransmittingState(final long irt, final long mrt, final int mrc) {
+            mInitialRetransTimeMillis = irt;
+            mMaxRetransTimeMillis = mrt;
+            mMaxRetransCount = mrc;
+        }
 
         @Override
         public void enter() {
             super.enter();
-            mTimer = FIRST_TIMEOUT_MS;
             sendMessage(CMD_KICK);
         }
 
@@ -268,16 +275,18 @@ public class Dhcp6Client extends StateMachine {
         public void exit() {
             super.exit();
             mKickAlarm.cancel();
+            mRetransTimeout = -1;
+            mRetransCount = 0;
         }
 
         protected abstract boolean sendPacket();
         protected abstract void receivePacket(Dhcp6Packet packet);
-
-        protected int jitterTimer(int baseTimer) {
-            int maxJitter = baseTimer / 10;
-            int jitter = mRandom.nextInt(2 * maxJitter) - maxJitter;
-            return baseTimer + jitter;
-        }
+        // If the message exchange is considered to have failed according to the retransmission
+        // mechanism(i.e. client has transmitted the message MRC times or MRD seconds has elapsed
+        // since the first message transmission), this method will be called to roll back to Solicit
+        // state and restart the configuration, and notify IpClient the DHCPv6 message exchange
+        // failure if needed.
+        protected void onMessageExchangeFailed() {}
 
         /**
          * Per RFC8415 section 15, each of the computations of a new RT includes a randomization
@@ -289,14 +298,31 @@ public class Dhcp6Client extends StateMachine {
         }
 
         protected void scheduleKick() {
-            long now = SystemClock.elapsedRealtime();
-            long timeout = jitterTimer(mTimer);
-            long alarmTime = now + timeout;
-            mKickAlarm.schedule(alarmTime);
-            mTimer *= 2;
-            if (mTimer > MAX_TIMEOUT_MS) {
-                mTimer = MAX_TIMEOUT_MS;
+            if (mRetransTimeout == -1) {
+                // RT for the first message transmission is based on IRT.
+                mRetransTimeout =
+                        mInitialRetransTimeMillis + (long) (rand() * mInitialRetransTimeMillis);
+            } else {
+                // RT for each subsequent message transmission is based on the previous value of RT.
+                mRetransTimeout = 2 * mRetransTimeout + (long) (rand() * mRetransTimeout);
             }
+            if (mMaxRetransTimeMillis != 0 && mRetransTimeout > mMaxRetransTimeMillis) {
+                mRetransTimeout = mMaxRetransTimeMillis + (long) (rand() * mMaxRetransTimeMillis);
+            }
+            if (mMaxRetransDurationMillis != 0 && mRetransTimeout > mMaxRetransDurationMillis) {
+                onMessageExchangeFailed();
+                Log.i(TAG, mMaxRetransDurationMillis + " seconds has elapsed since the first"
+                        + " transmission, stopping retransmission");
+                return;
+            }
+            if (mMaxRetransCount != 0 && mRetransCount > mMaxRetransCount) {
+                onMessageExchangeFailed();
+                Log.i(TAG, "client has transmitted the message " + mMaxRetransCount
+                        + " times, stopping retransmission");
+                return;
+            }
+            mKickAlarm.schedule(SystemClock.elapsedRealtime() + mRetransTimeout);
+            mRetransCount++;
         }
     }
 
@@ -467,6 +493,11 @@ public class Dhcp6Client extends StateMachine {
      * Note: Not implement DHCPv6 server selection, always request the first Advertise we receive.
      */
     class SolicitState extends PacketRetransmittingState {
+        SolicitState() {
+            // TODO: use the actual constants.
+            super((long) 0/* IRT */, (long) 0 /* MRT */, 0 /* MRC */);
+        }
+
         @Override
         public void enter() {
             super.enter();
@@ -511,6 +542,11 @@ public class Dhcp6Client extends StateMachine {
      * process the Reply message in this state.
      */
     class RequestState extends PacketRetransmittingState {
+        RequestState() {
+            // TODO: use the actual constants.
+            super((long) 0/* IRT */, (long) 0 /* MRT */, 0 /* MRC */);
+        }
+
         @Override
         protected boolean sendPacket() {
             return sendRequestPacket(buildIaPdOption(mAdvertise));
@@ -526,6 +562,11 @@ public class Dhcp6Client extends StateMachine {
                 mReply = pd;
                 transitionTo(mBoundState);
             }
+        }
+
+        @Override
+        protected void onMessageExchangeFailed() {
+            transitionTo(mSolicitState);
         }
     }
 
@@ -626,6 +667,11 @@ public class Dhcp6Client extends StateMachine {
     }
 
     abstract class ReacquireState extends PacketRetransmittingState {
+        ReacquireState() {
+            // TODO: use the actual constants.
+            super((long) 0/* IRT */, (long) 0 /* MRT */, 0 /* MRC */);
+        }
+
         @Override
         public void enter() {
             super.enter();
@@ -658,6 +704,12 @@ public class Dhcp6Client extends StateMachine {
                 // Bound state after a success update.
                 transitionTo(mBoundState);
             }
+        }
+
+        @Override
+        protected void onMessageExchangeFailed() {
+            notifyPrefixDelegation(DHCP6_PD_PREFIX_MSG_EXCHANGE_TERMINATED, null);
+            transitionTo(mSolicitState);
         }
     }
 

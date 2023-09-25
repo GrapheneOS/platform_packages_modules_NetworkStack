@@ -34,6 +34,7 @@ import static android.system.OsConstants.ETH_P_ARP;
 import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.SOCK_NONBLOCK;
 import static android.system.OsConstants.SOCK_RAW;
+
 import static com.android.net.module.util.NetworkStackConstants.ARP_REPLY;
 import static com.android.net.module.util.NetworkStackConstants.ETHER_BROADCAST;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_ROUTERS_MULTICAST;
@@ -3065,6 +3066,7 @@ public class IpClient extends StateMachine {
 
                         case Dhcp6Client.DHCP6_PD_PREFIX_EXPIRED:
                         case Dhcp6Client.DHCP6_PD_PREFIX_CHANGED:
+                        case Dhcp6Client.DHCP6_PD_PREFIX_MSG_EXCHANGE_TERMINATED:
                             clearIpv6PrefixDelegationAddresses();
                             mPrefixDelegation = null;
                             handleLinkPropertiesUpdate(SEND_CALLBACKS);
