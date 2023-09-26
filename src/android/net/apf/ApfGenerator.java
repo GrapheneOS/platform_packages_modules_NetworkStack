@@ -508,6 +508,26 @@ public class ApfGenerator {
     }
 
     /**
+     * Add an instruction to the end of the program to multiply register R0 by {@code value}.
+     */
+    public ApfGenerator addMul(int value) {
+        Instruction instruction = new Instruction(Opcodes.MUL);
+        instruction.setUnsignedImm(value);
+        addInstruction(instruction);
+        return this;
+    }
+
+    /**
+     * Add an instruction to the end of the program to divide register R0 by {@code value}.
+     */
+    public ApfGenerator addDiv(int value) {
+        Instruction instruction = new Instruction(Opcodes.DIV);
+        instruction.setUnsignedImm(value);
+        addInstruction(instruction);
+        return this;
+    }
+
+    /**
      * Add an instruction to the end of the program to logically and register R0 with {@code value}.
      */
     public ApfGenerator addAnd(int value) {
@@ -553,6 +573,24 @@ public class ApfGenerator {
      */
     public ApfGenerator addAddR1() {
         Instruction instruction = new Instruction(Opcodes.ADD, Register.R1);
+        addInstruction(instruction);
+        return this;
+    }
+
+    /**
+     * Add an instruction to the end of the program to multiply register R0 by register R1.
+     */
+    public ApfGenerator addMulR1() {
+        Instruction instruction = new Instruction(Opcodes.MUL, Register.R1);
+        addInstruction(instruction);
+        return this;
+    }
+
+    /**
+     * Add an instruction to the end of the program to divide register R0 by register R1.
+     */
+    public ApfGenerator addDivR1() {
+        Instruction instruction = new Instruction(Opcodes.DIV, Register.R1);
         addInstruction(instruction);
         return this;
     }
