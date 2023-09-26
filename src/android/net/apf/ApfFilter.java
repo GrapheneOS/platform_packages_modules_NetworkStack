@@ -1008,7 +1008,7 @@ public class ApfFilter implements AndroidPacketFilter {
                     if (lft == 0) return MatchType.MATCH_PASS;
                     // gen.addJumpIfR0GreaterThan(section.min - 1, nextFilterLabel);
                     if (lft >= section.min) return MatchType.MATCH_PASS;
-                } else if (section.lifetime <= 3 * section.min) {
+                } else if (section.lifetime <= 3 * (long) section.min) {
                     // Case 3a) min <= old lft <= 3 * min
                     // Note that:
                     // "(old lft + 2) / 3 <= min" is equivalent to "old lft <= 3 * min"
@@ -1151,7 +1151,7 @@ public class ApfFilter implements AndroidPacketFilter {
                         // if lft >= min -> PASS
                         gen.addJumpIfR0Equals(0, nextFilterLabel);
                         gen.addJumpIfR0GreaterThan(section.min - 1, nextFilterLabel);
-                    } else if (section.lifetime <= 3 * section.min) {
+                    } else if (section.lifetime <= 3 * (long) section.min) {
                         // Case 3a) min <= old lft <= 3 * min
                         // Note that:
                         // "(old lft + 2) / 3 <= min" is equivalent to "old lft <= 3 * min"
