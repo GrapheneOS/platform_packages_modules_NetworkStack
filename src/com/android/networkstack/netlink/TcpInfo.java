@@ -19,8 +19,7 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-
-import com.android.internal.annotations.VisibleForTesting;
+import androidx.annotation.VisibleForTesting;
 
 import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
@@ -97,10 +96,13 @@ public class TcpInfo {
     static final int SEGS_IN_OFFSET = getFieldOffset(Field.SEGS_IN);
     @VisibleForTesting
     static final int SEGS_OUT_OFFSET = getFieldOffset(Field.SEGS_OUT);
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    static final int TOTAL_RETRANS_OFFSET = getFieldOffset(Field.TOTAL_RETRANS);
     final int mSegsIn;
     final int mSegsOut;
     final int mLost;
     final int mRetransmits;
+    final int mTotalRetrans;
 
     private static int getFieldOffset(@NonNull final Field needle) {
         int offset = 0;
@@ -122,18 +124,20 @@ public class TcpInfo {
         mSegsOut = bytes.getInt(start + SEGS_OUT_OFFSET);
         mLost = bytes.getInt(start + LOST_OFFSET);
         mRetransmits = bytes.get(start + RETRANSMITS_OFFSET);
+        mTotalRetrans = bytes.get(start + TOTAL_RETRANS_OFFSET);
         // tcp_info structure grows over time as new fields are added. Jump to the end of the
         // structure, as unknown fields might remain at the end of the structure if the tcp_info
         // struct was expanded.
         bytes.position(Math.min(infolen + start, bytes.limit()));
     }
 
-    @VisibleForTesting
-    TcpInfo(int retransmits, int lost, int segsOut, int segsIn) {
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    TcpInfo(int retransmits, int lost, int segsOut, int segsIn, int totalRetrans) {
         mRetransmits = retransmits;
         mLost = lost;
         mSegsOut = segsOut;
         mSegsIn = segsIn;
+        mTotalRetrans = totalRetrans;
     }
 
     /** Parse a TcpInfo from a giving ByteBuffer with a specific length. */
@@ -180,17 +184,18 @@ public class TcpInfo {
         TcpInfo other = (TcpInfo) obj;
 
         return mSegsIn == other.mSegsIn && mSegsOut == other.mSegsOut
-            && mRetransmits == other.mRetransmits && mLost == other.mLost;
+                && mRetransmits == other.mRetransmits && mLost == other.mLost
+                && mTotalRetrans == other.mTotalRetrans;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(mLost, mRetransmits, mSegsIn, mSegsOut);
+        return Objects.hash(mLost, mRetransmits, mSegsIn, mSegsOut, mTotalRetrans);
     }
 
     @Override
     public String toString() {
         return "TcpInfo{lost=" + mLost + ", retransmit=" + mRetransmits + ", received=" + mSegsIn
-                + ", sent=" + mSegsOut + "}";
+                + ", sent=" + mSegsOut + ", totalRetrans=" + mTotalRetrans + "}";
     }
 }
