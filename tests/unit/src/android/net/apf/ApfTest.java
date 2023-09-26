@@ -375,6 +375,26 @@ public class ApfTest {
         gen.addJumpIfR0Equals(1234567890 >> 1, gen.DROP_LABEL);
         assertDrop(gen);
 
+        // Test multiply.
+        gen = new ApfGenerator(MIN_APF_VERSION);
+        gen.addLoadImmediate(R0, 123456789);
+        gen.addMul(2);
+        gen.addJumpIfR0Equals(123456789 * 2, gen.DROP_LABEL);
+        assertDrop(gen);
+
+        // Test divide.
+        gen = new ApfGenerator(MIN_APF_VERSION);
+        gen.addLoadImmediate(R0, 1234567890);
+        gen.addDiv(2);
+        gen.addJumpIfR0Equals(1234567890 / 2, gen.DROP_LABEL);
+        assertDrop(gen);
+
+        // Test divide by zero.
+        gen = new ApfGenerator(MIN_APF_VERSION);
+        gen.addDiv(0);
+        gen.addJump(gen.DROP_LABEL);
+        assertPass(gen);
+
         // Test add.
         gen = new ApfGenerator(MIN_APF_VERSION);
         gen.addLoadImmediate(R1, 1234567890);
@@ -419,6 +439,28 @@ public class ApfTest {
         gen.addLeftShiftR1();
         gen.addJumpIfR0Equals(1234567890 >> 1, gen.DROP_LABEL);
         assertDrop(gen);
+
+        // Test multiply.
+        gen = new ApfGenerator(MIN_APF_VERSION);
+        gen.addLoadImmediate(R0, 123456789);
+        gen.addLoadImmediate(R1, 2);
+        gen.addMulR1();
+        gen.addJumpIfR0Equals(123456789 * 2, gen.DROP_LABEL);
+        assertDrop(gen);
+
+        // Test divide.
+        gen = new ApfGenerator(MIN_APF_VERSION);
+        gen.addLoadImmediate(R0, 1234567890);
+        gen.addLoadImmediate(R1, 2);
+        gen.addDivR1();
+        gen.addJumpIfR0Equals(1234567890 / 2, gen.DROP_LABEL);
+        assertDrop(gen);
+
+        // Test divide by zero.
+        gen = new ApfGenerator(MIN_APF_VERSION);
+        gen.addDivR1();
+        gen.addJump(gen.DROP_LABEL);
+        assertPass(gen);
 
         // Test byte load.
         gen = new ApfGenerator(MIN_APF_VERSION);
