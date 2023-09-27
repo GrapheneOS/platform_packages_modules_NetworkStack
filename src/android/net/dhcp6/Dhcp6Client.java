@@ -113,6 +113,10 @@ public class Dhcp6Client extends StateMachine {
     private static final long REQ_TIMEOUT       =    1 * SECONDS;
     private static final long REQ_MAX_RT        =   30 * SECONDS;
     private static final int REQ_MAX_RC         =   10;
+    private static final long REN_TIMEOUT       =   10 * SECONDS;
+    private static final long REN_MAX_RT        =  600 * SECONDS;
+    private static final long REB_TIMEOUT       =   10 * SECONDS;
+    private static final long REB_MAX_RT        =  600 * SECONDS;
 
     // Per rfc8415#section-12, the IAID MUST be consistent across restarts.
     // Since currently only one IAID is supported, a well-known value can be used (0).
@@ -676,9 +680,8 @@ public class Dhcp6Client extends StateMachine {
     }
 
     abstract class ReacquireState extends PacketRetransmittingState {
-        ReacquireState() {
-            // TODO: use the actual constants.
-            super((long) 0 /* delay */, (long) 0/* IRT */, (long) 0 /* MRT */, 0 /* MRC */);
+        ReacquireState(final long irt, final long mrt) {
+            super(0 /* delay */, irt, mrt, 0 /* MRC */);
         }
 
         @Override
@@ -728,6 +731,10 @@ public class Dhcp6Client extends StateMachine {
      * extend the lifetimes on the leases assigned to the client.
      */
     class RenewState extends ReacquireState {
+        RenewState() {
+            super(REN_TIMEOUT, REN_MAX_RT);
+        }
+
         @Override
         public boolean processMessage(Message message) {
             if (super.processMessage(message) == HANDLED) {
@@ -754,6 +761,10 @@ public class Dhcp6Client extends StateMachine {
      * update other configuration parameters.
      */
     class RebindState extends ReacquireState {
+        RebindState() {
+            super(REB_TIMEOUT, REB_MAX_RT);
+        }
+
         @Override
         protected boolean sendPacket() {
             return sendRebindPacket(buildIaPdOption(mReply));
