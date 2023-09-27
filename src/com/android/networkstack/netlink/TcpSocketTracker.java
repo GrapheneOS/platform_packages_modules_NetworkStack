@@ -26,6 +26,7 @@ import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 import static android.system.OsConstants.SOL_SOCKET;
 import static android.system.OsConstants.SO_SNDTIMEO;
+
 import static com.android.net.module.util.NetworkStackConstants.DNS_OVER_TLS_PORT;
 import static com.android.net.module.util.netlink.NetlinkConstants.NLMSG_DONE;
 import static com.android.net.module.util.netlink.NetlinkConstants.SOCKDIAG_MSG_HEADER_SIZE;
@@ -281,7 +282,7 @@ public class TcpSocketTracker {
                     ? (mSentSinceLastRecv + stat.sentCount) : 0;
             mLatestReceivedCount = stat.receivedCount;
             mLatestPacketFailPercentage = ((stat.sentCount != 0)
-                    ? ((stat.retransmitCount + stat.lostCount) * 100 / stat.sentCount) : 0);
+                    ? (stat.retransCount * 100 / stat.sentCount) : 0);
 
             // Remove out-of-date socket info.
             cleanupSocketInfo(time);
@@ -455,14 +456,12 @@ public class TcpSocketTracker {
 
         stat.sentCount = current.tcpInfo.mSegsOut;
         stat.receivedCount = current.tcpInfo.mSegsIn;
-        stat.lostCount = current.tcpInfo.mLost;
-        stat.retransmitCount = current.tcpInfo.mRetransmits;
+        stat.retransCount = current.tcpInfo.mTotalRetrans;
 
         if (previous != null && previous.tcpInfo != null) {
             stat.sentCount -= previous.tcpInfo.mSegsOut;
             stat.receivedCount -= previous.tcpInfo.mSegsIn;
-            stat.lostCount -= previous.tcpInfo.mLost;
-            stat.retransmitCount -= previous.tcpInfo.mRetransmits;
+            stat.retransCount -= previous.tcpInfo.mTotalRetrans;
         }
         log("calculateLatestPacketsStat, stat:" + stat);
         return stat;
@@ -618,23 +617,21 @@ public class TcpSocketTracker {
      * */
     private class TcpStat {
         public int sentCount;
-        public int lostCount;
-        public int retransmitCount;
         public int receivedCount;
+        public int retransCount;
 
         void accumulate(@Nullable final TcpStat stat) {
             if (stat == null) return;
 
             sentCount += stat.sentCount;
-            lostCount += stat.lostCount;
             receivedCount += stat.receivedCount;
-            retransmitCount += stat.retransmitCount;
+            retransCount += stat.retransCount;
         }
 
         @Override
         public String toString() {
-            return "TcpStat {sent=" + sentCount + ", lost=" + lostCount
-                    + ", retransmit=" + retransmitCount + ", received=" + receivedCount + "}";
+            return "TcpStat {sent=" + sentCount + ", retransCount=" + retransCount
+                    + ", received=" + receivedCount + "}";
         }
     }
 
