@@ -76,6 +76,11 @@ public class Dhcp6Packet {
     protected final byte[] mServerDuid;
 
     /**
+     * DHCPv6 Optional Type: Option Request Option.
+     */
+    public static final byte DHCP6_OPTION_REQUEST_OPTION = 6;
+
+    /**
      * DHCPv6 Optional Type: Elapsed time.
      * This time is expressed in hundredths of a second.
      */
@@ -112,6 +117,11 @@ public class Dhcp6Packet {
     protected final byte[] mIaPd;
     @NonNull
     protected PrefixDelegation mPrefixDelegation;
+
+    /**
+     * DHCPv6 Optional Type: SOL_MAX_RT.
+     */
+    public static final byte DHCP6_SOL_MAX_RT = 82;
 
     /**
      * The transaction identifier used in this particular DHCPv6 negotiation
