@@ -91,12 +91,12 @@ public class TcpSocketTrackerTest {
     private static final byte[] SOCK_DIAG_MSG_BYTES =
             HexEncoding.decode(DIAG_MSG_HEX.toCharArray(), false);
     // Hexadecimal representation of a SOCK_DIAG response with tcp info.
-    private static final String SOCK_DIAG_TCP_ZERO_LOST_HEX =
-            composeSockDiagTcpHex(0 /* lost */, 10 /* sent */);
-    private static final byte[] SOCK_DIAG_TCP_INET_ZERO_LOST_BYTES =
-            HexEncoding.decode(SOCK_DIAG_TCP_ZERO_LOST_HEX.toCharArray(), false);
-    private static final TcpInfo TEST_TCPINFO = new TcpInfo(5 /* retransmits */, 0 /* lost */,
-            10 /* segsOut */, 0 /* segsIn */, 5 /* totalRetrans */);
+    private static final String SOCK_DIAG_TCP_TEST_HEX =
+            composeSockDiagTcpHex(5 /* retrans */, 10 /* sent */);
+    private static final byte[] SOCK_DIAG_TCP_INET_TEST_BYTES =
+            HexEncoding.decode(SOCK_DIAG_TCP_TEST_HEX.toCharArray(), false);
+    private static final TcpInfo TEST_TCPINFO =
+            new TcpInfo(10 /* segsOut */, 0 /* segsIn */, 5 /* totalRetrans */);
     private static final String NLMSG_DONE_HEX =
             // struct nlmsghdr
             "14000000"     // length = 20
@@ -109,7 +109,7 @@ public class TcpSocketTrackerTest {
             + "06"           // state
             + "00"           // timer
             + "00";          // retrans
-    private static final String TEST_RESPONSE_HEX = SOCK_DIAG_TCP_ZERO_LOST_HEX + NLMSG_DONE_HEX;
+    private static final String TEST_RESPONSE_HEX = SOCK_DIAG_TCP_TEST_HEX + NLMSG_DONE_HEX;
     private static final byte[] TEST_RESPONSE_BYTES =
             HexEncoding.decode(TEST_RESPONSE_HEX.toCharArray(), false);
     private static final int TEST_NETID1 = 0xA85;
@@ -178,7 +178,7 @@ public class TcpSocketTrackerTest {
 
     @Test
     public void testParseSockInfo() {
-        final ByteBuffer buffer = getByteBuffer(SOCK_DIAG_TCP_INET_ZERO_LOST_BYTES);
+        final ByteBuffer buffer = getByteBuffer(SOCK_DIAG_TCP_INET_TEST_BYTES);
         final ArrayList<TcpSocketTracker.SocketInfo> infoList = new ArrayList<>();
         TcpSocketTracker.parseMessage(buffer, AF_INET, infoList, 100L);
         assertEquals(1, infoList.size());
@@ -247,11 +247,11 @@ public class TcpSocketTrackerTest {
         final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
         // Simulate 1 message with data stall happened.
         doReturn(getByteBufferFromHexString(
-                        composeSockDiagTcpHex(4, 10) + NLMSG_DONE_HEX))
+                        composeSockDiagTcpHex(9, 10) + NLMSG_DONE_HEX))
                 .when(mDependencies).recvMessage(any());
         assertTrue(tst.pollSocketsInfo());
 
-        // ( Lost 4 + default 5 retransmits in the sample ) / 10 sent = 90 percent.
+        // 9 retrans / 10 sent = 90 percent.
         assertEquals(90, tst.getLatestPacketFailPercentage());
         assertEquals(10, tst.getSentSinceLastRecv());
         assertTrue(tst.isDataStallSuspected());
@@ -262,8 +262,8 @@ public class TcpSocketTrackerTest {
         final LinkProperties testLp = new LinkProperties();
         testLp.addDnsServer(TEST_DNS1);
         tst.setLinkProperties(testLp);
-        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(4, 10)
-                + composeSockDiagTcpHex(5, 10, DNS_OVER_TLS_PORT, TEST_COOKIE2)
+        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(9, 10)
+                + composeSockDiagTcpHex(9, 10, DNS_OVER_TLS_PORT, TEST_COOKIE2)
                 + NLMSG_DONE_HEX))
                 .when(mDependencies).recvMessage(any());
         assertTrue(tst.pollSocketsInfo());
@@ -280,12 +280,12 @@ public class TcpSocketTrackerTest {
         // will be counted.
         testLp.addValidatedPrivateDnsServer(TEST_DNS1);
         tst.setLinkProperties(testLp);
-        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(5, 12)
-                + composeSockDiagTcpHex(7, 12, DNS_OVER_TLS_PORT, TEST_COOKIE2)
+        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(10, 12)
+                + composeSockDiagTcpHex(11, 12, DNS_OVER_TLS_PORT, TEST_COOKIE2)
                 + NLMSG_DONE_HEX))
                 .when(mDependencies).recvMessage(any());
         assertTrue(tst.pollSocketsInfo());
-        // Lost ( 1 + 2 ) / ( 2 + 2 ) sent = 75 percent.
+        // Retrans ( 1 + 2 ) / ( 2 + 2 ) sent = 75 percent.
         assertEquals(75, tst.getLatestPacketFailPercentage());
         assertEquals(14, tst.getSentSinceLastRecv());
         assertFalse(tst.isDataStallSuspected());
@@ -294,12 +294,12 @@ public class TcpSocketTrackerTest {
         // counted. And the stat is correctly subtracted from the stat ignored in the previous
         // polling cycle.
         tst.setOpportunisticMode(false);
-        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(6, 14)
-                + composeSockDiagTcpHex(9, 14, DNS_OVER_TLS_PORT, TEST_COOKIE2)
+        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(11, 14)
+                + composeSockDiagTcpHex(13, 14, DNS_OVER_TLS_PORT, TEST_COOKIE2)
                 + NLMSG_DONE_HEX))
                 .when(mDependencies).recvMessage(any());
         assertTrue(tst.pollSocketsInfo());
-        // Lost ( 1 + 2 ) / ( 2 + 2 ) sent = 75 percent.
+        // Retrans ( 1 + 2 ) / ( 2 + 2 ) sent = 75 percent.
         assertEquals(75, tst.getLatestPacketFailPercentage());
         assertEquals(18, tst.getSentSinceLastRecv());
         assertFalse(tst.isDataStallSuspected());
@@ -314,20 +314,20 @@ public class TcpSocketTrackerTest {
         //
         // Mocking 6 return results for different IP families(3 for IPv6; 3 for Ipv4). Use the same
         // message for different IP families to reduce the complexity.
-        doReturn(getByteBufferFromHexString(repeat(composeSockDiagTcpHex(0, 10), 5)),
-                getByteBufferFromHexString(repeat(composeSockDiagTcpHex(0, 10), 2)),
+        doReturn(getByteBufferFromHexString(repeat(composeSockDiagTcpHex(5, 10), 5)),
+                getByteBufferFromHexString(repeat(composeSockDiagTcpHex(5, 10), 2)),
                 getByteBufferFromHexString(
-                        repeat(composeSockDiagTcpHex(0, 10), 2) + NLMSG_DONE_HEX),
-                getByteBufferFromHexString(repeat(composeSockDiagTcpHex(0, 10), 5)),
-                getByteBufferFromHexString(repeat(composeSockDiagTcpHex(0, 10), 2)),
+                        repeat(composeSockDiagTcpHex(5, 10), 2) + NLMSG_DONE_HEX),
+                getByteBufferFromHexString(repeat(composeSockDiagTcpHex(5, 10), 5)),
+                getByteBufferFromHexString(repeat(composeSockDiagTcpHex(5, 10), 2)),
                 getByteBufferFromHexString(
-                        repeat(composeSockDiagTcpHex(0, 10), 2) + NLMSG_DONE_HEX))
+                        repeat(composeSockDiagTcpHex(5, 10), 2) + NLMSG_DONE_HEX))
                 .when(mDependencies).recvMessage(any());
 
         assertTrue(tst.pollSocketsInfo());
         // Verify that code reads all the messages. (3 times for IPv4, 3 times for IPv6)
         verify(mDependencies, times(6)).recvMessage(any());
-        // Calculated from (retransmits + lost) / segsout.
+        // Calculated from totalRetrans / segsout.
         // Note that the counters cannot be verified given that the cookie of the mocked sockets
         // are the same, the latest SocketInfo would overwrite previous reported ones.
         assertEquals(50, tst.getLatestPacketFailPercentage());
@@ -340,12 +340,12 @@ public class TcpSocketTrackerTest {
         //
         // Mocking 6 return results for different IP families(3 for IPv6; 3 for Ipv4). Use the same
         // message for different IP families to reduce the complexity.
-        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(5, 15)),
-                getByteBufferFromHexString(repeat(composeSockDiagTcpHex(5, 15), 5)),
-                getByteBufferFromHexString(composeSockDiagTcpHex(5, 15) + NLMSG_DONE_HEX),
-                getByteBufferFromHexString(composeSockDiagTcpHex(5, 15)),
-                getByteBufferFromHexString(repeat(composeSockDiagTcpHex(5, 15), 5)),
-                getByteBufferFromHexString(composeSockDiagTcpHex(5, 15) + NLMSG_DONE_HEX))
+        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(10, 15)),
+                getByteBufferFromHexString(repeat(composeSockDiagTcpHex(10, 15), 5)),
+                getByteBufferFromHexString(composeSockDiagTcpHex(10, 15) + NLMSG_DONE_HEX),
+                getByteBufferFromHexString(composeSockDiagTcpHex(10, 15)),
+                getByteBufferFromHexString(repeat(composeSockDiagTcpHex(10, 15), 5)),
+                getByteBufferFromHexString(composeSockDiagTcpHex(10, 15) + NLMSG_DONE_HEX))
                 .when(mDependencies).recvMessage(any());
 
         assertTrue(tst.pollSocketsInfo());
@@ -362,12 +362,12 @@ public class TcpSocketTrackerTest {
         //
         // Mocking 4 return results for different IP families(2 for IPv6; 2 for Ipv4). Use the same
         // message for different IP families to reduce the complexity.
-        doReturn(getByteBufferFromHexString(repeat(composeSockDiagTcpHex(5, 15), 5)),
-                getByteBufferFromHexString(composeSockDiagTcpHex(5, 15)),
-                getByteBufferFromHexString(composeSockDiagTcpHex(5, 15) + NLMSG_DONE_HEX),
-                getByteBufferFromHexString(repeat(composeSockDiagTcpHex(5, 15), 5)),
-                getByteBufferFromHexString(composeSockDiagTcpHex(5, 15)),
-                getByteBufferFromHexString(composeSockDiagTcpHex(5, 15) + NLMSG_DONE_HEX))
+        doReturn(getByteBufferFromHexString(repeat(composeSockDiagTcpHex(10, 15), 5)),
+                getByteBufferFromHexString(composeSockDiagTcpHex(10, 15)),
+                getByteBufferFromHexString(composeSockDiagTcpHex(10, 15) + NLMSG_DONE_HEX),
+                getByteBufferFromHexString(repeat(composeSockDiagTcpHex(10, 15), 5)),
+                getByteBufferFromHexString(composeSockDiagTcpHex(10, 15)),
+                getByteBufferFromHexString(composeSockDiagTcpHex(10, 15) + NLMSG_DONE_HEX))
                 .when(mDependencies).recvMessage(any());
 
         assertTrue(tst.pollSocketsInfo());
@@ -384,9 +384,9 @@ public class TcpSocketTrackerTest {
         // Mocking 2 return results for different IP families(1 for IPv6; 1 for Ipv4). Use the same
         // message for different IP families to reduce the complexity.
         doReturn(getByteBufferFromHexString(
-                        repeat(composeSockDiagTcpHex(9, 20), 8) + NLMSG_DONE_HEX),
+                        repeat(composeSockDiagTcpHex(14, 20), 8) + NLMSG_DONE_HEX),
                 getByteBufferFromHexString(
-                        repeat(composeSockDiagTcpHex(9, 20), 8) + NLMSG_DONE_HEX))
+                        repeat(composeSockDiagTcpHex(14, 20), 8) + NLMSG_DONE_HEX))
                 .when(mDependencies).recvMessage(any());
 
         assertTrue(tst.pollSocketsInfo());
@@ -404,9 +404,9 @@ public class TcpSocketTrackerTest {
         // Mocking 2 return results for different IP families(1 for IPv6; 1 for Ipv4). Use the same
         // message for different IP families to reduce the complexity.
         doReturn(getByteBufferFromHexString(
-                        NLMSG_DONE_HEX + repeat(composeSockDiagTcpHex(15, 26), 2)),
+                        NLMSG_DONE_HEX + repeat(composeSockDiagTcpHex(20, 26), 2)),
                 getByteBufferFromHexString(
-                        NLMSG_DONE_HEX + repeat(composeSockDiagTcpHex(15, 26), 2)))
+                        NLMSG_DONE_HEX + repeat(composeSockDiagTcpHex(20, 26), 2)))
                 .when(mDependencies).recvMessage(any());
         assertTrue(tst.pollSocketsInfo());
         // Another 1 time for IPv6 and 1 time for IPv4
@@ -468,11 +468,11 @@ public class TcpSocketTrackerTest {
         return s;
     }
 
-    private static String composeSockDiagTcpHex(int lost, int sent) {
-        return composeSockDiagTcpHex(lost, sent, TEST_DST_PORT, TEST_COOKIE1);
+    private static String composeSockDiagTcpHex(int retrans, int sent) {
+        return composeSockDiagTcpHex(retrans, sent, TEST_DST_PORT, TEST_COOKIE1);
     }
 
-    private static String composeSockDiagTcpHex(int lost, int sent, short dstPort, long cookie) {
+    private static String composeSockDiagTcpHex(int retrans, int sent, short dstPort, long cookie) {
         return // struct nlmsghdr.
                 "14010000" +        // length = 276
                 "1400" +            // type = SOCK_DIAG_BY_FAMILY
@@ -521,7 +521,7 @@ public class TcpSocketTrackerTest {
                 "18020000" +        // rcvMss = 536
                 "00000000" +        // unsacked = 0
                 "00000000" +        // acked = 0
-                getHexStringFromInt(lost) + // lost
+                "00000000" +        // lost
                 "00000000" +        // retrans = 0
                 "00000000" +        // fackets = 0
                 "BB000000" +        // lastDataSent = 187
@@ -538,7 +538,7 @@ public class TcpSocketTrackerTest {
                 "03000000" +        // reordering = 3
                 "00000000" +        // rcvrtt = 0
                 "30560100" +        // rcvspace = 87600
-                "05000000" +        // totalRetrans = 5
+                getHexStringFromInt(retrans) +   // totalRetrans
                 "53AC000000000000" +    // pacingRate = 44115
                 "FFFFFFFFFFFFFFFF" +    // maxPacingRate = 18446744073709551615
                 "0100000000000000" +    // bytesAcked = 1
@@ -593,7 +593,7 @@ public class TcpSocketTrackerTest {
         final BroadcastReceiver receiver = receiverCaptor.getValue();
         doReturn(true).when(mPowerManager).isDeviceLightIdleMode();
         receiver.onReceive(mContext, new Intent(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED));
-        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(4, 10)
+        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(9, 10)
                 + NLMSG_DONE_HEX)).when(mDependencies).recvMessage(any());
 
         // Verify counters are not updated.
@@ -625,7 +625,7 @@ public class TcpSocketTrackerTest {
         final BroadcastReceiver receiver = receiverCaptor.getValue();
         doReturn(true).when(mPowerManager).isDeviceLightIdleMode();
         receiver.onReceive(mContext, new Intent(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED));
-        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(4, 10)
+        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(9, 10)
                 + NLMSG_DONE_HEX)).when(mDependencies).recvMessage(any());
 
         // Verify TcpInfo is still processed.

@@ -92,8 +92,8 @@ public class TcpInfoTest {
             "0000000000000000";   // sndBufLimited = 0
     private static final byte[] TCP_INFO_BYTES =
             HexEncoding.decode(TCP_INFO_HEX.toCharArray(), false);
-    private static final TcpInfo TEST_TCPINFO = new TcpInfo(0 /* retransmits */, 0 /* lost */,
-            2 /* segsOut */, 1 /* segsIn */, 5 /* totalRetrans */);
+    private static final TcpInfo TEST_TCPINFO =
+            new TcpInfo(2 /* segsOut */, 1 /* segsIn */, 5 /* totalRetrans */);
 
     private static final String EXPANDED_TCP_INFO_HEX = TCP_INFO_HEX
             + "00000000"         // tcpi_delivered
