@@ -75,7 +75,7 @@ public class TcpInfoTest {
             "02000000" +          // reordering = 3
             "00000000" +          // rcvrtt = 0
             "30560100" +          // rcvspace = 87600
-            "00000000" +          // totalRetrans = 0
+            "05000000" +          // totalRetrans = 5
             "53AC000000000000" +  // pacingRate = 44115
             "FFFFFFFFFFFFFFFF" +  // maxPacingRate = 18446744073709551615
             "0100000000000001" +  // bytesAcked = 1
@@ -92,8 +92,8 @@ public class TcpInfoTest {
             "0000000000000000";   // sndBufLimited = 0
     private static final byte[] TCP_INFO_BYTES =
             HexEncoding.decode(TCP_INFO_HEX.toCharArray(), false);
-    private static final TcpInfo TEST_TCPINFO =
-            new TcpInfo(0 /* retransmits */, 0 /* lost */, 2 /* segsOut */, 1 /* segsIn */);
+    private static final TcpInfo TEST_TCPINFO = new TcpInfo(0 /* retransmits */, 0 /* lost */,
+            2 /* segsOut */, 1 /* segsIn */, 5 /* totalRetrans */);
 
     private static final String EXPANDED_TCP_INFO_HEX = TCP_INFO_HEX
             + "00000000"         // tcpi_delivered
@@ -134,6 +134,7 @@ public class TcpInfoTest {
     public void testFieldOffset() {
         assertEquals(TcpInfo.RETRANSMITS_OFFSET, 2);
         assertEquals(TcpInfo.LOST_OFFSET, 32);
+        assertEquals(TcpInfo.TOTAL_RETRANS_OFFSET, 100);
         assertEquals(TcpInfo.SEGS_OUT_OFFSET, 136);
         assertEquals(TcpInfo.SEGS_IN_OFFSET, 140);
     }
