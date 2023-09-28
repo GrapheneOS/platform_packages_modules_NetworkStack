@@ -265,6 +265,12 @@ public class Dhcp6Client extends StateMachine {
             sendMessageDelayed(CMD_KICK, mInitialDelayMillis);
         }
 
+        private void handleReceivedPacket(Dhcp6Packet packet) {
+            if (packet.isValid(mTransId, mClientDuid)) {
+                receivePacket(packet);
+            }
+        }
+
         @Override
         public boolean processMessage(Message message) {
             if (super.processMessage(message) == HANDLED) {
@@ -277,7 +283,7 @@ public class Dhcp6Client extends StateMachine {
                     scheduleKick();
                     return HANDLED;
                 case CMD_RECEIVED_PACKET:
-                    receivePacket((Dhcp6Packet) message.obj);
+                    handleReceivedPacket((Dhcp6Packet) message.obj);
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -526,7 +532,6 @@ public class Dhcp6Client extends StateMachine {
         // TODO: support multiple prefixes.
         @Override
         protected void receivePacket(Dhcp6Packet packet) {
-            if (!packet.isValid(mTransId, mClientDuid)) return;
             if (packet instanceof Dhcp6AdvertisePacket) {
                 mAdvertise = packet.mPrefixDelegation;
                 if (mAdvertise != null && mAdvertise.iaid == IAID) {
@@ -569,7 +574,6 @@ public class Dhcp6Client extends StateMachine {
         @Override
         protected void receivePacket(Dhcp6Packet packet) {
             if (!(packet instanceof Dhcp6ReplyPacket)) return;
-            if (!packet.isValid(mTransId, mClientDuid)) return;
             final PrefixDelegation pd = packet.mPrefixDelegation;
             if (pd != null && pd.iaid == IAID) {
                 Log.d(TAG, "Get prefix delegation option from Reply: " + pd);
@@ -693,7 +697,6 @@ public class Dhcp6Client extends StateMachine {
         @Override
         protected void receivePacket(Dhcp6Packet packet) {
             if (!(packet instanceof Dhcp6ReplyPacket)) return;
-            if (!packet.isValid(mTransId, mClientDuid)) return;
             final PrefixDelegation pd = packet.mPrefixDelegation;
             if (pd != null) {
                 if (pd.iaid != IAID
