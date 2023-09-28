@@ -238,7 +238,7 @@ public class Dhcp6Client extends StateMachine {
      * which is called when the alarm fires and a packet needs to be transmitted, and receivePacket,
      * which is triggered by CMD_RECEIVED_PACKET sent by the receive thread.
      */
-    abstract class PacketRetransmittingState extends State {
+    abstract class MessageExchangeState extends State {
         private int mTransId = 0;
         private long mTransStartMs = 0;
 
@@ -249,7 +249,7 @@ public class Dhcp6Client extends StateMachine {
         private final long mMaxRetransTimeMs;
         private final int mMaxRetransCount;
 
-        PacketRetransmittingState(final long delay, final long irt, final long mrt, final int mrc) {
+        MessageExchangeState(final long delay, final long irt, final long mrt, final int mrc) {
             mInitialDelayMs = delay;
             mInitialRetransTimeMs = irt;
             mMaxRetransTimeMs = mrt;
@@ -520,7 +520,7 @@ public class Dhcp6Client extends StateMachine {
      *
      * Note: Not implement DHCPv6 server selection, always request the first Advertise we receive.
      */
-    class SolicitState extends PacketRetransmittingState {
+    class SolicitState extends MessageExchangeState {
         SolicitState() {
             // First Solicit message should be delayed by a random amount of time between 0
             // and SOL_MAX_DELAY(1s).
@@ -570,7 +570,7 @@ public class Dhcp6Client extends StateMachine {
      * Client (re)transmits a Request message to request configuration from a specific server and
      * process the Reply message in this state.
      */
-    class RequestState extends PacketRetransmittingState {
+    class RequestState extends MessageExchangeState {
         RequestState() {
             super((long) 0 /* delay */, REQ_TIMEOUT /* IRT */, REQ_MAX_RT /* MRT */,
                     REQ_MAX_RC /* MRC */);
@@ -694,7 +694,7 @@ public class Dhcp6Client extends StateMachine {
         }
     }
 
-    abstract class ReacquireState extends PacketRetransmittingState {
+    abstract class ReacquireState extends MessageExchangeState {
         ReacquireState(final long irt, final long mrt) {
             super(0 /* delay */, irt, mrt, 0 /* MRC */);
         }
