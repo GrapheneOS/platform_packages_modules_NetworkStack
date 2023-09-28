@@ -240,19 +240,19 @@ public class Dhcp6Client extends StateMachine {
      */
     abstract class PacketRetransmittingState extends State {
         private int mTransId = 0;
-        private long mTransStartMillis = 0;
+        private long mTransStartMs = 0;
 
         private long mRetransTimeout = -1;
         private int mRetransCount = 0;
-        private final long mInitialDelayMillis;
-        private final long mInitialRetransTimeMillis;
-        private final long mMaxRetransTimeMillis;
+        private final long mInitialDelayMs;
+        private final long mInitialRetransTimeMs;
+        private final long mMaxRetransTimeMs;
         private final int mMaxRetransCount;
 
         PacketRetransmittingState(final long delay, final long irt, final long mrt, final int mrc) {
-            mInitialDelayMillis = delay;
-            mInitialRetransTimeMillis = irt;
-            mMaxRetransTimeMillis = mrt;
+            mInitialDelayMs = delay;
+            mInitialRetransTimeMs = irt;
+            mMaxRetransTimeMs = mrt;
             mMaxRetransCount = mrc;
         }
 
@@ -261,7 +261,7 @@ public class Dhcp6Client extends StateMachine {
             super.enter();
             // Every message exchange generates a new transaction id.
             mTransId = mRandom.nextInt() & 0xffffff;
-            sendMessageDelayed(CMD_KICK, mInitialDelayMillis);
+            sendMessageDelayed(CMD_KICK, mInitialDelayMs);
         }
 
         private void handleKick() {
@@ -271,9 +271,9 @@ public class Dhcp6Client extends StateMachine {
             final long elapsedTimeMs;
             if (mRetransCount == 0) {
                 elapsedTimeMs = 0;
-                mTransStartMillis = SystemClock.elapsedRealtime();
+                mTransStartMs = SystemClock.elapsedRealtime();
             } else {
-                elapsedTimeMs = SystemClock.elapsedRealtime() - mTransStartMillis;
+                elapsedTimeMs = SystemClock.elapsedRealtime() - mTransStartMs;
             }
 
             sendPacket(mTransId, elapsedTimeMs);
@@ -334,14 +334,13 @@ public class Dhcp6Client extends StateMachine {
         protected void scheduleKick() {
             if (mRetransTimeout == -1) {
                 // RT for the first message transmission is based on IRT.
-                mRetransTimeout =
-                        mInitialRetransTimeMillis + (long) (rand() * mInitialRetransTimeMillis);
+                mRetransTimeout = mInitialRetransTimeMs + (long) (rand() * mInitialRetransTimeMs);
             } else {
                 // RT for each subsequent message transmission is based on the previous value of RT.
                 mRetransTimeout = 2 * mRetransTimeout + (long) (rand() * mRetransTimeout);
             }
-            if (mMaxRetransTimeMillis != 0 && mRetransTimeout > mMaxRetransTimeMillis) {
-                mRetransTimeout = mMaxRetransTimeMillis + (long) (rand() * mMaxRetransTimeMillis);
+            if (mMaxRetransTimeMs != 0 && mRetransTimeout > mMaxRetransTimeMs) {
+                mRetransTimeout = mMaxRetransTimeMs + (long) (rand() * mMaxRetransTimeMs);
             }
             // Per RFC8415 section 18.2.4 and 18.2.5, MRD equals to the remaining time until
             // earliest T2(RenewState) or valid lifetimes of all leases in all IA have expired
