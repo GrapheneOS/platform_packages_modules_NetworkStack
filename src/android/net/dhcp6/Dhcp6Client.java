@@ -273,7 +273,7 @@ public class Dhcp6Client extends StateMachine {
 
             switch (message.what) {
                 case CMD_KICK:
-                    sendPacket();
+                    sendPacket(mTransId, getElapsedTimeMs());
                     scheduleKick();
                     return HANDLED;
                 case CMD_RECEIVED_PACKET:
@@ -292,7 +292,7 @@ public class Dhcp6Client extends StateMachine {
             mRetransCount = 0;
         }
 
-        protected abstract boolean sendPacket();
+        protected abstract boolean sendPacket(int transId, long elapsedTimeMs);
         protected abstract void receivePacket(Dhcp6Packet packet);
         // If the message exchange is considered to have failed according to the retransmission
         // mechanism(i.e. client has transmitted the message MRC times or MRD seconds has elapsed
@@ -519,7 +519,7 @@ public class Dhcp6Client extends StateMachine {
         }
 
         @Override
-        protected boolean sendPacket() {
+        protected boolean sendPacket(int transId, long elapsedTimeMs) {
             return sendSolicitPacket(buildEmptyIaPdOption());
         }
 
@@ -562,7 +562,7 @@ public class Dhcp6Client extends StateMachine {
         }
 
         @Override
-        protected boolean sendPacket() {
+        protected boolean sendPacket(int transId, long elapsedTimeMs) {
             return sendRequestPacket(buildIaPdOption(mAdvertise));
         }
 
@@ -744,7 +744,7 @@ public class Dhcp6Client extends StateMachine {
         }
 
         @Override
-        protected boolean sendPacket() {
+        protected boolean sendPacket(int transId, long elapsedTimeMs) {
             return sendRenewPacket(buildIaPdOption(mReply));
         }
     }
@@ -760,7 +760,7 @@ public class Dhcp6Client extends StateMachine {
         }
 
         @Override
-        protected boolean sendPacket() {
+        protected boolean sendPacket(int transId, long elapsedTimeMs) {
             return sendRebindPacket(buildIaPdOption(mReply));
         }
     }
