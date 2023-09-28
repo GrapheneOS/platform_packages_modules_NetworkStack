@@ -243,7 +243,6 @@ public class Dhcp6Client extends StateMachine {
     abstract class PacketRetransmittingState extends State {
         private long mRetransTimeout = -1;
         private int mRetransCount = 0;
-        private long mMaxRetransDurationMillis = 0;
         private final long mInitialDelayMillis;
         private final long mInitialRetransTimeMillis;
         private final long mMaxRetransTimeMillis;
@@ -319,12 +318,16 @@ public class Dhcp6Client extends StateMachine {
             if (mMaxRetransTimeMillis != 0 && mRetransTimeout > mMaxRetransTimeMillis) {
                 mRetransTimeout = mMaxRetransTimeMillis + (long) (rand() * mMaxRetransTimeMillis);
             }
-            if (mMaxRetransDurationMillis != 0 && mRetransTimeout > mMaxRetransDurationMillis) {
-                onMessageExchangeFailed();
-                Log.i(TAG, mMaxRetransDurationMillis + " seconds has elapsed since the first"
-                        + " transmission, stopping retransmission");
-                return;
-            }
+            // Per RFC8415 section 18.2.4 and 18.2.5, MRD equals to the remaining time until
+            // earliest T2(RenewState) or valid lifetimes of all leases in all IA have expired
+            // (RebindState), and message exchange is terminated when the earliest time T2 is
+            // reached, at which point client begins the Rebind message exchange, however, section
+            // 15 says the message exchange fails(terminated) once MRD seconds have elapsed since
+            // the client first transmitted the message. So far MRD is being used for Renew, Rebind
+            // and Confirm message retransmission. Given we don't support Confirm message yet, we
+            // can just use rebindTimeout and expirationTimeout on behalf of MRD which have been
+            // scheduled in BoundState to simplify the implementation, therefore, we don't need to
+            // explicitly assign the MRD in the subclasses.
             if (mMaxRetransCount != 0 && mRetransCount > mMaxRetransCount) {
                 onMessageExchangeFailed();
                 Log.i(TAG, "client has transmitted the message " + mMaxRetransCount
@@ -716,12 +719,6 @@ public class Dhcp6Client extends StateMachine {
                 // Bound state after a success update.
                 transitionTo(mBoundState);
             }
-        }
-
-        @Override
-        protected void onMessageExchangeFailed() {
-            notifyPrefixDelegation(DHCP6_PD_PREFIX_MSG_EXCHANGE_TERMINATED, null);
-            transitionTo(mSolicitState);
         }
     }
 
