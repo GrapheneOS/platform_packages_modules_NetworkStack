@@ -122,8 +122,6 @@ public class Dhcp6Client extends StateMachine {
     // Since currently only one IAID is supported, a well-known value can be used (0).
     private static final int IAID = 0;
 
-    private int mTransId;
-    private long mTransStartMillis;
     @Nullable private PrefixDelegation mAdvertise;
     @Nullable private PrefixDelegation mReply;
     @Nullable private byte[] mServerDuid;
@@ -241,6 +239,9 @@ public class Dhcp6Client extends StateMachine {
      * which is triggered by CMD_RECEIVED_PACKET sent by the receive thread.
      */
     abstract class PacketRetransmittingState extends State {
+        private int mTransId = 0;
+        private long mTransStartMillis = 0;
+
         private long mRetransTimeout = -1;
         private int mRetransCount = 0;
         private final long mInitialDelayMillis;
@@ -263,6 +264,10 @@ public class Dhcp6Client extends StateMachine {
             mTransId = mRandom.nextInt() & 0xffffff;
             mTransStartMillis = SystemClock.elapsedRealtime();
             sendMessageDelayed(CMD_KICK, mInitialDelayMillis);
+        }
+
+        private long getElapsedTimeMs() {
+            return SystemClock.elapsedRealtime() - mTransStartMillis;
         }
 
         private void handleReceivedPacket(Dhcp6Packet packet) {
@@ -407,10 +412,6 @@ public class Dhcp6Client extends StateMachine {
         mAdvertise = null;
         mReply = null;
         mServerDuid = null;
-    }
-
-    private long getElapsedTimeMs() {
-        return SystemClock.elapsedRealtime() - mTransStartMillis;
     }
 
     @SuppressWarnings("ByteBufferBackingArray")
