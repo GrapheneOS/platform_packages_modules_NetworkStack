@@ -259,15 +259,26 @@ public class Dhcp6Client extends StateMachine {
         @Override
         public void enter() {
             super.enter();
-            // Every message exchange generates a new transaction id and starts the transaction
-            // timer (used to set the Elapsed Time option).
+            // Every message exchange generates a new transaction id.
             mTransId = mRandom.nextInt() & 0xffffff;
-            mTransStartMillis = SystemClock.elapsedRealtime();
             sendMessageDelayed(CMD_KICK, mInitialDelayMillis);
         }
 
-        private long getElapsedTimeMs() {
-            return SystemClock.elapsedRealtime() - mTransStartMillis;
+        private void handleKick() {
+            // rfc8415#section-21.9: The elapsed time is measured from the time at which the
+            // client sent the first message in the message exchange, and the elapsed-time field
+            // is set to 0 in the first message in the message exchange.
+            final long elapsedTimeMs;
+            if (mRetransCount == 0) {
+                elapsedTimeMs = 0;
+                mTransStartMillis = SystemClock.elapsedRealtime();
+            } else {
+                elapsedTimeMs = SystemClock.elapsedRealtime() - mTransStartMillis;
+            }
+
+            sendPacket(mTransId, elapsedTimeMs);
+            // Compares retransmission parameters and reschedules alarm accordingly.
+            scheduleKick();
         }
 
         private void handleReceivedPacket(Dhcp6Packet packet) {
@@ -284,8 +295,7 @@ public class Dhcp6Client extends StateMachine {
 
             switch (message.what) {
                 case CMD_KICK:
-                    sendPacket(mTransId, getElapsedTimeMs());
-                    scheduleKick();
+                    handleKick();
                     return HANDLED;
                 case CMD_RECEIVED_PACKET:
                     handleReceivedPacket((Dhcp6Packet) message.obj);
