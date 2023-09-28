@@ -258,6 +258,10 @@ public class Dhcp6Client extends StateMachine {
         @Override
         public void enter() {
             super.enter();
+            // Every message exchange generates a new transaction id and starts the transaction
+            // timer (used to set the Elapsed Time option).
+            mTransId = mRandom.nextInt() & 0xffffff;
+            mTransStartMillis = SystemClock.elapsedRealtime();
             sendMessageDelayed(CMD_KICK, mInitialDelayMillis);
         }
 
@@ -399,11 +403,6 @@ public class Dhcp6Client extends StateMachine {
         mServerDuid = null;
     }
 
-    private void startNewTransaction() {
-        mTransId = mRandom.nextInt() & 0xffffff;
-        mTransStartMillis = SystemClock.elapsedRealtime();
-    }
-
     private long getElapsedTimeMs() {
         return SystemClock.elapsedRealtime() - mTransStartMillis;
     }
@@ -517,7 +516,6 @@ public class Dhcp6Client extends StateMachine {
         @Override
         public void enter() {
             super.enter();
-            startNewTransaction();
         }
 
         @Override
@@ -690,7 +688,6 @@ public class Dhcp6Client extends StateMachine {
         @Override
         public void enter() {
             super.enter();
-            startNewTransaction();
         }
 
         @Override
