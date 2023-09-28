@@ -425,7 +425,9 @@ public class Dhcp6Packet {
             Log.e(TAG, "IA_PD option with invalid T1 " + t1 + " or T2 " + t2);
             return false;
         }
-        if (t1 > t2) {
+
+        // Generally, t1 must be smaller or equal to t2 (except when t2 is 0).
+        if (t2 != 0 && t1 > t2) {
             Log.e(TAG, "IA_PD option with T1 " + t1 + " greater than T2 " + t2);
             return false;
         }
@@ -441,8 +443,10 @@ public class Dhcp6Packet {
                     + " greater than valid lifetime " + valid);
             return false;
         }
-        if (preferred < t2) {
-            Log.e(TAG, "preferred lifetime " + preferred + " is samller than T2 " + t2);
+
+        // If t2 is 0, ignore it.
+        if (t2 != 0 && preferred < t2) {
+            Log.e(TAG, "preferred lifetime " + preferred + " is smaller than T2 " + t2);
             return false;
         }
         return true;
