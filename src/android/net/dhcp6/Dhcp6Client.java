@@ -408,29 +408,29 @@ public class Dhcp6Client extends StateMachine {
     }
 
     @SuppressWarnings("ByteBufferBackingArray")
-    private boolean sendSolicitPacket(final ByteBuffer iapd) {
-        final ByteBuffer packet = Dhcp6Packet.buildSolicitPacket(mTransId,
-                getElapsedTimeMs(), iapd.array(), mClientDuid, true /* rapidCommit */);
+    private boolean sendSolicitPacket(int transId, long elapsedTimeMs, final ByteBuffer iapd) {
+        final ByteBuffer packet = Dhcp6Packet.buildSolicitPacket(transId, elapsedTimeMs,
+                iapd.array(), mClientDuid, true /* rapidCommit */);
         return transmitPacket(packet, "solicit");
     }
 
     @SuppressWarnings("ByteBufferBackingArray")
-    private boolean sendRequestPacket(final ByteBuffer iapd) {
-        final ByteBuffer packet = Dhcp6Packet.buildRequestPacket(mTransId, getElapsedTimeMs(),
+    private boolean sendRequestPacket(int transId, long elapsedTimeMs, final ByteBuffer iapd) {
+        final ByteBuffer packet = Dhcp6Packet.buildRequestPacket(transId, elapsedTimeMs,
                 iapd.array(), mClientDuid, mServerDuid);
         return transmitPacket(packet, "request");
     }
 
     @SuppressWarnings("ByteBufferBackingArray")
-    private boolean sendRenewPacket(final ByteBuffer iapd) {
-        final ByteBuffer packet = Dhcp6Packet.buildRenewPacket(mTransId, getElapsedTimeMs(),
+    private boolean sendRenewPacket(int transId, long elapsedTimeMs, final ByteBuffer iapd) {
+        final ByteBuffer packet = Dhcp6Packet.buildRenewPacket(transId, elapsedTimeMs,
                 iapd.array(), mClientDuid, mServerDuid);
         return transmitPacket(packet, "renew");
     }
 
     @SuppressWarnings("ByteBufferBackingArray")
-    private boolean sendRebindPacket(final ByteBuffer iapd) {
-        final ByteBuffer packet = Dhcp6Packet.buildRebindPacket(mTransId, getElapsedTimeMs(),
+    private boolean sendRebindPacket(int transId, long elapsedTimeMs, final ByteBuffer iapd) {
+        final ByteBuffer packet = Dhcp6Packet.buildRebindPacket(transId, elapsedTimeMs,
                 iapd.array(), mClientDuid);
         return transmitPacket(packet, "rebind");
     }
@@ -520,7 +520,7 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            return sendSolicitPacket(buildEmptyIaPdOption());
+            return sendSolicitPacket(transId, elapsedTimeMs, buildEmptyIaPdOption());
         }
 
         // TODO: support multiple prefixes.
@@ -563,7 +563,7 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            return sendRequestPacket(buildIaPdOption(mAdvertise));
+            return sendRequestPacket(transId, elapsedTimeMs, buildIaPdOption(mAdvertise));
         }
 
         @Override
@@ -745,7 +745,7 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            return sendRenewPacket(buildIaPdOption(mReply));
+            return sendRenewPacket(transId, elapsedTimeMs, buildIaPdOption(mReply));
         }
     }
 
@@ -761,7 +761,7 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            return sendRebindPacket(buildIaPdOption(mReply));
+            return sendRebindPacket(transId, elapsedTimeMs, buildIaPdOption(mReply));
         }
     }
 
