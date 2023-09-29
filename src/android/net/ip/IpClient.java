@@ -809,7 +809,7 @@ public class IpClient extends StateMachine {
         public AndroidPacketFilter maybeCreateApfFilter(Context context,
                 ApfFilter.ApfConfiguration config, InterfaceParams ifParams,
                 IpClientCallbacksWrapper cb) {
-            if (isNetworkStackFeatureNotChickenedOut(
+            if (isNetworkStackFeatureNotChickenedOut(context,
                     NetworkStackUtils.APF_NEW_RA_FILTER_FORCE_DISABLE)) {
                 return ApfFilter.maybeCreate(context, config, ifParams, cb);
             } else {
@@ -820,10 +820,11 @@ public class IpClient extends StateMachine {
         /**
          * Check whether one specific experimental feature in NetworkStack module from
          * {@link DeviceConfig} is not disabled.
-         * @see DeviceConfigUtils#isNetworkStackFeatureNotChickenedOut(String)
+         * @see DeviceConfigUtils#isNetworkStackFeatureNotChickenedOut(Context, String)
          */
-        public boolean isNetworkStackFeatureNotChickenedOut(final String name) {
-            return DeviceConfigUtils.isNetworkStackFeatureNotChickenedOut(name);
+        public boolean isNetworkStackFeatureNotChickenedOut(final Context context,
+                final String name) {
+            return DeviceConfigUtils.isNetworkStackFeatureNotChickenedOut(context, name);
         }
 
         /**
@@ -2161,7 +2162,7 @@ public class IpClient extends StateMachine {
         }
         // Check chickened out flag first before reading IPv6 sysctl, which can prevent from
         // triggering a potential kernel bug about the sysctl.
-        if (mDependencies.isNetworkStackFeatureNotChickenedOut(
+        if (mDependencies.isNetworkStackFeatureNotChickenedOut(mContext,
                 IPCLIENT_IGNORE_LOW_RA_LIFETIME_FORCE_DISABLE)
                 && mDependencies.hasIpv6Sysctl(mInterfaceName, ACCEPT_RA_MIN_LFT)) {
             setIpv6Sysctl(ACCEPT_RA_MIN_LFT, mAcceptRaMinLft);
@@ -2243,7 +2244,7 @@ public class IpClient extends StateMachine {
         setIpv6Sysctl(ACCEPT_RA, 2);
         setIpv6Sysctl(ACCEPT_RA_DEFRTR, 1);
         maybeRestoreDadTransmits();
-        if (mDependencies.isNetworkStackFeatureNotChickenedOut(
+        if (mDependencies.isNetworkStackFeatureNotChickenedOut(mContext,
                 IPCLIENT_IGNORE_LOW_RA_LIFETIME_FORCE_DISABLE)
                 && mDependencies.hasIpv6Sysctl(mInterfaceName, ACCEPT_RA_MIN_LFT)) {
             setIpv6Sysctl(ACCEPT_RA_MIN_LFT, 0 /* sysctl default */);
