@@ -762,7 +762,7 @@ public class TcpSocketTracker {
         public boolean shouldDisableInLightDoze() {
             // Light doze mode status checking API is only available at T or later releases.
             return SdkLevel.isAtLeastT() && DeviceConfigUtils.isNetworkStackFeatureNotChickenedOut(
-                    SKIP_TCP_POLL_IN_LIGHT_DOZE);
+                    mContext, SKIP_TCP_POLL_IN_LIGHT_DOZE);
         }
     }
 }
