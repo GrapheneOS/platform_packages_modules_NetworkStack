@@ -122,8 +122,6 @@ public class Dhcp6Client extends StateMachine {
     // Since currently only one IAID is supported, a well-known value can be used (0).
     private static final int IAID = 0;
 
-    private int mTransId;
-    private long mTransStartMillis;
     @Nullable private PrefixDelegation mAdvertise;
     @Nullable private PrefixDelegation mReply;
     @Nullable private byte[] mServerDuid;
@@ -240,25 +238,53 @@ public class Dhcp6Client extends StateMachine {
      * which is called when the alarm fires and a packet needs to be transmitted, and receivePacket,
      * which is triggered by CMD_RECEIVED_PACKET sent by the receive thread.
      */
-    abstract class PacketRetransmittingState extends State {
+    abstract class MessageExchangeState extends State {
+        private int mTransId = 0;
+        private long mTransStartMs = 0;
+
         private long mRetransTimeout = -1;
         private int mRetransCount = 0;
-        private final long mInitialDelayMillis;
-        private final long mInitialRetransTimeMillis;
-        private final long mMaxRetransTimeMillis;
+        private final long mInitialDelayMs;
+        private final long mInitialRetransTimeMs;
+        private final long mMaxRetransTimeMs;
         private final int mMaxRetransCount;
 
-        PacketRetransmittingState(final long delay, final long irt, final long mrt, final int mrc) {
-            mInitialDelayMillis = delay;
-            mInitialRetransTimeMillis = irt;
-            mMaxRetransTimeMillis = mrt;
+        MessageExchangeState(final long delay, final long irt, final long mrt, final int mrc) {
+            mInitialDelayMs = delay;
+            mInitialRetransTimeMs = irt;
+            mMaxRetransTimeMs = mrt;
             mMaxRetransCount = mrc;
         }
 
         @Override
         public void enter() {
             super.enter();
-            sendMessageDelayed(CMD_KICK, mInitialDelayMillis);
+            // Every message exchange generates a new transaction id.
+            mTransId = mRandom.nextInt() & 0xffffff;
+            sendMessageDelayed(CMD_KICK, mInitialDelayMs);
+        }
+
+        private void handleKick() {
+            // rfc8415#section-21.9: The elapsed time is measured from the time at which the
+            // client sent the first message in the message exchange, and the elapsed-time field
+            // is set to 0 in the first message in the message exchange.
+            final long elapsedTimeMs;
+            if (mRetransCount == 0) {
+                elapsedTimeMs = 0;
+                mTransStartMs = SystemClock.elapsedRealtime();
+            } else {
+                elapsedTimeMs = SystemClock.elapsedRealtime() - mTransStartMs;
+            }
+
+            sendPacket(mTransId, elapsedTimeMs);
+            // Compares retransmission parameters and reschedules alarm accordingly.
+            scheduleKick();
+        }
+
+        private void handleReceivedPacket(Dhcp6Packet packet) {
+            if (packet.isValid(mTransId, mClientDuid)) {
+                receivePacket(packet);
+            }
         }
 
         @Override
@@ -269,11 +295,10 @@ public class Dhcp6Client extends StateMachine {
 
             switch (message.what) {
                 case CMD_KICK:
-                    sendPacket();
-                    scheduleKick();
+                    handleKick();
                     return HANDLED;
                 case CMD_RECEIVED_PACKET:
-                    receivePacket((Dhcp6Packet) message.obj);
+                    handleReceivedPacket((Dhcp6Packet) message.obj);
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -288,7 +313,7 @@ public class Dhcp6Client extends StateMachine {
             mRetransCount = 0;
         }
 
-        protected abstract boolean sendPacket();
+        protected abstract boolean sendPacket(int transId, long elapsedTimeMs);
         protected abstract void receivePacket(Dhcp6Packet packet);
         // If the message exchange is considered to have failed according to the retransmission
         // mechanism(i.e. client has transmitted the message MRC times or MRD seconds has elapsed
@@ -309,14 +334,13 @@ public class Dhcp6Client extends StateMachine {
         protected void scheduleKick() {
             if (mRetransTimeout == -1) {
                 // RT for the first message transmission is based on IRT.
-                mRetransTimeout =
-                        mInitialRetransTimeMillis + (long) (rand() * mInitialRetransTimeMillis);
+                mRetransTimeout = mInitialRetransTimeMs + (long) (rand() * mInitialRetransTimeMs);
             } else {
                 // RT for each subsequent message transmission is based on the previous value of RT.
                 mRetransTimeout = 2 * mRetransTimeout + (long) (rand() * mRetransTimeout);
             }
-            if (mMaxRetransTimeMillis != 0 && mRetransTimeout > mMaxRetransTimeMillis) {
-                mRetransTimeout = mMaxRetransTimeMillis + (long) (rand() * mMaxRetransTimeMillis);
+            if (mMaxRetransTimeMs != 0 && mRetransTimeout > mMaxRetransTimeMs) {
+                mRetransTimeout = mMaxRetransTimeMs + (long) (rand() * mMaxRetransTimeMs);
             }
             // Per RFC8415 section 18.2.4 and 18.2.5, MRD equals to the remaining time until
             // earliest T2(RenewState) or valid lifetimes of all leases in all IA have expired
@@ -399,39 +423,30 @@ public class Dhcp6Client extends StateMachine {
         mServerDuid = null;
     }
 
-    private void startNewTransaction() {
-        mTransId = mRandom.nextInt() & 0xffffff;
-        mTransStartMillis = SystemClock.elapsedRealtime();
-    }
-
-    private long getElapsedTimeMs() {
-        return SystemClock.elapsedRealtime() - mTransStartMillis;
-    }
-
     @SuppressWarnings("ByteBufferBackingArray")
-    private boolean sendSolicitPacket(final ByteBuffer iapd) {
-        final ByteBuffer packet = Dhcp6Packet.buildSolicitPacket(mTransId,
-                getElapsedTimeMs(), iapd.array(), mClientDuid, true /* rapidCommit */);
+    private boolean sendSolicitPacket(int transId, long elapsedTimeMs, final ByteBuffer iapd) {
+        final ByteBuffer packet = Dhcp6Packet.buildSolicitPacket(transId, elapsedTimeMs,
+                iapd.array(), mClientDuid, true /* rapidCommit */);
         return transmitPacket(packet, "solicit");
     }
 
     @SuppressWarnings("ByteBufferBackingArray")
-    private boolean sendRequestPacket(final ByteBuffer iapd) {
-        final ByteBuffer packet = Dhcp6Packet.buildRequestPacket(mTransId, getElapsedTimeMs(),
+    private boolean sendRequestPacket(int transId, long elapsedTimeMs, final ByteBuffer iapd) {
+        final ByteBuffer packet = Dhcp6Packet.buildRequestPacket(transId, elapsedTimeMs,
                 iapd.array(), mClientDuid, mServerDuid);
         return transmitPacket(packet, "request");
     }
 
     @SuppressWarnings("ByteBufferBackingArray")
-    private boolean sendRenewPacket(final ByteBuffer iapd) {
-        final ByteBuffer packet = Dhcp6Packet.buildRenewPacket(mTransId, getElapsedTimeMs(),
+    private boolean sendRenewPacket(int transId, long elapsedTimeMs, final ByteBuffer iapd) {
+        final ByteBuffer packet = Dhcp6Packet.buildRenewPacket(transId, elapsedTimeMs,
                 iapd.array(), mClientDuid, mServerDuid);
         return transmitPacket(packet, "renew");
     }
 
     @SuppressWarnings("ByteBufferBackingArray")
-    private boolean sendRebindPacket(final ByteBuffer iapd) {
-        final ByteBuffer packet = Dhcp6Packet.buildRebindPacket(mTransId, getElapsedTimeMs(),
+    private boolean sendRebindPacket(int transId, long elapsedTimeMs, final ByteBuffer iapd) {
+        final ByteBuffer packet = Dhcp6Packet.buildRebindPacket(transId, elapsedTimeMs,
                 iapd.array(), mClientDuid);
         return transmitPacket(packet, "rebind");
     }
@@ -505,7 +520,7 @@ public class Dhcp6Client extends StateMachine {
      *
      * Note: Not implement DHCPv6 server selection, always request the first Advertise we receive.
      */
-    class SolicitState extends PacketRetransmittingState {
+    class SolicitState extends MessageExchangeState {
         SolicitState() {
             // First Solicit message should be delayed by a random amount of time between 0
             // and SOL_MAX_DELAY(1s).
@@ -517,18 +532,16 @@ public class Dhcp6Client extends StateMachine {
         @Override
         public void enter() {
             super.enter();
-            startNewTransaction();
         }
 
         @Override
-        protected boolean sendPacket() {
-            return sendSolicitPacket(buildEmptyIaPdOption());
+        protected boolean sendPacket(int transId, long elapsedTimeMs) {
+            return sendSolicitPacket(transId, elapsedTimeMs, buildEmptyIaPdOption());
         }
 
         // TODO: support multiple prefixes.
         @Override
         protected void receivePacket(Dhcp6Packet packet) {
-            if (!packet.isValid(mTransId, mClientDuid)) return;
             if (packet instanceof Dhcp6AdvertisePacket) {
                 mAdvertise = packet.mPrefixDelegation;
                 if (mAdvertise != null && mAdvertise.iaid == IAID) {
@@ -557,21 +570,20 @@ public class Dhcp6Client extends StateMachine {
      * Client (re)transmits a Request message to request configuration from a specific server and
      * process the Reply message in this state.
      */
-    class RequestState extends PacketRetransmittingState {
+    class RequestState extends MessageExchangeState {
         RequestState() {
             super((long) 0 /* delay */, REQ_TIMEOUT /* IRT */, REQ_MAX_RT /* MRT */,
                     REQ_MAX_RC /* MRC */);
         }
 
         @Override
-        protected boolean sendPacket() {
-            return sendRequestPacket(buildIaPdOption(mAdvertise));
+        protected boolean sendPacket(int transId, long elapsedTimeMs) {
+            return sendRequestPacket(transId, elapsedTimeMs, buildIaPdOption(mAdvertise));
         }
 
         @Override
         protected void receivePacket(Dhcp6Packet packet) {
             if (!(packet instanceof Dhcp6ReplyPacket)) return;
-            if (!packet.isValid(mTransId, mClientDuid)) return;
             final PrefixDelegation pd = packet.mPrefixDelegation;
             if (pd != null && pd.iaid == IAID) {
                 Log.d(TAG, "Get prefix delegation option from Reply: " + pd);
@@ -682,7 +694,7 @@ public class Dhcp6Client extends StateMachine {
         }
     }
 
-    abstract class ReacquireState extends PacketRetransmittingState {
+    abstract class ReacquireState extends MessageExchangeState {
         ReacquireState(final long irt, final long mrt) {
             super(0 /* delay */, irt, mrt, 0 /* MRC */);
         }
@@ -690,13 +702,11 @@ public class Dhcp6Client extends StateMachine {
         @Override
         public void enter() {
             super.enter();
-            startNewTransaction();
         }
 
         @Override
         protected void receivePacket(Dhcp6Packet packet) {
             if (!(packet instanceof Dhcp6ReplyPacket)) return;
-            if (!packet.isValid(mTransId, mClientDuid)) return;
             final PrefixDelegation pd = packet.mPrefixDelegation;
             if (pd != null) {
                 if (pd.iaid != IAID
@@ -747,8 +757,8 @@ public class Dhcp6Client extends StateMachine {
         }
 
         @Override
-        protected boolean sendPacket() {
-            return sendRenewPacket(buildIaPdOption(mReply));
+        protected boolean sendPacket(int transId, long elapsedTimeMs) {
+            return sendRenewPacket(transId, elapsedTimeMs, buildIaPdOption(mReply));
         }
     }
 
@@ -763,8 +773,8 @@ public class Dhcp6Client extends StateMachine {
         }
 
         @Override
-        protected boolean sendPacket() {
-            return sendRebindPacket(buildIaPdOption(mReply));
+        protected boolean sendPacket(int transId, long elapsedTimeMs) {
+            return sendRebindPacket(transId, elapsedTimeMs, buildIaPdOption(mReply));
         }
     }
 
