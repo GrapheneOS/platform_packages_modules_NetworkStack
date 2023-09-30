@@ -24,10 +24,30 @@
 #include <vector>
 
 #include "apf_interpreter.h"
+#include "v5/apf_interpreter.h"
 #include "nativehelper/scoped_primitive_array.h"
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #define LOG_TAG "NetworkStackUtils-JNI"
+
+static uint32_t active_apf_interpreter_version = 4;
+
+static int run_apf_interpreter(uint8_t *program, uint32_t program_len,
+                               uint32_t ram_len, const uint8_t *packet,
+                               uint32_t packet_len, uint32_t filter_age) {
+  if (active_apf_interpreter_version == 4) {
+    return accept_packet(program, program_len, ram_len, packet, packet_len,
+                         filter_age);
+  } else {
+    return apf_run(program, program_len, ram_len, packet, packet_len,
+                         filter_age);
+  }
+}
+
+static void com_android_server_ApfTest_setApfVersion(JNIEnv*, jclass,
+                                                     jint apf_version) {
+  active_apf_interpreter_version = apf_version;
+}
 
 // JNI function acting as simply call-through to native APF interpreter.
 static jint com_android_server_ApfTest_apfSimulate(
@@ -48,8 +68,9 @@ static jint com_android_server_ApfTest_apfSimulate(
     }
 
     jint result =
-        accept_packet(buf.data(), program_len, program_len + data_len,
-                        reinterpret_cast<const uint8_t*>(packet.get()), packet_len, filter_age);
+        run_apf_interpreter(buf.data(), program_len, program_len + data_len,
+                            reinterpret_cast<const uint8_t *>(packet.get()),
+                            packet_len, filter_age);
 
     if (jdata) {
         env->SetByteArrayRegion(jdata, 0, data_len,
@@ -163,7 +184,7 @@ static jboolean com_android_server_ApfTest_compareBpfApf(JNIEnv* env, jclass, js
         const uint8_t* apf_packet;
         do {
             apf_packet = pcap_next(apf_pcap.get(), &apf_header);
-        } while (apf_packet != NULL && !accept_packet(
+        } while (apf_packet != NULL && !run_apf_interpreter(
                 reinterpret_cast<uint8_t*>(const_cast<int8_t*>(apf_program.get())),
                 apf_program.size(), 0 /* data_len */,
                 apf_packet, apf_header.len, 0 /* filter_age */));
@@ -208,8 +229,9 @@ static jboolean com_android_server_ApfTest_dropsAllPackets(JNIEnv* env, jclass, 
     }
 
     while ((apf_packet = pcap_next(apf_pcap.get(), &apf_header)) != NULL) {
-        int result = accept_packet(buf.data(), apf_program_len,
-                                    apf_program_len + data_len, apf_packet, apf_header.len, 0);
+        int result = run_apf_interpreter(buf.data(), apf_program_len,
+                                         apf_program_len + data_len, apf_packet,
+                                         apf_header.len, 0);
 
         // Return false once packet passes the filter
         if (result) {
@@ -240,6 +262,8 @@ extern "C" jint JNI_OnLoad(JavaVM* vm, void*) {
                     (void*)com_android_server_ApfTest_compareBpfApf },
             { "dropsAllPackets", "([B[BLjava/lang/String;)Z",
                     (void*)com_android_server_ApfTest_dropsAllPackets },
+            {"setApfVersion", "(I)V",
+                    (void *)com_android_server_ApfTest_setApfVersion},
     };
 
     jniRegisterNativeMethods(env, "android/net/apf/ApfTest",
