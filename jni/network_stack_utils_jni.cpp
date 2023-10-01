@@ -108,14 +108,13 @@ static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jclass clazz, jobj
 
         // Check this is not a fragment.
         BPF_LOAD_IPV4_BE16(frag_off),
-        BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K,   IP_MF | IP_OFFMASK, 0, 1),
-        BPF_REJECT,
+        BPF2_REJECT_IF_ANY_MASKED_BITS_SET(IP_MF | IP_OFFMASK),
 
-        // Get the IP header length.
-        BPF_STMT(BPF_LDX | BPF_B    | BPF_MSH, kEtherHeaderLen),
+        // Get the IP header length.  X := 4 * (Byte[offset] & 0xf)
+        BPF_STMT(BPF_LDX | BPF_B | BPF_MSH, kEtherHeaderLen),
 
         // Check the destination port.
-        BPF_STMT(BPF_LD  | BPF_H    | BPF_IND, kUDPDstPortIndirectOffset),
+        BPF_STMT(BPF_LD  | BPF_H | BPF_IND, kUDPDstPortIndirectOffset),
         BPF2_REJECT_IF_NOT_EQUAL(kDhcpClientPort),
 
         BPF_ACCEPT,
@@ -180,7 +179,7 @@ static void network_stack_utils_attachControlPacketFilter(
 
         // Accept all ARP.
         // TODO: Figure out how to better filter ARPs on noisy networks.
-        BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   ETHERTYPE_ARP, 16, 0),
+        BPF2_ACCEPT_IF_EQUAL(ETHERTYPE_ARP),
 
         // If IPv4:
         BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   ETHERTYPE_IP, 0, 9),
