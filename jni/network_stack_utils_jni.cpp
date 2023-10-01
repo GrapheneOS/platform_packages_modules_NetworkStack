@@ -42,7 +42,6 @@ namespace android {
 constexpr const char NETWORKSTACKUTILS_PKG_NAME[] =
     "com/android/networkstack/util/NetworkStackUtils";
 
-static const uint32_t kEtherTypeOffset = offsetof(ether_header, ether_type);
 static const uint32_t kEtherHeaderLen = sizeof(ether_header);
 static const uint32_t kIPv4Protocol = kEtherHeaderLen + offsetof(iphdr, protocol);
 static const uint32_t kIPv4FlagsOffset = kEtherHeaderLen + offsetof(iphdr, frag_off);
@@ -174,8 +173,8 @@ static void network_stack_utils_attachControlPacketFilter(
     //     '(ip and udp port 68)' or
     //     '(icmp6 and ip6[40] >= 133 and ip6[40] <= 136)'
     static sock_filter filter_code[] = {
-        // Load the link layer next payload field.
-        BPF_STMT(BPF_LD  | BPF_H    | BPF_ABS,  kEtherTypeOffset),
+        // Load the ethertype from skb->protocol
+        BPF_LOAD_SKB_PROTOCOL,
 
         // Accept all ARP.
         // TODO: Figure out how to better filter ARPs on noisy networks.
