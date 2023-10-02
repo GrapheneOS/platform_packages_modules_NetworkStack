@@ -1087,11 +1087,6 @@ public class ApfFilter implements AndroidPacketFilter {
             return Math.max(0, filterLifetime);
         }
 
-        @GuardedBy("ApfFilter.this")
-        private boolean shouldFilter() {
-            return getRemainingFilterLft() > 0;
-        }
-
         // Append a filter for this RA to {@code gen}. Jump to DROP_LABEL if it should be dropped.
         // Jump to the next filter if packet doesn't match this RA.
         // Return Long.MAX_VALUE if we don't install any filter program for this RA. As the return
@@ -2023,7 +2018,8 @@ public class ApfFilter implements AndroidPacketFilter {
             }
 
             for (Ra ra : mRas) {
-                if (!ra.shouldFilter()) continue;
+                // skip filter if it has expired.
+                if (ra.getRemainingFilterLft() <= 0) continue;
                 ra.generateFilterLocked(gen);
                 // Stop if we get too big.
                 if (gen.programLengthOverEstimate() > maximumApfProgramSize) {
