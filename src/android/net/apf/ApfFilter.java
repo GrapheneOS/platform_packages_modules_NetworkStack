@@ -949,6 +949,9 @@ public class ApfFilter implements AndroidPacketFilter {
             // Does their size match?
             if (newRa.mPacket.capacity() != mPacket.capacity()) return MatchType.NO_MATCH;
 
+            // If the filter has expired, it cannot match the new RA.
+            if (getRemainingFilterLft(currentTimeSeconds()) <= 0) return MatchType.NO_MATCH;
+
             // Check if all MATCH sections are byte-identical.
             final byte[] newPacket = newRa.mPacket.array();
             final byte[] oldPacket = mPacket.array();
@@ -1065,18 +1068,6 @@ public class ApfFilter implements AndroidPacketFilter {
                 minLifetime = (int) Math.min(minLifetime, section.lifetime);
             }
             return minLifetime;
-        }
-
-        // How many seconds does this RA's have to live, taking into account the fact
-        // that we might have seen it a while ago.
-        private long currentLifetime() {
-            return mMinLifetime - (currentTimeSeconds() - mLastSeen);
-        }
-
-        boolean isExpired() {
-            // TODO: We may want to handle 0 lifetime RAs differently, if they are common. We'll
-            // have to calculate the filter lifetime specially as a fraction of 0 is still 0.
-            return currentLifetime() <= 0;
         }
 
         // Filter for a fraction of the lifetime and adjust for the age of the RA.
@@ -1991,7 +1982,6 @@ public class ApfFilter implements AndroidPacketFilter {
     @GuardedBy("this")
     @VisibleForTesting
     public void installNewProgramLocked() {
-        purgeExpiredRasLocked();
         ArrayList<Ra> rasToFilter = new ArrayList<>();
         final byte[] program;
         long programMinLifetime = Long.MAX_VALUE;
@@ -2077,18 +2067,6 @@ public class ApfFilter implements AndroidPacketFilter {
         log(msg + HexDump.toHexString(packet, 0, length, false /* lowercase */));
     }
 
-    @GuardedBy("this")
-    private void purgeExpiredRasLocked() {
-        for (int i = 0; i < mRas.size();) {
-            if (mRas.get(i).isExpired()) {
-                log("Expiring " + mRas.get(i));
-                mRas.remove(i);
-            } else {
-                i++;
-            }
-        }
-    }
-
     /**
      * Process an RA packet, updating the list of known RAs and installing a new APF program
      * if the current APF program should be updated.
@@ -2138,7 +2116,6 @@ public class ApfFilter implements AndroidPacketFilter {
                 return ProcessRaResult.IGNORED;
             }
         }
-        purgeExpiredRasLocked();
         if (mRas.size() >= MAX_RAS) {
             // Remove the last (i.e. oldest) RA.
             mRas.remove(mRas.size() - 1);
