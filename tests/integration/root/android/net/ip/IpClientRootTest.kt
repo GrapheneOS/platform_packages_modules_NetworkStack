@@ -27,7 +27,6 @@ import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener
 import android.net.ipmemorystore.Status
 import android.net.networkstack.TestNetworkStackServiceClient
 import android.os.Process
-import android.provider.DeviceConfig
 import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
 import com.android.net.module.util.DeviceConfigUtils
@@ -185,10 +184,19 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
         setDeviceConfigProperty(feature, if (enabled) "1" else "999999999")
     }
 
-    override fun isFeatureEnabled(name: String, defaultEnabled: Boolean): Boolean {
+    override fun isFeatureEnabled(name: String): Boolean {
         automation.adoptShellPermissionIdentity(READ_DEVICE_CONFIG, WRITE_DEVICE_CONFIG)
         try {
-            return DeviceConfigUtils.isNetworkStackFeatureEnabled(mContext, name, defaultEnabled)
+            return DeviceConfigUtils.isNetworkStackFeatureEnabled(mContext, name)
+        } finally {
+            automation.dropShellPermissionIdentity()
+        }
+    }
+
+    override fun isFeatureNotChickenedOut(name: String): Boolean {
+        automation.adoptShellPermissionIdentity(READ_DEVICE_CONFIG, WRITE_DEVICE_CONFIG)
+        try {
+            return DeviceConfigUtils.isNetworkStackFeatureNotChickenedOut(mContext, name)
         } finally {
             automation.dropShellPermissionIdentity()
         }
