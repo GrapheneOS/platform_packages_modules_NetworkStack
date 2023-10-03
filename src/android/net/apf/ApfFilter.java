@@ -25,6 +25,7 @@ import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
 import static android.system.OsConstants.IPPROTO_TCP;
 import static android.system.OsConstants.IPPROTO_UDP;
+import static android.system.OsConstants.SOCK_CLOEXEC;
 import static android.system.OsConstants.SOCK_RAW;
 
 import static com.android.net.module.util.NetworkStackConstants.ETHER_BROADCAST;
@@ -522,10 +523,10 @@ public class ApfFilter implements AndroidPacketFilter {
                 // Install basic filters
                 installNewProgramLocked();
             }
-            socket = Os.socket(AF_PACKET, SOCK_RAW, ETH_P_IPV6);
+            socket = Os.socket(AF_PACKET, SOCK_RAW | SOCK_CLOEXEC, 0);
+            NetworkStackUtils.attachRaFilter(socket);
             SocketAddress addr = makePacketSocketAddress(ETH_P_IPV6, mInterfaceParams.index);
             Os.bind(socket, addr);
-            NetworkStackUtils.attachRaFilter(socket);
         } catch(SocketException|ErrnoException e) {
             Log.e(TAG, "Error starting filter", e);
             return;
