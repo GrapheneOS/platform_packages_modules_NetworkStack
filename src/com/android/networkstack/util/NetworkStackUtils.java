@@ -393,8 +393,7 @@ public class NetworkStackUtils {
      * Attaches a socket filter that accepts ICMPv6 router advertisements to the given socket.
      * @param fd the socket's {@link FileDescriptor}.
      */
-    public static native void attachRaFilter(FileDescriptor fd)
-            throws SocketException;
+    public static native void attachRaFilter(FileDescriptor fd) throws ErrnoException;
 
     /**
      * Attaches a socket filter that accepts L2-L4 signaling traffic required for IP connectivity.
