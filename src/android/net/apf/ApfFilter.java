@@ -536,8 +536,8 @@ public class ApfFilter implements AndroidPacketFilter {
 
     // Returns seconds since device boot.
     @VisibleForTesting
-    protected long secondsSinceBoot() {
-        return SystemClock.elapsedRealtime() / DateUtils.SECOND_IN_MILLIS;
+    protected int secondsSinceBoot() {
+        return (int) (SystemClock.elapsedRealtime() / DateUtils.SECOND_IN_MILLIS);
     }
 
     public static class InvalidRaException extends Exception {
@@ -645,7 +645,7 @@ public class ApfFilter implements AndroidPacketFilter {
         // Minimum lifetime in packet
         private final int mMinLifetime;
         // When the packet was last captured, in seconds since Unix Epoch
-        private final long mLastSeen;
+        private final int mLastSeen;
 
         // For debugging only. Offsets into the packet where PIOs are.
         private final ArrayList<Integer> mPrefixOptionOffsets = new ArrayList<>();
@@ -1071,7 +1071,7 @@ public class ApfFilter implements AndroidPacketFilter {
         }
 
         // Filter for a fraction of the lifetime and adjust for the age of the RA.
-        int getRemainingFilterLft(long currentTimeSeconds) {
+        int getRemainingFilterLft(int currentTimeSeconds) {
             final int filterLifetime = (int) ((mMinLifetime / FRACTION_OF_LIFETIME_TO_FILTER)
                     - (currentTimeSeconds - mLastSeen));
             return Math.max(0, filterLifetime);
@@ -1080,7 +1080,7 @@ public class ApfFilter implements AndroidPacketFilter {
         // Append a filter for this RA to {@code gen}. Jump to DROP_LABEL if it should be dropped.
         // Jump to the next filter if packet doesn't match this RA.
         @GuardedBy("ApfFilter.this")
-        void generateFilterLocked(ApfGenerator gen, long timeSeconds)
+        void generateFilterLocked(ApfGenerator gen, int timeSeconds)
                 throws IllegalInstructionException {
             String nextFilterLabel = "Ra" + getUniqueNumberLocked();
             // Skip if packet is not the right size
@@ -1404,10 +1404,10 @@ public class ApfFilter implements AndroidPacketFilter {
 
     // When did we last install a filter program? In seconds since Unix Epoch.
     @GuardedBy("this")
-    private long mLastTimeInstalledProgram;
+    private int mLastTimeInstalledProgram;
     // How long should the last installed filter program live for? In seconds.
     @GuardedBy("this")
-    private long mLastInstalledProgramMinLifetime;
+    private int mLastInstalledProgramMinLifetime;
     @GuardedBy("this")
     private ApfProgramEvent.Builder mLastInstallEvent;
 
@@ -1975,15 +1975,15 @@ public class ApfFilter implements AndroidPacketFilter {
     public void installNewProgramLocked() {
         ArrayList<Ra> rasToFilter = new ArrayList<>();
         final byte[] program;
-        long programMinLft = Long.MAX_VALUE;
-        long maximumApfProgramSize = mApfCapabilities.maximumApfProgramSize;
+        int programMinLft = Integer.MAX_VALUE;
+        int maximumApfProgramSize = mApfCapabilities.maximumApfProgramSize;
         if (mApfCapabilities.hasDataAccess()) {
             // Reserve space for the counters.
             maximumApfProgramSize -= Counter.totalSize();
         }
 
         // Ensure the entire APF program uses the same time base.
-        long timeSeconds = secondsSinceBoot();
+        int timeSeconds = secondsSinceBoot();
         try {
             // Step 1: Determine how many RA filters we can fit in the program.
             ApfGenerator gen = emitPrologueLocked();
@@ -2042,13 +2042,13 @@ public class ApfFilter implements AndroidPacketFilter {
     }
 
     @GuardedBy("this")
-    private void logApfProgramEventLocked(long now) {
+    private void logApfProgramEventLocked(int now) {
         if (mLastInstallEvent == null) {
             return;
         }
         ApfProgramEvent.Builder ev = mLastInstallEvent;
         mLastInstallEvent = null;
-        final long actualLifetime = now - mLastTimeInstalledProgram;
+        final int actualLifetime = now - mLastTimeInstalledProgram;
         ev.setActualLifetime(actualLifetime);
         if (actualLifetime < APF_PROGRAM_EVENT_LIFETIME_THRESHOLD) {
             return;
