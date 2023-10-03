@@ -1047,7 +1047,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
         // What is the minimum of all lifetimes within {@code packet} in seconds?
         // Precondition: matches(packet, length) already returned true.
-        int minLifetime() {
+        private int minLifetime() {
             // While technically most lifetimes in the RA are u32s, as far as the RA filter is
             // concerned, INT_MAX is still a *much* longer lifetime than any filter would ever
             // reasonably be active for.
@@ -1069,7 +1069,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
         // How many seconds does this RA's have to live, taking into account the fact
         // that we might have seen it a while ago.
-        long currentLifetime() {
+        private long currentLifetime() {
             return mMinLifetime - (currentTimeSeconds() - mLastSeen);
         }
 
@@ -1088,7 +1088,7 @@ public class ApfFilter implements AndroidPacketFilter {
         }
 
         @GuardedBy("ApfFilter.this")
-        boolean shouldFilter() {
+        private boolean shouldFilter() {
             return filterLifetime() > 0;
         }
 
