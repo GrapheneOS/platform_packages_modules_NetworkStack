@@ -1081,7 +1081,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
         // Filter for a fraction of the lifetime and adjust for the age of the RA.
         @GuardedBy("ApfFilter.this")
-        int filterLifetime() {
+        int getRemainingFilterLft() {
             final int filterLifetime = (int) ((mMinLifetime / FRACTION_OF_LIFETIME_TO_FILTER)
                     - (mProgramBaseTime - mLastSeen));
             return Math.max(0, filterLifetime);
@@ -1089,7 +1089,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
         @GuardedBy("ApfFilter.this")
         private boolean shouldFilter() {
-            return filterLifetime() > 0;
+            return getRemainingFilterLft() > 0;
         }
 
         // Append a filter for this RA to {@code gen}. Jump to DROP_LABEL if it should be dropped.
@@ -1106,7 +1106,7 @@ public class ApfFilter implements AndroidPacketFilter {
             gen.addJumpIfR0NotEquals(mPacket.capacity(), nextFilterLabel);
             // Skip filter if expired
             gen.addLoadFromMemory(Register.R0, gen.FILTER_AGE_MEMORY_SLOT);
-            gen.addJumpIfR0GreaterThan(filterLifetime(), nextFilterLabel);
+            gen.addJumpIfR0GreaterThan(getRemainingFilterLft(), nextFilterLabel);
             for (PacketSection section : mPacketSections) {
                 // Generate code to match the packet bytes.
                 if (section.type == PacketSection.Type.MATCH) {
@@ -1186,7 +1186,7 @@ public class ApfFilter implements AndroidPacketFilter {
             maybeSetupCounter(gen, Counter.DROPPED_RA);
             gen.addJump(mCountAndDropLabel);
             gen.defineLabel(nextFilterLabel);
-            return filterLifetime();
+            return getRemainingFilterLft();
         }
     }
 
