@@ -1013,8 +1013,8 @@ public abstract class ApfTest {
         }
 
         @Override
-        protected long currentTimeSeconds() {
-            return mCurrentTimeMs / DateUtils.SECOND_IN_MILLIS;
+        protected int secondsSinceBoot() {
+            return (int) (mCurrentTimeMs / DateUtils.SECOND_IN_MILLIS);
         }
 
         @Override
