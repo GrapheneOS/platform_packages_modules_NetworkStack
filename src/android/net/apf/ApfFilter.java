@@ -1080,10 +1080,9 @@ public class ApfFilter implements AndroidPacketFilter {
         }
 
         // Filter for a fraction of the lifetime and adjust for the age of the RA.
-        @GuardedBy("ApfFilter.this")
-        int getRemainingFilterLft() {
+        int getRemainingFilterLft(long currentTimeSeconds) {
             final int filterLifetime = (int) ((mMinLifetime / FRACTION_OF_LIFETIME_TO_FILTER)
-                    - (mProgramBaseTime - mLastSeen));
+                    - (currentTimeSeconds - mLastSeen));
             return Math.max(0, filterLifetime);
         }
 
@@ -1101,7 +1100,7 @@ public class ApfFilter implements AndroidPacketFilter {
             gen.addJumpIfR0NotEquals(mPacket.capacity(), nextFilterLabel);
             // Skip filter if expired
             gen.addLoadFromMemory(Register.R0, gen.FILTER_AGE_MEMORY_SLOT);
-            gen.addJumpIfR0GreaterThan(getRemainingFilterLft(), nextFilterLabel);
+            gen.addJumpIfR0GreaterThan(getRemainingFilterLft(mProgramBaseTime), nextFilterLabel);
             for (PacketSection section : mPacketSections) {
                 // Generate code to match the packet bytes.
                 if (section.type == PacketSection.Type.MATCH) {
@@ -1181,7 +1180,7 @@ public class ApfFilter implements AndroidPacketFilter {
             maybeSetupCounter(gen, Counter.DROPPED_RA);
             gen.addJump(mCountAndDropLabel);
             gen.defineLabel(nextFilterLabel);
-            return getRemainingFilterLft();
+            return getRemainingFilterLft(mProgramBaseTime);
         }
     }
 
@@ -2019,7 +2018,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
             for (Ra ra : mRas) {
                 // skip filter if it has expired.
-                if (ra.getRemainingFilterLft() <= 0) continue;
+                if (ra.getRemainingFilterLft(mProgramBaseTime) <= 0) continue;
                 ra.generateFilterLocked(gen);
                 // Stop if we get too big.
                 if (gen.programLengthOverEstimate() > maximumApfProgramSize) {
