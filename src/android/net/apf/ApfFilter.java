@@ -2100,7 +2100,7 @@ public class ApfFilter implements AndroidPacketFilter {
                 if (mTokenBucket.get()) {
                     installNewProgramLocked();
                 } else {
-                    Log.wtf(TAG, "Failed to install prog for tracked RA, too many updates. " + ra);
+                    Log.e(TAG, "Failed to install prog for tracked RA, too many updates. " + ra);
                 }
                 // TODO: clean up ProcessRaResults and update metrics collection.
                 return ProcessRaResult.MATCH;
@@ -2119,7 +2119,7 @@ public class ApfFilter implements AndroidPacketFilter {
         if (mTokenBucket.get()) {
             installNewProgramLocked();
         } else {
-            Log.wtf(TAG, "Failed to install prog for new RA, too many updates. " + ra);
+            Log.e(TAG, "Failed to install prog for new RA, too many updates. " + ra);
         }
         // TODO: clean up ProcessRaResults and update metrics collection.
         return ProcessRaResult.UPDATE_NEW_RA;
