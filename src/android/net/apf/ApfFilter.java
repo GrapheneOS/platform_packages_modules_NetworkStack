@@ -657,9 +657,6 @@ public class ApfFilter implements AndroidPacketFilter {
         // For debugging only. Offsets into the packet where RIO options are.
         private final ArrayList<Integer> mRioOptionOffsets = new ArrayList<>();
 
-        // For debugging only. How many times this RA was seen.
-        int seenCount = 1;
-
         // For debugging only. Returns the hex representation of the last matching packet.
         String getLastMatchingPacket() {
             return HexDump.toHexString(mPacket.array(), 0, mPacket.capacity(),
@@ -2084,9 +2081,6 @@ public class ApfFilter implements AndroidPacketFilter {
             final Ra oldRa = mRas.get(i);
             final Ra.MatchType result = oldRa.matches(ra);
             if (result == Ra.MatchType.MATCH_PASS) {
-                // Only update RA seenCount (or anything related to the RA for a MATCH_PASS, so
-                // behavior is independent of APF program state.
-                ra.seenCount += oldRa.seenCount;
                 log("Updating RA from " + oldRa + " to " + ra);
 
                 // Keep mRas in LRU order so as to prioritize generating filters for recently seen
@@ -2327,7 +2321,7 @@ public class ApfFilter implements AndroidPacketFilter {
             pw.println(ra);
             pw.increaseIndent();
             pw.println(String.format(
-                    "Seen: %d, last %ds ago", ra.seenCount, secondsSinceBoot() - ra.mLastSeen));
+                    "Last seen %ds ago", secondsSinceBoot() - ra.mLastSeen));
             if (DBG) {
                 pw.println("Last match:");
                 pw.increaseIndent();
