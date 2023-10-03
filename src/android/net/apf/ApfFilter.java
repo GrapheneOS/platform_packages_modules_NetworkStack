@@ -536,7 +536,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
     // Returns seconds since device boot.
     @VisibleForTesting
-    protected long currentTimeSeconds() {
+    protected long secondsSinceBoot() {
         return SystemClock.elapsedRealtime() / DateUtils.SECOND_IN_MILLIS;
     }
 
@@ -839,7 +839,7 @@ public class ApfFilter implements AndroidPacketFilter {
             }
 
             mPacket = ByteBuffer.wrap(Arrays.copyOf(packet, length));
-            mLastSeen = currentTimeSeconds();
+            mLastSeen = secondsSinceBoot();
 
             // Check packet in case a packet arrives before we attach RA filter
             // to our packet socket. b/29586253
@@ -950,7 +950,7 @@ public class ApfFilter implements AndroidPacketFilter {
             if (newRa.mPacket.capacity() != mPacket.capacity()) return MatchType.NO_MATCH;
 
             // If the filter has expired, it cannot match the new RA.
-            if (getRemainingFilterLft(currentTimeSeconds()) <= 0) return MatchType.NO_MATCH;
+            if (getRemainingFilterLft(secondsSinceBoot()) <= 0) return MatchType.NO_MATCH;
 
             // Check if all MATCH sections are byte-identical.
             final byte[] newPacket = newRa.mPacket.array();
@@ -1983,7 +1983,7 @@ public class ApfFilter implements AndroidPacketFilter {
         }
 
         // Ensure the entire APF program uses the same time base.
-        long timeSeconds = currentTimeSeconds();
+        long timeSeconds = secondsSinceBoot();
         try {
             // Step 1: Determine how many RA filters we can fit in the program.
             ApfGenerator gen = emitPrologueLocked();
@@ -2310,7 +2310,7 @@ public class ApfFilter implements AndroidPacketFilter {
         pw.println("Program updates: " + mNumProgramUpdates);
         pw.println(String.format(
                 "Last program length %d, installed %ds ago, lifetime %ds",
-                mLastInstalledProgram.length, currentTimeSeconds() - mLastTimeInstalledProgram,
+                mLastInstalledProgram.length, secondsSinceBoot() - mLastTimeInstalledProgram,
                 mLastInstalledProgramMinLifetime));
 
         pw.print("Denylisted Ethertypes:");
@@ -2324,7 +2324,7 @@ public class ApfFilter implements AndroidPacketFilter {
             pw.println(ra);
             pw.increaseIndent();
             pw.println(String.format(
-                    "Seen: %d, last %ds ago", ra.seenCount, currentTimeSeconds() - ra.mLastSeen));
+                    "Seen: %d, last %ds ago", ra.seenCount, secondsSinceBoot() - ra.mLastSeen));
             if (DBG) {
                 pw.println("Last match:");
                 pw.increaseIndent();
