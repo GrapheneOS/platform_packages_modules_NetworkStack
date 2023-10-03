@@ -19,6 +19,7 @@ package android.net.ip;
 import static android.system.OsConstants.AF_INET6;
 import static android.system.OsConstants.AF_UNSPEC;
 import static android.system.OsConstants.IFF_LOOPBACK;
+
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
 import static com.android.net.module.util.netlink.NetlinkConstants.IFF_LOWER_UP;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTM_F_CLONED;
@@ -188,7 +189,7 @@ public class IpClientLinkObserver implements NetworkObserver {
         mDnsServerRepository = new DnsServerRepository(config.minRdnssLifetime);
         mAlarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         mDependencies = deps;
-        mNetlinkEventParsingEnabled = deps.isNetworkStackFeatureNotChickenedOut(context,
+        mNetlinkEventParsingEnabled = deps.isFeatureNotChickenedOut(context,
                 IPCLIENT_PARSE_NETLINK_EVENTS_FORCE_DISABLE);
         mNetlinkMonitor = new MyNetlinkMonitor(h, log, mTag);
         mHandler.post(() -> {
@@ -203,8 +204,8 @@ public class IpClientLinkObserver implements NetworkObserver {
     }
 
     private boolean isIpv6LinkLocalDnsAccepted() {
-        return mDependencies.isFeatureEnabled(mContext,
-                IPCLIENT_ACCEPT_IPV6_LINK_LOCAL_DNS_VERSION, true /* default value */);
+        return mDependencies.isFeatureNotChickenedOut(mContext,
+                IPCLIENT_ACCEPT_IPV6_LINK_LOCAL_DNS_VERSION);
     }
 
     private void maybeLog(String operation, String iface, LinkAddress address) {
