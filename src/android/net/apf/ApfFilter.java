@@ -643,7 +643,7 @@ public class ApfFilter implements AndroidPacketFilter {
         private final ArrayList<PacketSection> mPacketSections = new ArrayList<>();
 
         // Minimum lifetime in packet
-        int mMinLifetime;
+        private final int mMinLifetime;
         // When the packet was last captured, in seconds since Unix Epoch
         private final long mLastSeen;
 
