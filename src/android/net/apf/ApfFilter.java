@@ -279,7 +279,7 @@ public class ApfFilter implements AndroidPacketFilter {
                         .setProgramUpdatesAllowingMulticast(mNumProgramUpdatesAllowingMulticast)
                         .build();
                 mMetricsLog.log(stats);
-                logApfProgramEventLocked(nowMs / DateUtils.SECOND_IN_MILLIS);
+                logApfProgramEventLocked(secondsSinceBoot());
             }
         }
     }
