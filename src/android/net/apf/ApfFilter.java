@@ -1072,9 +1072,11 @@ public class ApfFilter implements AndroidPacketFilter {
 
         // Filter for a fraction of the lifetime and adjust for the age of the RA.
         int getRemainingFilterLft(int currentTimeSeconds) {
-            final int filterLifetime = (int) ((mMinLifetime / FRACTION_OF_LIFETIME_TO_FILTER)
+            int filterLifetime = (int) ((mMinLifetime / FRACTION_OF_LIFETIME_TO_FILTER)
                     - (currentTimeSeconds - mLastSeen));
-            return Math.max(0, filterLifetime);
+            filterLifetime = Math.max(0, filterLifetime);
+            // Clamp filterLifetime to <= 65535, so it fits in 2 bytes.
+            return Math.min(65535, filterLifetime);
         }
 
         // Append a filter for this RA to {@code gen}. Jump to DROP_LABEL if it should be dropped.
