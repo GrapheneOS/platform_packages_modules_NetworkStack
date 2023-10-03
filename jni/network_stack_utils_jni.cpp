@@ -42,7 +42,6 @@ namespace android {
 constexpr const char NETWORKSTACKUTILS_PKG_NAME[] =
     "com/android/networkstack/util/NetworkStackUtils";
 
-static const uint32_t kEtherTypeOffset = offsetof(ether_header, ether_type);
 static const uint32_t kEtherHeaderLen = sizeof(ether_header);
 static const uint32_t kIPv4Protocol = kEtherHeaderLen + offsetof(iphdr, protocol);
 static const uint32_t kIPv4FlagsOffset = kEtherHeaderLen + offsetof(iphdr, frag_off);
@@ -108,14 +107,13 @@ static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jclass clazz, jobj
 
         // Check this is not a fragment.
         BPF_LOAD_IPV4_BE16(frag_off),
-        BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K,   IP_MF | IP_OFFMASK, 0, 1),
-        BPF_REJECT,
+        BPF2_REJECT_IF_ANY_MASKED_BITS_SET(IP_MF | IP_OFFMASK),
 
-        // Get the IP header length.
-        BPF_STMT(BPF_LDX | BPF_B    | BPF_MSH, kEtherHeaderLen),
+        // Get the IP header length.  X := 4 * (Byte[offset] & 0xf)
+        BPF_STMT(BPF_LDX | BPF_B | BPF_MSH, kEtherHeaderLen),
 
         // Check the destination port.
-        BPF_STMT(BPF_LD  | BPF_H    | BPF_IND, kUDPDstPortIndirectOffset),
+        BPF_STMT(BPF_LD  | BPF_H | BPF_IND, kUDPDstPortIndirectOffset),
         BPF2_REJECT_IF_NOT_EQUAL(kDhcpClientPort),
 
         BPF_ACCEPT,
@@ -175,12 +173,12 @@ static void network_stack_utils_attachControlPacketFilter(
     //     '(ip and udp port 68)' or
     //     '(icmp6 and ip6[40] >= 133 and ip6[40] <= 136)'
     static sock_filter filter_code[] = {
-        // Load the link layer next payload field.
-        BPF_STMT(BPF_LD  | BPF_H    | BPF_ABS,  kEtherTypeOffset),
+        // Load the ethertype from skb->protocol
+        BPF_LOAD_SKB_PROTOCOL,
 
         // Accept all ARP.
         // TODO: Figure out how to better filter ARPs on noisy networks.
-        BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   ETHERTYPE_ARP, 16, 0),
+        BPF2_ACCEPT_IF_EQUAL(ETHERTYPE_ARP),
 
         // If IPv4:
         BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   ETHERTYPE_IP, 0, 9),
