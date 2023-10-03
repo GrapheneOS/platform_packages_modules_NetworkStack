@@ -95,6 +95,8 @@ static void network_stack_utils_addArpEntry(JNIEnv *env, jclass clazz, jbyteArra
     }
 }
 
+// fd is a "socket(AF_PACKET, SOCK_RAW, ETH_P_IP)"
+// which guarantees packets already have skb->protocol == htons(ETH_P_IP)
 static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jclass clazz, jobject javaFd) {
     static sock_filter filter_code[] = {
         // Check the protocol is UDP.
@@ -125,6 +127,8 @@ static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jclass clazz, jobj
     }
 }
 
+// fd is a "socket(AF_PACKET, SOCK_RAW, ETH_P_IPV6)"
+// which guarantees packets already have skb->protocol == htons(ETH_P_IPV6)
 static void network_stack_utils_attachRaFilter(JNIEnv *env, jclass clazz, jobject javaFd) {
     static sock_filter filter_code[] = {
         BPF_LOADX_CONSTANT_IPV6_HLEN,
@@ -151,6 +155,7 @@ static void network_stack_utils_attachRaFilter(JNIEnv *env, jclass clazz, jobjec
 }
 
 // TODO: Move all this filter code into libnetutils.
+// fd is a "socket(AF_PACKET, SOCK_RAW, ETH_P_ALL)"
 static void network_stack_utils_attachControlPacketFilter(
         JNIEnv *env, jclass clazz, jobject javaFd, jint hardwareAddressType) {
     if (hardwareAddressType != ARPHRD_ETHER) {
