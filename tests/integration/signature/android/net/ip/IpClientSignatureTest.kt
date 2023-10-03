@@ -44,8 +44,12 @@ class IpClientSignatureTest : IpClientIntegrationTestCommon() {
 
     override fun useNetworkStackSignature() = true
 
-    override fun isFeatureEnabled(name: String, defaultEnabled: Boolean): Boolean {
-        return mEnabledFeatures.get(name) ?: defaultEnabled
+    override fun isFeatureEnabled(name: String): Boolean {
+        return mEnabledFeatures.get(name) ?: false
+    }
+
+    override fun isFeatureNotChickenedOut(name: String): Boolean {
+        return mEnabledFeatures.get(name) ?: true
     }
 
     override fun setFeatureEnabled(name: String, enabled: Boolean) {
