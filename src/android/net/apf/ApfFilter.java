@@ -114,16 +114,6 @@ public class ApfFilter implements AndroidPacketFilter {
         public int acceptRaMinLft;
     }
 
-    // Enums describing the outcome of receiving an RA packet.
-    private static enum ProcessRaResult {
-        MATCH,          // Received RA matched a known RA
-        PARSE_ERROR,    // Received RA could not be parsed
-        ZERO_LIFETIME,  // Received RA had 0 lifetime
-        UPDATE_NEW_RA,  // APF program updated for new RA
-        IGNORED,        // Received RA would be dropped by APF bytecode
-        UPDATE_EXPIRY   // APF program updated for expiry
-    }
-
     /**
      * APF packet counters.
      *
@@ -1968,10 +1958,9 @@ public class ApfFilter implements AndroidPacketFilter {
     /**
      * Process an RA packet, updating the list of known RAs and installing a new APF program
      * if the current APF program should be updated.
-     * @return a ProcessRaResult enum describing what action was performed.
      */
     @VisibleForTesting
-    public synchronized ProcessRaResult processRa(byte[] packet, int length) {
+    public synchronized void processRa(byte[] packet, int length) {
         if (VDBG) hexDump("Read packet = ", packet, length);
 
         final Ra ra;
@@ -1979,7 +1968,7 @@ public class ApfFilter implements AndroidPacketFilter {
             ra = new Ra(packet, length);
         } catch (Exception e) {
             Log.e(TAG, "Error parsing RA", e);
-            return ProcessRaResult.PARSE_ERROR;
+            return;
         }
         // Have we seen this RA before?
         for (int i = 0; i < mRas.size(); i++) {
@@ -2004,11 +1993,10 @@ public class ApfFilter implements AndroidPacketFilter {
                 } else {
                     Log.e(TAG, "Failed to install prog for tracked RA, too many updates. " + ra);
                 }
-                // TODO: clean up ProcessRaResults and update metrics collection.
-                return ProcessRaResult.MATCH;
+                return;
             } else if (result == Ra.MatchType.MATCH_DROP) {
                 log("Ignoring RA " + ra + " which matches " + oldRa);
-                return ProcessRaResult.IGNORED;
+                return;
             }
         }
         if (mRas.size() >= MAX_RAS) {
@@ -2023,8 +2011,6 @@ public class ApfFilter implements AndroidPacketFilter {
         } else {
             Log.e(TAG, "Failed to install prog for new RA, too many updates. " + ra);
         }
-        // TODO: clean up ProcessRaResults and update metrics collection.
-        return ProcessRaResult.UPDATE_NEW_RA;
     }
 
     /**
