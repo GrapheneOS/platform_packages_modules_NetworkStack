@@ -16,6 +16,7 @@
 
 package android.net.dhcp6;
 
+import static android.net.dhcp6.Dhcp6Packet.IAID;
 import static android.net.dhcp6.Dhcp6Packet.PrefixDelegation;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_INET6;
@@ -120,10 +121,6 @@ public class Dhcp6Client extends StateMachine {
     private static final int REB_MAX_RT         =  600 * SECONDS;
 
     private int mSolMaxRtMs = SOL_MAX_RT;
-
-    // Per rfc8415#section-12, the IAID MUST be consistent across restarts.
-    // Since currently only one IAID is supported, a well-known value can be used (0).
-    private static final int IAID = 0;
 
     @Nullable private PrefixDelegation mAdvertise;
     @Nullable private PrefixDelegation mReply;
@@ -645,10 +642,6 @@ public class Dhcp6Client extends StateMachine {
 
             // TODO: roll back to SOLICIT state after a delay if something wrong happens
             // instead of returning directly.
-            if (!Dhcp6Packet.hasValidPrefixDelegation(mReply)) {
-                Log.e(TAG, "Invalid prefix delegatioin " + mReply);
-                return;
-            }
             // Configure the IPv6 addresses based on the delegated prefix on the interface.
             // We've checked that delegated prefix is valid upon receiving the response
             // from DHCPv6 server, and the server may assign a prefix with length less
