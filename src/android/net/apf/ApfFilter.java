@@ -46,7 +46,6 @@ import android.net.TcpKeepalivePacketDataParcelable;
 import android.net.apf.ApfGenerator.IllegalInstructionException;
 import android.net.apf.ApfGenerator.Register;
 import android.net.ip.IpClient.IpClientCallbacksWrapper;
-import android.net.metrics.IpConnectivityLog;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.system.ErrnoException;
@@ -313,7 +312,6 @@ public class ApfFilter implements AndroidPacketFilter {
     private final ApfCapabilities mApfCapabilities;
     private final IpClientCallbacksWrapper mIpClientCallback;
     private final InterfaceParams mInterfaceParams;
-    private final IpConnectivityLog mMetricsLog;
     private final TokenBucket mTokenBucket;
 
     @VisibleForTesting
@@ -360,7 +358,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
     @VisibleForTesting
     public ApfFilter(Context context, ApfConfiguration config, InterfaceParams ifParams,
-            IpClientCallbacksWrapper ipClientCallback, IpConnectivityLog log) {
+            IpClientCallbacksWrapper ipClientCallback) {
         mApfCapabilities = config.apfCapabilities;
         mIpClientCallback = ipClientCallback;
         mInterfaceParams = ifParams;
@@ -382,8 +380,6 @@ public class ApfFilter implements AndroidPacketFilter {
 
         // Now fill the black list from the passed array
         mEthTypeBlackList = filterEthTypeBlackList(config.ethTypeBlackList);
-
-        mMetricsLog = log;
 
         // TokenBucket for rate limiting filter installation. APF filtering relies on the filter
         // always being up-to-date and APF bytecode being in sync with userspace. The TokenBucket
@@ -2055,7 +2051,7 @@ public class ApfFilter implements AndroidPacketFilter {
             return null;
         }
 
-        return new ApfFilter(context, config, ifParams, ipClientCallback, new IpConnectivityLog());
+        return new ApfFilter(context, config, ifParams, ipClientCallback);
     }
 
     public synchronized void shutdown() {
