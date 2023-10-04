@@ -39,9 +39,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 import android.content.Context;
 import android.net.InetAddresses;
@@ -56,9 +54,7 @@ import android.net.apf.ApfGenerator.IllegalInstructionException;
 import android.net.ip.IIpClientCallbacks;
 import android.net.ip.IpClient.IpClientCallbacksWrapper;
 import android.net.metrics.IpConnectivityLog;
-import android.net.metrics.RaEvent;
 import android.os.ConditionVariable;
-import android.os.Parcelable;
 import android.os.SystemClock;
 import android.system.ErrnoException;
 import android.system.Os;
@@ -88,7 +84,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -2573,36 +2568,6 @@ public class ApfTest {
         verifyRaLifetime(program, packet, lifetime);
     }
 
-    private void verifyRaEvent(RaEvent expected) {
-        ArgumentCaptor<IpConnectivityLog.Event> captor =
-                ArgumentCaptor.forClass(IpConnectivityLog.Event.class);
-        verify(mLog, atLeastOnce()).log(captor.capture());
-        RaEvent got = lastRaEvent(captor.getAllValues());
-        if (!raEventEquals(expected, got)) {
-            assertEquals(expected, got);  // fail for printing an assertion error message.
-        }
-    }
-
-    private RaEvent lastRaEvent(List<IpConnectivityLog.Event> events) {
-        RaEvent got = null;
-        for (Parcelable ev : events) {
-            if (ev instanceof RaEvent) {
-                got = (RaEvent) ev;
-            }
-        }
-        return got;
-    }
-
-    private boolean raEventEquals(RaEvent ev1, RaEvent ev2) {
-        return (ev1 != null) && (ev2 != null)
-                && (ev1.routerLifetime == ev2.routerLifetime)
-                && (ev1.prefixValidLifetime == ev2.prefixValidLifetime)
-                && (ev1.prefixPreferredLifetime == ev2.prefixPreferredLifetime)
-                && (ev1.routeInfoLifetime == ev2.routeInfoLifetime)
-                && (ev1.rdnssLifetime == ev2.rdnssLifetime)
-                && (ev1.dnsslLifetime == ev2.dnsslLifetime);
-    }
-
     private void assertInvalidRa(TestApfFilter apfFilter, MockIpClientCallback ipClientCallback,
             ByteBuffer packet) throws IOException, ErrnoException {
         ipClientCallback.resetApfProgramWait();
@@ -2633,7 +2598,6 @@ public class ApfTest {
         assertPass(program, basePacket.array());
 
         verifyRaLifetime(apfFilter, ipClientCallback, basePacket, ROUTER_LIFETIME);
-        verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, -1, -1, -1));
 
         ra = new RaPacketBuilder(ROUTER_LIFETIME);
         // Check that changes are ignored in every byte of the flow label.
@@ -2655,14 +2619,11 @@ public class ApfTest {
         ByteBuffer prefixOptionPacket = ByteBuffer.wrap(ra.build());
         verifyRaLifetime(
                 apfFilter, ipClientCallback, prefixOptionPacket, PREFIX_PREFERRED_LIFETIME);
-        verifyRaEvent(new RaEvent(
-                ROUTER_LIFETIME, PREFIX_VALID_LIFETIME, PREFIX_PREFERRED_LIFETIME, -1, -1, -1));
 
         ra = new RaPacketBuilder(ROUTER_LIFETIME);
         ra.addRdnssOption(RDNSS_LIFETIME, "2001:4860:4860::8888", "2001:4860:4860::8844");
         ByteBuffer rdnssOptionPacket = ByteBuffer.wrap(ra.build());
         verifyRaLifetime(apfFilter, ipClientCallback, rdnssOptionPacket, RDNSS_LIFETIME);
-        verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, -1, RDNSS_LIFETIME, -1));
 
         final int lowLifetime = 60;
         ra = new RaPacketBuilder(ROUTER_LIFETIME);
@@ -2670,13 +2631,11 @@ public class ApfTest {
         ByteBuffer lowLifetimeRdnssOptionPacket = ByteBuffer.wrap(ra.build());
         verifyRaLifetime(apfFilter, ipClientCallback, lowLifetimeRdnssOptionPacket,
                 ROUTER_LIFETIME);
-        verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, -1, lowLifetime, -1));
 
         ra = new RaPacketBuilder(ROUTER_LIFETIME);
         ra.addRioOption(ROUTE_LIFETIME, "64:ff9b::/96");
         ByteBuffer routeInfoOptionPacket = ByteBuffer.wrap(ra.build());
         verifyRaLifetime(apfFilter, ipClientCallback, routeInfoOptionPacket, ROUTE_LIFETIME);
-        verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, ROUTE_LIFETIME, -1, -1));
 
         // Check that RIOs differing only in the first 4 bytes are different.
         ra = new RaPacketBuilder(ROUTER_LIFETIME);
@@ -2689,11 +2648,9 @@ public class ApfTest {
         ra.addDnsslOption(DNSSL_LIFETIME, "test.example.com", "one.more.example.com");
         ByteBuffer dnsslOptionPacket = ByteBuffer.wrap(ra.build());
         verifyRaLifetime(apfFilter, ipClientCallback, dnsslOptionPacket, ROUTER_LIFETIME);
-        verifyRaEvent(new RaEvent(ROUTER_LIFETIME, -1, -1, -1, -1, -1));
 
         ByteBuffer largeRaPacket = ByteBuffer.wrap(buildLargeRa());
         verifyRaLifetime(apfFilter, ipClientCallback, largeRaPacket, 300);
-        verifyRaEvent(new RaEvent(1800, 600, 300, 1200, 7200, -1));
 
         // Verify that current program filters all the RAs (note: ApfFilter.MAX_RAS == 10).
         program = ipClientCallback.getApfProgram();
