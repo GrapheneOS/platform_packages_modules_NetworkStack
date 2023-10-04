@@ -46,7 +46,6 @@ import android.net.TcpKeepalivePacketDataParcelable;
 import android.net.apf.ApfGenerator.IllegalInstructionException;
 import android.net.apf.ApfGenerator.Register;
 import android.net.ip.IpClient.IpClientCallbacksWrapper;
-import android.net.metrics.ApfProgramEvent;
 import android.net.metrics.ApfStats;
 import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.RaEvent;
@@ -280,7 +279,6 @@ public class ApfFilter implements AndroidPacketFilter {
                         .setProgramUpdatesAllowingMulticast(mNumProgramUpdatesAllowingMulticast)
                         .build();
                 mMetricsLog.log(stats);
-                logApfProgramEventLocked(secondsSinceBoot());
             }
         }
     }
@@ -346,8 +344,6 @@ public class ApfFilter implements AndroidPacketFilter {
     private static final short ARP_OPCODE_REPLY = 2;
     private static final int ARP_SOURCE_IP_ADDRESS_OFFSET = ARP_HEADER_OFFSET + 14;
     private static final int ARP_TARGET_IP_ADDRESS_OFFSET = ARP_HEADER_OFFSET + 24;
-    // Do not log ApfProgramEvents whose actual lifetimes was less than this.
-    private static final int APF_PROGRAM_EVENT_LIFETIME_THRESHOLD = 2;
     // Limit on the Black List size to cap on program usage for this
     // TODO: Select a proper max length
     private static final int APF_MAX_ETH_TYPE_BLACK_LIST_LEN = 20;
@@ -1408,8 +1404,6 @@ public class ApfFilter implements AndroidPacketFilter {
     // How long should the last installed filter program live for? In seconds.
     @GuardedBy("this")
     private int mLastInstalledProgramMinLifetime;
-    @GuardedBy("this")
-    private ApfProgramEvent.Builder mLastInstallEvent;
 
     // For debugging only. The last program installed.
     @GuardedBy("this")
@@ -2032,28 +2026,6 @@ public class ApfFilter implements AndroidPacketFilter {
         if (VDBG) {
             hexDump("Installing filter: ", program, program.length);
         }
-        logApfProgramEventLocked(timeSeconds);
-        mLastInstallEvent = new ApfProgramEvent.Builder()
-                .setLifetime(programMinLft)
-                .setFilteredRas(rasToFilter.size())
-                .setCurrentRas(mRas.size())
-                .setProgramLength(program.length)
-                .setFlags(mIPv4Address != null, mMulticastFilter);
-    }
-
-    @GuardedBy("this")
-    private void logApfProgramEventLocked(int now) {
-        if (mLastInstallEvent == null) {
-            return;
-        }
-        ApfProgramEvent.Builder ev = mLastInstallEvent;
-        mLastInstallEvent = null;
-        final int actualLifetime = now - mLastTimeInstalledProgram;
-        ev.setActualLifetime(actualLifetime);
-        if (actualLifetime < APF_PROGRAM_EVENT_LIFETIME_THRESHOLD) {
-            return;
-        }
-        mMetricsLog.log(ev.build());
     }
 
     private void hexDump(String msg, byte[] packet, int length) {
