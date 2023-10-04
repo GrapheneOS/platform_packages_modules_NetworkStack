@@ -42,15 +42,10 @@ namespace android {
 constexpr const char NETWORKSTACKUTILS_PKG_NAME[] =
     "com/android/networkstack/util/NetworkStackUtils";
 
-static const uint32_t kEtherTypeOffset = offsetof(ether_header, ether_type);
 static const uint32_t kEtherHeaderLen = sizeof(ether_header);
-static const uint32_t kIPv4Protocol = kEtherHeaderLen + offsetof(iphdr, protocol);
-static const uint32_t kIPv4FlagsOffset = kEtherHeaderLen + offsetof(iphdr, frag_off);
 static const uint32_t kIPv6NextHeader = kEtherHeaderLen + offsetof(ip6_hdr, ip6_nxt);
 static const uint32_t kIPv6PayloadStart = kEtherHeaderLen + sizeof(ip6_hdr);
 static const uint32_t kICMPv6TypeOffset = kIPv6PayloadStart + offsetof(icmp6_hdr, icmp6_type);
-static const uint32_t kUDPSrcPortIndirectOffset = kEtherHeaderLen + offsetof(udphdr, source);
-static const uint32_t kUDPDstPortIndirectOffset = kEtherHeaderLen + offsetof(udphdr, dest);
 static const uint16_t kDhcpClientPort = 68;
 
 static bool checkLenAndCopy(JNIEnv* env, const jbyteArray& addr, int len, void* dst) {
@@ -100,6 +95,8 @@ static void network_stack_utils_addArpEntry(JNIEnv *env, jclass clazz, jbyteArra
     }
 }
 
+// fd is a "socket(AF_PACKET, SOCK_RAW, ETH_P_IP)"
+// which guarantees packets already have skb->protocol == htons(ETH_P_IP)
 static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jclass clazz, jobject javaFd) {
     static sock_filter filter_code[] = {
         // Check the protocol is UDP.
@@ -108,14 +105,13 @@ static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jclass clazz, jobj
 
         // Check this is not a fragment.
         BPF_LOAD_IPV4_BE16(frag_off),
-        BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K,   IP_MF | IP_OFFMASK, 0, 1),
-        BPF_REJECT,
+        BPF2_REJECT_IF_ANY_MASKED_BITS_SET(IP_MF | IP_OFFMASK),
 
         // Get the IP header length.
-        BPF_STMT(BPF_LDX | BPF_B    | BPF_MSH, kEtherHeaderLen),
+        BPF_LOADX_NET_RELATIVE_IPV4_HLEN,
 
         // Check the destination port.
-        BPF_STMT(BPF_LD  | BPF_H    | BPF_IND, kUDPDstPortIndirectOffset),
+        BPF_LOAD_NETX_RELATIVE_DST_PORT,
         BPF2_REJECT_IF_NOT_EQUAL(kDhcpClientPort),
 
         BPF_ACCEPT,
@@ -131,14 +127,18 @@ static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jclass clazz, jobj
     }
 }
 
+// fd is a "socket(AF_PACKET, SOCK_RAW, ETH_P_IPV6)"
+// which guarantees packets already have skb->protocol == htons(ETH_P_IPV6)
 static void network_stack_utils_attachRaFilter(JNIEnv *env, jclass clazz, jobject javaFd) {
     static sock_filter filter_code[] = {
+        BPF_LOADX_CONSTANT_IPV6_HLEN,
+
         // Check IPv6 Next Header is ICMPv6.
         BPF_LOAD_IPV6_U8(nexthdr),
         BPF2_REJECT_IF_NOT_EQUAL(IPPROTO_ICMPV6),
 
         // Check ICMPv6 type is Router Advertisement.
-        BPF_LOAD_NET_RELATIVE_U8(sizeof(ipv6hdr) + offsetof(icmp6_hdr, icmp6_type)),
+        BPF_LOAD_NETX_RELATIVE_ICMP_TYPE,
         BPF2_REJECT_IF_NOT_EQUAL(ND_ROUTER_ADVERT),
 
         BPF_ACCEPT,
@@ -150,12 +150,12 @@ static void network_stack_utils_attachRaFilter(JNIEnv *env, jclass clazz, jobjec
 
     int fd = netjniutils::GetNativeFileDescriptor(env, javaFd);
     if (setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &filter, sizeof(filter)) != 0) {
-        jniThrowExceptionFmt(env, "java/net/SocketException",
-                "setsockopt(SO_ATTACH_FILTER): %s", strerror(errno));
+        jniThrowErrnoException(env, "setsockopt(SO_ATTACH_FILTER)", errno);
     }
 }
 
 // TODO: Move all this filter code into libnetutils.
+// fd is a "socket(AF_PACKET, SOCK_RAW, ETH_P_ALL)"
 static void network_stack_utils_attachControlPacketFilter(
         JNIEnv *env, jclass clazz, jobject javaFd, jint hardwareAddressType) {
     if (hardwareAddressType != ARPHRD_ETHER) {
@@ -175,33 +175,33 @@ static void network_stack_utils_attachControlPacketFilter(
     //     '(ip and udp port 68)' or
     //     '(icmp6 and ip6[40] >= 133 and ip6[40] <= 136)'
     static sock_filter filter_code[] = {
-        // Load the link layer next payload field.
-        BPF_STMT(BPF_LD  | BPF_H    | BPF_ABS,  kEtherTypeOffset),
+        // Load the ethertype from skb->protocol
+        BPF_LOAD_SKB_PROTOCOL,
 
         // Accept all ARP.
         // TODO: Figure out how to better filter ARPs on noisy networks.
-        BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   ETHERTYPE_ARP, 16, 0),
+        BPF2_ACCEPT_IF_EQUAL(ETHERTYPE_ARP),
 
         // If IPv4:
         BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   ETHERTYPE_IP, 0, 9),
 
         // Check the protocol is UDP.
-        BPF_STMT(BPF_LD  | BPF_B    | BPF_ABS, kIPv4Protocol),
+        BPF_LOAD_IPV4_U8(protocol),
         BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   IPPROTO_UDP, 0, 14),
 
         // Check this is not a fragment.
-        BPF_STMT(BPF_LD  | BPF_H    | BPF_ABS, kIPv4FlagsOffset),
+        BPF_LOAD_IPV4_BE16(frag_off),
         BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K,   IP_OFFMASK, 12, 0),
 
         // Get the IP header length.
-        BPF_STMT(BPF_LDX | BPF_B    | BPF_MSH, kEtherHeaderLen),
+        BPF_LOADX_NET_RELATIVE_IPV4_HLEN,
 
         // Check the source port.
-        BPF_STMT(BPF_LD  | BPF_H    | BPF_IND, kUDPSrcPortIndirectOffset),
+        BPF_LOAD_NETX_RELATIVE_SRC_PORT,
         BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   kDhcpClientPort, 8, 0),
 
         // Check the destination port.
-        BPF_STMT(BPF_LD  | BPF_H    | BPF_IND, kUDPDstPortIndirectOffset),
+        BPF_LOAD_NETX_RELATIVE_DST_PORT,
         BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   kDhcpClientPort, 6, 7),
 
         // IPv6 ...

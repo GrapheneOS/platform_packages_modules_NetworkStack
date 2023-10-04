@@ -25,6 +25,7 @@ import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
 import static android.system.OsConstants.IPPROTO_TCP;
 import static android.system.OsConstants.IPPROTO_UDP;
+import static android.system.OsConstants.SOCK_CLOEXEC;
 import static android.system.OsConstants.SOCK_RAW;
 
 import static com.android.net.module.util.NetworkStackConstants.ETHER_BROADCAST;
@@ -279,7 +280,7 @@ public class ApfFilter implements AndroidPacketFilter {
                         .setProgramUpdatesAllowingMulticast(mNumProgramUpdatesAllowingMulticast)
                         .build();
                 mMetricsLog.log(stats);
-                logApfProgramEventLocked(nowMs / DateUtils.SECOND_IN_MILLIS);
+                logApfProgramEventLocked(secondsSinceBoot());
             }
         }
     }
@@ -522,10 +523,10 @@ public class ApfFilter implements AndroidPacketFilter {
                 // Install basic filters
                 installNewProgramLocked();
             }
-            socket = Os.socket(AF_PACKET, SOCK_RAW, ETH_P_IPV6);
+            socket = Os.socket(AF_PACKET, SOCK_RAW | SOCK_CLOEXEC, 0);
+            NetworkStackUtils.attachRaFilter(socket);
             SocketAddress addr = makePacketSocketAddress(ETH_P_IPV6, mInterfaceParams.index);
             Os.bind(socket, addr);
-            NetworkStackUtils.attachRaFilter(socket);
         } catch(SocketException|ErrnoException e) {
             Log.e(TAG, "Error starting filter", e);
             return;
@@ -536,8 +537,8 @@ public class ApfFilter implements AndroidPacketFilter {
 
     // Returns seconds since device boot.
     @VisibleForTesting
-    protected long currentTimeSeconds() {
-        return SystemClock.elapsedRealtime() / DateUtils.SECOND_IN_MILLIS;
+    protected int secondsSinceBoot() {
+        return (int) (SystemClock.elapsedRealtime() / DateUtils.SECOND_IN_MILLIS);
     }
 
     public static class InvalidRaException extends Exception {
@@ -643,9 +644,9 @@ public class ApfFilter implements AndroidPacketFilter {
         private final ArrayList<PacketSection> mPacketSections = new ArrayList<>();
 
         // Minimum lifetime in packet
-        int mMinLifetime;
+        private final int mMinLifetime;
         // When the packet was last captured, in seconds since Unix Epoch
-        private final long mLastSeen;
+        private final int mLastSeen;
 
         // For debugging only. Offsets into the packet where PIOs are.
         private final ArrayList<Integer> mPrefixOptionOffsets = new ArrayList<>();
@@ -839,7 +840,7 @@ public class ApfFilter implements AndroidPacketFilter {
             }
 
             mPacket = ByteBuffer.wrap(Arrays.copyOf(packet, length));
-            mLastSeen = currentTimeSeconds();
+            mLastSeen = secondsSinceBoot();
 
             // Check packet in case a packet arrives before we attach RA filter
             // to our packet socket. b/29586253
@@ -949,6 +950,9 @@ public class ApfFilter implements AndroidPacketFilter {
             // Does their size match?
             if (newRa.mPacket.capacity() != mPacket.capacity()) return MatchType.NO_MATCH;
 
+            // If the filter has expired, it cannot match the new RA.
+            if (getRemainingFilterLft(secondsSinceBoot()) <= 0) return MatchType.NO_MATCH;
+
             // Check if all MATCH sections are byte-identical.
             final byte[] newPacket = newRa.mPacket.array();
             final byte[] oldPacket = mPacket.array();
@@ -1047,7 +1051,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
         // What is the minimum of all lifetimes within {@code packet} in seconds?
         // Precondition: matches(packet, length) already returned true.
-        int minLifetime() {
+        private int minLifetime() {
             // While technically most lifetimes in the RA are u32s, as far as the RA filter is
             // concerned, INT_MAX is still a *much* longer lifetime than any filter would ever
             // reasonably be active for.
@@ -1067,46 +1071,27 @@ public class ApfFilter implements AndroidPacketFilter {
             return minLifetime;
         }
 
-        // How many seconds does this RA's have to live, taking into account the fact
-        // that we might have seen it a while ago.
-        long currentLifetime() {
-            return mMinLifetime - (currentTimeSeconds() - mLastSeen);
-        }
-
-        boolean isExpired() {
-            // TODO: We may want to handle 0 lifetime RAs differently, if they are common. We'll
-            // have to calculate the filter lifetime specially as a fraction of 0 is still 0.
-            return currentLifetime() <= 0;
-        }
-
         // Filter for a fraction of the lifetime and adjust for the age of the RA.
-        @GuardedBy("ApfFilter.this")
-        int filterLifetime() {
-            final int filterLifetime = (int) ((mMinLifetime / FRACTION_OF_LIFETIME_TO_FILTER)
-                    - (mProgramBaseTime - mLastSeen));
-            return Math.max(0, filterLifetime);
-        }
-
-        @GuardedBy("ApfFilter.this")
-        boolean shouldFilter() {
-            return filterLifetime() > 0;
+        int getRemainingFilterLft(int currentTimeSeconds) {
+            int filterLifetime = (int) ((mMinLifetime / FRACTION_OF_LIFETIME_TO_FILTER)
+                    - (currentTimeSeconds - mLastSeen));
+            filterLifetime = Math.max(0, filterLifetime);
+            // Clamp filterLifetime to <= 65535, so it fits in 2 bytes.
+            return Math.min(65535, filterLifetime);
         }
 
         // Append a filter for this RA to {@code gen}. Jump to DROP_LABEL if it should be dropped.
         // Jump to the next filter if packet doesn't match this RA.
-        // Return Long.MAX_VALUE if we don't install any filter program for this RA. As the return
-        // value of this function is used to calculate the program min lifetime (which corresponds
-        // to the smallest generated filter lifetime). Returning Long.MAX_VALUE in the case no
-        // filter gets generated makes sure the program lifetime stays unaffected.
         @GuardedBy("ApfFilter.this")
-        long generateFilterLocked(ApfGenerator gen) throws IllegalInstructionException {
+        void generateFilterLocked(ApfGenerator gen, int timeSeconds)
+                throws IllegalInstructionException {
             String nextFilterLabel = "Ra" + getUniqueNumberLocked();
             // Skip if packet is not the right size
             gen.addLoadFromMemory(Register.R0, gen.PACKET_SIZE_MEMORY_SLOT);
             gen.addJumpIfR0NotEquals(mPacket.capacity(), nextFilterLabel);
             // Skip filter if expired
             gen.addLoadFromMemory(Register.R0, gen.FILTER_AGE_MEMORY_SLOT);
-            gen.addJumpIfR0GreaterThan(filterLifetime(), nextFilterLabel);
+            gen.addJumpIfR0GreaterThan(getRemainingFilterLft(timeSeconds), nextFilterLabel);
             for (PacketSection section : mPacketSections) {
                 // Generate code to match the packet bytes.
                 if (section.type == PacketSection.Type.MATCH) {
@@ -1186,7 +1171,6 @@ public class ApfFilter implements AndroidPacketFilter {
             maybeSetupCounter(gen, Counter.DROPPED_RA);
             gen.addJump(mCountAndDropLabel);
             gen.defineLabel(nextFilterLabel);
-            return filterLifetime();
         }
     }
 
@@ -1421,17 +1405,12 @@ public class ApfFilter implements AndroidPacketFilter {
     // packets may be dropped, so let's use 6.
     private static final int FRACTION_OF_LIFETIME_TO_FILTER = 6;
 
-    // The base time for this filter program. In seconds since Unix Epoch.
-    // This is the time when the APF program was generated. All filters in the program should use
-    // this base time as their current time for consistency purposes.
-    @GuardedBy("this")
-    private long mProgramBaseTime;
     // When did we last install a filter program? In seconds since Unix Epoch.
     @GuardedBy("this")
-    private long mLastTimeInstalledProgram;
+    private int mLastTimeInstalledProgram;
     // How long should the last installed filter program live for? In seconds.
     @GuardedBy("this")
-    private long mLastInstalledProgramMinLifetime;
+    private int mLastInstalledProgramMinLifetime;
     @GuardedBy("this")
     private ApfProgramEvent.Builder mLastInstallEvent;
 
@@ -1997,17 +1976,17 @@ public class ApfFilter implements AndroidPacketFilter {
     @GuardedBy("this")
     @VisibleForTesting
     public void installNewProgramLocked() {
-        purgeExpiredRasLocked();
         ArrayList<Ra> rasToFilter = new ArrayList<>();
         final byte[] program;
-        long programMinLifetime = Long.MAX_VALUE;
-        long maximumApfProgramSize = mApfCapabilities.maximumApfProgramSize;
+        int programMinLft = Integer.MAX_VALUE;
+        int maximumApfProgramSize = mApfCapabilities.maximumApfProgramSize;
         if (mApfCapabilities.hasDataAccess()) {
             // Reserve space for the counters.
             maximumApfProgramSize -= Counter.totalSize();
         }
 
-        mProgramBaseTime = currentTimeSeconds();
+        // Ensure the entire APF program uses the same time base.
+        int timeSeconds = secondsSinceBoot();
         try {
             // Step 1: Determine how many RA filters we can fit in the program.
             ApfGenerator gen = emitPrologueLocked();
@@ -2023,8 +2002,9 @@ public class ApfFilter implements AndroidPacketFilter {
             }
 
             for (Ra ra : mRas) {
-                if (!ra.shouldFilter()) continue;
-                ra.generateFilterLocked(gen);
+                // skip filter if it has expired.
+                if (ra.getRemainingFilterLft(timeSeconds) <= 0) continue;
+                ra.generateFilterLocked(gen, timeSeconds);
                 // Stop if we get too big.
                 if (gen.programLengthOverEstimate() > maximumApfProgramSize) {
                     if (VDBG) Log.d(TAG, "Past maximum program size, skipping RAs");
@@ -2037,7 +2017,8 @@ public class ApfFilter implements AndroidPacketFilter {
             // Step 2: Actually generate the program
             gen = emitPrologueLocked();
             for (Ra ra : rasToFilter) {
-                programMinLifetime = Math.min(programMinLifetime, ra.generateFilterLocked(gen));
+                ra.generateFilterLocked(gen, timeSeconds);
+                programMinLft = Math.min(programMinLft, ra.getRemainingFilterLft(timeSeconds));
             }
             emitEpilogue(gen);
             program = gen.generate();
@@ -2046,17 +2027,17 @@ public class ApfFilter implements AndroidPacketFilter {
             return;
         }
         mIpClientCallback.installPacketFilter(program);
-        mLastTimeInstalledProgram = mProgramBaseTime;
-        mLastInstalledProgramMinLifetime = programMinLifetime;
+        mLastTimeInstalledProgram = timeSeconds;
+        mLastInstalledProgramMinLifetime = programMinLft;
         mLastInstalledProgram = program;
         mNumProgramUpdates++;
 
         if (VDBG) {
             hexDump("Installing filter: ", program, program.length);
         }
-        logApfProgramEventLocked(mProgramBaseTime);
+        logApfProgramEventLocked(timeSeconds);
         mLastInstallEvent = new ApfProgramEvent.Builder()
-                .setLifetime(programMinLifetime)
+                .setLifetime(programMinLft)
                 .setFilteredRas(rasToFilter.size())
                 .setCurrentRas(mRas.size())
                 .setProgramLength(program.length)
@@ -2064,13 +2045,13 @@ public class ApfFilter implements AndroidPacketFilter {
     }
 
     @GuardedBy("this")
-    private void logApfProgramEventLocked(long now) {
+    private void logApfProgramEventLocked(int now) {
         if (mLastInstallEvent == null) {
             return;
         }
         ApfProgramEvent.Builder ev = mLastInstallEvent;
         mLastInstallEvent = null;
-        final long actualLifetime = now - mLastTimeInstalledProgram;
+        final int actualLifetime = now - mLastTimeInstalledProgram;
         ev.setActualLifetime(actualLifetime);
         if (actualLifetime < APF_PROGRAM_EVENT_LIFETIME_THRESHOLD) {
             return;
@@ -2080,18 +2061,6 @@ public class ApfFilter implements AndroidPacketFilter {
 
     private void hexDump(String msg, byte[] packet, int length) {
         log(msg + HexDump.toHexString(packet, 0, length, false /* lowercase */));
-    }
-
-    @GuardedBy("this")
-    private void purgeExpiredRasLocked() {
-        for (int i = 0; i < mRas.size();) {
-            if (mRas.get(i).isExpired()) {
-                log("Expiring " + mRas.get(i));
-                mRas.remove(i);
-            } else {
-                i++;
-            }
-        }
     }
 
     /**
@@ -2134,7 +2103,7 @@ public class ApfFilter implements AndroidPacketFilter {
                 if (mTokenBucket.get()) {
                     installNewProgramLocked();
                 } else {
-                    Log.wtf(TAG, "Failed to install prog for tracked RA, too many updates. " + ra);
+                    Log.e(TAG, "Failed to install prog for tracked RA, too many updates. " + ra);
                 }
                 // TODO: clean up ProcessRaResults and update metrics collection.
                 return ProcessRaResult.MATCH;
@@ -2143,7 +2112,6 @@ public class ApfFilter implements AndroidPacketFilter {
                 return ProcessRaResult.IGNORED;
             }
         }
-        purgeExpiredRasLocked();
         if (mRas.size() >= MAX_RAS) {
             // Remove the last (i.e. oldest) RA.
             mRas.remove(mRas.size() - 1);
@@ -2154,7 +2122,7 @@ public class ApfFilter implements AndroidPacketFilter {
         if (mTokenBucket.get()) {
             installNewProgramLocked();
         } else {
-            Log.wtf(TAG, "Failed to install prog for new RA, too many updates. " + ra);
+            Log.e(TAG, "Failed to install prog for new RA, too many updates. " + ra);
         }
         // TODO: clean up ProcessRaResults and update metrics collection.
         return ProcessRaResult.UPDATE_NEW_RA;
@@ -2345,7 +2313,7 @@ public class ApfFilter implements AndroidPacketFilter {
         pw.println("Program updates: " + mNumProgramUpdates);
         pw.println(String.format(
                 "Last program length %d, installed %ds ago, lifetime %ds",
-                mLastInstalledProgram.length, currentTimeSeconds() - mLastTimeInstalledProgram,
+                mLastInstalledProgram.length, secondsSinceBoot() - mLastTimeInstalledProgram,
                 mLastInstalledProgramMinLifetime));
 
         pw.print("Denylisted Ethertypes:");
@@ -2359,7 +2327,7 @@ public class ApfFilter implements AndroidPacketFilter {
             pw.println(ra);
             pw.increaseIndent();
             pw.println(String.format(
-                    "Seen: %d, last %ds ago", ra.seenCount, currentTimeSeconds() - ra.mLastSeen));
+                    "Seen: %d, last %ds ago", ra.seenCount, secondsSinceBoot() - ra.mLastSeen));
             if (DBG) {
                 pw.println("Last match:");
                 pw.increaseIndent();

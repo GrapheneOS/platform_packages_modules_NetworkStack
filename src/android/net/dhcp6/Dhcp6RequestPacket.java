@@ -49,6 +49,7 @@ public class Dhcp6RequestPacket extends Dhcp6Packet {
         addTlv(packet, DHCP6_CLIENT_IDENTIFIER, mClientDuid);
         addTlv(packet, DHCP6_ELAPSED_TIME, (short) (mElapsedTime & 0xFFFF));
         addTlv(packet, DHCP6_IA_PD, mIaPd);
+        addTlv(packet, DHCP6_OPTION_REQUEST_OPTION, DHCP6_SOL_MAX_RT);
 
         packet.flip();
         return packet;

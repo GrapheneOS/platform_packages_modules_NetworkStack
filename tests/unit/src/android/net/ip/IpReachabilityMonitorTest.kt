@@ -24,7 +24,6 @@ import android.net.LinkAddress
 import android.net.LinkProperties
 import android.net.RouteInfo
 import android.net.metrics.IpConnectivityLog
-import com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_MCAST_RESOLICIT_VERSION
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.MessageQueue
@@ -36,12 +35,12 @@ import android.stats.connectivity.NudEventType
 import android.stats.connectivity.NudEventType.NUD_CONFIRM_FAILED
 import android.stats.connectivity.NudEventType.NUD_CONFIRM_FAILED_CRITICAL
 import android.stats.connectivity.NudEventType.NUD_CONFIRM_MAC_ADDRESS_CHANGED
-import android.stats.connectivity.NudEventType.NUD_POST_ROAMING_FAILED
-import android.stats.connectivity.NudEventType.NUD_POST_ROAMING_FAILED_CRITICAL
-import android.stats.connectivity.NudEventType.NUD_POST_ROAMING_MAC_ADDRESS_CHANGED
 import android.stats.connectivity.NudEventType.NUD_ORGANIC_FAILED
 import android.stats.connectivity.NudEventType.NUD_ORGANIC_FAILED_CRITICAL
 import android.stats.connectivity.NudEventType.NUD_ORGANIC_MAC_ADDRESS_CHANGED
+import android.stats.connectivity.NudEventType.NUD_POST_ROAMING_FAILED
+import android.stats.connectivity.NudEventType.NUD_POST_ROAMING_FAILED_CRITICAL
+import android.stats.connectivity.NudEventType.NUD_POST_ROAMING_MAC_ADDRESS_CHANGED
 import android.stats.connectivity.NudNeighborType
 import android.stats.connectivity.NudNeighborType.NUD_NEIGHBOR_BOTH
 import android.stats.connectivity.NudNeighborType.NUD_NEIGHBOR_DNS
@@ -50,32 +49,16 @@ import android.system.ErrnoException
 import android.system.OsConstants.EAGAIN
 import androidx.test.filters.SmallTest
 import androidx.test.runner.AndroidJUnit4
-import com.android.networkstack.metrics.IpReachabilityMonitorMetrics
 import com.android.net.module.util.InterfaceParams
 import com.android.net.module.util.SharedLog
 import com.android.net.module.util.ip.IpNeighborMonitor
 import com.android.net.module.util.netlink.StructNdMsg.NUD_FAILED
 import com.android.net.module.util.netlink.StructNdMsg.NUD_REACHABLE
 import com.android.net.module.util.netlink.StructNdMsg.NUD_STALE
+import com.android.networkstack.metrics.IpReachabilityMonitorMetrics
+import com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_MCAST_RESOLICIT_VERSION
 import com.android.testutils.makeNewNeighMessage
 import com.android.testutils.waitForIdle
-import org.junit.After
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.mockito.ArgumentCaptor
-import org.mockito.ArgumentMatchers.any
-import org.mockito.ArgumentMatchers.anyBoolean
-import org.mockito.ArgumentMatchers.anyInt
-import org.mockito.ArgumentMatchers.anyObject
-import org.mockito.ArgumentMatchers.anyString
-import org.mockito.ArgumentMatchers.eq
-import org.mockito.Mockito.doAnswer
-import org.mockito.Mockito.doReturn
-import org.mockito.Mockito.mock
-import org.mockito.Mockito.never
-import org.mockito.Mockito.timeout
-import org.mockito.Mockito.verify
 import java.io.FileDescriptor
 import java.net.Inet4Address
 import java.net.Inet6Address
@@ -86,6 +69,21 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.fail
+import org.junit.After
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.mockito.ArgumentCaptor
+import org.mockito.ArgumentMatchers.any
+import org.mockito.ArgumentMatchers.anyInt
+import org.mockito.ArgumentMatchers.anyString
+import org.mockito.ArgumentMatchers.eq
+import org.mockito.Mockito.doAnswer
+import org.mockito.Mockito.doReturn
+import org.mockito.Mockito.mock
+import org.mockito.Mockito.never
+import org.mockito.Mockito.timeout
+import org.mockito.Mockito.verify
 
 private const val TEST_TIMEOUT_MS = 10_000L
 
@@ -261,8 +259,8 @@ class IpReachabilityMonitorTest {
         }.`when`(dependencies).makeIpNeighborMonitor(any(), any(), any())
         doReturn(mIpReachabilityMonitorMetrics)
                 .`when`(dependencies).getIpReachabilityMonitorMetrics()
-        doReturn(true).`when`(dependencies).isFeatureEnabled(anyObject(),
-                eq(IP_REACHABILITY_MCAST_RESOLICIT_VERSION), anyBoolean())
+        doReturn(true).`when`(dependencies).isFeatureNotChickenedOut(any(),
+                eq(IP_REACHABILITY_MCAST_RESOLICIT_VERSION))
 
         val monitorFuture = CompletableFuture<IpReachabilityMonitor>()
         // IpReachabilityMonitor needs to be started from the handler thread
