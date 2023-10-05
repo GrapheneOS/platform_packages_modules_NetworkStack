@@ -2143,9 +2143,7 @@ public class ApfFilter implements AndroidPacketFilter {
             return null;
         }
         // For now only support generating programs for Ethernet frames. If this restriction is
-        // lifted:
-        //   1. the program generator will need its offsets adjusted.
-        //   2. the packet filter attached to our packet socket will need its offset adjusted.
+        // lifted the program generator will need its offsets adjusted.
         if (apfCapabilities.apfPacketFormat != ARPHRD_ETHER) return null;
         if (!ApfGenerator.supportsVersion(apfCapabilities.apfVersionSupported)) {
             Log.e(TAG, "Unsupported APF version: " + apfCapabilities.apfVersionSupported);
