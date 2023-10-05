@@ -261,7 +261,7 @@ extern "C" jint JNI_OnLoad(JavaVM* vm, void*) {
                     (void*)com_android_server_ApfTest_dropsAllPackets },
     };
 
-    jniRegisterNativeMethods(env, "android/net/apf/ApfTestHelper",
+    jniRegisterNativeMethods(env, "android/net/apf/ApfJniUtils",
             gMethods, ARRAY_SIZE(gMethods));
 
     return JNI_VERSION_1_6;
