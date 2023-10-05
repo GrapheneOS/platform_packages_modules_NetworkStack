@@ -18,7 +18,7 @@ package android.net.apf;
 /**
  * The class contains the helper method for interacting with native apf code.
  */
-public class ApfTestHelper {
+public class ApfJniUtils {
 
     static {
         // Load up native shared library containing APF interpreter exposed via JNI.

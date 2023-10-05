@@ -18,10 +18,10 @@ package android.net.apf;
 
 import static android.net.apf.ApfGenerator.Register.R0;
 import static android.net.apf.ApfGenerator.Register.R1;
-import static android.net.apf.ApfTestHelper.apfSimulate;
-import static android.net.apf.ApfTestHelper.compareBpfApf;
-import static android.net.apf.ApfTestHelper.compileToBpf;
-import static android.net.apf.ApfTestHelper.dropsAllPackets;
+import static android.net.apf.ApfJniUtils.apfSimulate;
+import static android.net.apf.ApfJniUtils.compareBpfApf;
+import static android.net.apf.ApfJniUtils.compileToBpf;
+import static android.net.apf.ApfJniUtils.dropsAllPackets;
 import static android.system.OsConstants.AF_UNIX;
 import static android.system.OsConstants.ARPHRD_ETHER;
 import static android.system.OsConstants.ETH_P_ARP;
