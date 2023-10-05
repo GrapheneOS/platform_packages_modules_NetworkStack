@@ -1002,14 +1002,17 @@ public class ApfTest {
 
         private FileDescriptor mWriteSocket;
         private long mCurrentTimeMs = SystemClock.elapsedRealtime();
+        private final MockIpClientCallback mMockIpClientCb;
 
         public TestApfFilter(Context context, ApfConfiguration config,
-                IpClientCallbacksWrapper ipClientCallback) throws Exception {
+                MockIpClientCallback ipClientCallback) throws Exception {
             super(context, config, InterfaceParams.getByName("lo"), ipClientCallback);
+            mMockIpClientCb = ipClientCallback;
         }
 
         // Pretend an RA packet has been received and show it to ApfFilter.
         public void pretendPacketReceived(byte[] packet) throws IOException, ErrnoException {
+            mMockIpClientCb.resetApfProgramWait();
             // ApfFilter's ReceiveThread will be waiting to read this.
             Os.write(mWriteSocket, packet, 0, packet.length);
         }
@@ -1182,7 +1185,7 @@ public class ApfTest {
 
     // Helper to initialize a default apfFilter.
     private ApfFilter setupApfFilter(
-            IpClientCallbacksWrapper ipClientCallback, ApfConfiguration config) throws Exception {
+            MockIpClientCallback ipClientCallback, ApfConfiguration config) throws Exception {
         LinkAddress link = new LinkAddress(InetAddress.getByAddress(MOCK_IPV4_ADDR), 19);
         LinkProperties lp = new LinkProperties();
         lp.addLinkAddress(link);
@@ -2560,7 +2563,6 @@ public class ApfTest {
     private void verifyRaLifetime(TestApfFilter apfFilter, MockIpClientCallback ipClientCallback,
             ByteBuffer packet, int lifetime) throws IOException, ErrnoException {
         // Verify new program generated if ApfFilter witnesses RA
-        ipClientCallback.resetApfProgramWait();
         apfFilter.pretendPacketReceived(packet.array());
         byte[] program = ipClientCallback.getApfProgram();
         verifyRaLifetime(program, packet, lifetime);
@@ -2568,7 +2570,6 @@ public class ApfTest {
 
     private void assertInvalidRa(TestApfFilter apfFilter, MockIpClientCallback ipClientCallback,
             ByteBuffer packet) throws IOException, ErrnoException {
-        ipClientCallback.resetApfProgramWait();
         apfFilter.pretendPacketReceived(packet.array());
         ipClientCallback.assertNoProgramUpdate();
     }
@@ -2685,7 +2686,6 @@ public class ApfTest {
         assertPass(program, raPacket);
 
         // Assume apf is shown the given RA, it generates program to filter it.
-        ipClientCallback.resetApfProgramWait();
         apfFilter.pretendPacketReceived(raPacket);
         program = ipClientCallback.getApfProgram();
         assertDrop(program, raPacket);
@@ -2822,7 +2822,6 @@ public class ApfTest {
 
         // Create an RA and build an APF program
         byte[] ra = new RaPacketBuilder(1800 /* router lifetime */).build();
-        ipClientCallback.resetApfProgramWait();
         apfFilter.pretendPacketReceived(ra);
         byte[] program = ipClientCallback.getApfProgram();
 
@@ -2831,7 +2830,6 @@ public class ApfTest {
         assertPass(program, ra);
 
         // update program with the new RA
-        ipClientCallback.resetApfProgramWait();
         apfFilter.pretendPacketReceived(ra);
         program = ipClientCallback.getApfProgram();
 
