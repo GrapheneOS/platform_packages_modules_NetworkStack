@@ -553,6 +553,14 @@ public class NetworkMonitorTest {
         }).when(mCleartextDnsNetwork).openConnection(any());
         initHttpConnection(mHttpConnection);
         initHttpConnection(mHttpsConnection);
+        initHttpConnection(mFallbackConnection);
+        initHttpConnection(mOtherHttpConnection1);
+        initHttpConnection(mOtherHttpsConnection1);
+        initHttpConnection(mOtherHttpsConnection2);
+        initHttpConnection(mOtherFallbackConnection);
+        initHttpConnection(mTestOverriddenUrlConnection);
+        initHttpConnection(mCapportApiConnection);
+        initHttpConnection(mSpeedTestConnection);
 
         mFakeDns = new FakeDns();
         mFakeDns.startMocking();
@@ -610,6 +618,7 @@ public class NetworkMonitorTest {
         // Explicitly set the HttpURLConnection methods so that these will not interact with real
         // methods to prevent threading issue in the test.
         doReturn(new HashMap<>()).when(connection).getHeaderFields();
+        doReturn(null).when(connection).getHeaderField(eq("location"));
         doNothing().when(connection).setInstanceFollowRedirects(anyBoolean());
         doNothing().when(connection).setConnectTimeout(anyInt());
         doNothing().when(connection).setReadTimeout(anyInt());
