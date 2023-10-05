@@ -18,6 +18,10 @@ package android.net.apf;
 
 import static android.net.apf.ApfGenerator.Register.R0;
 import static android.net.apf.ApfGenerator.Register.R1;
+import static android.net.apf.ApfTestHelper.apfSimulate;
+import static android.net.apf.ApfTestHelper.compareBpfApf;
+import static android.net.apf.ApfTestHelper.compileToBpf;
+import static android.net.apf.ApfTestHelper.dropsAllPackets;
 import static android.system.OsConstants.AF_UNIX;
 import static android.system.OsConstants.ARPHRD_ETHER;
 import static android.system.OsConstants.ETH_P_ARP;
@@ -64,6 +68,7 @@ import android.util.Log;
 import android.util.Pair;
 
 import androidx.test.InstrumentationRegistry;
+import androidx.test.filters.SmallTest;
 
 import com.android.internal.util.HexDump;
 import com.android.net.module.util.DnsPacket;
@@ -81,6 +86,8 @@ import libcore.io.Streams;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -105,25 +112,29 @@ import java.util.Random;
 
 /**
  * Tests for APF program generator and interpreter.
+ *
+ * The test cases will be executed by both APFv4 and APFv6 interpreter.
  */
-public abstract class ApfTest {
+@RunWith(Parameterized.class)
+@SmallTest
+public class ApfTest {
     private static final int TIMEOUT_MS = 500;
     private static final int MIN_APF_VERSION = 2;
 
+    // Indicates which apf interpreter to run.
+    @Parameterized.Parameter()
+    public int mApfVersion;
+
+    @Parameterized.Parameters
+    public static Iterable<? extends Object> data() {
+        return Arrays.asList(4, 6);
+    }
+
     @Mock IpConnectivityLog mLog;
     @Mock Context mContext;
-
-    /**
-     * Specify which interpreter version to test.
-     */
-    protected abstract int getApfVersionToTest();
-
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
-        // Load up native shared library containing APF interpreter exposed via JNI.
-        System.loadLibrary("networkstacktestsjni");
-        ApfTest.setApfVersion(getApfVersionToTest());
     }
 
     private static final String TAG = "ApfTest";
@@ -186,12 +197,14 @@ public abstract class ApfTest {
         final String msg = "Unexpected APF verdict. To debug:\n"
                 + "  apf_run --program " + HexDump.toHexString(program)
                 + " --packet " + HexDump.toHexString(packet) + " --trace | less\n  ";
-        assertReturnCodesEqual(msg, expected, apfSimulate(program, packet, null, filterAge));
+        assertReturnCodesEqual(msg, expected,
+                apfSimulate(mApfVersion, program, packet, null, filterAge));
     }
 
     private void assertVerdict(String msg, int expected, byte[] program, byte[] packet,
             int filterAge) {
-        assertReturnCodesEqual(msg, expected, apfSimulate(program, packet, null, filterAge));
+        assertReturnCodesEqual(msg, expected,
+                apfSimulate(mApfVersion, program, packet, null, filterAge));
     }
 
     private void assertVerdict(int expected, byte[] program, byte[] packet) {
@@ -226,7 +239,8 @@ public abstract class ApfTest {
     private void assertDataMemoryContents(
             int expected, byte[] program, byte[] packet, byte[] data, byte[] expected_data)
             throws IllegalInstructionException, Exception {
-        assertReturnCodesEqual(expected, apfSimulate(program, packet, data, 0 /* filterAge */));
+        assertReturnCodesEqual(expected,
+                apfSimulate(mApfVersion, program, packet, data, 0 /* filterAge */));
 
         // assertArrayEquals() would only print one byte, making debugging difficult.
         if (!Arrays.equals(expected_data, data)) {
@@ -239,7 +253,7 @@ public abstract class ApfTest {
 
     private void assertVerdict(int expected, ApfGenerator gen, byte[] packet, int filterAge)
             throws IllegalInstructionException {
-        assertReturnCodesEqual(expected, apfSimulate(gen.generate(), packet, null,
+        assertReturnCodesEqual(expected, apfSimulate(mApfVersion, gen.generate(), packet, null,
               filterAge));
     }
 
@@ -926,7 +940,7 @@ public abstract class ApfTest {
         for (String tcpdump_filter : tcpdump_filters) {
             byte[] apf_program = Bpf2Apf.convert(compileToBpf(tcpdump_filter));
             assertTrue("Failed to match for filter: " + tcpdump_filter,
-                    compareBpfApf(tcpdump_filter, pcap_filename, apf_program));
+                    compareBpfApf(mApfVersion, tcpdump_filter, pcap_filename, apf_program));
         }
     }
 
@@ -954,7 +968,7 @@ public abstract class ApfTest {
         byte[] data = new byte[ApfFilter.Counter.totalSize()];
         final boolean result;
 
-        result = dropsAllPackets(program, data, pcapFilename);
+        result = dropsAllPackets(mApfVersion, program, data, pcapFilename);
         Log.i(TAG, "testApfFilterPcapFile(): Data counters: " + HexDump.toHexString(data, false));
 
         assertTrue("Failed to drop all packets by filter. \nAPF counters:" +
@@ -2869,41 +2883,6 @@ public abstract class ApfTest {
         // assert program was updated and new lifetimes were taken into account.
         assertDrop(program, ra);
     }
-
-    /**
-     * Call the APF interpreter to run {@code program} on {@code packet} with persistent memory
-     * segment {@data} pretending the filter was installed {@code filter_age} seconds ago.
-     */
-    private native static int apfSimulate(byte[] program, byte[] packet, byte[] data,
-        int filter_age);
-
-    /**
-     * Compile a tcpdump human-readable filter (e.g. "icmp" or "tcp port 54") into a BPF
-     * prorgam and return a human-readable dump of the BPF program identical to "tcpdump -d".
-     */
-    private native static String compileToBpf(String filter);
-
-    /**
-     * Open packet capture file {@code pcap_filename} and filter the packets using tcpdump
-     * human-readable filter (e.g. "icmp" or "tcp port 54") compiled to a BPF program and
-     * at the same time using APF program {@code apf_program}.  Return {@code true} if
-     * both APF and BPF programs filter out exactly the same packets.
-     */
-    private native static boolean compareBpfApf(String filter, String pcap_filename,
-            byte[] apf_program);
-
-
-    /**
-     * Set the APF interpreter version that used to run the program.
-     */
-    public static native void setApfVersion(int version);
-
-    /**
-     * Open packet capture file {@code pcapFilename} and run it through APF filter. Then
-     * checks whether all the packets are dropped and populates data[] {@code data} with
-     * the APF counters.
-     */
-    private native static boolean dropsAllPackets(byte[] program, byte[] data, String pcapFilename);
 
     @Test
     public void testBroadcastAddress() throws Exception {
