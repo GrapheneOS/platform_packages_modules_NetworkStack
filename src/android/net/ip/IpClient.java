@@ -816,8 +816,7 @@ public class IpClient extends StateMachine {
         public AndroidPacketFilter maybeCreateApfFilter(Context context,
                 ApfFilter.ApfConfiguration config, InterfaceParams ifParams,
                 IpClientCallbacksWrapper cb) {
-            if (isFeatureNotChickenedOut(context,
-                    NetworkStackUtils.APF_NEW_RA_FILTER_FORCE_DISABLE)) {
+            if (isFeatureEnabled(context, NetworkStackUtils.APF_NEW_RA_FILTER_VERSION)) {
                 return ApfFilter.maybeCreate(context, config, ifParams, cb);
             } else {
                 return LegacyApfFilter.maybeCreate(context, config, ifParams, cb);
