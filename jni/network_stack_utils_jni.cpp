@@ -187,7 +187,7 @@ static void network_stack_utils_attachControlPacketFilter(
 
         // Check this is not a fragment.
         BPF_LOAD_IPV4_BE16(frag_off),
-        BPF2_REJECT_IF_ANY_MASKED_BITS_SET(IP_OFFMASK),
+        BPF2_REJECT_IF_ANY_MASKED_BITS_SET(IP_MF | IP_OFFMASK),
 
         // Get the IP header length.
         BPF_LOADX_NET_RELATIVE_IPV4_HLEN,
