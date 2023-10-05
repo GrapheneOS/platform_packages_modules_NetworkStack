@@ -267,6 +267,11 @@ public class NetworkStackUtils {
     public static final String IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION =
             "ipclient_dhcpv6_prefix_delegation_version";
 
+    /**
+     * Experiment flag to enable new ra filter.
+     */
+    public static final String APF_NEW_RA_FILTER_VERSION = "apf_new_ra_filter_version";
+
     /**** BEGIN Feature Kill Switch Flags ****/
 
     /**
@@ -282,11 +287,6 @@ public class NetworkStackUtils {
      */
     public static final String IPCLIENT_IGNORE_LOW_RA_LIFETIME_FORCE_DISABLE =
             "ipclient_ignore_low_ra_lifetime_force_disable";
-    /**
-     * Kill switch flag to disable new apf ra filter.
-     */
-    public static final String APF_NEW_RA_FILTER_FORCE_DISABLE =
-            "apf_new_ra_filter_force_disable";
 
     /**
      * Kill switch flag to disable the feature of skipping Tcp socket info polling when light
