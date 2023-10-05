@@ -153,13 +153,7 @@ static void network_stack_utils_attachRaFilter(JNIEnv *env, jclass clazz, jobjec
 // TODO: Move all this filter code into libnetutils.
 // fd is a "socket(AF_PACKET, SOCK_RAW, ETH_P_ALL)"
 static void network_stack_utils_attachControlPacketFilter(
-        JNIEnv *env, jclass clazz, jobject javaFd, jint hardwareAddressType) {
-    if (hardwareAddressType != ARPHRD_ETHER) {
-        jniThrowExceptionFmt(env, "java/net/SocketException",
-                "attachControlPacketFilter only supports ARPHRD_ETHER");
-        return;
-    }
-
+        JNIEnv *env, jclass clazz, jobject javaFd) {
     // Capture all:
     //     - ARPs
     //     - DHCPv4 packets
@@ -223,8 +217,7 @@ static void network_stack_utils_attachControlPacketFilter(
 
     int fd = netjniutils::GetNativeFileDescriptor(env, javaFd);
     if (setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &filter, sizeof(filter)) != 0) {
-        jniThrowExceptionFmt(env, "java/net/SocketException",
-                "setsockopt(SO_ATTACH_FILTER): %s", strerror(errno));
+        jniThrowErrnoException(env, "setsockopt(SO_ATTACH_FILTER)", errno);
     }
 }
 
@@ -236,7 +229,7 @@ static const JNINativeMethod gNetworkStackUtilsMethods[] = {
     { "addArpEntry", "([B[BLjava/lang/String;Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_addArpEntry },
     { "attachDhcpFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_attachDhcpFilter },
     { "attachRaFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_attachRaFilter },
-    { "attachControlPacketFilter", "(Ljava/io/FileDescriptor;I)V", (void*) network_stack_utils_attachControlPacketFilter },
+    { "attachControlPacketFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_attachControlPacketFilter },
 };
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void*) {
