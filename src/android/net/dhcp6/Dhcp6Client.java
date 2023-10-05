@@ -119,6 +119,8 @@ public class Dhcp6Client extends StateMachine {
     private static final int REB_TIMEOUT        =   10 * SECONDS;
     private static final int REB_MAX_RT         =  600 * SECONDS;
 
+    private int mSolMaxRtMs = SOL_MAX_RT;
+
     // Per rfc8415#section-12, the IAID MUST be consistent across restarts.
     // Since currently only one IAID is supported, a well-known value can be used (0).
     private static final int IAID = 0;
@@ -425,6 +427,7 @@ public class Dhcp6Client extends StateMachine {
         mAdvertise = null;
         mReply = null;
         mServerDuid = null;
+        mSolMaxRtMs = SOL_MAX_RT;
     }
 
     @SuppressWarnings("ByteBufferBackingArray")
@@ -528,9 +531,8 @@ public class Dhcp6Client extends StateMachine {
         SolicitState() {
             // First Solicit message should be delayed by a random amount of time between 0
             // and SOL_MAX_DELAY(1s).
-            // TODO: request SOL_MAX_RT option from server.
             super((int) (new Random().nextDouble() * SECONDS) /* delay */, SOL_TIMEOUT /* IRT */,
-                    0 /* MRC */, () -> SOL_MAX_RT /* MRT */);
+                    0 /* MRC */, () -> mSolMaxRtMs /* MRT */);
         }
 
         @Override
@@ -551,6 +553,7 @@ public class Dhcp6Client extends StateMachine {
                 if (mAdvertise != null && mAdvertise.iaid == IAID) {
                     Log.d(TAG, "Get prefix delegation option from Advertise: " + mAdvertise);
                     mServerDuid = packet.mServerDuid;
+                    mSolMaxRtMs = packet.getSolMaxRtMs().orElse(mSolMaxRtMs);
                     transitionTo(mRequestState);
                 }
             } else if (packet instanceof Dhcp6ReplyPacket) {
@@ -564,6 +567,7 @@ public class Dhcp6Client extends StateMachine {
                     Log.d(TAG, "Get prefix delegation option from RapidCommit Reply: " + pd);
                     mReply = pd;
                     mServerDuid = packet.mServerDuid;
+                    mSolMaxRtMs = packet.getSolMaxRtMs().orElse(mSolMaxRtMs);
                     transitionTo(mBoundState);
                 }
             }
@@ -592,6 +596,7 @@ public class Dhcp6Client extends StateMachine {
             if (pd != null && pd.iaid == IAID) {
                 Log.d(TAG, "Get prefix delegation option from Reply: " + pd);
                 mReply = pd;
+                mSolMaxRtMs = packet.getSolMaxRtMs().orElse(mSolMaxRtMs);
                 transitionTo(mBoundState);
             }
         }
