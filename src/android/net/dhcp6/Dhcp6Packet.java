@@ -174,9 +174,9 @@ public class Dhcp6Packet {
     }
 
     /**
-     * Returns the SOL_MAX_RT option value.
+     * Returns the SOL_MAX_RT option value in milliseconds.
      */
-    public OptionalInt getSolMaxRtValue() {
+    public OptionalInt getSolMaxRtMs() {
         return mSolMaxRt;
     }
 
@@ -398,7 +398,7 @@ public class Dhcp6Packet {
         newPacket.mRapidCommit = rapidCommit;
         newPacket.mSolMaxRt =
                 (solMaxRt >= 60 && solMaxRt <= 86400)
-                        ? OptionalInt.of(solMaxRt)
+                        ? OptionalInt.of(solMaxRt * 1000)
                         : OptionalInt.empty();
 
         return newPacket;
