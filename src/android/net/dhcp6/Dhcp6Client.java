@@ -545,28 +545,24 @@ public class Dhcp6Client extends StateMachine {
         // TODO: support multiple prefixes.
         @Override
         protected void receivePacket(Dhcp6Packet packet) {
+            final PrefixDelegation pd = packet.mPrefixDelegation;
             if (packet instanceof Dhcp6AdvertisePacket) {
-                mAdvertise = packet.mPrefixDelegation;
-                if (mAdvertise != null && mAdvertise.iaid == IAID) {
-                    Log.d(TAG, "Get prefix delegation option from Advertise: " + mAdvertise);
-                    mServerDuid = packet.mServerDuid;
-                    mSolMaxRtMs = packet.getSolMaxRtMs().orElse(mSolMaxRtMs);
-                    transitionTo(mRequestState);
-                }
+                Log.d(TAG, "Get prefix delegation option from Advertise: " + pd);
+                mAdvertise = pd;
+                mServerDuid = packet.mServerDuid;
+                mSolMaxRtMs = packet.getSolMaxRtMs().orElse(mSolMaxRtMs);
+                transitionTo(mRequestState);
             } else if (packet instanceof Dhcp6ReplyPacket) {
                 if (!packet.mRapidCommit) {
-                    Log.e(TAG, "Server responded to SOLICIT with REPLY without rapid commit option"
+                    Log.e(TAG, "Server responded to Solicit with Reply without rapid commit option"
                             + ", ignoring");
                     return;
                 }
-                final PrefixDelegation pd = packet.mPrefixDelegation;
-                if (pd != null && pd.iaid == IAID) {
-                    Log.d(TAG, "Get prefix delegation option from RapidCommit Reply: " + pd);
-                    mReply = pd;
-                    mServerDuid = packet.mServerDuid;
-                    mSolMaxRtMs = packet.getSolMaxRtMs().orElse(mSolMaxRtMs);
-                    transitionTo(mBoundState);
-                }
+                Log.d(TAG, "Get prefix delegation option from RapidCommit Reply: " + pd);
+                mReply = pd;
+                mServerDuid = packet.mServerDuid;
+                mSolMaxRtMs = packet.getSolMaxRtMs().orElse(mSolMaxRtMs);
+                transitionTo(mBoundState);
             }
         }
     }
@@ -590,12 +586,10 @@ public class Dhcp6Client extends StateMachine {
         protected void receivePacket(Dhcp6Packet packet) {
             if (!(packet instanceof Dhcp6ReplyPacket)) return;
             final PrefixDelegation pd = packet.mPrefixDelegation;
-            if (pd != null && pd.iaid == IAID) {
-                Log.d(TAG, "Get prefix delegation option from Reply: " + pd);
-                mReply = pd;
-                mSolMaxRtMs = packet.getSolMaxRtMs().orElse(mSolMaxRtMs);
-                transitionTo(mBoundState);
-            }
+            Log.d(TAG, "Get prefix delegation option from Reply: " + pd);
+            mReply = pd;
+            mSolMaxRtMs = packet.getSolMaxRtMs().orElse(mSolMaxRtMs);
+            transitionTo(mBoundState);
         }
 
         @Override
@@ -710,27 +704,24 @@ public class Dhcp6Client extends StateMachine {
         protected void receivePacket(Dhcp6Packet packet) {
             if (!(packet instanceof Dhcp6ReplyPacket)) return;
             final PrefixDelegation pd = packet.mPrefixDelegation;
-            if (pd != null) {
-                if (pd.iaid != IAID
-                        || !(Arrays.equals(pd.ipo.prefix, mReply.ipo.prefix)
-                                && pd.ipo.prefixLen == mReply.ipo.prefixLen)) {
-                    Log.i(TAG, "Renewal prefix " + HexDump.toHexString(pd.ipo.prefix)
-                            + " does not match current prefix "
-                            + HexDump.toHexString(mReply.ipo.prefix));
-                    notifyPrefixDelegation(DHCP6_PD_PREFIX_CHANGED, null);
-                    transitionTo(mSolicitState);
-                    return;
-                }
-                mReply = pd;
-                mServerDuid = packet.mServerDuid;
-                // Once the delegated prefix gets refreshed successfully we have to extend the
-                // preferred lifetime and valid lifetime of global IPv6 addresses, otherwise
-                // these addresses will become depreacated finally and then provisioning failure
-                // happens. So we transit to mBoundState to update the address with refreshed
-                // preferred and valid lifetime via sending RTM_NEWADDR message, going back to
-                // Bound state after a success update.
-                transitionTo(mBoundState);
+            if (!(Arrays.equals(pd.ipo.prefix, mReply.ipo.prefix)
+                    && pd.ipo.prefixLen == mReply.ipo.prefixLen)) {
+                Log.i(TAG, "Renewal prefix " + HexDump.toHexString(pd.ipo.prefix)
+                        + " does not match current prefix "
+                        + HexDump.toHexString(mReply.ipo.prefix));
+                notifyPrefixDelegation(DHCP6_PD_PREFIX_CHANGED, null);
+                transitionTo(mSolicitState);
+                return;
             }
+            mReply = pd;
+            mServerDuid = packet.mServerDuid;
+            // Once the delegated prefix gets refreshed successfully we have to extend the
+            // preferred lifetime and valid lifetime of global IPv6 addresses, otherwise
+            // these addresses will become depreacated finally and then provisioning failure
+            // happens. So we transit to mBoundState to update the address with refreshed
+            // preferred and valid lifetime via sending RTM_NEWADDR message, going back to
+            // Bound state after a success update.
+            transitionTo(mBoundState);
         }
     }
 

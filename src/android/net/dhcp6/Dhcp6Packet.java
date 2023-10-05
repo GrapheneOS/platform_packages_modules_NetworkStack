@@ -206,6 +206,10 @@ public class Dhcp6Packet {
          * TODO: ensure that the prefix has a reasonable lifetime, and the timers aren't too short.
          */
         public boolean isValid() {
+            if (iaid != IAID) {
+                Log.w(TAG, "IA_ID doesn't match, expected: " + IAID + ", actual: " + iaid);
+                return false;
+            }
             if (ipo.prefixLen > 64) {
                 Log.e(TAG, "IA_PD option with prefix length " + ipo.prefixLen + " longer than 64");
                 return false;
