@@ -2846,6 +2846,46 @@ public class ApfTest {
         assertDrop(program, ra);
     }
 
+    // Test for go/apf-ra-filter Case 4b.
+    // Old lifetime is > 3 * accept_ra_min_lft
+    @Test
+    public void testAcceptRaMinLftCase4b() throws Exception {
+        final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
+        // configure accept_ra_min_lft
+        final ApfConfiguration config = getDefaultConfig();
+        config.acceptRaMinLft = 180;
+        final TestApfFilter apfFilter = new TestApfFilter(mContext, config, ipClientCallback);
+
+        // Create an initial RA and build an APF program
+        byte[] ra = new RaPacketBuilder(1800 /* router lifetime */).build();
+
+        apfFilter.pretendPacketReceived(ra);
+        byte[] program = ipClientCallback.getApfProgram();
+
+        // repeated RA is dropped
+        assertDrop(program, ra);
+
+        // lifetime increases
+        ra = new RaPacketBuilder(1801 /* router lifetime */).build();
+        assertPass(program, ra);
+
+        // lifetime is just above 1/3 of old lft
+        ra = new RaPacketBuilder(601 /* router lifetime */).build();
+        assertDrop(program, ra);
+
+        // lifetime is below 1/3 of old lft
+        ra = new RaPacketBuilder(599 /* router lifetime */).build();
+        assertPass(program, ra);
+
+        // lifetime is below accept_ra_min_lft (but not 0)
+        ra = new RaPacketBuilder(1 /* router lifetime */).build();
+        assertDrop(program, ra);
+
+        // lifetime is 0
+        ra = new RaPacketBuilder(0 /* router lifetime */).build();
+        assertPass(program, ra);
+    }
+
     @Test
     public void testBroadcastAddress() throws Exception {
         assertEqualsIp("255.255.255.255", ApfFilter.ipv4BroadcastAddress(IPV4_ANY_HOST_ADDR, 0));
