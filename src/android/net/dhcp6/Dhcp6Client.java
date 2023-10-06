@@ -67,6 +67,7 @@ import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Random;
+import java.util.function.IntSupplier;
 
 /**
  * A DHCPv6 client.
@@ -108,15 +109,17 @@ public class Dhcp6Client extends StateMachine {
 
     // Transmission and Retransmission parameters in milliseconds.
     private static final int SECONDS            = 1000;
-    private static final long SOL_TIMEOUT       =    1 * SECONDS;
-    private static final long SOL_MAX_RT        = 3600 * SECONDS;
-    private static final long REQ_TIMEOUT       =    1 * SECONDS;
-    private static final long REQ_MAX_RT        =   30 * SECONDS;
+    private static final int SOL_TIMEOUT        =    1 * SECONDS;
+    private static final int SOL_MAX_RT         = 3600 * SECONDS;
+    private static final int REQ_TIMEOUT        =    1 * SECONDS;
+    private static final int REQ_MAX_RT         =   30 * SECONDS;
     private static final int REQ_MAX_RC         =   10;
-    private static final long REN_TIMEOUT       =   10 * SECONDS;
-    private static final long REN_MAX_RT        =  600 * SECONDS;
-    private static final long REB_TIMEOUT       =   10 * SECONDS;
-    private static final long REB_MAX_RT        =  600 * SECONDS;
+    private static final int REN_TIMEOUT        =   10 * SECONDS;
+    private static final int REN_MAX_RT         =  600 * SECONDS;
+    private static final int REB_TIMEOUT        =   10 * SECONDS;
+    private static final int REB_MAX_RT         =  600 * SECONDS;
+
+    private int mSolMaxRtMs = SOL_MAX_RT;
 
     // Per rfc8415#section-12, the IAID MUST be consistent across restarts.
     // Since currently only one IAID is supported, a well-known value can be used (0).
@@ -241,24 +244,26 @@ public class Dhcp6Client extends StateMachine {
     abstract class MessageExchangeState extends State {
         private int mTransId = 0;
         private long mTransStartMs = 0;
+        private long mMaxRetransTimeMs = 0;
 
         private long mRetransTimeout = -1;
         private int mRetransCount = 0;
         private final long mInitialDelayMs;
         private final long mInitialRetransTimeMs;
-        private final long mMaxRetransTimeMs;
         private final int mMaxRetransCount;
+        private final IntSupplier mMaxRetransTimeSupplier;
 
-        MessageExchangeState(final long delay, final long irt, final long mrt, final int mrc) {
+        MessageExchangeState(final int delay, final int irt, final int mrc, final IntSupplier mrt) {
             mInitialDelayMs = delay;
             mInitialRetransTimeMs = irt;
-            mMaxRetransTimeMs = mrt;
             mMaxRetransCount = mrc;
+            mMaxRetransTimeSupplier = mrt;
         }
 
         @Override
         public void enter() {
             super.enter();
+            mMaxRetransTimeMs = mMaxRetransTimeSupplier.getAsInt();
             // Every message exchange generates a new transaction id.
             mTransId = mRandom.nextInt() & 0xffffff;
             sendMessageDelayed(CMD_KICK, mInitialDelayMs);
@@ -311,6 +316,7 @@ public class Dhcp6Client extends StateMachine {
             mKickAlarm.cancel();
             mRetransTimeout = -1;
             mRetransCount = 0;
+            mMaxRetransTimeMs = 0;
         }
 
         protected abstract boolean sendPacket(int transId, long elapsedTimeMs);
@@ -421,6 +427,7 @@ public class Dhcp6Client extends StateMachine {
         mAdvertise = null;
         mReply = null;
         mServerDuid = null;
+        mSolMaxRtMs = SOL_MAX_RT;
     }
 
     @SuppressWarnings("ByteBufferBackingArray")
@@ -524,9 +531,8 @@ public class Dhcp6Client extends StateMachine {
         SolicitState() {
             // First Solicit message should be delayed by a random amount of time between 0
             // and SOL_MAX_DELAY(1s).
-            // TODO: request SOL_MAX_RT option from server.
-            super((long) (new Random().nextDouble() * SECONDS) /* delay */, SOL_TIMEOUT /* IRT */,
-                    SOL_MAX_RT /* MRT */, 0 /* MRC */);
+            super((int) (new Random().nextDouble() * SECONDS) /* delay */, SOL_TIMEOUT /* IRT */,
+                    0 /* MRC */, () -> mSolMaxRtMs /* MRT */);
         }
 
         @Override
@@ -547,6 +553,7 @@ public class Dhcp6Client extends StateMachine {
                 if (mAdvertise != null && mAdvertise.iaid == IAID) {
                     Log.d(TAG, "Get prefix delegation option from Advertise: " + mAdvertise);
                     mServerDuid = packet.mServerDuid;
+                    mSolMaxRtMs = packet.getSolMaxRtMs().orElse(mSolMaxRtMs);
                     transitionTo(mRequestState);
                 }
             } else if (packet instanceof Dhcp6ReplyPacket) {
@@ -560,6 +567,7 @@ public class Dhcp6Client extends StateMachine {
                     Log.d(TAG, "Get prefix delegation option from RapidCommit Reply: " + pd);
                     mReply = pd;
                     mServerDuid = packet.mServerDuid;
+                    mSolMaxRtMs = packet.getSolMaxRtMs().orElse(mSolMaxRtMs);
                     transitionTo(mBoundState);
                 }
             }
@@ -572,8 +580,8 @@ public class Dhcp6Client extends StateMachine {
      */
     class RequestState extends MessageExchangeState {
         RequestState() {
-            super((long) 0 /* delay */, REQ_TIMEOUT /* IRT */, REQ_MAX_RT /* MRT */,
-                    REQ_MAX_RC /* MRC */);
+            super(0 /* delay */, REQ_TIMEOUT /* IRT */, REQ_MAX_RC /* MRC */,
+                    () -> REQ_MAX_RT /* MRT */);
         }
 
         @Override
@@ -588,6 +596,7 @@ public class Dhcp6Client extends StateMachine {
             if (pd != null && pd.iaid == IAID) {
                 Log.d(TAG, "Get prefix delegation option from Reply: " + pd);
                 mReply = pd;
+                mSolMaxRtMs = packet.getSolMaxRtMs().orElse(mSolMaxRtMs);
                 transitionTo(mBoundState);
             }
         }
@@ -695,8 +704,8 @@ public class Dhcp6Client extends StateMachine {
     }
 
     abstract class ReacquireState extends MessageExchangeState {
-        ReacquireState(final long irt, final long mrt) {
-            super(0 /* delay */, irt, mrt, 0 /* MRC */);
+        ReacquireState(final int irt, final int mrt) {
+            super(0 /* delay */, irt, 0 /* MRC */, () -> mrt /* MRT */);
         }
 
         @Override
