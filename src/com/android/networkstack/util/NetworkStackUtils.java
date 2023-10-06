@@ -401,10 +401,8 @@ public class NetworkStackUtils {
      * This includes: all ARP, ICMPv6 RS/RA/NS/NA messages, and DHCPv4 exchanges.
      *
      * @param fd the socket's {@link FileDescriptor}.
-     * @param packetType the hardware address type, one of ARPHRD_*.
      */
-    public static native void attachControlPacketFilter(FileDescriptor fd, int packetType)
-            throws SocketException;
+    public static native void attachControlPacketFilter(FileDescriptor fd) throws ErrnoException;
 
     /**
      * Add an entry into the ARP cache.
