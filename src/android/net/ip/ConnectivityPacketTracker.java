@@ -18,7 +18,6 @@ package android.net.ip;
 
 import static android.net.util.SocketUtils.makePacketSocketAddress;
 import static android.system.OsConstants.AF_PACKET;
-import static android.system.OsConstants.ARPHRD_ETHER;
 import static android.system.OsConstants.ETH_P_ALL;
 import static android.system.OsConstants.SOCK_NONBLOCK;
 import static android.system.OsConstants.SOCK_RAW;
@@ -110,7 +109,7 @@ public class ConnectivityPacketTracker {
             FileDescriptor s = null;
             try {
                 s = Os.socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, 0);
-                NetworkStackUtils.attachControlPacketFilter(s, ARPHRD_ETHER);
+                NetworkStackUtils.attachControlPacketFilter(s);
                 Os.bind(s, makePacketSocketAddress(ETH_P_ALL, mInterface.index));
             } catch (ErrnoException | IOException e) {
                 logError("Failed to create packet tracking socket: ", e);
