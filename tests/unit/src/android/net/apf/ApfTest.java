@@ -2372,19 +2372,23 @@ public class ApfTest {
             mPacket.write(buffer.array(), 0, buffer.capacity());
         }
 
-        public void setFlowLabel(int flowLabel) {
+        public RaPacketBuilder setFlowLabel(int flowLabel) {
             mFlowLabel = flowLabel;
+            return this;
         }
 
-        public void setReachableTime(int reachable) {
+        public RaPacketBuilder setReachableTime(int reachable) {
             mReachableTime = reachable;
+            return this;
         }
 
-        public void setRetransmissionTimer(int retrans) {
+        public RaPacketBuilder setRetransmissionTimer(int retrans) {
             mRetransmissionTimer = retrans;
+            return this;
         }
 
-        public void addPioOption(int valid, int preferred, String prefixString) throws Exception {
+        public RaPacketBuilder addPioOption(int valid, int preferred, String prefixString)
+                throws Exception {
             ByteBuffer buffer = ByteBuffer.allocate(ICMP6_PREFIX_OPTION_LEN);
 
             IpPrefix prefix = new IpPrefix(prefixString);
@@ -2398,9 +2402,10 @@ public class ApfTest {
             buffer.put(prefix.getRawAddress());
 
             mPacket.write(buffer.array(), 0, buffer.capacity());
+            return this;
         }
 
-        public void addRioOption(int lifetime, String prefixString) throws Exception {
+        public RaPacketBuilder addRioOption(int lifetime, String prefixString) throws Exception {
             IpPrefix prefix = new IpPrefix(prefixString);
 
             int optionLength;
@@ -2424,9 +2429,10 @@ public class ApfTest {
             buffer.put(prefixBytes, 0, (optionLength - 1) * 8);
 
             mPacket.write(buffer.array(), 0, buffer.capacity());
+            return this;
         }
 
-        public void addDnsslOption(int lifetime, String... domains) {
+        public RaPacketBuilder addDnsslOption(int lifetime, String... domains) {
             ByteArrayOutputStream dnssl = new ByteArrayOutputStream();
             for (String domain : domains) {
                 for (String label : domain.split(".")) {
@@ -2453,9 +2459,10 @@ public class ApfTest {
             buffer.put(dnssl.toByteArray());             // Domain names
 
             mPacket.write(buffer.array(), 0, buffer.capacity());
+            return this;
         }
 
-        public void addRdnssOption(int lifetime, String... servers) throws Exception {
+        public RaPacketBuilder addRdnssOption(int lifetime, String... servers) throws Exception {
             int optionLength = 1 + 2 * servers.length;   // In 8-byte units
             ByteBuffer buffer = ByteBuffer.allocate(optionLength * 8);
 
@@ -2468,14 +2475,16 @@ public class ApfTest {
             }
 
             mPacket.write(buffer.array(), 0, buffer.capacity());
+            return this;
         }
 
-        public void addZeroLengthOption() throws Exception {
+        public RaPacketBuilder addZeroLengthOption() throws Exception {
             ByteBuffer buffer = ByteBuffer.allocate(ICMP6_4_BYTE_OPTION_LEN);
             buffer.put((byte) ICMP6_PREFIX_OPTION_TYPE);
             buffer.put((byte) 0);
 
             mPacket.write(buffer.array(), 0, buffer.capacity());
+            return this;
         }
 
         public byte[] build() {
