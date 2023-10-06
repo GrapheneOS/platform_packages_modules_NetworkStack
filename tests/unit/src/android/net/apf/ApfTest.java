@@ -2846,6 +2846,42 @@ public class ApfTest {
         assertDrop(program, ra);
     }
 
+    // Test for go/apf-ra-filter Case 2b.
+    // Old lifetime is < accept_ra_min_lft (but not 0).
+    @Test
+    public void testAcceptRaMinLftCase2b() throws Exception {
+        final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
+        // configure accept_ra_min_lft
+        final ApfConfiguration config = getDefaultConfig();
+        config.acceptRaMinLft = 180;
+        final TestApfFilter apfFilter = new TestApfFilter(mContext, config, ipClientCallback);
+
+        // Create an initial RA and build an APF program
+        byte[] ra = new RaPacketBuilder(100 /* router lifetime */).build();
+
+        apfFilter.pretendPacketReceived(ra);
+        byte[] program = ipClientCallback.getApfProgram();
+
+        // repeated RA is dropped
+        assertDrop(program, ra);
+
+        // lifetime increases
+        ra = new RaPacketBuilder(101 /* router lifetime */).build();
+        assertDrop(program, ra);
+
+        // lifetime decreases significantly
+        ra = new RaPacketBuilder(1 /* router lifetime */).build();
+        assertDrop(program, ra);
+
+        // above accept_ra_min_lft
+        ra = new RaPacketBuilder(181 /* router lifetime */).build();
+        assertPass(program, ra);
+
+        // lifetime is 0
+        ra = new RaPacketBuilder(0 /* router lifetime */).build();
+        assertPass(program, ra);
+    }
+
     // Test for go/apf-ra-filter Case 3b.
     // Old lifetime is >= accept_ra_min_lft and <= 3 * accept_ra_min_lft
     @Test
