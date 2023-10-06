@@ -307,12 +307,15 @@ class NetworkStackUtilsIntegrationTest {
         packet.putShort(checksumOffset, IpUtils.ipChecksum(packet, ETHER_HEADER_LEN))
     }
 
-    @Test
-    fun testDhcpResponseWithMfBitDropped() {
+    private fun doTestDhcpResponseWithMfBitDropped(generic: Boolean) {
         val ifindex = InterfaceParams.getByName(iface.interfaceName).index
         val packetSock = Os.socket(AF_PACKET, SOCK_RAW or SOCK_NONBLOCK, /*protocol=*/0)
         try {
-            NetworkStackUtils.attachDhcpFilter(packetSock)
+            if (generic) {
+                NetworkStackUtils.attachControlPacketFilter(packetSock)
+            } else {
+                NetworkStackUtils.attachDhcpFilter(packetSock)
+            }
             val addr = SocketUtils.makePacketSocketAddress(OsConstants.ETH_P_IP, ifindex)
             Os.bind(packetSock, addr)
             val packet = DhcpPacket.buildNakPacket(DhcpPacket.ENCAP_L2, 42,
@@ -332,6 +335,16 @@ class NetworkStackUtilsIntegrationTest {
         } finally {
             Os.close(packetSock)
         }
+    }
+
+    @Test
+    fun testDhcpResponseWithMfBitDropped() {
+        doTestDhcpResponseWithMfBitDropped(false)
+    }
+
+    @Test
+    fun testGenericDhcpResponseWithMfBitDropped() {
+        doTestDhcpResponseWithMfBitDropped(true)
     }
 }
 
