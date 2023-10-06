@@ -42,10 +42,6 @@ namespace android {
 constexpr const char NETWORKSTACKUTILS_PKG_NAME[] =
     "com/android/networkstack/util/NetworkStackUtils";
 
-static const uint32_t kEtherHeaderLen = sizeof(ether_header);
-static const uint32_t kIPv6NextHeader = kEtherHeaderLen + offsetof(ip6_hdr, ip6_nxt);
-static const uint32_t kIPv6PayloadStart = kEtherHeaderLen + sizeof(ip6_hdr);
-static const uint32_t kICMPv6TypeOffset = kIPv6PayloadStart + offsetof(icmp6_hdr, icmp6_type);
 static const uint16_t kDhcpClientPort = 68;
 
 static bool checkLenAndCopy(JNIEnv* env, const jbyteArray& addr, int len, void* dst) {
@@ -157,13 +153,7 @@ static void network_stack_utils_attachRaFilter(JNIEnv *env, jclass clazz, jobjec
 // TODO: Move all this filter code into libnetutils.
 // fd is a "socket(AF_PACKET, SOCK_RAW, ETH_P_ALL)"
 static void network_stack_utils_attachControlPacketFilter(
-        JNIEnv *env, jclass clazz, jobject javaFd, jint hardwareAddressType) {
-    if (hardwareAddressType != ARPHRD_ETHER) {
-        jniThrowExceptionFmt(env, "java/net/SocketException",
-                "attachControlPacketFilter only supports ARPHRD_ETHER");
-        return;
-    }
-
+        JNIEnv *env, jclass clazz, jobject javaFd) {
     // Capture all:
     //     - ARPs
     //     - DHCPv4 packets
@@ -182,41 +172,43 @@ static void network_stack_utils_attachControlPacketFilter(
         // TODO: Figure out how to better filter ARPs on noisy networks.
         BPF2_ACCEPT_IF_EQUAL(ETHERTYPE_ARP),
 
-        // If IPv4:
-        BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   ETHERTYPE_IP, 0, 9),
+        // If IPv4:  (otherwise jump to the 'IPv6 ...' below)
+        BPF_JUMP_IF_NOT_EQUAL(ETHERTYPE_IP, 14),
 
         // Check the protocol is UDP.
         BPF_LOAD_IPV4_U8(protocol),
-        BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   IPPROTO_UDP, 0, 14),
+        BPF2_REJECT_IF_NOT_EQUAL(IPPROTO_UDP),
 
         // Check this is not a fragment.
         BPF_LOAD_IPV4_BE16(frag_off),
-        BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K,   IP_OFFMASK, 12, 0),
+        BPF2_REJECT_IF_ANY_MASKED_BITS_SET(IP_MF | IP_OFFMASK),
 
         // Get the IP header length.
         BPF_LOADX_NET_RELATIVE_IPV4_HLEN,
 
         // Check the source port.
         BPF_LOAD_NETX_RELATIVE_SRC_PORT,
-        BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   kDhcpClientPort, 8, 0),
+        BPF2_ACCEPT_IF_EQUAL(kDhcpClientPort),
 
         // Check the destination port.
         BPF_LOAD_NETX_RELATIVE_DST_PORT,
-        BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   kDhcpClientPort, 6, 7),
+        BPF2_ACCEPT_IF_EQUAL(kDhcpClientPort),
+
+        // Reject any other UDPv4
+        BPF_REJECT,
 
         // IPv6 ...
-        BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   ETHERTYPE_IPV6, 0, 6),
+        BPF2_REJECT_IF_NOT_EQUAL(ETHERTYPE_IPV6),
+        // Assume standard, 40-byte, extension header-less ipv6 packet
+        BPF_LOADX_CONSTANT_IPV6_HLEN,
         // ... check IPv6 Next Header is ICMPv6 (ignore fragments), ...
-        BPF_STMT(BPF_LD  | BPF_B    | BPF_ABS, kIPv6NextHeader),
-        BPF_JUMP(BPF_JMP | BPF_JEQ  | BPF_K,   IPPROTO_ICMPV6, 0, 4),
+        BPF_LOAD_IPV6_U8(nexthdr),
+        BPF2_REJECT_IF_NOT_EQUAL(IPPROTO_ICMPV6),
         // ... and check the ICMPv6 type is one of RS/RA/NS/NA.
-        BPF_STMT(BPF_LD  | BPF_B    | BPF_ABS, kICMPv6TypeOffset),
-        BPF_JUMP(BPF_JMP | BPF_JGE  | BPF_K,   ND_ROUTER_SOLICIT, 0, 2),
-        BPF_JUMP(BPF_JMP | BPF_JGT  | BPF_K,   ND_NEIGHBOR_ADVERT, 1, 0),
+        BPF_LOAD_NETX_RELATIVE_ICMP_TYPE,
+        BPF3_REJECT_IF_NOT_IN_RANGE(ND_ROUTER_SOLICIT, ND_NEIGHBOR_ADVERT),
 
         BPF_ACCEPT,
-
-        BPF_REJECT,
     };
     static const sock_fprog filter = {
         sizeof(filter_code) / sizeof(filter_code[0]),
@@ -225,8 +217,7 @@ static void network_stack_utils_attachControlPacketFilter(
 
     int fd = netjniutils::GetNativeFileDescriptor(env, javaFd);
     if (setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &filter, sizeof(filter)) != 0) {
-        jniThrowExceptionFmt(env, "java/net/SocketException",
-                "setsockopt(SO_ATTACH_FILTER): %s", strerror(errno));
+        jniThrowErrnoException(env, "setsockopt(SO_ATTACH_FILTER)", errno);
     }
 }
 
@@ -238,7 +229,7 @@ static const JNINativeMethod gNetworkStackUtilsMethods[] = {
     { "addArpEntry", "([B[BLjava/lang/String;Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_addArpEntry },
     { "attachDhcpFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_attachDhcpFilter },
     { "attachRaFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_attachRaFilter },
-    { "attachControlPacketFilter", "(Ljava/io/FileDescriptor;I)V", (void*) network_stack_utils_attachControlPacketFilter },
+    { "attachControlPacketFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_attachControlPacketFilter },
 };
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void*) {
