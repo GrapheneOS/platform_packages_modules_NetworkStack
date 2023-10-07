@@ -160,8 +160,7 @@ class NetworkStackUtilsIntegrationTest {
         assertArrayEquals("Sent packet != original packet", originalPacket, sentDhcpPacket)
     }
 
-    @Test
-    fun testAttachRaFilter() {
+    private fun doTestAttachRaFilter(generic: Boolean) {
         val socket = Os.socket(AF_PACKET, SOCK_RAW or SOCK_CLOEXEC, 0)
         val ifParams = InterfaceParams.getByName(iface.interfaceName)
                 ?: fail("Could not obtain interface params for ${iface.interfaceName}")
@@ -177,7 +176,11 @@ class NetworkStackUtilsIntegrationTest {
         echo.rewind()
         assertNextPacketEquals(socket, echo.readAsArray(), "ICMPv6 echo")
 
-        NetworkStackUtils.attachRaFilter(socket)
+        if (generic) {
+            NetworkStackUtils.attachControlPacketFilter(socket)
+        } else {
+            NetworkStackUtils.attachRaFilter(socket)
+        }
         // Send another echo, then an RA. After setting the filter expect only the RA.
         echo.rewind()
         reader.sendResponse(echo)
@@ -191,6 +194,16 @@ class NetworkStackUtilsIntegrationTest {
         ra.rewind()
 
         assertNextPacketEquals(socket, ra.readAsArray(), "ICMPv6 RA")
+    }
+
+    @Test
+    fun testAttachRaFilter() {
+        doTestAttachRaFilter(false)
+    }
+
+    @Test
+    fun testRaViaAttachControlPacketFilter() {
+        doTestAttachRaFilter(true)
     }
 
     private fun assertNextPacketEquals(socket: FileDescriptor, expected: ByteArray, descr: String) {
