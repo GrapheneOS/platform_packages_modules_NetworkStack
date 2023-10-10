@@ -1284,6 +1284,11 @@ public abstract class DhcpPacket {
                             break;
                         case DHCP_IPV6_ONLY_PREFERRED:
                             expectedLen = 4;
+                            if (expectedLen != optionLen) {
+                                // rfc8925#section-3.1: The client MUST ignore the IPv6-Only
+                                // Preferred option if the length field value is not 4.
+                                skipOption(packet, optionLen);
+                            }
                             ipv6OnlyWaitTime = Integer.valueOf(packet.getInt());
                             break;
                         default:
