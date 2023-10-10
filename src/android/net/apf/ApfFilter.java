@@ -1970,6 +1970,13 @@ public class ApfFilter implements AndroidPacketFilter {
             Log.e(TAG, "Error parsing RA", e);
             return;
         }
+
+        // Remove all expired RA filters before trying to match the new RA.
+        // TODO: matches() still checks that the old RA filter has not expired. Consider removing
+        // that check.
+        final int now = secondsSinceBoot();
+        mRas.removeIf(item -> item.getRemainingFilterLft(now) <= 0);
+
         // Have we seen this RA before?
         for (int i = 0; i < mRas.size(); i++) {
             final Ra oldRa = mRas.get(i);
