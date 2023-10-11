@@ -2932,8 +2932,8 @@ public class ApfTest {
         ra = new RaPacketBuilder(179 /* router lifetime */).build();
         assertDrop(program, ra);
 
-        // lifetime increases above accept_ra_min_lft
-        ra = new RaPacketBuilder(181 /* router lifetime */).build();
+        // lifetime increases to accept_ra_min_lft
+        ra = new RaPacketBuilder(180 /* router lifetime */).build();
         assertPass(program, ra);
     }
 
@@ -2965,8 +2965,8 @@ public class ApfTest {
         ra = new RaPacketBuilder(1 /* router lifetime */).build();
         assertDrop(program, ra);
 
-        // above accept_ra_min_lft
-        ra = new RaPacketBuilder(181 /* router lifetime */).build();
+        // equals accept_ra_min_lft
+        ra = new RaPacketBuilder(180 /* router lifetime */).build();
         assertPass(program, ra);
 
         // lifetime is 0
@@ -3029,8 +3029,8 @@ public class ApfTest {
         ra = new RaPacketBuilder(1801 /* router lifetime */).build();
         assertPass(program, ra);
 
-        // lifetime is just above 1/3 of old lft
-        ra = new RaPacketBuilder(601 /* router lifetime */).build();
+        // lifetime is 1/3 of old lft
+        ra = new RaPacketBuilder(600 /* router lifetime */).build();
         assertDrop(program, ra);
 
         // lifetime is below 1/3 of old lft
