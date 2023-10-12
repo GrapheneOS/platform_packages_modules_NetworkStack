@@ -3047,6 +3047,60 @@ public class ApfTest {
     }
 
     @Test
+    public void testRaFilterIsUpdated() throws Exception {
+        final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
+        // configure accept_ra_min_lft
+        final ApfConfiguration config = getDefaultConfig();
+        config.acceptRaMinLft = 180;
+        final TestApfFilter apfFilter = new TestApfFilter(mContext, config, ipClientCallback);
+
+        // Create an initial RA and build an APF program
+        byte[] ra = new RaPacketBuilder(1800 /* router lifetime */).build();
+        apfFilter.pretendPacketReceived(ra);
+        byte[] program = ipClientCallback.assertProgramUpdateAndGet();
+
+        // repeated RA is dropped.
+        assertDrop(program, ra);
+
+        // updated RA is passed, repeated RA is dropped after program update.
+        ra = new RaPacketBuilder(599 /* router lifetime */).build();
+        assertPass(program, ra);
+        apfFilter.pretendPacketReceived(ra);
+        program = ipClientCallback.assertProgramUpdateAndGet();
+        assertDrop(program, ra);
+
+        ra = new RaPacketBuilder(180 /* router lifetime */).build();
+        assertPass(program, ra);
+        apfFilter.pretendPacketReceived(ra);
+        program = ipClientCallback.assertProgramUpdateAndGet();
+        assertDrop(program, ra);
+
+        ra = new RaPacketBuilder(0 /* router lifetime */).build();
+        assertPass(program, ra);
+        apfFilter.pretendPacketReceived(ra);
+        program = ipClientCallback.assertProgramUpdateAndGet();
+        assertDrop(program, ra);
+
+        ra = new RaPacketBuilder(180 /* router lifetime */).build();
+        assertPass(program, ra);
+        apfFilter.pretendPacketReceived(ra);
+        program = ipClientCallback.assertProgramUpdateAndGet();
+        assertDrop(program, ra);
+
+        ra = new RaPacketBuilder(599 /* router lifetime */).build();
+        assertPass(program, ra);
+        apfFilter.pretendPacketReceived(ra);
+        program = ipClientCallback.assertProgramUpdateAndGet();
+        assertDrop(program, ra);
+
+        ra = new RaPacketBuilder(1800 /* router lifetime */).build();
+        assertPass(program, ra);
+        apfFilter.pretendPacketReceived(ra);
+        program = ipClientCallback.assertProgramUpdateAndGet();
+        assertDrop(program, ra);
+    }
+
+    @Test
     public void testBroadcastAddress() throws Exception {
         assertEqualsIp("255.255.255.255", ApfFilter.ipv4BroadcastAddress(IPV4_ANY_HOST_ADDR, 0));
         assertEqualsIp("0.0.0.0", ApfFilter.ipv4BroadcastAddress(IPV4_ANY_HOST_ADDR, 32));
