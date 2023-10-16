@@ -1300,6 +1300,44 @@ public class DhcpPacketTest {
         checkBuildOfferPacket(3600, null);
     }
 
+    @Test
+    public void testInvalidLengthIpv6OnlyPreferredOption() throws Exception {
+        // CHECKSTYLE:OFF Generated code
+        final ByteBuffer packet = ByteBuffer.wrap(HexDump.hexStringToByteArray(
+                // IP header.
+                "45100158000040004011B5CEC0A80164C0A80102" +
+                // UDP header
+                "004300440144CE63" +
+                // BOOTP header
+                "02010600B8BF41E60000000000000000C0A80102C0A8016400000000" +
+                // MAC address.
+                "22B3614EE01200000000000000000000" +
+                // Server name and padding.
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                // File.
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                // Options
+                "638253633501023604C0A80164330400000E103A04000007083B0400000C4E01" +
+                "04FFFFFF001C04C0A801FF0304C0A801640604C0A801640C0C74657374686F73" +
+                "746E616D651A0205DC" +
+                // Option 108 (0x6c, IPv6-Only preferred option), length 8 (0x08)
+                "6C080102030405060708" +
+                // End of options.
+                "FF"));
+        // CHECKSTYLE:ON Generated code
+
+        final DhcpPacket offerPacket = DhcpPacket.decodeFullPacket(packet, ENCAP_L3,
+                TEST_EMPTY_OPTIONS_SKIP_LIST);
+        // rfc8925#section-3.1: The client MUST ignore the IPv6-Only Preferred option if the length
+        // field value is not 4.
+        assertTrue(offerPacket instanceof DhcpOfferPacket);
+        assertEquals(offerPacket.mIpv6OnlyWaitTime, null);
+    }
+
     private static byte[] intToByteArray(int val) {
         return ByteBuffer.allocate(4).putInt(val).array();
     }
