@@ -36,6 +36,7 @@ import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_SKIPPED;
 import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_VALID;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED;
+import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_SUSPENDED;
 import static android.net.captiveportal.CaptivePortalProbeSpec.parseCaptivePortalProbeSpecs;
 import static android.net.metrics.ValidationProbeEvent.DNS_FAILURE;
 import static android.net.metrics.ValidationProbeEvent.DNS_SUCCESS;
@@ -542,6 +543,7 @@ public class NetworkMonitor extends StateMachine {
     private final boolean mPrivateIpNoInternetEnabled;
 
     private final boolean mMetricsEnabled;
+    private final boolean mReevaluateWhenResumeEnabled;
     @NonNull
     private final NetworkInformationShim mInfoShim = NetworkInformationShimImpl.newInstance();
 
@@ -628,6 +630,8 @@ public class NetworkMonitor extends StateMachine {
         mPrivateIpNoInternetEnabled = getIsPrivateIpNoInternetEnabled();
         mMetricsEnabled = deps.isFeatureNotChickenedOut(context,
                 NetworkStackUtils.VALIDATION_METRICS_VERSION);
+        mReevaluateWhenResumeEnabled = deps.isFeatureNotChickenedOut(context,
+                NetworkStackUtils.REEVALUATE_WHEN_RESUME);
         mUseHttps = getUseHttpsValidation();
         mCaptivePortalUserAgent = getCaptivePortalUserAgent();
         mCaptivePortalFallbackSpecs =
@@ -1101,16 +1105,8 @@ public class NetworkMonitor extends StateMachine {
                     }
                     break;
                 case EVENT_NETWORK_CAPABILITIES_CHANGED:
-                    final NetworkCapabilities newCap = (NetworkCapabilities) message.obj;
-                    // Reevaluate network if underlying network changes on the validation required
-                    // VPN.
-                    if (isVpnUnderlyingNetworkChangeReevaluationRequired(
-                            newCap, mNetworkCapabilities)) {
-                        sendMessage(CMD_FORCE_REEVALUATION, NO_UID, 0);
-                    }
-
-                    mNetworkCapabilities = newCap;
-                    suppressNotificationIfNetworkRestricted();
+                    handleCapabilitiesChanged((NetworkCapabilities) message.obj,
+                            true /* reevaluateOnResume */);
                     break;
                 case EVENT_RESOURCE_CONFIG_CHANGED:
                     // RRO generation does not happen during package installation and instead after
@@ -1129,18 +1125,47 @@ public class NetworkMonitor extends StateMachine {
             return HANDLED;
         }
 
-        private boolean isVpnUnderlyingNetworkChangeReevaluationRequired(
-                final NetworkCapabilities newCap, final NetworkCapabilities oldCap) {
-            return !newCap.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
-                    && isValidationRequired()
-                    && !Objects.equals(mInfoShim.getUnderlyingNetworks(newCap),
-                    mInfoShim.getUnderlyingNetworks(oldCap));
-        }
-
         @Override
         public void exit() {
             mContext.unregisterReceiver(mConfigurationReceiver);
         }
+    }
+
+    private void handleCapabilitiesChanged(@NonNull final NetworkCapabilities newCap,
+            boolean reevaluateOnResume) {
+        // Go to EvaluatingState to reset the network re-evaluation timer when
+        // the network resumes from suspended.
+        // This is because the network is expected to be down
+        // when the device is suspended, and if the delay timer falls back to
+        // the maximum interval, re-evaluation will be triggered slowly after
+        // the network resumes.
+        // Suppress re-evaluation in validated state, if the network has been validated,
+        // then it's in the expected state.
+        // TODO(b/287183389): Evaluate once but do not re-evaluate when suspended, to make
+        //  exclamation mark visible by user but doesn't cause too much network traffic.
+        if (mReevaluateWhenResumeEnabled && reevaluateOnResume
+                && !mNetworkCapabilities.hasCapability(NET_CAPABILITY_NOT_SUSPENDED)
+                && newCap.hasCapability(NET_CAPABILITY_NOT_SUSPENDED)) {
+            // Interrupt if waiting for next probe.
+            sendMessage(CMD_FORCE_REEVALUATION, NO_UID, 1 /* forceAccept */);
+        } else if (isVpnUnderlyingNetworkChangeReevaluationRequired(newCap, mNetworkCapabilities)) {
+            // If no re-evaluation is needed from the previous check, fall-through for lower
+            // priority checks.
+            // Reevaluate network if underlying network changes on the validation required
+            // VPN.
+            sendMessage(CMD_FORCE_REEVALUATION, NO_UID, 0 /* forceAccept */);
+        }
+
+        mNetworkCapabilities = newCap;
+        suppressNotificationIfNetworkRestricted();
+    }
+
+    private boolean isVpnUnderlyingNetworkChangeReevaluationRequired(
+            final NetworkCapabilities newCap, final NetworkCapabilities oldCap) {
+        return !newCap.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+                && isValidationRequired()
+                && !Objects.equals(mInfoShim.getUnderlyingNetworks(newCap),
+                mInfoShim.getUnderlyingNetworks(oldCap));
     }
 
     // Being in the ValidatedState State indicates a Network is:
@@ -1207,6 +1232,12 @@ public class NetworkMonitor extends StateMachine {
                     } else {
                         sendTcpPollingEvent();
                     }
+                    break;
+                case EVENT_NETWORK_CAPABILITIES_CHANGED:
+                    // The timer does not need to reset, and it won't need to re-evaluate if
+                    // the network is already validated when resumes.
+                    handleCapabilitiesChanged((NetworkCapabilities) message.obj,
+                            false /* reevaluateOnResume */);
                     break;
                 default:
                     return NOT_HANDLED;
@@ -3453,6 +3484,11 @@ public class NetworkMonitor extends StateMachine {
     @VisibleForTesting
     protected long getLastProbeTime() {
         return mLastProbeTime;
+    }
+
+    @VisibleForTesting
+    public int getReevaluationDelayMs() {
+        return mReevaluateDelayMs;
     }
 
     @VisibleForTesting
