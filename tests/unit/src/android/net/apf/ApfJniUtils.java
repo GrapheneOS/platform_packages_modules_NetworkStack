@@ -54,4 +54,9 @@ public class ApfJniUtils {
      */
     public static native boolean dropsAllPackets(int apfVersion, byte[] program, byte[] data,
             String pcapFilename);
+
+    /**
+     * Disassemble the Apf program into human-readable text.
+     */
+    public static native String[] disassembleApf(byte[] program);
 }
