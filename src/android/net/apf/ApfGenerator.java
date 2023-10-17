@@ -78,7 +78,9 @@ public class ApfGenerator {
         NOT(32),  // Not, e.g. "not R0"
         NEG(33),  // Negate, e.g. "neg R0"
         SWAP(34), // Swap, e.g. "swap R0,R1"
-        MOVE(35);  // Move, e.g. "move R0,R1"
+        MOVE(35),  // Move, e.g. "move R0,R1"
+        ALLOC(36), // Allocate buffer, "e.g. ALLOC R0"
+        TRANS(37); // Transmit buffer, "e.g. TRANS R0"
 
         final int value;
 
@@ -834,6 +836,32 @@ public class ApfGenerator {
     public ApfGenerator addMove(Register register) {
         Instruction instruction = new Instruction(Opcodes.EXT, register);
         instruction.setUnsignedImm(ExtendedOpcodes.MOVE.value);
+        addInstruction(instruction);
+        return this;
+    }
+
+    /**
+     * Add an instruction to the end of the program to call the apf_allocate_buffer() function.
+     *
+     * @param register the register value contains the buffer size.
+     */
+    public ApfGenerator addAlloc(Register register) throws IllegalInstructionException {
+        requireApfVersion(5);
+        Instruction instruction = new Instruction(Opcodes.EXT, register);
+        instruction.setUnsignedImm(ExtendedOpcodes.ALLOC.value);
+        addInstruction(instruction);
+        return this;
+    }
+
+    /**
+     * Add an instruction to the end of the program to call the apf_transmit_buffer() function.
+     *
+     * @param register the register value contains the packet type.
+     */
+    public ApfGenerator addTrans(Register register) throws IllegalInstructionException {
+        requireApfVersion(5);
+        Instruction instruction = new Instruction(Opcodes.EXT, register);
+        instruction.setUnsignedImm(ExtendedOpcodes.TRANS.value);
         addInstruction(instruction);
         return this;
     }
