@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "apf_interpreter.h"
+#include "disassembler.h"
 #include "v5/apf_interpreter.h"
 #include "nativehelper/scoped_primitive_array.h"
 
@@ -243,6 +244,35 @@ static jboolean com_android_server_ApfTest_dropsAllPackets(
     return true;
 }
 
+static char output_buffer[512];
+
+static jobjectArray com_android_server_ApfTest_disassembleApf(
+    JNIEnv* env, jclass, jbyteArray jprogram) {
+    uint32_t program_len = env->GetArrayLength(jprogram);
+    std::vector<uint8_t> buf(program_len, 0);
+
+    env->GetByteArrayRegion(jprogram, 0, program_len,
+                            reinterpret_cast<jbyte*>(buf.data()));
+    std::vector<std::string> disassemble_output;
+    for (uint32_t pc = 0; pc < program_len;) {
+         pc = apf_disassemble(buf.data(), program_len, pc, output_buffer,
+                              sizeof(output_buffer) / sizeof(output_buffer[0]));
+         disassemble_output.emplace_back(output_buffer);
+    }
+    jclass stringClass = env->FindClass("java/lang/String");
+    jobjectArray disassembleOutput =
+        env->NewObjectArray(disassemble_output.size(), stringClass, nullptr);
+
+    for (jsize i = 0; i < (jsize) disassemble_output.size(); i++) {
+         jstring j_disassemble_output =
+             env->NewStringUTF(disassemble_output[i].c_str());
+         env->SetObjectArrayElement(disassembleOutput, i, j_disassemble_output);
+         env->DeleteLocalRef(j_disassemble_output);
+    }
+
+    return disassembleOutput;
+}
+
 extern "C" jint JNI_OnLoad(JavaVM* vm, void*) {
     JNIEnv *env;
     if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
@@ -259,6 +289,8 @@ extern "C" jint JNI_OnLoad(JavaVM* vm, void*) {
                     (void*)com_android_server_ApfTest_compareBpfApf },
             { "dropsAllPackets", "(I[B[BLjava/lang/String;)Z",
                     (void*)com_android_server_ApfTest_dropsAllPackets },
+            { "disassembleApf", "([B)[Ljava/lang/String;",
+              (void*)com_android_server_ApfTest_disassembleApf },
     };
 
     jniRegisterNativeMethods(env, "android/net/apf/ApfJniUtils",
