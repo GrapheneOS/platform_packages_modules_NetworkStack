@@ -16,6 +16,8 @@
 
 package android.net.apf;
 
+import android.annotation.Nullable;
+
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
@@ -98,13 +100,24 @@ public class ApfGenerator {
             this.value = value;
         }
     }
+
+    private static class Immediate {
+        public final boolean mSigned;
+        public final byte mImmSize;
+        public final int mValue;
+
+        Immediate(int value, boolean signed) {
+            mValue = value;
+            mSigned = signed;
+            mImmSize = calculateImmSize(value, signed);
+        }
+    }
+
     private class Instruction {
         private final byte mOpcode;   // A "Opcode" value.
         private final byte mRegister; // A "Register" value.
-        private boolean mHasImm;
-        private byte mImmSize;
-        private boolean mImmSigned;
-        private int mImm;
+        @Nullable
+        public Immediate mImm;
         // When mOpcode is a jump:
         private byte mTargetLabelSize;
         private String mTargetLabel;
@@ -125,10 +138,7 @@ public class ApfGenerator {
         }
 
         void setImm(int imm, boolean signed) {
-            mHasImm = true;
-            mImm = imm;
-            mImmSigned = signed;
-            mImmSize = calculateImmSize(imm, signed);
+            mImm = new Immediate(imm, signed);
         }
 
         void setUnsignedImm(int imm) {
@@ -170,7 +180,7 @@ public class ApfGenerator {
                 return 0;
             }
             int size = 1;
-            if (mHasImm) {
+            if (mImm != null) {
                 size += generatedImmSize();
             }
             if (mTargetLabel != null) {
@@ -245,8 +255,8 @@ public class ApfGenerator {
             if (mTargetLabel != null) {
                 writingOffset = writeValue(calculateTargetLabelOffset(), bytecode, writingOffset);
             }
-            if (mHasImm) {
-                writingOffset = writeValue(mImm, bytecode, writingOffset);
+            if (mImm != null) {
+                writingOffset = writeValue(mImm.mValue, bytecode, writingOffset);
             }
             if (mCompareBytes != null) {
                 System.arraycopy(mCompareBytes, 0, bytecode, writingOffset, mCompareBytes.length);
@@ -267,7 +277,11 @@ public class ApfGenerator {
          * truncated.
          */
         private byte generatedImmSize() {
-            return mImmSize > mTargetLabelSize ? mImmSize : mTargetLabelSize;
+            if (mImm == null) {
+                return mTargetLabelSize;
+            } else {
+                return mImm.mImmSize > mTargetLabelSize ? mImm.mImmSize : mTargetLabelSize;
+            }
         }
 
         private int calculateTargetLabelOffset() throws IllegalInstructionException {
@@ -285,21 +299,6 @@ public class ApfGenerator {
             // Calculate distance from end of this instruction to instruction.offset.
             final int targetLabelOffset = targetLabelInstruction.offset - (offset + size());
             return targetLabelOffset;
-        }
-
-        private byte calculateImmSize(int imm, boolean signed) {
-            if (imm == 0) {
-                return 0;
-            }
-            if (signed && (imm >= -128 && imm <= 127) ||
-                    !signed && (imm >= 0 && imm <= 255)) {
-                return 1;
-            }
-            if (signed && (imm >= -32768 && imm <= 32767) ||
-                    !signed && (imm >= 0 && imm <= 65535)) {
-                return 2;
-            }
-            return 4;
         }
     }
 
@@ -907,6 +906,22 @@ public class ApfGenerator {
             offset += instruction.size();
         }
         return offset;
+    }
+
+    /**
+     * Calculate the size of the imm.
+     */
+    private static byte calculateImmSize(int imm, boolean signed) {
+        if (imm == 0) {
+            return 0;
+        }
+        if (signed && (imm >= -128 && imm <= 127) || !signed && (imm >= 0 && imm <= 255)) {
+            return 1;
+        }
+        if (signed && (imm >= -32768 && imm <= 32767) || !signed && (imm >= 0 && imm <= 65535)) {
+            return 2;
+        }
+        return 4;
     }
 
     /**
