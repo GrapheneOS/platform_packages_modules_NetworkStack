@@ -123,4 +123,17 @@ public final class PrivateDnsConfigTest {
         testPrivateDnsConfigConversion(new PrivateDnsConfig(true, "dns.com", TEST_ADDRS, "doh.com",
                 TEST_ADDRS, "dohpath=/some-path{?dns}", 443));
     }
+
+    @Test
+    public void testIpAddressArrayIsCopied() {
+        final InetAddress ip = InetAddress.parseNumericAddress("1.2.3.4");
+        final InetAddress[] ipArray = new InetAddress[] { ip };
+        final PrivateDnsConfig cfg = new PrivateDnsConfig(true /* useTls */, null /* hostname */,
+                ipArray /* ips */, null /* dohName */, ipArray /* dohIps */, null /* dohPath */,
+                -1 /* dohPort */);
+
+        ipArray[0] = InetAddress.parseNumericAddress("2001:db8::2");
+        assertArrayEquals(new InetAddress[] { ip }, cfg.ips);
+        assertArrayEquals(new InetAddress[] { ip }, cfg.dohIps);
+    }
 }

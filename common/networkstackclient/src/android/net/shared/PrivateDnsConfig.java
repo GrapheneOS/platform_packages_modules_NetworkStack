@@ -81,9 +81,9 @@ public class PrivateDnsConfig {
             InetAddress[] dohIps, String dohPath, int dohPort) {
         this.useTls = useTls;
         this.hostname = (hostname != null) ? hostname : "";
-        this.ips = (ips != null) ? ips : new InetAddress[0];
+        this.ips = (ips != null) ? ips.clone() : new InetAddress[0];
         this.dohName = (dohName != null) ? dohName : "";
-        this.dohIps = (dohIps != null) ? dohIps : new InetAddress[0];
+        this.dohIps = (dohIps != null) ? dohIps.clone() : new InetAddress[0];
         this.dohPath = (dohPath != null) ? dohPath : "";
         this.dohPort = dohPort;
     }
