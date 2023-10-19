@@ -179,6 +179,7 @@ import android.stats.connectivity.NudEventType;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.util.ArrayMap;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.test.InstrumentationRegistry;
@@ -281,6 +282,7 @@ import java.util.function.Predicate;
 @RunWith(Parameterized.class)
 @SmallTest
 public abstract class IpClientIntegrationTestCommon {
+    private static final String TAG = IpClientIntegrationTestCommon.class.getSimpleName();
     private static final int DATA_BUFFER_LEN = 4096;
     private static final int PACKET_TIMEOUT_MS = 5_000;
     private static final String TEST_CLUSTER = "some cluster";
@@ -3189,7 +3191,7 @@ public abstract class IpClientIntegrationTestCommon {
         return lp;
     }
 
-    private void doDualStackProvisioning() throws Exception {
+    private LinkProperties doDualStackProvisioning() throws Exception {
         final ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
                 .build();
@@ -3205,7 +3207,7 @@ public abstract class IpClientIntegrationTestCommon {
             mIIpClient.startProvisioning(config.toStableParcelable());
         }
 
-        performDualStackProvisioning();
+        return performDualStackProvisioning();
     }
 
     private boolean hasRouteTo(@NonNull final LinkProperties lp, @NonNull final String prefix) {
@@ -3233,7 +3235,8 @@ public abstract class IpClientIntegrationTestCommon {
 
     @Test
     public void testIgnoreIpv6ProvisioningLoss_disableAcceptRaDefrtr() throws Exception {
-        doDualStackProvisioning();
+        LinkProperties lp = doDualStackProvisioning();
+        Log.d(TAG, "current LinkProperties: " + lp);
 
         final CompletableFuture<LinkProperties> lpFuture = new CompletableFuture<>();
 
@@ -3254,7 +3257,8 @@ public abstract class IpClientIntegrationTestCommon {
                     lpFuture.complete(x);
                     return true;
                 }));
-        final LinkProperties lp = lpFuture.get(TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        lp = lpFuture.get(TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        Log.d(TAG, "After receiving RA with 0 router lifetime, LinkProperties: " + lp);
         assertNotNull(lp);
         assertEquals(lp.getAddresses().get(0), CLIENT_ADDR);
         assertEquals(lp.getDnsServers().get(0), SERVER_ADDR);
