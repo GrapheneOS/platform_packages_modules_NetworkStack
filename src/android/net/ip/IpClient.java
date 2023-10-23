@@ -816,7 +816,10 @@ public class IpClient extends StateMachine {
         public AndroidPacketFilter maybeCreateApfFilter(Context context,
                 ApfFilter.ApfConfiguration config, InterfaceParams ifParams,
                 IpClientCallbacksWrapper cb) {
-            if (isFeatureEnabled(context, NetworkStackUtils.APF_NEW_RA_FILTER_VERSION)) {
+            // The experiment explicitly excludes debuggable builds (see cl/575032139).
+            // Always enable the new APF filtering mechanism on userdebug and eng builds.
+            if (!Build.TYPE.equals("user")
+                    || isFeatureEnabled(context, NetworkStackUtils.APF_NEW_RA_FILTER_VERSION)) {
                 return ApfFilter.maybeCreate(context, config, ifParams, cb);
             } else {
                 return LegacyApfFilter.maybeCreate(context, config, ifParams, cb);
