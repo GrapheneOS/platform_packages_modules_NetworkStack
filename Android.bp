@@ -337,7 +337,10 @@ android_library {
         "src/**/*.java",
         ":statslog-networkstack-java-gen-current"
     ],
-    static_libs: ["NetworkStackApiCurrentShims"],
+    static_libs: [
+        "NetworkStackApiCurrentShims",
+        "net-utils-device-common-struct",
+    ],
     manifest: "AndroidManifestBase.xml",
     visibility: [
         "//frameworks/base/tests/net/integration",
@@ -355,7 +358,10 @@ android_library {
         "src/**/*.java",
         ":statslog-networkstack-java-gen-stable",
     ],
-    static_libs: ["NetworkStackApiStableShims"],
+    static_libs: [
+        "NetworkStackApiStableShims",
+        "net-utils-device-common-struct",
+    ],
     manifest: "AndroidManifestBase.xml",
     visibility: [
         "//frameworks/base/packages/Connectivity/tests/integration",
