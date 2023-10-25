@@ -41,10 +41,41 @@ class ApfV5Test {
         program = gen.generate()
         assertContentEquals(byteArrayOf(encodeInstruction(21, 1, 1), 37), program)
         assertContentEquals(arrayOf("       0: trans r1"), ApfJniUtils.disassembleApf(program))
+
+        gen = ApfGenerator(MIN_APF_VERSION)
+        gen.addWrite(0x01, 1)
+        gen.addWrite(0x0102, 2)
+        gen.addWrite(0x01020304, 4)
+        program = gen.generate()
+        assertContentEquals(byteArrayOf(
+                encodeInstruction(24, 1, 0), 0x01,
+                encodeInstruction(24, 2, 0), 0x01, 0x02,
+                encodeInstruction(24, 4, 0), 0x01, 0x02, 0x03, 0x04
+        ), program)
+        assertContentEquals(arrayOf(
+                "       0: write 0x01",
+                "       2: write 0x0102",
+                "       5: write 0x01020304"), ApfJniUtils.disassembleApf(program))
+
+        gen = ApfGenerator(MIN_APF_VERSION)
+        gen.addWrite(ApfGenerator.Register.R0, 1)
+        gen.addWrite(ApfGenerator.Register.R0, 2)
+        gen.addWrite(ApfGenerator.Register.R0, 4)
+        program = gen.generate()
+        assertContentEquals(byteArrayOf(
+                encodeInstruction(21, 1, 0), 38,
+                encodeInstruction(21, 1, 0), 39,
+                encodeInstruction(21, 1, 0), 40
+        ), program)
+        assertContentEquals(arrayOf(
+                "       0: write r0, 1",
+                "       2: write r0, 2",
+                "       4: write r0, 4"), ApfJniUtils.disassembleApf(program))
     }
 
     private fun encodeInstruction(opcode: Int, immLength: Int, register: Int): Byte {
-        return opcode.shl(3).or(immLength.shl(1)).or(register).toByte()
+        val immLengthEncoding = if (immLength == 4) 3 else immLength
+        return opcode.shl(3).or(immLengthEncoding.shl(1)).or(register).toByte()
     }
 
     companion object {
