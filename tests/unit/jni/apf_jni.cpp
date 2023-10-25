@@ -25,8 +25,9 @@
 
 #include "apf_interpreter.h"
 #include "disassembler.h"
-#include "v5/apf_interpreter.h"
 #include "nativehelper/scoped_primitive_array.h"
+#include "v5/apf_interpreter.h"
+#include "v5/test_buf_allocator.h"
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #define LOG_TAG "NetworkStackUtils-JNI"
@@ -273,6 +274,23 @@ static jobjectArray com_android_server_ApfTest_disassembleApf(
     return disassembleOutput;
 }
 
+jbyteArray com_android_server_ApfTest_getTransmittedPacket(JNIEnv* env,
+                                                           jclass) {
+    jbyteArray jdata = env->NewByteArray((jint) apf_test_tx_packet_len);
+    if (jdata == NULL) { return NULL; }
+    if (apf_test_tx_packet_len == 0) { return jdata; }
+
+    env->SetByteArrayRegion(jdata, 0, (jint) apf_test_tx_packet_len,
+                            reinterpret_cast<jbyte*>(apf_test_tx_packet));
+
+    return jdata;
+}
+
+void com_android_server_ApfTest_resetTransmittedPacketMemory(JNIEnv, jclass) {
+    apf_test_tx_packet_len = 0;
+    memset(apf_test_tx_packet, 0, APF_TX_BUFFER_SIZE);
+}
+
 extern "C" jint JNI_OnLoad(JavaVM* vm, void*) {
     JNIEnv *env;
     if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
@@ -291,6 +309,10 @@ extern "C" jint JNI_OnLoad(JavaVM* vm, void*) {
                     (void*)com_android_server_ApfTest_dropsAllPackets },
             { "disassembleApf", "([B)[Ljava/lang/String;",
               (void*)com_android_server_ApfTest_disassembleApf },
+            { "getTransmittedPacket", "()[B",
+              (void*)com_android_server_ApfTest_getTransmittedPacket },
+            { "resetTransmittedPacketMemory", "()V",
+              (void*)com_android_server_ApfTest_resetTransmittedPacketMemory },
     };
 
     jniRegisterNativeMethods(env, "android/net/apf/ApfJniUtils",
