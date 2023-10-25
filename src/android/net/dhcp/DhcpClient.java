@@ -53,7 +53,6 @@ import static com.android.net.module.util.NetworkStackConstants.IPV4_CONFLICT_AN
 import static com.android.net.module.util.NetworkStackConstants.IPV4_CONFLICT_PROBE_NUM;
 import static com.android.net.module.util.SocketUtils.closeSocketQuietly;
 import static com.android.networkstack.util.NetworkStackUtils.DHCP_INIT_REBOOT_VERSION;
-import static com.android.networkstack.util.NetworkStackUtils.DHCP_IPV6_ONLY_PREFERRED_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.DHCP_IP_CONFLICT_DETECT_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.DHCP_RAPID_COMMIT_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.DHCP_SLOW_RETRANSMISSION_VERSION;
@@ -302,9 +301,7 @@ public class DhcpClient extends StateMachine {
         if (isCapportApiEnabled()) {
             params.write(DHCP_CAPTIVE_PORTAL);
         }
-        if (isIPv6OnlyPreferredModeEnabled()) {
-            params.write(DHCP_IPV6_ONLY_PREFERRED);
-        }
+        params.write(DHCP_IPV6_ONLY_PREFERRED);
         // Customized DHCP options to be put in PRL.
         for (DhcpOption option : mConfiguration.options) {
             if (option.value == null) params.write(option.type);
@@ -567,16 +564,6 @@ public class DhcpClient extends StateMachine {
     }
 
     /**
-     * check whether or not to support IPv6-only preferred option.
-     *
-     * IPv6-only preferred option is enabled by default if there is no experiment flag set to
-     * disable this feature explicitly.
-     */
-    public boolean isIPv6OnlyPreferredModeEnabled() {
-        return mDependencies.isFeatureNotChickenedOut(mContext, DHCP_IPV6_ONLY_PREFERRED_VERSION);
-    }
-
-    /**
      * Check whether to adopt slow DHCPREQUEST retransmission approach in Renewing/Rebinding state
      * suggested in RFC2131 section 4.4.5.
      */
@@ -648,7 +635,6 @@ public class DhcpClient extends StateMachine {
     private byte[] getOptionsToSkip() {
         final ByteArrayOutputStream optionsToSkip = new ByteArrayOutputStream(2);
         if (!isCapportApiEnabled()) optionsToSkip.write(DHCP_CAPTIVE_PORTAL);
-        if (!isIPv6OnlyPreferredModeEnabled()) optionsToSkip.write(DHCP_IPV6_ONLY_PREFERRED);
         return optionsToSkip.toByteArray();
     }
 
@@ -1292,7 +1278,6 @@ public class DhcpClient extends StateMachine {
     }
 
     private boolean maybeTransitionToIpv6OnlyWaitState(@NonNull final DhcpPacket packet) {
-        if (!isIPv6OnlyPreferredModeEnabled()) return false;
         if (packet.getIpv6OnlyWaitTimeMillis() == DhcpPacket.V6ONLY_PREFERRED_ABSENCE) return false;
 
         mIpv6OnlyWaitTimeMs = packet.getIpv6OnlyWaitTimeMillis();
