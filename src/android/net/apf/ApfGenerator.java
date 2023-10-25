@@ -63,7 +63,8 @@ public class ApfGenerator {
         JNEBS(20), // Compare not equal byte sequence, e.g. "jnebs R0,5,label,0x1122334455"
         EXT(21),   // Followed by immediate indicating ExtendedOpcodes.
         LDDW(22),  // Load 4 bytes from data memory address (register + immediate): "lddw R0, [5]R1"
-        STDW(23);  // Store 4 bytes to data memory address (register + immediate): "stdw R0, [5]R1"
+        STDW(23),  // Store 4 bytes to data memory address (register + immediate): "stdw R0, [5]R1"
+        WRITE(24); // Write 1, 2 or 4 bytes imm to the output buffer, e.g. "WRITE 5"
 
         final int value;
 
@@ -81,7 +82,10 @@ public class ApfGenerator {
         SWAP(34), // Swap, e.g. "swap R0,R1"
         MOVE(35),  // Move, e.g. "move R0,R1"
         ALLOC(36), // Allocate buffer, "e.g. ALLOC R0"
-        TRANS(37); // Transmit buffer, "e.g. TRANS R0"
+        TRANS(37), // Transmit buffer, "e.g. TRANS R0"
+        EWRITE1(38), // Write 1 byte from register to the output buffer, e.g. "EWRITE1 R0"
+        EWRITE2(39), // Write 2 bytes from register to the output buffer, e.g. "EWRITE2 R0"
+        EWRITE4(40); // Write 4 bytes from register to the output buffer, e.g. "EWRITE4 R0"
 
         final int value;
 
@@ -106,9 +110,13 @@ public class ApfGenerator {
         public final int mValue;
 
         Immediate(int value, boolean signed) {
+            this(value, signed, calculateImmSize(value, signed));
+        }
+
+        Immediate(int value, boolean signed, byte size) {
             mValue = value;
             mSigned = signed;
-            mImmSize = calculateImmSize(value, signed);
+            mImmSize = size;
         }
     }
 
@@ -141,21 +149,25 @@ public class ApfGenerator {
             this(opcode, Register.R0);
         }
 
-        void addImm(int imm, boolean signed) {
+        void addUnsignedImm(int imm) {
+            addImm(new Immediate(imm, false));
+        }
+
+        void addUnsignedImm(int imm, byte size) {
+            addImm(new Immediate(imm, false, size));
+        }
+
+        void addSignedImm(int imm) {
+            addImm(new Immediate(imm, true));
+        }
+
+        void addImm(Immediate imm) {
             if (mImms.size() == mMaxSupportedImmediates) {
                 throw new IllegalArgumentException(
                         String.format("Opcode: %d only support at max: %d imms", mOpcode,
                                 mMaxSupportedImmediates));
             }
-            mImms.add(new Immediate(imm, signed));
-        }
-
-        void addUnsignedImm(int imm) {
-            addImm(imm, false);
-        }
-
-        void addSignedImm(int imm) {
-            addImm(imm, true);
+            mImms.add(imm);
         }
 
         void setLabel(String label) throws IllegalInstructionException {
@@ -868,6 +880,57 @@ public class ApfGenerator {
         requireApfVersion(5);
         Instruction instruction = new Instruction(Opcodes.EXT, register);
         instruction.addUnsignedImm(ExtendedOpcodes.TRANS.value);
+        addInstruction(instruction);
+        return this;
+    }
+
+    /**
+     * Add an instruction to the end of the program to write 1, 2 or 4 bytes value to output buffer.
+     *
+     * @param value the value to write
+     * @param size the size of the value
+     * @return the ApfGenerator object
+     * @throws IllegalInstructionException throws when size is not 1, 2 or 4
+     */
+    public ApfGenerator addWrite(int value, byte size) throws IllegalInstructionException {
+        requireApfVersion(5);
+        if (!(size == 1 || size == 2 || size == 4)) {
+            throw new IllegalInstructionException("length field must be 1, 2 or 4");
+        }
+        if (size < calculateImmSize(value, false)) {
+            throw new IllegalInstructionException(
+                    String.format("the value %d is unfit into size: %d", value, size));
+        }
+        Instruction instruction = new Instruction(Opcodes.WRITE);
+        instruction.addUnsignedImm(value, size);
+        addInstruction(instruction);
+        return this;
+    }
+
+    /**
+     * Add an instruction to the end of the program to write 1, 2 or 4 bytes value from register
+     * to output buffer.
+     *
+     * @param register the register contains the value to be written
+     * @param size the size of the value
+     * @return the ApfGenerator object
+     * @throws IllegalInstructionException throws when size is not 1, 2 or 4
+     */
+    public ApfGenerator addWrite(Register register, byte size)
+            throws IllegalInstructionException {
+        requireApfVersion(5);
+        if (!(size == 1 || size == 2 || size == 4)) {
+            throw new IllegalInstructionException(
+                    "length field must be 1, 2 or 4");
+        }
+        Instruction instruction = new Instruction(Opcodes.EXT, register);
+        if (size == 1) {
+            instruction.addUnsignedImm(ExtendedOpcodes.EWRITE1.value);
+        } else if (size == 2) {
+            instruction.addUnsignedImm(ExtendedOpcodes.EWRITE2.value);
+        } else {
+            instruction.addUnsignedImm(ExtendedOpcodes.EWRITE4.value);
+        }
         addInstruction(instruction);
         return this;
     }
