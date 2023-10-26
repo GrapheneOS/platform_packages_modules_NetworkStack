@@ -64,7 +64,6 @@ import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.Inet6Address;
 import java.net.SocketException;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Random;
@@ -284,7 +283,14 @@ public class Dhcp6Client extends StateMachine {
         }
 
         private void handleReceivedPacket(Dhcp6Packet packet) {
-            if (packet.isValid(mTransId, mClientDuid)) {
+            // Technically it is valid for the server to not include a prefix in an IA in certain
+            // scenarios (specifically in a reply to Renew / Rebind, which means: do not extend the
+            // prefix). However, while only supporting a single prefix, this never works well, so if
+            // the server decides to do so, ignore it.
+            // TODO: revisit this when adding multi-prefix support.
+            final boolean validIpo = packet.mPrefixDelegation.ipo != null
+                    && packet.mPrefixDelegation.ipo.isValid();
+            if (packet.isValid(mTransId, mClientDuid) && validIpo) {
                 receivePacket(packet);
             }
         }
@@ -636,25 +642,16 @@ public class Dhcp6Client extends StateMachine {
 
             // TODO: roll back to SOLICIT state after a delay if something wrong happens
             // instead of returning directly.
-            // Configure the IPv6 addresses based on the delegated prefix on the interface.
-            // We've checked that delegated prefix is valid upon receiving the response
-            // from DHCPv6 server, and the server may assign a prefix with length less
-            // than 64. So for SLAAC use case we always set the prefix length to 64 even
-            // if the delegated prefix length is less than 64.
-            final IpPrefix prefix;
-            try {
-                prefix = new IpPrefix(Inet6Address.getByAddress(mReply.ipo.prefix),
-                        RFC7421_PREFIX_LENGTH);
-            } catch (UnknownHostException e) {
-                Log.wtf(TAG, "Invalid delegated prefix "
-                        + HexDump.toHexString(mReply.ipo.prefix));
-                return;
-            }
-            // Create an IPv6 address from the interface mac address with IFA_F_MANAGETEMPADDR
-            // flag, kernel will create another privacy IPv6 address on behalf of user space.
-            // We don't need to remember IPv6 addresses that need to extend the lifetime every
-            // time it enters BoundState.
-            final Inet6Address address = createInet6AddressFromEui64(prefix,
+            // The server may assign a prefix with length less than 64. To support automatic address
+            // generation (with IFA_F_MANAGETEMPADDR), we always set the address prefix length to
+            // 64, even if the delegated prefix length is less than 64. However, the unreachable
+            // route should still use the assigned prefix length.
+            final IpPrefix routePrefix = mReply.ipo.getIpPrefix();
+            final IpPrefix addressPrefix = new IpPrefix(routePrefix.getAddress(),
+                    RFC7421_PREFIX_LENGTH);
+            // Create EUI-64, so we don't need to remember IPv6 addresses that need to extend the
+            // lifetime every time it enters BoundState.
+            final Inet6Address address = createInet6AddressFromEui64(addressPrefix,
                     macAddressToEui64(mIface.macAddr));
             final int flags = IFA_F_NOPREFIXROUTE | IFA_F_MANAGETEMPADDR | IFA_F_NODAD;
             final long now = SystemClock.elapsedRealtime();
@@ -802,16 +799,6 @@ public class Dhcp6Client extends StateMachine {
                 return null;
             }
             return mUdpSock;
-        }
-
-        @Override
-        protected int readPacket(FileDescriptor fd, byte[] packetBuffer) throws Exception {
-            try {
-                return Os.read(fd, packetBuffer, 0, packetBuffer.length);
-            } catch (IOException | ErrnoException e) {
-                Log.e(TAG, "Fail to read packet");
-                throw e;
-            }
         }
 
         public int transmitPacket(final ByteBuffer buf) throws ErrnoException, SocketException {
