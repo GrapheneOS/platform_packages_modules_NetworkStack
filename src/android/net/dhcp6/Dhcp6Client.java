@@ -804,16 +804,6 @@ public class Dhcp6Client extends StateMachine {
             return mUdpSock;
         }
 
-        @Override
-        protected int readPacket(FileDescriptor fd, byte[] packetBuffer) throws Exception {
-            try {
-                return Os.read(fd, packetBuffer, 0, packetBuffer.length);
-            } catch (IOException | ErrnoException e) {
-                Log.e(TAG, "Fail to read packet");
-                throw e;
-            }
-        }
-
         public int transmitPacket(final ByteBuffer buf) throws ErrnoException, SocketException {
             int ret = Os.sendto(mUdpSock, buf.array(), 0 /* byteOffset */,
                     buf.limit() /* byteCount */, 0 /* flags */, ALL_DHCP_RELAY_AGENTS_AND_SERVERS,
