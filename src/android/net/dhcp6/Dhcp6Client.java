@@ -284,7 +284,14 @@ public class Dhcp6Client extends StateMachine {
         }
 
         private void handleReceivedPacket(Dhcp6Packet packet) {
-            if (packet.isValid(mTransId, mClientDuid)) {
+            // Technically it is valid for the server to not include a prefix in an IA in certain
+            // scenarios (specifically in a reply to Renew / Rebind, which means: do not extend the
+            // prefix). However, while only supporting a single prefix, this never works well, so if
+            // the server decides to do so, ignore it.
+            // TODO: revisit this when adding multi-prefix support.
+            final boolean validIpo = packet.mPrefixDelegation.ipo != null
+                    && packet.mPrefixDelegation.ipo.isValid();
+            if (packet.isValid(mTransId, mClientDuid) && validIpo) {
                 receivePacket(packet);
             }
         }
