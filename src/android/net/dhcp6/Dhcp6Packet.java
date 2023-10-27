@@ -210,10 +210,6 @@ public class Dhcp6Packet {
                 Log.w(TAG, "IA_ID doesn't match, expected: " + IAID + ", actual: " + iaid);
                 return false;
             }
-            if (ipo.prefixLen > 64) {
-                Log.e(TAG, "IA_PD option with prefix length " + ipo.prefixLen + " longer than 64");
-                return false;
-            }
             if (t1 < 0 || t2 < 0) {
                 Log.e(TAG, "IA_PD option with invalid T1 " + t1 + " or T2 " + t2);
                 return false;
@@ -222,24 +218,6 @@ public class Dhcp6Packet {
             // Generally, t1 must be smaller or equal to t2 (except when t2 is 0).
             if (t2 != 0 && t1 > t2) {
                 Log.e(TAG, "IA_PD option with T1 " + t1 + " greater than T2 " + t2);
-                return false;
-            }
-            final long preferred = ipo.preferred;
-            final long valid = ipo.valid;
-            if (preferred < 0 || valid < 0) {
-                Log.e(TAG, "IA_PD option with invalid lifetime, preferred lifetime " + preferred
-                        + ", valid lifetime " + valid);
-                return false;
-            }
-            if (preferred > valid) {
-                Log.e(TAG, "IA_PD option with preferred lifetime " + preferred
-                        + " greater than valid lifetime " + valid);
-                return false;
-            }
-
-            // If t2 is 0, ignore it.
-            if (t2 != 0 && preferred < t2) {
-                Log.e(TAG, "preferred lifetime " + preferred + " is smaller than T2 " + t2);
                 return false;
             }
             return true;
