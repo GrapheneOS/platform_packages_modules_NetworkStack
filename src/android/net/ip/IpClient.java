@@ -113,6 +113,7 @@ import com.android.internal.util.MessageUtils;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.internal.util.WakeupMessage;
+import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.CollectionUtils;
 import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.InterfaceParams;
@@ -448,8 +449,14 @@ public class IpClient extends StateMachine {
          * Set maximum acceptable DTIM multiplier to hardware driver.
          */
         public void setMaxDtimMultiplier(int multiplier) {
-            log("setMaxDtimMultiplier(" + multiplier + ")");
             try {
+                // {@link IWifiStaIface#setDtimMultiplier} has been implemented since U, calling
+                // this method on U- platforms does nothing actually.
+                if (!SdkLevel.isAtLeastU()) {
+                    log("SDK level is lower than U, do not call setMaxDtimMultiplier method");
+                    return;
+                }
+                log("setMaxDtimMultiplier(" + multiplier + ")");
                 mCallback.setMaxDtimMultiplier(multiplier);
             } catch (RemoteException e) {
                 log("Failed to call setMaxDtimMultiplier", e);
