@@ -3234,6 +3234,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
+    @SignatureRequiredTest(reason = "Out of SLO flakiness")
     public void testIgnoreIpv6ProvisioningLoss_disableAcceptRaDefrtr() throws Exception {
         LinkProperties lp = doDualStackProvisioning();
         Log.d(TAG, "current LinkProperties: " + lp);
