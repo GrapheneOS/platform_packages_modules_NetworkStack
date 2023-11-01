@@ -4702,6 +4702,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
+    @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
     public void testMaxDtimMultiplier_IPv6OnlyNetwork() throws Exception {
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIPv4()
@@ -4719,6 +4720,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
+    @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
     public void testMaxDtimMultiplier_IPv6LinkLocalOnlyMode() throws Exception {
         final InOrder inOrder = inOrder(mCb);
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
@@ -4736,6 +4738,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
+    @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
     public void testMaxDtimMultiplier_IPv4OnlyNetwork() throws Exception {
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
@@ -4757,12 +4760,14 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
+    @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
     public void testMaxDtimMultiplier_DualStackNetwork() throws Exception {
         final InOrder inOrder = inOrder(mCb);
         runDualStackNetworkDtimMultiplierSetting(inOrder);
     }
 
     @Test
+    @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
     public void testMaxDtimMultiplier_MulticastLock() throws Exception {
         final InOrder inOrder = inOrder(mCb);
         runDualStackNetworkDtimMultiplierSetting(inOrder);
@@ -4780,6 +4785,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
+    @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
     public void testMaxDtimMultiplier_MulticastLockEnabled_StoppedState() throws Exception {
         // Simulate to hold the multicast lock by disabling the multicast filter at StoppedState,
         // verify no callback to be sent, start dual-stack provisioning and verify the multiplier
@@ -4794,6 +4800,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
+    @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
     public void testMaxDtimMultiplier_resetMultiplier() throws Exception {
         final InOrder inOrder = inOrder(mCb);
         runDualStackNetworkDtimMultiplierSetting(inOrder);
