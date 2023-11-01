@@ -912,6 +912,7 @@ public class ApfTest {
 
         assertTrue("Failed to drop all packets by filter. \nAPF counters:" +
             HexDump.toHexString(data, false), result);
+        apfFilter.shutdown();
     }
 
     private class MockIpClientCallback extends IpClientCallbacksWrapper {
@@ -996,6 +997,10 @@ public class ApfTest {
         @Override
         public void shutdown() {
             super.shutdown();
+            if (mReceiveThread != null) {
+                mReceiveThread.halt();
+                mReceiveThread = null;
+            }
             IoUtils.closeQuietly(mWriteSocket);
         }
     }
@@ -2747,6 +2752,7 @@ public class ApfTest {
                 throw new Exception("bad packet: " + HexDump.toHexString(packet), e);
             }
         }
+        apfFilter.shutdown();
     }
 
     @Test
@@ -2767,6 +2773,7 @@ public class ApfTest {
                 throw new Exception("bad packet: " + HexDump.toHexString(packet), e);
             }
         }
+        apfFilter.shutdown();
     }
 
     @Test
@@ -2790,6 +2797,7 @@ public class ApfTest {
 
         // assert program was updated and new lifetimes were taken into account.
         assertDrop(program, ra);
+        apfFilter.shutdown();
     }
 
     // Test for go/apf-ra-filter Case 1a.
@@ -2818,6 +2826,7 @@ public class ApfTest {
                 .addPioOption(1800 /*valid*/, 1 /*preferred*/, "2001:db8::/64")
                 .build();
         assertPass(program, ra);
+        apfFilter.shutdown();
     }
 
     // Test for go/apf-ra-filter Case 2a.
@@ -2852,6 +2861,7 @@ public class ApfTest {
                 .addPioOption(1800 /*valid*/, 33 /*preferred*/, "2001:db8::/64")
                 .build();
         assertPass(program, ra);
+        apfFilter.shutdown();
     }
 
 
@@ -2881,6 +2891,7 @@ public class ApfTest {
         // lifetime increases to accept_ra_min_lft
         ra = new RaPacketBuilder(180 /* router lifetime */).build();
         assertPass(program, ra);
+        apfFilter.shutdown();
     }
 
 
@@ -2918,6 +2929,7 @@ public class ApfTest {
         // lifetime is 0
         ra = new RaPacketBuilder(0 /* router lifetime */).build();
         assertPass(program, ra);
+        apfFilter.shutdown();
     }
 
     // Test for go/apf-ra-filter Case 3b.
@@ -2950,6 +2962,7 @@ public class ApfTest {
         // lifetime is 0
         ra = new RaPacketBuilder(0 /* router lifetime */).build();
         assertPass(program, ra);
+        apfFilter.shutdown();
     }
 
     // Test for go/apf-ra-filter Case 4b.
@@ -2990,6 +3003,7 @@ public class ApfTest {
         // lifetime is 0
         ra = new RaPacketBuilder(0 /* router lifetime */).build();
         assertPass(program, ra);
+        apfFilter.shutdown();
     }
 
     @Test
@@ -3044,6 +3058,7 @@ public class ApfTest {
         apfFilter.pretendPacketReceived(ra);
         program = ipClientCallback.assertProgramUpdateAndGet();
         assertDrop(program, ra);
+        apfFilter.shutdown();
     }
 
     @Test
