@@ -16,6 +16,9 @@
 
 package com.android.networkstack.netlink;
 
+import static android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET;
+import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED;
+import static android.net.NetworkCapabilities.TRANSPORT_CELLULAR;
 import static android.net.util.DataStallUtils.CONFIG_TCP_PACKETS_FAIL_PERCENTAGE;
 import static android.net.util.DataStallUtils.DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE;
 import static android.os.PowerManager.ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED;
@@ -47,6 +50,7 @@ import android.net.InetAddresses;
 import android.net.LinkProperties;
 import android.net.MarkMaskParcel;
 import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.os.Build;
 import android.os.PowerManager;
 import android.util.Log;
@@ -126,6 +130,17 @@ public class TcpSocketTrackerTest {
     private static final long TEST_COOKIE1 = 43387759684916L;
     private static final long TEST_COOKIE2 = TEST_COOKIE1 + 1;
     private static final InetAddress TEST_DNS1 = InetAddresses.parseNumericAddress("8.8.8.8");
+
+    private static final NetworkCapabilities CELL_METERED_CAPABILITIES =
+            new NetworkCapabilities()
+                    .addTransportType(TRANSPORT_CELLULAR)
+                    .addCapability(NET_CAPABILITY_INTERNET);
+
+    private static final NetworkCapabilities CELL_NOT_METERED_CAPABILITIES =
+            new NetworkCapabilities()
+                    .addTransportType(TRANSPORT_CELLULAR)
+                    .addCapability(NET_CAPABILITY_INTERNET)
+                    .addCapability(NET_CAPABILITY_NOT_METERED);
     @Mock private TcpSocketTracker.Dependencies mDependencies;
     @Mock private INetd mNetd;
     private final Network mNetwork = new Network(TEST_NETID1);
@@ -358,6 +373,7 @@ public class TcpSocketTrackerTest {
     public void testPollSocketsInfo_ignoreBlockedUid_featureEnabled() throws Exception {
         doReturn(true).when(mDependencies).shouldIgnoreTcpInfoForBlockedUids();
         final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
+        tst.setNetworkCapabilities(CELL_NOT_METERED_CAPABILITIES);
         doReturn(true).when(mCm).isUidNetworkingBlocked(TEST_UID2, false /* metered */);
         // With the feature enabled, append another message with blocked uid, verify the
         // traffic of networking-blocked uid is filtered out.
@@ -381,6 +397,30 @@ public class TcpSocketTrackerTest {
         assertEquals(100, tst.getLatestPacketFailPercentage());
         assertEquals(12, tst.getSentSinceLastRecv());
         assertTrue(tst.isDataStallSuspected());
+    }
+
+    // The feature is not enabled on pre-T device, because it needs bpf support.
+    @IgnoreUpTo(Build.VERSION_CODES.S_V2)
+    @Test
+    public void testPollSocketsInfo_ignoreBlockedUid_featureEnabled_dataSaver() throws Exception {
+        doReturn(true).when(mDependencies).shouldIgnoreTcpInfoForBlockedUids();
+        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
+
+        tst.setNetworkCapabilities(CELL_NOT_METERED_CAPABILITIES);
+        final ByteBuffer mockMessage = getByteBufferFromHexString(composeSockDiagTcpHex(4, 10)
+                + NLMSG_DONE_HEX);
+        doReturn(mockMessage).when(mDependencies).recvMessage(any());
+        assertTrue(tst.pollSocketsInfo());
+        verify(mCm).isUidNetworkingBlocked(TEST_UID1, false /* metered */);
+
+        // Verify the metered parameter will be correctly passed to ConnectivityManager.
+        tst.setNetworkCapabilities(CELL_METERED_CAPABILITIES);
+        mockMessage.rewind(); // Reset read position to 0 since the same buffer is used.
+        assertTrue(tst.pollSocketsInfo());
+        verify(mCm).isUidNetworkingBlocked(TEST_UID1, true /* metered */);
+
+        // Correctness of the logic which handling different blocked status is
+        // verified in other tests, see {@code testPollSocketsInfo_ignoreBlockedUid_featureEnabled}.
     }
 
     @Test

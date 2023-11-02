@@ -942,6 +942,7 @@ public class NetworkMonitor extends StateMachine {
                 // Initialization.
                 tst.setOpportunisticMode(false);
                 tst.setLinkProperties(mLinkProperties);
+                tst.setNetworkCapabilities(mNetworkCapabilities);
             }
             Log.d(TAG, "Starting on network " + mNetwork
                     + " with capport HTTPS URL " + Arrays.toString(mCaptivePortalHttpsUrls)
@@ -1154,6 +1155,10 @@ public class NetworkMonitor extends StateMachine {
             // Reevaluate network if underlying network changes on the validation required
             // VPN.
             sendMessage(CMD_FORCE_REEVALUATION, NO_UID, 0 /* forceAccept */);
+        }
+        final TcpSocketTracker tst = getTcpSocketTracker();
+        if (tst != null) {
+            tst.setNetworkCapabilities(newCap);
         }
 
         mNetworkCapabilities = newCap;

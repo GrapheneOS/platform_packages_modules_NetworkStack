@@ -47,6 +47,7 @@ import android.net.INetd;
 import android.net.LinkProperties;
 import android.net.MarkMaskParcel;
 import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.IBinder;
@@ -144,6 +145,8 @@ public class TcpSocketTracker {
     private boolean mInOpportunisticMode;
     @NonNull
     private LinkProperties mLinkProperties;
+    @NonNull
+    private NetworkCapabilities mNetworkCapabilities;
 
     private final boolean mShouldDisableInLightDoze;
     private final boolean mShouldIgnoreTcpInfoForBlockedUids;
@@ -282,9 +285,13 @@ public class TcpSocketTracker {
                 }
 
                 if (mShouldIgnoreTcpInfoForBlockedUids) {
-                    // TODO: Supports networking blocked by data saver.
-                    final boolean uidBlocked = mCm.isUidNetworkingBlocked(newInfo.uid,
-                            false /* isNetworkMetered */);
+                    // For backward-compatibility, NET_CAPABILITY_TEMPORARILY_NOT_METERED
+                    // is not referenced when deciding meteredness in NetworkPolicyManagerService.
+                    // Thus, whether to block metered networking should only be judged with
+                    // NET_CAPABILITY_NOT_METERED.
+                    final boolean metered = !mNetworkCapabilities.hasCapability(
+                            NetworkCapabilities.NET_CAPABILITY_NOT_METERED);
+                    final boolean uidBlocked = mCm.isUidNetworkingBlocked(newInfo.uid, metered);
                     if (uidBlocked) {
                         skippedBlockedUids.add(newInfo.uid);
                         continue;
@@ -637,6 +644,10 @@ public class TcpSocketTracker {
 
     public void setLinkProperties(@NonNull LinkProperties lp) {
         mLinkProperties = lp;
+    }
+
+    public void setNetworkCapabilities(@NonNull NetworkCapabilities caps) {
+        mNetworkCapabilities = caps;
     }
 
     /**

@@ -2345,6 +2345,19 @@ public class NetworkMonitorTest {
     }
 
     @Test
+    public void testTcpSocketTracker_setCapabilities() throws Exception {
+        setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
+        final InOrder inOrder = inOrder(mTst);
+        final WrappedNetworkMonitor wnm = prepareValidatedStateNetworkMonitor(
+                CELL_METERED_CAPABILITIES);
+        inOrder.verify(mTst).setNetworkCapabilities(eq(CELL_METERED_CAPABILITIES));
+
+        // Suspend the network. Verify the capabilities would be passed to TcpSocketTracker.
+        setNetworkCapabilities(wnm, CELL_SUSPENDED_METERED_CAPABILITIES);
+        inOrder.verify(mTst).setNetworkCapabilities(eq(CELL_SUSPENDED_METERED_CAPABILITIES));
+    }
+
+    @Test
     public void testDataStall_setOpportunisticMode() {
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
         WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
