@@ -68,9 +68,9 @@ import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.SocketUtils;
 import com.android.net.module.util.netlink.InetDiagMessage;
-import com.android.net.module.util.netlink.NetlinkConstants;
 import com.android.net.module.util.netlink.NetlinkUtils;
 import com.android.net.module.util.netlink.StructInetDiagMsg;
+import com.android.net.module.util.netlink.StructNlAttr;
 import com.android.net.module.util.netlink.StructNlMsgHdr;
 import com.android.networkstack.apishim.NetworkShimImpl;
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
@@ -401,18 +401,13 @@ public class TcpSocketTracker {
         int mark = NetlinkUtils.INIT_MARK_VALUE;
         // Get a tcp_info.
         while (bytes.position() < remainingDataSize) {
-            final RoutingAttribute rtattr =
-                    new RoutingAttribute(bytes.getShort(), bytes.getShort());
-            final short dataLen = rtattr.getDataLength();
-            if (rtattr.rtaType == NetlinkUtils.INET_DIAG_INFO) {
-                tcpInfo = TcpInfo.parse(bytes, dataLen);
-            } else if (rtattr.rtaType == NetlinkUtils.INET_DIAG_MARK) {
-                mark = bytes.getInt();
-            } else {
-                // Data provided by kernel will include both valid data and padding data. The data
-                // len provided from kernel indicates the valid data size. Readers must deduce the
-                // alignment by themselves.
-                skipRemainingAttributesBytesAligned(bytes, dataLen);
+            final StructNlAttr nlattr = StructNlAttr.parse(bytes);
+            if (nlattr == null) break;
+
+            if (nlattr.nla_type == NetlinkUtils.INET_DIAG_MARK) {
+                mark = nlattr.getValueAsInteger();
+            } else if (nlattr.nla_type == NetlinkUtils.INET_DIAG_INFO) {
+                tcpInfo = TcpInfo.parse(nlattr.getValueAsByteBuffer(), nlattr.getAlignedLength());
             }
         }
         final SocketInfo info = new SocketInfo(tcpInfo, family, mark, time, uid, cookie, dstPort);
@@ -503,31 +498,6 @@ public class TcpSocketTracker {
         return mTcpPacketsFailRateThreshold;
     }
 
-    /**
-     * Method to skip the remaining attributes bytes.
-     * Corresponds to NLMSG_NEXT in bionic/libc/kernel/uapi/linux/netlink.h.
-     *
-     * @param buffer the target ByteBuffer
-     * @param len the remaining length to skip.
-     */
-    private static void skipRemainingAttributesBytesAligned(@NonNull final ByteBuffer buffer,
-            final short len) {
-        // Data in {@Code RoutingAttribute} is followed after header with size {@Code NLA_ALIGNTO}
-        // bytes long for each block. Next attribute will start after the padding bytes if any.
-        // If all remaining bytes after header are valid in a data block, next attr will just start
-        // after valid bytes.
-        //
-        // E.g. With NLA_ALIGNTO(4), an attr struct with length 5 means 1 byte valid data remains
-        // after header and 3(4-1) padding bytes. Next attr with length 8 will start after the
-        // padding bytes and contain 4(8-4) valid bytes of data. The next attr start after the
-        // valid bytes, like:
-        //
-        // [HEADER(L=5)][   4-Bytes DATA      ][ HEADER(L=8) ][4 bytes DATA][Next attr]
-        // [ 5 valid bytes ][3 padding bytes  ][      8 valid bytes        ]   ...
-        final int cur = buffer.position();
-        buffer.position(cur + NetlinkConstants.alignedLengthOf(len));
-    }
-
     private static void log(final String str) {
         if (DBG) Log.d(TAG, str);
     }
@@ -536,30 +506,6 @@ public class TcpSocketTracker {
     public void quit() {
         mDependencies.removeDeviceConfigChangedListener(mConfigListener);
         mDependencies.removeBroadcastReceiver(mDeviceIdleReceiver);
-    }
-
-    /**
-     * Corresponds to {@code struct rtattr} from bionic/libc/kernel/uapi/linux/rtnetlink.h
-     *
-     * struct rtattr {
-     *    unsigned short rta_len;    // Length of option
-     *    unsigned short rta_type;   // Type of option
-     *    // Data follows
-     * };
-     */
-    static class RoutingAttribute {
-        public static final int HEADER_LENGTH = 4;
-
-        public final short rtaLen;  // The whole valid size of the struct.
-        public final short rtaType;
-
-        RoutingAttribute(final short len, final short type) {
-            rtaLen = len;
-            rtaType = type;
-        }
-        public short getDataLength() {
-            return (short) (rtaLen - HEADER_LENGTH);
-        }
     }
 
     /**
