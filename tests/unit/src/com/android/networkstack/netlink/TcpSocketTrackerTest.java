@@ -474,82 +474,82 @@ public class TcpSocketTrackerTest {
 
     private static String composeSockDiagTcpHex(int retrans, int sent, short dstPort, long cookie) {
         return // struct nlmsghdr.
-                "14010000" +        // length = 276
-                "1400" +            // type = SOCK_DIAG_BY_FAMILY
-                "0301" +            // flags = NLM_F_REQUEST | NLM_F_DUMP
-                "00000000" +        // seqno
-                "00000000" +        // pid (0 == kernel)
+                "14010000"          // length = 276
+                + "1400"            // type = SOCK_DIAG_BY_FAMILY
+                + "0301"            // flags = NLM_F_REQUEST | NLM_F_DUMP
+                + "00000000"        // seqno
+                + "00000000"        // pid (0 == kernel)
                 // struct inet_diag_req_v2
-                "02" +              // family = AF_INET
-                "06" +              // state
-                "00" +              // timer
-                "00" +              // retrans
+                + "02"              // family = AF_INET
+                + "06"              // state
+                + "00"              // timer
+                + "00"              // retrans
                 // inet_diag_sockid: ports and addresses are always in big endian,
                 // see StructInetDiagSockId.
-                "DEA5" +                                               // idiag_sport = 56997
-                getHexStringFromShort(dstPort, ByteOrder.BIG_ENDIAN) + // idiag_dport
-                "0a006402000000000000000000000000" +                   // idiag_src = 10.0.100.2
-                "08080808000000000000000000000000" +                   // idiag_dst = 8.8.8.8
-                "00000000" +                                           // idiag_if
-                getHexStringFromLong(cookie) +                         // idiag_cookie
-                "00000000" +                                           // idiag_expires
-                "00000000" +                                           // idiag_rqueue
-                "00000000" +                                           // idiag_wqueue
-                getHexStringFromInt(TEST_UID1) +                       // idiag_uid
-                "00000000" +                                           // idiag_inode
+                + "DEA5"                                               // idiag_sport = 56997
+                + getHexStringFromShort(dstPort, ByteOrder.BIG_ENDIAN) // idiag_dport
+                + "0a006402000000000000000000000000"                   // idiag_src = 10.0.100.2
+                + "08080808000000000000000000000000"                   // idiag_dst = 8.8.8.8
+                + "00000000"                                           // idiag_if
+                + getHexStringFromLong(cookie)                         // idiag_cookie
+                + "00000000"                                           // idiag_expires
+                + "00000000"                                           // idiag_rqueue
+                + "00000000"                                           // idiag_wqueue
+                + getHexStringFromInt(TEST_UID1)                       // idiag_uid
+                + "00000000"                                           // idiag_inode
                 // rtattr
-                "0500" +            // len = 5
-                "0800" +            // type = 8
-                "00000000" +        // data
-                "0800" +            // len = 8
-                "0F00" +            // type = 15(INET_DIAG_MARK)
-                "850A0C00" +        // data, socket mark=789125
-                "AC00" +            // len = 172
-                "0200" +            // type = 2(INET_DIAG_INFO)
+                + "0500"            // len = 5
+                + "0800"            // type = 8
+                + "00000000"        // data
+                + "0800"            // len = 8
+                + "0F00"            // type = 15(INET_DIAG_MARK)
+                + "850A0C00"        // data, socket mark=789125
+                + "AC00"            // len = 172
+                + "0200"            // type = 2(INET_DIAG_INFO)
                 // tcp_info
-                "01" +              // state = TCP_ESTABLISHED
-                "00" +              // ca_state = TCP_CA_OPEN
-                "05" +              // retransmits = 5
-                "00" +              // probes = 0
-                "00" +              // backoff = 0
-                "07" +              // option = TCPI_OPT_WSCALE|TCPI_OPT_SACK|TCPI_OPT_TIMESTAMPS
-                "88" +              // wscale = 8
-                "00" +              // delivery_rate_app_limited = 0
-                "4A911B00" +        // rto = 1806666
-                "00000000" +        // ato = 0
-                "2E050000" +        // sndMss = 1326
-                "18020000" +        // rcvMss = 536
-                "00000000" +        // unsacked = 0
-                "00000000" +        // acked = 0
-                "00000000" +        // lost
-                "00000000" +        // retrans = 0
-                "00000000" +        // fackets = 0
-                "BB000000" +        // lastDataSent = 187
-                "00000000" +        // lastAckSent = 0
-                "BB000000" +        // lastDataRecv = 187
-                "BB000000" +        // lastDataAckRecv = 187
-                "DC050000" +        // pmtu = 1500
-                "30560100" +        // rcvSsthresh = 87600
-                "3E2C0900" +        // rttt = 601150
-                "1F960400" +        // rttvar = 300575
-                "78050000" +        // sndSsthresh = 1400
-                "0A000000" +        // sndCwnd = 10
-                "A8050000" +        // advmss = 1448
-                "03000000" +        // reordering = 3
-                "00000000" +        // rcvrtt = 0
-                "30560100" +        // rcvspace = 87600
-                getHexStringFromInt(retrans) +   // totalRetrans
-                "53AC000000000000" +    // pacingRate = 44115
-                "FFFFFFFFFFFFFFFF" +    // maxPacingRate = 18446744073709551615
-                "0100000000000000" +    // bytesAcked = 1
-                "0000000000000000" +    // bytesReceived = 0
-                getHexStringFromInt(sent) + // SegsOut
-                "00000000" +        // SegsIn = 0
-                "00000000" +        // NotSentBytes = 0
-                "3E2C0900" +        // minRtt = 601150
-                "00000000" +        // DataSegsIn = 0
-                "00000000" +        // DataSegsOut = 0
-                "0000000000000000"; // deliverRate = 0
+                + "01"              // state = TCP_ESTABLISHED
+                + "00"              // ca_state = TCP_CA_OPEN
+                + "05"              // retransmits = 5
+                + "00"              // probes = 0
+                + "00"              // backoff = 0
+                + "07"              // option = TCPI_OPT_WSCALE|TCPI_OPT_SACK|TCPI_OPT_TIMESTAMPS
+                + "88"              // wscale = 8
+                + "00"              // delivery_rate_app_limited = 0
+                + "4A911B00"        // rto = 1806666
+                + "00000000"        // ato = 0
+                + "2E050000"        // sndMss = 1326
+                + "18020000"        // rcvMss = 536
+                + "00000000"        // unsacked = 0
+                + "00000000"        // acked = 0
+                + "00000000"        // lost
+                + "00000000"        // retrans = 0
+                + "00000000"        // fackets = 0
+                + "BB000000"        // lastDataSent = 187
+                + "00000000"        // lastAckSent = 0
+                + "BB000000"        // lastDataRecv = 187
+                + "BB000000"        // lastDataAckRecv = 187
+                + "DC050000"        // pmtu = 1500
+                + "30560100"        // rcvSsthresh = 87600
+                + "3E2C0900"        // rttt = 601150
+                + "1F960400"        // rttvar = 300575
+                + "78050000"        // sndSsthresh = 1400
+                + "0A000000"        // sndCwnd = 10
+                + "A8050000"        // advmss = 1448
+                + "03000000"        // reordering = 3
+                + "00000000"        // rcvrtt = 0
+                + "30560100"        // rcvspace = 87600
+                + getHexStringFromInt(retrans)   // totalRetrans
+                + "53AC000000000000"    // pacingRate = 44115
+                + "FFFFFFFFFFFFFFFF"    // maxPacingRate = 18446744073709551615
+                + "0100000000000000"    // bytesAcked = 1
+                + "0000000000000000"    // bytesReceived = 0
+                + getHexStringFromInt(sent) // SegsOut
+                + "00000000"        // SegsIn = 0
+                + "00000000"        // NotSentBytes = 0
+                + "3E2C0900"        // minRtt = 601150
+                + "00000000"        // DataSegsIn = 0
+                + "00000000"        // DataSegsOut = 0
+                + "0000000000000000"; // deliverRate = 0
     }
 
     @Test
@@ -643,28 +643,28 @@ public class TcpSocketTrackerTest {
 
     private static final String BAD_DIAG_MSG_HEX =
         // struct nlmsghdr.
-            "00000058" +      // length = 1476395008
-            "1400" +         // type = SOCK_DIAG_BY_FAMILY
-            "0301" +         // flags = NLM_F_REQUEST | NLM_F_DUMP
-            "00000000" +     // seqno
-            "00000000" +     // pid (0 == kernel)
+            "00000058"      // length = 1476395008
+            + "1400"         // type = SOCK_DIAG_BY_FAMILY
+            + "0301"         // flags = NLM_F_REQUEST | NLM_F_DUMP
+            + "00000000"     // seqno
+            + "00000000"     // pid (0 == kernel)
             // struct inet_diag_req_v2
-            "02" +           // family = AF_INET
-            "06" +           // state
-            "00" +           // timer
-            "00" +           // retrans
+            + "02"           // family = AF_INET
+            + "06"           // state
+            + "00"           // timer
+            + "00"           // retrans
             // inet_diag_sockid
-            "DEA5" +         // idiag_sport = 42462
-            "71B9" +         // idiag_dport = 47473
-            "0a006402000000000000000000000000" + // idiag_src = 10.0.100.2
-            "08080808000000000000000000000000" + // idiag_dst = 8.8.8.8
-            "00000000" +    // idiag_if
-            "34ED000076270000" + // idiag_cookie = 43387759684916
-            "00000000" +    // idiag_expires
-            "00000000" +    // idiag_rqueue
-            "00000000" +    // idiag_wqueue
-            "00000000" +    // idiag_uid
-            "00000000";    // idiag_inode
+            + "DEA5"         // idiag_sport = 42462
+            + "71B9"         // idiag_dport = 47473
+            + "0a006402000000000000000000000000" // idiag_src = 10.0.100.2
+            + "08080808000000000000000000000000" // idiag_dst = 8.8.8.8
+            + "00000000"    // idiag_if
+            + "34ED000076270000" // idiag_cookie = 43387759684916
+            + "00000000"    // idiag_expires
+            + "00000000"    // idiag_rqueue
+            + "00000000"    // idiag_wqueue
+            + "00000000"    // idiag_uid
+            + "00000000";    // idiag_inode
     private static final byte[] BAD_SOCK_DIAG_MSG_BYTES =
         HexEncoding.decode(BAD_DIAG_MSG_HEX.toCharArray(), false);
 
