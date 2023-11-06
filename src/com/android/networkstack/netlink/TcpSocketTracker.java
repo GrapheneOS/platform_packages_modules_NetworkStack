@@ -619,7 +619,7 @@ public class TcpSocketTracker {
          */
         public FileDescriptor connectToKernel() throws ErrnoException, SocketException {
             final FileDescriptor fd = NetlinkUtils.createNetLinkInetDiagSocket();
-            NetlinkUtils.connectSocketToNetlink(fd);
+            NetlinkUtils.connectToKernel(fd);
             Os.setsockoptTimeval(fd, SOL_SOCKET, SO_SNDTIMEO,
                     StructTimeval.fromMillis(IO_TIMEOUT_MS));
             return fd;
