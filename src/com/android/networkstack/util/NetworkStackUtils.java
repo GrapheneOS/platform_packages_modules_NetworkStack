@@ -182,12 +182,6 @@ public class NetworkStackUtils {
     public static final String DHCP_IP_CONFLICT_DETECT_VERSION = "dhcp_ip_conflict_detect_version";
 
     /**
-     * Minimum module version at which to enable the IPv6-Only preferred option.
-     */
-    public static final String DHCP_IPV6_ONLY_PREFERRED_VERSION =
-            "dhcp_ipv6_only_preferred_version";
-
-    /**
      * Minimum module version at which to enable slow DHCP retransmission approach in renew/rebind
      * state suggested in RFC2131 section 4.4.5.
      */
