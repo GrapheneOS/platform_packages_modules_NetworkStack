@@ -71,6 +71,32 @@ class ApfV5Test {
                 "       0: write r0, 1",
                 "       2: write r0, 2",
                 "       4: write r0, 4"), ApfJniUtils.disassembleApf(program))
+
+        gen = ApfGenerator(MIN_APF_VERSION)
+        gen.addDataCopy(1, 5)
+        gen.addPacketCopy(1000, 255)
+        program = gen.generate()
+        assertContentEquals(byteArrayOf(
+                encodeInstruction(25, 1, 1), 1, 5,
+                encodeInstruction(25, 2, 0),
+                0x03.toByte(), 0xe8.toByte(), 0xff.toByte(),
+        ), program)
+        assertContentEquals(arrayOf(
+                "       0: dcopy 1, 5",
+                "       3: pcopy 1000, 255"), ApfJniUtils.disassembleApf(program))
+
+        gen = ApfGenerator(MIN_APF_VERSION)
+        gen.addDataCopy(ApfGenerator.Register.R1, 0, 5)
+        gen.addPacketCopy(ApfGenerator.Register.R0, 1000, 255)
+        program = gen.generate()
+        assertContentEquals(byteArrayOf(
+                encodeInstruction(21, 1, 1), 42, 0, 5,
+                encodeInstruction(21, 2, 0),
+                0, 41, 0x03.toByte(), 0xe8.toByte(), 0xff.toByte()
+        ), program)
+        assertContentEquals(arrayOf(
+                "       0: dcopy [r1+0], 5",
+                "       4: pcopy [r0+1000], 255"), ApfJniUtils.disassembleApf(program))
     }
 
     private fun encodeInstruction(opcode: Int, immLength: Int, register: Int): Byte {
