@@ -152,21 +152,6 @@ public class NetworkStackUtils {
             new String [] {"https://www.google.com/generate_204"};
 
     /**
-     * @deprecated Considering boolean experiment flag is likely to cause misconfiguration
-     *             particularly when NetworkStack module rolls back to previous version. It's
-     *             much safer to determine whether or not to enable one specific experimental
-     *             feature by comparing flag version with module version.
-     */
-    @Deprecated
-    public static final String DHCP_INIT_REBOOT_ENABLED = "dhcp_init_reboot_enabled";
-
-    /**
-     * @deprecated See above explanation.
-     */
-    @Deprecated
-    public static final String DHCP_RAPID_COMMIT_ENABLED = "dhcp_rapid_commit_enabled";
-
-    /**
      * Minimum module version at which to enable the DHCP INIT-REBOOT state.
      */
     public static final String DHCP_INIT_REBOOT_VERSION = "dhcp_init_reboot_version";
