@@ -693,14 +693,11 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     protected void setDhcpFeatures(final boolean isDhcpLeaseCacheEnabled,
-            final boolean isRapidCommitEnabled, final boolean isDhcpIpConflictDetectEnabled,
-            final boolean isIPv6OnlyPreferredEnabled) {
+            final boolean isRapidCommitEnabled, final boolean isDhcpIpConflictDetectEnabled) {
         setFeatureEnabled(NetworkStackUtils.DHCP_INIT_REBOOT_VERSION, isDhcpLeaseCacheEnabled);
         setFeatureEnabled(NetworkStackUtils.DHCP_RAPID_COMMIT_VERSION, isRapidCommitEnabled);
         setFeatureEnabled(NetworkStackUtils.DHCP_IP_CONFLICT_DETECT_VERSION,
                 isDhcpIpConflictDetectEnabled);
-        setFeatureEnabled(NetworkStackUtils.DHCP_IPV6_ONLY_PREFERRED_VERSION,
-                isIPv6OnlyPreferredEnabled);
     }
 
     private void setDeviceConfigForMaxDtimMultiplier() {
@@ -1201,9 +1198,9 @@ public abstract class IpClientIntegrationTestCommon {
 
     private void startIpClientProvisioning(final boolean isDhcpLeaseCacheEnabled,
             final boolean shouldReplyRapidCommitAck, final boolean isPreconnectionEnabled,
-            final boolean isDhcpIpConflictDetectEnabled, final boolean isIPv6OnlyPreferredEnabled,
-            final String displayName, final ScanResultInfo scanResultInfo,
-            final Layer2Information layer2Info) throws Exception {
+            final boolean isDhcpIpConflictDetectEnabled, final String displayName,
+            final ScanResultInfo scanResultInfo, final Layer2Information layer2Info)
+                    throws Exception {
         ProvisioningConfiguration.Builder prov = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
                 .withLayer2Information(layer2Info == null
@@ -1216,7 +1213,7 @@ public abstract class IpClientIntegrationTestCommon {
         if (scanResultInfo != null) prov.withScanResultInfo(scanResultInfo);
 
         setDhcpFeatures(isDhcpLeaseCacheEnabled, shouldReplyRapidCommitAck,
-                isDhcpIpConflictDetectEnabled, isIPv6OnlyPreferredEnabled);
+                isDhcpIpConflictDetectEnabled);
 
         startIpClientProvisioning(prov.build());
         if (!isPreconnectionEnabled) {
@@ -1227,10 +1224,9 @@ public abstract class IpClientIntegrationTestCommon {
 
     private void startIpClientProvisioning(final boolean isDhcpLeaseCacheEnabled,
             final boolean isDhcpRapidCommitEnabled, final boolean isPreconnectionEnabled,
-            final boolean isDhcpIpConflictDetectEnabled, final boolean isIPv6OnlyPreferredEnabled)
-            throws Exception {
+            final boolean isDhcpIpConflictDetectEnabled) throws Exception {
         startIpClientProvisioning(isDhcpLeaseCacheEnabled, isDhcpRapidCommitEnabled,
-                isPreconnectionEnabled, isDhcpIpConflictDetectEnabled, isIPv6OnlyPreferredEnabled,
+                isPreconnectionEnabled, isDhcpIpConflictDetectEnabled,
                 null /* displayName */, null /* ScanResultInfo */, null /* layer2Info */);
     }
 
@@ -1284,13 +1280,12 @@ public abstract class IpClientIntegrationTestCommon {
             final Integer leaseTimeSec, final boolean isDhcpLeaseCacheEnabled,
             final boolean shouldReplyRapidCommitAck, final int mtu,
             final boolean isDhcpIpConflictDetectEnabled,
-            final boolean isIPv6OnlyPreferredEnabled,
             final String captivePortalApiUrl, final String displayName,
             final ScanResultInfo scanResultInfo, final Layer2Information layer2Info)
             throws Exception {
         startIpClientProvisioning(isDhcpLeaseCacheEnabled, shouldReplyRapidCommitAck,
                 false /* isPreconnectionEnabled */, isDhcpIpConflictDetectEnabled,
-                isIPv6OnlyPreferredEnabled, displayName, scanResultInfo, layer2Info);
+                displayName, scanResultInfo, layer2Info);
         return handleDhcpPackets(isSuccessLease, leaseTimeSec, shouldReplyRapidCommitAck, mtu,
                 captivePortalApiUrl);
     }
@@ -1335,7 +1330,6 @@ public abstract class IpClientIntegrationTestCommon {
             final boolean isDhcpIpConflictDetectEnabled) throws Exception {
         return performDhcpHandshake(isSuccessLease, leaseTimeSec, isDhcpLeaseCacheEnabled,
                 isDhcpRapidCommitEnabled, mtu, isDhcpIpConflictDetectEnabled,
-                false /* isIPv6OnlyPreferredEnabled */,
                 null /* captivePortalApiUrl */, null /* displayName */, null /* scanResultInfo */,
                 null /* layer2Info */);
     }
@@ -1392,7 +1386,7 @@ public abstract class IpClientIntegrationTestCommon {
         }).when(mIpMemoryStore).retrieveNetworkAttributes(eq(TEST_L2KEY), any());
         startIpClientProvisioning(true /* isDhcpLeaseCacheEnabled */,
                 false /* shouldReplyRapidCommitAck */, false /* isPreconnectionEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
         return getNextDhcpPacket();
     }
 
@@ -1494,7 +1488,7 @@ public abstract class IpClientIntegrationTestCommon {
 
         startIpClientProvisioning(true /* isDhcpLeaseCacheEnabled */,
                 shouldReplyRapidCommitAck, true /* isDhcpPreConnectionEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
         DhcpPacket packet = assertDiscoverPacketOnPreconnectionStart();
         final int preconnDiscoverTransId = packet.getTransactionId();
 
@@ -1674,7 +1668,7 @@ public abstract class IpClientIntegrationTestCommon {
     public void testDhcpInit() throws Exception {
         startIpClientProvisioning(false /* isDhcpLeaseCacheEnabled */,
                 false /* shouldReplyRapidCommitAck */, false /* isPreconnectionEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
         final DhcpPacket packet = getNextDhcpPacket();
         assertTrue(packet instanceof DhcpDiscoverPacket);
     }
@@ -1742,7 +1736,7 @@ public abstract class IpClientIntegrationTestCommon {
     public void testRollbackFromRapidCommitOption() throws Exception {
         startIpClientProvisioning(false /* isDhcpLeaseCacheEnabled */,
                 true /* isDhcpRapidCommitEnabled */, false /* isPreConnectionEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
 
         final List<DhcpPacket> discoverList = new ArrayList<DhcpPacket>();
         DhcpPacket packet;
@@ -1819,7 +1813,7 @@ public abstract class IpClientIntegrationTestCommon {
     public void testDhcpClientRapidCommitEnabled() throws Exception {
         startIpClientProvisioning(false /* isDhcpLeaseCacheEnabled */,
                 true /* shouldReplyRapidCommitAck */, false /* isPreconnectionEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
         final DhcpPacket packet = getNextDhcpPacket();
         assertTrue(packet instanceof DhcpDiscoverPacket);
     }
@@ -2545,7 +2539,7 @@ public abstract class IpClientIntegrationTestCommon {
         // PreconnectionState instead of RunningState.
         startIpClientProvisioning(false /* isDhcpLeaseCacheEnabled */,
                 false /* shouldReplyRapidCommitAck */, true /* isDhcpPreConnectionEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
         assertDiscoverPacketOnPreconnectionStart();
 
         // Force to enter RunningState.
@@ -2671,7 +2665,7 @@ public abstract class IpClientIntegrationTestCommon {
                 .withPreconnection()
                 .build();
         setDhcpFeatures(false /* isDhcpLeaseCacheEnabled */, false /* shouldReplyRapidCommitAck */,
-                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
         startIpClientProvisioning(config);
         assertDiscoverPacketOnPreconnectionStart();
 
@@ -2703,7 +2697,7 @@ public abstract class IpClientIntegrationTestCommon {
         // StoppedState.
         startIpClientProvisioning(false /* isDhcpLeaseCacheEnabled */,
                 false /* shouldReplyRapidCommitAck */, false /* isPreConnectionEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
         final DhcpPacket discover = getNextDhcpPacket();
         assertTrue(discover instanceof DhcpDiscoverPacket);
     }
@@ -2820,7 +2814,7 @@ public abstract class IpClientIntegrationTestCommon {
             boolean serverSendsOption) throws Exception {
         startIpClientProvisioning(false /* isDhcpLeaseCacheEnabled */,
                 false /* shouldReplyRapidCommitAck */, false /* isPreConnectionEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
         final DhcpPacket discover = getNextDhcpPacket();
         assertTrue(discover instanceof DhcpDiscoverPacket);
         assertEquals(featureEnabled, discover.hasRequestedParam(DhcpPacket.DHCP_CAPTIVE_PORTAL));
@@ -2931,7 +2925,6 @@ public abstract class IpClientIntegrationTestCommon {
                 TEST_LEASE_DURATION_S, true /* isDhcpLeaseCacheEnabled */,
                 false /* isDhcpRapidCommitEnabled */, TEST_DEFAULT_MTU,
                 false /* isDhcpIpConflictDetectEnabled */,
-                false /* isIPv6OnlyPreferredEnabled */,
                 null /* captivePortalApiUrl */, displayName, info /* scanResultInfo */,
                 null /* layer2Info */);
         assertEquals(2, sentPackets.size());
@@ -3046,7 +3039,6 @@ public abstract class IpClientIntegrationTestCommon {
         performDhcpHandshake(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
                 true /* isDhcpLeaseCacheEnabled */, false /* isDhcpRapidCommitEnabled */,
                 TEST_DEFAULT_MTU, false /* isDhcpIpConflictDetectEnabled */,
-                false /* isIPv6OnlyPreferredEnabled */,
                 null /* captivePortalApiUrl */, displayName, null /* scanResultInfo */,
                 layer2Info);
         verifyIPv4OnlyProvisioningSuccess(Collections.singletonList(CLIENT_ADDR));
@@ -3199,7 +3191,7 @@ public abstract class IpClientIntegrationTestCommon {
         // Enable rapid commit to accelerate DHCP handshake to shorten test duration,
         // not strictly necessary.
         setDhcpFeatures(false /* isDhcpLeaseCacheEnabled */, true /* isRapidCommitEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
         // Both signature and root tests can use this function to do dual-stack provisioning.
         if (useNetworkStackSignature()) {
             mIpc.startProvisioning(config);
@@ -3303,7 +3295,7 @@ public abstract class IpClientIntegrationTestCommon {
                 .withoutIpReachabilityMonitor()
                 .build();
         setDhcpFeatures(false /* isDhcpLeaseCacheEnabled */, false /* isRapidCommitEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */, true /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
         startIpClientProvisioning(config);
 
         final DhcpPacket packet =
@@ -3367,7 +3359,7 @@ public abstract class IpClientIntegrationTestCommon {
                 .build();
 
         setDhcpFeatures(false /* isDhcpLeaseCacheEnabled */, true /* isRapidCommitEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */, true /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
         startIpClientProvisioning(config);
 
         final DhcpPacket packet = assertDiscoverPacketOnPreconnectionStart();
@@ -3422,7 +3414,7 @@ public abstract class IpClientIntegrationTestCommon {
                 .build();
 
         setDhcpFeatures(true /* isDhcpLeaseCacheEnabled */, false /* isRapidCommitEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */, true /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
         startIpClientProvisioning(config);
 
         final DhcpPacket packet =
@@ -3556,7 +3548,7 @@ public abstract class IpClientIntegrationTestCommon {
                 .withoutIPv6();
 
         setDhcpFeatures(isDhcpLeaseCacheEnabled, false /* isRapidCommitEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
 
         startIpClientProvisioning(prov.build());
         verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(true);
@@ -3927,7 +3919,7 @@ public abstract class IpClientIntegrationTestCommon {
         // Enable rapid commit to accelerate DHCP handshake to shorten test duration,
         // not strictly necessary.
         setDhcpFeatures(false /* isDhcpLeaseCacheEnabled */, true /* isRapidCommitEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
 
         // Disable gratuitious neighbor discovery feature manually, if the feature is enabled on
         // the DUT during experiment launch, that will send another two duplicate NA packets and
@@ -4294,8 +4286,7 @@ public abstract class IpClientIntegrationTestCommon {
         mNetworkAgentThread.start();
 
         setDhcpFeatures(false /* isDhcpLeaseCacheEnabled */, true /* isRapidCommitEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */,
-                false /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
         setFeatureEnabled(
                 NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION,
                 isIgnoreIncompleteIpv6DnsServerEnabled);
@@ -4471,7 +4462,7 @@ public abstract class IpClientIntegrationTestCommon {
 
         // Speed up provisioning by enabling rapid commit. TODO: why is this necessary?
         setDhcpFeatures(false /* isDhcpLeaseCacheEnabled */, true /* isRapidCommitEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
         config = new ProvisioningConfiguration.Builder()
                 .build();
         startIpClientProvisioning(config);
@@ -4936,7 +4927,7 @@ public abstract class IpClientIntegrationTestCommon {
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .build();
         setDhcpFeatures(false /* isDhcpLeaseCacheEnabled */, true /* isRapidCommitEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
         startIpClientProvisioning(config);
 
         waitForRouterSolicitation();
@@ -4994,7 +4985,7 @@ public abstract class IpClientIntegrationTestCommon {
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .build();
         setDhcpFeatures(false /* isDhcpLeaseCacheEnabled */, true /* isRapidCommitEnabled */,
-                false /* isDhcpIpConflictDetectEnabled */, false /* isIPv6OnlyPreferredEnabled */);
+                false /* isDhcpIpConflictDetectEnabled */);
         startIpClientProvisioning(config);
 
         waitForRouterSolicitation();
