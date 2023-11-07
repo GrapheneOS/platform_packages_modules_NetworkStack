@@ -2362,7 +2362,7 @@ public class NetworkMonitorTest {
             throws Exception {
         assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
         setupTcpDataStall();
-        setTcpPollingInterval(0);
+        setTcpPollingInterval(1);
         // NM suspects data stall from TCP signal and sends data stall metrics.
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
         final WrappedNetworkMonitor nm = prepareNetworkMonitorForVerifyDataStall(nc);
@@ -2411,7 +2411,9 @@ public class NetworkMonitorTest {
                 ArgumentCaptor.forClass(CaptivePortalProbeResult.class);
         final ArgumentCaptor<DataStallDetectionStats> statsCaptor =
                 ArgumentCaptor.forClass(DataStallDetectionStats.class);
-        verify(mDependencies, timeout(HANDLER_TIMEOUT_MS).times(1))
+        // TCP data stall detection may be triggered more than once because NM stays in the
+        // ValidatedState and polling timer is set to 0.
+        verify(mDependencies, timeout(HANDLER_TIMEOUT_MS).atLeast(1))
                 .writeDataStallDetectionStats(statsCaptor.capture(), probeResultCaptor.capture());
         // Ensure probe will not stop due to rate-limiting mechanism.
         nm.setLastProbeTime(SystemClock.elapsedRealtime() - STALL_EXPECTED_LAST_PROBE_TIME_MS);
