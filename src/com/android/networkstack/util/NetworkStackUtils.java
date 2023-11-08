@@ -34,7 +34,6 @@ import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
-import java.net.SocketException;
 import java.net.UnknownHostException;
 
 /**
@@ -272,6 +271,11 @@ public class NetworkStackUtils {
      * doze mode is enabled.
      */
     public static final String SKIP_TCP_POLL_IN_LIGHT_DOZE = "skip_tcp_poll_in_light_doze_mode";
+
+    /**
+     * Kill switch flag to disable the feature of re-evaluate when network resumes.
+     */
+    public static final String REEVALUATE_WHEN_RESUME = "reevaluate_when_resume";
 
     static {
         System.loadLibrary("networkstackutilsjni");
