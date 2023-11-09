@@ -563,6 +563,7 @@ public class NetworkMonitorTest {
         initHttpConnection(mHttpConnection);
         initHttpConnection(mHttpsConnection);
         initHttpConnection(mFallbackConnection);
+        initHttpConnection(mOtherFallbackConnection);
 
         mFakeDns = new FakeDns();
         mFakeDns.startMocking();
