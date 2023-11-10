@@ -25,7 +25,6 @@ import static android.net.apf.ApfTestUtils.DROP;
 import static android.net.apf.ApfTestUtils.MIN_PKT_SIZE;
 import static android.net.apf.ApfTestUtils.PASS;
 import static android.net.apf.ApfTestUtils.assertProgramEquals;
-import static android.system.OsConstants.AF_UNIX;
 import static android.system.OsConstants.ARPHRD_ETHER;
 import static android.system.OsConstants.ETH_P_ARP;
 import static android.system.OsConstants.ETH_P_IP;
@@ -34,15 +33,12 @@ import static android.system.OsConstants.IPPROTO_ICMPV6;
 import static android.system.OsConstants.IPPROTO_IPV6;
 import static android.system.OsConstants.IPPROTO_TCP;
 import static android.system.OsConstants.IPPROTO_UDP;
-import static android.system.OsConstants.SOCK_STREAM;
 
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ECHO_REQUEST_TYPE;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.mock;
 
 import android.content.Context;
 import android.net.InetAddresses;
@@ -54,14 +50,10 @@ import android.net.NattKeepalivePacketDataParcelable;
 import android.net.TcpKeepalivePacketDataParcelable;
 import android.net.apf.ApfFilter.ApfConfiguration;
 import android.net.apf.ApfGenerator.IllegalInstructionException;
-import android.net.ip.IIpClientCallbacks;
-import android.net.ip.IpClient.IpClientCallbacksWrapper;
-import android.os.ConditionVariable;
-import android.os.SystemClock;
+import android.net.apf.ApfTestUtils.MockIpClientCallback;
+import android.net.apf.ApfTestUtils.TestApfFilter;
 import android.system.ErrnoException;
-import android.system.Os;
 import android.text.TextUtils;
-import android.text.format.DateUtils;
 import android.util.Log;
 import android.util.Pair;
 
@@ -71,14 +63,10 @@ import androidx.test.filters.SmallTest;
 import com.android.internal.util.HexDump;
 import com.android.net.module.util.DnsPacket;
 import com.android.net.module.util.Inet4AddressUtils;
-import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.NetworkStackConstants;
 import com.android.net.module.util.PacketBuilder;
-import com.android.net.module.util.SharedLog;
-import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.server.networkstack.tests.R;
 
-import libcore.io.IoUtils;
 import libcore.io.Streams;
 
 import org.junit.Assert;
@@ -91,7 +79,6 @@ import org.mockito.MockitoAnnotations;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -115,7 +102,6 @@ import java.util.Random;
 @RunWith(Parameterized.class)
 @SmallTest
 public class ApfTest {
-    private static final int TIMEOUT_MS = 500;
     private static final int MIN_APF_VERSION = 2;
 
     // Indicates which apf interpreter to run.
@@ -913,96 +899,6 @@ public class ApfTest {
         assertTrue("Failed to drop all packets by filter. \nAPF counters:" +
             HexDump.toHexString(data, false), result);
         apfFilter.shutdown();
-    }
-
-    private class MockIpClientCallback extends IpClientCallbacksWrapper {
-        private final ConditionVariable mGotApfProgram = new ConditionVariable();
-        private byte[] mLastApfProgram;
-
-        MockIpClientCallback() {
-            super(mock(IIpClientCallbacks.class), mock(SharedLog.class),
-                    NetworkInformationShimImpl.newInstance());
-        }
-
-        @Override
-        public void installPacketFilter(byte[] filter) {
-            mLastApfProgram = filter;
-            mGotApfProgram.open();
-        }
-
-        public void resetApfProgramWait() {
-            mGotApfProgram.close();
-        }
-
-        public byte[] assertProgramUpdateAndGet() {
-            assertTrue(mGotApfProgram.block(TIMEOUT_MS));
-            return mLastApfProgram;
-        }
-
-        public void assertNoProgramUpdate() {
-            assertFalse(mGotApfProgram.block(TIMEOUT_MS));
-        }
-    }
-
-    private static class TestApfFilter extends ApfFilter {
-        public static final byte[] MOCK_MAC_ADDR = {1,2,3,4,5,6};
-
-        private FileDescriptor mWriteSocket;
-        private long mCurrentTimeMs = SystemClock.elapsedRealtime();
-        private final MockIpClientCallback mMockIpClientCb;
-
-        public TestApfFilter(Context context, ApfConfiguration config,
-                MockIpClientCallback ipClientCallback) throws Exception {
-            super(context, config, InterfaceParams.getByName("lo"), ipClientCallback);
-            mMockIpClientCb = ipClientCallback;
-        }
-
-        // Pretend an RA packet has been received and show it to ApfFilter.
-        public void pretendPacketReceived(byte[] packet) throws IOException, ErrnoException {
-            mMockIpClientCb.resetApfProgramWait();
-            // ApfFilter's ReceiveThread will be waiting to read this.
-            Os.write(mWriteSocket, packet, 0, packet.length);
-        }
-
-        // Simulate current time changes
-        public void increaseCurrentTimeSeconds(int delta) {
-            mCurrentTimeMs += delta * DateUtils.SECOND_IN_MILLIS;
-        }
-
-        @Override
-        protected int secondsSinceBoot() {
-            return (int) (mCurrentTimeMs / DateUtils.SECOND_IN_MILLIS);
-        }
-
-        @Override
-        public synchronized void maybeStartFilter() {
-            mHardwareAddress = MOCK_MAC_ADDR;
-            installNewProgramLocked();
-
-            // Create two sockets, "readSocket" and "mWriteSocket" and connect them together.
-            FileDescriptor readSocket = new FileDescriptor();
-            mWriteSocket = new FileDescriptor();
-            try {
-                Os.socketpair(AF_UNIX, SOCK_STREAM, 0, mWriteSocket, readSocket);
-            } catch (ErrnoException e) {
-                fail();
-                return;
-            }
-            // Now pass readSocket to ReceiveThread as if it was setup to read raw RAs.
-            // This allows us to pretend RA packets have been recieved via pretendPacketReceived().
-            mReceiveThread = new ReceiveThread(readSocket);
-            mReceiveThread.start();
-        }
-
-        @Override
-        public void shutdown() {
-            super.shutdown();
-            if (mReceiveThread != null) {
-                mReceiveThread.halt();
-                mReceiveThread = null;
-            }
-            IoUtils.closeQuietly(mWriteSocket);
-        }
     }
 
     private static final int ETH_HEADER_LEN               = 14;
