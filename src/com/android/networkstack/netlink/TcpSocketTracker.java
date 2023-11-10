@@ -214,9 +214,9 @@ public class TcpSocketTracker {
             final int netId = NetworkShimImpl.newInstance(mNetwork).getNetId();
             return mNetd.getFwmarkForNetwork(netId);
         } catch (UnsupportedApiLevelException e) {
-            log("Get netId is not available in this API level.");
+            logd("Get netId is not available in this API level.");
         } catch (RemoteException e) {
-            Log.e(TAG, "Error getting fwmark for network, ", e);
+            loge("Error getting fwmark for network, ", e);
         }
         return null;
     }
@@ -246,7 +246,7 @@ public class TcpSocketTracker {
                 mDependencies.sendPollingRequest(fd, mSockDiagMsg.get(family));
                 while (parseMessage(mDependencies.recvMessage(fd),
                         family, newSocketInfoList, time)) {
-                    log("Pending info exist. Attempt to read more");
+                    logd("Pending info exist. Attempt to read more");
                 }
             }
 
@@ -288,7 +288,7 @@ public class TcpSocketTracker {
             cleanupSocketInfo(time);
             return true;
         } catch (ErrnoException | SocketException | InterruptedIOException e) {
-            Log.e(TAG, "Fail to get TCP info via netlink.", e);
+            loge("Fail to get TCP info via netlink.", e);
         } finally {
             SocketUtils.closeSocketQuietly(fd);
         }
@@ -302,11 +302,11 @@ public class TcpSocketTracker {
 
     // Return true if there are more pending messages to read
     @VisibleForTesting
-    static boolean parseMessage(ByteBuffer bytes, int family,
+    boolean parseMessage(ByteBuffer bytes, int family,
             ArrayList<SocketInfo> outputSocketInfoList, long time) {
         if (!NetlinkUtils.enoughBytesRemainForValidNlMsg(bytes)) {
             // This is unlikely to happen in real cases. Check this first for testing.
-            Log.e(TAG, "Size is less than header size. Ignored.");
+            loge("Size is less than header size. Ignored.");
             return false;
         }
 
@@ -340,12 +340,12 @@ public class TcpSocketTracker {
                 outputSocketInfoList.add(info);
             } while (NetlinkUtils.enoughBytesRemainForValidNlMsg(bytes));
         } catch (IllegalArgumentException | BufferUnderflowException e) {
-            Log.wtf(TAG, "Unexpected socket info parsing, family " + family
+            logwtf("Unexpected socket info parsing, family " + family
                     + " buffer:" + bytes + " "
                     + Base64.getEncoder().encodeToString(bytes.array()), e);
             return false;
         } catch (IllegalStateException e) {
-            Log.e(TAG, "Unexpected socket info parsing, family " + family
+            loge("Unexpected socket info parsing, family " + family
                     + " buffer:" + bytes + " "
                     + Base64.getEncoder().encodeToString(bytes.array()), e);
             return false;
@@ -354,21 +354,21 @@ public class TcpSocketTracker {
         return true;
     }
 
-    private static int getLengthAndVerifyMsgHeader(@NonNull ByteBuffer bytes, int family) {
+    private int getLengthAndVerifyMsgHeader(@NonNull ByteBuffer bytes, int family) {
         final StructNlMsgHdr nlmsghdr = StructNlMsgHdr.parse(bytes);
         if (nlmsghdr == null) {
-            Log.e(TAG, "Badly formatted data.");
+            loge("Badly formatted data.");
             return END_OF_PARSING;
         }
 
-        log("pollSocketsInfo: nlmsghdr=" + nlmsghdr + ", limit=" + bytes.limit());
+        logd("pollSocketsInfo: nlmsghdr=" + nlmsghdr + ", limit=" + bytes.limit());
         // End of the message. Stop parsing.
         if (nlmsghdr.nlmsg_type == NLMSG_DONE) {
             return END_OF_PARSING;
         }
 
         if (nlmsghdr.nlmsg_type != SOCK_DIAG_BY_FAMILY) {
-            Log.e(TAG, "Expect to get family " + family
+            loge("Expect to get family " + family
                     + " SOCK_DIAG_BY_FAMILY message but get "
                     + nlmsghdr.nlmsg_type);
             return END_OF_PARSING;
@@ -393,7 +393,7 @@ public class TcpSocketTracker {
 
     /** Parse a {@code SocketInfo} from the given position of the given byte buffer. */
     @NonNull
-    private static SocketInfo parseSockInfo(@NonNull final ByteBuffer bytes, final int family,
+    private SocketInfo parseSockInfo(@NonNull final ByteBuffer bytes, final int family,
             final int nlmsgLen, final long time, final int uid, final long cookie,
             final int dstPort) {
         final int remainingDataSize = bytes.position() + nlmsgLen - SOCKDIAG_MSG_HEADER_SIZE;
@@ -411,7 +411,7 @@ public class TcpSocketTracker {
             }
         }
         final SocketInfo info = new SocketInfo(tcpInfo, family, mark, time, uid, cookie, dstPort);
-        log("parseSockInfo, " + info);
+        logd("parseSockInfo, " + info);
         return info;
     }
 
@@ -429,7 +429,7 @@ public class TcpSocketTracker {
         }
         final boolean ret = (getLatestPacketFailPercentage() >= getTcpPacketsFailRateThreshold());
         if (ret) {
-            Log.d(TAG, "data stall suspected, uids: " + mLatestReportedUids.toString());
+            log("data stall suspected, uids: " + mLatestReportedUids.toString());
         }
         return ret;
     }
@@ -445,7 +445,7 @@ public class TcpSocketTracker {
         }
 
         if (current.tcpInfo == null) {
-            log("Current tcpInfo is null.");
+            logd("Current tcpInfo is null.");
             return null;
         }
 
@@ -458,7 +458,7 @@ public class TcpSocketTracker {
             stat.receivedCount -= previous.tcpInfo.mSegsIn;
             stat.retransCount -= previous.tcpInfo.mTotalRetrans;
         }
-        log("calculateLatestPacketsStat, stat:" + stat);
+        logd("calculateLatestPacketsStat, stat:" + stat);
         return stat;
     }
 
@@ -498,8 +498,24 @@ public class TcpSocketTracker {
         return mTcpPacketsFailRateThreshold;
     }
 
-    private static void log(final String str) {
-        if (DBG) Log.d(TAG, str);
+    private void logd(final String str) {
+        if (DBG) log(str);
+    }
+
+    private void log(final String s) {
+        Log.d(TAG + "/" + mNetwork.toString(), s);
+    }
+
+    private void loge(final String str) {
+        loge(str, null /* tr */);
+    }
+
+    private void loge(final String str, @Nullable Throwable tr) {
+        Log.e(TAG + "/" + mNetwork.toString(), str, tr);
+    }
+
+    private void logwtf(final String str, @Nullable Throwable tr) {
+        Log.wtf(TAG + "/" + mNetwork.toString(), str, tr);
     }
 
     /** Stops monitoring and releases resources. */
@@ -585,7 +601,7 @@ public class TcpSocketTracker {
         synchronized (mDozeModeLock) {
             if (mInDozeMode == isEnabled) return;
             mInDozeMode = isEnabled;
-            log("Doze mode enabled=" + mInDozeMode);
+            logd("Doze mode enabled=" + mInDozeMode);
         }
     }
 
@@ -593,7 +609,7 @@ public class TcpSocketTracker {
         if (mInOpportunisticMode == isEnabled) return;
         mInOpportunisticMode = isEnabled;
 
-        log("Private DNS Opportunistic mode enabled=" + mInOpportunisticMode);
+        logd("Private DNS Opportunistic mode enabled=" + mInOpportunisticMode);
     }
 
     public void setLinkProperties(@NonNull LinkProperties lp) {
