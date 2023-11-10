@@ -180,7 +180,8 @@ public class TcpSocketTrackerTest {
     public void testParseSockInfo() {
         final ByteBuffer buffer = getByteBuffer(SOCK_DIAG_TCP_INET_TEST_BYTES);
         final ArrayList<TcpSocketTracker.SocketInfo> infoList = new ArrayList<>();
-        TcpSocketTracker.parseMessage(buffer, AF_INET, infoList, 100L);
+        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
+        tst.parseMessage(buffer, AF_INET, infoList, 100L);
         assertEquals(1, infoList.size());
         final TcpSocketTracker.SocketInfo parsed = infoList.get(0);
 
