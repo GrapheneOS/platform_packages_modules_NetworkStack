@@ -1293,7 +1293,8 @@ public class IpClient extends StateMachine {
         IndentingPrintWriter pw = new IndentingPrintWriter(writer, "  ");
         pw.println(mTag + " APF dump:");
         pw.increaseIndent();
-        if (apfFilter != null) {
+        if (apfFilter != null && apfCapabilities != null
+                && apfCapabilities.apfVersionSupported > 0) {
             if (apfCapabilities.hasDataAccess()) {
                 // Request a new snapshot, then wait for it.
                 mApfDataSnapshotComplete.close();
