@@ -86,6 +86,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -147,6 +149,8 @@ public class IpClientTest {
     @Mock private IpMemoryStoreService mIpMemoryStoreService;
     @Mock private InterfaceParams mInterfaceParams;
     @Mock private IpConnectivityLog mMetricsLog;
+    @Mock private FileDescriptor mFd;
+    @Mock private PrintWriter mWriter;
 
     private NetworkObserver mObserver;
     private InterfaceParams mIfParams;
@@ -778,6 +782,17 @@ public class IpClientTest {
         assertEquals(4096, actual.apfCapabilities.maximumApfProgramSize);
         assertEquals(4, actual.apfCapabilities.apfPacketFormat);
 
+        verifyShutdown(ipc);
+    }
+
+    @Test
+    public void testDumpApfFilter_withNoException() throws Exception {
+        final IpClient ipc = makeIpClient(TEST_IFNAME);
+        final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
+                false /* isApfSupported */);
+        assertNull(config.apfCapabilities);
+        clearInvocations(mDependencies);
+        ipc.dump(mFd, mWriter, null /* args */);
         verifyShutdown(ipc);
     }
 
