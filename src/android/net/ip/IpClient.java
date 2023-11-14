@@ -40,10 +40,11 @@ import static com.android.net.module.util.NetworkStackConstants.ETHER_BROADCAST;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_ROUTERS_MULTICAST;
 import static com.android.net.module.util.NetworkStackConstants.RFC7421_PREFIX_LENGTH;
 import static com.android.net.module.util.NetworkStackConstants.VENDOR_SPECIFIC_IE_ID;
+import static com.android.networkstack.util.NetworkStackUtils.APF_NEW_RA_FILTER_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GRATUITOUS_NA_VERSION;
-import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_IGNORE_LOW_RA_LIFETIME_FORCE_DISABLE;
+import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_MULTICAST_NS_VERSION;
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
@@ -668,6 +669,8 @@ public class IpClient extends StateMachine {
 
     // Experiment flag read from device config.
     private final boolean mDhcp6PrefixDelegationEnabled;
+    private final boolean mUseNewApfFilter;
+    private final boolean mEnableIpClientIgnoreLowRaLifetime;
 
     private InterfaceParams mInterfaceParams;
 
@@ -822,8 +825,8 @@ public class IpClient extends StateMachine {
          */
         public AndroidPacketFilter maybeCreateApfFilter(Context context,
                 ApfFilter.ApfConfiguration config, InterfaceParams ifParams,
-                IpClientCallbacksWrapper cb) {
-            if (isFeatureEnabled(context, NetworkStackUtils.APF_NEW_RA_FILTER_VERSION)) {
+                IpClientCallbacksWrapper cb, boolean useNewApfFilter) {
+            if (useNewApfFilter) {
                 return ApfFilter.maybeCreate(context, config, ifParams, cb);
             } else {
                 return LegacyApfFilter.maybeCreate(context, config, ifParams, cb);
@@ -884,6 +887,9 @@ public class IpClient extends StateMachine {
                 CONFIG_MIN_RDNSS_LIFETIME, DEFAULT_MIN_RDNSS_LIFETIME);
         mAcceptRaMinLft = mDependencies.getDeviceConfigPropertyInt(CONFIG_ACCEPT_RA_MIN_LFT,
                 DEFAULT_ACCEPT_RA_MIN_LFT);
+        mUseNewApfFilter = mDependencies.isFeatureEnabled(context, APF_NEW_RA_FILTER_VERSION);
+        mEnableIpClientIgnoreLowRaLifetime = mDependencies.isFeatureEnabled(context,
+                IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION);
 
         IpClientLinkObserver.Configuration config = new IpClientLinkObserver.Configuration(
                 mMinRdnssLifetimeSec);
@@ -2161,10 +2167,10 @@ public class IpClient extends StateMachine {
                 setIpv6Sysctl(DAD_TRANSMITS, 0 /* dad_transmits */);
             }
         }
-        // Check chickened out flag first before reading IPv6 sysctl, which can prevent from
+        // Check the feature flag first before reading IPv6 sysctl, which can prevent from
         // triggering a potential kernel bug about the sysctl.
-        if (mDependencies.isFeatureNotChickenedOut(mContext,
-                IPCLIENT_IGNORE_LOW_RA_LIFETIME_FORCE_DISABLE)
+        // TODO: add unit test to check if the setIpv6Sysctl() is called or not.
+        if (mEnableIpClientIgnoreLowRaLifetime && mUseNewApfFilter
                 && mDependencies.hasIpv6Sysctl(mInterfaceName, ACCEPT_RA_MIN_LFT)) {
             setIpv6Sysctl(ACCEPT_RA_MIN_LFT, mAcceptRaMinLft);
         }
@@ -2245,8 +2251,7 @@ public class IpClient extends StateMachine {
         setIpv6Sysctl(ACCEPT_RA, 2);
         setIpv6Sysctl(ACCEPT_RA_DEFRTR, 1);
         maybeRestoreDadTransmits();
-        if (mDependencies.isFeatureNotChickenedOut(mContext,
-                IPCLIENT_IGNORE_LOW_RA_LIFETIME_FORCE_DISABLE)
+        if (mUseNewApfFilter && mEnableIpClientIgnoreLowRaLifetime
                 && mDependencies.hasIpv6Sysctl(mInterfaceName, ACCEPT_RA_MIN_LFT)) {
             setIpv6Sysctl(ACCEPT_RA_MIN_LFT, 0 /* sysctl default */);
         }
@@ -2355,7 +2360,7 @@ public class IpClient extends StateMachine {
         apfConfig.minRdnssLifetimeSec = mMinRdnssLifetimeSec;
         apfConfig.acceptRaMinLft = mAcceptRaMinLft;
         return mDependencies.maybeCreateApfFilter(mContext, apfConfig, mInterfaceParams,
-                mCallback);
+                mCallback, mUseNewApfFilter);
     }
 
     private boolean handleUpdateApfCapabilities(@NonNull final ApfCapabilities apfCapabilities) {

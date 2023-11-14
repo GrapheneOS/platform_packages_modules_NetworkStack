@@ -249,6 +249,12 @@ public class NetworkStackUtils {
      * Experiment flag to enable new ra filter.
      */
     public static final String APF_NEW_RA_FILTER_VERSION = "apf_new_ra_filter_version";
+    /**
+     * Experiment flag to enable the feature of ignoring any individual RA section with lifetime
+     * below accept_ra_min_lft sysctl.
+     */
+    public static final String IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION =
+            "ipclient_ignore_low_ra_lifetime_version";
 
     /**** BEGIN Feature Kill Switch Flags ****/
 
@@ -259,12 +265,6 @@ public class NetworkStackUtils {
     public static final String IPCLIENT_PARSE_NETLINK_EVENTS_FORCE_DISABLE =
             "ipclient_parse_netlink_events_force_disable";
 
-    /**
-     * Kill switch flag to disable the feature of ignoring any individual RA section with lifetime
-     * below accept_ra_min_lft sysctl.
-     */
-    public static final String IPCLIENT_IGNORE_LOW_RA_LIFETIME_FORCE_DISABLE =
-            "ipclient_ignore_low_ra_lifetime_force_disable";
 
     /**
      * Kill switch flag to disable the feature of skipping Tcp socket info polling when light
