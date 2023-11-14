@@ -25,6 +25,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.clearInvocations;
@@ -706,7 +707,7 @@ public class IpClientTest {
         final ArgumentCaptor<ApfConfiguration> configCaptor = ArgumentCaptor.forClass(
                 ApfConfiguration.class);
         verify(mDependencies, timeout(TEST_TIMEOUT_MS)).maybeCreateApfFilter(
-                any(), configCaptor.capture(), any(), any());
+                any(), configCaptor.capture(), any(), any(), anyBoolean());
 
         return configCaptor.getValue();
     }
@@ -775,7 +776,7 @@ public class IpClientTest {
         final ArgumentCaptor<ApfConfiguration> configCaptor = ArgumentCaptor.forClass(
                 ApfConfiguration.class);
         verify(mDependencies, timeout(TEST_TIMEOUT_MS)).maybeCreateApfFilter(
-                any(), configCaptor.capture(), any(), any());
+                any(), configCaptor.capture(), any(), any(), anyBoolean());
         final ApfConfiguration actual = configCaptor.getValue();
         assertNotNull(actual);
         assertEquals(4, actual.apfCapabilities.apfVersionSupported);
@@ -808,7 +809,8 @@ public class IpClientTest {
                 8192 /* maxProgramSize */, 4 /* format */);
         ipc.updateApfCapabilities(newApfCapabilities);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies, never()).maybeCreateApfFilter(any(), any(), any(), any());
+        verify(mDependencies, never()).maybeCreateApfFilter(any(), any(), any(), any(),
+                anyBoolean());
         verifyShutdown(ipc);
     }
 
@@ -822,7 +824,8 @@ public class IpClientTest {
 
         ipc.updateApfCapabilities(null /* apfCapabilities */);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies, never()).maybeCreateApfFilter(any(), any(), any(), any());
+        verify(mDependencies, never()).maybeCreateApfFilter(any(), any(), any(), any(),
+                anyBoolean());
         verifyShutdown(ipc);
     }
 
