@@ -40,6 +40,7 @@ import static com.android.net.module.util.NetworkStackConstants.ETHER_BROADCAST;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_ROUTERS_MULTICAST;
 import static com.android.net.module.util.NetworkStackConstants.RFC7421_PREFIX_LENGTH;
 import static com.android.net.module.util.NetworkStackConstants.VENDOR_SPECIFIC_IE_ID;
+import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_LIGHT_DOZE_FORCE_DISABLE;
 import static com.android.networkstack.util.NetworkStackUtils.APF_NEW_RA_FILTER_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
@@ -671,6 +672,7 @@ public class IpClient extends StateMachine {
     private final boolean mDhcp6PrefixDelegationEnabled;
     private final boolean mUseNewApfFilter;
     private final boolean mEnableIpClientIgnoreLowRaLifetime;
+    private final boolean mApfShouldHandleLightDoze;
 
     private InterfaceParams mInterfaceParams;
 
@@ -890,6 +892,9 @@ public class IpClient extends StateMachine {
         mUseNewApfFilter = mDependencies.isFeatureEnabled(context, APF_NEW_RA_FILTER_VERSION);
         mEnableIpClientIgnoreLowRaLifetime = mDependencies.isFeatureEnabled(context,
                 IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION);
+        // Light doze mode status checking API is only available at T or later releases.
+        mApfShouldHandleLightDoze = SdkLevel.isAtLeastT() && mDependencies.isFeatureNotChickenedOut(
+                mContext, APF_HANDLE_LIGHT_DOZE_FORCE_DISABLE);
 
         IpClientLinkObserver.Configuration config = new IpClientLinkObserver.Configuration(
                 mMinRdnssLifetimeSec);
@@ -2359,6 +2364,7 @@ public class IpClient extends StateMachine {
 
         apfConfig.minRdnssLifetimeSec = mMinRdnssLifetimeSec;
         apfConfig.acceptRaMinLft = mAcceptRaMinLft;
+        apfConfig.shouldHandleLightDoze = mApfShouldHandleLightDoze;
         return mDependencies.maybeCreateApfFilter(mContext, apfConfig, mInterfaceParams,
                 mCallback, mUseNewApfFilter);
     }

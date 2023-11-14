@@ -25,6 +25,8 @@ import static android.net.apf.ApfTestUtils.DROP;
 import static android.net.apf.ApfTestUtils.MIN_PKT_SIZE;
 import static android.net.apf.ApfTestUtils.PASS;
 import static android.net.apf.ApfTestUtils.assertProgramEquals;
+import static android.os.PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED;
+import static android.os.PowerManager.ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED;
 import static android.system.OsConstants.ARPHRD_ETHER;
 import static android.system.OsConstants.ETH_P_ARP;
 import static android.system.OsConstants.ETH_P_IP;
@@ -37,10 +39,16 @@ import static android.system.OsConstants.IPPROTO_UDP;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ECHO_REQUEST_TYPE;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.verify;
 
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
 import android.net.InetAddresses;
 import android.net.IpPrefix;
 import android.net.LinkAddress;
@@ -52,6 +60,8 @@ import android.net.apf.ApfFilter.ApfConfiguration;
 import android.net.apf.ApfGenerator.IllegalInstructionException;
 import android.net.apf.ApfTestUtils.MockIpClientCallback;
 import android.net.apf.ApfTestUtils.TestApfFilter;
+import android.os.Build;
+import android.os.PowerManager;
 import android.system.ErrnoException;
 import android.text.TextUtils;
 import android.util.Log;
@@ -66,14 +76,18 @@ import com.android.net.module.util.Inet4AddressUtils;
 import com.android.net.module.util.NetworkStackConstants;
 import com.android.net.module.util.PacketBuilder;
 import com.android.server.networkstack.tests.R;
+import com.android.testutils.DevSdkIgnoreRule;
+import com.android.testutils.DevSdkIgnoreRunner;
 
 import libcore.io.Streams;
 
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -99,11 +113,13 @@ import java.util.Random;
  *
  * The test cases will be executed by both APFv4 and APFv6 interpreter.
  */
-@RunWith(Parameterized.class)
+@RunWith(DevSdkIgnoreRunner.class)
 @SmallTest
 public class ApfTest {
     private static final int MIN_APF_VERSION = 2;
 
+    @Rule
+    public DevSdkIgnoreRule mDevSdkIgnoreRule = new DevSdkIgnoreRule();
     // Indicates which apf interpreter to run.
     @Parameterized.Parameter()
     public int mApfVersion;
@@ -113,10 +129,14 @@ public class ApfTest {
         return Arrays.asList(4, 6);
     }
 
-    @Mock Context mContext;
+    @Mock private Context mContext;
+    @Mock
+    private ApfFilter.Dependencies mDependencies;
+    @Mock private PowerManager mPowerManager;
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
+        doReturn(mPowerManager).when(mContext).getSystemService(PowerManager.class);
     }
 
     private static final String TAG = "ApfTest";
@@ -1030,17 +1050,6 @@ public class ApfTest {
     private static final int IPV6_UDP_DEST_PORT_OFFSET = IPV6_PAYLOAD_OFFSET + 2;
     private static final int MDNS_UDP_PORT = 5353;
 
-    // Helper to initialize a default apfFilter.
-    private ApfFilter setupApfFilter(
-            MockIpClientCallback ipClientCallback, ApfConfiguration config) throws Exception {
-        LinkAddress link = new LinkAddress(InetAddress.getByAddress(MOCK_IPV4_ADDR), 19);
-        LinkProperties lp = new LinkProperties();
-        lp.addLinkAddress(link);
-        TestApfFilter apfFilter = new TestApfFilter(mContext, config, ipClientCallback);
-        apfFilter.setLinkProperties(lp);
-        return apfFilter;
-    }
-
     private static void setIpv4VersionFields(ByteBuffer packet) {
         packet.putShort(ETH_ETHERTYPE_OFFSET, (short) ETH_P_IP);
         packet.put(IP_HEADER_OFFSET, (byte) 0x45);
@@ -1696,20 +1705,60 @@ public class ApfTest {
 
     @Test
     public void testApfFilterMulticastPingWhileDozing() throws Exception {
-        MockIpClientCallback ipClientCallback = new MockIpClientCallback();
-        ApfFilter apfFilter = setupApfFilter(ipClientCallback, getDefaultConfig());
+        doTestApfFilterMulticastPingWhileDozing(false /* isLightDozing */);
+    }
+
+    @Test
+    @DevSdkIgnoreRule.IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
+    public void testApfFilterMulticastPingWhileLightDozing() throws Exception {
+        doTestApfFilterMulticastPingWhileDozing(true /* isLightDozing */);
+    }
+
+    @Test
+    @DevSdkIgnoreRule.IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
+    public void testShouldHandleLightDozeKillSwitch() throws Exception {
+        final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
+        final ApfConfiguration configuration = getDefaultConfig();
+        configuration.shouldHandleLightDoze = false;
+        final ApfFilter apfFilter = TestApfFilter.createTestApfFilter(mContext, ipClientCallback,
+                configuration, mDependencies);
+        final ArgumentCaptor<BroadcastReceiver> receiverCaptor =
+                ArgumentCaptor.forClass(BroadcastReceiver.class);
+        verify(mDependencies).addDeviceIdleReceiver(receiverCaptor.capture(), anyBoolean());
+        final BroadcastReceiver receiver = receiverCaptor.getValue();
+        doReturn(true).when(mPowerManager).isDeviceLightIdleMode();
+        receiver.onReceive(mContext, new Intent(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED));
+        assertFalse(apfFilter.isInDozeMode());
+    }
+
+    private void doTestApfFilterMulticastPingWhileDozing(boolean isLightDozing) throws Exception {
+        final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
+        final ApfConfiguration configuration = getDefaultConfig();
+        configuration.shouldHandleLightDoze = true;
+        final ApfFilter apfFilter = TestApfFilter.createTestApfFilter(mContext, ipClientCallback,
+                configuration, mDependencies);
+        final ArgumentCaptor<BroadcastReceiver> receiverCaptor =
+                ArgumentCaptor.forClass(BroadcastReceiver.class);
+        verify(mDependencies).addDeviceIdleReceiver(receiverCaptor.capture(), anyBoolean());
+        final BroadcastReceiver receiver = receiverCaptor.getValue();
 
         // Construct a multicast ICMPv6 ECHO request.
         final byte[] multicastIpv6Addr = {(byte)0xff,2,0,0,0,0,0,0,0,0,0,0,0,0,0,(byte)0xfb};
-        ByteBuffer packet = makeIpv6Packet(IPPROTO_ICMPV6);
+        final ByteBuffer packet = makeIpv6Packet(IPPROTO_ICMPV6);
         packet.put(ICMP6_TYPE_OFFSET, (byte)ICMPV6_ECHO_REQUEST_TYPE);
         put(packet, IPV6_DEST_ADDR_OFFSET, multicastIpv6Addr);
 
         // Normally, we let multicast pings alone...
         assertPass(ipClientCallback.assertProgramUpdateAndGet(), packet.array());
 
+        if (isLightDozing) {
+            doReturn(true).when(mPowerManager).isDeviceLightIdleMode();
+            receiver.onReceive(mContext, new Intent(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED));
+        } else {
+            doReturn(true).when(mPowerManager).isDeviceIdleMode();
+            receiver.onReceive(mContext, new Intent(ACTION_DEVICE_IDLE_MODE_CHANGED));
+        }
         // ...and even while dozing...
-        apfFilter.setDozeMode(true);
         assertPass(ipClientCallback.assertProgramUpdateAndGet(), packet.array());
 
         // ...but when the multicast filter is also enabled, drop the multicast pings to save power.
@@ -1725,7 +1774,13 @@ public class ApfTest {
 
         // Now wake up from doze mode to ensure that we no longer drop the packets.
         // (The multicast filter is still enabled at this point).
-        apfFilter.setDozeMode(false);
+        if (isLightDozing) {
+            doReturn(false).when(mPowerManager).isDeviceLightIdleMode();
+            receiver.onReceive(mContext, new Intent(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED));
+        } else {
+            doReturn(false).when(mPowerManager).isDeviceIdleMode();
+            receiver.onReceive(mContext, new Intent(ACTION_DEVICE_IDLE_MODE_CHANGED));
+        }
         assertPass(ipClientCallback.assertProgramUpdateAndGet(), packet.array());
 
         apfFilter.shutdown();
@@ -1735,7 +1790,8 @@ public class ApfTest {
     public void testApfFilter802_3() throws Exception {
         MockIpClientCallback ipClientCallback = new MockIpClientCallback();
         ApfConfiguration config = getDefaultConfig();
-        ApfFilter apfFilter = setupApfFilter(ipClientCallback, config);
+        ApfFilter apfFilter = TestApfFilter.createTestApfFilter(mContext, ipClientCallback, config,
+                mDependencies);
         byte[] program = ipClientCallback.assertProgramUpdateAndGet();
 
         // Verify empty packet of 100 zero bytes is passed
@@ -1755,7 +1811,8 @@ public class ApfTest {
         ipClientCallback.resetApfProgramWait();
         apfFilter.shutdown();
         config.ieee802_3Filter = DROP_802_3_FRAMES;
-        apfFilter = setupApfFilter(ipClientCallback, config);
+        apfFilter = TestApfFilter.createTestApfFilter(mContext, ipClientCallback, config,
+                mDependencies);
         program = ipClientCallback.assertProgramUpdateAndGet();
 
         // Verify that IEEE802.3 frame is dropped
@@ -1782,7 +1839,8 @@ public class ApfTest {
 
         MockIpClientCallback ipClientCallback = new MockIpClientCallback();
         ApfConfiguration config = getDefaultConfig();
-        ApfFilter apfFilter = setupApfFilter(ipClientCallback, config);
+        ApfFilter apfFilter = TestApfFilter.createTestApfFilter(mContext, ipClientCallback, config,
+                mDependencies);
         byte[] program = ipClientCallback.assertProgramUpdateAndGet();
 
         // Verify empty packet of 100 zero bytes is passed
@@ -1802,7 +1860,8 @@ public class ApfTest {
         ipClientCallback.resetApfProgramWait();
         apfFilter.shutdown();
         config.ethTypeBlackList = ipv4BlackList;
-        apfFilter = setupApfFilter(ipClientCallback, config);
+        apfFilter = TestApfFilter.createTestApfFilter(mContext, ipClientCallback, config,
+                mDependencies);
         program = ipClientCallback.assertProgramUpdateAndGet();
 
         // Verify that IPv4 frame will be dropped
@@ -1817,7 +1876,8 @@ public class ApfTest {
         ipClientCallback.resetApfProgramWait();
         apfFilter.shutdown();
         config.ethTypeBlackList = ipv4Ipv6BlackList;
-        apfFilter = setupApfFilter(ipClientCallback, config);
+        apfFilter = TestApfFilter.createTestApfFilter(mContext, ipClientCallback, config,
+                mDependencies);
         program = ipClientCallback.assertProgramUpdateAndGet();
 
         // Verify that IPv4 frame will be dropped
