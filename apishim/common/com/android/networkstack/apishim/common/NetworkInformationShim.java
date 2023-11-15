@@ -100,7 +100,7 @@ public interface NetworkInformationShim {
     }
 
     /**
-     * @see NetworkCapabilites#getUnderlyingNetworks()
+     * @see NetworkCapabilities#getUnderlyingNetworks()
      */
     @Nullable
     default List<Network> getUnderlyingNetworks(@NonNull NetworkCapabilities nc) {
