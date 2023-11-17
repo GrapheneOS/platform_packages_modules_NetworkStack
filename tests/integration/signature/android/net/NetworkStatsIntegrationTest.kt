@@ -28,10 +28,10 @@ import android.net.NetworkStatsIntegrationTest.Direction.DOWNLOAD
 import android.net.NetworkStatsIntegrationTest.Direction.UPLOAD
 import android.net.NetworkTemplate.MATCH_TEST
 import android.os.Build
+import android.os.ParcelFileDescriptor.AutoCloseInputStream
 import android.os.Process
 import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
-import com.android.compatibility.common.util.SystemUtil
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo
 import com.android.testutils.DevSdkIgnoreRunner
 import com.android.testutils.PacketBridge
@@ -44,6 +44,7 @@ import com.android.testutils.runAsShell
 import fi.iki.elonen.NanoHTTPD
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
+import java.io.BufferedReader
 import java.net.HttpURLConnection
 import java.net.HttpURLConnection.HTTP_OK
 import java.net.InetSocketAddress
@@ -65,7 +66,7 @@ private const val TEST_TAG = 0xF00D
 @TargetApi(Build.VERSION_CODES.S)
 @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
 class NetworkStatsIntegrationTest {
-    private val TAG = NetworkStatsIntegrationTest::class.java.name
+    private val TAG = NetworkStatsIntegrationTest::class.java.simpleName
     private val INTERNAL_V6ADDR =
         LinkAddress(InetAddresses.parseNumericAddress("2001:db8::1234"), 64)
     private val EXTERNAL_V6ADDR =
@@ -464,7 +465,7 @@ class NetworkStatsIntegrationTest {
             val egressRegex = Regex("""\[(?<txPackets>\d+):(?<txBytes>\d+)\]""" +
                     """.*prog_netd_skfilter_egress_xtbpf""")
             val (v4Stats, v6Stats) = listOf("iptables-save -c", "ip6tables-save -c").map {
-                val output = SystemUtil.runShellCommand(it)
+                val output = runShellCommand(it)
                 val rxMatches = ingressRegex.find(output)
                 val txMatches = egressRegex.find(output)
                 assertNotNull(rxMatches)
@@ -478,6 +479,13 @@ class NetworkStatsIntegrationTest {
                 )
             }
             return v4Stats.plus(v6Stats)
+        }
+
+        private fun runShellCommand(cmd: String): String {
+            return InstrumentationRegistry.getInstrumentation().getUiAutomation()
+                    .executeShellCommand(cmd).use { pfd ->
+                        AutoCloseInputStream(pfd).bufferedReader().use(BufferedReader::readText)
+                    }
         }
     }
 
@@ -513,8 +521,8 @@ class NetworkStatsIntegrationTest {
         // unexpected to provide more debug information when failing other items.
         if (!checkInRange(before.xtBpfStats, after.xtBpfStats,
                         lower + lower.reverse(), upper + upper.reverse())) {
-            Log.d(TAG, "Unexpected xtbpf stats: " +
-                    "$after - $before is not within range [$lower, $upper]")
+            Log.d(TAG, "Unexpected xtbpf stats: ${after.xtBpfStats} - ${before.xtBpfStats} " +
+                    "is not within range [$lower, $upper]")
         }
         assertInRange(
             "Unexpected iface traffic stats",
