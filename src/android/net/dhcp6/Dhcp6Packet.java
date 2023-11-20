@@ -33,8 +33,8 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalInt;
@@ -121,6 +121,11 @@ public class Dhcp6Packet {
     protected final byte[] mIaPd;
     @NonNull
     protected PrefixDelegation mPrefixDelegation;
+
+    /**
+     * DHCPv6 Optional Type: IA Prefix Option.
+     */
+    public static final byte DHCP6_IAPREFIX = 26;
 
     /**
      * DHCPv6 Optional Type: SOL_MAX_RT.
@@ -236,6 +241,38 @@ public class Dhcp6Packet {
             return true;
         }
 
+        /**
+         * Decode IA Prefix options.
+         */
+        public static PrefixDelegation decode(@NonNull final ByteBuffer buffer)
+                throws ParseException {
+            try {
+                final int iaid = buffer.getInt();
+                final int t1 = buffer.getInt();
+                final int t2 = buffer.getInt();
+                final List<IaPrefixOption> ipos = new ArrayList<IaPrefixOption>();
+                while (buffer.remaining() > 0) {
+                    final int original = buffer.position();
+                    final short optionType = buffer.getShort();
+                    final int optionLen = buffer.getShort() & 0xFFFF;
+                    switch (optionType) {
+                        case DHCP6_IAPREFIX:
+                            buffer.position(original);
+                            final IaPrefixOption ipo = Struct.parse(IaPrefixOption.class, buffer);
+                            Log.d(TAG, "IA Prefix Option: " + ipo);
+                            ipos.add(ipo);
+                            break;
+                        // TODO: support DHCP6_STATUS_CODE option
+                        default:
+                            skipOption(buffer, optionLen);
+                    }
+                }
+                return new PrefixDelegation(iaid, t1, t2, ipos);
+            } catch (BufferUnderflowException e) {
+                throw new ParseException(e.getMessage());
+            }
+        }
+
         @Override
         public String toString() {
             return "Prefix Delegation: iaid " + iaid + ", t1 " + t1 + ", t2 " + t2
@@ -316,6 +353,7 @@ public class Dhcp6Packet {
         String statusMsg = null;
         boolean rapidCommit = false;
         int solMaxRt = 0;
+        PrefixDelegation pd = null;
 
         packet.order(ByteOrder.BIG_ENDIAN);
 
@@ -360,6 +398,7 @@ public class Dhcp6Packet {
                         final byte[] bytes = new byte[expectedLen];
                         packet.get(bytes, 0 /* offset */, expectedLen);
                         iapd = bytes;
+                        pd = PrefixDelegation.decode(ByteBuffer.wrap(iapd));
                         break;
                     case DHCP6_RAPID_COMMIT:
                         expectedLen = 0;
@@ -423,15 +462,9 @@ public class Dhcp6Packet {
                 throw new ParseException("Unimplemented DHCP6 message type %d" + messageType);
         }
 
-        if (iapd != null) {
-            final ByteBuffer buffer = ByteBuffer.wrap(iapd);
-            final int iaid = buffer.getInt();
-            final int t1 = buffer.getInt();
-            final int t2 = buffer.getInt();
-            final IaPrefixOption ipo = Struct.parse(IaPrefixOption.class, buffer);
-            newPacket.mPrefixDelegation =
-                    new PrefixDelegation(iaid, t1, t2, Collections.singletonList(ipo));
-            newPacket.mIaId = iaid;
+        if (pd != null) {
+            newPacket.mPrefixDelegation = pd;
+            newPacket.mIaId = pd.iaid;
         }
         newPacket.mStatusCode = statusCode;
         newPacket.mStatusMsg = statusMsg;
