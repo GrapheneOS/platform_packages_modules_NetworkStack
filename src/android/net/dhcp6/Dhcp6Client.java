@@ -59,6 +59,7 @@ import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.PacketReader;
 import com.android.net.module.util.netlink.NetlinkUtils;
+import com.android.net.module.util.structs.IaPrefixOption;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -66,6 +67,8 @@ import java.net.Inet6Address;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Random;
 import java.util.function.IntSupplier;
 
@@ -288,8 +291,8 @@ public class Dhcp6Client extends StateMachine {
             // prefix). However, while only supporting a single prefix, this never works well, so if
             // the server decides to do so, ignore it.
             // TODO: revisit this when adding multi-prefix support.
-            final boolean validIpo = packet.mPrefixDelegation.ipo != null
-                    && packet.mPrefixDelegation.ipo.isValid();
+            final IaPrefixOption ipo = packet.mPrefixDelegation.ipos.get(0);
+            final boolean validIpo = (ipo != null && ipo.isValid());
             if (packet.isValid(mTransId, mClientDuid) && validIpo) {
                 receivePacket(packet);
             }
@@ -377,17 +380,18 @@ public class Dhcp6Client extends StateMachine {
         // prevent packet storms due to low timeouts.
         int renewTimeout = mReply.t1;
         int rebindTimeout = mReply.t2;
-        final long expirationTimeout = mReply.ipo.valid;
+        final IaPrefixOption ipo = mReply.ipos.get(0);
+        final long expirationTimeout = ipo.valid;
 
         // rfc8415#section-14.2: if t1 and / or t2 are 0, the client chooses an appropriate value.
         // rfc8415#section-21.21: Recommended values for T1 and T2 are 0.5 and 0.8 times the
         // shortest preferred lifetime of the prefixes in the IA_PD that the server is willing to
         // extend, respectively.
         if (renewTimeout == 0) {
-            renewTimeout = (int) (mReply.ipo.preferred * 0.5);
+            renewTimeout = (int) (ipo.preferred * 0.5);
         }
         if (rebindTimeout == 0) {
-            rebindTimeout = (int) (mReply.ipo.preferred * 0.8);
+            rebindTimeout = (int) (ipo.preferred * 0.8);
         }
 
         // Note: message validation asserts that the received t1 <= t2 if both t1 > 0 and t2 > 0.
@@ -461,14 +465,8 @@ public class Dhcp6Client extends StateMachine {
         return transmitPacket(packet, "rebind");
     }
 
-    private ByteBuffer buildEmptyIaPdOption() {
-        return Dhcp6Packet.buildIaPdOption(IAID, 0 /* t1 */, 0 /* t2 */, 0 /* preferred */,
-                0 /* valid */, new byte[16] /* empty prefix */, (byte) RFC7421_PREFIX_LENGTH);
-    }
-
-    private ByteBuffer buildIaPdOption(@NonNull final PrefixDelegation pd) {
-        return Dhcp6Packet.buildIaPdOption(pd.iaid, pd.t1, pd.t2, pd.ipo.preferred, pd.ipo.valid,
-                pd.ipo.prefix, pd.ipo.prefixLen);
+    private ByteBuffer buildIaPdOption(@NonNull final List<IaPrefixOption> ipos) {
+        return Dhcp6Packet.buildIaPdOption(IAID, 0 /* t1 */, 0 /* t2 */, ipos);
     }
 
     /**
@@ -545,7 +543,11 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            return sendSolicitPacket(transId, elapsedTimeMs, buildEmptyIaPdOption());
+            final IaPrefixOption emptyPrefix = new IaPrefixOption((short) IaPrefixOption.LENGTH,
+                    0 /* preferred */, 0 /* valid */, (byte) RFC7421_PREFIX_LENGTH,
+                    new byte[16] /* empty prefix */);
+            return sendSolicitPacket(transId, elapsedTimeMs,
+                    buildIaPdOption(Collections.singletonList(emptyPrefix)));
         }
 
         // TODO: support multiple prefixes.
@@ -585,7 +587,7 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            return sendRequestPacket(transId, elapsedTimeMs, buildIaPdOption(mAdvertise));
+            return sendRequestPacket(transId, elapsedTimeMs, buildIaPdOption(mAdvertise.ipos));
         }
 
         @Override
@@ -646,7 +648,7 @@ public class Dhcp6Client extends StateMachine {
             // generation (with IFA_F_MANAGETEMPADDR), we always set the address prefix length to
             // 64, even if the delegated prefix length is less than 64. However, the unreachable
             // route should still use the assigned prefix length.
-            final IpPrefix routePrefix = mReply.ipo.getIpPrefix();
+            final IpPrefix routePrefix = mReply.ipos.get(0).getIpPrefix();
             final IpPrefix addressPrefix = new IpPrefix(routePrefix.getAddress(),
                     RFC7421_PREFIX_LENGTH);
             // Create EUI-64, so we don't need to remember IPv6 addresses that need to extend the
@@ -655,8 +657,9 @@ public class Dhcp6Client extends StateMachine {
                     macAddressToEui64(mIface.macAddr));
             final int flags = IFA_F_NOPREFIXROUTE | IFA_F_MANAGETEMPADDR | IFA_F_NODAD;
             final long now = SystemClock.elapsedRealtime();
-            final long deprecationTime = now + mReply.ipo.preferred;
-            final long expirationTime = now + mReply.ipo.valid;
+            final IaPrefixOption ipo = mReply.ipos.get(0);
+            final long deprecationTime = now + ipo.preferred;
+            final long expirationTime = now + ipo.valid;
             final LinkAddress la = new LinkAddress(address, RFC7421_PREFIX_LENGTH, flags,
                     RT_SCOPE_UNIVERSE /* scope */, deprecationTime, expirationTime);
             if (!la.isGlobalPreferred()) {
@@ -666,7 +669,7 @@ public class Dhcp6Client extends StateMachine {
             if (!NetlinkUtils.sendRtmNewAddressRequest(mIface.index, address,
                     (short) RFC7421_PREFIX_LENGTH,
                     flags, (byte) RT_SCOPE_UNIVERSE /* scope */,
-                    mReply.ipo.preferred, mReply.ipo.valid)) {
+                    ipo.preferred, ipo.valid)) {
                 Log.e(TAG, "Failed to set IPv6 address " + address.getHostAddress()
                         + "%" + mIface.index);
                 return;
@@ -701,11 +704,13 @@ public class Dhcp6Client extends StateMachine {
         protected void receivePacket(Dhcp6Packet packet) {
             if (!(packet instanceof Dhcp6ReplyPacket)) return;
             final PrefixDelegation pd = packet.mPrefixDelegation;
-            if (!(Arrays.equals(pd.ipo.prefix, mReply.ipo.prefix)
-                    && pd.ipo.prefixLen == mReply.ipo.prefixLen)) {
-                Log.i(TAG, "Renewal prefix " + HexDump.toHexString(pd.ipo.prefix)
+            final IaPrefixOption request = mReply.ipos.get(0);
+            final IaPrefixOption response = pd.ipos.get(0);
+            if (!(Arrays.equals(request.prefix, response.prefix)
+                    && request.prefixLen == response.prefixLen)) {
+                Log.i(TAG, "Renewal prefix " + HexDump.toHexString(response.prefix)
                         + " does not match current prefix "
-                        + HexDump.toHexString(mReply.ipo.prefix));
+                        + HexDump.toHexString(request.prefix));
                 notifyPrefixDelegation(DHCP6_PD_PREFIX_CHANGED, null);
                 transitionTo(mSolicitState);
                 return;
@@ -748,7 +753,7 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            return sendRenewPacket(transId, elapsedTimeMs, buildIaPdOption(mReply));
+            return sendRenewPacket(transId, elapsedTimeMs, buildIaPdOption(mReply.ipos));
         }
     }
 
@@ -764,7 +769,7 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            return sendRebindPacket(transId, elapsedTimeMs, buildIaPdOption(mReply));
+            return sendRebindPacket(transId, elapsedTimeMs, buildIaPdOption(mReply.ipos));
         }
     }
 
