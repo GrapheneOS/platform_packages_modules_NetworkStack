@@ -232,7 +232,6 @@ public class Dhcp6Packet {
                 Log.e(TAG, "IA_PD option with invalid T1 " + t1 + " or T2 " + t2);
                 return false;
             }
-
             // Generally, t1 must be smaller or equal to t2 (except when t2 is 0).
             if (t2 != 0 && t1 > t2) {
                 Log.e(TAG, "IA_PD option with T1 " + t1 + " greater than T2 " + t2);
@@ -271,6 +270,22 @@ public class Dhcp6Packet {
             } catch (BufferUnderflowException e) {
                 throw new ParseException(e.getMessage());
             }
+        }
+
+        /**
+         * Return valid IA prefix options to be used and extended in the Reply message. It may
+         * return empty list if there isn't any valid IA prefix option in the Reply message.
+         *
+         * TODO: ensure that the prefix has a reasonable lifetime, and the timers aren't too short.
+         * and handle status code such as NoPrefixAvail.
+         */
+        public List<IaPrefixOption> getValidIaPrefixes() {
+            final List<IaPrefixOption> validIpos = new ArrayList<IaPrefixOption>();
+            for (IaPrefixOption ipo : ipos) {
+                if (!ipo.isValid()) continue;
+                validIpos.add(ipo);
+            }
+            return validIpos;
         }
 
         @Override
