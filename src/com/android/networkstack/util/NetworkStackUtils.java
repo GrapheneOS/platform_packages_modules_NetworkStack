@@ -265,6 +265,11 @@ public class NetworkStackUtils {
     public static final String IPCLIENT_PARSE_NETLINK_EVENTS_FORCE_DISABLE =
             "ipclient_parse_netlink_events_force_disable";
 
+    /**
+     * Kill switch flag to disable the feature of handle light doze mode in Apf.
+     */
+    public static final String APF_HANDLE_LIGHT_DOZE_FORCE_DISABLE =
+            "apf_handle_light_doze_force_disable";
 
     /**
      * Kill switch flag to disable the feature of skipping Tcp socket info polling when light
