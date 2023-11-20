@@ -34,6 +34,9 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
 import java.util.OptionalInt;
 
 /**
@@ -155,6 +158,14 @@ public class Dhcp6Packet {
     }
 
     /**
+     * Returns decoded IA_PD options associated with IA_ID.
+     */
+    @VisibleForTesting
+    public PrefixDelegation getPrefixDelegation() {
+        return mPrefixDelegation;
+    }
+
+    /**
      * Returns IA_ID associated to IA_PD.
      */
     public int getIaId() {
@@ -188,16 +199,18 @@ public class Dhcp6Packet {
      * https://www.rfc-editor.org/rfc/rfc8415.html#section-21.21
      */
     public static class PrefixDelegation {
-        public int iaid;
-        public int t1;
-        public int t2;
-        public final IaPrefixOption ipo;
+        public final int iaid;
+        public final int t1;
+        public final int t2;
+        @NonNull
+        public final List<IaPrefixOption> ipos;
 
-        PrefixDelegation(int iaid, int t1, int t2, final IaPrefixOption ipo) {
+        PrefixDelegation(int iaid, int t1, int t2, @NonNull final List<IaPrefixOption> ipos) {
+            Objects.requireNonNull(ipos);
             this.iaid = iaid;
             this.t1 = t1;
             this.t2 = t2;
-            this.ipo = ipo;
+            this.ipos = ipos;
         }
 
         /**
@@ -226,7 +239,7 @@ public class Dhcp6Packet {
         @Override
         public String toString() {
             return "Prefix Delegation: iaid " + iaid + ", t1 " + t1 + ", t2 " + t2
-                    + ", prefix " + ipo;
+                    + ", IA prefix options: " + ipos;
         }
     }
 
@@ -416,7 +429,8 @@ public class Dhcp6Packet {
             final int t1 = buffer.getInt();
             final int t2 = buffer.getInt();
             final IaPrefixOption ipo = Struct.parse(IaPrefixOption.class, buffer);
-            newPacket.mPrefixDelegation = new PrefixDelegation(iaid, t1, t2, ipo);
+            newPacket.mPrefixDelegation =
+                    new PrefixDelegation(iaid, t1, t2, Collections.singletonList(ipo));
             newPacket.mIaId = iaid;
         }
         newPacket.mStatusCode = statusCode;
@@ -530,16 +544,16 @@ public class Dhcp6Packet {
     /**
      * Build an IA_PD option from given specific parameters, including IA_PREFIX option.
      */
-    public static ByteBuffer buildIaPdOption(int iaid, int t1, int t2, long preferred, long valid,
-            final byte[] prefix, byte prefixLen) {
+    public static ByteBuffer buildIaPdOption(int iaid, int t1, int t2,
+            @NonNull final List<IaPrefixOption> ipos) {
         final ByteBuffer iapd = ByteBuffer.allocate(IaPdOption.LENGTH
-                + Struct.getSize(IaPrefixOption.class));
+                + Struct.getSize(IaPrefixOption.class) * ipos.size());
         iapd.putInt(iaid);
         iapd.putInt(t1);
         iapd.putInt(t2);
-        final ByteBuffer prefixOption = IaPrefixOption.build((short) IaPrefixOption.LENGTH,
-                preferred, valid, prefixLen, prefix);
-        iapd.put(prefixOption);
+        for (IaPrefixOption ipo : ipos) {
+            ipo.writeToByteBuffer(iapd);
+        }
         iapd.flip();
         return iapd;
     }
