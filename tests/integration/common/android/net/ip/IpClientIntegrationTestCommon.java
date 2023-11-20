@@ -38,6 +38,7 @@ import static android.net.dhcp.DhcpPacket.ENCAP_L2;
 import static android.net.dhcp.DhcpPacket.INADDR_BROADCAST;
 import static android.net.dhcp.DhcpPacket.INFINITE_LEASE;
 import static android.net.dhcp.DhcpPacket.MIN_V6ONLY_WAIT_MS;
+import static android.net.dhcp6.Dhcp6Packet.PrefixDelegation;
 import static android.net.ip.IIpClientCallbacks.DTIM_MULTIPLIER_RESET;
 import static android.net.ip.IpClient.CONFIG_IPV6_AUTOCONF_TIMEOUT;
 import static android.net.ip.IpClient.CONFIG_ACCEPT_RA_MIN_LFT;
@@ -78,6 +79,7 @@ import static com.android.net.module.util.NetworkStackConstants.NEIGHBOR_ADVERTI
 import static com.android.net.module.util.NetworkStackConstants.NEIGHBOR_ADVERTISEMENT_FLAG_SOLICITED;
 import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_AUTONOMOUS;
 import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_ON_LINK;
+import static com.android.net.module.util.NetworkStackConstants.RFC7421_PREFIX_LENGTH;
 import static com.android.testutils.MiscAsserts.assertThrows;
 import static com.android.testutils.ParcelUtils.parcelingRoundTrip;
 import static com.android.testutils.TestPermissionUtil.runAsShell;
@@ -199,6 +201,7 @@ import com.android.net.module.util.ip.IpNeighborMonitor.NeighborEventConsumer;
 import com.android.net.module.util.netlink.NetlinkUtils;
 import com.android.net.module.util.netlink.StructNdOptPref64;
 import com.android.net.module.util.structs.EthernetHeader;
+import com.android.net.module.util.structs.IaPrefixOption;
 import com.android.net.module.util.structs.Ipv6Header;
 import com.android.net.module.util.structs.LlaOption;
 import com.android.net.module.util.structs.PrefixInformationOption;
@@ -4803,19 +4806,27 @@ public abstract class IpClientIntegrationTestCommon {
         inOrder.verify(mCb, timeout(TEST_TIMEOUT_MS)).setMaxDtimMultiplier(DTIM_MULTIPLIER_RESET);
     }
 
-    private void handleDhcp6Packets(final IpPrefix prefix, boolean shouldReplyRapidCommit)
-            throws Exception {
-        handleDhcp6Packets(prefix, 3600 /* t1 */, 4500 /* t2 */, 4500 /* preferred */,
-                7200 /* valid */, shouldReplyRapidCommit);
+    private IaPrefixOption buildIaPrefixOption(final IpPrefix prefix, int preferred,
+            int valid) {
+        return new IaPrefixOption((short) IaPrefixOption.LENGTH, preferred, valid,
+                (byte) RFC7421_PREFIX_LENGTH, prefix.getRawAddress() /* prefix */);
     }
 
-    private void handleDhcp6Packets(final IpPrefix prefix, int t1, int t2, int preferred, int valid,
+    private void handleDhcp6Packets(final IpPrefix prefix, boolean shouldReplyRapidCommit)
+            throws Exception {
+        final IaPrefixOption ipo = buildIaPrefixOption(prefix, 4500 /* preferred */,
+                7200 /* valid */);
+        handleDhcp6Packets(Collections.singletonList(ipo), 3600 /* t1 */, 4500 /* t2 */,
+                shouldReplyRapidCommit);
+    }
+
+    private void handleDhcp6Packets(final List<IaPrefixOption> ipos, int t1, int t2,
             boolean shouldReplyRapidCommit) throws Exception {
+        ByteBuffer iapd;
         Dhcp6Packet packet;
         while ((packet = getNextDhcp6Packet()) != null) {
-            final ByteBuffer iapd = Dhcp6Packet.buildIaPdOption(packet.getIaId(), t1, t2,
-                    preferred, valid, prefix.getRawAddress(), (byte) prefix.getPrefixLength());
             if (packet instanceof Dhcp6SolicitPacket) {
+                iapd = Dhcp6Packet.buildIaPdOption(packet.getIaId(), t1, t2, ipos);
                 if (shouldReplyRapidCommit) {
                     mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
                             (Inet6Address) mClientIpAddress, true /* rapidCommit */));
@@ -4824,6 +4835,8 @@ public abstract class IpClientIntegrationTestCommon {
                             (Inet6Address) mClientIpAddress));
                 }
             } else if (packet instanceof Dhcp6RequestPacket) {
+                final PrefixDelegation pd = packet.getPrefixDelegation();
+                iapd = Dhcp6Packet.buildIaPdOption(packet.getIaId(), pd.t1, pd.t2, pd.ipos);
                 mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
                           (Inet6Address) mClientIpAddress, false /* rapidCommit */));
             } else {
@@ -4874,7 +4887,11 @@ public abstract class IpClientIntegrationTestCommon {
     @Test
     public void testDhcp6Pd_longPrefixLength() throws Exception {
         prepareDhcp6PdTest();
-        handleDhcp6Packets(new IpPrefix("2001:db8:1::/80"), true /* shouldReplyRapidCommit */);
+        final IpPrefix prefix = new IpPrefix("2001:db8:1::/80");
+        final IaPrefixOption ipo = buildIaPrefixOption(prefix, 3600 /* preferred */,
+                4000 /* valid */);
+        handleDhcp6Packets(Collections.singletonList(ipo), 3600 /* t1 */, 4500 /* t2 */,
+                true /* shouldReplyRapidCommit */);
         verify(mCb, never()).onProvisioningSuccess(any());
     }
 
@@ -4891,24 +4908,33 @@ public abstract class IpClientIntegrationTestCommon {
     @Test
     public void testDhcp6Pd_T1GreaterThanT2() throws Exception {
         prepareDhcp6PdTest();
-        handleDhcp6Packets(new IpPrefix("2001:db8:1::/80"), 4500 /* t1 */, 3600 /* t2 */,
-                4500 /* preferred */, 7200 /* valid */, true /* shouldReplyRapidCommit */);
+        final IpPrefix prefix = new IpPrefix("2001:db8:1::/64");
+        final IaPrefixOption ipo = buildIaPrefixOption(prefix, 3600 /* preferred */,
+                4000 /* valid */);
+        handleDhcp6Packets(Collections.singletonList(ipo), 4500 /* t1 */, 3600 /* t2 */,
+                true /* shouldReplyRapidCommit */);
         verify(mCb, never()).onProvisioningSuccess(any());
     }
 
     @Test
     public void testDhcp6Pd_preferredLifetimeGreaterThanValidLifetime() throws Exception {
         prepareDhcp6PdTest();
-        handleDhcp6Packets(new IpPrefix("2001:db8:1::/80"), 3600 /* t1 */, 4500 /* t2 */,
-                7200 /* preferred */, 4500 /* valid */, true /* shouldReplyRapidCommit */);
+        final IpPrefix prefix = new IpPrefix("2001:db8:1::/64");
+        final IaPrefixOption ipo = buildIaPrefixOption(prefix, 7200 /* preferred */,
+                4500 /* valid */);
+        handleDhcp6Packets(Collections.singletonList(ipo), 3600 /* t1 */, 4500 /* t2 */,
+                true /* shouldReplyRapidCommit */);
         verify(mCb, never()).onProvisioningSuccess(any());
     }
 
     @Test
     public void testDhcp6Pd_preferredLifetimeLessThanT2() throws Exception {
         prepareDhcp6PdTest();
-        handleDhcp6Packets(new IpPrefix("2001:db8:1::/80"), 3600 /* t1 */, 4500 /* t2 */,
-                3600 /* preferred */, 4000 /* valid */, true /* shouldReplyRapidCommit */);
+        final IpPrefix prefix = new IpPrefix("2001:db8:1::/64");
+        final IaPrefixOption ipo = buildIaPrefixOption(prefix, 3600 /* preferred */,
+                4000 /* valid */);
+        handleDhcp6Packets(Collections.singletonList(ipo), 3600 /* t1 */, 4500 /* t2 */,
+                true /* shouldReplyRapidCommit */);
         verify(mCb, never()).onProvisioningSuccess(any());
     }
 
@@ -5056,12 +5082,13 @@ public abstract class IpClientIntegrationTestCommon {
         Dhcp6Packet packet = getNextDhcp6Packet();
         assertTrue(packet instanceof Dhcp6RenewPacket);
 
-        // Reply with a different prefix with requested one, check if all global IPv6 addresses
-        // will be deleted and loss the IPv6 provisioning.
+        // Reply with a different prefix with requested one, per RFC8415#section-18.2.10.1
+        // any new prefix should be added.
         final IpPrefix prefix1 = new IpPrefix("2001:db8:2::/64");
+        final IaPrefixOption ipo = buildIaPrefixOption(prefix1, 4500 /* preferred */,
+                7200 /* valid */);
         final ByteBuffer iapd = Dhcp6Packet.buildIaPdOption(packet.getIaId(), 3600 /* t1*/,
-                4500 /* t2 */, 4500 /* preferred */, 7200 /* valid */, prefix1.getRawAddress(),
-                (byte) 64 /* prefix length */);
+                4500 /* t2 */, Collections.singletonList(ipo));
         mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
                 (Inet6Address) mClientIpAddress, false /* rapidCommit */));
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(any());
