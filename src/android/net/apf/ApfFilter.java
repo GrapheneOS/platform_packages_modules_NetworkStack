@@ -17,6 +17,8 @@
 package android.net.apf;
 
 import static android.net.util.SocketUtils.makePacketSocketAddress;
+import static android.os.PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED;
+import static android.os.PowerManager.ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED;
 import static android.system.OsConstants.AF_PACKET;
 import static android.system.OsConstants.ARPHRD_ETHER;
 import static android.system.OsConstants.ETH_P_ARP;
@@ -54,6 +56,7 @@ import android.text.format.DateUtils;
 import android.util.Log;
 import android.util.SparseArray;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.android.internal.annotations.GuardedBy;
@@ -61,6 +64,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.HexDump;
 import com.android.internal.util.IndentingPrintWriter;
 import com.android.internal.util.TokenBucket;
+import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.CollectionUtils;
 import com.android.net.module.util.ConnectivityUtils;
 import com.android.net.module.util.InterfaceParams;
@@ -112,6 +116,7 @@ public class ApfFilter implements AndroidPacketFilter {
         public int[] ethTypeBlackList;
         public int minRdnssLifetimeSec;
         public int acceptRaMinLft;
+        public boolean shouldHandleLightDoze;
     }
 
     /**
@@ -323,16 +328,48 @@ public class ApfFilter implements AndroidPacketFilter {
     // Tracks the value of /proc/sys/ipv6/conf/$iface/accept_ra_min_lft which affects router, RIO,
     // and PIO valid lifetimes.
     private final int mAcceptRaMinLft;
+    private final boolean mShouldHandleLightDoze;
+
+    private static boolean isDeviceIdleModeChangedAction(Intent intent) {
+        return ACTION_DEVICE_IDLE_MODE_CHANGED.equals(intent.getAction());
+    }
+
+    private boolean isDeviceLightIdleModeChangedAction(Intent intent) {
+        // The ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED only exist since T. For lower platform version,
+        // the check should return false. The explicit SDK check is needed to make linter happy
+        // about accessing ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED in this function.
+        if (!SdkLevel.isAtLeastT()) {
+            return false;
+        }
+        if (!mShouldHandleLightDoze) {
+            return false;
+        }
+        return ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED.equals(intent.getAction());
+    }
+
+    private boolean isDeviceLightIdleMode(@NonNull PowerManager powerManager) {
+        // The powerManager.isDeviceLightIdleMode() only exist since T. For lower platform version,
+        // the check should return false. The explicit SDK check is needed to make linter happy
+        // about accessing powerManager.isDeviceLightIdleMode() in this function.
+        if (!SdkLevel.isAtLeastT()) {
+            return false;
+        }
+        if (!mShouldHandleLightDoze) {
+            return false;
+        }
+
+        return powerManager.isDeviceLightIdleMode();
+    }
 
     // Detects doze mode state transitions.
     private final BroadcastReceiver mDeviceIdleReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if (action.equals(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)) {
-                PowerManager powerManager =
-                        (PowerManager) context.getSystemService(Context.POWER_SERVICE);
-                final boolean deviceIdle = powerManager.isDeviceIdleMode();
+            final PowerManager powerManager = context.getSystemService(PowerManager.class);
+            if (isDeviceIdleModeChangedAction(intent)
+                    || isDeviceLightIdleModeChangedAction(intent)) {
+                final boolean deviceIdle = powerManager.isDeviceIdleMode()
+                        || isDeviceLightIdleMode(powerManager);
                 setDozeMode(deviceIdle);
             }
         }
@@ -346,9 +383,16 @@ public class ApfFilter implements AndroidPacketFilter {
     @GuardedBy("this")
     private int mIPv4PrefixLength;
 
-    @VisibleForTesting
+    private final Dependencies mDependencies;
+
     public ApfFilter(Context context, ApfConfiguration config, InterfaceParams ifParams,
             IpClientCallbacksWrapper ipClientCallback) {
+        this(context, config, ifParams, ipClientCallback, new Dependencies(context));
+    }
+
+    @VisibleForTesting
+    public ApfFilter(Context context, ApfConfiguration config, InterfaceParams ifParams,
+            IpClientCallbacksWrapper ipClientCallback, Dependencies dependencies) {
         mApfCapabilities = config.apfCapabilities;
         mIpClientCallback = ipClientCallback;
         mInterfaceParams = ifParams;
@@ -357,6 +401,8 @@ public class ApfFilter implements AndroidPacketFilter {
         mMinRdnssLifetimeSec = config.minRdnssLifetimeSec;
         mAcceptRaMinLft = config.acceptRaMinLft;
         mContext = context;
+        mShouldHandleLightDoze = config.shouldHandleLightDoze;
+        mDependencies = dependencies;
 
         if (mApfCapabilities.hasDataAccess()) {
             mCountAndPassLabel = "countAndPass";
@@ -384,8 +430,33 @@ public class ApfFilter implements AndroidPacketFilter {
         maybeStartFilter();
 
         // Listen for doze-mode transition changes to enable/disable the IPv6 multicast filter.
-        mContext.registerReceiver(mDeviceIdleReceiver,
-                new IntentFilter(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED));
+        mDependencies.addDeviceIdleReceiver(mDeviceIdleReceiver, mShouldHandleLightDoze);
+    }
+
+    /**
+     * Dependencies class for testing.
+     */
+    @VisibleForTesting
+    public static class Dependencies {
+        private final Context mContext;
+        public Dependencies(final Context context) {
+            mContext = context;
+        }
+
+        /** Add receiver for detecting doze mode change */
+        public void addDeviceIdleReceiver(@NonNull final BroadcastReceiver receiver,
+                boolean shouldHandleLightDoze) {
+            final IntentFilter intentFilter = new IntentFilter(ACTION_DEVICE_IDLE_MODE_CHANGED);
+            if (SdkLevel.isAtLeastT() && shouldHandleLightDoze) {
+                intentFilter.addAction(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED);
+            }
+            mContext.registerReceiver(receiver, intentFilter);
+        }
+
+        /** Remove broadcast receiver. */
+        public void removeBroadcastReceiver(@NonNull final BroadcastReceiver receiver) {
+            mContext.unregisterReceiver(receiver);
+        }
     }
 
     public synchronized void setDataSnapshot(byte[] data) {
@@ -2052,7 +2123,7 @@ public class ApfFilter implements AndroidPacketFilter {
             mReceiveThread = null;
         }
         mRas.clear();
-        mContext.unregisterReceiver(mDeviceIdleReceiver);
+        mDependencies.removeBroadcastReceiver(mDeviceIdleReceiver);
     }
 
     public synchronized void setMulticastFilter(boolean isEnabled) {
@@ -2085,6 +2156,11 @@ public class ApfFilter implements AndroidPacketFilter {
         if (mInDozeMode == isEnabled) return;
         mInDozeMode = isEnabled;
         installNewProgramLocked();
+    }
+
+    @VisibleForTesting
+    public synchronized boolean isInDozeMode() {
+        return mInDozeMode;
     }
 
     /** Find the single IPv4 LinkAddress if there is one, otherwise return null. */

@@ -26,6 +26,8 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 
 import android.content.Context;
+import android.net.LinkAddress;
+import android.net.LinkProperties;
 import android.net.ip.IIpClientCallbacks;
 import android.net.ip.IpClient;
 import android.os.ConditionVariable;
@@ -43,6 +45,7 @@ import libcore.io.IoUtils;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.util.Arrays;
 
 /**
@@ -253,6 +256,7 @@ public class ApfTestUtils {
      */
     public static class TestApfFilter extends ApfFilter {
         public static final byte[] MOCK_MAC_ADDR = {1, 2, 3, 4, 5, 6};
+        private static final byte[] MOCK_IPV4_ADDR = {10, 0, 0, 1};
 
         private FileDescriptor mWriteSocket;
         private long mCurrentTimeMs = SystemClock.elapsedRealtime();
@@ -260,8 +264,28 @@ public class ApfTestUtils {
 
         public TestApfFilter(Context context, ApfConfiguration config,
                 MockIpClientCallback ipClientCallback) throws Exception {
-            super(context, config, InterfaceParams.getByName("lo"), ipClientCallback);
+            this(context, config, ipClientCallback, new Dependencies(context));
+        }
+
+        public TestApfFilter(Context context, ApfConfiguration config,
+                MockIpClientCallback ipClientCallback, Dependencies dependencies) {
+            super(context, config, InterfaceParams.getByName("lo"), ipClientCallback, dependencies);
             mMockIpClientCb = ipClientCallback;
+        }
+
+        /**
+         * Create a new test ApfFiler.
+         */
+        public static ApfFilter createTestApfFilter(Context context,
+                MockIpClientCallback ipClientCallback, ApfConfiguration config,
+                ApfFilter.Dependencies dependencies) throws Exception {
+            LinkAddress link = new LinkAddress(InetAddress.getByAddress(MOCK_IPV4_ADDR), 19);
+            LinkProperties lp = new LinkProperties();
+            lp.addLinkAddress(link);
+            TestApfFilter apfFilter = new TestApfFilter(context, config, ipClientCallback,
+                    dependencies);
+            apfFilter.setLinkProperties(lp);
+            return apfFilter;
         }
 
         /**
