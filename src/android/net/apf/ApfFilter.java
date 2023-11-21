@@ -1464,12 +1464,12 @@ public class ApfFilter implements AndroidPacketFilter {
         maybeSetupCounter(gen, Counter.DROPPED_ARP_REPLY_SPA_NO_HOST);
         gen.addJumpIfR0Equals(IPV4_ANY_HOST_ADDRESS, mCountAndDropLabel);
 
-        // Pass if unicast reply.
+        // Pass if non-broadcast reply.
         gen.addLoadImmediate(Register.R0, ETH_DEST_ADDR_OFFSET);
         maybeSetupCounter(gen, Counter.PASSED_ARP_UNICAST_REPLY);
         gen.addJumpIfBytesNotEqual(Register.R0, ETHER_BROADCAST, mCountAndPassLabel);
 
-        // Either a unicast request, a unicast reply, or a broadcast reply.
+        // Either a request, or a broadcast reply.
         gen.defineLabel(checkTargetIPv4);
         if (mIPv4Address == null) {
             // When there is no IPv4 address, drop GARP replies (b/29404209).
