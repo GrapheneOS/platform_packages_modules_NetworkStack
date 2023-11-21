@@ -242,4 +242,20 @@ public class TcpInfoTest {
 
         return info;
     }
+
+    @Test
+    public void testHashCode() {
+        final TcpInfo info = new TcpInfo(2, 1, 5);
+        final TcpInfo info2 = new TcpInfo(2, 1, 5);
+
+        assertEquals(info, info2);
+        assertEquals(info.hashCode(), info2.hashCode());
+    }
+
+    @Test
+    public void testDecodeWscale() {
+        assertEquals("0:0", TcpInfo.decodeWscale((byte) 0));
+        assertEquals("15:15", TcpInfo.decodeWscale((byte) 255));
+        assertEquals("15:0", TcpInfo.decodeWscale((byte) 240));
+    }
 }
