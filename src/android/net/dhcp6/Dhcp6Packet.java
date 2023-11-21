@@ -22,8 +22,8 @@ import android.net.MacAddress;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.VisibleForTesting;
 
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.HexDump;
 import com.android.net.module.util.Struct;
 import com.android.net.module.util.structs.IaPdOption;
@@ -380,8 +380,7 @@ public class Dhcp6Packet {
      * |                                                               |
      * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
      */
-    @VisibleForTesting
-    static Dhcp6Packet decode(@NonNull final ByteBuffer packet) throws ParseException {
+    private static Dhcp6Packet decode(@NonNull final ByteBuffer packet) throws ParseException {
         int elapsedTime = 0;
         byte[] iapd = null;
         byte[] serverDuid = null;
