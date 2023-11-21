@@ -40,6 +40,7 @@ import static com.android.net.module.util.NetworkStackConstants.ETHER_BROADCAST;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_ROUTERS_MULTICAST;
 import static com.android.net.module.util.NetworkStackConstants.RFC7421_PREFIX_LENGTH;
 import static com.android.net.module.util.NetworkStackConstants.VENDOR_SPECIFIC_IE_ID;
+import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_LIGHT_DOZE_FORCE_DISABLE;
 import static com.android.networkstack.util.NetworkStackUtils.APF_NEW_RA_FILTER_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
@@ -123,6 +124,7 @@ import com.android.net.module.util.SocketUtils;
 import com.android.net.module.util.arp.ArpPacket;
 import com.android.net.module.util.ip.InterfaceController;
 import com.android.net.module.util.netlink.NetlinkUtils;
+import com.android.net.module.util.structs.IaPrefixOption;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.networkstack.apishim.SocketUtilsShimImpl;
@@ -671,6 +673,7 @@ public class IpClient extends StateMachine {
     private final boolean mDhcp6PrefixDelegationEnabled;
     private final boolean mUseNewApfFilter;
     private final boolean mEnableIpClientIgnoreLowRaLifetime;
+    private final boolean mApfShouldHandleLightDoze;
 
     private InterfaceParams mInterfaceParams;
 
@@ -890,6 +893,9 @@ public class IpClient extends StateMachine {
         mUseNewApfFilter = mDependencies.isFeatureEnabled(context, APF_NEW_RA_FILTER_VERSION);
         mEnableIpClientIgnoreLowRaLifetime = mDependencies.isFeatureEnabled(context,
                 IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION);
+        // Light doze mode status checking API is only available at T or later releases.
+        mApfShouldHandleLightDoze = SdkLevel.isAtLeastT() && mDependencies.isFeatureNotChickenedOut(
+                mContext, APF_HANDLE_LIGHT_DOZE_FORCE_DISABLE);
 
         IpClientLinkObserver.Configuration config = new IpClientLinkObserver.Configuration(
                 mMinRdnssLifetimeSec);
@@ -1728,24 +1734,24 @@ public class IpClient extends StateMachine {
 
         // [4] Add in data from DHCPv6 Prefix Delegation, if available.
         if (mPrefixDelegation != null) {
-            try {
-                final IpPrefix destination =
-                        new IpPrefix(Inet6Address.getByAddress(mPrefixDelegation.ipo.prefix),
-                                mPrefixDelegation.ipo.prefixLen);
-                // Direct-connected route to delegated prefix. Add RTN_UNREACHABLE to this route
-                // based on the delegated prefix. To prevent the traffic loop between host and
-                // upstream delegated router. Because we specify the IFA_F_NOPREFIXROUTE when adding
-                // the IPv6 address, the kernel does not create a delegated prefix route, as a
-                // result, the user space won't receive any RTM_NEWROUTE message about the delegated
-                // prefix, we still need to install an unreachable route for the delegated prefix
-                // manually in LinkProperties to notify the caller this update.
-                // TODO: support RTN_BLACKHOLE in netd and use that on newer Android versions.
-                final RouteInfo route = new RouteInfo(destination, null /* gateway */,
-                        mInterfaceName, RTN_UNREACHABLE);
-                newLp.addRoute(route);
-            } catch (UnknownHostException e) {
-                Log.wtf(mTag, "Invalid delegated prefix "
-                        + HexDump.toHexString(mPrefixDelegation.ipo.prefix));
+            for (IaPrefixOption ipo : mPrefixDelegation.ipos) {
+                try {
+                    final IpPrefix destination =
+                            new IpPrefix(Inet6Address.getByAddress(ipo.prefix), ipo.prefixLen);
+                    // Direct-connected route to delegated prefix. Add RTN_UNREACHABLE to this route
+                    // based on the delegated prefix. To prevent the traffic loop between host and
+                    // upstream delegated router. Because we specify the IFA_F_NOPREFIXROUTE when
+                    // adding the IPv6 address, the kernel does not create a delegated prefix route,
+                    // as a result, the user space won't receive any RTM_NEWROUTE message about the
+                    // delegated prefix, we still need to install an unreachable route for the
+                    // delegated prefix manually in LinkProperties to notify the caller this update.
+                    // TODO: support RTN_BLACKHOLE in netd and use that on newer Android versions.
+                    final RouteInfo route = new RouteInfo(destination, null /* gateway */,
+                            mInterfaceName, RTN_UNREACHABLE);
+                    newLp.addRoute(route);
+                } catch (UnknownHostException e) {
+                    Log.wtf(mTag, "Invalid delegated prefix " + HexDump.toHexString(ipo.prefix));
+                }
             }
         }
 
@@ -2359,6 +2365,7 @@ public class IpClient extends StateMachine {
 
         apfConfig.minRdnssLifetimeSec = mMinRdnssLifetimeSec;
         apfConfig.acceptRaMinLft = mAcceptRaMinLft;
+        apfConfig.shouldHandleLightDoze = mApfShouldHandleLightDoze;
         return mDependencies.maybeCreateApfFilter(mContext, apfConfig, mInterfaceParams,
                 mCallback, mUseNewApfFilter);
     }
@@ -2861,13 +2868,12 @@ public class IpClient extends StateMachine {
                 Log.wtf(mTag, "PrefixDelegation shouldn't be null when DHCPv6 PD fails.");
                 return;
             }
+            final IaPrefixOption ipo = mPrefixDelegation.ipos.get(0);
             final IpPrefix prefix;
             try {
-                prefix = new IpPrefix(Inet6Address.getByAddress(mPrefixDelegation.ipo.prefix),
-                        RFC7421_PREFIX_LENGTH);
+                prefix = new IpPrefix(Inet6Address.getByAddress(ipo.prefix), RFC7421_PREFIX_LENGTH);
             } catch (UnknownHostException e) {
-                Log.wtf(TAG, "Invalid delegated prefix "
-                        + HexDump.toHexString(mPrefixDelegation.ipo.prefix));
+                Log.wtf(TAG, "Invalid delegated prefix " + HexDump.toHexString(ipo.prefix));
                 return;
             }
 
