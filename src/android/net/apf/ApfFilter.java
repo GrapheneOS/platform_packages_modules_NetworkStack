@@ -137,7 +137,6 @@ public class ApfFilter implements AndroidPacketFilter {
         PASSED_IPV4_UNICAST,
         PASSED_IPV6_ICMP,
         PASSED_IPV6_UNICAST_NON_ICMP,
-        PASSED_ARP_UNKNOWN,
         PASSED_ARP_UNICAST_REPLY,
         PASSED_NON_IP_UNICAST,
         PASSED_MDNS,
@@ -161,7 +160,8 @@ public class ApfFilter implements AndroidPacketFilter {
         DROPPED_IPV6_KEEPALIVE_ACK,
         DROPPED_IPV4_NATT_KEEPALIVE,
         DROPPED_MDNS,
-        DROPPED_ARP_NON_IPV4;
+        DROPPED_ARP_NON_IPV4,
+        DROPPED_ARP_UNKNOWN;
 
         // Returns the negative byte offset from the end of the APF data segment for
         // a given counter.
@@ -1433,7 +1433,7 @@ public class ApfFilter implements AndroidPacketFilter {
         // if not ARP IPv4
         //   drop
         // if not ARP IPv4 reply or request
-        //   pass
+        //   drop
         // if ARP reply source ip is 0.0.0.0
         //   drop
         // if unicast ARP reply
@@ -1453,11 +1453,11 @@ public class ApfFilter implements AndroidPacketFilter {
         maybeSetupCounter(gen, Counter.DROPPED_ARP_NON_IPV4);
         gen.addJumpIfBytesNotEqual(Register.R0, ARP_IPV4_HEADER, mCountAndDropLabel);
 
-        // Pass if unknown ARP opcode.
+        // Drop if unknown ARP opcode.
         gen.addLoad16(Register.R0, ARP_OPCODE_OFFSET);
         gen.addJumpIfR0Equals(ARP_OPCODE_REQUEST, checkTargetIPv4); // Skip to unicast check
-        maybeSetupCounter(gen, Counter.PASSED_ARP_UNKNOWN);
-        gen.addJumpIfR0NotEquals(ARP_OPCODE_REPLY, mCountAndPassLabel);
+        maybeSetupCounter(gen, Counter.DROPPED_ARP_UNKNOWN);
+        gen.addJumpIfR0NotEquals(ARP_OPCODE_REPLY, mCountAndDropLabel);
 
         // Drop if ARP reply source IP is 0.0.0.0
         gen.addLoad32(Register.R0, ARP_SOURCE_IP_ADDRESS_OFFSET);
