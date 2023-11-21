@@ -137,7 +137,6 @@ public class ApfFilter implements AndroidPacketFilter {
         PASSED_IPV4_UNICAST,
         PASSED_IPV6_ICMP,
         PASSED_IPV6_UNICAST_NON_ICMP,
-        PASSED_ARP_NON_IPV4,
         PASSED_ARP_UNKNOWN,
         PASSED_ARP_UNICAST_REPLY,
         PASSED_NON_IP_UNICAST,
@@ -161,7 +160,8 @@ public class ApfFilter implements AndroidPacketFilter {
         DROPPED_IPV4_KEEPALIVE_ACK,
         DROPPED_IPV6_KEEPALIVE_ACK,
         DROPPED_IPV4_NATT_KEEPALIVE,
-        DROPPED_MDNS;
+        DROPPED_MDNS,
+        DROPPED_ARP_NON_IPV4;
 
         // Returns the negative byte offset from the end of the APF data segment for
         // a given counter.
@@ -1431,7 +1431,7 @@ public class ApfFilter implements AndroidPacketFilter {
         // Here's a basic summary of what the ARP filter program does:
         //
         // if not ARP IPv4
-        //   pass
+        //   drop
         // if not ARP IPv4 reply or request
         //   pass
         // if ARP reply source ip is 0.0.0.0
@@ -1448,10 +1448,10 @@ public class ApfFilter implements AndroidPacketFilter {
 
         final String checkTargetIPv4 = "checkTargetIPv4";
 
-        // Pass if not ARP IPv4.
+        // Drop if not ARP IPv4.
         gen.addLoadImmediate(Register.R0, ARP_HEADER_OFFSET);
-        maybeSetupCounter(gen, Counter.PASSED_ARP_NON_IPV4);
-        gen.addJumpIfBytesNotEqual(Register.R0, ARP_IPV4_HEADER, mCountAndPassLabel);
+        maybeSetupCounter(gen, Counter.DROPPED_ARP_NON_IPV4);
+        gen.addJumpIfBytesNotEqual(Register.R0, ARP_IPV4_HEADER, mCountAndDropLabel);
 
         // Pass if unknown ARP opcode.
         gen.addLoad16(Register.R0, ARP_OPCODE_OFFSET);
