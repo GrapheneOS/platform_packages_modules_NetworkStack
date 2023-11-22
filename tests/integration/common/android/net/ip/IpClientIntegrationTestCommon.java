@@ -3223,7 +3223,7 @@ public abstract class IpClientIntegrationTestCommon {
         for (LinkAddress la : lp.getLinkAddresses()) {
             final InetAddress addr = la.getAddress();
             if ((addr instanceof Inet6Address) && !addr.isLinkLocalAddress()) {
-                return prefix.contains(addr);
+                if (prefix.contains(addr)) return true;
             }
         }
         return false;
