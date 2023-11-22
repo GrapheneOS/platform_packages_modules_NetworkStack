@@ -2415,7 +2415,6 @@ public class NetworkMonitorTest {
 
     private void testDataStall_StallTcpSuspectedAndSendMetrics(NetworkCapabilities nc)
             throws Exception {
-        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
         setupTcpDataStall();
         setTcpPollingInterval(1);
         // NM suspects data stall from TCP signal and sends data stall metrics.
@@ -2623,26 +2622,22 @@ public class NetworkMonitorTest {
 
     @Test
     public void testCollectDataStallMetrics_TcpWithCellular() {
-        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
         testDataStallMetricsWithCellular(DATA_STALL_EVALUATION_TYPE_TCP);
     }
 
     @Test
     public void testCollectDataStallMetrics_TcpWithWiFi() {
-        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
         testDataStallMetricsWithWiFi(DATA_STALL_EVALUATION_TYPE_TCP);
     }
 
     @Test
     public void testCollectDataStallMetrics_TcpAndDnsWithWifi() {
-        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
         testDataStallMetricsWithWiFi(
                 DATA_STALL_EVALUATION_TYPE_TCP | DATA_STALL_EVALUATION_TYPE_DNS);
     }
 
     @Test
     public void testCollectDataStallMetrics_TcpAndDnsWithCellular() {
-        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
         testDataStallMetricsWithCellular(
                 DATA_STALL_EVALUATION_TYPE_TCP | DATA_STALL_EVALUATION_TYPE_DNS);
     }
