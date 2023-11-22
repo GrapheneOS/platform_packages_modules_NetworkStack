@@ -211,7 +211,8 @@ public class Dhcp6Packet {
         @NonNull
         public final List<IaPrefixOption> ipos;
 
-        PrefixDelegation(int iaid, int t1, int t2, @NonNull final List<IaPrefixOption> ipos) {
+        public PrefixDelegation(int iaid, int t1, int t2,
+                @NonNull final List<IaPrefixOption> ipos) {
             Objects.requireNonNull(ipos);
             this.iaid = iaid;
             this.t1 = t1;
@@ -242,7 +243,7 @@ public class Dhcp6Packet {
         }
 
         /**
-         * Decode IA Prefix options.
+         * Decode an IA_PD option from the byte buffer.
          */
         public static PrefixDelegation decode(@NonNull final ByteBuffer buffer)
                 throws ParseException {
@@ -271,6 +272,22 @@ public class Dhcp6Packet {
             } catch (BufferUnderflowException e) {
                 throw new ParseException(e.getMessage());
             }
+        }
+
+        /**
+         * Build an IA_PD option from given specific parameters, including IA_PREFIX options.
+         */
+        public ByteBuffer build() {
+            final ByteBuffer iapd = ByteBuffer.allocate(IaPdOption.LENGTH
+                    + Struct.getSize(IaPrefixOption.class) * ipos.size());
+            iapd.putInt(iaid);
+            iapd.putInt(t1);
+            iapd.putInt(t2);
+            for (IaPrefixOption ipo : ipos) {
+                ipo.writeToByteBuffer(iapd);
+            }
+            iapd.flip();
+            return iapd;
         }
 
         /**
@@ -608,23 +625,6 @@ public class Dhcp6Packet {
     protected static void addTlv(ByteBuffer buf, short type) {
         buf.putShort(type);
         buf.putShort((short) 0);
-    }
-
-    /**
-     * Build an IA_PD option from given specific parameters, including IA_PREFIX option.
-     */
-    public static ByteBuffer buildIaPdOption(int iaid, int t1, int t2,
-            @NonNull final List<IaPrefixOption> ipos) {
-        final ByteBuffer iapd = ByteBuffer.allocate(IaPdOption.LENGTH
-                + Struct.getSize(IaPrefixOption.class) * ipos.size());
-        iapd.putInt(iaid);
-        iapd.putInt(t1);
-        iapd.putInt(t2);
-        for (IaPrefixOption ipo : ipos) {
-            ipo.writeToByteBuffer(iapd);
-        }
-        iapd.flip();
-        return iapd;
     }
 
     /**
