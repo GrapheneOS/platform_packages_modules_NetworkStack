@@ -552,8 +552,8 @@ public class ApfTest {
         // Test filter age pre-filled memory.
         gen = new ApfGenerator(MIN_APF_VERSION);
         gen.addLoadFromMemory(R0, gen.FILTER_AGE_MEMORY_SLOT);
-        gen.addJumpIfR0Equals(1234567890, gen.DROP_LABEL);
-        assertDrop(gen, new byte[MIN_PKT_SIZE], 1234567890);
+        gen.addJumpIfR0Equals(123, gen.DROP_LABEL);
+        assertDrop(gen, new byte[MIN_PKT_SIZE], 123);
 
         // Test packet size pre-filled memory.
         gen = new ApfGenerator(MIN_APF_VERSION);
