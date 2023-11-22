@@ -2724,19 +2724,17 @@ public class NetworkMonitorTest {
 
     @Test
     public void testNotifyNetwork_WithforceReevaluation() throws Exception {
+        // Set validated result for both HTTP and HTTPS probes.
         setValidProbes();
         final NetworkMonitor nm = runValidatedNetworkTest();
         // Verify forceReevaluation will not reset the validation result but only probe result until
         // getting the validation result.
         setSslException(mHttpsConnection);
-        setStatus(mHttpConnection, 500);
-        setStatus(mFallbackConnection, 204);
         nm.forceReevaluation(Process.myUid());
         // Expect to send HTTP, HTTPs, FALLBACK and evaluation results.
-        verifyNetworkTested(VALIDATION_RESULT_INVALID,
-                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_FALLBACK,
+        verifyNetworkTested(NETWORK_VALIDATION_RESULT_PARTIAL,
+                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTP,
                 1 /* interactions */);
-        HandlerUtils.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
     }
 
     @Test
