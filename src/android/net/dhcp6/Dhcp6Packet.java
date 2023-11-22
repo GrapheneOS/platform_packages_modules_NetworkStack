@@ -22,8 +22,8 @@ import android.net.MacAddress;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.VisibleForTesting;
 
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.HexDump;
 import com.android.net.module.util.Struct;
 import com.android.net.module.util.structs.IaPdOption;
@@ -35,6 +35,7 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalInt;
@@ -293,6 +294,27 @@ public class Dhcp6Packet {
             return "Prefix Delegation: iaid " + iaid + ", t1 " + t1 + ", t2 " + t2
                     + ", IA prefix options: " + ipos;
         }
+
+        /**
+         * Compare the preferred lifetime in the IA prefix optin list and return the minimum one.
+         * TODO: exclude 0 preferred lifetime.
+         */
+        public long getMinimalPreferredLifetime() {
+            final IaPrefixOption ipo = Collections.min(ipos,
+                    (IaPrefixOption lhs, IaPrefixOption rhs) -> Long.compare(lhs.preferred,
+                            rhs.preferred));
+            return ipo.preferred;
+        }
+
+        /**
+         * Compare the valid lifetime in the IA prefix optin list and return the minimum one.
+         * TODO: exclude 0 valid lifetime.
+         */
+        public long getMinimalValidLifetime() {
+            final IaPrefixOption ipo = Collections.min(ipos,
+                    (IaPrefixOption lhs, IaPrefixOption rhs) -> Long.compare(lhs.valid, rhs.valid));
+            return ipo.valid;
+        }
     }
 
     /**
@@ -358,8 +380,7 @@ public class Dhcp6Packet {
      * |                                                               |
      * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
      */
-    @VisibleForTesting
-    static Dhcp6Packet decode(@NonNull final ByteBuffer packet) throws ParseException {
+    private static Dhcp6Packet decode(@NonNull final ByteBuffer packet) throws ParseException {
         int elapsedTime = 0;
         byte[] iapd = null;
         byte[] serverDuid = null;
