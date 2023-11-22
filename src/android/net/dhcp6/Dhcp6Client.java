@@ -68,7 +68,6 @@ import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Random;
 import java.util.function.IntSupplier;
 
@@ -465,10 +464,6 @@ public class Dhcp6Client extends StateMachine {
         return transmitPacket(packet, "rebind");
     }
 
-    private ByteBuffer buildIaPdOption(@NonNull final List<IaPrefixOption> ipos) {
-        return Dhcp6Packet.buildIaPdOption(IAID, 0 /* t1 */, 0 /* t2 */, ipos);
-    }
-
     /**
      * Parent state at which client does initialization of interface and packet handler, also
      * processes the CMD_STOP_DHCP6 command in this state which child states don't handle.
@@ -543,11 +538,12 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            final IaPrefixOption emptyPrefix = new IaPrefixOption((short) IaPrefixOption.LENGTH,
+            final IaPrefixOption hintOption = new IaPrefixOption((short) IaPrefixOption.LENGTH,
                     0 /* preferred */, 0 /* valid */, (byte) RFC7421_PREFIX_LENGTH,
                     new byte[16] /* empty prefix */);
-            return sendSolicitPacket(transId, elapsedTimeMs,
-                    buildIaPdOption(Collections.singletonList(emptyPrefix)));
+            final PrefixDelegation pd = new PrefixDelegation(IAID, 0 /* t1 */, 0 /* t2 */,
+                    Collections.singletonList(hintOption));
+            return sendSolicitPacket(transId, elapsedTimeMs, pd.build());
         }
 
         // TODO: support multiple prefixes.
@@ -587,7 +583,7 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            return sendRequestPacket(transId, elapsedTimeMs, buildIaPdOption(mAdvertise.ipos));
+            return sendRequestPacket(transId, elapsedTimeMs, mAdvertise.build());
         }
 
         @Override
@@ -753,7 +749,7 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            return sendRenewPacket(transId, elapsedTimeMs, buildIaPdOption(mReply.ipos));
+            return sendRenewPacket(transId, elapsedTimeMs, mReply.build());
         }
     }
 
@@ -769,7 +765,7 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            return sendRebindPacket(transId, elapsedTimeMs, buildIaPdOption(mReply.ipos));
+            return sendRebindPacket(transId, elapsedTimeMs, mReply.build());
         }
     }
 
