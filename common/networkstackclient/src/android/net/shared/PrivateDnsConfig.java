@@ -31,8 +31,7 @@ import java.util.Arrays;
 /** @hide */
 public class PrivateDnsConfig {
     // These fields store the private DNS configuration from setting.
-    // TODO(b/261404136): Replace this `boolean useTls` with `int mode`.
-    public final boolean useTls;
+    public final int mode;
     public final String hostname;
 
     // Stores the DoT server IP addresses resolved from A/AAAA lookups.
@@ -60,8 +59,9 @@ public class PrivateDnsConfig {
      * A constructor for off/opportunistic mode private DNS configuration depending on `useTls`.
      */
     public PrivateDnsConfig(boolean useTls) {
-        this(useTls, null /* hostname */ , null /* ips */, null /* dohName */, null /* dohIps */,
-                null /* dohPath */, -1 /* dohPort */);
+        this(useTls ? PRIVATE_DNS_MODE_OPPORTUNISTIC : PRIVATE_DNS_MODE_OFF, null /* hostname */,
+                null /* ips */, null /* dohName */, null /* dohIps */, null /* dohPath */,
+                -1 /* dohPort */);
     }
 
     /**
@@ -70,16 +70,17 @@ public class PrivateDnsConfig {
      * otherwise, it creates a PrivateDnsConfig for strict mode.
      */
     public PrivateDnsConfig(String hostname, InetAddress[] ips) {
-        this(!TextUtils.isEmpty(hostname), hostname, ips, null /* dohName */, null /* dohIps */,
-                null /* dohPath */, -1 /* dohPort */);
+        this(TextUtils.isEmpty(hostname) ? PRIVATE_DNS_MODE_OFF :
+                PRIVATE_DNS_MODE_PROVIDER_HOSTNAME, hostname, ips, null /* dohName */,
+                null /* dohIps */, null /* dohPath */, -1 /* dohPort */);
     }
 
     /**
      * A constructor for all kinds of private DNS configuration with given DoH information.
      */
-    public PrivateDnsConfig(boolean useTls, String hostname, InetAddress[] ips, String dohName,
+    public PrivateDnsConfig(int mode, String hostname, InetAddress[] ips, String dohName,
             InetAddress[] dohIps, String dohPath, int dohPort) {
-        this.useTls = useTls;
+        this.mode = mode;
         this.hostname = (hostname != null) ? hostname : "";
         this.ips = (ips != null) ? ips.clone() : new InetAddress[0];
         this.dohName = (dohName != null) ? dohName : "";
@@ -89,7 +90,7 @@ public class PrivateDnsConfig {
     }
 
     public PrivateDnsConfig(PrivateDnsConfig cfg) {
-        useTls = cfg.useTls;
+        mode = cfg.mode;
         hostname = cfg.hostname;
         ips = cfg.ips;
         dohName = cfg.dohName;
@@ -102,25 +103,34 @@ public class PrivateDnsConfig {
      * Indicates whether this is a strict mode private DNS configuration.
      */
     public boolean inStrictMode() {
-        return useTls && !TextUtils.isEmpty(hostname);
+        return mode == PRIVATE_DNS_MODE_PROVIDER_HOSTNAME;
     }
 
     /**
      * Indicates whether this is an opportunistic mode private DNS configuration.
      */
     public boolean inOpportunisticMode() {
-        return useTls && TextUtils.isEmpty(hostname);
+        return mode == PRIVATE_DNS_MODE_OPPORTUNISTIC;
     }
 
     @Override
     public String toString() {
         return PrivateDnsConfig.class.getSimpleName()
-                + "{" + useTls + ":" + hostname + "/" + Arrays.toString(ips)
+                + "{" + modeAsString(mode) + ":" + hostname + "/" + Arrays.toString(ips)
                 + ", dohName=" + dohName
                 + ", dohIps=" + Arrays.toString(dohIps)
                 + ", dohPath=" + dohPath
                 + ", dohPort=" + dohPort
                 + "}";
+    }
+
+    private static String modeAsString(int mode) {
+        switch (mode) {
+            case PRIVATE_DNS_MODE_OFF: return "off";
+            case PRIVATE_DNS_MODE_OPPORTUNISTIC: return "opportunistic";
+            case PRIVATE_DNS_MODE_PROVIDER_HOSTNAME: return "strict";
+            default: return "unknown";
+        }
     }
 
     /**
@@ -131,9 +141,7 @@ public class PrivateDnsConfig {
         parcel.hostname = hostname;
         parcel.ips = toParcelableArray(
                 Arrays.asList(ips), IpConfigurationParcelableUtil::parcelAddress, String.class);
-        parcel.privateDnsMode = !useTls ? PRIVATE_DNS_MODE_OFF
-                : TextUtils.isEmpty(hostname)
-                        ? PRIVATE_DNS_MODE_OPPORTUNISTIC : PRIVATE_DNS_MODE_PROVIDER_HOSTNAME;
+        parcel.privateDnsMode = mode;
         parcel.dohName = dohName;
         parcel.dohIps = toParcelableArray(
                 Arrays.asList(dohIps), IpConfigurationParcelableUtil::parcelAddress, String.class);
@@ -152,7 +160,7 @@ public class PrivateDnsConfig {
 
         // For compatibility. If the sender (Tethering module) is using an old version (< 19) of
         // NetworkStack AIDL that `privateDnsMode` field is not present, `privateDnsMode` will be
-        // assigned from the default value -1. Let `useTls` assigned based on the hostname.
+        // assigned from the default value -1. Let `privateDnsMode` assigned based on the hostname.
         // In this case, there is a harmless bug that the receiver (NetworkStack module) can't
         // convert the parcel to a PrivateDnsConfig that indicates opportunistic mode.
         // The bug is harmless because 1) the bug exists for years without any problems and
@@ -165,11 +173,10 @@ public class PrivateDnsConfig {
             return new PrivateDnsConfig(parcel.hostname, ips);
         }
 
-        final boolean useTls = parcel.privateDnsMode != PRIVATE_DNS_MODE_OFF;
         InetAddress[] dohIps = new InetAddress[parcel.dohIps.length];
         dohIps = fromParcelableArray(parcel.dohIps,
                 IpConfigurationParcelableUtil::unparcelAddress).toArray(dohIps);
-        return new PrivateDnsConfig(useTls, parcel.hostname, ips, parcel.dohName, dohIps,
-                parcel.dohPath, parcel.dohPort);
+        return new PrivateDnsConfig(parcel.privateDnsMode, parcel.hostname, ips, parcel.dohName,
+                dohIps, parcel.dohPath, parcel.dohPort);
     }
 }
