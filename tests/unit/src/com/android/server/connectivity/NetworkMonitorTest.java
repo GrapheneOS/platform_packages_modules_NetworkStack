@@ -2415,7 +2415,6 @@ public class NetworkMonitorTest {
 
     private void testDataStall_StallTcpSuspectedAndSendMetrics(NetworkCapabilities nc)
             throws Exception {
-        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
         setupTcpDataStall();
         setTcpPollingInterval(1);
         // NM suspects data stall from TCP signal and sends data stall metrics.
@@ -2623,26 +2622,22 @@ public class NetworkMonitorTest {
 
     @Test
     public void testCollectDataStallMetrics_TcpWithCellular() {
-        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
         testDataStallMetricsWithCellular(DATA_STALL_EVALUATION_TYPE_TCP);
     }
 
     @Test
     public void testCollectDataStallMetrics_TcpWithWiFi() {
-        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
         testDataStallMetricsWithWiFi(DATA_STALL_EVALUATION_TYPE_TCP);
     }
 
     @Test
     public void testCollectDataStallMetrics_TcpAndDnsWithWifi() {
-        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
         testDataStallMetricsWithWiFi(
                 DATA_STALL_EVALUATION_TYPE_TCP | DATA_STALL_EVALUATION_TYPE_DNS);
     }
 
     @Test
     public void testCollectDataStallMetrics_TcpAndDnsWithCellular() {
-        assumeTrue(ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q));
         testDataStallMetricsWithCellular(
                 DATA_STALL_EVALUATION_TYPE_TCP | DATA_STALL_EVALUATION_TYPE_DNS);
     }
@@ -2729,19 +2724,17 @@ public class NetworkMonitorTest {
 
     @Test
     public void testNotifyNetwork_WithforceReevaluation() throws Exception {
+        // Set validated result for both HTTP and HTTPS probes.
         setValidProbes();
         final NetworkMonitor nm = runValidatedNetworkTest();
         // Verify forceReevaluation will not reset the validation result but only probe result until
         // getting the validation result.
         setSslException(mHttpsConnection);
-        setStatus(mHttpConnection, 500);
-        setStatus(mFallbackConnection, 204);
         nm.forceReevaluation(Process.myUid());
         // Expect to send HTTP, HTTPs, FALLBACK and evaluation results.
-        verifyNetworkTested(VALIDATION_RESULT_INVALID,
-                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_FALLBACK,
+        verifyNetworkTested(NETWORK_VALIDATION_RESULT_PARTIAL,
+                NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTP,
                 1 /* interactions */);
-        HandlerUtils.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
     }
 
     @Test

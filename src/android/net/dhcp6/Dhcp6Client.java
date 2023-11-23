@@ -68,7 +68,6 @@ import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Random;
 import java.util.function.IntSupplier;
 
@@ -285,17 +284,27 @@ public class Dhcp6Client extends StateMachine {
             scheduleKick();
         }
 
-        private void handleReceivedPacket(Dhcp6Packet packet) {
+        private void handleReceivedPacket(@NonNull final Dhcp6Packet packet) {
             // Technically it is valid for the server to not include a prefix in an IA in certain
             // scenarios (specifically in a reply to Renew / Rebind, which means: do not extend the
-            // prefix). However, while only supporting a single prefix, this never works well, so if
-            // the server decides to do so, ignore it.
-            // TODO: revisit this when adding multi-prefix support.
-            final IaPrefixOption ipo = packet.mPrefixDelegation.ipos.get(0);
-            final boolean validIpo = (ipo != null && ipo.isValid());
-            if (packet.isValid(mTransId, mClientDuid) && validIpo) {
-                receivePacket(packet);
+            // prefix, e.g. the list of prefix is empty). However, if prefix(es) do exist and all
+            // prefixes are invalid, then we should just ignore this packet.
+            if (!packet.isValid(mTransId, mClientDuid)) return;
+            if (!packet.mPrefixDelegation.ipos.isEmpty()) {
+                boolean allInvalidPrefixes = true;
+                for (IaPrefixOption ipo : packet.mPrefixDelegation.ipos) {
+                    if (ipo != null && ipo.isValid()) {
+                        allInvalidPrefixes = false;
+                        break;
+                    }
+                }
+                if (allInvalidPrefixes) {
+                    Log.w(TAG, "All IA_Prefix options included in the "
+                            + packet.getClass().getSimpleName() + " are invalid, ignore it.");
+                    return;
+                }
             }
+            receivePacket(packet);
         }
 
         @Override
@@ -465,10 +474,6 @@ public class Dhcp6Client extends StateMachine {
         return transmitPacket(packet, "rebind");
     }
 
-    private ByteBuffer buildIaPdOption(@NonNull final List<IaPrefixOption> ipos) {
-        return Dhcp6Packet.buildIaPdOption(IAID, 0 /* t1 */, 0 /* t2 */, ipos);
-    }
-
     /**
      * Parent state at which client does initialization of interface and packet handler, also
      * processes the CMD_STOP_DHCP6 command in this state which child states don't handle.
@@ -543,11 +548,12 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            final IaPrefixOption emptyPrefix = new IaPrefixOption((short) IaPrefixOption.LENGTH,
+            final IaPrefixOption hintOption = new IaPrefixOption((short) IaPrefixOption.LENGTH,
                     0 /* preferred */, 0 /* valid */, (byte) RFC7421_PREFIX_LENGTH,
                     new byte[16] /* empty prefix */);
-            return sendSolicitPacket(transId, elapsedTimeMs,
-                    buildIaPdOption(Collections.singletonList(emptyPrefix)));
+            final PrefixDelegation pd = new PrefixDelegation(IAID, 0 /* t1 */, 0 /* t2 */,
+                    Collections.singletonList(hintOption));
+            return sendSolicitPacket(transId, elapsedTimeMs, pd.build());
         }
 
         // TODO: support multiple prefixes.
@@ -587,7 +593,7 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            return sendRequestPacket(transId, elapsedTimeMs, buildIaPdOption(mAdvertise.ipos));
+            return sendRequestPacket(transId, elapsedTimeMs, mAdvertise.build());
         }
 
         @Override
@@ -753,7 +759,7 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            return sendRenewPacket(transId, elapsedTimeMs, buildIaPdOption(mReply.ipos));
+            return sendRenewPacket(transId, elapsedTimeMs, mReply.build());
         }
     }
 
@@ -769,7 +775,7 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            return sendRebindPacket(transId, elapsedTimeMs, buildIaPdOption(mReply.ipos));
+            return sendRebindPacket(transId, elapsedTimeMs, mReply.build());
         }
     }
 

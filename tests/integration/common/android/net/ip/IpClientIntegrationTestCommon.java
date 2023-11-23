@@ -153,6 +153,7 @@ import android.net.dhcp.DhcpPacket.ParseException;
 import android.net.dhcp.DhcpRequestPacket;
 import android.net.dhcp6.Dhcp6Client;
 import android.net.dhcp6.Dhcp6Packet;
+import android.net.dhcp6.Dhcp6Packet.PrefixDelegation;
 import android.net.dhcp6.Dhcp6RebindPacket;
 import android.net.dhcp6.Dhcp6RenewPacket;
 import android.net.dhcp6.Dhcp6RequestPacket;
@@ -3222,7 +3223,7 @@ public abstract class IpClientIntegrationTestCommon {
         for (LinkAddress la : lp.getLinkAddresses()) {
             final InetAddress addr = la.getAddress();
             if ((addr instanceof Inet6Address) && !addr.isLinkLocalAddress()) {
-                return prefix.contains(addr);
+                if (prefix.contains(addr)) return true;
             }
         }
         return false;
@@ -4825,8 +4826,9 @@ public abstract class IpClientIntegrationTestCommon {
         ByteBuffer iapd;
         Dhcp6Packet packet;
         while ((packet = getNextDhcp6Packet()) != null) {
+            final PrefixDelegation pd = new PrefixDelegation(packet.getIaId(), t1, t2, ipos);
+            iapd = pd.build();
             if (packet instanceof Dhcp6SolicitPacket) {
-                iapd = Dhcp6Packet.buildIaPdOption(packet.getIaId(), t1, t2, ipos);
                 if (shouldReplyRapidCommit) {
                     mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
                             (Inet6Address) mClientIpAddress, true /* rapidCommit */));
@@ -4835,8 +4837,6 @@ public abstract class IpClientIntegrationTestCommon {
                             (Inet6Address) mClientIpAddress));
                 }
             } else if (packet instanceof Dhcp6RequestPacket) {
-                final PrefixDelegation pd = packet.getPrefixDelegation();
-                iapd = Dhcp6Packet.buildIaPdOption(packet.getIaId(), pd.t1, pd.t2, pd.ipos);
                 mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
                           (Inet6Address) mClientIpAddress, false /* rapidCommit */));
             } else {
@@ -5087,8 +5087,9 @@ public abstract class IpClientIntegrationTestCommon {
         final IpPrefix prefix1 = new IpPrefix("2001:db8:2::/64");
         final IaPrefixOption ipo = buildIaPrefixOption(prefix1, 4500 /* preferred */,
                 7200 /* valid */);
-        final ByteBuffer iapd = Dhcp6Packet.buildIaPdOption(packet.getIaId(), 3600 /* t1*/,
+        final PrefixDelegation pd = new PrefixDelegation(packet.getIaId(), 3600 /* t1 */,
                 4500 /* t2 */, Collections.singletonList(ipo));
+        final ByteBuffer iapd = pd.build();
         mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
                 (Inet6Address) mClientIpAddress, false /* rapidCommit */));
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(any());
