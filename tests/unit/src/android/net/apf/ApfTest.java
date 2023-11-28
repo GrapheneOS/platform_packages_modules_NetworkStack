@@ -56,6 +56,7 @@ import android.net.LinkProperties;
 import android.net.MacAddress;
 import android.net.NattKeepalivePacketDataParcelable;
 import android.net.TcpKeepalivePacketDataParcelable;
+import android.net.apf.ApfCounterTracker.Counter;
 import android.net.apf.ApfFilter.ApfConfiguration;
 import android.net.apf.ApfGenerator.IllegalInstructionException;
 import android.net.apf.ApfTestUtils.MockIpClientCallback;
@@ -910,7 +911,7 @@ public class ApfTest {
         TestApfFilter apfFilter = new TestApfFilter(mContext, config, ipClientCallback);
         apfFilter.setLinkProperties(lp);
         byte[] program = ipClientCallback.assertProgramUpdateAndGet();
-        byte[] data = new byte[ApfFilter.Counter.totalSize()];
+        byte[] data = new byte[Counter.totalSize()];
         final boolean result;
 
         result = dropsAllPackets(mApfVersion, program, data, pcapFilename);

@@ -45,6 +45,7 @@ import android.net.LinkAddress;
 import android.net.LinkProperties;
 import android.net.NattKeepalivePacketDataParcelable;
 import android.net.TcpKeepalivePacketDataParcelable;
+import android.net.apf.ApfCounterTracker.Counter;
 import android.net.apf.ApfGenerator.IllegalInstructionException;
 import android.net.apf.ApfGenerator.Register;
 import android.net.ip.IpClient.IpClientCallbacksWrapper;
@@ -117,63 +118,6 @@ public class ApfFilter implements AndroidPacketFilter {
         public int minRdnssLifetimeSec;
         public int acceptRaMinLft;
         public boolean shouldHandleLightDoze;
-    }
-
-    /**
-     * APF packet counters.
-     *
-     * Packet counters are 32bit big-endian values, and allocated near the end of the APF data
-     * buffer, using negative byte offsets, where -4 is equivalent to maximumApfProgramSize - 4,
-     * the last writable 32bit word.
-     */
-    @VisibleForTesting
-    public static enum Counter {
-        RESERVED_OOB,  // Points to offset 0 from the end of the buffer (out-of-bounds)
-        TOTAL_PACKETS,
-        PASSED_ARP,
-        PASSED_DHCP,
-        PASSED_IPV4,
-        PASSED_IPV6_NON_ICMP,
-        PASSED_IPV4_UNICAST,
-        PASSED_IPV6_ICMP,
-        PASSED_IPV6_UNICAST_NON_ICMP,
-        PASSED_ARP_UNICAST_REPLY,
-        PASSED_NON_IP_UNICAST,
-        PASSED_MDNS,
-        DROPPED_ETH_BROADCAST,
-        DROPPED_RA,
-        DROPPED_GARP_REPLY,
-        DROPPED_ARP_OTHER_HOST,
-        DROPPED_IPV4_L2_BROADCAST,
-        DROPPED_IPV4_BROADCAST_ADDR,
-        DROPPED_IPV4_BROADCAST_NET,
-        DROPPED_IPV4_MULTICAST,
-        DROPPED_IPV6_ROUTER_SOLICITATION,
-        DROPPED_IPV6_MULTICAST_NA,
-        DROPPED_IPV6_MULTICAST,
-        DROPPED_IPV6_MULTICAST_PING,
-        DROPPED_IPV6_NON_ICMP_MULTICAST,
-        DROPPED_802_3_FRAME,
-        DROPPED_ETHERTYPE_BLACKLISTED,
-        DROPPED_ARP_REPLY_SPA_NO_HOST,
-        DROPPED_IPV4_KEEPALIVE_ACK,
-        DROPPED_IPV6_KEEPALIVE_ACK,
-        DROPPED_IPV4_NATT_KEEPALIVE,
-        DROPPED_MDNS,
-        DROPPED_IPV4_TCP_PORT7_UNICAST,
-        DROPPED_ARP_NON_IPV4,
-        DROPPED_ARP_UNKNOWN;
-
-        // Returns the negative byte offset from the end of the APF data segment for
-        // a given counter.
-        public int offset() {
-            return - this.ordinal() * 4;  // Currently, all counters are 32bit long.
-        }
-
-        // Returns the total size of the data segment in bytes.
-        public static int totalSize() {
-            return (Counter.class.getEnumConstants().length - 1) * 4;
-        }
     }
 
     /**
@@ -325,6 +269,8 @@ public class ApfFilter implements AndroidPacketFilter {
     private final boolean mDrop802_3Frames;
     private final int[] mEthTypeBlackList;
 
+    private final ApfCounterTracker mApfCounterTracker = new ApfCounterTracker();
+
     // Ignore non-zero RDNSS lifetimes below this value.
     private final int mMinRdnssLifetimeSec;
 
@@ -464,6 +410,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
     public synchronized void setDataSnapshot(byte[] data) {
         mDataSnapshot = data;
+        mApfCounterTracker.updateCountersFromData(data);
     }
 
     private void log(String s) {
@@ -1922,7 +1869,7 @@ public class ApfFilter implements AndroidPacketFilter {
         }
 
         // Handle ether-type black list
-        maybeSetupCounter(gen, Counter.DROPPED_ETHERTYPE_BLACKLISTED);
+        maybeSetupCounter(gen, Counter.DROPPED_ETHERTYPE_DENYLISTED);
         for (int p : mEthTypeBlackList) {
             gen.addJumpIfR0Equals(p, mCountAndDropLabel);
         }
@@ -2052,6 +1999,8 @@ public class ApfFilter implements AndroidPacketFilter {
             Log.e(TAG, "Failed to generate APF program.", e);
             return;
         }
+        // Update data snapshot every time we install a new program
+        mIpClientCallback.startReadPacketFilter();
         mIpClientCallback.installPacketFilter(program);
         mLastTimeInstalledProgram = timeSeconds;
         mLastInstalledProgramMinLifetime = programMinLft;
@@ -2287,23 +2236,6 @@ public class ApfFilter implements AndroidPacketFilter {
         installNewProgramLocked();
     }
 
-    static public long counterValue(byte[] data, Counter counter)
-            throws ArrayIndexOutOfBoundsException {
-        // Follow the same wrap-around addressing scheme of the interpreter.
-        int offset = counter.offset();
-        if (offset < 0) {
-            offset = data.length + offset;
-        }
-
-        // Decode 32bit big-endian integer into a long so we can count up beyond 2^31.
-        long value = 0;
-        for (int i = 0; i < 4; i++) {
-            value = value << 8 | (data[offset] & 0xFF);
-            offset++;
-        }
-        return value;
-    }
-
     public synchronized void dump(IndentingPrintWriter pw) {
         pw.println("Capabilities: " + mApfCapabilities);
         pw.println("Receive thread: " + (mReceiveThread != null ? "RUNNING" : "STOPPED"));
@@ -2388,10 +2320,16 @@ public class ApfFilter implements AndroidPacketFilter {
             try {
                 Counter[] counters = Counter.class.getEnumConstants();
                 for (Counter c : Arrays.asList(counters).subList(1, counters.length)) {
-                    long value = counterValue(mDataSnapshot, c);
+                    long value = ApfCounterTracker.getCounterValue(mDataSnapshot, c);
                     // Only print non-zero counters
                     if (value != 0) {
                         pw.println(c.toString() + ": " + value);
+                    }
+
+                    // If the counter's value decreases, it may have been cleaned up or there may be
+                    // a bug.
+                    if (value < mApfCounterTracker.getCounters().getOrDefault(c, 0L)) {
+                        Log.e(TAG, "Error: Counter value unexpectedly decreased.");
                     }
                 }
             } catch (ArrayIndexOutOfBoundsException e) {
