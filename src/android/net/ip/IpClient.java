@@ -2388,6 +2388,7 @@ public class IpClient extends StateMachine {
         apfConfig.minRdnssLifetimeSec = mMinRdnssLifetimeSec;
         apfConfig.acceptRaMinLft = mAcceptRaMinLft;
         apfConfig.shouldHandleLightDoze = mApfShouldHandleLightDoze;
+        apfConfig.minMetricsSessionDurationMs = mApfCounterPollingIntervalMs;
         return mDependencies.maybeCreateApfFilter(mContext, apfConfig, mInterfaceParams,
                 mCallback, mNetworkQuirkMetrics, mUseNewApfFilter);
     }
