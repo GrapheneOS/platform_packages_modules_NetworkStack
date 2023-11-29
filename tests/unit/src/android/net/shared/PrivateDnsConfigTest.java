@@ -22,9 +22,6 @@ import static android.net.ConnectivitySettingsManager.PRIVATE_DNS_MODE_PROVIDER_
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import android.net.PrivateDnsConfigParcel;
 
@@ -36,6 +33,10 @@ import java.net.InetAddress;
 
 @RunWith(JUnit4.class)
 public final class PrivateDnsConfigTest {
+    private static final int OFF_MODE = PRIVATE_DNS_MODE_OFF;
+    private static final int OPPORTUNISTIC_MODE = PRIVATE_DNS_MODE_OPPORTUNISTIC;
+    private static final int STRICT_MODE = PRIVATE_DNS_MODE_PROVIDER_HOSTNAME;
+
     private static final InetAddress[] TEST_ADDRS = new InetAddress[] {
         InetAddress.parseNumericAddress("1.2.3.4"),
         InetAddress.parseNumericAddress("2001:db8::2"),
@@ -51,7 +52,7 @@ public final class PrivateDnsConfigTest {
     }
 
     private void assertPrivateDnsConfigEquals(PrivateDnsConfig a, PrivateDnsConfig b) {
-        assertEquals(a.useTls, b.useTls);
+        assertEquals(a.mode, b.mode);
         assertEquals(a.hostname, b.hostname);
         assertArrayEquals(a.ips, b.ips);
         assertEquals(a.dohName, b.dohName);
@@ -61,24 +62,9 @@ public final class PrivateDnsConfigTest {
     }
 
     private void assertParcelEquals(PrivateDnsConfig cfg, PrivateDnsConfigParcel parcel) {
+        assertEquals(parcel.privateDnsMode, cfg.mode);
         assertEquals(parcel.hostname, cfg.hostname);
         assertArrayEquals(parcel.ips, toStringArray(cfg.ips));
-        switch (parcel.privateDnsMode) {
-            case PRIVATE_DNS_MODE_OFF:
-                assertFalse(cfg.useTls);
-                assertTrue(cfg.hostname.isEmpty());
-                break;
-            case PRIVATE_DNS_MODE_OPPORTUNISTIC:
-                assertTrue(cfg.useTls);
-                assertTrue(cfg.hostname.isEmpty());
-                break;
-            case PRIVATE_DNS_MODE_PROVIDER_HOSTNAME:
-                assertTrue(cfg.useTls);
-                assertFalse(cfg.hostname.isEmpty());
-                break;
-            default:
-                fail("Unexpected private DNS mode");
-        }
         assertEquals(parcel.dohName, cfg.dohName);
         assertEquals(parcel.dohPath, cfg.dohPath);
         assertEquals(parcel.dohPort, cfg.dohPort);
@@ -94,6 +80,8 @@ public final class PrivateDnsConfigTest {
         assertPrivateDnsConfigEquals(cfg, convertedCfg);
     }
 
+    // Tests that a PrivateDnsConfig and a PrivateDnsConfig that is converted from
+    // PrivateDnsConfigParcel are equal.
     @Test
     public void testParcelableConversion() {
         // Test the constructor: PrivateDnsConfig()
@@ -110,25 +98,31 @@ public final class PrivateDnsConfigTest {
         testPrivateDnsConfigConversion(new PrivateDnsConfig("dns.com", TEST_ADDRS));
 
         // Test the constructor:
-        // PrivateDnsConfig(boolean useTls, String hostname, InetAddress[] ips, String dohName,
-        //                  InetAddress[] dohIps, String dohPath, int dohPort)
-        testPrivateDnsConfigConversion(new PrivateDnsConfig(true, "dns.com", TEST_ADDRS, null,
-                null, null, -1));
-        testPrivateDnsConfigConversion(new PrivateDnsConfig(true, "dns.com", TEST_ADDRS, "doh.com",
-                null, null, -1));
-        testPrivateDnsConfigConversion(new PrivateDnsConfig(true, "dns.com", TEST_ADDRS, "doh.com",
-                TEST_ADDRS, null, -1));
-        testPrivateDnsConfigConversion(new PrivateDnsConfig(true, "dns.com", TEST_ADDRS, "doh.com",
-                TEST_ADDRS, "dohpath=/some-path{?dns}", -1));
-        testPrivateDnsConfigConversion(new PrivateDnsConfig(true, "dns.com", TEST_ADDRS, "doh.com",
-                TEST_ADDRS, "dohpath=/some-path{?dns}", 443));
+        // PrivateDnsConfig(int mode, String hostname, InetAddress[] ips,
+        //                  String dohName, InetAddress[] dohIps, String dohPath, int dohPort)
+        for (int mode : new int[] { OFF_MODE, OPPORTUNISTIC_MODE, STRICT_MODE }) {
+            testPrivateDnsConfigConversion(new PrivateDnsConfig(mode, null, null,
+                    null, null, null, -1));
+            testPrivateDnsConfigConversion(new PrivateDnsConfig(mode, "dns.com", null,
+                    null, null, null, -1));
+            testPrivateDnsConfigConversion(new PrivateDnsConfig(mode, "dns.com", TEST_ADDRS,
+                    null, null, null, -1));
+            testPrivateDnsConfigConversion(new PrivateDnsConfig(mode, "dns.com", TEST_ADDRS,
+                    "doh.com", null, null, -1));
+            testPrivateDnsConfigConversion(new PrivateDnsConfig(mode, "dns.com", TEST_ADDRS,
+                    "doh.com", TEST_ADDRS, null, -1));
+            testPrivateDnsConfigConversion(new PrivateDnsConfig(mode, "dns.com", TEST_ADDRS,
+                    "doh.com", TEST_ADDRS, "dohpath=/some-path{?dns}", -1));
+            testPrivateDnsConfigConversion(new PrivateDnsConfig(mode, "dns.com", TEST_ADDRS,
+                    "doh.com", TEST_ADDRS, "dohpath=/some-path{?dns}", 443));
+        }
     }
 
     @Test
     public void testIpAddressArrayIsCopied() {
         final InetAddress ip = InetAddress.parseNumericAddress("1.2.3.4");
         final InetAddress[] ipArray = new InetAddress[] { ip };
-        final PrivateDnsConfig cfg = new PrivateDnsConfig(true /* useTls */, null /* hostname */,
+        final PrivateDnsConfig cfg = new PrivateDnsConfig(OPPORTUNISTIC_MODE, null /* hostname */,
                 ipArray /* ips */, null /* dohName */, ipArray /* dohIps */, null /* dohPath */,
                 -1 /* dohPort */);
 
