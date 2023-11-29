@@ -170,7 +170,8 @@ public class TcpInfo {
         }
     }
 
-    private static String decodeWscale(byte num) {
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    static String decodeWscale(byte num) {
         return String.valueOf((num >> 4) & 0x0f)  + ":" + String.valueOf(num & 0x0f);
     }
 
