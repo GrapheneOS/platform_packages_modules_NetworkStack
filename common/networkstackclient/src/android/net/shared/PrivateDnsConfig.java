@@ -22,6 +22,8 @@ import static android.net.ConnectivitySettingsManager.PRIVATE_DNS_MODE_PROVIDER_
 import static android.net.shared.ParcelableUtil.fromParcelableArray;
 import static android.net.shared.ParcelableUtil.toParcelableArray;
 
+import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.net.PrivateDnsConfigParcel;
 import android.text.TextUtils;
 
@@ -32,14 +34,19 @@ import java.util.Arrays;
 public class PrivateDnsConfig {
     // These fields store the private DNS configuration from setting.
     public final int mode;
+    @NonNull
     public final String hostname;
 
     // Stores the DoT server IP addresses resolved from A/AAAA lookups.
+    @NonNull
     public final InetAddress[] ips;
 
     // These fields store the DoH information discovered from SVCB lookups.
+    @NonNull
     public final String dohName;
+    @NonNull
     public final InetAddress[] dohIps;
+    @NonNull
     public final String dohPath;
     public final int dohPort;
 
@@ -69,7 +76,7 @@ public class PrivateDnsConfig {
      * If `hostname` is empty or null, this constructor creates a PrivateDnsConfig for off mode;
      * otherwise, it creates a PrivateDnsConfig for strict mode.
      */
-    public PrivateDnsConfig(String hostname, InetAddress[] ips) {
+    public PrivateDnsConfig(@Nullable String hostname, @Nullable InetAddress[] ips) {
         this(TextUtils.isEmpty(hostname) ? PRIVATE_DNS_MODE_OFF :
                 PRIVATE_DNS_MODE_PROVIDER_HOSTNAME, hostname, ips, null /* dohName */,
                 null /* dohIps */, null /* dohPath */, -1 /* dohPort */);
@@ -77,9 +84,12 @@ public class PrivateDnsConfig {
 
     /**
      * A constructor for all kinds of private DNS configuration with given DoH information.
+     * It treats both null values and empty strings as equivalent. Similarly, treats null values
+     * and empty arrays as equivalent.
      */
-    public PrivateDnsConfig(int mode, String hostname, InetAddress[] ips, String dohName,
-            InetAddress[] dohIps, String dohPath, int dohPort) {
+    public PrivateDnsConfig(int mode, @Nullable String hostname, @Nullable InetAddress[] ips,
+            @Nullable String dohName, @Nullable InetAddress[] dohIps, @Nullable String dohPath,
+            int dohPort) {
         this.mode = mode;
         this.hostname = (hostname != null) ? hostname : "";
         this.ips = (ips != null) ? ips.clone() : new InetAddress[0];
@@ -124,6 +134,7 @@ public class PrivateDnsConfig {
                 + "}";
     }
 
+    @NonNull
     private static String modeAsString(int mode) {
         switch (mode) {
             case PRIVATE_DNS_MODE_OFF: return "off";
