@@ -278,22 +278,37 @@ public class ApfTestUtils {
                 MockIpClientCallback ipClientCallback, NetworkQuirkMetrics networkQuirkMetrics)
                 throws Exception {
             this(context, config, ipClientCallback, networkQuirkMetrics, new Dependencies(context),
-                    false /* throwsExceptionWhenGeneratesProgram */);
+                    false /* throwsExceptionWhenGeneratesProgram */, new ApfFilter.Clock());
         }
 
         public TestApfFilter(Context context, ApfConfiguration config,
                 MockIpClientCallback ipClientCallback, NetworkQuirkMetrics networkQuirkMetrics,
                 Dependencies dependencies) throws Exception {
             this(context, config, ipClientCallback, networkQuirkMetrics, dependencies,
-                    false /* throwsExceptionWhenGeneratesProgram */);
+                    false /* throwsExceptionWhenGeneratesProgram */, new ApfFilter.Clock());
         }
 
         public TestApfFilter(Context context, ApfConfiguration config,
                 MockIpClientCallback ipClientCallback, NetworkQuirkMetrics networkQuirkMetrics,
                 Dependencies dependencies, boolean throwsExceptionWhenGeneratesProgram)
                 throws Exception {
+            this(context, config, ipClientCallback, networkQuirkMetrics, dependencies,
+                    throwsExceptionWhenGeneratesProgram, new ApfFilter.Clock());
+        }
+
+        public TestApfFilter(Context context, ApfConfiguration config,
+                MockIpClientCallback ipClientCallback, NetworkQuirkMetrics networkQuirkMetrics,
+                Dependencies dependencies, ApfFilter.Clock clock) throws Exception {
+            this(context, config, ipClientCallback, networkQuirkMetrics, dependencies,
+                    false /* throwsExceptionWhenGeneratesProgram */, clock);
+        }
+
+        public TestApfFilter(Context context, ApfConfiguration config,
+                MockIpClientCallback ipClientCallback, NetworkQuirkMetrics networkQuirkMetrics,
+                Dependencies dependencies, boolean throwsExceptionWhenGeneratesProgram,
+                ApfFilter.Clock clock) throws Exception {
             super(context, config, InterfaceParams.getByName("lo"), ipClientCallback,
-                    networkQuirkMetrics, dependencies);
+                    networkQuirkMetrics, dependencies, clock);
             mMockIpClientCb = ipClientCallback;
             mThrowsExceptionWhenGeneratesProgram = throwsExceptionWhenGeneratesProgram;
         }
