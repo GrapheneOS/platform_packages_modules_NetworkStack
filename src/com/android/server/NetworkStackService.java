@@ -21,11 +21,13 @@ import static android.net.dhcp.IDhcpServer.STATUS_SUCCESS;
 import static android.net.dhcp.IDhcpServer.STATUS_UNKNOWN_ERROR;
 
 import static com.android.net.module.util.DeviceConfigUtils.getResBooleanConfig;
+import static com.android.net.module.util.FeatureVersions.FEATURE_IS_UID_NETWORKING_BLOCKED;
 import static com.android.server.util.PermissionUtil.checkDumpPermission;
 
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
 import android.net.IIpMemoryStore;
 import android.net.IIpMemoryStoreCallbacks;
 import android.net.INetd;
@@ -49,6 +51,7 @@ import android.os.Build;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
 import android.text.TextUtils;
 import android.util.ArraySet;
@@ -59,6 +62,8 @@ import androidx.annotation.VisibleForTesting;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.IndentingPrintWriter;
+import com.android.modules.utils.BasicShellCommandHandler;
+import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.SharedLog;
 import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
@@ -480,6 +485,69 @@ public class NetworkStackService extends Service {
             pw.print("useNeighborResource: ");
             pw.println(getResBooleanConfig(mContext,
                     R.bool.config_no_sim_card_uses_neighbor_mcc, false));
+        }
+
+        @Override
+        public int handleShellCommand(@NonNull ParcelFileDescriptor in,
+                @NonNull ParcelFileDescriptor out, @NonNull ParcelFileDescriptor err,
+                @NonNull String[] args) {
+            return new ShellCmd().exec(this, in.getFileDescriptor(), out.getFileDescriptor(),
+                    err.getFileDescriptor(), args);
+        }
+
+        private class ShellCmd extends BasicShellCommandHandler {
+            @Override
+            public int onCommand(String cmd) {
+                if (cmd == null) {
+                    return handleDefaultCommands(cmd);
+                }
+                final PrintWriter pw = getOutPrintWriter();
+                try {
+                    switch (cmd) {
+                        case "is-uid-networking-blocked":
+                            if (!DeviceConfigUtils.isFeatureSupported(mContext,
+                                    FEATURE_IS_UID_NETWORKING_BLOCKED)) {
+                                pw.println("API is unsupported");
+                                return -1;
+                            }
+
+                            // Usage : cmd network_stack is-uid-networking-blocked <uid> <metered>
+                            // If no argument, get and display the usage help.
+                            if (getRemainingArgsCount() != 2) {
+                                onHelp();
+                                return -1;
+                            }
+                            final int uid;
+                            final boolean metered;
+                            // If any fail, throws and output to the stdout.
+                            // Let the caller handle it.
+                            uid = Integer.parseInt(getNextArg());
+                            metered = Boolean.parseBoolean(getNextArg());
+                            final ConnectivityManager cm =
+                                    mContext.getSystemService(ConnectivityManager.class);
+                            pw.println(cm.isUidNetworkingBlocked(
+                                    uid, metered /* isNetworkMetered */));
+                            return 0;
+                        default:
+                            return handleDefaultCommands(cmd);
+                    }
+                } catch (Exception e) {
+                    pw.println(e);
+                }
+                return -1;
+            }
+
+            @Override
+            public void onHelp() {
+                PrintWriter pw = getOutPrintWriter();
+                pw.println("NetworkStack service commands:");
+                pw.println("  help");
+                pw.println("    Print this help text.");
+                pw.println("  is-uid-networking-blocked <uid> <metered>");
+                pw.println("    Get whether the networking is blocked for given uid and metered.");
+                pw.println("    <uid>: The target uid.");
+                pw.println("    <metered>: [true|false], Whether the target network is metered.");
+            }
         }
 
         /**
