@@ -16,6 +16,9 @@
 
 package com.android.networkstack.netlink;
 
+import static android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET;
+import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED;
+import static android.net.NetworkCapabilities.TRANSPORT_CELLULAR;
 import static android.net.util.DataStallUtils.CONFIG_TCP_PACKETS_FAIL_PERCENTAGE;
 import static android.net.util.DataStallUtils.DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE;
 import static android.os.PowerManager.ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED;
@@ -33,6 +36,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,11 +44,13 @@ import static org.mockito.Mockito.when;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
 import android.net.INetd;
 import android.net.InetAddresses;
 import android.net.LinkProperties;
 import android.net.MarkMaskParcel;
 import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.os.Build;
 import android.os.PowerManager;
 import android.util.Log;
@@ -57,6 +63,7 @@ import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.netlink.NetlinkUtils;
 import com.android.net.module.util.netlink.StructNlMsgHdr;
 import com.android.testutils.DevSdkIgnoreRule;
+import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
 
 import libcore.util.HexEncoding;
@@ -118,10 +125,22 @@ public class TcpSocketTrackerTest {
     private static final int TEST_NETID2_FWMARK = 0x1A85;
     private static final int NETID_MASK = 0xffff;
     private static final int TEST_UID1 = 1234;
+    private static final int TEST_UID2 = TEST_UID1 + 1;
     private static final short TEST_DST_PORT = 29113;
     private static final long TEST_COOKIE1 = 43387759684916L;
     private static final long TEST_COOKIE2 = TEST_COOKIE1 + 1;
     private static final InetAddress TEST_DNS1 = InetAddresses.parseNumericAddress("8.8.8.8");
+
+    private static final NetworkCapabilities CELL_METERED_CAPABILITIES =
+            new NetworkCapabilities()
+                    .addTransportType(TRANSPORT_CELLULAR)
+                    .addCapability(NET_CAPABILITY_INTERNET);
+
+    private static final NetworkCapabilities CELL_NOT_METERED_CAPABILITIES =
+            new NetworkCapabilities()
+                    .addTransportType(TRANSPORT_CELLULAR)
+                    .addCapability(NET_CAPABILITY_INTERNET)
+                    .addCapability(NET_CAPABILITY_NOT_METERED);
     @Mock private TcpSocketTracker.Dependencies mDependencies;
     @Mock private INetd mNetd;
     private final Network mNetwork = new Network(TEST_NETID1);
@@ -129,6 +148,7 @@ public class TcpSocketTrackerTest {
     private TerribleFailureHandler mOldWtfHandler;
     @Mock private Context mContext;
     @Mock private PowerManager mPowerManager;
+    @Mock private ConnectivityManager mCm;
 
     @Rule
     public final DevSdkIgnoreRule mIgnoreRule = new DevSdkIgnoreRule();
@@ -150,7 +170,9 @@ public class TcpSocketTrackerTest {
 
         when(mNetd.getFwmarkForNetwork(eq(TEST_NETID1)))
                 .thenReturn(makeMarkMaskParcel(NETID_MASK, TEST_NETID1_FWMARK));
+        doReturn(mContext).when(mDependencies).getContext();
         doReturn(mPowerManager).when(mContext).getSystemService(PowerManager.class);
+        doReturn(mCm).when(mContext).getSystemService(ConnectivityManager.class);
     }
 
     @After
@@ -264,7 +286,7 @@ public class TcpSocketTrackerTest {
         testLp.addDnsServer(TEST_DNS1);
         tst.setLinkProperties(testLp);
         doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(9, 10)
-                + composeSockDiagTcpHex(9, 10, DNS_OVER_TLS_PORT, TEST_COOKIE2)
+                + composeSockDiagTcpHex(9, 10, DNS_OVER_TLS_PORT, TEST_COOKIE2, TEST_UID1)
                 + NLMSG_DONE_HEX))
                 .when(mDependencies).recvMessage(any());
         assertTrue(tst.pollSocketsInfo());
@@ -282,7 +304,7 @@ public class TcpSocketTrackerTest {
         testLp.addValidatedPrivateDnsServer(TEST_DNS1);
         tst.setLinkProperties(testLp);
         doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(10, 12)
-                + composeSockDiagTcpHex(11, 12, DNS_OVER_TLS_PORT, TEST_COOKIE2)
+                + composeSockDiagTcpHex(11, 12, DNS_OVER_TLS_PORT, TEST_COOKIE2, TEST_UID1)
                 + NLMSG_DONE_HEX))
                 .when(mDependencies).recvMessage(any());
         assertTrue(tst.pollSocketsInfo());
@@ -296,7 +318,7 @@ public class TcpSocketTrackerTest {
         // polling cycle.
         tst.setOpportunisticMode(false);
         doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(11, 14)
-                + composeSockDiagTcpHex(13, 14, DNS_OVER_TLS_PORT, TEST_COOKIE2)
+                + composeSockDiagTcpHex(13, 14, DNS_OVER_TLS_PORT, TEST_COOKIE2, TEST_UID1)
                 + NLMSG_DONE_HEX))
                 .when(mDependencies).recvMessage(any());
         assertTrue(tst.pollSocketsInfo());
@@ -304,6 +326,101 @@ public class TcpSocketTrackerTest {
         assertEquals(75, tst.getLatestPacketFailPercentage());
         assertEquals(18, tst.getSentSinceLastRecv());
         assertFalse(tst.isDataStallSuspected());
+    }
+
+    @IgnoreAfter(Build.VERSION_CODES.S_V2)
+    @Test
+    public void testPollSocketsInfo_ignoreBlockedUid_featureDisabled_beforeT() throws Exception {
+        doTestPollSocketsInfo_ignoreBlockedUid_featureDisabled();
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.S_V2)
+    @Test
+    public void testPollSocketsInfo_ignoreBlockedUid_featureDisabled_TOrAbove() throws Exception {
+        doTestPollSocketsInfo_ignoreBlockedUid_featureDisabled();
+        verify(mCm, never()).isUidNetworkingBlocked(anyInt(), anyBoolean());
+    }
+
+    private void doTestPollSocketsInfo_ignoreBlockedUid_featureDisabled() throws Exception {
+        doReturn(false).when(mDependencies).shouldIgnoreTcpInfoForBlockedUids();
+        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
+        // Simulate 1 message with data stall happened.
+        doReturn(getByteBufferFromHexString(
+                composeSockDiagTcpHex(4, 10) + NLMSG_DONE_HEX))
+                .when(mDependencies).recvMessage(any());
+        assertTrue(tst.pollSocketsInfo());
+        // 4 retran / 10 sent = 40 percent.
+        assertEquals(40, tst.getLatestPacketFailPercentage());
+        assertEquals(10, tst.getSentSinceLastRecv());
+        assertFalse(tst.isDataStallSuspected());
+
+        // With the feature disabled, append another message with blocked uid, verify the
+        // traffic of networking-blocked uid is not filtered.
+        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(9, 10)
+                + composeSockDiagTcpHex(5, 10, DNS_OVER_TLS_PORT, TEST_COOKIE2, TEST_UID2)
+                + NLMSG_DONE_HEX))
+                .when(mDependencies).recvMessage(any());
+        assertTrue(tst.pollSocketsInfo());
+        // 5 + 5 retrans / 10 sent = 100 percent.
+        assertEquals(100, tst.getLatestPacketFailPercentage());
+        assertEquals(20, tst.getSentSinceLastRecv());
+        assertTrue(tst.isDataStallSuspected());
+    }
+
+    // The feature is not enabled on pre-T device, because it needs bpf support.
+    @IgnoreUpTo(Build.VERSION_CODES.S_V2)
+    @Test
+    public void testPollSocketsInfo_ignoreBlockedUid_featureEnabled() throws Exception {
+        doReturn(true).when(mDependencies).shouldIgnoreTcpInfoForBlockedUids();
+        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
+        tst.setNetworkCapabilities(CELL_NOT_METERED_CAPABILITIES);
+        doReturn(true).when(mCm).isUidNetworkingBlocked(TEST_UID2, false /* metered */);
+        // With the feature enabled, append another message with blocked uid, verify the
+        // traffic of networking-blocked uid is filtered out.
+        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(4, 10)
+                + composeSockDiagTcpHex(6, 12, DNS_OVER_TLS_PORT, TEST_COOKIE2, TEST_UID2)
+                + NLMSG_DONE_HEX))
+                .when(mDependencies).recvMessage(any());
+        assertTrue(tst.pollSocketsInfo());
+        assertEquals(40, tst.getLatestPacketFailPercentage());
+        assertEquals(10, tst.getSentSinceLastRecv());
+        assertFalse(tst.isDataStallSuspected());
+
+        // Unblock traffic of the uid, verify the traffic of the uid is not filtered.
+        doReturn(false).when(mCm).isUidNetworkingBlocked(TEST_UID2, false /* metered */);
+        doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(4, 10)
+                + composeSockDiagTcpHex(8, 14, DNS_OVER_TLS_PORT, TEST_COOKIE2, TEST_UID2)
+                + NLMSG_DONE_HEX))
+                .when(mDependencies).recvMessage(any());
+        assertTrue(tst.pollSocketsInfo());
+        // Lost 2 / 2 sent = 100 percent.
+        assertEquals(100, tst.getLatestPacketFailPercentage());
+        assertEquals(12, tst.getSentSinceLastRecv());
+        assertTrue(tst.isDataStallSuspected());
+    }
+
+    // The feature is not enabled on pre-T device, because it needs bpf support.
+    @IgnoreUpTo(Build.VERSION_CODES.S_V2)
+    @Test
+    public void testPollSocketsInfo_ignoreBlockedUid_featureEnabled_dataSaver() throws Exception {
+        doReturn(true).when(mDependencies).shouldIgnoreTcpInfoForBlockedUids();
+        final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
+
+        tst.setNetworkCapabilities(CELL_NOT_METERED_CAPABILITIES);
+        final ByteBuffer mockMessage = getByteBufferFromHexString(composeSockDiagTcpHex(4, 10)
+                + NLMSG_DONE_HEX);
+        doReturn(mockMessage).when(mDependencies).recvMessage(any());
+        assertTrue(tst.pollSocketsInfo());
+        verify(mCm).isUidNetworkingBlocked(TEST_UID1, false /* metered */);
+
+        // Verify the metered parameter will be correctly passed to ConnectivityManager.
+        tst.setNetworkCapabilities(CELL_METERED_CAPABILITIES);
+        mockMessage.rewind(); // Reset read position to 0 since the same buffer is used.
+        assertTrue(tst.pollSocketsInfo());
+        verify(mCm).isUidNetworkingBlocked(TEST_UID1, true /* metered */);
+
+        // Correctness of the logic which handling different blocked status is
+        // verified in other tests, see {@code testPollSocketsInfo_ignoreBlockedUid_featureEnabled}.
     }
 
     @Test
@@ -470,10 +587,11 @@ public class TcpSocketTrackerTest {
     }
 
     private static String composeSockDiagTcpHex(int retrans, int sent) {
-        return composeSockDiagTcpHex(retrans, sent, TEST_DST_PORT, TEST_COOKIE1);
+        return composeSockDiagTcpHex(retrans, sent, TEST_DST_PORT, TEST_COOKIE1, TEST_UID1);
     }
 
-    private static String composeSockDiagTcpHex(int retrans, int sent, short dstPort, long cookie) {
+    private static String composeSockDiagTcpHex(int retrans, int sent, short dstPort,
+            long cookie, int uid) {
         return // struct nlmsghdr.
                 "14010000"          // length = 276
                 + "1400"            // type = SOCK_DIAG_BY_FAMILY
@@ -487,17 +605,17 @@ public class TcpSocketTrackerTest {
                 + "00"              // retrans
                 // inet_diag_sockid: ports and addresses are always in big endian,
                 // see StructInetDiagSockId.
-                + "DEA5"                                               // idiag_sport = 56997
-                + getHexStringFromShort(dstPort, ByteOrder.BIG_ENDIAN) // idiag_dport
-                + "0a006402000000000000000000000000"                   // idiag_src = 10.0.100.2
-                + "08080808000000000000000000000000"                   // idiag_dst = 8.8.8.8
-                + "00000000"                                           // idiag_if
-                + getHexStringFromLong(cookie)                         // idiag_cookie
-                + "00000000"                                           // idiag_expires
-                + "00000000"                                           // idiag_rqueue
-                + "00000000"                                           // idiag_wqueue
-                + getHexStringFromInt(TEST_UID1)                       // idiag_uid
-                + "00000000"                                           // idiag_inode
+                + "DEA5"                                                // idiag_sport = 56997
+                + getHexStringFromShort(dstPort, ByteOrder.BIG_ENDIAN)  // idiag_dport
+                + "0a006402000000000000000000000000"                    // idiag_src = 10.0.100.2
+                + "08080808000000000000000000000000"                    // idiag_dst = 8.8.8.8
+                + "00000000"                                            // idiag_if
+                + getHexStringFromLong(cookie)                          // idiag_cookie
+                + "00000000"                                            // idiag_expires
+                + "00000000"                                            // idiag_rqueue
+                + "00000000"                                            // idiag_wqueue
+                + getHexStringFromInt(uid)                              // idiag_uid
+                + "00000000"                                            // idiag_inode
                 // rtattr
                 + "0500"            // len = 5
                 + "0800"            // type = 8
