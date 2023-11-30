@@ -22,6 +22,8 @@ import static android.net.dhcp.IDhcpServer.STATUS_UNKNOWN_ERROR;
 
 import static com.android.net.module.util.DeviceConfigUtils.getResBooleanConfig;
 import static com.android.net.module.util.FeatureVersions.FEATURE_IS_UID_NETWORKING_BLOCKED;
+import static com.android.networkstack.util.NetworkStackUtils.IGNORE_TCP_INFO_FOR_BLOCKED_UIDS;
+import static com.android.networkstack.util.NetworkStackUtils.SKIP_TCP_POLL_IN_LIGHT_DOZE;
 import static com.android.server.util.PermissionUtil.checkDumpPermission;
 
 import android.app.Service;
@@ -439,6 +441,20 @@ public class NetworkStackService extends Service {
             if (args != null && args.length >= 1 && DUMPSYS_ARG_VERSION.equals(args[0])) {
                 return;
             }
+
+            pw.println("Device Configs:");
+            pw.increaseIndent();
+            pw.println("SKIP_TCP_POLL_IN_LIGHT_DOZE="
+                    + DeviceConfigUtils.isNetworkStackFeatureNotChickenedOut(
+                            mContext, SKIP_TCP_POLL_IN_LIGHT_DOZE));
+            pw.println("FEATURE_IS_UID_NETWORKING_BLOCKED=" + DeviceConfigUtils.isFeatureSupported(
+                            mContext, FEATURE_IS_UID_NETWORKING_BLOCKED));
+            pw.println("IGNORE_TCP_INFO_FOR_BLOCKED_UIDS="
+                    + DeviceConfigUtils.isNetworkStackFeatureNotChickenedOut(mContext,
+                            IGNORE_TCP_INFO_FOR_BLOCKED_UIDS));
+            pw.decreaseIndent();
+            pw.println();
+
 
             pw.println("NetworkStack logs:");
             mLog.dump(fd, pw, args);

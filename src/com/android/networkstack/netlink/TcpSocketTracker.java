@@ -148,6 +148,7 @@ public class TcpSocketTracker {
     @NonNull
     private NetworkCapabilities mNetworkCapabilities;
 
+    private final boolean mShouldDisableInDeepDoze;
     private final boolean mShouldDisableInLightDoze;
     private final boolean mShouldIgnoreTcpInfoForBlockedUids;
     private final ConnectivityManager mCm;
@@ -168,8 +169,9 @@ public class TcpSocketTracker {
                 }
             };
 
-    private static boolean isDeviceIdleModeChangedAction(Intent intent) {
-        return ACTION_DEVICE_IDLE_MODE_CHANGED.equals(intent.getAction());
+    private boolean isDeviceIdleModeChangedAction(Intent intent) {
+        return mShouldDisableInDeepDoze
+                && ACTION_DEVICE_IDLE_MODE_CHANGED.equals(intent.getAction());
     }
 
     @TargetApi(Build.VERSION_CODES.TIRAMISU)
@@ -190,7 +192,8 @@ public class TcpSocketTracker {
                 // For tcp polling mechanism, there is no difference between deep doze mode and
                 // light doze mode. The deep doze mode and light doze mode block networking
                 // for uids in the same way, use single variable to control.
-                final boolean deviceIdle = powerManager.isDeviceIdleMode()
+                final boolean deviceIdle = (mShouldDisableInDeepDoze
+                        && powerManager.isDeviceIdleMode())
                         || (mShouldDisableInLightDoze && powerManager.isDeviceLightIdleMode());
                 setDozeMode(deviceIdle);
             }
@@ -201,8 +204,15 @@ public class TcpSocketTracker {
         mDependencies = dps;
         mNetwork = network;
         mNetd = mDependencies.getNetd();
-        mShouldDisableInLightDoze = mDependencies.shouldDisableInLightDoze();
         mShouldIgnoreTcpInfoForBlockedUids = mDependencies.shouldIgnoreTcpInfoForBlockedUids();
+
+        // Previous workarounds can be disabled if the device supports ignore blocked uids feature.
+        // To prevent inconsistencies and issues like broadcast receiver leaks, the feature flags
+        // are fixed after being read.
+        // TODO: Remove these workarounds when pre-T devices are no longer supported.
+        mShouldDisableInLightDoze = mDependencies.shouldDisableInLightDoze(
+                mShouldIgnoreTcpInfoForBlockedUids);
+        mShouldDisableInDeepDoze = !mShouldIgnoreTcpInfoForBlockedUids;
 
         // If the parcel is null, nothing should be matched which is achieved by the combination of
         // {@code NetlinkUtils#NULL_MASK} and {@code NetlinkUtils#UNKNOWN_MARK}.
@@ -216,7 +226,8 @@ public class TcpSocketTracker {
                     family, InetDiagMessage.buildInetDiagReqForAliveTcpSockets(family));
         }
         mDependencies.addDeviceConfigChangedListener(mConfigListener);
-        mDependencies.addDeviceIdleReceiver(mDeviceIdleReceiver, mShouldDisableInLightDoze);
+        mDependencies.addDeviceIdleReceiver(mDeviceIdleReceiver, mShouldDisableInDeepDoze,
+                mShouldDisableInLightDoze);
         mCm = mDependencies.getContext().getSystemService(ConnectivityManager.class);
     }
 
@@ -551,7 +562,8 @@ public class TcpSocketTracker {
     /** Stops monitoring and releases resources. */
     public void quit() {
         mDependencies.removeDeviceConfigChangedListener(mConfigListener);
-        mDependencies.removeBroadcastReceiver(mDeviceIdleReceiver);
+        mDependencies.removeBroadcastReceiver(mDeviceIdleReceiver,
+                mShouldDisableInDeepDoze, mShouldDisableInLightDoze);
     }
 
     /**
@@ -736,8 +748,14 @@ public class TcpSocketTracker {
         /** Add receiver for detecting doze mode change to control TCP detection. */
         @TargetApi(Build.VERSION_CODES.TIRAMISU)
         public void addDeviceIdleReceiver(@NonNull final BroadcastReceiver receiver,
-                boolean shouldDisableInLightDoze) {
-            final IntentFilter intentFilter = new IntentFilter(ACTION_DEVICE_IDLE_MODE_CHANGED);
+                boolean shouldDisableInDeepDoze, boolean shouldDisableInLightDoze) {
+            // No need to register receiver if no related feature is enabled.
+            if (!shouldDisableInDeepDoze && !shouldDisableInLightDoze) return;
+
+            final IntentFilter intentFilter = new IntentFilter();
+            if (shouldDisableInDeepDoze) {
+                intentFilter.addAction(ACTION_DEVICE_IDLE_MODE_CHANGED);
+            }
             if (shouldDisableInLightDoze) {
                 intentFilter.addAction(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED);
             }
@@ -745,7 +763,9 @@ public class TcpSocketTracker {
         }
 
         /** Remove broadcast receiver. */
-        public void removeBroadcastReceiver(@NonNull final BroadcastReceiver receiver) {
+        public void removeBroadcastReceiver(@NonNull final BroadcastReceiver receiver,
+                boolean shouldDisableInDeepDoze, boolean shouldDisableInLightDoze) {
+            if (!shouldDisableInDeepDoze && !shouldDisableInLightDoze) return;
             mContext.unregisterReceiver(receiver);
         }
 
@@ -755,9 +775,14 @@ public class TcpSocketTracker {
          * to deal with flag values changing at runtime.
          */
         @TargetApi(Build.VERSION_CODES.TIRAMISU)
-        public boolean shouldDisableInLightDoze() {
+        public boolean shouldDisableInLightDoze(boolean ignoreBlockedUidsSupported) {
             // Light doze mode status checking API is only available at T or later releases.
-            return SdkLevel.isAtLeastT() && DeviceConfigUtils.isNetworkStackFeatureNotChickenedOut(
+            if (!SdkLevel.isAtLeastT()) return false;
+
+            // Disable light doze mode design is replaced by ignoring blocked uids design.
+            if (ignoreBlockedUidsSupported) return false;
+
+            return DeviceConfigUtils.isNetworkStackFeatureNotChickenedOut(
                     mContext, SKIP_TCP_POLL_IN_LIGHT_DOZE);
         }
 
