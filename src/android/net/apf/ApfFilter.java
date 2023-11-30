@@ -51,6 +51,7 @@ import android.net.apf.ApfGenerator.Register;
 import android.net.ip.IpClient.IpClientCallbacksWrapper;
 import android.os.PowerManager;
 import android.os.SystemClock;
+import android.stats.connectivity.NetworkQuirkEvent;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.text.format.DateUtils;
@@ -70,6 +71,7 @@ import com.android.net.module.util.CollectionUtils;
 import com.android.net.module.util.ConnectivityUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.SocketUtils;
+import com.android.networkstack.metrics.NetworkQuirkMetrics;
 import com.android.networkstack.util.NetworkStackUtils;
 
 import java.io.ByteArrayOutputStream;
@@ -279,6 +281,8 @@ public class ApfFilter implements AndroidPacketFilter {
     private final int mAcceptRaMinLft;
     private final boolean mShouldHandleLightDoze;
 
+    private final NetworkQuirkMetrics mNetworkQuirkMetrics;
+
     private static boolean isDeviceIdleModeChangedAction(Intent intent) {
         return ACTION_DEVICE_IDLE_MODE_CHANGED.equals(intent.getAction());
     }
@@ -335,13 +339,15 @@ public class ApfFilter implements AndroidPacketFilter {
     private final Dependencies mDependencies;
 
     public ApfFilter(Context context, ApfConfiguration config, InterfaceParams ifParams,
-            IpClientCallbacksWrapper ipClientCallback) {
-        this(context, config, ifParams, ipClientCallback, new Dependencies(context));
+            IpClientCallbacksWrapper ipClientCallback, NetworkQuirkMetrics networkQuirkMetrics) {
+        this(context, config, ifParams, ipClientCallback, networkQuirkMetrics,
+                new Dependencies(context));
     }
 
     @VisibleForTesting
     public ApfFilter(Context context, ApfConfiguration config, InterfaceParams ifParams,
-            IpClientCallbacksWrapper ipClientCallback, Dependencies dependencies) {
+            IpClientCallbacksWrapper ipClientCallback, NetworkQuirkMetrics networkQuirkMetrics,
+            Dependencies dependencies) {
         mApfCapabilities = config.apfCapabilities;
         mIpClientCallback = ipClientCallback;
         mInterfaceParams = ifParams;
@@ -352,6 +358,7 @@ public class ApfFilter implements AndroidPacketFilter {
         mContext = context;
         mShouldHandleLightDoze = config.shouldHandleLightDoze;
         mDependencies = dependencies;
+        mNetworkQuirkMetrics = networkQuirkMetrics;
 
         if (mApfCapabilities.hasDataAccess()) {
             mCountAndPassLabel = "countAndPass";
@@ -466,7 +473,9 @@ public class ApfFilter implements AndroidPacketFilter {
                 // a crash on some older devices (b/78905546).
                 if (mApfCapabilities.hasDataAccess()) {
                     byte[] zeroes = new byte[mApfCapabilities.maximumApfProgramSize];
-                    mIpClientCallback.installPacketFilter(zeroes);
+                    if (!mIpClientCallback.installPacketFilter(zeroes)) {
+                        sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
+                    }
                 }
 
                 // Install basic filters
@@ -1832,7 +1841,8 @@ public class ApfFilter implements AndroidPacketFilter {
      * </ul>
      */
     @GuardedBy("this")
-    private ApfGenerator emitPrologueLocked() throws IllegalInstructionException {
+    @VisibleForTesting
+    protected ApfGenerator emitPrologueLocked() throws IllegalInstructionException {
         // This is guaranteed to succeed because of the check in maybeCreate.
         ApfGenerator gen = new ApfGenerator(mApfCapabilities.apfVersionSupported);
 
@@ -1971,6 +1981,7 @@ public class ApfFilter implements AndroidPacketFilter {
             // Can't fit the program even without any RA filters?
             if (gen.programLengthOverEstimate() > maximumApfProgramSize) {
                 Log.e(TAG, "Program exceeds maximum size " + maximumApfProgramSize);
+                sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
                 return;
             }
 
@@ -1981,6 +1992,7 @@ public class ApfFilter implements AndroidPacketFilter {
                 // Stop if we get too big.
                 if (gen.programLengthOverEstimate() > maximumApfProgramSize) {
                     if (VDBG) Log.d(TAG, "Past maximum program size, skipping RAs");
+                    sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
                     break;
                 }
 
@@ -1997,11 +2009,14 @@ public class ApfFilter implements AndroidPacketFilter {
             program = gen.generate();
         } catch (IllegalInstructionException|IllegalStateException e) {
             Log.e(TAG, "Failed to generate APF program.", e);
+            sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_GENERATE_FILTER_EXCEPTION);
             return;
         }
         // Update data snapshot every time we install a new program
         mIpClientCallback.startReadPacketFilter();
-        mIpClientCallback.installPacketFilter(program);
+        if (!mIpClientCallback.installPacketFilter(program)) {
+            sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
+        }
         mLastTimeInstalledProgram = timeSeconds;
         mLastInstalledProgramMinLifetime = programMinLft;
         mLastInstalledProgram = program;
@@ -2086,7 +2101,8 @@ public class ApfFilter implements AndroidPacketFilter {
      * filtering using APF programs.
      */
     public static ApfFilter maybeCreate(Context context, ApfConfiguration config,
-            InterfaceParams ifParams, IpClientCallbacksWrapper ipClientCallback) {
+            InterfaceParams ifParams, IpClientCallbacksWrapper ipClientCallback,
+            NetworkQuirkMetrics networkQuirkMetrics) {
         if (context == null || config == null || ifParams == null) return null;
         ApfCapabilities apfCapabilities =  config.apfCapabilities;
         if (apfCapabilities == null) return null;
@@ -2103,7 +2119,7 @@ public class ApfFilter implements AndroidPacketFilter {
             return null;
         }
 
-        return new ApfFilter(context, config, ifParams, ipClientCallback);
+        return new ApfFilter(context, config, ifParams, ipClientCallback, networkQuirkMetrics);
     }
 
     public synchronized void shutdown() {
@@ -2384,5 +2400,11 @@ public class ApfFilter implements AndroidPacketFilter {
             offset += a.length;
         }
         return result;
+    }
+
+    private void sendNetworkQuirkMetrics(final NetworkQuirkEvent event) {
+        if (mNetworkQuirkMetrics == null) return;
+        mNetworkQuirkMetrics.setEvent(event);
+        mNetworkQuirkMetrics.statsWrite();
     }
 }

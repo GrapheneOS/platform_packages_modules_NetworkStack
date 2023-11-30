@@ -376,13 +376,15 @@ public class IpClient extends StateMachine {
         /**
          * Called to indicate that a new APF program must be installed to filter incoming packets.
          */
-        public void installPacketFilter(byte[] filter) {
+        public boolean installPacketFilter(byte[] filter) {
             log("installPacketFilter(byte[" + filter.length + "])");
             try {
                 mCallback.installPacketFilter(filter);
             } catch (RemoteException e) {
                 log("Failed to call installPacketFilter", e);
+                return false;
             }
+            return true;
         }
 
         /**
@@ -841,11 +843,13 @@ public class IpClient extends StateMachine {
          */
         public AndroidPacketFilter maybeCreateApfFilter(Context context,
                 ApfFilter.ApfConfiguration config, InterfaceParams ifParams,
-                IpClientCallbacksWrapper cb, boolean useNewApfFilter) {
+                IpClientCallbacksWrapper cb, NetworkQuirkMetrics networkQuirkMetrics,
+                boolean useNewApfFilter) {
             if (useNewApfFilter) {
-                return ApfFilter.maybeCreate(context, config, ifParams, cb);
+                return ApfFilter.maybeCreate(context, config, ifParams, cb, networkQuirkMetrics);
             } else {
-                return LegacyApfFilter.maybeCreate(context, config, ifParams, cb);
+                return LegacyApfFilter.maybeCreate(context, config, ifParams, cb,
+                        networkQuirkMetrics);
             }
         }
 
@@ -2385,7 +2389,7 @@ public class IpClient extends StateMachine {
         apfConfig.acceptRaMinLft = mAcceptRaMinLft;
         apfConfig.shouldHandleLightDoze = mApfShouldHandleLightDoze;
         return mDependencies.maybeCreateApfFilter(mContext, apfConfig, mInterfaceParams,
-                mCallback, mUseNewApfFilter);
+                mCallback, mNetworkQuirkMetrics, mUseNewApfFilter);
     }
 
     private boolean handleUpdateApfCapabilities(@NonNull final ApfCapabilities apfCapabilities) {

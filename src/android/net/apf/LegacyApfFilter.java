@@ -52,6 +52,7 @@ import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.RaEvent;
 import android.os.PowerManager;
 import android.os.SystemClock;
+import android.stats.connectivity.NetworkQuirkEvent;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.text.format.DateUtils;
@@ -68,6 +69,7 @@ import com.android.net.module.util.CollectionUtils;
 import com.android.net.module.util.ConnectivityUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.SocketUtils;
+import com.android.networkstack.metrics.NetworkQuirkMetrics;
 import com.android.networkstack.util.NetworkStackUtils;
 
 import java.io.ByteArrayOutputStream;
@@ -325,6 +327,8 @@ public class LegacyApfFilter implements AndroidPacketFilter {
     // Ignore non-zero RDNSS lifetimes below this value.
     private final int mMinRdnssLifetimeSec;
 
+    private final NetworkQuirkMetrics mNetworkQuirkMetrics;
+
     // Detects doze mode state transitions.
     private final BroadcastReceiver mDeviceIdleReceiver = new BroadcastReceiver() {
         @Override
@@ -350,7 +354,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
     @VisibleForTesting
     public LegacyApfFilter(Context context, ApfFilter.ApfConfiguration config,
             InterfaceParams ifParams, IpClientCallbacksWrapper ipClientCallback,
-            IpConnectivityLog log) {
+            IpConnectivityLog log, NetworkQuirkMetrics networkQuirkMetrics) {
         mApfCapabilities = config.apfCapabilities;
         mIpClientCallback = ipClientCallback;
         mInterfaceParams = ifParams;
@@ -358,6 +362,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
         mDrop802_3Frames = config.ieee802_3Filter;
         mMinRdnssLifetimeSec = config.minRdnssLifetimeSec;
         mContext = context;
+        mNetworkQuirkMetrics = networkQuirkMetrics;
 
         if (mApfCapabilities.hasDataAccess()) {
             mCountAndPassLabel = "countAndPass";
@@ -440,7 +445,9 @@ public class LegacyApfFilter implements AndroidPacketFilter {
                 // a crash on some older devices (b/78905546).
                 if (mApfCapabilities.hasDataAccess()) {
                     byte[] zeroes = new byte[mApfCapabilities.maximumApfProgramSize];
-                    mIpClientCallback.installPacketFilter(zeroes);
+                    if (!mIpClientCallback.installPacketFilter(zeroes)) {
+                        sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
+                    }
                 }
 
                 // Install basic filters
@@ -1756,6 +1763,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
             // Can't fit the program even without any RA filters?
             if (gen.programLengthOverEstimate() > maximumApfProgramSize) {
                 Log.e(TAG, "Program exceeds maximum size " + maximumApfProgramSize);
+                sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
                 return;
             }
 
@@ -1765,6 +1773,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
                 // Stop if we get too big.
                 if (gen.programLengthOverEstimate() > maximumApfProgramSize) {
                     if (VDBG) Log.d(TAG, "Past maximum program size, skipping RAs");
+                    sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
                     break;
                 }
 
@@ -1780,9 +1789,12 @@ public class LegacyApfFilter implements AndroidPacketFilter {
             program = gen.generate();
         } catch (IllegalInstructionException|IllegalStateException e) {
             Log.e(TAG, "Failed to generate APF program.", e);
+            sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_GENERATE_FILTER_EXCEPTION);
             return;
         }
-        mIpClientCallback.installPacketFilter(program);
+        if (!mIpClientCallback.installPacketFilter(program)) {
+            sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
+        }
         mLastTimeInstalledProgram = mProgramBaseTime;
         mLastInstalledProgramMinLifetime = programMinLifetime;
         mLastInstalledProgram = program;
@@ -1901,7 +1913,8 @@ public class LegacyApfFilter implements AndroidPacketFilter {
      * filtering using APF programs.
      */
     public static LegacyApfFilter maybeCreate(Context context, ApfFilter.ApfConfiguration config,
-            InterfaceParams ifParams, IpClientCallbacksWrapper ipClientCallback) {
+            InterfaceParams ifParams, IpClientCallbacksWrapper ipClientCallback,
+            NetworkQuirkMetrics networkQuirkMetrics) {
         if (context == null || config == null || ifParams == null) return null;
         ApfCapabilities apfCapabilities =  config.apfCapabilities;
         if (apfCapabilities == null) return null;
@@ -1920,7 +1933,8 @@ public class LegacyApfFilter implements AndroidPacketFilter {
             return null;
         }
 
-        return new LegacyApfFilter(context, config, ifParams, ipClientCallback, new IpConnectivityLog());
+        return new LegacyApfFilter(context, config, ifParams, ipClientCallback,
+                new IpConnectivityLog(), networkQuirkMetrics);
     }
 
     public synchronized void shutdown() {
@@ -2196,5 +2210,11 @@ public class LegacyApfFilter implements AndroidPacketFilter {
             offset += a.length;
         }
         return result;
+    }
+
+    private void sendNetworkQuirkMetrics(final NetworkQuirkEvent event) {
+        if (mNetworkQuirkMetrics == null) return;
+        mNetworkQuirkMetrics.setEvent(event);
+        mNetworkQuirkMetrics.statsWrite();
     }
 }
