@@ -221,7 +221,7 @@ public class Dhcp6Packet {
         }
 
         /**
-         * Check whether or not the delegated prefix in DHCPv6 packet is valid.
+         * Check whether or not the IA_PD option in DHCPv6 message is valid.
          *
          * TODO: ensure that the prefix has a reasonable lifetime, and the timers aren't too short.
          */
