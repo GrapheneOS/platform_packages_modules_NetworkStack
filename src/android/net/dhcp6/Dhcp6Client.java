@@ -638,6 +638,33 @@ public class Dhcp6Client extends StateMachine {
         }
     }
 
+    // Create an IPv6 address from the interface mac address with IFA_F_MANAGETEMPADDR
+    // flag, kernel will create another privacy IPv6 address on behalf of user space.
+    // We don't need to remember IPv6 addresses that need to extend the lifetime every
+    // time it enters BoundState.
+    private boolean addInterfaceAddress(@NonNull final Inet6Address address,
+            @NonNull final IaPrefixOption ipo) {
+        final int flags = IFA_F_NOPREFIXROUTE | IFA_F_MANAGETEMPADDR | IFA_F_NODAD;
+        final long now = SystemClock.elapsedRealtime();
+        final long deprecationTime = now + ipo.preferred;
+        final long expirationTime = now + ipo.valid;
+        final LinkAddress la = new LinkAddress(address, RFC7421_PREFIX_LENGTH, flags,
+                RT_SCOPE_UNIVERSE /* scope */, deprecationTime, expirationTime);
+        if (!la.isGlobalPreferred()) {
+            Log.e(TAG, la + " is not a global preferred IPv6 address");
+            return false;
+        }
+        if (!NetlinkUtils.sendRtmNewAddressRequest(mIface.index, address,
+                (short) RFC7421_PREFIX_LENGTH,
+                flags, (byte) RT_SCOPE_UNIVERSE /* scope */,
+                ipo.preferred, ipo.valid)) {
+            Log.e(TAG, "Failed to set IPv6 address " + address.getHostAddress()
+                    + "%" + mIface.index);
+            return false;
+        }
+        return true;
+    }
+
     /**
      * Client has already obtained the lease(e.g. IA_PD option) from server and stays in Bound
      * state until T1 expires, and then transition to Renew state to extend the lease duration.
@@ -650,35 +677,21 @@ public class Dhcp6Client extends StateMachine {
 
             // TODO: roll back to SOLICIT state after a delay if something wrong happens
             // instead of returning directly.
-            // The server may assign a prefix with length less than 64. To support automatic address
-            // generation (with IFA_F_MANAGETEMPADDR), we always set the address prefix length to
-            // 64, even if the delegated prefix length is less than 64. However, the unreachable
-            // route should still use the assigned prefix length.
-            final IpPrefix routePrefix = mReply.ipos.get(0).getIpPrefix();
-            final IpPrefix addressPrefix = new IpPrefix(routePrefix.getAddress(),
-                    RFC7421_PREFIX_LENGTH);
-            // Create EUI-64, so we don't need to remember IPv6 addresses that need to extend the
-            // lifetime every time it enters BoundState.
-            final Inet6Address address = createInet6AddressFromEui64(addressPrefix,
-                    macAddressToEui64(mIface.macAddr));
-            final int flags = IFA_F_NOPREFIXROUTE | IFA_F_MANAGETEMPADDR | IFA_F_NODAD;
-            final long now = SystemClock.elapsedRealtime();
-            final IaPrefixOption ipo = mReply.ipos.get(0);
-            final long deprecationTime = now + ipo.preferred;
-            final long expirationTime = now + ipo.valid;
-            final LinkAddress la = new LinkAddress(address, RFC7421_PREFIX_LENGTH, flags,
-                    RT_SCOPE_UNIVERSE /* scope */, deprecationTime, expirationTime);
-            if (!la.isGlobalPreferred()) {
-                Log.e(TAG, la + " is not a global IPv6 address, ignoring");
-                return;
-            }
-            if (!NetlinkUtils.sendRtmNewAddressRequest(mIface.index, address,
-                    (short) RFC7421_PREFIX_LENGTH,
-                    flags, (byte) RT_SCOPE_UNIVERSE /* scope */,
-                    ipo.preferred, ipo.valid)) {
-                Log.e(TAG, "Failed to set IPv6 address " + address.getHostAddress()
-                        + "%" + mIface.index);
-                return;
+            for (IaPrefixOption ipo : mReply.getValidIaPrefixes()) {
+                // TODO: The prefix with preferred/valid lifetime of 0 is valid, but client
+                // should stop using the prefix immediately. Actually kernel doesn't accept
+                // the address with valid lifetime of 0 and returns EINVAL when it sees that.
+                // We should send RTM_DELADDR netlink message to kernel to delete these addresses
+                // from the interface if any.
+                // Configure IPv6 addresses based on the delegated prefix(es) on the interface.
+                // We've checked that delegated prefix is valid upon receiving the response from
+                // DHCPv6 server, and the server may assign a prefix with length less than 64. So
+                // for SLAAC use case we always set the prefix length to 64 even if the delegated
+                // prefix length is less than 64.
+                final IpPrefix prefix = ipo.getIpPrefix();
+                final Inet6Address address = createInet6AddressFromEui64(prefix,
+                        macAddressToEui64(mIface.macAddr));
+                if (!addInterfaceAddress(address, ipo)) continue;
             }
             notifyPrefixDelegation(DHCP6_PD_SUCCESS, mReply);
         }
