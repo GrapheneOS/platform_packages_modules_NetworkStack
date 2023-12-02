@@ -372,18 +372,21 @@ public class LegacyApfFilter implements AndroidPacketFilter {
     @GuardedBy("this")
     private int mIPv4PrefixLength;
 
+    private final ApfFilter.Dependencies mDependencies;
+
     @VisibleForTesting
     public LegacyApfFilter(Context context, ApfFilter.ApfConfiguration config,
             InterfaceParams ifParams, IpClientCallbacksWrapper ipClientCallback,
             IpConnectivityLog log, NetworkQuirkMetrics networkQuirkMetrics) {
         this(context, config, ifParams, ipClientCallback, log, networkQuirkMetrics,
-                new ApfFilter.Clock());
+                new ApfFilter.Dependencies(context), new ApfFilter.Clock());
     }
 
     @VisibleForTesting
     public LegacyApfFilter(Context context, ApfFilter.ApfConfiguration config,
             InterfaceParams ifParams, IpClientCallbacksWrapper ipClientCallback,
-            IpConnectivityLog log, NetworkQuirkMetrics networkQuirkMetrics, ApfFilter.Clock clock) {
+            IpConnectivityLog log, NetworkQuirkMetrics networkQuirkMetrics,
+            ApfFilter.Dependencies dependencies, ApfFilter.Clock clock) {
         mApfCapabilities = config.apfCapabilities;
         mIpClientCallback = ipClientCallback;
         mInterfaceParams = ifParams;
@@ -392,9 +395,10 @@ public class LegacyApfFilter implements AndroidPacketFilter {
         mMinRdnssLifetimeSec = config.minRdnssLifetimeSec;
         mContext = context;
         mClock = clock;
+        mDependencies = dependencies;
         mNetworkQuirkMetrics = networkQuirkMetrics;
-        mIpClientRaInfoMetrics = new IpClientRaInfoMetrics();
-        mApfSessionInfoMetrics = new ApfSessionInfoMetrics();
+        mIpClientRaInfoMetrics = dependencies.getIpClientRaInfoMetrics();
+        mApfSessionInfoMetrics = dependencies.getApfSessionInfoMetrics();
         mSessionStartMs = mClock.elapsedRealtime();
         mMinMetricsSessionDurationMs = config.minMetricsSessionDurationMs;
 
@@ -1705,7 +1709,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
      * </ul>
      */
     @GuardedBy("this")
-    private ApfGenerator emitPrologueLocked() throws IllegalInstructionException {
+    protected ApfGenerator emitPrologueLocked() throws IllegalInstructionException {
         // This is guaranteed to succeed because of the check in maybeCreate.
         ApfGenerator gen = new ApfGenerator(mApfCapabilities.apfVersionSupported);
 
