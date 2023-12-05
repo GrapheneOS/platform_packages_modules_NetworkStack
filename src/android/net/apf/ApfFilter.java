@@ -1551,13 +1551,15 @@ public class ApfFilter implements AndroidPacketFilter {
                 int broadcastAddr = ipv4BroadcastAddress(mIPv4Address, mIPv4PrefixLength);
                 gen.addJumpIfR0Equals(broadcastAddr, mCountAndDropLabel);
             }
+        }
 
-            // If any TCP keepalive filter matches, drop
-            generateV4KeepaliveFilters(gen);
+        // If any TCP keepalive filter matches, drop
+        generateV4KeepaliveFilters(gen);
 
-            // If any NAT-T keepalive filter matches, drop
-            generateV4NattKeepaliveFilters(gen);
+        // If any NAT-T keepalive filter matches, drop
+        generateV4NattKeepaliveFilters(gen);
 
+        if (mMulticastFilter) {
             // Otherwise, this is an IPv4 unicast, pass
             // If L2 broadcast packet, drop.
             // TODO: can we invert this condition to fall through to the common pass case below?
@@ -1566,9 +1568,6 @@ public class ApfFilter implements AndroidPacketFilter {
             gen.addJumpIfBytesNotEqual(Register.R0, ETHER_BROADCAST, mCountAndPassLabel);
             maybeSetupCounter(gen, Counter.DROPPED_IPV4_L2_BROADCAST);
             gen.addJump(mCountAndDropLabel);
-        } else {
-            generateV4KeepaliveFilters(gen);
-            generateV4NattKeepaliveFilters(gen);
         }
 
         // Otherwise, pass
