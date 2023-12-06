@@ -278,7 +278,7 @@ public class NetworkStackUtils {
     public static final String SKIP_TCP_POLL_IN_LIGHT_DOZE = "skip_tcp_poll_in_light_doze_mode";
 
     /**
-     * Kill switch flag to disable the feature of re-evaluate when network resumes.
+     * Experiment flag to enable the feature of re-evaluate when network resumes.
      */
     public static final String REEVALUATE_WHEN_RESUME = "reevaluate_when_resume";
 
