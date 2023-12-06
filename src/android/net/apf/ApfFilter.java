@@ -239,6 +239,7 @@ public class ApfFilter implements AndroidPacketFilter {
     // Endianness is not an issue for this constant because the APF interpreter always operates in
     // network byte order.
     private static final int IPV4_FRAGMENT_OFFSET_MASK = 0x1fff;
+    private static final int IPV4_FRAGMENT_MORE_FRAGS_MASK = 0x2000;
     private static final int IPV4_PROTOCOL_OFFSET = ETH_HEADER_LEN + 9;
     private static final int IPV4_DEST_ADDR_OFFSET = ETH_HEADER_LEN + 16;
     private static final int IPV4_ANY_HOST_ADDRESS = 0;
@@ -1760,9 +1761,10 @@ public class ApfFilter implements AndroidPacketFilter {
         gen.addLoad16(Register.R0, ETH_ETHERTYPE_OFFSET);
         gen.addJumpIfR0NotEquals(ETH_P_IP, skipMdnsFilter);
 
-        // Check it's not a fragment or is the initial fragment.
+        // Check it's not a fragment.
         gen.addLoad16(Register.R0, IPV4_FRAGMENT_OFFSET_OFFSET);
-        gen.addJumpIfR0AnyBitsSet(IPV4_FRAGMENT_OFFSET_MASK, skipMdnsFilter);
+        gen.addJumpIfR0AnyBitsSet(IPV4_FRAGMENT_MORE_FRAGS_MASK | IPV4_FRAGMENT_OFFSET_MASK,
+                skipMdnsFilter);
 
         // Checks it's UDP.
         gen.addLoad8(Register.R0, IPV4_PROTOCOL_OFFSET);
