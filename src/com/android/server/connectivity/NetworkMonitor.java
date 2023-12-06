@@ -630,8 +630,8 @@ public class NetworkMonitor extends StateMachine {
         mPrivateIpNoInternetEnabled = getIsPrivateIpNoInternetEnabled();
         mMetricsEnabled = deps.isFeatureNotChickenedOut(context,
                 NetworkStackUtils.VALIDATION_METRICS_VERSION);
-        mReevaluateWhenResumeEnabled = deps.isFeatureNotChickenedOut(context,
-                NetworkStackUtils.REEVALUATE_WHEN_RESUME);
+        mReevaluateWhenResumeEnabled = deps.isFeatureEnabled(
+                context, NetworkStackUtils.REEVALUATE_WHEN_RESUME);
         mUseHttps = getUseHttpsValidation();
         mCaptivePortalUserAgent = getCaptivePortalUserAgent();
         mCaptivePortalFallbackSpecs =
