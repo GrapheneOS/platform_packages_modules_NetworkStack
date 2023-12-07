@@ -15,9 +15,11 @@
  */
 package android.net.apf
 
+import android.net.apf.ApfGenerator.IllegalInstructionException
 import androidx.test.filters.SmallTest
 import androidx.test.runner.AndroidJUnit4
 import kotlin.test.assertContentEquals
+import kotlin.test.assertFailsWith
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -29,12 +31,24 @@ import org.junit.runner.RunWith
 class ApfV5Test {
 
     @Test
+    fun testApfInstructionVersionCheck() {
+        var gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION)
+        assertFailsWith<IllegalInstructionException> { gen.addDrop() }
+    }
+
+    @Test
     fun testApfInstructionsEncoding() {
         var gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION)
         gen.addPass()
         var program = gen.generate()
         // encoding PASS opcode: opcode=0, imm_len=0, R=0
         assertContentEquals(byteArrayOf(encodeInstruction(0, 0, 0)), program)
+
+        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
+        gen.addDrop()
+        program = gen.generate()
+        // encoding DROP opcode: opcode=0, imm_len=0, R=1
+        assertContentEquals(byteArrayOf(encodeInstruction(0, 0, 1)), program)
 
         gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
         gen.addAlloc(ApfGenerator.Register.R0)
