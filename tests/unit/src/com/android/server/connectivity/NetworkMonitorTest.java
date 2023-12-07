@@ -2302,8 +2302,7 @@ public class NetworkMonitorTest {
     @Test
     public void testReevaluationInterval_networkResume() throws Exception {
         // Setup nothing and expect validation to fail.
-        doReturn(true).when(mDependencies)
-                .isFeatureNotChickenedOut(any(), eq(REEVALUATE_WHEN_RESUME));
+        doReturn(true).when(mDependencies).isFeatureEnabled(any(), eq(REEVALUATE_WHEN_RESUME));
         final NetworkMonitor nm = runFailedNetworkTest();
         verifyNetworkTested(VALIDATION_RESULT_INVALID, 0 /* probesSucceeded */,
                 1 /* interactions */);

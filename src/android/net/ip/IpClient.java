@@ -1089,7 +1089,7 @@ public class IpClient extends StateMachine {
     }
 
     private boolean isGratuitousNaEnabled() {
-        return mDependencies.isFeatureEnabled(mContext, IPCLIENT_GRATUITOUS_NA_VERSION);
+        return mDependencies.isFeatureNotChickenedOut(mContext, IPCLIENT_GRATUITOUS_NA_VERSION);
     }
 
     private boolean isGratuitousArpNaRoamingEnabled() {
