@@ -323,6 +323,7 @@ java_defaults {
         "net-utils-device-common",
         "net-utils-device-common-ip",
         "net-utils-device-common-netlink",
+        "net-utils-device-common-struct",
     ],
 }
 
@@ -340,7 +341,6 @@ android_library {
     ],
     static_libs: [
         "NetworkStackApiCurrentShims",
-        "net-utils-device-common-struct",
     ],
     manifest: "AndroidManifestBase.xml",
     visibility: [
@@ -361,7 +361,6 @@ android_library {
     ],
     static_libs: [
         "NetworkStackApiStableShims",
-        "net-utils-device-common-struct",
     ],
     manifest: "AndroidManifestBase.xml",
     visibility: [
