@@ -42,6 +42,7 @@ import static com.android.net.module.util.NetworkStackConstants.RFC7421_PREFIX_L
 import static com.android.net.module.util.NetworkStackConstants.VENDOR_SPECIFIC_IE_ID;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_LIGHT_DOZE_FORCE_DISABLE;
 import static com.android.networkstack.util.NetworkStackUtils.APF_NEW_RA_FILTER_VERSION;
+import static com.android.networkstack.util.NetworkStackUtils.APF_POLLING_COUNTERS_FORCE_DISABLE;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GRATUITOUS_NA_VERSION;
@@ -99,6 +100,7 @@ import android.stats.connectivity.NudEventType;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.text.TextUtils;
+import android.text.format.DateUtils;
 import android.util.LocalLog;
 import android.util.Log;
 import android.util.Pair;
@@ -374,13 +376,15 @@ public class IpClient extends StateMachine {
         /**
          * Called to indicate that a new APF program must be installed to filter incoming packets.
          */
-        public void installPacketFilter(byte[] filter) {
+        public boolean installPacketFilter(byte[] filter) {
             log("installPacketFilter(byte[" + filter.length + "])");
             try {
                 mCallback.installPacketFilter(filter);
             } catch (RemoteException e) {
                 log("Failed to call installPacketFilter", e);
+                return false;
             }
+            return true;
         }
 
         /**
@@ -516,6 +520,7 @@ public class IpClient extends StateMachine {
     private static final int CMD_SET_DTIM_MULTIPLIER_AFTER_DELAY = 18;
     private static final int CMD_UPDATE_APF_CAPABILITIES = 19;
     private static final int EVENT_IPV6_AUTOCONF_TIMEOUT = 20;
+    private static final int CMD_UPDATE_APF_DATA_SNAPSHOT = 21;
 
     private static final int ARG_LINKPROP_CHANGED_LINKSTATE_DOWN = 0;
     private static final int ARG_LINKPROP_CHANGED_LINKSTATE_UP = 1;
@@ -546,6 +551,12 @@ public class IpClient extends StateMachine {
     static final String CONFIG_ACCEPT_RA_MIN_LFT = "ipclient_accept_ra_min_lft";
     @VisibleForTesting
     static final int DEFAULT_ACCEPT_RA_MIN_LFT = 180;
+
+    @VisibleForTesting
+    static final String CONFIG_APF_COUNTER_POLLING_INTERVAL_SECS =
+            "ipclient_apf_counter_polling_interval_secs";
+    @VisibleForTesting
+    static final int DEFAULT_APF_COUNTER_POLLING_INTERVAL_SECS = 300;
 
     // Used to wait for the provisioning to complete eventually and then decide the target
     // network type, which gives the accurate hint to set DTIM multiplier. Per current IPv6
@@ -669,11 +680,15 @@ public class IpClient extends StateMachine {
     // Ignore any nonzero RA section with lifetime below this value.
     private final int mAcceptRaMinLft;
 
+    // Polling interval to update APF data snapshot
+    private final long mApfCounterPollingIntervalMs;
+
     // Experiment flag read from device config.
     private final boolean mDhcp6PrefixDelegationEnabled;
     private final boolean mUseNewApfFilter;
     private final boolean mEnableIpClientIgnoreLowRaLifetime;
     private final boolean mApfShouldHandleLightDoze;
+    private final boolean mApfShouldPollingCounters;
 
     private InterfaceParams mInterfaceParams;
 
@@ -828,11 +843,13 @@ public class IpClient extends StateMachine {
          */
         public AndroidPacketFilter maybeCreateApfFilter(Context context,
                 ApfFilter.ApfConfiguration config, InterfaceParams ifParams,
-                IpClientCallbacksWrapper cb, boolean useNewApfFilter) {
+                IpClientCallbacksWrapper cb, NetworkQuirkMetrics networkQuirkMetrics,
+                boolean useNewApfFilter) {
             if (useNewApfFilter) {
-                return ApfFilter.maybeCreate(context, config, ifParams, cb);
+                return ApfFilter.maybeCreate(context, config, ifParams, cb, networkQuirkMetrics);
             } else {
-                return LegacyApfFilter.maybeCreate(context, config, ifParams, cb);
+                return LegacyApfFilter.maybeCreate(context, config, ifParams, cb,
+                        networkQuirkMetrics);
             }
         }
 
@@ -890,12 +907,17 @@ public class IpClient extends StateMachine {
                 CONFIG_MIN_RDNSS_LIFETIME, DEFAULT_MIN_RDNSS_LIFETIME);
         mAcceptRaMinLft = mDependencies.getDeviceConfigPropertyInt(CONFIG_ACCEPT_RA_MIN_LFT,
                 DEFAULT_ACCEPT_RA_MIN_LFT);
+        mApfCounterPollingIntervalMs = mDependencies.getDeviceConfigPropertyInt(
+                CONFIG_APF_COUNTER_POLLING_INTERVAL_SECS,
+                DEFAULT_APF_COUNTER_POLLING_INTERVAL_SECS) * DateUtils.SECOND_IN_MILLIS;
         mUseNewApfFilter = mDependencies.isFeatureEnabled(context, APF_NEW_RA_FILTER_VERSION);
         mEnableIpClientIgnoreLowRaLifetime = mDependencies.isFeatureEnabled(context,
                 IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION);
         // Light doze mode status checking API is only available at T or later releases.
         mApfShouldHandleLightDoze = SdkLevel.isAtLeastT() && mDependencies.isFeatureNotChickenedOut(
                 mContext, APF_HANDLE_LIGHT_DOZE_FORCE_DISABLE);
+        mApfShouldPollingCounters = mDependencies.isFeatureNotChickenedOut(
+                mContext, APF_POLLING_COUNTERS_FORCE_DISABLE);
 
         IpClientLinkObserver.Configuration config = new IpClientLinkObserver.Configuration(
                 mMinRdnssLifetimeSec);
@@ -2366,8 +2388,9 @@ public class IpClient extends StateMachine {
         apfConfig.minRdnssLifetimeSec = mMinRdnssLifetimeSec;
         apfConfig.acceptRaMinLft = mAcceptRaMinLft;
         apfConfig.shouldHandleLightDoze = mApfShouldHandleLightDoze;
+        apfConfig.minMetricsSessionDurationMs = mApfCounterPollingIntervalMs;
         return mDependencies.maybeCreateApfFilter(mContext, apfConfig, mInterfaceParams,
-                mCallback, mUseNewApfFilter);
+                mCallback, mNetworkQuirkMetrics, mUseNewApfFilter);
     }
 
     private boolean handleUpdateApfCapabilities(@NonNull final ApfCapabilities apfCapabilities) {
@@ -2773,6 +2796,9 @@ public class IpClient extends StateMachine {
             if (mApfFilter == null) {
                 mCallback.setFallbackMulticastFilter(mMulticastFiltering);
             }
+            if (mApfShouldPollingCounters) {
+                sendMessageDelayed(CMD_UPDATE_APF_DATA_SNAPSHOT, mApfCounterPollingIntervalMs);
+            }
 
             mPacketTracker = createPacketTracker();
             if (mPacketTracker != null) mPacketTracker.start(mConfiguration.mDisplayName);
@@ -2830,6 +2856,8 @@ public class IpClient extends StateMachine {
             }
 
             resetLinkProperties();
+
+            removeMessages(CMD_UPDATE_APF_DATA_SNAPSHOT);
         }
 
         private void enqueueJumpToStoppingState(final DisconnectCode code) {
@@ -3119,6 +3147,11 @@ public class IpClient extends StateMachine {
                     if (handleUpdateApfCapabilities(apfCapabilities)) {
                         mApfFilter = maybeCreateApfFilter(apfCapabilities);
                     }
+                    break;
+
+                case CMD_UPDATE_APF_DATA_SNAPSHOT:
+                    mCallback.startReadPacketFilter();
+                    sendMessageDelayed(CMD_UPDATE_APF_DATA_SNAPSHOT, mApfCounterPollingIntervalMs);
                     break;
 
                 default:

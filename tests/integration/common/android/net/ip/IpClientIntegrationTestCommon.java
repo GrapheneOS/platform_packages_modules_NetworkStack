@@ -42,7 +42,9 @@ import static android.net.dhcp6.Dhcp6Packet.PrefixDelegation;
 import static android.net.ip.IIpClientCallbacks.DTIM_MULTIPLIER_RESET;
 import static android.net.ip.IpClient.CONFIG_IPV6_AUTOCONF_TIMEOUT;
 import static android.net.ip.IpClient.CONFIG_ACCEPT_RA_MIN_LFT;
+import static android.net.ip.IpClient.CONFIG_APF_COUNTER_POLLING_INTERVAL_SECS;
 import static android.net.ip.IpClient.DEFAULT_ACCEPT_RA_MIN_LFT;
+import static android.net.ip.IpClient.DEFAULT_APF_COUNTER_POLLING_INTERVAL_SECS;
 import static android.net.ip.IpClientLinkObserver.CLAT_PREFIX;
 import static android.net.ip.IpClientLinkObserver.CONFIG_SOCKET_RECV_BUFSIZE;
 import static android.net.ip.IpReachabilityMonitor.NUD_MCAST_RESOLICIT_NUM;
@@ -829,6 +831,10 @@ public abstract class IpClientIntegrationTestCommon {
         // Set the minimal RA lifetime value, any RA section with liftime below this value will be
         // ignored.
         mDependencies.setDeviceConfigProperty(CONFIG_ACCEPT_RA_MIN_LFT, DEFAULT_ACCEPT_RA_MIN_LFT);
+
+        // Set the polling interval to update APF data snapshot.
+        mDependencies.setDeviceConfigProperty(CONFIG_APF_COUNTER_POLLING_INTERVAL_SECS,
+                DEFAULT_APF_COUNTER_POLLING_INTERVAL_SECS);
     }
 
     private void awaitIpClientShutdown() throws Exception {
