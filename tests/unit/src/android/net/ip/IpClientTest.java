@@ -707,7 +707,7 @@ public class IpClientTest {
         final ArgumentCaptor<ApfConfiguration> configCaptor = ArgumentCaptor.forClass(
                 ApfConfiguration.class);
         verify(mDependencies, timeout(TEST_TIMEOUT_MS)).maybeCreateApfFilter(
-                any(), configCaptor.capture(), any(), any(), anyBoolean());
+                any(), configCaptor.capture(), any(), any(), any(), anyBoolean());
 
         return configCaptor.getValue();
     }
@@ -776,7 +776,7 @@ public class IpClientTest {
         final ArgumentCaptor<ApfConfiguration> configCaptor = ArgumentCaptor.forClass(
                 ApfConfiguration.class);
         verify(mDependencies, timeout(TEST_TIMEOUT_MS)).maybeCreateApfFilter(
-                any(), configCaptor.capture(), any(), any(), anyBoolean());
+                any(), configCaptor.capture(), any(), any(), any(), anyBoolean());
         final ApfConfiguration actual = configCaptor.getValue();
         assertNotNull(actual);
         assertEquals(4, actual.apfCapabilities.apfVersionSupported);
@@ -809,7 +809,7 @@ public class IpClientTest {
                 8192 /* maxProgramSize */, 4 /* format */);
         ipc.updateApfCapabilities(newApfCapabilities);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies, never()).maybeCreateApfFilter(any(), any(), any(), any(),
+        verify(mDependencies, never()).maybeCreateApfFilter(any(), any(), any(), any(), any(),
                 anyBoolean());
         verifyShutdown(ipc);
     }
@@ -824,7 +824,7 @@ public class IpClientTest {
 
         ipc.updateApfCapabilities(null /* apfCapabilities */);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies, never()).maybeCreateApfFilter(any(), any(), any(), any(),
+        verify(mDependencies, never()).maybeCreateApfFilter(any(), any(), any(), any(), any(),
                 anyBoolean());
         verifyShutdown(ipc);
     }

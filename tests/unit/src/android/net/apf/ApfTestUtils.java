@@ -28,6 +28,7 @@ import static org.mockito.Mockito.mock;
 import android.content.Context;
 import android.net.LinkAddress;
 import android.net.LinkProperties;
+import android.net.apf.ApfGenerator.IllegalInstructionException;
 import android.net.ip.IIpClientCallbacks;
 import android.net.ip.IpClient;
 import android.os.ConditionVariable;
@@ -36,10 +37,12 @@ import android.system.ErrnoException;
 import android.system.Os;
 import android.text.format.DateUtils;
 
+import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.HexDump;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.SharedLog;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
+import com.android.networkstack.metrics.NetworkQuirkMetrics;
 
 import libcore.io.IoUtils;
 
@@ -216,16 +219,24 @@ public class ApfTestUtils {
     public static class MockIpClientCallback extends IpClient.IpClientCallbacksWrapper {
         private final ConditionVariable mGotApfProgram = new ConditionVariable();
         private byte[] mLastApfProgram;
+        private boolean mInstallPacketFilterReturn = true;
 
         MockIpClientCallback() {
             super(mock(IIpClientCallbacks.class), mock(SharedLog.class),
                     NetworkInformationShimImpl.newInstance());
         }
 
+        MockIpClientCallback(boolean installPacketFilterReturn) {
+            super(mock(IIpClientCallbacks.class), mock(SharedLog.class),
+                    NetworkInformationShimImpl.newInstance());
+            mInstallPacketFilterReturn = installPacketFilterReturn;
+        }
+
         @Override
-        public void installPacketFilter(byte[] filter) {
+        public boolean installPacketFilter(byte[] filter) {
             mLastApfProgram = filter;
             mGotApfProgram.open();
+            return mInstallPacketFilterReturn;
         }
 
         /**
@@ -261,16 +272,30 @@ public class ApfTestUtils {
         private FileDescriptor mWriteSocket;
         private long mCurrentTimeMs = SystemClock.elapsedRealtime();
         private final MockIpClientCallback mMockIpClientCb;
+        private final boolean mThrowsExceptionWhenGeneratesProgram;
 
         public TestApfFilter(Context context, ApfConfiguration config,
-                MockIpClientCallback ipClientCallback) throws Exception {
-            this(context, config, ipClientCallback, new Dependencies(context));
+                MockIpClientCallback ipClientCallback, NetworkQuirkMetrics networkQuirkMetrics)
+                throws Exception {
+            this(context, config, ipClientCallback, networkQuirkMetrics, new Dependencies(context),
+                    false /* throwsExceptionWhenGeneratesProgram */);
         }
 
         public TestApfFilter(Context context, ApfConfiguration config,
-                MockIpClientCallback ipClientCallback, Dependencies dependencies) {
-            super(context, config, InterfaceParams.getByName("lo"), ipClientCallback, dependencies);
+                MockIpClientCallback ipClientCallback, NetworkQuirkMetrics networkQuirkMetrics,
+                Dependencies dependencies) throws Exception {
+            this(context, config, ipClientCallback, networkQuirkMetrics, dependencies,
+                    false /* throwsExceptionWhenGeneratesProgram */);
+        }
+
+        public TestApfFilter(Context context, ApfConfiguration config,
+                MockIpClientCallback ipClientCallback, NetworkQuirkMetrics networkQuirkMetrics,
+                Dependencies dependencies, boolean throwsExceptionWhenGeneratesProgram)
+                throws Exception {
+            super(context, config, InterfaceParams.getByName("lo"), ipClientCallback,
+                    networkQuirkMetrics, dependencies);
             mMockIpClientCb = ipClientCallback;
+            mThrowsExceptionWhenGeneratesProgram = throwsExceptionWhenGeneratesProgram;
         }
 
         /**
@@ -278,12 +303,13 @@ public class ApfTestUtils {
          */
         public static ApfFilter createTestApfFilter(Context context,
                 MockIpClientCallback ipClientCallback, ApfConfiguration config,
-                ApfFilter.Dependencies dependencies) throws Exception {
+                NetworkQuirkMetrics networkQuirkMetrics, ApfFilter.Dependencies dependencies)
+                throws Exception {
             LinkAddress link = new LinkAddress(InetAddress.getByAddress(MOCK_IPV4_ADDR), 19);
             LinkProperties lp = new LinkProperties();
             lp.addLinkAddress(link);
             TestApfFilter apfFilter = new TestApfFilter(context, config, ipClientCallback,
-                    dependencies);
+                    networkQuirkMetrics, dependencies);
             apfFilter.setLinkProperties(lp);
             return apfFilter;
         }
@@ -337,6 +363,15 @@ public class ApfTestUtils {
                 mReceiveThread = null;
             }
             IoUtils.closeQuietly(mWriteSocket);
+        }
+
+        @Override
+        @GuardedBy("this")
+        protected ApfGenerator emitPrologueLocked() throws IllegalInstructionException {
+            if (mThrowsExceptionWhenGeneratesProgram) {
+                throw new IllegalStateException();
+            }
+            return super.emitPrologueLocked();
         }
     }
 }
