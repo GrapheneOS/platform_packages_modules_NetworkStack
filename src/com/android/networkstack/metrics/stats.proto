@@ -204,17 +204,17 @@ message IpClientRaInfoReported {
     // The number of parsing error for RAs (Router Advertisements).
     optional int32 number_of_parsing_error_ras = 3;
 
-    // The lowest router lifetime in seconds.
+    // The lowest router lifetime in seconds, excluding 0.
     optional int32 lowest_router_lifetime_seconds = 4;
 
-    // The lowest valid lifetime of PIO (Prefix Information Option) in seconds.
-    optional int32 lowest_pio_valid_lifetime_seconds = 5;
+    // The lowest valid lifetime of PIO (Prefix Information Option) in seconds, excluding 0.
+    optional int64 lowest_pio_valid_lifetime_seconds = 5;
 
-    // The lowest route lifetime of RIO (Route Information Option) in seconds.
-    optional int32 lowest_rio_route_lifetime_seconds = 6;
+    // The lowest route lifetime of RIO (Route Information Option) in seconds, excluding 0.
+    optional int64 lowest_rio_route_lifetime_seconds = 6;
 
-    // The lowest lifetime of RDNSS (Recursive DNS Server Option) in seconds.
-    optional int32 lowest_rdnss_lifetime_seconds = 7;
+    // The lowest lifetime of RDNSS (Recursive DNS Server Option) in seconds, excluding 0.
+    optional int64 lowest_rdnss_lifetime_seconds = 7;
 }
 
 /**
@@ -225,7 +225,7 @@ message ApfCounter {
     optional .android.stats.connectivity.CounterName counter_name = 1;
 
     // The value of APF counter.
-    optional int32 counter_value = 2;
+    optional int64 counter_value = 2;
 }
 
 
@@ -249,8 +249,8 @@ message ApfSessionInfoReported {
     // The values of all APF counters.
     optional ApfCounterList apf_counter_list = 3;
 
-    // The duration of ip client in milliseconds.
-    optional int32 ip_client_session_duration_ms = 4;
+    // The duration of APF session in seconds.
+    optional int32 apf_session_duration_seconds = 4;
 
     // Number of times APF program updated.
     optional int32 num_of_times_apf_program_updated = 5;
