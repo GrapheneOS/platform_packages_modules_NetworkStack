@@ -44,6 +44,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
@@ -3369,7 +3370,7 @@ public class ApfTest {
         final long startTimeMs = 12345;
         final long durationTimeMs = config.minMetricsSessionDurationMs;
 
-        // Verify no metrics data written to statsd for duration less than 1 minute.
+        // Verify no metrics data written to statsd for duration less than durationTimeMs.
         doReturn(startTimeMs).when(mClock).elapsedRealtime();
         final TestAndroidPacketFilter apfFilter =
                 makeTestApfFilter(config, ipClientCallback, isLegacy);
@@ -3378,11 +3379,13 @@ public class ApfTest {
         verify(mApfSessionInfoMetrics, never()).statsWrite();
         verify(mIpClientRaInfoMetrics, never()).statsWrite();
 
-        // Verify metrics data written to statsd for duration greater than or equal to 1 minute.
-        doReturn(startTimeMs).when(mClock).elapsedRealtime();
+        // Verify metrics data written to statsd for duration greater than or equal to
+        // durationTimeMs.
+        ApfFilter.Clock clock = mock(ApfFilter.Clock.class);
+        doReturn(startTimeMs).when(clock).elapsedRealtime();
         final TestAndroidPacketFilter apfFilter2 = new TestApfFilter(mContext, config,
-                ipClientCallback, mNetworkQuirkMetrics, mDependencies, mClock);
-        doReturn(startTimeMs + durationTimeMs).when(mClock).elapsedRealtime();
+                ipClientCallback, mNetworkQuirkMetrics, mDependencies, clock);
+        doReturn(startTimeMs + durationTimeMs).when(clock).elapsedRealtime();
         apfFilter2.shutdown();
         verify(mApfSessionInfoMetrics).statsWrite();
         verify(mIpClientRaInfoMetrics).statsWrite();
