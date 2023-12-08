@@ -41,6 +41,7 @@ public class ApfGenerator {
     }
     private enum Opcodes {
         LABEL(-1),
+        PASS(0),   // Unconditionally pass packet, requires R=0, LEN=0, e.g. "pass"
         LDB(1),    // Load 1 byte from immediate offset, e.g. "ldb R0, [5]"
         LDH(2),    // Load 2 bytes from immediate offset, e.g. "ldh R0, [5]"
         LDW(3),    // Load 4 bytes from immediate offset, e.g. "ldw R0, [5]"
@@ -436,7 +437,9 @@ public class ApfGenerator {
     public static final int LAST_PREFILLED_MEMORY_SLOT = FILTER_AGE_MEMORY_SLOT;
 
     // This version number syncs up with APF_VERSION in hardware/google/apf/apf_interpreter.h
-    private static final int MIN_APF_VERSION = 2;
+    public static final int MIN_APF_VERSION = 2;
+    public static final int MIN_APF_VERSION_IN_DEV = 5;
+
 
     private final ArrayList<Instruction> mInstructions = new ArrayList<Instruction>();
     private final HashMap<String, Instruction> mLabels = new HashMap<String, Instruction>();
@@ -914,6 +917,15 @@ public class ApfGenerator {
     public ApfGenerator addMove(Register register) {
         Instruction instruction = new Instruction(Opcodes.EXT, register);
         instruction.addUnsignedImm(ExtendedOpcodes.MOVE.value);
+        addInstruction(instruction);
+        return this;
+    }
+
+    /**
+     * Add an instruction to the end of the program to let the program immediately return PASS.
+     */
+    public ApfGenerator addPass() throws IllegalInstructionException {
+        Instruction instruction = new Instruction(Opcodes.PASS, Register.R0);
         addInstruction(instruction);
         return this;
     }
