@@ -372,7 +372,7 @@ public class ApfTestUtils {
         }
 
         @Override
-        public void shutdown() {
+        public synchronized void shutdown() {
             super.shutdown();
             if (mReceiveThread != null) {
                 mReceiveThread.halt();
@@ -468,7 +468,7 @@ public class ApfTestUtils {
         }
 
         @Override
-        public void shutdown() {
+        public synchronized void shutdown() {
             super.shutdown();
             if (mReceiveThread != null) {
                 mReceiveThread.halt();
