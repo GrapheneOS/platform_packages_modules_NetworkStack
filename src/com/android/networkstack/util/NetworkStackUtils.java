@@ -272,6 +272,12 @@ public class NetworkStackUtils {
             "apf_handle_light_doze_force_disable";
 
     /**
+     * Kill switch flag to disable the feature of polling counters in Apf.
+     */
+    public static final String APF_POLLING_COUNTERS_FORCE_DISABLE =
+            "apf_polling_counters_force_disable";
+
+    /**
      * Kill switch flag to disable the feature of skipping Tcp socket info polling when light
      * doze mode is enabled.
      */

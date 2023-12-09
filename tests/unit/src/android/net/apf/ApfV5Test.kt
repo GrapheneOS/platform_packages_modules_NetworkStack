@@ -15,9 +15,11 @@
  */
 package android.net.apf
 
+import android.net.apf.ApfGenerator.IllegalInstructionException
 import androidx.test.filters.SmallTest
 import androidx.test.runner.AndroidJUnit4
 import kotlin.test.assertContentEquals
+import kotlin.test.assertFailsWith
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -29,20 +31,38 @@ import org.junit.runner.RunWith
 class ApfV5Test {
 
     @Test
+    fun testApfInstructionVersionCheck() {
+        var gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION)
+        assertFailsWith<IllegalInstructionException> { gen.addDrop() }
+    }
+
+    @Test
     fun testApfInstructionsEncoding() {
-        var gen = ApfGenerator(MIN_APF_VERSION)
-        gen.addAlloc(ApfGenerator.Register.R0)
+        var gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION)
+        gen.addPass()
         var program = gen.generate()
+        // encoding PASS opcode: opcode=0, imm_len=0, R=0
+        assertContentEquals(byteArrayOf(encodeInstruction(0, 0, 0)), program)
+
+        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
+        gen.addDrop()
+        program = gen.generate()
+        // encoding DROP opcode: opcode=0, imm_len=0, R=1
+        assertContentEquals(byteArrayOf(encodeInstruction(0, 0, 1)), program)
+
+        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
+        gen.addAlloc(ApfGenerator.Register.R0)
+        program = gen.generate()
         assertContentEquals(byteArrayOf(encodeInstruction(21, 1, 0), 36), program)
         assertContentEquals(arrayOf("       0: alloc r0"), ApfJniUtils.disassembleApf(program))
 
-        gen = ApfGenerator(MIN_APF_VERSION)
+        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
         gen.addTrans(ApfGenerator.Register.R1)
         program = gen.generate()
         assertContentEquals(byteArrayOf(encodeInstruction(21, 1, 1), 37), program)
         assertContentEquals(arrayOf("       0: trans r1"), ApfJniUtils.disassembleApf(program))
 
-        gen = ApfGenerator(MIN_APF_VERSION)
+        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
         gen.addWrite(0x01, 1)
         gen.addWrite(0x0102, 2)
         gen.addWrite(0x01020304, 4)
@@ -57,7 +77,7 @@ class ApfV5Test {
                 "       2: write 0x0102",
                 "       5: write 0x01020304"), ApfJniUtils.disassembleApf(program))
 
-        gen = ApfGenerator(MIN_APF_VERSION)
+        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
         gen.addWrite(ApfGenerator.Register.R0, 1)
         gen.addWrite(ApfGenerator.Register.R0, 2)
         gen.addWrite(ApfGenerator.Register.R0, 4)
@@ -72,7 +92,7 @@ class ApfV5Test {
                 "       2: write r0, 2",
                 "       4: write r0, 4"), ApfJniUtils.disassembleApf(program))
 
-        gen = ApfGenerator(MIN_APF_VERSION)
+        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
         gen.addDataCopy(1, 5)
         gen.addPacketCopy(1000, 255)
         program = gen.generate()
@@ -85,7 +105,7 @@ class ApfV5Test {
                 "       0: dcopy 1, 5",
                 "       3: pcopy 1000, 255"), ApfJniUtils.disassembleApf(program))
 
-        gen = ApfGenerator(MIN_APF_VERSION)
+        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
         gen.addDataCopy(ApfGenerator.Register.R1, 0, 5)
         gen.addPacketCopy(ApfGenerator.Register.R0, 1000, 255)
         program = gen.generate()
@@ -102,9 +122,5 @@ class ApfV5Test {
     private fun encodeInstruction(opcode: Int, immLength: Int, register: Int): Byte {
         val immLengthEncoding = if (immLength == 4) 3 else immLength
         return opcode.shl(3).or(immLengthEncoding.shl(1)).or(register).toByte()
-    }
-
-    companion object {
-        private const val MIN_APF_VERSION = 5
     }
 }
