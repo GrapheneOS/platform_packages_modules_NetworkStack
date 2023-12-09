@@ -518,6 +518,8 @@ public class Dhcp6Packet {
         if (pd != null) {
             newPacket.mPrefixDelegation = pd;
             newPacket.mIaId = pd.iaid;
+        } else {
+            throw new ParseException("Missing IA_PD option");
         }
         newPacket.mStatusCode = statusCode;
         newPacket.mStatusMsg = statusMsg;
@@ -556,10 +558,8 @@ public class Dhcp6Packet {
             Log.e(TAG, "Unexpected transaction ID " + mTransId + ", expected " + transId);
             return false;
         }
-        if (mPrefixDelegation == null) {
-            Log.e(TAG, "DHCPv6 message without IA_PD option, ignoring");
-            return false;
-        }
+        // mPrefixDelegation is guaranteed to be non-null. In decode() function, we throw the
+        // exception if IA_PD option doesn't exist.
         if (!mPrefixDelegation.isValid()) {
             Log.e(TAG, "DHCPv6 message takes invalid IA_PD option, ignoring");
             return false;
