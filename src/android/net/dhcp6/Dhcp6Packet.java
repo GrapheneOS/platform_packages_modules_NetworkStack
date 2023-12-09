@@ -35,7 +35,6 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalInt;
@@ -321,23 +320,24 @@ public class Dhcp6Packet {
 
         /**
          * Compare the preferred lifetime in the IA prefix optin list and return the minimum one.
-         * TODO: exclude 0 preferred lifetime.
          */
         public long getMinimalPreferredLifetime() {
-            final IaPrefixOption ipo = Collections.min(ipos,
-                    (IaPrefixOption lhs, IaPrefixOption rhs) -> Long.compare(lhs.preferred,
-                            rhs.preferred));
-            return ipo.preferred;
+            long min = Long.MAX_VALUE;
+            for (IaPrefixOption ipo : ipos) {
+                min = (ipo.preferred != 0 && min > ipo.preferred) ? ipo.preferred : min;
+            }
+            return min;
         }
 
         /**
          * Compare the valid lifetime in the IA prefix optin list and return the minimum one.
-         * TODO: exclude 0 valid lifetime.
          */
         public long getMinimalValidLifetime() {
-            final IaPrefixOption ipo = Collections.min(ipos,
-                    (IaPrefixOption lhs, IaPrefixOption rhs) -> Long.compare(lhs.valid, rhs.valid));
-            return ipo.valid;
+            long min = Long.MAX_VALUE;
+            for (IaPrefixOption ipo : ipos) {
+                min = (ipo.valid != 0 && min > ipo.valid) ? ipo.valid : min;
+            }
+            return min;
         }
 
         /**
