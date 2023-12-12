@@ -66,7 +66,6 @@ import java.io.IOException;
 import java.net.Inet6Address;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Random;
 import java.util.function.IntSupplier;
@@ -709,6 +708,27 @@ public class Dhcp6Client extends StateMachine {
         }
     }
 
+
+    /**
+     *  Per RFC8415 section 18.2.10.1: Reply for renew or Rebind.
+     * - If all binding IA_PDs were renewed/rebound(so far we only support one IA_PD option per
+     *   interface), then move to BoundState to update the existing global IPv6 addresses lifetime
+     *   or install new global IPv6 address depending on the response from server.
+     * - Server may add new IA prefix option in Reply message(e.g. due to renumbering events), or
+     *   may choose to deprecate some prefixes if it cannot extend the lifetime by:
+     *     - either not including these requested IA prefixes in Reply message
+     *     - or setting the valid lifetime equals to T1/T2
+     *   That forces previous delegated prefixes to expire in a natural way, and client should
+     *   also stop trying to extend the lifetime for them. That being said, the global IPv6 address
+     *   lifetime won't be updated in BoundState if corresponding prefix doesn't appear in Reply
+     *   message, resulting in these global IPv6 addresses eventually and IpClient obtains these
+     *   updates via netlink message and remove the delegated prefix(es) from LinkProperties.
+     * - If some binding IA_PDs were absent in Reply message, client should still stay at RenewState
+     *   or RebindState and retransmit Renew/Rebind messages to see if it can get all later. So far
+     *   we only support one IA_PD option per interface, if the received Reply message doesn't take
+     *   any IA_Prefix option, then treat it as if IA_PD is absent, since there's no point in
+     *   returning BoundState again.
+     */
     abstract class ReacquireState extends MessageExchangeState {
         ReacquireState(final int irt, final int mrt) {
             super(0 /* delay */, irt, 0 /* MRC */, () -> mrt /* MRT */);
@@ -722,18 +742,11 @@ public class Dhcp6Client extends StateMachine {
         @Override
         protected void receivePacket(Dhcp6Packet packet) {
             if (!(packet instanceof Dhcp6ReplyPacket)) return;
+            // TODO: send a Request message to the server that responded if any of the IA_PDs in
+            // Reply message contain NoBinding status code.
             final PrefixDelegation pd = packet.mPrefixDelegation;
-            final IaPrefixOption request = mReply.ipos.get(0);
-            final IaPrefixOption response = pd.ipos.get(0);
-            if (!(Arrays.equals(request.prefix, response.prefix)
-                    && request.prefixLen == response.prefixLen)) {
-                Log.i(TAG, "Renewal prefix " + HexDump.toHexString(response.prefix)
-                        + " does not match current prefix "
-                        + HexDump.toHexString(request.prefix));
-                notifyPrefixDelegation(DHCP6_PD_PREFIX_CHANGED, null);
-                transitionTo(mSolicitState);
-                return;
-            }
+            Log.d(TAG, "Get prefix delegation option from Reply as response to Renew/Rebind " + pd);
+            if (pd.ipos.isEmpty()) return;
             mReply = pd;
             mServerDuid = packet.mServerDuid;
             // Once the delegated prefix gets refreshed successfully we have to extend the
