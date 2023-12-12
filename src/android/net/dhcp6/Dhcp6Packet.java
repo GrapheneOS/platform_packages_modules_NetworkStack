@@ -278,12 +278,19 @@ public class Dhcp6Packet {
          * Build an IA_PD option from given specific parameters, including IA_PREFIX options.
          */
         public ByteBuffer build() {
+            return build(ipos);
+        }
+
+        /**
+         * Build an IA_PD option from given specific parameters, including IA_PREFIX options.
+         */
+        public ByteBuffer build(@NonNull final List<IaPrefixOption> input) {
             final ByteBuffer iapd = ByteBuffer.allocate(IaPdOption.LENGTH
-                    + Struct.getSize(IaPrefixOption.class) * ipos.size());
+                    + Struct.getSize(IaPrefixOption.class) * input.size());
             iapd.putInt(iaid);
             iapd.putInt(t1);
             iapd.putInt(t2);
-            for (IaPrefixOption ipo : ipos) {
+            for (IaPrefixOption ipo : input) {
                 ipo.writeToByteBuffer(iapd);
             }
             iapd.flip();
@@ -331,6 +338,22 @@ public class Dhcp6Packet {
             final IaPrefixOption ipo = Collections.min(ipos,
                     (IaPrefixOption lhs, IaPrefixOption rhs) -> Long.compare(lhs.valid, rhs.valid));
             return ipo.valid;
+        }
+
+        /**
+         * Return IA prefix option list to be renewed/rebound.
+         *
+         * Per RFC8415#section-18.2.4, client must not include any prefixes that it didn't obtain
+         * from server or that are no longer valid (that have a valid lifetime of 0). Section-18.3.4
+         * also mentions that server can inform client that it will not extend the prefix by setting
+         * T1 and T2 to values equal to the valid lifetime, so in this case client has no point in
+         * renewing as well.
+         */
+        public List<IaPrefixOption> getRenewableIaPrefixes() {
+            final List<IaPrefixOption> toBeRenewed = getValidIaPrefixes();
+            toBeRenewed.removeIf(ipo -> ipo.preferred == 0 && ipo.valid == 0);
+            toBeRenewed.removeIf(ipo -> t1 == ipo.valid && t2 == ipo.valid);
+            return toBeRenewed;
         }
     }
 
