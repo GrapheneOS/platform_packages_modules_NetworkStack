@@ -29,6 +29,21 @@ import org.junit.runner.RunWith
 @SmallTest
 class Dhcp6PacketTest {
     @Test
+    fun testDecodeDhcp6PacketWithoutIaPdOption() {
+        val solicitHex =
+                // Solicit, Transaction ID
+                "01000F51" +
+                        // client identifier option(option_len=12)
+                        "0001000C0003001B024CCBFFFE5F6EA9" +
+                        // elapsed time option(option_len=2)
+                        "000800020000"
+        val bytes = HexDump.hexStringToByteArray(solicitHex)
+        assertThrows(Dhcp6Packet.ParseException::class.java) {
+            Dhcp6Packet.decode(bytes, bytes.size)
+        }
+    }
+
+    @Test
     fun testDecodeDhcp6SolicitPacket() {
         val solicitHex =
                 // Solicit, Transaction ID
