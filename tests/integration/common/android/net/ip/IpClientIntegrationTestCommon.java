@@ -5220,6 +5220,92 @@ public abstract class IpClientIntegrationTestCommon {
         verify(mCb, never()).onLinkPropertiesChange(any());
     }
 
+    @SignatureRequiredTest(reason = "Need to mock the DHCP6 renew/rebind alarms")
+    @Test
+    public void testDhcp6Pd_renewInvalidPrefixes_zeroPreferredAndValidLifetime() throws Exception {
+        prepareDhcp6PdRenewTest();
+
+        final InOrder inOrder = inOrder(mAlarm);
+        final Handler handler = mDependencies.mDhcp6Client.getHandler();
+        final OnAlarmListener renewAlarm = expectAlarmSet(inOrder, "RENEW", 3600, handler);
+
+        handler.post(() -> renewAlarm.onAlarm());
+        HandlerUtils.waitForIdle(handler, TEST_TIMEOUT_MS);
+
+        Dhcp6Packet packet = getNextDhcp6Packet();
+        assertTrue(packet instanceof Dhcp6RenewPacket);
+
+        // Reply with the requested prefix with preferred/valid lifetime of 0.
+        final IpPrefix prefix = new IpPrefix("2001:db8:1::/64");
+        final IpPrefix prefix1 = new IpPrefix("2001:db8:2::/64");
+        final IaPrefixOption ipo = buildIaPrefixOption(prefix, 0 /* preferred */,
+                0 /* valid */);
+        final IaPrefixOption ipo1 = buildIaPrefixOption(prefix1, 5000 /* preferred */,
+                6000 /* valid */);
+        final PrefixDelegation pd = new PrefixDelegation(packet.getIaId(), 3600 /* t1 */,
+                4500 /* t2 */, Arrays.asList(ipo, ipo1));
+        final ByteBuffer iapd = pd.build();
+        mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
+                (Inet6Address) mClientIpAddress, false /* rapidCommit */));
+        verify(mCb, never()).onProvisioningFailure(any());
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(argThat(
+                x -> x.isIpv6Provisioned()
+                        && hasIpv6AddressPrefixedWith(x, prefix)
+                        && hasIpv6AddressPrefixedWith(x, prefix1)
+                        && hasRouteTo(x, "2001:db8:1::/64", RTN_UNREACHABLE)
+                        && hasRouteTo(x, "2001:db8:2::/64", RTN_UNREACHABLE)
+                        // IPv6 link-local, four global delegated IPv6 addresses
+                        && x.getLinkAddresses().size() == 5
+        ));
+
+        handler.post(() -> renewAlarm.onAlarm());
+        HandlerUtils.waitForIdle(handler, TEST_TIMEOUT_MS);
+
+        packet = getNextDhcp6Packet();
+        assertTrue(packet instanceof Dhcp6RenewPacket);
+        final List<IaPrefixOption> renewIpos = packet.getPrefixDelegation().ipos;
+        assertEquals(1, renewIpos.size()); // don't renew prefix 2001:db8:1::/64
+        assertEquals(prefix1, renewIpos.get(0).getIpPrefix());
+    }
+
+    @SignatureRequiredTest(reason = "Need to mock the DHCP6 renew/rebind alarms")
+    @Test
+    public void testDhcp6Pd_renewInvalidPrefixes_theSameT1T2ValidLifetime() throws Exception {
+        prepareDhcp6PdRenewTest();
+
+        final InOrder inOrder = inOrder(mAlarm);
+        final Handler handler = mDependencies.mDhcp6Client.getHandler();
+        final OnAlarmListener renewAlarm = expectAlarmSet(inOrder, "RENEW", 3600, handler);
+
+        handler.post(() -> renewAlarm.onAlarm());
+        HandlerUtils.waitForIdle(handler, TEST_TIMEOUT_MS);
+
+        Dhcp6Packet packet = getNextDhcp6Packet();
+        assertTrue(packet instanceof Dhcp6RenewPacket);
+
+        clearInvocations(mCb);
+
+        // Reply with the requested prefix with preferred/valid lifetime of 0.
+        final IpPrefix prefix = new IpPrefix("2001:db8:1::/64");
+        final IaPrefixOption ipo = buildIaPrefixOption(prefix, 3600 /* preferred */,
+                3600 /* valid */);
+        final PrefixDelegation pd = new PrefixDelegation(packet.getIaId(), 3600 /* t1 */,
+                3600 /* t2 */, Collections.singletonList(ipo));
+        final ByteBuffer iapd = pd.build();
+        mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
+                (Inet6Address) mClientIpAddress, false /* rapidCommit */));
+        // The prefix doesn't change only the lifetime is updated, therefore, LinkProperties update
+        // isn't expected.
+        verify(mCb, never()).onProvisioningFailure(any());
+        verify(mCb, never()).onLinkPropertiesChange(any());
+
+        handler.post(() -> renewAlarm.onAlarm());
+        HandlerUtils.waitForIdle(handler, TEST_TIMEOUT_MS);
+
+        packet = getNextDhcp6Packet(TEST_TIMEOUT_MS);
+        assertNull(packet);
+    }
+
     @Test
     @SignatureRequiredTest(reason = "InterfaceParams.getByName requires CAP_NET_ADMIN")
     public void testSendRtmDelAddressMethod() throws Exception {

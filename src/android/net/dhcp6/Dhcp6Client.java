@@ -67,6 +67,7 @@ import java.net.Inet6Address;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.util.Collections;
+import java.util.List;
 import java.util.Random;
 import java.util.function.IntSupplier;
 
@@ -384,8 +385,9 @@ public class Dhcp6Client extends StateMachine {
     }
 
     private void scheduleLeaseTimers() {
-        // TODO: validate t1, t2, valid and preferred lifetimes before the timers are scheduled to
-        // prevent packet storms due to low timeouts.
+        // TODO: validate t1, t2, valid and preferred lifetimes before the timers are scheduled
+        // to prevent packet storms due to low timeouts. Preferred/valid lifetime of 0 should be
+        // excluded before scheduling the lease timer.
         int renewTimeout = mReply.t1;
         int rebindTimeout = mReply.t2;
         final long preferredTimeout = mReply.getMinimalPreferredLifetime();
@@ -785,7 +787,9 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            return sendRenewPacket(transId, elapsedTimeMs, mReply.build());
+            final List<IaPrefixOption> toBeRenewed = mReply.getRenewableIaPrefixes();
+            if (toBeRenewed.isEmpty()) return false;
+            return sendRenewPacket(transId, elapsedTimeMs, mReply.build(toBeRenewed));
         }
     }
 
@@ -801,7 +805,9 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
-            return sendRebindPacket(transId, elapsedTimeMs, mReply.build());
+            final List<IaPrefixOption> toBeRebound = mReply.getRenewableIaPrefixes();
+            if (toBeRebound.isEmpty()) return false;
+            return sendRebindPacket(transId, elapsedTimeMs, mReply.build(toBeRebound));
         }
     }
 
