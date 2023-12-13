@@ -35,7 +35,6 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalInt;
@@ -278,12 +277,19 @@ public class Dhcp6Packet {
          * Build an IA_PD option from given specific parameters, including IA_PREFIX options.
          */
         public ByteBuffer build() {
+            return build(ipos);
+        }
+
+        /**
+         * Build an IA_PD option from given specific parameters, including IA_PREFIX options.
+         */
+        public ByteBuffer build(@NonNull final List<IaPrefixOption> input) {
             final ByteBuffer iapd = ByteBuffer.allocate(IaPdOption.LENGTH
-                    + Struct.getSize(IaPrefixOption.class) * ipos.size());
+                    + Struct.getSize(IaPrefixOption.class) * input.size());
             iapd.putInt(iaid);
             iapd.putInt(t1);
             iapd.putInt(t2);
-            for (IaPrefixOption ipo : ipos) {
+            for (IaPrefixOption ipo : input) {
                 ipo.writeToByteBuffer(iapd);
             }
             iapd.flip();
@@ -314,23 +320,40 @@ public class Dhcp6Packet {
 
         /**
          * Compare the preferred lifetime in the IA prefix optin list and return the minimum one.
-         * TODO: exclude 0 preferred lifetime.
          */
         public long getMinimalPreferredLifetime() {
-            final IaPrefixOption ipo = Collections.min(ipos,
-                    (IaPrefixOption lhs, IaPrefixOption rhs) -> Long.compare(lhs.preferred,
-                            rhs.preferred));
-            return ipo.preferred;
+            long min = Long.MAX_VALUE;
+            for (IaPrefixOption ipo : ipos) {
+                min = (ipo.preferred != 0 && min > ipo.preferred) ? ipo.preferred : min;
+            }
+            return min;
         }
 
         /**
          * Compare the valid lifetime in the IA prefix optin list and return the minimum one.
-         * TODO: exclude 0 valid lifetime.
          */
         public long getMinimalValidLifetime() {
-            final IaPrefixOption ipo = Collections.min(ipos,
-                    (IaPrefixOption lhs, IaPrefixOption rhs) -> Long.compare(lhs.valid, rhs.valid));
-            return ipo.valid;
+            long min = Long.MAX_VALUE;
+            for (IaPrefixOption ipo : ipos) {
+                min = (ipo.valid != 0 && min > ipo.valid) ? ipo.valid : min;
+            }
+            return min;
+        }
+
+        /**
+         * Return IA prefix option list to be renewed/rebound.
+         *
+         * Per RFC8415#section-18.2.4, client must not include any prefixes that it didn't obtain
+         * from server or that are no longer valid (that have a valid lifetime of 0). Section-18.3.4
+         * also mentions that server can inform client that it will not extend the prefix by setting
+         * T1 and T2 to values equal to the valid lifetime, so in this case client has no point in
+         * renewing as well.
+         */
+        public List<IaPrefixOption> getRenewableIaPrefixes() {
+            final List<IaPrefixOption> toBeRenewed = getValidIaPrefixes();
+            toBeRenewed.removeIf(ipo -> ipo.preferred == 0 && ipo.valid == 0);
+            toBeRenewed.removeIf(ipo -> t1 == ipo.valid && t2 == ipo.valid);
+            return toBeRenewed;
         }
     }
 
@@ -518,6 +541,8 @@ public class Dhcp6Packet {
         if (pd != null) {
             newPacket.mPrefixDelegation = pd;
             newPacket.mIaId = pd.iaid;
+        } else {
+            throw new ParseException("Missing IA_PD option");
         }
         newPacket.mStatusCode = statusCode;
         newPacket.mStatusMsg = statusMsg;
@@ -556,10 +581,8 @@ public class Dhcp6Packet {
             Log.e(TAG, "Unexpected transaction ID " + mTransId + ", expected " + transId);
             return false;
         }
-        if (mPrefixDelegation == null) {
-            Log.e(TAG, "DHCPv6 message without IA_PD option, ignoring");
-            return false;
-        }
+        // mPrefixDelegation is guaranteed to be non-null. In decode() function, we throw the
+        // exception if IA_PD option doesn't exist.
         if (!mPrefixDelegation.isValid()) {
             Log.e(TAG, "DHCPv6 message takes invalid IA_PD option, ignoring");
             return false;

@@ -29,6 +29,21 @@ import org.junit.runner.RunWith
 @SmallTest
 class Dhcp6PacketTest {
     @Test
+    fun testDecodeDhcp6PacketWithoutIaPdOption() {
+        val solicitHex =
+                // Solicit, Transaction ID
+                "01000F51" +
+                        // client identifier option(option_len=12)
+                        "0001000C0003001B024CCBFFFE5F6EA9" +
+                        // elapsed time option(option_len=2)
+                        "000800020000"
+        val bytes = HexDump.hexStringToByteArray(solicitHex)
+        assertThrows(Dhcp6Packet.ParseException::class.java) {
+            Dhcp6Packet.decode(bytes, bytes.size)
+        }
+    }
+
+    @Test
     fun testDecodeDhcp6SolicitPacket() {
         val solicitHex =
                 // Solicit, Transaction ID
@@ -174,5 +189,35 @@ class Dhcp6PacketTest {
         assertTrue(packet is Dhcp6ReplyPacket)
         assertEquals(400, packet.prefixDelegation.minimalPreferredLifetime)
         assertEquals(1623, packet.prefixDelegation.minimalValidLifetime)
+    }
+
+    @Test
+    fun testGetMinimalPreferredValidLifetime() {
+        val replyHex =
+            // Reply, Transaction ID
+            "07000A47" +
+            // server identifier option(option_len=10)
+            "0002000A0003000186C9B26AED4D" +
+            // client identifier option(option_len=12)
+            "0001000C0003001B02FBBAFFFEB7BC71" +
+            // SOL_MAX_RT (don't support this option yet)
+            "005200040000003c" +
+            // Rapid Commit
+            "000e0000" +
+            // DNS recursive server (don't support this opton yet)
+            "00170010fdfd9ed6795000000000000000000001" +
+            // IA_PD option(option_len=70, including IA prefix option)
+            "0019004629cc56c7000000d300000152" +
+            // IA prefix option(option_len=25, prefix="2401:fa00:49c:412::/64", preferred=0,
+            // valid=0)
+            "001a00190000000000000000402401fa00049c04120000000000000000" +
+            // IA prefix option(option_len=25, prefix="fdfd:9ed6:7950:2::/64", preferred=423,
+            // valid=43200)
+            "001a0019000001a70000a8c040fdfd9ed6795000020000000000000000"
+        val bytes = HexDump.hexStringToByteArray(replyHex)
+        val packet = Dhcp6Packet.decode(bytes, bytes.size)
+        assertTrue(packet is Dhcp6ReplyPacket)
+        assertEquals(423, packet.prefixDelegation.minimalPreferredLifetime)
+        assertEquals(43200, packet.prefixDelegation.minimalValidLifetime)
     }
 }
