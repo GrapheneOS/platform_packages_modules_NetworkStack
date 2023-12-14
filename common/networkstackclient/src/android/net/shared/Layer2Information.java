@@ -30,7 +30,6 @@ public class Layer2Information {
     public final String mCluster;
     @Nullable
     public final MacAddress mBssid;
-
     /**
      * Create a Layer2Information with the specified configuration.
      */

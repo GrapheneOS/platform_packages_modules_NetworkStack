@@ -125,4 +125,7 @@
 
     <!-- Whether to validate DUN networks. This is unused and always true on U+. -->
     <bool name="config_validate_dun_networks">false</bool>
+
+    <!-- Configuration for including DHCP domain search list option -->
+    <bool name="config_dhcp_client_domain_search_list">false</bool>
 </resources>

@@ -40,6 +40,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.net.Inet4Address;
+import java.util.Arrays;
 
 /**
  * Tests for {@link IpConfigurationParcelableUtil}.
@@ -63,8 +64,9 @@ public class DhcpResultsParcelableUtilTest {
         mDhcpResults.serverHostName = "dhcp.example.com";
         mDhcpResults.mtu = 1450;
         mDhcpResults.captivePortalApiUrl = "https://example.com/testapi";
+        mDhcpResults.dmnsrchList.addAll(Arrays.asList("google.com", "example.com"));
         // Any added DhcpResults field must be included in equals() to be tested properly
-        assertFieldCountEquals(10, DhcpResults.class);
+        assertFieldCountEquals(11, DhcpResults.class);
     }
 
     @Test
@@ -126,10 +128,16 @@ public class DhcpResultsParcelableUtilTest {
         assertEquals(mDhcpResults, unparceled);
     }
 
-    private static void setFieldsLostWhileParceling(@NonNull DhcpResults unparceledResults) {
+    private void setFieldsLostWhileParceling(@NonNull DhcpResults unparceledResults) {
         // TODO: add other fields that are not part of DhcpResultsParcelable here
         // e.g. if the dmnsrchList field is added,
-        // parceledResults.dmnsrchList.addAll(mDhcpResults.dmnSrchList);
+        unparceledResults.dmnsrchList.clear();
+        unparceledResults.dnsServers.clear();
+        unparceledResults.dmnsrchList.addAll(mDhcpResults.dmnsrchList);
+        unparceledResults.domains = mDhcpResults.domains;
+        unparceledResults.dnsServers.addAll(mDhcpResults.dnsServers);
+        unparceledResults.gateway = mDhcpResults.gateway;
+        unparceledResults.ipAddress = mDhcpResults.ipAddress;
     }
 
     /**
