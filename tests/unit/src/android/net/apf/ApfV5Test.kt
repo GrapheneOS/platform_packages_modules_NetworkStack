@@ -100,61 +100,63 @@ class ApfV5Test {
         // TODO: add back disassembling test check after we update the apf_disassembler
         // assertContentEquals(arrayOf("       0: trans"), ApfJniUtils.disassembleApf(program))
 
-        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
-        gen.addWrite(0x01, 1)
-        gen.addWrite(0x0102, 2)
-        gen.addWrite(0x01020304, 4)
-        program = gen.generate()
-        assertContentEquals(byteArrayOf(
-                encodeInstruction(24, 1, 0), 0x01,
-                encodeInstruction(24, 2, 0), 0x01, 0x02,
-                encodeInstruction(24, 4, 0), 0x01, 0x02, 0x03, 0x04
-        ), program)
-        assertContentEquals(arrayOf(
-                "       0: write 0x01",
-                "       2: write 0x0102",
-                "       5: write 0x01020304"), ApfJniUtils.disassembleApf(program))
+        // TODO: add back when support write opcode
+//        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
+//        gen.addWrite(0x01, 1)
+//        gen.addWrite(0x0102, 2)
+//        gen.addWrite(0x01020304, 4)
+//        program = gen.generate()
+//        assertContentEquals(byteArrayOf(
+//                encodeInstruction(24, 1, 0), 0x01,
+//                encodeInstruction(24, 2, 0), 0x01, 0x02,
+//                encodeInstruction(24, 4, 0), 0x01, 0x02, 0x03, 0x04
+//        ), program)
+//        assertContentEquals(arrayOf(
+//                "       0: write 0x01",
+//                "       2: write 0x0102",
+//                "       5: write 0x01020304"), ApfJniUtils.disassembleApf(program))
+//
+//        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
+//        gen.addWrite(ApfGenerator.Register.R0, 1)
+//        gen.addWrite(ApfGenerator.Register.R0, 2)
+//        gen.addWrite(ApfGenerator.Register.R0, 4)
+//        program = gen.generate()
+//        assertContentEquals(byteArrayOf(
+//                encodeInstruction(21, 1, 0), 38,
+//                encodeInstruction(21, 1, 0), 39,
+//                encodeInstruction(21, 1, 0), 40
+//        ), program)
+//        assertContentEquals(arrayOf(
+//                "       0: write r0, 1",
+//                "       2: write r0, 2",
+//                "       4: write r0, 4"), ApfJniUtils.disassembleApf(program))
 
-        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
-        gen.addWrite(ApfGenerator.Register.R0, 1)
-        gen.addWrite(ApfGenerator.Register.R0, 2)
-        gen.addWrite(ApfGenerator.Register.R0, 4)
-        program = gen.generate()
-        assertContentEquals(byteArrayOf(
-                encodeInstruction(21, 1, 0), 38,
-                encodeInstruction(21, 1, 0), 39,
-                encodeInstruction(21, 1, 0), 40
-        ), program)
-        assertContentEquals(arrayOf(
-                "       0: write r0, 1",
-                "       2: write r0, 2",
-                "       4: write r0, 4"), ApfJniUtils.disassembleApf(program))
-
-        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
-        gen.addDataCopy(1, 5)
-        gen.addPacketCopy(1000, 255)
-        program = gen.generate()
-        assertContentEquals(byteArrayOf(
-                encodeInstruction(25, 1, 1), 1, 5,
-                encodeInstruction(25, 2, 0),
-                0x03.toByte(), 0xe8.toByte(), 0xff.toByte(),
-        ), program)
-        assertContentEquals(arrayOf(
-                "       0: dcopy 1, 5",
-                "       3: pcopy 1000, 255"), ApfJniUtils.disassembleApf(program))
-
-        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
-        gen.addDataCopy(ApfGenerator.Register.R1, 0, 5)
-        gen.addPacketCopy(ApfGenerator.Register.R0, 1000, 255)
-        program = gen.generate()
-        assertContentEquals(byteArrayOf(
-                encodeInstruction(21, 1, 1), 42, 0, 5,
-                encodeInstruction(21, 2, 0),
-                0, 41, 0x03.toByte(), 0xe8.toByte(), 0xff.toByte()
-        ), program)
-        assertContentEquals(arrayOf(
-                "       0: dcopy [r1+0], 5",
-                "       4: pcopy [r0+1000], 255"), ApfJniUtils.disassembleApf(program))
+        // TODO: add back when we properly support copy opcode
+//        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
+//        gen.addDataCopy(1, 5)
+//        gen.addPacketCopy(1000, 255)
+//        program = gen.generate()
+//        assertContentEquals(byteArrayOf(
+//                encodeInstruction(25, 1, 1), 1, 5,
+//                encodeInstruction(25, 2, 0),
+//                0x03.toByte(), 0xe8.toByte(), 0xff.toByte(),
+//        ), program)
+//        assertContentEquals(arrayOf(
+//                "       0: dcopy 1, 5",
+//                "       3: pcopy 1000, 255"), ApfJniUtils.disassembleApf(program))
+//
+//        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
+//        gen.addDataCopy(ApfGenerator.Register.R1, 0, 5)
+//        gen.addPacketCopy(ApfGenerator.Register.R0, 1000, 255)
+//        program = gen.generate()
+//        assertContentEquals(byteArrayOf(
+//                encodeInstruction(21, 1, 1), 42, 0, 5,
+//                encodeInstruction(21, 2, 0),
+//                0, 41, 0x03.toByte(), 0xe8.toByte(), 0xff.toByte()
+//        ), program)
+//        assertContentEquals(arrayOf(
+//                "       0: dcopy [r1+0], 5",
+//                "       4: pcopy [r0+1000], 255"), ApfJniUtils.disassembleApf(program))
     }
 
     private fun encodeInstruction(opcode: Int, immLength: Int, register: Int): Byte {
