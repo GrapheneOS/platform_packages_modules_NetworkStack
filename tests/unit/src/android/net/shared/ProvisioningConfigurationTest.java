@@ -112,6 +112,7 @@ public class ProvisioningConfigurationTest {
         config.mIPv4ProvisioningMode = PROV_IPV4_DHCP;
         config.mIPv6ProvisioningMode = PROV_IPV6_SLAAC;
         config.mUniqueEui64AddressesOnly = false;
+        config.mCreatorUid = 10136;
         return config;
     }
 
@@ -142,6 +143,7 @@ public class ProvisioningConfigurationTest {
                 MacAddress.fromString("00:01:02:03:04:05"));
         p.layer2Info = layer2Info.toStableParcelable();
         p.options = makeCustomizedDhcpOptions((byte) 60, new String("android-dhcp-11").getBytes());
+        p.creatorUid = 10136;
         return p;
     }
 
@@ -149,7 +151,7 @@ public class ProvisioningConfigurationTest {
     public void setUp() {
         mConfig = makeTestProvisioningConfiguration();
         // Any added field must be included in equals() to be tested properly
-        assertFieldCountEquals(17, ProvisioningConfiguration.class);
+        assertFieldCountEquals(18, ProvisioningConfiguration.class);
     }
 
     @Test
@@ -281,7 +283,8 @@ public class ProvisioningConfigurationTest {
         assertNotEqualsAfterChange(c -> c.mIPv6ProvisioningMode = PROV_IPV6_DISABLED);
         assertNotEqualsAfterChange(c -> c.mIPv6ProvisioningMode = PROV_IPV6_LINKLOCAL);
         assertNotEqualsAfterChange(c -> c.mUniqueEui64AddressesOnly = true);
-        assertFieldCountEquals(17, ProvisioningConfiguration.class);
+        assertNotEqualsAfterChange(c -> c.mCreatorUid = 10138);
+        assertFieldCountEquals(18, ProvisioningConfiguration.class);
     }
 
     private void assertNotEqualsAfterChange(Consumer<ProvisioningConfiguration> mutator) {
