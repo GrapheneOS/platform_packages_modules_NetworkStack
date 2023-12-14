@@ -96,7 +96,12 @@ public class ApfGenerator {
         SWAP(34), // Swap, e.g. "swap R0,R1"
         MOVE(35),  // Move, e.g. "move R0,R1"
         ALLOC(36), // Allocate buffer, "e.g. ALLOC R0"
-        TRANS(37), // Transmit buffer, "e.g. TRANS R0"
+        //  Transmit and deallocate the buffer (transmission can be delayed until the program
+        //  terminates). R=0 means discard the buffer, R=1 means transmit the buffer.
+        // "e.g. trans"
+        // "e.g. discard"
+        TRANSMIT(37),
+        DISCARD(37),
         EWRITE1(38), // Write 1 byte from register to the output buffer, e.g. "EWRITE1 R0"
         EWRITE2(39), // Write 2 bytes from register to the output buffer, e.g. "EWRITE2 R0"
         EWRITE4(40), // Write 4 bytes from register to the output buffer, e.g. "EWRITE4 R0"
@@ -988,14 +993,23 @@ public class ApfGenerator {
     }
 
     /**
-     * Add an instruction to the end of the program to call the apf_transmit_buffer() function.
-     *
-     * @param register the register value contains the packet type.
+     * Add an instruction to the end of the program to transmit the allocated buffer.
      */
-    public ApfGenerator addTrans(Register register) throws IllegalInstructionException {
-        requireApfVersion(5);
-        Instruction instruction = new Instruction(Opcodes.EXT, register);
-        instruction.addUnsignedImm(ExtendedOpcodes.TRANS.value);
+    public ApfGenerator addTransmit() throws IllegalInstructionException {
+        requireApfVersion(MIN_APF_VERSION_IN_DEV);
+        Instruction instruction = new Instruction(Opcodes.EXT, Register.R0);
+        instruction.addUnsignedImm(ExtendedOpcodes.TRANSMIT.value);
+        addInstruction(instruction);
+        return this;
+    }
+
+    /**
+     * Add an instruction to the end of the program to discard the allocated buffer.
+     */
+    public ApfGenerator addDiscard() throws IllegalInstructionException {
+        requireApfVersion(MIN_APF_VERSION_IN_DEV);
+        Instruction instruction = new Instruction(Opcodes.EXT, Register.R1);
+        instruction.addUnsignedImm(ExtendedOpcodes.DISCARD.value);
         addInstruction(instruction);
         return this;
     }
