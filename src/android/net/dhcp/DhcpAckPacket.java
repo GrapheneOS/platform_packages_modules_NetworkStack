@@ -50,6 +50,7 @@ public class DhcpAckPacket extends DhcpPacket {
                 + ", netmask " + mSubnetMask
                 + ", gateways " + mGateways + dnsServers
                 + ", lease time " + mLeaseTime
+                + ", domain " + mDomainName
                 + (mIpv6OnlyWaitTime != null ? ", V6ONLY_WAIT " + mIpv6OnlyWaitTime : "");
     }
 

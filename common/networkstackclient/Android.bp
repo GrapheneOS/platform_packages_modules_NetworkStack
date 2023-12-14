@@ -48,21 +48,54 @@ aidl_interface {
             enabled: false,
         },
     },
-    versions: [
-        "1",
-        "2",
-        "3",
-        "4",
-        "5",
-        "6",
-        "7",
-        "8",
-        "9",
-        "10",
-    ],
+
     visibility: [
         "//system/tools/aidl/build",
     ],
+    versions_with_info: [
+        {
+            version: "1",
+            imports: [],
+        },
+        {
+            version: "2",
+            imports: [],
+        },
+        {
+            version: "3",
+            imports: [],
+        },
+        {
+            version: "4",
+            imports: [],
+        },
+        {
+            version: "5",
+            imports: [],
+        },
+        {
+            version: "6",
+            imports: [],
+        },
+        {
+            version: "7",
+            imports: [],
+        },
+        {
+            version: "8",
+            imports: [],
+        },
+        {
+            version: "9",
+            imports: [],
+        },
+        {
+            version: "10",
+            imports: [],
+        },
+
+    ],
+
 }
 
 aidl_interface {
@@ -164,12 +197,13 @@ aidl_interface {
             version: "19",
             imports: ["ipmemorystore-aidl-interfaces-V10"],
         },
+        {
+            version: "20",
+            imports: ["ipmemorystore-aidl-interfaces-V10"],
+        },
 
     ],
-
-    // "frozen: true" is removed manually after each freeze, this property cannot be unrecognized
-    // in some downstream branches and TH will get the build error, see b/262507066 for details.
-
+    frozen: true,
 }
 
 java_library {
@@ -178,7 +212,7 @@ java_library {
     min_sdk_version: "30",
     static_libs: [
         "ipmemorystore-aidl-interfaces-V10-java",
-        "networkstack-aidl-interfaces-V19-java",
+        "networkstack-aidl-interfaces-V20-java",
     ],
     visibility: ["//packages/modules/NetworkStack:__subpackages__"],
     apex_available: [

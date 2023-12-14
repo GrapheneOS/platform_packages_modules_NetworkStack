@@ -122,8 +122,11 @@ import android.app.AlarmManager;
 import android.app.AlarmManager.OnAlarmListener;
 import android.app.Instrumentation;
 import android.app.UiAutomation;
+import android.app.admin.DevicePolicyManager;
+import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.net.ConnectivityManager;
 import android.net.DhcpResultsParcelable;
@@ -296,6 +299,8 @@ public abstract class IpClientIntegrationTestCommon {
     private static final int TEST_LOWER_IPV6_ONLY_WAIT_S = (int) (MIN_V6ONLY_WAIT_MS / 1000 - 1);
     private static final int TEST_ZERO_IPV6_ONLY_WAIT_S = 0;
     private static final long TEST_MAX_IPV6_ONLY_WAIT_S = 0xffffffffL;
+    private static final int TEST_DEVICE_OWNER_APP_UID = 14242;
+    private static final String TEST_DEVICE_OWNER_APP_PACKAGE = "com.example.deviceowner";
     protected static final String TEST_L2KEY = "some l2key";
 
     // TODO: move to NetlinkConstants, NetworkStackConstants, or OsConstants.
@@ -356,7 +361,8 @@ public abstract class IpClientIntegrationTestCommon {
     @Mock protected NetworkStackIpMemoryStore mIpMemoryStore;
     @Mock private NetworkQuirkMetrics.Dependencies mNetworkQuirkMetricsDeps;
     @Mock private IpReachabilityMonitorMetrics mIpReachabilityMonitorMetrics;
-
+    @Mock private DevicePolicyManager mDevicePolicyManager;
+    @Mock private PackageManager mPackageManager;
     @Spy private INetd mNetd;
     private NetworkObserverRegistry mNetworkObserverRegistry;
 
@@ -794,8 +800,11 @@ public abstract class IpClientIntegrationTestCommon {
         MockitoAnnotations.initMocks(this);
 
         mDependencies = new Dependencies();
-        when(mContext.getSystemService(eq(Context.ALARM_SERVICE))).thenReturn(mAlarm);
-        when(mContext.getSystemService(eq(ConnectivityManager.class))).thenReturn(mCm);
+        when(mContext.getSystemService(Context.ALARM_SERVICE)).thenReturn(mAlarm);
+        when(mContext.getSystemService(ConnectivityManager.class)).thenReturn(mCm);
+        when(mContext.getSystemService(Context.DEVICE_POLICY_SERVICE))
+                .thenReturn(mDevicePolicyManager);
+        when(mContext.getPackageManager()).thenReturn(mPackageManager);
         when(mContext.getResources()).thenReturn(mResources);
         when(mResources.getInteger(eq(R.integer.config_nud_postroaming_solicit_num))).thenReturn(5);
         when(mResources.getInteger(eq(R.integer.config_nud_postroaming_solicit_interval)))
@@ -814,6 +823,11 @@ public abstract class IpClientIntegrationTestCommon {
         // notifyLost won't be invoked, or the wrong code path when receiving RA with 0 router
         // liftime.
         when(mCm.shouldAvoidBadWifi()).thenReturn(true);
+
+        when(mDevicePolicyManager.getDeviceOwnerComponentOnAnyUser()).thenReturn(
+                new ComponentName(TEST_DEVICE_OWNER_APP_PACKAGE, "com.example.SomeClass"));
+        when(mPackageManager.getPackagesForUid(TEST_DEVICE_OWNER_APP_UID)).thenReturn(
+                new String[] { TEST_DEVICE_OWNER_APP_PACKAGE });
 
         mDependencies.setDeviceConfigProperty(IpClient.CONFIG_MIN_RDNSS_LIFETIME, 67);
         mDependencies.setDeviceConfigProperty(DhcpClient.DHCP_RESTART_CONFIG_DELAY, 10);
@@ -1114,43 +1128,47 @@ public abstract class IpClientIntegrationTestCommon {
 
     private static ByteBuffer buildDhcpOfferPacket(final DhcpPacket packet,
             final Inet4Address clientAddress, final Integer leaseTimeSec, final short mtu,
-            final String captivePortalUrl, final Integer ipv6OnlyWaitTime) {
+            final String captivePortalUrl, final Integer ipv6OnlyWaitTime,
+            final String domainName, final List<String> domainSearchList) {
         return DhcpPacket.buildOfferPacket(DhcpPacket.ENCAP_L2, packet.getTransactionId(),
                 false /* broadcast */, SERVER_ADDR, INADDR_ANY /* relayIp */,
                 clientAddress /* yourIp */, packet.getClientMac(), leaseTimeSec,
                 NETMASK /* netMask */, BROADCAST_ADDR /* bcAddr */,
                 Collections.singletonList(SERVER_ADDR) /* gateways */,
                 Collections.singletonList(SERVER_ADDR) /* dnsServers */,
-                SERVER_ADDR /* dhcpServerIdentifier */, null /* domainName */, HOSTNAME,
-                false /* metered */, mtu, captivePortalUrl, ipv6OnlyWaitTime);
+                SERVER_ADDR /* dhcpServerIdentifier */, domainName, HOSTNAME,
+                false /* metered */, mtu, captivePortalUrl, ipv6OnlyWaitTime, domainSearchList);
     }
 
     private static ByteBuffer buildDhcpOfferPacket(final DhcpPacket packet,
             final Inet4Address clientAddress, final Integer leaseTimeSec, final short mtu,
             final String captivePortalUrl) {
         return buildDhcpOfferPacket(packet, clientAddress, leaseTimeSec, mtu, captivePortalUrl,
-                null /* ipv6OnlyWaitTime */);
+                null /* ipv6OnlyWaitTime */, null /* domainName */, null /* domainSearchList */);
     }
 
     private static ByteBuffer buildDhcpAckPacket(final DhcpPacket packet,
             final Inet4Address clientAddress, final Integer leaseTimeSec, final short mtu,
             final boolean rapidCommit, final String captivePortalApiUrl,
-            final Integer ipv6OnlyWaitTime) {
+            final Integer ipv6OnlyWaitTime, final String domainName,
+            final List<String> domainSearchList) {
         return DhcpPacket.buildAckPacket(DhcpPacket.ENCAP_L2, packet.getTransactionId(),
                 false /* broadcast */, SERVER_ADDR, INADDR_ANY /* relayIp */,
                 clientAddress /* yourIp */, CLIENT_ADDR /* requestIp */, packet.getClientMac(),
                 leaseTimeSec, NETMASK /* netMask */, BROADCAST_ADDR /* bcAddr */,
                 Collections.singletonList(SERVER_ADDR) /* gateways */,
                 Collections.singletonList(SERVER_ADDR) /* dnsServers */,
-                SERVER_ADDR /* dhcpServerIdentifier */, null /* domainName */, HOSTNAME,
-                false /* metered */, mtu, rapidCommit, captivePortalApiUrl, ipv6OnlyWaitTime);
+                SERVER_ADDR /* dhcpServerIdentifier */, domainName, HOSTNAME,
+                false /* metered */, mtu, rapidCommit, captivePortalApiUrl, ipv6OnlyWaitTime,
+                domainSearchList);
     }
 
     private static ByteBuffer buildDhcpAckPacket(final DhcpPacket packet,
             final Inet4Address clientAddress, final Integer leaseTimeSec, final short mtu,
             final boolean rapidCommit, final String captivePortalApiUrl) {
         return buildDhcpAckPacket(packet, clientAddress, leaseTimeSec, mtu, rapidCommit,
-                captivePortalApiUrl, null /* ipv6OnlyWaitTime */);
+                captivePortalApiUrl, null /* ipv6OnlyWaitTime */, null /* domainName */,
+                null /* domainSearchList */);
     }
 
     private static ByteBuffer buildDhcpNakPacket(final DhcpPacket packet, final String message) {
@@ -1306,6 +1324,15 @@ public abstract class IpClientIntegrationTestCommon {
     private List<DhcpPacket> handleDhcpPackets(final boolean isSuccessLease,
             final Integer leaseTimeSec, final boolean shouldReplyRapidCommitAck, final int mtu,
             final String captivePortalApiUrl) throws Exception {
+        return handleDhcpPackets(isSuccessLease, leaseTimeSec, shouldReplyRapidCommitAck,
+                mtu, captivePortalApiUrl, null /* ipv6OnlyWaitTime */,
+                null /* domainName */, null /* domainSearchList */);
+    }
+
+    private List<DhcpPacket> handleDhcpPackets(final boolean isSuccessLease,
+            final Integer leaseTimeSec, final boolean shouldReplyRapidCommitAck, final int mtu,
+            final String captivePortalApiUrl, final Integer ipv6OnlyWaitTime,
+            final String domainName, final List<String> domainSearchList) throws Exception {
         final List<DhcpPacket> packetList = new ArrayList<>();
         DhcpPacket packet;
         while ((packet = getNextDhcpPacket()) != null) {
@@ -1313,15 +1340,18 @@ public abstract class IpClientIntegrationTestCommon {
             if (packet instanceof DhcpDiscoverPacket) {
                 if (shouldReplyRapidCommitAck) {
                     mPacketReader.sendResponse(buildDhcpAckPacket(packet, CLIENT_ADDR, leaseTimeSec,
-                              (short) mtu, true /* rapidCommit */, captivePortalApiUrl));
+                              (short) mtu, true /* rapidCommit */, captivePortalApiUrl,
+                              ipv6OnlyWaitTime, domainName, domainSearchList));
                 } else {
                     mPacketReader.sendResponse(buildDhcpOfferPacket(packet, CLIENT_ADDR,
-                            leaseTimeSec, (short) mtu, captivePortalApiUrl));
+                            leaseTimeSec, (short) mtu, captivePortalApiUrl, ipv6OnlyWaitTime,
+                            domainName, domainSearchList));
                 }
             } else if (packet instanceof DhcpRequestPacket) {
                 final ByteBuffer byteBuffer = isSuccessLease
                         ? buildDhcpAckPacket(packet, CLIENT_ADDR, leaseTimeSec, (short) mtu,
-                                false /* rapidCommit */, captivePortalApiUrl)
+                                false /* rapidCommit */, captivePortalApiUrl, ipv6OnlyWaitTime,
+                                domainName, domainSearchList)
                         : buildDhcpNakPacket(packet, "duplicated request IP address");
                 mPacketReader.sendResponse(byteBuffer);
             } else {
@@ -3317,7 +3347,7 @@ public abstract class IpClientIntegrationTestCommon {
         // Respond DHCPOFFER with IPv6-Only preferred option and offered address.
         mPacketReader.sendResponse(buildDhcpOfferPacket(packet, clientAddress,
                 TEST_LEASE_DURATION_S, (short) TEST_DEFAULT_MTU, null /* captivePortalUrl */,
-                ipv6OnlyWaitTime));
+                ipv6OnlyWaitTime, null /* domainName */, null /* domainSearchList */));
     }
 
     private void doDiscoverIPv6OnlyPreferredOptionTest(final int optionSecs,
@@ -3387,7 +3417,8 @@ public abstract class IpClientIntegrationTestCommon {
         // contain the IPv6-only Preferred option to the client, instead respond with
         // a DHCPOFFER.
         mPacketReader.sendResponse(buildDhcpOfferPacket(packet, CLIENT_ADDR, TEST_LEASE_DURATION_S,
-                (short) TEST_DEFAULT_MTU, null /* captivePortalUrl */, TEST_IPV6_ONLY_WAIT_S));
+                (short) TEST_DEFAULT_MTU, null /* captivePortalUrl */, TEST_IPV6_ONLY_WAIT_S,
+                null /* domainName */, null /* domainSearchList */));
 
         final OnAlarmListener alarm = expectAlarmSet(null /* inOrder */, "TIMEOUT", 1800,
                 mDependencies.mDhcpClient.getHandler());
@@ -3436,7 +3467,8 @@ public abstract class IpClientIntegrationTestCommon {
         // Respond DHCPACK with IPv6-Only preferred option.
         mPacketReader.sendResponse(buildDhcpAckPacket(packet, CLIENT_ADDR,
                 TEST_LEASE_DURATION_S, (short) TEST_DEFAULT_MTU, false /* rapidcommit */,
-                null /* captivePortalUrl */, ipv6OnlyWaitTime));
+                null /* captivePortalUrl */, ipv6OnlyWaitTime, null /* domainName */,
+                null /* domainSearchList */));
 
         if (ipv6OnlyWaitTime != null) {
             expectAlarmSet(null /* inOrder */, "TIMEOUT", expectedWaitSecs,
@@ -5362,5 +5394,52 @@ public abstract class IpClientIntegrationTestCommon {
         final int acceptRaDefRtr = Integer.parseUnsignedInt(
                 mNetd.getProcSysNet(INetd.IPV6, INetd.CONF, mIfaceName, "accept_ra_defrtr"));
         assertEquals(1, acceptRaDefRtr);
+    }
+    private void runDhcpDomainSearchListOptionTest(final String domainName,
+            final List<String> domainSearchList, final String expectedDomain) throws Exception {
+        when(mResources.getBoolean(R.bool.config_dhcp_client_domain_search_list)).thenReturn(true);
+        final ProvisioningConfiguration cfg = new ProvisioningConfiguration.Builder()
+                .withoutIpReachabilityMonitor()
+                .withoutIPv6()
+                .withCreatorUid(TEST_DEVICE_OWNER_APP_UID)
+                .build();
+
+        startIpClientProvisioning(cfg);
+        handleDhcpPackets(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
+                false /* shouldReplyRapidCommitAck */, TEST_DEFAULT_MTU,
+                null /* captivePortalApiUrl */, null /* ipv6OnlyWaitTime */,
+                domainName, domainSearchList);
+
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        final LinkProperties lp = captor.getValue();
+        assertNotNull(lp);
+        assertEquals(expectedDomain, lp.getDomains());
+    }
+
+    @Test
+    @SignatureRequiredTest(reason = "requires mocked DevicePolicyManager")
+    public void testDhcpDomainSearchListOption() throws Exception {
+        final String domainName = "google.com";
+        final List<String> searchList = List.of("suffix1.google.com", "suffix2.google.com");
+        final String expectedDomain = "google.com suffix1.google.com suffix2.google.com";
+        runDhcpDomainSearchListOptionTest(domainName, searchList, expectedDomain);
+    }
+
+    @Test
+    @SignatureRequiredTest(reason = "requires mocked DevicePolicyManager")
+    public void testDhcpDomainSearchListOption_invalidSuffix() throws Exception {
+        final String domainName = "google.com";
+        final List<String> searchList = List.of("google com");
+        runDhcpDomainSearchListOptionTest(domainName, searchList, domainName /* expectedDomain */);
+    }
+
+    @Test
+    @SignatureRequiredTest(reason = "requires mocked DevicePolicyManager")
+    public void testDhcpDomainSearchListOption_onlySearchList() throws Exception {
+        final List<String> searchList = List.of("google.com", "example.com");
+        final String expectedDomain = "google.com example.com";
+        runDhcpDomainSearchListOptionTest(null /* domainName */, searchList,
+                expectedDomain);
     }
 }
