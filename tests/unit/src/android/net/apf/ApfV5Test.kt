@@ -37,6 +37,8 @@ class ApfV5Test {
         assertFailsWith<IllegalInstructionException> { gen.addDrop() }
         assertFailsWith<IllegalInstructionException> { gen.addCountAndDrop(12) }
         assertFailsWith<IllegalInstructionException> { gen.addCountAndPass(1000) }
+        assertFailsWith<IllegalInstructionException> { gen.addTransmit() }
+        assertFailsWith<IllegalInstructionException> { gen.addDiscard() }
     }
 
     @Test
@@ -85,10 +87,18 @@ class ApfV5Test {
         assertContentEquals(arrayOf("       0: alloc r0"), ApfJniUtils.disassembleApf(program))
 
         gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
-        gen.addTrans(ApfGenerator.Register.R1)
+        gen.addTransmit()
+        gen.addDiscard()
         program = gen.generate()
-        assertContentEquals(byteArrayOf(encodeInstruction(21, 1, 1), 37), program)
-        assertContentEquals(arrayOf("       0: trans r1"), ApfJniUtils.disassembleApf(program))
+        // encoding TRANSMIT/DISCARD opcode: opcode=21(EXT opcode number),
+        // imm=37(TRANSMIT/DISCARD opcode number),
+        // R=0 means discard the buffer. R=1 means transmit the buffer.
+        assertContentEquals(byteArrayOf(
+                encodeInstruction(opcode = 21, immLength = 1, register = 0), 37,
+                encodeInstruction(opcode = 21, immLength = 1, register = 1), 37,
+        ), program)
+        // TODO: add back disassembling test check after we update the apf_disassembler
+        // assertContentEquals(arrayOf("       0: trans"), ApfJniUtils.disassembleApf(program))
 
         gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
         gen.addWrite(0x01, 1)
