@@ -160,8 +160,7 @@ public class ApfGenerator {
         private String mTargetLabel;
         // When mOpcode == Opcodes.LABEL:
         private String mLabel;
-        // When mOpcode == Opcodes.JNEBS:
-        private byte[] mCompareBytes;
+        private byte[] mBytesImm;
         // Offset in bytes from the beginning of this program. Set by {@link ApfGenerator#generate}.
         int offset;
 
@@ -206,11 +205,11 @@ public class ApfGenerator {
             mTargetLabelSize = 4; // May shrink later on in generate().
         }
 
-        void setCompareBytes(byte[] bytes) {
+        void setBytesImm(byte[] bytes) {
             if (mOpcode != Opcodes.JNEBS.value) {
                 throw new IllegalStateException("adding compare bytes to non-JNEBS instruction");
             }
-            mCompareBytes = bytes;
+            mBytesImm = bytes;
         }
 
         /**
@@ -227,8 +226,8 @@ public class ApfGenerator {
             if (mTargetLabel != null) {
                 size += maxImmSize;
             }
-            if (mCompareBytes != null) {
-                size += mCompareBytes.length;
+            if (mBytesImm != null) {
+                size += mBytesImm.length;
             }
             return size;
         }
@@ -301,9 +300,9 @@ public class ApfGenerator {
             for (Immediate imm : mImms) {
                 writingOffset = writeValue(imm.mValue, bytecode, writingOffset, maxImmSize);
             }
-            if (mCompareBytes != null) {
-                System.arraycopy(mCompareBytes, 0, bytecode, writingOffset, mCompareBytes.length);
-                writingOffset += mCompareBytes.length;
+            if (mBytesImm != null) {
+                System.arraycopy(mBytesImm, 0, bytecode, writingOffset, mBytesImm.length);
+                writingOffset += mBytesImm.length;
             }
             if ((writingOffset - offset) != size()) {
                 throw new IllegalStateException("wrote " + (writingOffset - offset) +
@@ -808,7 +807,7 @@ public class ApfGenerator {
         Instruction instruction = new Instruction(Opcodes.JNEBS, register);
         instruction.addUnsignedImm(bytes.length);
         instruction.setTargetLabel(target);
-        instruction.setCompareBytes(bytes);
+        instruction.setBytesImm(bytes);
         addInstruction(instruction);
         return this;
     }
