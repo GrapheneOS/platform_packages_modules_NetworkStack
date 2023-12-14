@@ -48,7 +48,7 @@ public class DhcpOfferPacket extends DhcpPacket {
         }
 
         return s + " OFFER, ip " + mYourIp
-                + ", mask " + mSubnetMask + dnsServers
+                + ", netmask " + mSubnetMask + dnsServers
                 + ", gateways " + mGateways
                 + ", lease time " + mLeaseTime
                 + ", domain " + mDomainName

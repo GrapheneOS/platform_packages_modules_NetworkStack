@@ -90,6 +90,8 @@
             <item type="drawable" name="icon_wifi"/>
             <!-- Whether to validate DUN networks. This is unused and always true on U+. -->
             <item type="bool" name="config_validate_dun_networks"/>
+            <!-- Configuration for including DHCP client domain search list option. -->
+            <item type="bool" name="config_dhcp_client_domain_search_list"/>
         </policy>
     </overlayable>
 </resources>
