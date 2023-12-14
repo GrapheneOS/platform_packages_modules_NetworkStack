@@ -18,6 +18,7 @@ package android.net.apf
 import android.net.apf.ApfGenerator.IllegalInstructionException
 import androidx.test.filters.SmallTest
 import androidx.test.runner.AndroidJUnit4
+import java.lang.IllegalArgumentException
 import kotlin.test.assertContentEquals
 import kotlin.test.assertFailsWith
 import org.junit.Test
@@ -34,6 +35,15 @@ class ApfV5Test {
     fun testApfInstructionVersionCheck() {
         var gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION)
         assertFailsWith<IllegalInstructionException> { gen.addDrop() }
+        assertFailsWith<IllegalInstructionException> { gen.addCountAndDrop(12) }
+        assertFailsWith<IllegalInstructionException> { gen.addCountAndPass(1000) }
+    }
+
+    @Test
+    fun testApfInstructionArgumentCheck() {
+        var gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
+        assertFailsWith<IllegalArgumentException> { gen.addCountAndPass(0) }
+        assertFailsWith<IllegalArgumentException> { gen.addCountAndDrop(0) }
     }
 
     @Test
@@ -42,13 +52,31 @@ class ApfV5Test {
         gen.addPass()
         var program = gen.generate()
         // encoding PASS opcode: opcode=0, imm_len=0, R=0
-        assertContentEquals(byteArrayOf(encodeInstruction(0, 0, 0)), program)
+        assertContentEquals(
+                byteArrayOf(encodeInstruction(opcode = 0, immLength = 0, register = 0)), program)
 
         gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
         gen.addDrop()
         program = gen.generate()
         // encoding DROP opcode: opcode=0, imm_len=0, R=1
-        assertContentEquals(byteArrayOf(encodeInstruction(0, 0, 1)), program)
+        assertContentEquals(
+                byteArrayOf(encodeInstruction(opcode = 0, immLength = 0, register = 1)), program)
+
+        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
+        gen.addCountAndPass(129)
+        program = gen.generate()
+        // encoding COUNT(PASS) opcode: opcode=0, imm_len=size_of(imm), R=0, imm=counterNumber
+        assertContentEquals(
+                byteArrayOf(encodeInstruction(opcode = 0, immLength = 1, register = 0),
+                        0x81.toByte()), program)
+
+        gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
+        gen.addCountAndDrop(1000)
+        program = gen.generate()
+        // encoding COUNT(DROP) opcode: opcode=0, imm_len=size_of(imm), R=1, imm=counterNumber
+        assertContentEquals(
+                byteArrayOf(encodeInstruction(opcode = 0, immLength = 2, register = 1),
+                        0x03, 0xe8.toByte()), program)
 
         gen = ApfGenerator(ApfGenerator.MIN_APF_VERSION_IN_DEV)
         gen.addAlloc(ApfGenerator.Register.R0)
