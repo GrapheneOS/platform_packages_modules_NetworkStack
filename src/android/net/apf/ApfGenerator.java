@@ -41,8 +41,15 @@ public class ApfGenerator {
     }
     private enum Opcodes {
         LABEL(-1),
-        PASS(0),   // Unconditionally pass packet, requires R=0, LEN=0, e.g. "pass"
-        DROP(0),   // Unconditionally drop packet, requires R=1, LEN=0, e.g. "drop"
+        // Unconditionally pass (if R=0) or drop (if R=1) packet.
+        // An optional unsigned immediate value can be provided to encode the counter number.
+        // If the value is non-zero, the instruction increments the counter.
+        // The counter is located (-4 * counter number) bytes from the end of the data region.
+        // It is a U32 big-endian value and is always incremented by 1.
+        // This is more or less equivalent to: lddw R0, -N4; add R0,1; stdw R0, -N4; {pass,drop}
+        // e.g. "pass", "pass 1", "drop", "drop 1"
+        PASS(0),
+        DROP(0),
         LDB(1),    // Load 1 byte from immediate offset, e.g. "ldb R0, [5]"
         LDH(2),    // Load 2 bytes from immediate offset, e.g. "ldh R0, [5]"
         LDW(3),    // Load 4 bytes from immediate offset, e.g. "ldw R0, [5]"
@@ -932,11 +939,37 @@ public class ApfGenerator {
     }
 
     /**
+     * Add an instruction to the end of the program to increment the counter value and
+     * immediately return PASS.
+     */
+    public ApfGenerator addCountAndPass(int counterNumber) throws IllegalInstructionException {
+        requireApfVersion(MIN_APF_VERSION_IN_DEV);
+        checkCounterNumber(counterNumber);
+        Instruction instruction = new Instruction(Opcodes.PASS, Register.R0);
+        instruction.addUnsignedImm(counterNumber);
+        addInstruction(instruction);
+        return this;
+    }
+
+    /**
      * Add an instruction to the end of the program to let the program immediately return DROP.
      */
     public ApfGenerator addDrop() throws IllegalInstructionException {
         requireApfVersion(MIN_APF_VERSION_IN_DEV);
         Instruction instruction = new Instruction(Opcodes.DROP, Register.R1);
+        addInstruction(instruction);
+        return this;
+    }
+
+    /**
+     * Add an instruction to the end of the program to increment the counter value and
+     * immediately return DROP.
+     */
+    public ApfGenerator addCountAndDrop(int counterNumber) throws IllegalInstructionException {
+        requireApfVersion(MIN_APF_VERSION_IN_DEV);
+        checkCounterNumber(counterNumber);
+        Instruction instruction = new Instruction(Opcodes.DROP, Register.R1);
+        instruction.addUnsignedImm(counterNumber);
         addInstruction(instruction);
         return this;
     }
@@ -1125,6 +1158,13 @@ public class ApfGenerator {
         if (offset < 0) {
             throw new IllegalArgumentException(
                     "offset must be non less than zero, offset: " + offset);
+        }
+    }
+
+    private void checkCounterNumber(int counterNumber) {
+        if (counterNumber < 1 || counterNumber > 1000) {
+            throw new IllegalArgumentException(
+                    "Counter number must be in range (0, 1000], counterNumber: " + counterNumber);
         }
     }
 
