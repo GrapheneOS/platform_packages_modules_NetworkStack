@@ -56,6 +56,10 @@ class IpClientSignatureTest : IpClientIntegrationTestCommon() {
         mEnabledFeatures.put(name, enabled)
     }
 
+    override fun setFeatureChickenedOut(name: String, chickenedOut: Boolean) {
+        mEnabledFeatures.put(name, !chickenedOut)
+    }
+
     override fun setDeviceConfigProperty(name: String, value: Int) {
         mDependencies.setDeviceConfigProperty(name, value)
     }
