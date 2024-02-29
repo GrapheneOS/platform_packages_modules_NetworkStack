@@ -79,6 +79,13 @@ public class ApfV4Generator<Type extends BaseApfGenerator> extends BaseApfGenera
     }
 
     /**
+     * Add an unconditional jump instruction to the next instruction - ie. a no-op.
+     */
+    public Type addNop() {
+        return append(new Instruction(Opcodes.JMP).addUnsigned(0));
+    }
+
+    /**
      * Add an instruction to the end of the program to load the byte at offset {@code offset}
      * bytes from the beginning of the packet into {@code register}.
      */

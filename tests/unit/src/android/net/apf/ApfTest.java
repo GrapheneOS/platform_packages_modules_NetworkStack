@@ -1395,21 +1395,16 @@ public class ApfTest {
 
     }
 
-    /** Adds to the program a no-op instruction that is one byte long. */
-    private void addOneByteNoop(ApfV4Generator gen) {
-        gen.addLeftShift(0);
-    }
-
     @Test
-    public void testAddOneByteNoopAddsOneByte() throws Exception {
+    public void testAddNopAddsOneByte() throws Exception {
         ApfV4Generator gen = new ApfV4Generator(MIN_APF_VERSION);
-        addOneByteNoop(gen);
+        gen.addNop();
         assertEquals(1, gen.generate().length);
 
         final int count = 42;
         gen = new ApfV4Generator(MIN_APF_VERSION);
         for (int i = 0; i < count; i++) {
-            addOneByteNoop(gen);
+            gen.addNop();
         }
         assertEquals(count, gen.generate().length);
     }
@@ -1500,7 +1495,7 @@ public class ApfTest {
 
         // Hack to prevent the APF instruction limit triggering.
         for (int i = 0; i < 500; i++) {
-            addOneByteNoop(gen);
+            gen.addNop();
         }
 
         byte[] program = gen.generate();
@@ -1586,7 +1581,7 @@ public class ApfTest {
         // bytes, is capable of dropping the packet.
         ApfV4Generator gen = generateDnsFilter(/*ipv6=*/ true, labels);
         for (int i = 0; i < expectedNecessaryOverhead; i++) {
-            addOneByteNoop(gen);
+            gen.addNop();
         }
         final byte[] programWithJustEnoughOverhead = gen.generate();
         assertVerdict(
@@ -1600,7 +1595,7 @@ public class ApfTest {
         // cannot correctly drop the packet because it hits the interpreter instruction limit.
         gen = generateDnsFilter(/*ipv6=*/ true, labels);
         for (int i = 0; i < expectedNecessaryOverhead - 1; i++) {
-            addOneByteNoop(gen);
+            gen.addNop();
         }
         final byte[] programWithNotEnoughOverhead = gen.generate();
 
