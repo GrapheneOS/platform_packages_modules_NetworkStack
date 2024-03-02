@@ -572,7 +572,7 @@ genrule {
     tools: ["stats-log-api-gen"],
     cmd: "$(location stats-log-api-gen) --java $(out) --module network_stack" +
         " --javaPackage com.android.networkstack.metrics --javaClass NetworkStackStatsLog" +
-        " --minApiLevel 30 --compileApiLevel 30",
+        " --minApiLevel 30",
     out: ["com/android/networkstack/metrics/NetworkStackStatsLog.java"],
 }
 
