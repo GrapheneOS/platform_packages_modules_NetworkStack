@@ -260,7 +260,6 @@ java_library {
         "networkstack-aidl-latest",
     ],
     visibility: [
-        "//frameworks/base/packages/Connectivity/service",
         "//packages/modules/Connectivity/Tethering",
         "//packages/modules/Connectivity/service",
         "//frameworks/base/services/net",

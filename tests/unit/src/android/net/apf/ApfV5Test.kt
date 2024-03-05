@@ -164,7 +164,7 @@ class ApfV5Test {
 
     @Test
     fun testApfInstructionsEncoding() {
-        val v4gen = ApfV4Generator<ApfV4Generator<BaseApfGenerator>>(MIN_APF_VERSION)
+        val v4gen = ApfV4Generator(MIN_APF_VERSION)
         v4gen.addPass()
         var program = v4gen.generate()
         // encoding PASS opcode: opcode=0, imm_len=0, R=0

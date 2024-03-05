@@ -3478,6 +3478,23 @@ public class ApfTest {
         verifyNoMetricsWrittenForShortDuration(true /* isLegacy */);
     }
 
+    private int deriveApfGeneratorVersion(ApfV4GeneratorBase<?> gen) {
+        if (gen instanceof ApfV4Generator) {
+            return 4;
+        } else if (gen instanceof ApfV6Generator) {
+            return 6;
+        }
+        return -1;
+    }
+
+    @Test
+    public void testApfGeneratorPropagation() throws IllegalInstructionException {
+        ApfV4Generator v4Gen = new ApfV4Generator(APF_VERSION_4);
+        ApfV6Generator v6Gen = new ApfV6Generator();
+        assertEquals(4, deriveApfGeneratorVersion(v4Gen));
+        assertEquals(6, deriveApfGeneratorVersion(v6Gen));
+    }
+
     @Test
     public void testFullApfV4ProgramGenerationIPV6() throws IllegalInstructionException {
         ApfV4Generator gen = new ApfV4Generator(APF_VERSION_4);

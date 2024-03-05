@@ -374,8 +374,6 @@ android_library {
     ],
     manifest: "AndroidManifestBase.xml",
     visibility: [
-        "//frameworks/base/packages/Connectivity/tests/integration",
-        "//frameworks/base/tests/net/integration",
         "//packages/modules/Connectivity/Tethering/tests/integration",
         "//packages/modules/Connectivity/tests/integration",
         "//packages/modules/NetworkStack/tests/unit",

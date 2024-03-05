@@ -383,13 +383,13 @@ public abstract class BaseApfGenerator {
             return addUnsigned(imm);
         }
 
-        Instruction addTwosCompSigned(int imm) {
+        Instruction addTwosCompSigned(long imm) {
             mIntImms.add(IntImmediate.newTwosComplementSigned(imm));
             return this;
         }
 
 
-        Instruction addTwosCompUnsigned(int imm) {
+        Instruction addTwosCompUnsigned(long imm) {
             mIntImms.add(IntImmediate.newTwosComplementUnsigned(imm));
             return this;
         }
