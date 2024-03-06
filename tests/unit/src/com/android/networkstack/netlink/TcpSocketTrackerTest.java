@@ -32,6 +32,7 @@ import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
 import static junit.framework.Assert.assertTrue;
 
+import static org.junit.Assume.assumeTrue;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -59,9 +60,12 @@ import android.util.Log;
 import android.util.Log.TerribleFailureHandler;
 
 import androidx.test.filters.SmallTest;
+import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.modules.utils.build.SdkLevel;
+import com.android.net.module.util.DeviceConfigUtils;
+import com.android.net.module.util.FeatureVersions;
 import com.android.net.module.util.netlink.NetlinkUtils;
 import com.android.net.module.util.netlink.StructNlMsgHdr;
 import com.android.testutils.DevSdkIgnoreRule;
@@ -151,6 +155,7 @@ public class TcpSocketTrackerTest {
     private final Network mOtherNetwork = new Network(TEST_NETID2);
     private TerribleFailureHandler mOldWtfHandler;
     @Mock private Context mContext;
+    private final Context mRealContext = InstrumentationRegistry.getInstrumentation().getContext();
     @Mock private PowerManager mPowerManager;
     @Mock private ConnectivityManager mCm;
 
@@ -343,6 +348,9 @@ public class TcpSocketTrackerTest {
     @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
     @Test
     public void testPollSocketsInfo_ignoreBlockedUid_featureDisabled_UOrAbove() throws Exception {
+        // Test only if the Tethering module is new enough to support the API.
+        assumeTrue(DeviceConfigUtils.isFeatureSupported(mRealContext,
+                FeatureVersions.FEATURE_IS_UID_NETWORKING_BLOCKED));
         doTestPollSocketsInfo_ignoreBlockedUid_featureDisabled();
         verify(mCm, never()).isUidNetworkingBlocked(anyInt(), anyBoolean());
     }
@@ -377,6 +385,9 @@ public class TcpSocketTrackerTest {
     @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
     @Test
     public void testPollSocketsInfo_ignoreBlockedUid_featureEnabled() throws Exception {
+        // Test only if the Tethering module is new enough to support the API.
+        assumeTrue(DeviceConfigUtils.isFeatureSupported(mRealContext,
+                FeatureVersions.FEATURE_IS_UID_NETWORKING_BLOCKED));
         doReturn(true).when(mDependencies).shouldIgnoreTcpInfoForBlockedUids();
         final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
         tst.setNetworkCapabilities(CELL_NOT_METERED_CAPABILITIES);
@@ -409,6 +420,9 @@ public class TcpSocketTrackerTest {
     @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
     @Test
     public void testPollSocketsInfo_ignoreBlockedUid_featureEnabled_dataSaver() throws Exception {
+        // Test only if the Tethering module is new enough to support the API.
+        assumeTrue(DeviceConfigUtils.isFeatureSupported(mRealContext,
+                FeatureVersions.FEATURE_IS_UID_NETWORKING_BLOCKED));
         doReturn(true).when(mDependencies).shouldIgnoreTcpInfoForBlockedUids();
         final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
 
@@ -694,11 +708,14 @@ public class TcpSocketTrackerTest {
         doTestTcpInfoDisableParsingWithDozeMode(DEEP_DOZE, true /* featureEnabled */);
     }
 
-    // Ignore blocked uids is supported on T. Thus, for pre-T device this feature is always
+    // Ignore blocked uids is supported on U. Thus, for pre-U device this feature is always
     // needed since there is no replacement.
-    @IgnoreUpTo(Build.VERSION_CODES.S_V2)
+    @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
     @Test
     public void testTcpInfoParsingWithDozeMode_disabled() throws Exception {
+        // Test only if the Tethering module is new enough to support the API.
+        assumeTrue(DeviceConfigUtils.isFeatureSupported(mRealContext,
+                FeatureVersions.FEATURE_IS_UID_NETWORKING_BLOCKED));
         doReturn(true).when(mDependencies).shouldIgnoreTcpInfoForBlockedUids();
         doReturn(false).when(mDependencies).shouldDisableInLightDoze(anyBoolean());
         doTestTcpInfoDisableParsingWithDozeMode(DEEP_DOZE, false /* featureEnabled */);
