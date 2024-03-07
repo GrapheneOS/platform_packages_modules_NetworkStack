@@ -1075,7 +1075,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
             gen.addSwap();
             gen.addLoad16(R0, IPV4_TOTAL_LENGTH_OFFSET);
             gen.addNeg(R1);
-            gen.addAddR1();
+            gen.addAddR1ToR0();
             gen.addJumpIfR0NotEquals(1, nextFilterLabel);
 
             // Check that the ports match
@@ -1194,16 +1194,16 @@ public class LegacyApfFilter implements AndroidPacketFilter {
             // top bits of the low nibble are guaranteed to be zeroes. Right-shift R0 by 2.
             gen.addRightShift(2);
             // R0 += R1 -> R0 contains TCP + IP headers length
-            gen.addAddR1();
+            gen.addAddR1ToR0();
             // Load IPv4 total length
             gen.addLoad16(R1, IPV4_TOTAL_LENGTH_OFFSET);
             gen.addNeg(R0);
-            gen.addAddR1();
+            gen.addAddR1ToR0();
             gen.addJumpIfR0NotEquals(0, nextFilterLabel);
             // Add IPv4 header length
             gen.addLoadFromMemory(R1, gen.IPV4_HEADER_SIZE_MEMORY_SLOT);
             gen.addLoadImmediate(R0, ETH_HEADER_LEN);
-            gen.addAddR1();
+            gen.addAddR1ToR0();
             gen.addJumpIfBytesAtR0NotEqual(mPortSeqAckFingerprint, nextFilterLabel);
 
             maybeSetupCounter(gen, Counter.DROPPED_IPV4_KEEPALIVE_ACK);
@@ -1395,7 +1395,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
             // Check it's DHCP to our MAC address.
             gen.addLoadImmediate(R0, DHCP_CLIENT_MAC_OFFSET);
             // NOTE: Relies on R1 containing IPv4 header offset.
-            gen.addAddR1();
+            gen.addAddR1ToR0();
             gen.addJumpIfBytesAtR0NotEqual(mHardwareAddress, skipDhcpv4Filter);
             maybeSetupCounter(gen, Counter.PASSED_DHCP);
             gen.addJump(mCountAndPassLabel);
@@ -1660,7 +1660,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
         // If QDCOUNT == 1, matches the QNAME with allowlist.
         // Load offset for the first QNAME.
         gen.addLoadImmediate(R0, MDNS_QNAME_OFFSET);
-        gen.addAddR1();
+        gen.addAddR1ToR0();
 
         // Check first QNAME against allowlist
         for (int i = 0; i < mMdnsAllowList.size(); ++i) {

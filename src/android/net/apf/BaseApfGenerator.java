@@ -388,7 +388,6 @@ public abstract class BaseApfGenerator {
             return this;
         }
 
-
         Instruction addTwosCompUnsigned(long imm) {
             mIntImms.add(IntImmediate.newTwosComplementUnsigned(imm));
             return this;

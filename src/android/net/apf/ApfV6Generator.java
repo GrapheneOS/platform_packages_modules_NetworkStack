@@ -15,6 +15,8 @@
  */
 package android.net.apf;
 
+import static android.net.apf.BaseApfGenerator.Register.R1;
+
 import com.android.internal.annotations.VisibleForTesting;
 
 /**
@@ -31,5 +33,9 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
     public ApfV6Generator() throws IllegalInstructionException {
         super();
+    }
+
+    final void addArithR1(Opcodes opcode) {
+        append(new Instruction(opcode, R1));
     }
 }

@@ -145,7 +145,7 @@ public class DnsUtils {
         gen.addLoad16Indexed(R0, 0);
         gen.addAnd(0x3ff);
         gen.addLoadFromMemory(R1, SLOT_DNS_HEADER_OFFSET);
-        gen.addAddR1();
+        gen.addAddR1ToR0();
         gen.addLoadFromMemory(R1, SLOT_CURRENT_PARSE_OFFSET);
         gen.addJumpIfR0EqualsR1(ApfV4Generator.DROP_LABEL);
         gen.addJumpIfR0GreaterThanR1(ApfV4Generator.DROP_LABEL);
@@ -228,7 +228,7 @@ public class DnsUtils {
         gen.addJumpIfR0Equals(0, labelFindNextDnsQuestionNoPointer);
         // It's a pointer. Skip the pointer and question, and return.
         gen.addLoadImmediate(R0, POINTER_AND_QUESTION_HEADER_SIZE);
-        gen.addAddR1();
+        gen.addAddR1ToR0();
         gen.addStoreToMemory(R0, SLOT_CURRENT_PARSE_OFFSET);
         gen.addJump(labelFindNextDnsQuestionReturn);
 
@@ -240,14 +240,14 @@ public class DnsUtils {
         // Skip the label (1 byte) and query (2 bytes qtype, 2 bytes qclass) and return.
         gen.addJumpIfR0NotEquals(0, labelFindNextDnsQuestionLabel);
         gen.addLoadImmediate(R0, LABEL_AND_QUESTION_HEADER_SIZE);
-        gen.addAddR1();
+        gen.addAddR1ToR0();
         gen.addStoreToMemory(R0, SLOT_CURRENT_PARSE_OFFSET);
         gen.addJump(labelFindNextDnsQuestionReturn);
 
         // Non-zero length label. Consume it and continue.
         gen.defineLabel(labelFindNextDnsQuestionLabel);
         gen.addAdd(1);
-        gen.addAddR1();
+        gen.addAddR1ToR0();
         gen.addMove(R1);
         gen.addJump(labelFindNextDnsQuestionLoop);
 

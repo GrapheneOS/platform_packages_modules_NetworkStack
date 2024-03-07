@@ -163,17 +163,17 @@ public class Bpf2Apf {
                 if (arg.equals("x")) {
                     switch(opcode) {
                         case "add":
-                            gen.addAddR1();
+                            gen.addAddR1ToR0();
                             break;
                         case "and":
-                            gen.addAndR1();
+                            gen.addAndR0WithR1();
                             break;
                         case "or":
-                            gen.addOrR1();
+                            gen.addOrR0WithR1();
                             break;
                         case "sub":
                             gen.addNeg(R1);
-                            gen.addAddR1();
+                            gen.addAddR1ToR0();
                             gen.addNeg(R1);
                             break;
                     }

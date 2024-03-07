@@ -388,21 +388,21 @@ public class ApfTest {
         // Test add.
         gen = new ApfV4Generator(MIN_APF_VERSION);
         gen.addLoadImmediate(R1, 1234567890);
-        gen.addAddR1();
+        gen.addAddR1ToR0();
         gen.addJumpIfR0Equals(1234567890, DROP_LABEL);
         assertDrop(gen);
 
         // Test subtract.
         gen = new ApfV4Generator(MIN_APF_VERSION);
         gen.addLoadImmediate(R1, -1234567890);
-        gen.addAddR1();
+        gen.addAddR1ToR0();
         gen.addJumpIfR0Equals(-1234567890, DROP_LABEL);
         assertDrop(gen);
 
         // Test or.
         gen = new ApfV4Generator(MIN_APF_VERSION);
         gen.addLoadImmediate(R1, 1234567890);
-        gen.addOrR1();
+        gen.addOrR0WithR1();
         gen.addJumpIfR0Equals(1234567890, DROP_LABEL);
         assertDrop(gen);
 
@@ -410,7 +410,7 @@ public class ApfTest {
         gen = new ApfV4Generator(MIN_APF_VERSION);
         gen.addLoadImmediate(R0, 1234567890);
         gen.addLoadImmediate(R1, 123456789);
-        gen.addAndR1();
+        gen.addAndR0WithR1();
         gen.addJumpIfR0Equals(1234567890 & 123456789, DROP_LABEL);
         assertDrop(gen);
 
@@ -418,7 +418,7 @@ public class ApfTest {
         gen = new ApfV4Generator(MIN_APF_VERSION);
         gen.addLoadImmediate(R0, 1234567890);
         gen.addLoadImmediate(R1, 1);
-        gen.addLeftShiftR1();
+        gen.addLeftShiftR0ByR1();
         gen.addJumpIfR0Equals(1234567890 << 1, DROP_LABEL);
         assertDrop(gen);
 
@@ -426,7 +426,7 @@ public class ApfTest {
         gen = new ApfV4Generator(MIN_APF_VERSION);
         gen.addLoadImmediate(R0, 1234567890);
         gen.addLoadImmediate(R1, -1);
-        gen.addLeftShiftR1();
+        gen.addLeftShiftR0ByR1();
         gen.addJumpIfR0Equals(1234567890 >> 1, DROP_LABEL);
         assertDrop(gen);
 
@@ -434,7 +434,7 @@ public class ApfTest {
         gen = new ApfV4Generator(MIN_APF_VERSION);
         gen.addLoadImmediate(R0, 123456789);
         gen.addLoadImmediate(R1, 2);
-        gen.addMulR1();
+        gen.addMulR0ByR1();
         gen.addJumpIfR0Equals(123456789 * 2, DROP_LABEL);
         assertDrop(gen);
 
@@ -442,13 +442,13 @@ public class ApfTest {
         gen = new ApfV4Generator(MIN_APF_VERSION);
         gen.addLoadImmediate(R0, 1234567890);
         gen.addLoadImmediate(R1, 2);
-        gen.addDivR1();
+        gen.addDivR0ByR1();
         gen.addJumpIfR0Equals(1234567890 / 2, DROP_LABEL);
         assertDrop(gen);
 
         // Test divide by zero.
         gen = new ApfV4Generator(MIN_APF_VERSION);
-        gen.addDivR1();
+        gen.addDivR0ByR1();
         gen.addJump(DROP_LABEL);
         assertPass(gen);
 
@@ -1940,8 +1940,8 @@ public class ApfTest {
 
     private void verifyArpFilter(byte[] program, int filterResult) {
         // Verify ARP request packet
-        assertPass(program, arpRequestBroadcast(MOCK_IPV4_ADDR));
-        assertVerdict(filterResult, program, arpRequestBroadcast(ANOTHER_IPV4_ADDR));
+        assertVerdict(filterResult, program, arpRequestBroadcast(MOCK_IPV4_ADDR));
+        assertDrop(program, arpRequestBroadcast(ANOTHER_IPV4_ADDR));
         assertDrop(program, arpRequestBroadcast(IPV4_ANY_HOST_ADDR));
 
         // Verify ARP reply packets from different source ip
@@ -1968,17 +1968,17 @@ public class ApfTest {
         TestApfFilter apfFilter = new TestApfFilter(mContext, config, ipClientCallback,
                 mNetworkQuirkMetrics);
 
-        // Verify initially ARP request filter is off, and GARP filter is on.
-        verifyArpFilter(ipClientCallback.assertProgramUpdateAndGet(), PASS);
+        // Verify initially ARP request filter and GARP filter are on.
+        verifyArpFilter(ipClientCallback.assertProgramUpdateAndGet(), DROP);
 
         // Inform ApfFilter of our address and verify ARP filtering is on
         LinkAddress linkAddress = new LinkAddress(InetAddress.getByAddress(MOCK_IPV4_ADDR), 24);
         LinkProperties lp = new LinkProperties();
         assertTrue(lp.addLinkAddress(linkAddress));
-        verifyArpFilter(getProgram(ipClientCallback, apfFilter, lp), DROP);
+        verifyArpFilter(getProgram(ipClientCallback, apfFilter, lp), PASS);
 
-        // Inform ApfFilter of loss of IP and verify ARP filtering is off
-        verifyArpFilter(getProgram(ipClientCallback, apfFilter, new LinkProperties()), PASS);
+        // Inform ApfFilter of loss of IP and verify ARP filtering is on
+        verifyArpFilter(getProgram(ipClientCallback, apfFilter, new LinkProperties()), DROP);
 
         apfFilter.shutdown();
     }
@@ -3545,7 +3545,7 @@ public class ApfTest {
         gen.addLoad16Indexed(R0, 16);
         gen.addJumpIfR0NotEquals(0x44, "LABEL_159");
         gen.addLoadImmediate(R0, 50);
-        gen.addAddR1();
+        gen.addAddR1ToR0();
         gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("e212507c6345"), "LABEL_159");
         gen.addLoadImmediate(R1, -12);
         gen.addJump("LABEL_498");
@@ -3698,7 +3698,7 @@ public class ApfTest {
         gen.addLoad16Indexed(R0, 16);
         gen.addJumpIfR0NotEquals(0x44, "LABEL_151");
         gen.addLoadImmediate(R0, 50);
-        gen.addAddR1();
+        gen.addAddR1ToR0();
         gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("f683d58f832b"), "LABEL_151");
         gen.addLoadImmediate(R1, -12);
         gen.addJump("LABEL_277");
@@ -3819,7 +3819,7 @@ public class ApfTest {
         gen.addLoad16Indexed(R0, 16);
         gen.addJumpIfR0NotEquals(0x44, "LABEL_157");
         gen.addLoadImmediate(R0, 50);
-        gen.addAddR1();
+        gen.addAddR1ToR0();
         gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("ea42226789c0"), "LABEL_157");
         gen.addLoadImmediate(R1, -12);
         gen.addJump("LABEL_339");
@@ -3843,7 +3843,7 @@ public class ApfTest {
         gen.addSwap();
         gen.addLoad16(R0, 16);
         gen.addNeg(R1);
-        gen.addAddR1();
+        gen.addAddR1ToR0();
         gen.addJumpIfR0NotEquals(0x1, "LABEL_243");
         gen.addLoadFromMemory(R0, 13);
         gen.addAdd(14);
@@ -3961,7 +3961,7 @@ public class ApfTest {
         gen.addLoad16Indexed(R0, 16);
         gen.addJumpIfR0NotEquals(0x44, "LABEL_165");
         gen.addLoadImmediate(R0, 50);
-        gen.addAddR1();
+        gen.addAddR1ToR0();
         gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("7e9046bc7008"), "LABEL_165");
         gen.addLoadImmediate(R1, -24);
         gen.addJump("LABEL_576");
