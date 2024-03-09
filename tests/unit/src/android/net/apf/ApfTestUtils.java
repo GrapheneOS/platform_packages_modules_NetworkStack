@@ -383,7 +383,7 @@ public class ApfTestUtils {
 
         @Override
         @GuardedBy("this")
-        protected ApfV4Generator emitPrologueLocked() throws IllegalInstructionException {
+        protected ApfV4GeneratorBase<?> emitPrologueLocked() throws IllegalInstructionException {
             if (mThrowsExceptionWhenGeneratesProgram) {
                 throw new IllegalStateException();
             }
