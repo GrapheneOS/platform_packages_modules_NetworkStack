@@ -49,7 +49,6 @@ import static com.android.networkstack.util.NetworkStackUtils.APF_NEW_RA_FILTER_
 import static com.android.networkstack.util.NetworkStackUtils.APF_POLLING_COUNTERS_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
-import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GRATUITOUS_NA_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.createInet6AddressFromEui64;
@@ -1142,10 +1141,6 @@ public class IpClient extends StateMachine {
         mLinkObserver.shutdown();
     }
 
-    private boolean isGratuitousNaEnabled() {
-        return mDependencies.isFeatureNotChickenedOut(mContext, IPCLIENT_GRATUITOUS_NA_VERSION);
-    }
-
     private boolean isGratuitousArpNaRoamingEnabled() {
         return mDependencies.isFeatureEnabled(mContext, IPCLIENT_GARP_NA_ROAMING_VERSION);
     }
@@ -2073,9 +2068,7 @@ public class IpClient extends StateMachine {
         // Check if new assigned IPv6 GUA is available in the LinkProperties now. If so, initiate
         // gratuitous multicast unsolicited Neighbor Advertisements as soon as possible to inform
         // first-hop routers that the new GUA host is goning to use.
-        if (isGratuitousNaEnabled()) {
-            maybeSendGratuitousNAs(newLp, false /* isGratuitousNaAfterRoaming */);
-        }
+        maybeSendGratuitousNAs(newLp, false /* isGratuitousNaAfterRoaming */);
 
         // Sending multicast NS from each new assigned IPv6 GUAs to the solicited-node multicast
         // address based on the default router's IPv6 link-local address should trigger default
@@ -2436,6 +2429,10 @@ public class IpClient extends StateMachine {
     private AndroidPacketFilter maybeCreateApfFilter(final ApfCapabilities apfCapabilities) {
         ApfFilter.ApfConfiguration apfConfig = new ApfFilter.ApfConfiguration();
         apfConfig.apfCapabilities = apfCapabilities;
+        if (apfCapabilities != null && !SdkLevel.isAtLeastV()
+                && apfCapabilities.apfVersionSupported <= 4) {
+            apfConfig.installableProgramSizeClamp = 2000;
+        }
         apfConfig.multicastFilter = mMulticastFiltering;
         // Get the Configuration for ApfFilter from Context
         // Resource settings were moved from ApfCapabilities APIs to NetworkStack resources in S

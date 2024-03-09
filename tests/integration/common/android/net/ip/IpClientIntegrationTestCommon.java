@@ -3864,8 +3864,6 @@ public abstract class IpClientIntegrationTestCommon {
                 .withoutIPv4()
                 .build();
 
-        setFeatureEnabled(NetworkStackUtils.IPCLIENT_GRATUITOUS_NA_VERSION,
-                true /* isGratuitousNaEnabled */);
         startIpClientProvisioning(config);
 
         doIpv6OnlyProvisioning();
@@ -3898,11 +3896,6 @@ public abstract class IpClientIntegrationTestCommon {
         setDhcpFeatures(true /* isRapidCommitEnabled */,
                 false /* isDhcpIpConflictDetectEnabled */);
 
-        // Disable gratuitious neighbor discovery feature manually, if the feature is enabled on
-        // the DUT during experiment launch, that will send another two duplicate NA packets and
-        // mess up the assert of received NA packets.
-        setFeatureEnabled(NetworkStackUtils.IPCLIENT_GRATUITOUS_NA_VERSION,
-                false /* isGratuitousNaEnabled */);
         if (isGratuitousArpNaRoamingEnabled) {
             setFeatureEnabled(NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION, true);
         } else {
@@ -3939,7 +3932,8 @@ public abstract class IpClientIntegrationTestCommon {
         final List<ArpPacket> arpList = new ArrayList<>();
         final List<NeighborAdvertisement> naList = new ArrayList<>();
         waitForGratuitousArpAndNaPacket(arpList, naList);
-        assertEquals(2, naList.size()); // privacy address and stable privacy address
+        // 2 NAs sent due to RFC9131 implement and 2 NAs sent after roam
+        assertEquals(4, naList.size()); // privacy address and stable privacy address
         assertEquals(1, arpList.size()); // IPv4 address
     }
 
@@ -3953,7 +3947,7 @@ public abstract class IpClientIntegrationTestCommon {
         final List<ArpPacket> arpList = new ArrayList<>();
         final List<NeighborAdvertisement> naList = new ArrayList<>();
         waitForGratuitousArpAndNaPacket(arpList, naList);
-        assertEquals(0, naList.size());
+        assertEquals(2, naList.size()); // NAs sent due to RFC9131 implement, not from roam
         assertEquals(0, arpList.size());
     }
 
@@ -3967,7 +3961,8 @@ public abstract class IpClientIntegrationTestCommon {
         final List<ArpPacket> arpList = new ArrayList<>();
         final List<NeighborAdvertisement> naList = new ArrayList<>();
         waitForGratuitousArpAndNaPacket(arpList, naList);
-        assertEquals(2, naList.size());
+        // 2 NAs sent due to RFC9131 implement and 2 NAs sent after roam
+        assertEquals(4, naList.size());
         assertEquals(0, arpList.size());
     }
 

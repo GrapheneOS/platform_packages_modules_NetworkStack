@@ -21,7 +21,6 @@ package {
 
 java_defaults {
     name: "NetworkStackTestsDefaults",
-    platform_apis: true,
     srcs: [
         "src/**/*.java",
         "src/**/*.kt",
@@ -58,6 +57,7 @@ java_defaults {
 // Tests for NetworkStackNext.
 android_test {
     name: "NetworkStackNextTests",
+    platform_apis: true,
     target_sdk_version: "current",
     min_sdk_version: "30",
     srcs: [], // TODO: tests that only apply to the current, non-stable API can be added here
@@ -93,6 +93,7 @@ android_library {
 
 android_test {
     name: "NetworkStackTests",
+    platform_apis: true,
     min_sdk_version: "30",
     test_suites: [
         "general-tests",

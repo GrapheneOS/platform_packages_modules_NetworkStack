@@ -186,12 +186,6 @@ public class NetworkStackUtils {
     public static final String VALIDATION_METRICS_VERSION = "validation_metrics_version";
 
     /**
-     * Experiment flag to enable sending gratuitous multicast unsolicited Neighbor Advertisements
-     * to propagate new assigned IPv6 GUA as quickly as possible.
-     */
-    public static final String IPCLIENT_GRATUITOUS_NA_VERSION = "ipclient_gratuitous_na_version";
-
-    /**
      * Experiment flag to enable sending Gratuitous APR and Gratuitous Neighbor Advertisement for
      * all assigned IPv4 and IPv6 GUAs after completing L2 roaming.
      */

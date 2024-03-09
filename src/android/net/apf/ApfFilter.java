@@ -118,6 +118,7 @@ public class ApfFilter implements AndroidPacketFilter {
     // Helper class for specifying functional filter parameters.
     public static class ApfConfiguration {
         public ApfCapabilities apfCapabilities;
+        public int installableProgramSizeClamp = Integer.MAX_VALUE;
         public boolean multicastFilter;
         public boolean ieee802_3Filter;
         public int[] ethTypeBlackList;
@@ -269,6 +270,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
 
     private final ApfCapabilities mApfCapabilities;
+    private final int mInstallableProgramSizeClamp;
     private final IpClientCallbacksWrapper mIpClientCallback;
     private final InterfaceParams mInterfaceParams;
     private final TokenBucket mTokenBucket;
@@ -392,6 +394,7 @@ public class ApfFilter implements AndroidPacketFilter {
             IpClientCallbacksWrapper ipClientCallback, NetworkQuirkMetrics networkQuirkMetrics,
             Dependencies dependencies, Clock clock) {
         mApfCapabilities = config.apfCapabilities;
+        mInstallableProgramSizeClamp = config.installableProgramSizeClamp;
         mIpClientCallback = ipClientCallback;
         mInterfaceParams = ifParams;
         mMulticastFilter = config.multicastFilter;
@@ -2103,6 +2106,11 @@ public class ApfFilter implements AndroidPacketFilter {
             maximumApfProgramSize -= Counter.totalSize();
         }
 
+        // Prevent generating (and thus installing) larger programs
+        if (maximumApfProgramSize > mInstallableProgramSizeClamp) {
+            maximumApfProgramSize = mInstallableProgramSizeClamp;
+        }
+
         // Ensure the entire APF program uses the same time base.
         int timeSeconds = secondsSinceBoot();
         try {
@@ -2447,6 +2455,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
     public synchronized void dump(IndentingPrintWriter pw) {
         pw.println("Capabilities: " + mApfCapabilities);
+        pw.println("InstallableProgramSizeClamp: " + mInstallableProgramSizeClamp);
         pw.println("Receive thread: " + (mReceiveThread != null ? "RUNNING" : "STOPPED"));
         pw.println("Multicast: " + (mMulticastFilter ? "DROP" : "ALLOW"));
         pw.println("Minimum RDNSS lifetime: " + mMinRdnssLifetimeSec);
