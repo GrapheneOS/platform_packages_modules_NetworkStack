@@ -315,7 +315,10 @@ java_defaults {
     srcs: [
         ":framework-networkstack-shared-srcs",
     ],
-    libs: ["unsupportedappusage"],
+    libs: [
+        "error_prone_annotations",
+        "unsupportedappusage",
+    ],
     static_libs: [
         "androidx.annotation_annotation",
         "modules-utils-build_system",
