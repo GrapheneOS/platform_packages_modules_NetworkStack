@@ -16,7 +16,19 @@
 
 package android.net.ip;
 
+import static android.net.ip.IpClientLinkObserver.CONFIG_SOCKET_RECV_BUFSIZE;
+import static android.net.ip.IpClientLinkObserver.SOCKET_RECV_BUFSIZE;
 import static android.system.OsConstants.RT_SCOPE_UNIVERSE;
+
+import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
+import static com.android.net.module.util.netlink.NetlinkConstants.RTPROT_KERNEL;
+import static com.android.net.module.util.netlink.NetlinkConstants.RTM_DELROUTE;
+import static com.android.net.module.util.netlink.NetlinkConstants.RTM_NEWADDR;
+import static com.android.net.module.util.netlink.NetlinkConstants.RTM_NEWNDUSEROPT;
+import static com.android.net.module.util.netlink.NetlinkConstants.RTM_NEWROUTE;
+import static com.android.net.module.util.netlink.NetlinkConstants.RTN_UNICAST;
+import static com.android.net.module.util.netlink.StructNlMsgHdr.NLM_F_ACK;
+import static com.android.net.module.util.netlink.StructNlMsgHdr.NLM_F_REQUEST;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -27,6 +39,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
@@ -34,7 +47,6 @@ import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -57,6 +69,8 @@ import android.net.NetworkStackIpMemoryStore;
 import android.net.RouteInfo;
 import android.net.apf.ApfCapabilities;
 import android.net.apf.ApfFilter.ApfConfiguration;
+import android.net.ip.IpClientLinkObserver.IpClientNetlinkMonitor;
+import android.net.ip.IpClientLinkObserver.IpClientNetlinkMonitor.INetlinkMessageProcessor;
 import android.net.ipmemorystore.NetworkAttributes;
 import android.net.metrics.IpConnectivityLog;
 import android.net.shared.InitialConfiguration;
@@ -64,15 +78,21 @@ import android.net.shared.Layer2Information;
 import android.net.shared.ProvisioningConfiguration;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
 import android.os.Build;
+import android.system.OsConstants;
 
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.net.module.util.InterfaceParams;
+import com.android.net.module.util.netlink.NduseroptMessage;
+import com.android.net.module.util.netlink.RtNetlinkAddressMessage;
+import com.android.net.module.util.netlink.RtNetlinkRouteMessage;
+import com.android.net.module.util.netlink.StructIfaddrMsg;
+import com.android.net.module.util.netlink.StructNdOptRdnss;
+import com.android.net.module.util.netlink.StructNlMsgHdr;
+import com.android.net.module.util.netlink.StructRtMsg;
 import com.android.networkstack.R;
 import com.android.networkstack.ipmemorystore.IpMemoryStoreService;
-import com.android.server.NetworkObserver;
-import com.android.server.NetworkObserverRegistry;
 import com.android.server.NetworkStackService;
 import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
@@ -135,10 +155,12 @@ public class IpClientTest {
     private static final String TEST_IPV6_GATEWAY = "fd2c:4e57:8e3c::43";
     private static final String TEST_IPV4_GATEWAY = "192.168.42.11";
     private static final long TEST_DNS_LIFETIME = 3600;
+    // `whenMs` param in processNetlinkMessage is only used to process PREF64 option in RA, which
+    // is not used for RTM_NEWADDR, RTM_NEWROUTE and RDNSS option.
+    private static final long TEST_UNUSED_REAL_TIME = 0;
 
     @Mock private Context mContext;
     @Mock private ConnectivityManager mCm;
-    @Mock private NetworkObserverRegistry mObserverRegistry;
     @Mock private INetd mNetd;
     @Mock private Resources mResources;
     @Mock private IIpClientCallbacks mCb;
@@ -152,9 +174,10 @@ public class IpClientTest {
     @Mock private IpConnectivityLog mMetricsLog;
     @Mock private FileDescriptor mFd;
     @Mock private PrintWriter mWriter;
+    @Mock private IpClientNetlinkMonitor mNetlinkMonitor;
 
-    private NetworkObserver mObserver;
     private InterfaceParams mIfParams;
+    private INetlinkMessageProcessor mNetlinkMessageProcessor;
 
     @Before
     public void setUp() throws Exception {
@@ -172,6 +195,11 @@ public class IpClientTest {
         when(mDependencies.getIpMemoryStore(mContext, mNetworkStackServiceManager))
                 .thenReturn(mIpMemoryStore);
         when(mDependencies.getIpConnectivityLog()).thenReturn(mMetricsLog);
+        when(mDependencies.getDeviceConfigPropertyInt(eq(CONFIG_SOCKET_RECV_BUFSIZE), anyInt()))
+                .thenReturn(SOCKET_RECV_BUFSIZE);
+        when(mDependencies.makeIpClientNetlinkMonitor(
+                any(), any(), any(), anyInt(), any())).thenReturn(mNetlinkMonitor);
+        when(mNetlinkMonitor.start()).thenReturn(true);
 
         mIfParams = null;
     }
@@ -185,14 +213,15 @@ public class IpClientTest {
 
     private IpClient makeIpClient(String ifname) throws Exception {
         setTestInterfaceParams(ifname);
-        final IpClient ipc = new IpClient(mContext, ifname, mCb, mObserverRegistry,
-                mNetworkStackServiceManager, mDependencies);
+        final IpClient ipc =
+                new IpClient(mContext, ifname, mCb, mNetworkStackServiceManager, mDependencies);
         verify(mNetd, timeout(TEST_TIMEOUT_MS).times(1)).interfaceSetEnableIPv6(ifname, false);
         verify(mNetd, timeout(TEST_TIMEOUT_MS).times(1)).interfaceClearAddrs(ifname);
-        ArgumentCaptor<NetworkObserver> arg = ArgumentCaptor.forClass(NetworkObserver.class);
-        verify(mObserverRegistry, times(1)).registerObserverForNonblockingCallback(arg.capture());
-        mObserver = arg.getValue();
-        reset(mObserverRegistry);
+        final ArgumentCaptor<INetlinkMessageProcessor> processorCaptor =
+                ArgumentCaptor.forClass(INetlinkMessageProcessor.class);
+        verify(mDependencies).makeIpClientNetlinkMonitor(any(), any(), any(), anyInt(),
+                processorCaptor.capture());
+        mNetlinkMessageProcessor = processorCaptor.getValue();
         reset(mNetd);
         // Verify IpClient doesn't call onLinkPropertiesChange() when it starts.
         verify(mCb, never()).onLinkPropertiesChange(any());
@@ -212,12 +241,87 @@ public class IpClientTest {
         // verify(mIpMemoryStore).storeNetworkAttributes(eq(l2Key), eq(attributes), any());
     }
 
+    private static StructNlMsgHdr makeNetlinkMessageHeader(short type, short flags) {
+        final StructNlMsgHdr nlmsghdr = new StructNlMsgHdr();
+        nlmsghdr.nlmsg_type = type;
+        nlmsghdr.nlmsg_flags = flags;
+        nlmsghdr.nlmsg_seq = 1;
+        return nlmsghdr;
+    }
+
+    private static RtNetlinkAddressMessage buildRtmAddressMessage(short type, final LinkAddress la,
+            int ifindex, int flags) {
+        final StructNlMsgHdr nlmsghdr =
+                makeNetlinkMessageHeader(type, (short) (NLM_F_REQUEST | NLM_F_ACK));
+        InetAddress ip = la.getAddress();
+        final byte family =
+                (byte) ((ip instanceof Inet6Address) ? OsConstants.AF_INET6 : OsConstants.AF_INET);
+        StructIfaddrMsg ifaddrMsg = new StructIfaddrMsg(family,
+                (short) la.getPrefixLength(),
+                (short) la.getFlags(), (short) la.getScope(), ifindex);
+
+        return new RtNetlinkAddressMessage(nlmsghdr, ifaddrMsg, ip,
+                null /* structIfacacheInfo */, flags);
+    }
+
+    private static RtNetlinkRouteMessage buildRtmRouteMessage(short type, final RouteInfo route,
+            int ifindex) {
+        final StructNlMsgHdr nlmsghdr =
+                makeNetlinkMessageHeader(type, (short) (NLM_F_REQUEST | NLM_F_ACK));
+        final IpPrefix destination = route.getDestination();
+        final byte family = (byte) ((destination.getAddress() instanceof Inet6Address)
+                ? OsConstants.AF_INET6
+                : OsConstants.AF_INET);
+
+        final StructRtMsg rtMsg = new StructRtMsg(family,
+                (short) destination.getPrefixLength() /* dstLen */, (short) 0 /* srcLen */,
+                (short) 0 /* tos */, (short) 0xfd /* main table */, RTPROT_KERNEL /* protocol */,
+                (short) RT_SCOPE_UNIVERSE /* scope */, RTN_UNICAST /* type */, 0 /* flags */);
+        return new RtNetlinkRouteMessage(nlmsghdr, rtMsg, null /* source */, route.getDestination(),
+                route.getGateway(), 0 /* iif */, ifindex /* oif */, null /* cacheInfo */);
+    }
+
+    private static NduseroptMessage buildNduseroptMessage(int ifindex, long lifetime,
+            final String[] servers) {
+        final StructNlMsgHdr nlmsghdr =
+                makeNetlinkMessageHeader(RTM_NEWNDUSEROPT, (short) (NLM_F_REQUEST | NLM_F_ACK));
+        final Inet6Address[] serverArray = new Inet6Address[servers.length];
+        for (int i = 0; i < servers.length; i++) {
+            serverArray[i] = (Inet6Address) InetAddresses.parseNumericAddress(servers[i]);
+        }
+        final StructNdOptRdnss option = new StructNdOptRdnss(serverArray, lifetime);
+        return new NduseroptMessage(nlmsghdr, (byte) OsConstants.AF_INET6 /* family */,
+                0 /* opts_len */, ifindex, (byte) ICMPV6_ROUTER_ADVERTISEMENT /* icmp_type */,
+                (byte) 0 /* icmp_code */, option, null /* srcaddr */);
+    }
+
+    private void onInterfaceAddressUpdated(final LinkAddress la, int flags) {
+        final RtNetlinkAddressMessage msg =
+                buildRtmAddressMessage(RTM_NEWADDR, la, TEST_IFINDEX, flags);
+        mNetlinkMessageProcessor.processNetlinkMessage(msg, TEST_UNUSED_REAL_TIME /* whenMs */);
+    }
+
+    private void onRouteUpdated(final RouteInfo route) {
+        final RtNetlinkRouteMessage msg = buildRtmRouteMessage(RTM_NEWROUTE, route, TEST_IFINDEX);
+        mNetlinkMessageProcessor.processNetlinkMessage(msg, TEST_UNUSED_REAL_TIME /* whenMs */);
+    }
+
+    private void onRouteRemoved(final RouteInfo route) {
+        final RtNetlinkRouteMessage msg = buildRtmRouteMessage(RTM_DELROUTE, route, TEST_IFINDEX);
+        mNetlinkMessageProcessor.processNetlinkMessage(msg, TEST_UNUSED_REAL_TIME /* whenMs */);
+    }
+
+    private void onInterfaceDnsServerInfo(long lifetime, final String[] dnsServers) {
+        final NduseroptMessage msg = buildNduseroptMessage(TEST_IFINDEX, lifetime, dnsServers);
+        mNetlinkMessageProcessor.processNetlinkMessage(msg, TEST_UNUSED_REAL_TIME /* whenMs */);
+    }
+
     @Test
     public void testNullInterfaceNameMostDefinitelyThrows() throws Exception {
         setTestInterfaceParams(null);
         try {
-            final IpClient ipc = new IpClient(mContext, null, mCb, mObserverRegistry,
-                    mNetworkStackServiceManager, mDependencies);
+            final IpClient ipc = new IpClient(mContext, null, mCb, mNetworkStackServiceManager,
+                    mDependencies);
             ipc.shutdown();
             fail();
         } catch (NullPointerException npe) {
@@ -230,8 +334,8 @@ public class IpClientTest {
         final String ifname = "lo";
         setTestInterfaceParams(ifname);
         try {
-            final IpClient ipc = new IpClient(mContext, ifname, null, mObserverRegistry,
-                    mNetworkStackServiceManager, mDependencies);
+            final IpClient ipc = new IpClient(mContext, ifname, null, mNetworkStackServiceManager,
+                    mDependencies);
             ipc.shutdown();
             fail();
         } catch (NullPointerException npe) {
@@ -242,8 +346,8 @@ public class IpClientTest {
     @Test
     public void testInvalidInterfaceDoesNotThrow() throws Exception {
         setTestInterfaceParams(TEST_IFNAME);
-        final IpClient ipc = new IpClient(mContext, TEST_IFNAME, mCb, mObserverRegistry,
-                mNetworkStackServiceManager, mDependencies);
+        final IpClient ipc = new IpClient(mContext, TEST_IFNAME, mCb, mNetworkStackServiceManager,
+                mDependencies);
         verifyNoMoreInteractions(mIpMemoryStore);
         ipc.shutdown();
     }
@@ -251,8 +355,8 @@ public class IpClientTest {
     @Test
     public void testInterfaceNotFoundFailsImmediately() throws Exception {
         setTestInterfaceParams(null);
-        final IpClient ipc = new IpClient(mContext, TEST_IFNAME, mCb, mObserverRegistry,
-                mNetworkStackServiceManager, mDependencies);
+        final IpClient ipc = new IpClient(mContext, TEST_IFNAME, mCb, mNetworkStackServiceManager,
+                mDependencies);
         ipc.startProvisioning(new ProvisioningConfiguration());
         verify(mCb, timeout(TEST_TIMEOUT_MS).times(1)).onProvisioningFailure(any());
         verify(mIpMemoryStore, never()).storeNetworkAttributes(any(), any(), any());
@@ -286,9 +390,10 @@ public class IpClientTest {
         verify(mCb, timeout(TEST_TIMEOUT_MS).times(1)).setFallbackMulticastFilter(false);
 
         final LinkProperties lp = makeIPv6ProvisionedLinkProperties();
-        lp.getRoutes().forEach(mObserver::onRouteUpdated);
-        lp.getLinkAddresses().forEach(la -> mObserver.onInterfaceAddressUpdated(la, TEST_IFNAME));
-        mObserver.onInterfaceDnsServerInfo(TEST_IFNAME, TEST_DNS_LIFETIME,
+        lp.getRoutes().forEach(route -> onRouteUpdated(route));
+        lp.getLinkAddresses().forEach(
+                la -> onInterfaceAddressUpdated(la, la.getFlags()));
+        onInterfaceDnsServerInfo(TEST_DNS_LIFETIME,
                 lp.getDnsServers().stream().map(InetAddress::getHostAddress)
                         .toArray(String[]::new));
 
@@ -305,8 +410,8 @@ public class IpClientTest {
         final LinkAddress la = new LinkAddress(TEST_IPV4_LINKADDRESS);
         final RouteInfo defaultRoute = new RouteInfo(new IpPrefix(Inet4Address.ANY, 0),
                 InetAddresses.parseNumericAddress(TEST_IPV4_GATEWAY), TEST_IFNAME);
-        mObserver.onInterfaceAddressUpdated(la, TEST_IFNAME);
-        mObserver.onRouteUpdated(defaultRoute);
+        onInterfaceAddressUpdated(la, la.getFlags());
+        onRouteUpdated(defaultRoute);
 
         lp.addLinkAddress(la);
         lp.addRoute(defaultRoute);
@@ -319,7 +424,7 @@ public class IpClientTest {
      */
     private void doIPv6ProvisioningLoss(LinkProperties lp) {
         final RouteInfo defaultRoute = defaultIPV6Route(TEST_IPV6_GATEWAY);
-        mObserver.onRouteRemoved(defaultRoute);
+        onRouteRemoved(defaultRoute);
 
         lp.removeRoute(defaultRoute);
     }
@@ -413,13 +518,13 @@ public class IpClientTest {
 
         // Add N - 1 addresses
         for (int i = 0; i < lastAddr; i++) {
-            mObserver.onInterfaceAddressUpdated(new LinkAddress(TEST_LOCAL_ADDRESSES[i]), iface);
+            onInterfaceAddressUpdated(new LinkAddress(TEST_LOCAL_ADDRESSES[i]), 0 /* flags */);
             verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(any());
             reset(mCb);
         }
 
         // Add Nth address
-        mObserver.onInterfaceAddressUpdated(new LinkAddress(TEST_LOCAL_ADDRESSES[lastAddr]), iface);
+        onInterfaceAddressUpdated(new LinkAddress(TEST_LOCAL_ADDRESSES[lastAddr]), 0 /* flags */);
         LinkProperties want = linkproperties(links(TEST_LOCAL_ADDRESSES),
                 routes(TEST_PREFIXES), emptySet() /* dnses */);
         want.setInterfaceName(iface);

@@ -29,7 +29,6 @@ import static com.android.net.module.util.netlink.NetlinkConstants.RTPROT_KERNEL
 import static com.android.net.module.util.netlink.NetlinkConstants.RTPROT_RA;
 import static com.android.net.module.util.netlink.NetlinkConstants.RT_SCOPE_UNIVERSE;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_ACCEPT_IPV6_LINK_LOCAL_DNS_VERSION;
-import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_PARSE_NETLINK_EVENTS_FORCE_DISABLE;
 
 import android.app.AlarmManager;
 import android.content.Context;
@@ -65,7 +64,6 @@ import com.android.net.module.util.netlink.StructNdOptPref64;
 import com.android.net.module.util.netlink.StructNdOptRdnss;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
-import com.android.server.NetworkObserver;
 
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -80,10 +78,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * Keeps track of link configuration received from Netd.
  *
- * An instance of this class is constructed by passing in an interface name and a callback. The
- * owner is then responsible for registering the tracker with NetworkObserverRegistry. When the
- * class receives update notifications, it applies the update to its local LinkProperties, and if
- * something has changed, notifies its owner of the update via the callback.
+ * An instance of this class is constructed by passing in an interface name and a callback. When
+ * the class receives update notifications, it applies the update to its local LinkProperties, and
+ * if something has changed, notifies its owner of the update via the callback.
  *
  * The owner can then call {@code getLinkProperties()} in order to find out
  * what changed. If in the meantime the LinkProperties stored here have changed,
@@ -96,18 +93,15 @@ import java.util.concurrent.TimeUnit;
  *
  * - The owner of this class is expected to create it, register it, and call
  *   getLinkProperties or clearLinkProperties on its thread.
- * - Most of the methods in the class are implementing NetworkObserver and are called
- *   on the handler used to register the observer.
  * - All accesses to mLinkProperties must be synchronized(this). All the other
  *   member variables are immutable once the object is constructed.
  *
  * TODO: Now that all the methods are called on the handler thread, remove synchronization and
  *       pass the LinkProperties to the update() callback.
- * TODO: Stop extending NetworkObserver and get events from netlink directly.
  *
  * @hide
  */
-public class IpClientLinkObserver implements NetworkObserver {
+public class IpClientLinkObserver {
     private final String mTag;
 
     /**
@@ -163,9 +157,20 @@ public class IpClientLinkObserver implements NetworkObserver {
     private final IpClient.Dependencies mDependencies;
     private final String mClatInterfaceName;
     private final IpClientNetlinkMonitor mNetlinkMonitor;
-    private final boolean mNetlinkEventParsingEnabled;
+    private final NetworkInformationShim mShim;
+    private final AlarmManager.OnAlarmListener mExpirePref64Alarm;
 
     private boolean mClatInterfaceExists;
+    private long mNat64PrefixExpiry;
+
+    /**
+     * Current interface index. Most of this class (and of IpClient), only uses interface names,
+     * not interface indices. This means that the interface index can in theory change, and that
+     * it's not necessarily correct to get the interface name at object creation time (and in
+     * fact, when the object is created, the interface might not even exist).
+     * TODO: once all netlink events pass through this class, stop depending on interface names.
+     */
+    private int mIfindex;
 
     // This must match the interface prefix in clatd.c.
     // TODO: Revert this hack once IpClient and Nat464Xlat work in concert.
@@ -177,7 +182,8 @@ public class IpClientLinkObserver implements NetworkObserver {
     // recv buffer size to avoid the ENOBUFS as much as possible.
     @VisibleForTesting
     static final String CONFIG_SOCKET_RECV_BUFSIZE = "ipclient_netlink_sock_recv_buf_size";
-    private static final int SOCKET_RECV_BUFSIZE = 4 * 1024 * 1024;
+    @VisibleForTesting
+    static final int SOCKET_RECV_BUFSIZE = 4 * 1024 * 1024;
 
     public IpClientLinkObserver(Context context, Handler h, String iface, Callback callback,
             Configuration config, SharedLog log, IpClient.Dependencies deps) {
@@ -194,9 +200,11 @@ public class IpClientLinkObserver implements NetworkObserver {
         mDnsServerRepository = new DnsServerRepository(config.minRdnssLifetime);
         mAlarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         mDependencies = deps;
-        mNetlinkEventParsingEnabled = deps.isFeatureNotChickenedOut(context,
-                IPCLIENT_PARSE_NETLINK_EVENTS_FORCE_DISABLE);
-        mNetlinkMonitor = new IpClientNetlinkMonitor(h, log, mTag);
+        mNetlinkMonitor = deps.makeIpClientNetlinkMonitor(h, log, mTag,
+                getSocketReceiveBufferSize(),
+                (nlMsg, whenMs) -> processNetlinkMessage(nlMsg, whenMs));
+        mShim = NetworkInformationShimImpl.newInstance();
+        mExpirePref64Alarm = new IpClientObserverAlarmListener();
         mHandler.post(() -> {
             if (!mNetlinkMonitor.start()) {
                 Log.wtf(mTag, "Fail to start NetlinkMonitor.");
@@ -238,73 +246,6 @@ public class IpClientLinkObserver implements NetworkObserver {
             throw new IllegalArgumentException("Invalid SO_RCVBUF " + size);
         }
         return size;
-    }
-
-    @Override
-    public void onInterfaceAdded(String iface) {
-        if (mNetlinkEventParsingEnabled) return;
-        maybeLog("interfaceAdded", iface);
-        if (mClatInterfaceName.equals(iface)) {
-            mCallback.onClatInterfaceStateUpdate(true /* add interface */);
-        }
-    }
-
-    @Override
-    public void onInterfaceRemoved(String iface) {
-        if (mNetlinkEventParsingEnabled) return;
-        maybeLog("interfaceRemoved", iface);
-        if (mClatInterfaceName.equals(iface)) {
-            mCallback.onClatInterfaceStateUpdate(false /* remove interface */);
-        } else if (mInterfaceName.equals(iface)) {
-            updateInterfaceRemoved();
-        }
-    }
-
-    @Override
-    public void onInterfaceLinkStateChanged(String iface, boolean state) {
-        if (mNetlinkEventParsingEnabled) return;
-        if (!mInterfaceName.equals(iface)) return;
-        maybeLog("interfaceLinkStateChanged", iface + (state ? " up" : " down"));
-        updateInterfaceLinkStateChanged(state);
-    }
-
-    @Override
-    public void onInterfaceAddressUpdated(LinkAddress address, String iface) {
-        if (mNetlinkEventParsingEnabled) return;
-        if (!mInterfaceName.equals(iface)) return;
-        maybeLog("addressUpdated", iface, address);
-        updateInterfaceAddress(address, true /* add address */);
-    }
-
-    @Override
-    public void onInterfaceAddressRemoved(LinkAddress address, String iface) {
-        if (mNetlinkEventParsingEnabled) return;
-        if (!mInterfaceName.equals(iface)) return;
-        maybeLog("addressRemoved", iface, address);
-        updateInterfaceAddress(address, false /* remove address */);
-    }
-
-    @Override
-    public void onRouteUpdated(RouteInfo route) {
-        if (mNetlinkEventParsingEnabled) return;
-        if (!mInterfaceName.equals(route.getInterface())) return;
-        maybeLog("routeUpdated", route);
-        updateInterfaceRoute(route, true /* add route */);
-    }
-
-    @Override
-    public void onRouteRemoved(RouteInfo route) {
-        if (mNetlinkEventParsingEnabled) return;
-        if (!mInterfaceName.equals(route.getInterface())) return;
-        maybeLog("routeRemoved", route);
-        updateInterfaceRoute(route, false /* remove route */);
-    }
-
-    @Override
-    public void onInterfaceDnsServerInfo(String iface, long lifetime, String[] addresses) {
-        if (mNetlinkEventParsingEnabled) return;
-        if (!mInterfaceName.equals(iface)) return;
-        updateInterfaceDnsServerInfo(lifetime, addresses);
     }
 
     private synchronized void updateInterfaceLinkStateChanged(boolean state) {
@@ -390,7 +331,7 @@ public class IpClientLinkObserver implements NetworkObserver {
         // while interfaceDnsServerInfo() is being called, we'll end up with no DNS servers in
         // mLinkProperties, as desired.
         mDnsServerRepository = new DnsServerRepository(mConfig.minRdnssLifetime);
-        mNetlinkMonitor.clearAlarms();
+        cancelPref64Alarm();
         mLinkProperties.clear();
         mLinkProperties.setInterfaceName(mInterfaceName);
     }
@@ -405,12 +346,19 @@ public class IpClientLinkObserver implements NetworkObserver {
 
     /** Notifies this object of new interface parameters. */
     public void setInterfaceParams(InterfaceParams params) {
-        mNetlinkMonitor.setIfindex(params.index);
+        setIfindex(params.index);
     }
 
     /** Notifies this object not to listen on any interface. */
     public void clearInterfaceParams() {
-        mNetlinkMonitor.setIfindex(0);  // 0 is never a valid ifindex.
+        setIfindex(0);  // 0 is never a valid ifindex.
+    }
+
+    private void setIfindex(int ifindex) {
+        if (!mNetlinkMonitor.isRunning()) {
+            Log.wtf(mTag, "NetlinkMonitor is not running when setting interface parameter!");
+        }
+        mIfindex = ifindex;
     }
 
     private static boolean isSupportedRouteProtocol(RtNetlinkRouteMessage msg) {
@@ -429,47 +377,44 @@ public class IpClientLinkObserver implements NetworkObserver {
      * Simple NetlinkMonitor. Listen for netlink events from kernel.
      * All methods except the constructor must be called on the handler thread.
      */
-    private class IpClientNetlinkMonitor extends NetlinkMonitor {
-        private final Handler mHandler;
-
-        IpClientNetlinkMonitor(Handler h, SharedLog log, String tag) {
-            super(h, log, tag, OsConstants.NETLINK_ROUTE,
-                    !mNetlinkEventParsingEnabled
-                        ? NetlinkConstants.RTMGRP_ND_USEROPT
-                        : (NetlinkConstants.RTMGRP_ND_USEROPT | NetlinkConstants.RTMGRP_LINK
-                                | NetlinkConstants.RTMGRP_IPV4_IFADDR
-                                | NetlinkConstants.RTMGRP_IPV6_IFADDR
-                                | NetlinkConstants.RTMGRP_IPV6_ROUTE),
-                    getSocketReceiveBufferSize());
-
-            mHandler = h;
-        }
-
-        private final NetworkInformationShim mShim = NetworkInformationShimImpl.newInstance();
-
-        private long mNat64PrefixExpiry;
-
+    static class IpClientNetlinkMonitor extends NetlinkMonitor {
         /**
-         * Current interface index. Most of this class (and of IpClient), only uses interface names,
-         * not interface indices. This means that the interface index can in theory change, and that
-         * it's not necessarily correct to get the interface name at object creation time (and in
-         * fact, when the object is created, the interface might not even exist).
-         * TODO: once all netlink events pass through this class, stop depending on interface names.
+         * An interface used to process the received netlink messages, which is easiler to inject
+         * the function in unit test.
          */
-        private int mIfindex;
-
-        void setIfindex(int ifindex) {
-            if (!isRunning()) {
-                Log.wtf(mTag, "NetlinkMonitor is not running when setting interface parameter!");
-            }
-            mIfindex = ifindex;
+        public interface INetlinkMessageProcessor {
+            void processNetlinkMessage(@NonNull NetlinkMessage nlMsg, long whenMs);
         }
 
-        void clearAlarms() {
-            cancelPref64Alarm();
+        private final Handler mHandler;
+        private final INetlinkMessageProcessor mNetlinkMessageProcessor;
+
+        IpClientNetlinkMonitor(Handler h, SharedLog log, String tag, int sockRcvbufSize,
+                INetlinkMessageProcessor p) {
+            super(h, log, tag, OsConstants.NETLINK_ROUTE,
+                    (NetlinkConstants.RTMGRP_ND_USEROPT
+                            | NetlinkConstants.RTMGRP_LINK
+                            | NetlinkConstants.RTMGRP_IPV4_IFADDR
+                            | NetlinkConstants.RTMGRP_IPV6_IFADDR
+                            | NetlinkConstants.RTMGRP_IPV6_ROUTE),
+                    sockRcvbufSize);
+            mHandler = h;
+            mNetlinkMessageProcessor = p;
         }
 
-        private final AlarmManager.OnAlarmListener mExpirePref64Alarm = () -> {
+        @Override
+        protected void processNetlinkMessage(NetlinkMessage nlMsg, long whenMs) {
+            mNetlinkMessageProcessor.processNetlinkMessage(nlMsg, whenMs);
+        }
+
+        protected boolean isRunning() {
+            return super.isRunning();
+        }
+    }
+
+    private class IpClientObserverAlarmListener implements AlarmManager.OnAlarmListener {
+        @Override
+        public void onAlarm() {
             // Ignore the alarm if cancelPref64Alarm has already been called.
             //
             // TODO: in the rare case where the alarm fires and posts the lambda to the handler
@@ -478,254 +423,244 @@ public class IpClientLinkObserver implements NetworkObserver {
             // lifetime in the RA is zero this code will correctly do nothing, but if the lifetime
             // is nonzero then the prefix will be added and immediately removed by this code.
             if (mNat64PrefixExpiry == 0) return;
-            updatePref64(mShim.getNat64Prefix(mLinkProperties),
-                    mNat64PrefixExpiry, mNat64PrefixExpiry);
-        };
+            updatePref64(mShim.getNat64Prefix(mLinkProperties), mNat64PrefixExpiry,
+                    mNat64PrefixExpiry);
+        }
+    }
 
-        private void cancelPref64Alarm() {
-            // Clear the expiry in case the alarm just fired and has not been processed yet.
-            if (mNat64PrefixExpiry == 0) return;
-            mNat64PrefixExpiry = 0;
-            mAlarmManager.cancel(mExpirePref64Alarm);
+    private void cancelPref64Alarm() {
+        // Clear the expiry in case the alarm just fired and has not been processed yet.
+        if (mNat64PrefixExpiry == 0) return;
+        mNat64PrefixExpiry = 0;
+        mAlarmManager.cancel(mExpirePref64Alarm);
+    }
+
+    private void schedulePref64Alarm() {
+        // There is no need to cancel any existing alarms, because we are using the same
+        // OnAlarmListener object, and each such listener can only have at most one alarm.
+        final String tag = mTag + ".PREF64";
+        mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, mNat64PrefixExpiry, tag,
+                mExpirePref64Alarm, mHandler);
+    }
+
+    /**
+     * Processes a PREF64 ND option.
+     *
+     * @param prefix The NAT64 prefix.
+     * @param now The time (as determined by SystemClock.elapsedRealtime) when the event
+     *            that triggered this method was received.
+     * @param expiry The time (as determined by SystemClock.elapsedRealtime) when the option
+     *               expires.
+     */
+    private synchronized void updatePref64(IpPrefix prefix, final long now,
+            final long expiry) {
+        final IpPrefix currentPrefix = mShim.getNat64Prefix(mLinkProperties);
+
+        // If the prefix matches the current prefix, refresh its lifetime.
+        if (prefix.equals(currentPrefix)) {
+            mNat64PrefixExpiry = expiry;
+            if (expiry > now) schedulePref64Alarm();
         }
 
-        private void schedulePref64Alarm() {
-            // There is no need to cancel any existing alarms, because we are using the same
-            // OnAlarmListener object, and each such listener can only have at most one alarm.
-            final String tag = mTag + ".PREF64";
-            mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, mNat64PrefixExpiry, tag,
-                    mExpirePref64Alarm, mHandler);
+        // If we already have a prefix, continue using it and ignore the new one. Stopping and
+        // restarting clatd is disruptive because it will break existing IPv4 connections.
+        // Note: this means that if we receive an RA that adds a new prefix and deletes the old
+        // prefix, we might receive and ignore the new prefix, then delete the old prefix, and
+        // have no prefix until the next RA is received. This is because the kernel returns ND
+        // user options one at a time even if they are in the same RA.
+        // TODO: keep track of the last few prefixes seen, like DnsServerRepository does.
+        if (mNat64PrefixExpiry > now) return;
+
+        // The current prefix has expired. Either replace it with the new one or delete it.
+        if (expiry > now) {
+            // If expiry > now, then prefix != currentPrefix (due to the return statement above)
+            mShim.setNat64Prefix(mLinkProperties, prefix);
+            mNat64PrefixExpiry = expiry;
+            schedulePref64Alarm();
+        } else {
+            mShim.setNat64Prefix(mLinkProperties, null);
+            cancelPref64Alarm();
         }
 
-        /**
-         * Processes a PREF64 ND option.
-         *
-         * @param prefix The NAT64 prefix.
-         * @param now The time (as determined by SystemClock.elapsedRealtime) when the event
-         *            that triggered this method was received.
-         * @param expiry The time (as determined by SystemClock.elapsedRealtime) when the option
-         *               expires.
-         */
-        private synchronized void updatePref64(IpPrefix prefix, final long now,
-                final long expiry) {
-            final IpPrefix currentPrefix = mShim.getNat64Prefix(mLinkProperties);
+        mCallback.update(getInterfaceLinkStateLocked());
+    }
 
-            // If the prefix matches the current prefix, refresh its lifetime.
-            if (prefix.equals(currentPrefix)) {
-                mNat64PrefixExpiry = expiry;
-                if (expiry > now) {
-                    schedulePref64Alarm();
+    private void processPref64Option(StructNdOptPref64 opt, final long now) {
+        final long expiry = now + TimeUnit.SECONDS.toMillis(opt.lifetime);
+        updatePref64(opt.prefix, now, expiry);
+    }
+
+    private void processRdnssOption(StructNdOptRdnss opt) {
+        final String[] addresses = new String[opt.servers.length];
+        for (int i = 0; i < opt.servers.length; i++) {
+            final Inet6Address addr = isIpv6LinkLocalDnsAccepted()
+                    ? InetAddressUtils.withScopeId(opt.servers[i], mIfindex)
+                    : opt.servers[i];
+            addresses[i] = addr.getHostAddress();
+        }
+        updateInterfaceDnsServerInfo(opt.header.lifetime, addresses);
+    }
+
+    private void processNduseroptMessage(NduseroptMessage msg, final long whenMs) {
+        if (msg.family != AF_INET6 || msg.option == null || msg.ifindex != mIfindex) return;
+        if (msg.icmp_type != (byte) ICMPV6_ROUTER_ADVERTISEMENT) return;
+
+        switch (msg.option.type) {
+            case StructNdOptPref64.TYPE:
+                processPref64Option((StructNdOptPref64) msg.option, whenMs);
+                break;
+
+            case StructNdOptRdnss.TYPE:
+                processRdnssOption((StructNdOptRdnss) msg.option);
+                break;
+
+            default:
+                // TODO: implement DNSSL.
+                break;
+        }
+    }
+
+    private void updateClatInterfaceLinkState(@NonNull final StructIfinfoMsg ifinfoMsg,
+            @Nullable final String ifname, short nlMsgType) {
+        switch (nlMsgType) {
+            case NetlinkConstants.RTM_NEWLINK:
+                if (mClatInterfaceExists) break;
+                maybeLog("clatInterfaceAdded", ifname);
+                mCallback.onClatInterfaceStateUpdate(true /* add interface */);
+                mClatInterfaceExists = true;
+                break;
+
+            case NetlinkConstants.RTM_DELLINK:
+                if (!mClatInterfaceExists) break;
+                maybeLog("clatInterfaceRemoved", ifname);
+                mCallback.onClatInterfaceStateUpdate(false /* remove interface */);
+                mClatInterfaceExists = false;
+                break;
+
+            default:
+                Log.e(mTag, "unsupported rtnetlink link msg type " + nlMsgType);
+                break;
+        }
+    }
+
+    private void processRtNetlinkLinkMessage(RtNetlinkLinkMessage msg) {
+        // Check if receiving netlink link state update for clat interface.
+        final String ifname = msg.getInterfaceName();
+        final short nlMsgType = msg.getHeader().nlmsg_type;
+        final StructIfinfoMsg ifinfoMsg = msg.getIfinfoHeader();
+        if (mClatInterfaceName.equals(ifname)) {
+            updateClatInterfaceLinkState(ifinfoMsg, ifname, nlMsgType);
+            return;
+        }
+
+        if (ifinfoMsg.family != AF_UNSPEC || ifinfoMsg.index != mIfindex) return;
+        if ((ifinfoMsg.flags & IFF_LOOPBACK) != 0) return;
+
+        switch (nlMsgType) {
+            case NetlinkConstants.RTM_NEWLINK:
+                final boolean state = (ifinfoMsg.flags & IFF_LOWER_UP) != 0;
+                maybeLog("interfaceLinkStateChanged", "ifindex " + mIfindex
+                        + (state ? " up" : " down"));
+                updateInterfaceLinkStateChanged(state);
+                break;
+
+            case NetlinkConstants.RTM_DELLINK:
+                maybeLog("interfaceRemoved", ifname);
+                updateInterfaceRemoved();
+                break;
+
+            default:
+                Log.e(mTag, "Unknown rtnetlink link msg type " + nlMsgType);
+                break;
+        }
+    }
+
+    // The preferred/valid in ifa_cacheinfo expressed in units of seconds, convert
+    // it to milliseconds for deprecationTime or expirationTime used in LinkAddress.
+    // If the experiment flag is not enabled, LinkAddress.LIFETIME_UNKNOWN is retuend,
+    // the same as before.
+    private long getDeprecationOrExpirationTime(@Nullable final StructIfacacheInfo cacheInfo,
+            long now, boolean deprecationTime) {
+        if (!mConfig.populateLinkAddressLifetime || (cacheInfo == null)) {
+            return LinkAddress.LIFETIME_UNKNOWN;
+        }
+        final long lifetime = deprecationTime ? cacheInfo.preferred : cacheInfo.valid;
+        return (lifetime == Integer.toUnsignedLong(INFINITE_LEASE))
+                ? LinkAddress.LIFETIME_PERMANENT
+                : now + lifetime * 1000;
+    }
+
+    private void processRtNetlinkAddressMessage(RtNetlinkAddressMessage msg) {
+        final StructIfaddrMsg ifaddrMsg = msg.getIfaddrHeader();
+        if (ifaddrMsg.index != mIfindex) return;
+
+        final StructIfacacheInfo cacheInfo = msg.getIfacacheInfo();
+        final long now = SystemClock.elapsedRealtime();
+        final long deprecationTime =
+                getDeprecationOrExpirationTime(cacheInfo, now, true /* deprecationTime */);
+        final long expirationTime =
+                getDeprecationOrExpirationTime(cacheInfo, now, false /* deprecationTime */);
+        final LinkAddress la = new LinkAddress(msg.getIpAddress(), ifaddrMsg.prefixLen,
+                msg.getFlags(), ifaddrMsg.scope, deprecationTime, expirationTime);
+
+        switch (msg.getHeader().nlmsg_type) {
+            case NetlinkConstants.RTM_NEWADDR:
+                if (updateInterfaceAddress(la, true /* add address */)) {
+                    maybeLog("addressUpdated", mIfindex, la);
                 }
-            }
+                break;
+            case NetlinkConstants.RTM_DELADDR:
+                if (updateInterfaceAddress(la, false /* remove address */)) {
+                    maybeLog("addressRemoved", mIfindex, la);
+                }
+                break;
+            default:
+                Log.e(mTag, "Unknown rtnetlink address msg type " + msg.getHeader().nlmsg_type);
+        }
+    }
 
-            // If we already have a prefix, continue using it and ignore the new one. Stopping and
-            // restarting clatd is disruptive because it will break existing IPv4 connections.
-            // Note: this means that if we receive an RA that adds a new prefix and deletes the old
-            // prefix, we might receive and ignore the new prefix, then delete the old prefix, and
-            // have no prefix until the next RA is received. This is because the kernel returns ND
-            // user options one at a time even if they are in the same RA.
-            // TODO: keep track of the last few prefixes seen, like DnsServerRepository does.
-            if (mNat64PrefixExpiry > now) return;
-
-            // The current prefix has expired. Either replace it with the new one or delete it.
-            if (expiry > now) {
-                // If expiry > now, then prefix != currentPrefix (due to the return statement above)
-                mShim.setNat64Prefix(mLinkProperties, prefix);
-                mNat64PrefixExpiry = expiry;
-                schedulePref64Alarm();
-            } else {
-                mShim.setNat64Prefix(mLinkProperties, null);
-                cancelPref64Alarm();
-            }
-
-            mCallback.update(getInterfaceLinkStateLocked());
+    private void processRtNetlinkRouteMessage(RtNetlinkRouteMessage msg) {
+        if (msg.getInterfaceIndex() != mIfindex) return;
+        // Ignore the unsupported route protocol and non-global unicast routes.
+        if (!isSupportedRouteProtocol(msg)
+                || !isGlobalUnicastRoute(msg)
+                // don't support source routing
+                || (msg.getRtMsgHeader().srcLen != 0)
+                // don't support cloned routes
+                || ((msg.getRtMsgHeader().flags & RTM_F_CLONED) != 0)) {
+            return;
         }
 
-        private void processPref64Option(StructNdOptPref64 opt, final long now) {
-            final long expiry = now + TimeUnit.SECONDS.toMillis(opt.lifetime);
-            updatePref64(opt.prefix, now, expiry);
+        final RouteInfo route = new RouteInfo(msg.getDestination(), msg.getGateway(),
+                mInterfaceName, msg.getRtMsgHeader().type);
+        switch (msg.getHeader().nlmsg_type) {
+            case NetlinkConstants.RTM_NEWROUTE:
+                if (updateInterfaceRoute(route, true /* add route */)) {
+                    maybeLog("routeUpdated", route);
+                }
+                break;
+            case NetlinkConstants.RTM_DELROUTE:
+                if (updateInterfaceRoute(route, false /* remove route */)) {
+                    maybeLog("routeRemoved", route);
+                }
+                break;
+            default:
+                Log.e(mTag, "Unknown rtnetlink route msg type " + msg.getHeader().nlmsg_type);
+                break;
         }
+    }
 
-        private void processRdnssOption(StructNdOptRdnss opt) {
-            if (!mNetlinkEventParsingEnabled) return;
-            final String[] addresses = new String[opt.servers.length];
-            for (int i = 0; i < opt.servers.length; i++) {
-                final Inet6Address addr = isIpv6LinkLocalDnsAccepted()
-                        ? InetAddressUtils.withScopeId(opt.servers[i], mIfindex)
-                        : opt.servers[i];
-                addresses[i] = addr.getHostAddress();
-            }
-            updateInterfaceDnsServerInfo(opt.header.lifetime, addresses);
-        }
-
-        private void processNduseroptMessage(NduseroptMessage msg, final long whenMs) {
-            if (msg.family != AF_INET6 || msg.option == null || msg.ifindex != mIfindex) return;
-            if (msg.icmp_type != (byte) ICMPV6_ROUTER_ADVERTISEMENT) return;
-
-            switch (msg.option.type) {
-                case StructNdOptPref64.TYPE:
-                    processPref64Option((StructNdOptPref64) msg.option, whenMs);
-                    break;
-
-                case StructNdOptRdnss.TYPE:
-                    processRdnssOption((StructNdOptRdnss) msg.option);
-                    break;
-
-                default:
-                    // TODO: implement DNSSL.
-                    break;
-            }
-        }
-
-        private void updateClatInterfaceLinkState(@NonNull final StructIfinfoMsg ifinfoMsg,
-                @Nullable final String ifname, short nlMsgType) {
-            switch (nlMsgType) {
-                case NetlinkConstants.RTM_NEWLINK:
-                    if (mClatInterfaceExists) break;
-                    maybeLog("clatInterfaceAdded", ifname);
-                    mCallback.onClatInterfaceStateUpdate(true /* add interface */);
-                    mClatInterfaceExists = true;
-                    break;
-
-                case NetlinkConstants.RTM_DELLINK:
-                    if (!mClatInterfaceExists) break;
-                    maybeLog("clatInterfaceRemoved", ifname);
-                    mCallback.onClatInterfaceStateUpdate(false /* remove interface */);
-                    mClatInterfaceExists = false;
-                    break;
-
-                default:
-                    Log.e(mTag, "unsupported rtnetlink link msg type " + nlMsgType);
-                    break;
-            }
-        }
-
-        private void processRtNetlinkLinkMessage(RtNetlinkLinkMessage msg) {
-            if (!mNetlinkEventParsingEnabled) return;
-
-            // Check if receiving netlink link state update for clat interface.
-            final String ifname = msg.getInterfaceName();
-            final short nlMsgType = msg.getHeader().nlmsg_type;
-            final StructIfinfoMsg ifinfoMsg = msg.getIfinfoHeader();
-            if (mClatInterfaceName.equals(ifname)) {
-                updateClatInterfaceLinkState(ifinfoMsg, ifname, nlMsgType);
-                return;
-            }
-
-            if (ifinfoMsg.family != AF_UNSPEC || ifinfoMsg.index != mIfindex) return;
-            if ((ifinfoMsg.flags & IFF_LOOPBACK) != 0) return;
-
-            switch (nlMsgType) {
-                case NetlinkConstants.RTM_NEWLINK:
-                    final boolean state = (ifinfoMsg.flags & IFF_LOWER_UP) != 0;
-                    maybeLog("interfaceLinkStateChanged", "ifindex " + mIfindex
-                            + (state ? " up" : " down"));
-                    updateInterfaceLinkStateChanged(state);
-                    break;
-
-                case NetlinkConstants.RTM_DELLINK:
-                    maybeLog("interfaceRemoved", ifname);
-                    updateInterfaceRemoved();
-                    break;
-
-                default:
-                    Log.e(mTag, "Unknown rtnetlink link msg type " + nlMsgType);
-                    break;
-            }
-        }
-
-        // The preferred/valid in ifa_cacheinfo expressed in units of seconds, convert
-        // it to milliseconds for deprecationTime or expirationTime used in LinkAddress.
-        // If the experiment flag is not enabled, LinkAddress.LIFETIME_UNKNOWN is retuend,
-        // the same as before.
-        private long getDeprecationOrExpirationTime(@Nullable final StructIfacacheInfo cacheInfo,
-                long now, boolean deprecationTime) {
-            if (!mConfig.populateLinkAddressLifetime || (cacheInfo == null)) {
-                return LinkAddress.LIFETIME_UNKNOWN;
-            }
-            final long lifetime = deprecationTime ? cacheInfo.preferred : cacheInfo.valid;
-            return (lifetime == Integer.toUnsignedLong(INFINITE_LEASE))
-                    ? LinkAddress.LIFETIME_PERMANENT
-                    : now + lifetime * 1000;
-        }
-
-        private void processRtNetlinkAddressMessage(RtNetlinkAddressMessage msg) {
-            if (!mNetlinkEventParsingEnabled) return;
-
-            final StructIfaddrMsg ifaddrMsg = msg.getIfaddrHeader();
-            if (ifaddrMsg.index != mIfindex) return;
-
-            final StructIfacacheInfo cacheInfo = msg.getIfacacheInfo();
-            final long now = SystemClock.elapsedRealtime();
-            final long deprecationTime =
-                    getDeprecationOrExpirationTime(cacheInfo, now, true /* deprecationTime */);
-            final long expirationTime =
-                    getDeprecationOrExpirationTime(cacheInfo, now, false /* deprecationTime */);
-            final LinkAddress la = new LinkAddress(msg.getIpAddress(), ifaddrMsg.prefixLen,
-                    msg.getFlags(), ifaddrMsg.scope, deprecationTime, expirationTime);
-
-            switch (msg.getHeader().nlmsg_type) {
-                case NetlinkConstants.RTM_NEWADDR:
-                    if (updateInterfaceAddress(la, true /* add address */)) {
-                        maybeLog("addressUpdated", mIfindex, la);
-                    }
-                    break;
-                case NetlinkConstants.RTM_DELADDR:
-                    if (updateInterfaceAddress(la, false /* remove address */)) {
-                        maybeLog("addressRemoved", mIfindex, la);
-                    }
-                    break;
-                default:
-                    Log.e(mTag, "Unknown rtnetlink address msg type " + msg.getHeader().nlmsg_type);
-                    return;
-            }
-        }
-
-        private void processRtNetlinkRouteMessage(RtNetlinkRouteMessage msg) {
-            if (!mNetlinkEventParsingEnabled) return;
-            if (msg.getInterfaceIndex() != mIfindex) return;
-            // Ignore the unsupported route protocol and non-global unicast routes.
-            if (!isSupportedRouteProtocol(msg)
-                    || !isGlobalUnicastRoute(msg)
-                    // don't support source routing
-                    || (msg.getRtMsgHeader().srcLen != 0)
-                    // don't support cloned routes
-                    || ((msg.getRtMsgHeader().flags & RTM_F_CLONED) != 0)) {
-                return;
-            }
-
-            final RouteInfo route = new RouteInfo(msg.getDestination(), msg.getGateway(),
-                    mInterfaceName, msg.getRtMsgHeader().type);
-            switch (msg.getHeader().nlmsg_type) {
-                case NetlinkConstants.RTM_NEWROUTE:
-                    if (updateInterfaceRoute(route, true /* add route */)) {
-                        maybeLog("routeUpdated", route);
-                    }
-                    break;
-                case NetlinkConstants.RTM_DELROUTE:
-                    if (updateInterfaceRoute(route, false /* remove route */)) {
-                        maybeLog("routeRemoved", route);
-                    }
-                    break;
-                default:
-                    Log.e(mTag, "Unknown rtnetlink route msg type " + msg.getHeader().nlmsg_type);
-                    break;
-            }
-        }
-
-        @Override
-        protected void processNetlinkMessage(NetlinkMessage nlMsg, long whenMs) {
-            if (nlMsg instanceof NduseroptMessage) {
-                processNduseroptMessage((NduseroptMessage) nlMsg, whenMs);
-            } else if (nlMsg instanceof RtNetlinkLinkMessage) {
-                processRtNetlinkLinkMessage((RtNetlinkLinkMessage) nlMsg);
-            } else if (nlMsg instanceof RtNetlinkAddressMessage) {
-                processRtNetlinkAddressMessage((RtNetlinkAddressMessage) nlMsg);
-            } else if (nlMsg instanceof RtNetlinkRouteMessage) {
-                processRtNetlinkRouteMessage((RtNetlinkRouteMessage) nlMsg);
-            } else {
-                Log.e(mTag, "Unknown netlink message: " + nlMsg);
-            }
+    private void processNetlinkMessage(NetlinkMessage nlMsg, long whenMs) {
+        if (nlMsg instanceof NduseroptMessage) {
+            processNduseroptMessage((NduseroptMessage) nlMsg, whenMs);
+        } else if (nlMsg instanceof RtNetlinkLinkMessage) {
+            processRtNetlinkLinkMessage((RtNetlinkLinkMessage) nlMsg);
+        } else if (nlMsg instanceof RtNetlinkAddressMessage) {
+            processRtNetlinkAddressMessage((RtNetlinkAddressMessage) nlMsg);
+        } else if (nlMsg instanceof RtNetlinkRouteMessage) {
+            processRtNetlinkRouteMessage((RtNetlinkRouteMessage) nlMsg);
+        } else {
+            Log.e(mTag, "Unknown netlink message: " + nlMsg);
         }
     }
 

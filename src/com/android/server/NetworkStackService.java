@@ -179,9 +179,9 @@ public class NetworkStackService extends Service {
         /** @see IpClient */
         @NonNull
         public IpClient makeIpClient(@NonNull Context context, @NonNull String ifName,
-                @NonNull IIpClientCallbacks cb, @NonNull NetworkObserverRegistry observerRegistry,
+                @NonNull IIpClientCallbacks cb,
                 @NonNull NetworkStackServiceManager nsServiceManager) {
-            return new IpClient(context, ifName, cb, observerRegistry, nsServiceManager);
+            return new IpClient(context, ifName, cb, nsServiceManager);
         }
     }
 
@@ -196,7 +196,6 @@ public class NetworkStackService extends Service {
         private final PermissionChecker mPermChecker;
         private final Dependencies mDeps;
         private final INetd mNetd;
-        private final NetworkObserverRegistry mObserverRegistry;
         @GuardedBy("mIpClients")
         private final ArrayList<WeakReference<IpClient>> mIpClients = new ArrayList<>();
         private final IpMemoryStoreService mIpMemoryStoreService;
@@ -294,7 +293,6 @@ public class NetworkStackService extends Service {
             mDeps = deps;
             mNetd = INetd.Stub.asInterface(
                     (IBinder) context.getSystemService(Context.NETD_SERVICE));
-            mObserverRegistry = new NetworkObserverRegistry();
             mIpMemoryStoreService = mDeps.makeIpMemoryStoreService(context);
             // NetworkStackNotifier only shows notifications relevant for API level > Q
             if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
@@ -317,12 +315,6 @@ public class NetworkStackService extends Service {
                 netdHash = HASH_UNKNOWN;
             }
             updateNetdAidlVersion(netdVersion, netdHash);
-
-            try {
-                mObserverRegistry.register(mNetd);
-            } catch (RemoteException e) {
-                mLog.e("Error registering observer on Netd", e);
-            }
         }
 
         private void updateNetdAidlVersion(final int version, final String hash) {
@@ -385,7 +377,7 @@ public class NetworkStackService extends Service {
             mPermChecker.enforceNetworkStackCallingPermission();
             updateNetworkStackAidlVersion(cb.getInterfaceVersion(), cb.getInterfaceHash());
             final IpClient ipClient = mDeps.makeIpClient(
-                    mContext, ifName, cb, mObserverRegistry, this);
+                    mContext, ifName, cb, this);
 
             synchronized (mIpClients) {
                 final Iterator<WeakReference<IpClient>> it = mIpClients.iterator();

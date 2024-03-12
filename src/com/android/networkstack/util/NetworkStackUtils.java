@@ -273,13 +273,6 @@ public class NetworkStackUtils {
     /**** BEGIN Feature Kill Switch Flags ****/
 
     /**
-     * Kill switch flag to disable the feature of parsing netlink events from kernel directly
-     * instead from netd aidl interface by flag push.
-     */
-    public static final String IPCLIENT_PARSE_NETLINK_EVENTS_FORCE_DISABLE =
-            "ipclient_parse_netlink_events_force_disable";
-
-    /**
      * Kill switch flag to disable the feature of handle light doze mode in Apf.
      */
     public static final String APF_HANDLE_LIGHT_DOZE_FORCE_DISABLE =

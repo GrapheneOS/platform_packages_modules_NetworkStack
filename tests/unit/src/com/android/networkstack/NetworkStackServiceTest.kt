@@ -36,15 +36,22 @@ import android.os.Process
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
 import com.android.net.module.util.Inet4AddressUtils.inet4AddressToIntHTH
+import com.android.networkstack.ipmemorystore.IpMemoryStoreService
 import com.android.server.NetworkStackService.Dependencies
 import com.android.server.NetworkStackService.NetworkStackConnector
 import com.android.server.NetworkStackService.PermissionChecker
 import com.android.server.connectivity.NetworkMonitor
-import com.android.networkstack.ipmemorystore.IpMemoryStoreService
 import com.android.testutils.DevSdkIgnoreRule
 import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo
 import com.android.testutils.assertThrows
+import java.io.FileDescriptor
+import java.io.PrintWriter
+import java.io.StringWriter
+import java.net.Inet4Address
+import kotlin.reflect.KVisibility
+import kotlin.reflect.full.declaredMemberFunctions
+import kotlin.test.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -56,13 +63,6 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.spy
 import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
-import java.io.FileDescriptor
-import java.io.PrintWriter
-import java.io.StringWriter
-import java.net.Inet4Address
-import kotlin.reflect.KVisibility
-import kotlin.reflect.full.declaredMemberFunctions
-import kotlin.test.assertEquals
 
 private val TEST_NETD_VERSION = 9991001
 private val TEST_NETD_HASH = "test_netd_hash"
@@ -85,7 +85,7 @@ class NetworkStackServiceTest {
         doReturn(mockDhcpServer).`when`(this).makeDhcpServer(any(), any(), any(), any())
         doReturn(mockNetworkMonitor).`when`(this).makeNetworkMonitor(any(), any(), any(), any(),
                 any())
-        doReturn(mockIpClient).`when`(this).makeIpClient(any(), any(), any(), any(), any())
+        doReturn(mockIpClient).`when`(this).makeIpClient(any(), any(), any(), any())
     }
     private val netd = mock(INetd::class.java).apply {
         doReturn(TEST_NETD_VERSION).`when`(this).interfaceVersion
@@ -195,7 +195,7 @@ class NetworkStackServiceTest {
 
         connector.makeIpClient(TEST_IFACE, mockIpClientCb)
 
-        verify(deps).makeIpClient(any(), eq(TEST_IFACE), any(), any(), any())
+        verify(deps).makeIpClient(any(), eq(TEST_IFACE), any(), any())
         verify(mockIpClientCb).onIpClientCreated(any())
 
         // Call some methods one more time with a shared version number and hash to verify no
