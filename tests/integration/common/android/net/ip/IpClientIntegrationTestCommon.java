@@ -2124,10 +2124,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     private boolean isStablePrivacyAddress(LinkAddress addr) {
-        // The Q netd does not understand the IFA_F_STABLE_PRIVACY flag.
-        // See r.android.com/1295670.
-        final int flag = ShimUtils.isAtLeastR() ? IFA_F_STABLE_PRIVACY : 0;
-        return addr.isGlobalPreferred() && hasFlag(addr, flag);
+        return addr.isGlobalPreferred() && hasFlag(addr, IFA_F_STABLE_PRIVACY);
     }
 
     private LinkProperties doIpv6OnlyProvisioning() throws Exception {
