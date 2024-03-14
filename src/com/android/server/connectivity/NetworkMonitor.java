@@ -2022,7 +2022,8 @@ public class NetworkMonitor extends StateMachine {
             recordProbeEventMetrics(ProbeType.PT_PRIVDNS, elapsedNanos,
                     success ? ProbeResult.PR_SUCCESS :
                             ProbeResult.PR_FAILURE, null /* capportData */);
-            logValidationProbe(elapsedNanos, PROBE_PRIVDNS, success ? DNS_SUCCESS : DNS_FAILURE);
+            logValidationProbe(elapsedNanos / 1000, PROBE_PRIVDNS,
+                    success ? DNS_SUCCESS : DNS_FAILURE);
 
             final String strIps = Objects.toString(answer);
             validationLog(PROBE_PRIVDNS, queryName,

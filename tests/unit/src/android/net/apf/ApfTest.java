@@ -238,7 +238,13 @@ public class ApfTest {
     private void assertDataMemoryContents(int expected, byte[] program, byte[] packet,
             byte[] data, byte[] expectedData) throws Exception {
         ApfTestUtils.assertDataMemoryContents(mApfVersion, expected, program, packet, data,
-                expectedData);
+                expectedData, false /* ignoreInterpreterVersion */);
+    }
+
+    private void assertDataMemoryContentsIgnoreVersion(int expected, byte[] program,
+            byte[] packet, byte[] data, byte[] expectedData) throws Exception {
+        ApfTestUtils.assertDataMemoryContents(mApfVersion, expected, program, packet, data,
+                expectedData, true /* ignoreInterpreterVersion */);
     }
 
     private void assertVerdict(String msg, int expected, byte[] program,
@@ -3288,7 +3294,7 @@ public class ApfTest {
         final byte[] ra = buildLargeRa();
         expectedData[totalPacketsCounterIdx + 3] += 1;
         expectedData[passedIpv6IcmpCounterIdx + 3] += 1;
-        assertDataMemoryContents(PASS, program, ra, data, expectedData);
+        assertDataMemoryContentsIgnoreVersion(PASS, program, ra, data, expectedData);
         apfFilter.pretendPacketReceived(ra);
         program = ipClientCallback.assertProgramUpdateAndGet();
         maxProgramSize = Math.max(maxProgramSize, program.length);
@@ -3306,7 +3312,8 @@ public class ApfTest {
         put(mcastv4packet, IPV4_DEST_ADDR_OFFSET, multicastIpv4Addr);
         expectedData[totalPacketsCounterIdx + 3] += 1;
         expectedData[droppedIpv4MulticastIdx + 3] += 1;
-        assertDataMemoryContents(DROP, program, mcastv4packet.array(), data, expectedData);
+        assertDataMemoryContentsIgnoreVersion(DROP, program, mcastv4packet.array(), data,
+                expectedData);
 
         // Set data snapshot and update counters.
         apfFilter.setDataSnapshot(data);

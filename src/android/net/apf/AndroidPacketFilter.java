@@ -77,4 +77,18 @@ public interface AndroidPacketFilter {
      * Dump the status of APF.
      */
     void dump(IndentingPrintWriter pw);
+
+    /**
+     * Indicates whether the ApfFilter is currently running / paused for test and debugging
+     * purposes.
+     */
+    default boolean isRunning() {
+        return true;
+    }
+
+    /** Pause ApfFilter updates for testing purposes. */
+    default void pause() {}
+
+    /** Resume ApfFilter updates for testing purposes. */
+    default void resume() {}
 }

@@ -193,14 +193,6 @@ public class NetworkStackUtils {
             "ipclient_garp_na_roaming_version";
 
     /**
-     * Experiment flag to check if an on-link IPv6 link local DNS is acceptable. The default flag
-     * value is true, just add this flag for A/B testing to see if this fix works as expected via
-     * experiment rollout.
-     */
-    public static final String IPCLIENT_ACCEPT_IPV6_LINK_LOCAL_DNS_VERSION =
-            "ipclient_accept_ipv6_link_local_dns_version";
-
-    /**
      * Experiment flag to enable "mcast_resolicit" neighbor parameter in IpReachabilityMonitor,
      * set it to 3 by default.
      */

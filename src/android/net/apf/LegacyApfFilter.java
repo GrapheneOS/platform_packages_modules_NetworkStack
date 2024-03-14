@@ -1731,6 +1731,11 @@ public class LegacyApfFilter implements AndroidPacketFilter {
             maybeSetupCounter(gen, Counter.FILTER_AGE_16384THS);
             gen.addLoadFromMemory(R0, 9);  // m[9] is filter age in 16384ths
             gen.addStoreData(R0, 0);  // store 'counter'
+
+            // requires a new enough APFv5+ interpreter, otherwise will be 0
+            maybeSetupCounter(gen, Counter.APF_VERSION);
+            gen.addLoadFromMemory(R0, 8);  // m[8] is apf version
+            gen.addStoreData(R0, 0);  // store 'counter'
         }
 
         // Here's a basic summary of what the initial program does:

@@ -34,6 +34,7 @@ public final class ApfConstant {
     public static final int IPV4_FRAGMENT_OFFSET_MASK = 0x1fff;
     public static final int IPV4_FRAGMENT_MORE_FRAGS_MASK = 0x2000;
     public static final int IPV4_PROTOCOL_OFFSET = ETH_HEADER_LEN + 9;
+    public static final int IPV4_SRC_ADDR_OFFSET = ETH_HEADER_LEN + 12;
     public static final int IPV4_DEST_ADDR_OFFSET = ETH_HEADER_LEN + 16;
     public static final int IPV4_ANY_HOST_ADDRESS = 0;
     public static final int IPV4_BROADCAST_ADDRESS = -1; // 255.255.255.255
@@ -61,6 +62,7 @@ public final class ApfConstant {
 
     public static final int TCP_HEADER_SIZE_OFFSET = 12;
 
+    public static final int DHCP_SERVER_PORT = 67;
     public static final int DHCP_CLIENT_PORT = 68;
     // NOTE: this must be added to the IPv4 header length in IPV4_HEADER_SIZE_MEMORY_SLOT
 

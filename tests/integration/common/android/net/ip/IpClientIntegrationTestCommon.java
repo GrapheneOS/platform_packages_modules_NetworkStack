@@ -2219,14 +2219,11 @@ public abstract class IpClientIntegrationTestCommon {
         reset(mCb);
     }
 
-    private void runRaRdnssIpv6LinkLocalDnsTest(boolean isIpv6LinkLocalDnsAccepted)
-            throws Exception {
+    private void runRaRdnssIpv6LinkLocalDnsTest() throws Exception {
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIpReachabilityMonitor()
                 .withoutIPv4()
                 .build();
-        setFeatureEnabled(NetworkStackUtils.IPCLIENT_ACCEPT_IPV6_LINK_LOCAL_DNS_VERSION,
-                isIpv6LinkLocalDnsAccepted /* default value */);
         startIpClientProvisioning(config);
 
         final ByteBuffer pio = buildPioOption(600, 300, "2001:db8:1::/64");
@@ -2242,7 +2239,7 @@ public abstract class IpClientIntegrationTestCommon {
 
     @Test
     public void testRaRdnss_Ipv6LinkLocalDns() throws Exception {
-        runRaRdnssIpv6LinkLocalDnsTest(true /* isIpv6LinkLocalDnsAccepted */);
+        runRaRdnssIpv6LinkLocalDnsTest();
         final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
         final LinkProperties lp = captor.getValue();
@@ -2250,17 +2247,6 @@ public abstract class IpClientIntegrationTestCommon {
         assertEquals(1, lp.getDnsServers().size());
         assertEquals(ROUTER_LINK_LOCAL, (Inet6Address) lp.getDnsServers().get(0));
         assertTrue(lp.isIpv6Provisioned());
-    }
-
-    @Test
-    public void testRaRdnss_disableIpv6LinkLocalDns() throws Exception {
-        runRaRdnssIpv6LinkLocalDnsTest(false /* isIpv6LinkLocalDnsAccepted */);
-        verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(argThat(lp -> {
-            return lp.hasGlobalIpv6Address()
-                    && lp.hasIpv6DefaultRoute()
-                    && !lp.hasIpv6DnsServer();
-        }));
-        verify(mCb, never()).onProvisioningSuccess(any());
     }
 
     private void expectNat64PrefixUpdate(InOrder inOrder, IpPrefix expected) throws Exception {

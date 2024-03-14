@@ -28,7 +28,6 @@ import static com.android.net.module.util.netlink.NetlinkConstants.RTN_UNICAST;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTPROT_KERNEL;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTPROT_RA;
 import static com.android.net.module.util.netlink.NetlinkConstants.RT_SCOPE_UNIVERSE;
-import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_ACCEPT_IPV6_LINK_LOCAL_DNS_VERSION;
 
 import android.app.AlarmManager;
 import android.content.Context;
@@ -214,11 +213,6 @@ public class IpClientLinkObserver {
 
     public void shutdown() {
         mHandler.post(mNetlinkMonitor::stop);
-    }
-
-    private boolean isIpv6LinkLocalDnsAccepted() {
-        return mDependencies.isFeatureNotChickenedOut(mContext,
-                IPCLIENT_ACCEPT_IPV6_LINK_LOCAL_DNS_VERSION);
     }
 
     private void maybeLog(String operation, String iface, LinkAddress address) {
@@ -493,9 +487,7 @@ public class IpClientLinkObserver {
     private void processRdnssOption(StructNdOptRdnss opt) {
         final String[] addresses = new String[opt.servers.length];
         for (int i = 0; i < opt.servers.length; i++) {
-            final Inet6Address addr = isIpv6LinkLocalDnsAccepted()
-                    ? InetAddressUtils.withScopeId(opt.servers[i], mIfindex)
-                    : opt.servers[i];
+            final Inet6Address addr = InetAddressUtils.withScopeId(opt.servers[i], mIfindex);
             addresses[i] = addr.getHostAddress();
         }
         updateInterfaceDnsServerInfo(opt.header.lifetime, addresses);
@@ -520,8 +512,7 @@ public class IpClientLinkObserver {
         }
     }
 
-    private void updateClatInterfaceLinkState(@NonNull final StructIfinfoMsg ifinfoMsg,
-            @Nullable final String ifname, short nlMsgType) {
+    private void updateClatInterfaceLinkState(@Nullable final String ifname, short nlMsgType) {
         switch (nlMsgType) {
             case NetlinkConstants.RTM_NEWLINK:
                 if (mClatInterfaceExists) break;
@@ -549,7 +540,7 @@ public class IpClientLinkObserver {
         final short nlMsgType = msg.getHeader().nlmsg_type;
         final StructIfinfoMsg ifinfoMsg = msg.getIfinfoHeader();
         if (mClatInterfaceName.equals(ifname)) {
-            updateClatInterfaceLinkState(ifinfoMsg, ifname, nlMsgType);
+            updateClatInterfaceLinkState(ifname, nlMsgType);
             return;
         }
 

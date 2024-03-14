@@ -503,6 +503,18 @@ public class NetworkStackService extends Service {
                     err.getFileDescriptor(), args);
         }
 
+        private String apfShellCommand(String iface, String cmd, @Nullable String optarg) {
+            synchronized (mIpClients) {
+                for (WeakReference<IpClient> ipClientRef : mIpClients) {
+                    final IpClient ipClient = ipClientRef.get();
+                    if (ipClient != null && ipClient.getInterfaceName().equals(iface)) {
+                        return ipClient.apfShellCommand(cmd, optarg);
+                    }
+                }
+            }
+            throw new IllegalArgumentException("No active IpClient found for interface " + iface);
+        }
+
         private class ShellCmd extends BasicShellCommandHandler {
             @Override
             public int onCommand(String cmd) {
@@ -536,6 +548,30 @@ public class NetworkStackService extends Service {
                             pw.println(cm.isUidNetworkingBlocked(
                                     uid, metered /* isNetworkMetered */));
                             return 0;
+                        case "apf":
+                            // Usage: cmd network_stack apf <iface> <cmd>
+                            final String iface = getNextArg();
+                            if (iface == null) {
+                                pw.println("No <iface> specified");
+                                return -1;
+                            }
+
+                            final String subcmd = getNextArg();
+                            if (subcmd == null) {
+                                pw.println("No <cmd> specified");
+                                return -1;
+                            }
+
+                            final String optarg = getNextArg();
+                            if (getRemainingArgsCount() != 0) {
+                                onHelp();
+                                return -1;
+                            }
+
+                            final String result = apfShellCommand(iface, subcmd, optarg);
+                            pw.println(result);
+                            return 0;
+
                         default:
                             return handleDefaultCommands(cmd);
                     }
@@ -555,6 +591,16 @@ public class NetworkStackService extends Service {
                 pw.println("    Get whether the networking is blocked for given uid and metered.");
                 pw.println("    <uid>: The target uid.");
                 pw.println("    <metered>: [true|false], Whether the target network is metered.");
+                pw.println("  apf <iface> <cmd>");
+                pw.println("    APF utility commands for integration tests.");
+                pw.println("    <iface>: the network interface the provided command operates on.");
+                pw.println("    <cmd>: [status]");
+                pw.println("      status");
+                pw.println("        returns whether the APF filter is \"running\" or \"paused\".");
+                pw.println("      pause");
+                pw.println("        pause APF filter generation.");
+                pw.println("      resume");
+                pw.println("        resume APF filter generation.");
             }
         }
 

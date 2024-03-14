@@ -48,6 +48,7 @@ public class ApfCounterTracker {
         CORRUPT_DNS_PACKET,      // hardcoded in APFv6 interpreter
         FILTER_AGE_SECONDS,
         FILTER_AGE_16384THS,
+        APF_VERSION,
         PASSED_ARP,
         PASSED_DHCP,
         PASSED_IPV4,

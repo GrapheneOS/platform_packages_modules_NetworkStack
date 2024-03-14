@@ -173,7 +173,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -1407,6 +1409,45 @@ public class IpClient extends StateMachine {
         pw.decreaseIndent();
     }
 
+    /**
+     * Handle "adb shell cmd apf" command.
+     */
+    public String apfShellCommand(String cmd, @Nullable String optarg) {
+        final CompletableFuture<String> result = new CompletableFuture<>();
+
+        getHandler().post(() -> {
+            if (mApfFilter == null) {
+                // IpClient has either stopped or the interface does not support APF.
+                result.completeExceptionally(
+                        new IllegalStateException("No active APF filter."));
+            }
+            switch (cmd) {
+                case "status":
+                    result.complete(mApfFilter.isRunning() ? "running" : "paused");
+                    break;
+                case "pause":
+                    mApfFilter.pause();
+                    result.complete("success");
+                    break;
+                case "resume":
+                    mApfFilter.resume();
+                    result.complete("success");
+                    break;
+                default:
+                    result.completeExceptionally(
+                            new IllegalArgumentException("Invalid apf read command: " + cmd));
+            }
+        });
+
+        try {
+            return result.get();
+        } catch (ExecutionException | InterruptedException e) {
+            // completeExceptionally is solely used to return error messages back to the user, so
+            // the stack trace is not all that interesting. (A similar argument can be made for
+            // InterruptedException). Only extract the message from the checked exception.
+            throw new RuntimeException(e.getMessage());
+        }
+    }
 
     /**
      * Internals.

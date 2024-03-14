@@ -81,6 +81,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeFalse;
 import static org.junit.Assume.assumeTrue;
+import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -130,6 +131,8 @@ import android.net.PrivateDnsConfigParcel;
 import android.net.Uri;
 import android.net.captiveportal.CaptivePortalProbeResult;
 import android.net.metrics.IpConnectivityLog;
+import android.net.metrics.NetworkEvent;
+import android.net.metrics.ValidationProbeEvent;
 import android.net.networkstack.aidl.NetworkMonitorParameters;
 import android.net.shared.PrivateDnsConfig;
 import android.net.wifi.WifiInfo;
@@ -229,6 +232,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import javax.net.ssl.SSLHandshakeException;
@@ -3267,6 +3271,101 @@ public class NetworkMonitorTest {
         verifyNetworkTested(VALIDATION_RESULT_INVALID,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTP,
                 TEST_REDIRECT_URL, 1 /* interactions */);
+    }
+
+    private void doLegacyConnectivityLogTest() throws Exception {
+        mFakeDns.setAnswer("www.google.com", () -> {
+            // Make sure the DNS probes take at least 1ms
+            SystemClock.sleep(1);
+            return List.of(parseNumericAddress("2001:db8::443"));
+        }, TYPE_AAAA);
+        mFakeDns.setAnswer(PRIVATE_DNS_PROBE_HOST_SUFFIX, () -> {
+            SystemClock.sleep(1);
+            return List.of(parseNumericAddress("2001:db8::444"));
+        }, TYPE_AAAA);
+        setStatus(mHttpsConnection, 204);
+        setStatus(mHttpConnection, 204);
+
+        mFakeDns.setAnswer("dns6.google", new String[]{"2001:db8::53"}, TYPE_AAAA);
+        WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
+        wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig("dns6.google",
+                new InetAddress[0]));
+        notifyNetworkConnected(wnm, CELL_NOT_METERED_CAPABILITIES);
+        verifyNetworkTestedValidFromPrivateDns(1 /* interactions */);
+
+
+        final ArgumentCaptor<IpConnectivityLog.Event> eventCaptor =
+                ArgumentCaptor.forClass(IpConnectivityLog.Event.class);
+        verify(mLogger, atLeastOnce()).log(eq(mCleartextDnsNetwork),
+                aryEq(CELL_METERED_CAPABILITIES.getTransportTypes()),
+                eventCaptor.capture());
+
+        final List<IpConnectivityLog.Event> events = eventCaptor.getAllValues();
+        final String msg = "Did not find the expected event; events are " + events;
+
+        final int firstValidation = 1 << 8;
+
+        assertHasEvent(msg, NetworkEvent.class, events, 0,
+                e -> e.eventType == NetworkEvent.NETWORK_CONNECTED);
+
+        final int probesStartIndex = 1;
+        assertHasEvent(msg, ValidationProbeEvent.class, events, probesStartIndex,
+                e -> e.probeType == (firstValidation | ValidationProbeEvent.PROBE_DNS)
+                        && e.returnCode == ValidationProbeEvent.DNS_SUCCESS
+                        && e.durationMs >= 1L && e.durationMs < 1000L);
+        // The first probe has to be DNS, but then the order of the next DNS probe and HTTP/HTTPS
+        // probes is unknown.
+        final int httpProbesStartIndex = 2;
+        assertHasEvent(msg, ValidationProbeEvent.class, events, httpProbesStartIndex,
+                e -> e.probeType == (firstValidation | ValidationProbeEvent.PROBE_DNS)
+                        && e.returnCode == ValidationProbeEvent.DNS_SUCCESS
+                        && e.durationMs >= 1L && e.durationMs < 1000L);
+
+        final int httpsProbeIndex = assertHasEvent(msg, ValidationProbeEvent.class, events,
+                httpProbesStartIndex,
+                e -> e.probeType == (firstValidation | ValidationProbeEvent.PROBE_HTTPS)
+                        && e.returnCode == 204);
+
+        assertHasEvent(msg, ValidationProbeEvent.class, events, httpProbesStartIndex,
+                e -> e.probeType == (firstValidation | ValidationProbeEvent.PROBE_HTTP)
+                        && e.returnCode == 204);
+
+        // Private DNS starts after validation, so at least after the HTTPS probe
+        final int privDnsIndex = assertHasEvent(msg, ValidationProbeEvent.class, events,
+                httpsProbeIndex + 1,
+                e -> e.probeType == (firstValidation | ValidationProbeEvent.PROBE_PRIVDNS)
+                        && e.returnCode == ValidationProbeEvent.DNS_SUCCESS
+                        && e.durationMs >= 1L && e.durationMs < 1000L);
+
+        assertHasEvent(msg, NetworkEvent.class, events, privDnsIndex + 1,
+                e -> e.eventType == NetworkEvent.NETWORK_FIRST_VALIDATION_SUCCESS);
+    }
+
+    private static <T> int assertHasEvent(String msg, Class<T> clazz,
+            List<IpConnectivityLog.Event> events, int startIdx,
+            Predicate<T> predicate) {
+        for (int i = startIdx; i < events.size(); i++) {
+            if (events.get(i).getClass().isAssignableFrom(clazz)
+                    && predicate.test((T) events.get(i))) {
+                return i;
+            }
+        }
+        fail(msg + " at startIdx " + startIdx);
+        return -1;
+    }
+
+    @Test
+    public void testLegacyConnectivityLog_SyncDns() throws Exception {
+        doReturn(false).when(mDependencies).isFeatureEnabled(
+                any(), eq(NetworkStackUtils.NETWORKMONITOR_ASYNC_PRIVDNS_RESOLUTION));
+        doLegacyConnectivityLogTest();
+    }
+
+    @Test
+    public void testLegacyConnectivityLog_AsyncDns() throws Exception {
+        doReturn(true).when(mDependencies).isFeatureEnabled(
+                any(), eq(NetworkStackUtils.NETWORKMONITOR_ASYNC_PRIVDNS_RESOLUTION));
+        doLegacyConnectivityLogTest();
     }
 
     @Test
