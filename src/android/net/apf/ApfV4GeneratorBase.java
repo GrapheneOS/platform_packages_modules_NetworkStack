@@ -27,6 +27,11 @@ import com.android.internal.annotations.VisibleForTesting;
  *
  * Call add*() functions to add instructions to the program, then call
  * {@link BaseApfGenerator#generate} to get the APF bytecode for the program.
+ * <p>
+ * Choose between these approaches for your instruction helper methods: If the functionality must
+ * be identical across APF versions, make it a final method within the base class. If it needs
+ * version-specific adjustments, use an abstract method in the base class with final
+ * implementations in generator instances.
  *
  * @param <Type> the generator class
  *

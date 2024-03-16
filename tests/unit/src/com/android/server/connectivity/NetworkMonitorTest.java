@@ -180,11 +180,11 @@ import com.android.server.NetworkStackService.NetworkStackServiceManager;
 import com.android.server.connectivity.nano.CellularData;
 import com.android.server.connectivity.nano.DnsEvent;
 import com.android.server.connectivity.nano.WifiData;
+import com.android.testutils.ConcurrentUtils;
 import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
 import com.android.testutils.DevSdkIgnoreRunner;
-import com.android.testutils.FunctionalUtils.ThrowingConsumer;
 import com.android.testutils.HandlerUtils;
 
 import com.google.protobuf.nano.MessageNano;
@@ -233,7 +233,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 
 import javax.net.ssl.SSLHandshakeException;
 
@@ -333,6 +332,7 @@ public class NetworkMonitorTest {
     private static final NetworkAgentConfigShim TEST_AGENT_CONFIG =
             NetworkAgentConfigShimImpl.newInstance(null);
     private static final LinkProperties TEST_LINK_PROPERTIES = new LinkProperties();
+    // Each thread that runs isCaptivePortal could generate 2 more probing threads.
     private static final int THREAD_QUIT_MAX_RETRY_COUNT = 3;
 
     // Cannot have a static member for the LinkProperties with captive portal API information, as
@@ -714,32 +714,15 @@ public class NetworkMonitorTest {
         setConsecutiveDnsTimeoutThreshold(5);
     }
 
-    private static <T> void quitResourcesThat(Supplier<List<T>> supplier,
-            ThrowingConsumer terminator) throws Exception {
-        // Run it multiple times since new threads might be generated in a thread
-        // that is about to be terminated, e.g. each thread that runs
-        // isCaptivePortal could generate 2 more probing threads.
-        for (int retryCount = 0; retryCount < THREAD_QUIT_MAX_RETRY_COUNT; retryCount++) {
-            final List<T> resourcesToBeCleared = supplier.get();
-            if (resourcesToBeCleared.isEmpty()) return;
-            for (final T resource : resourcesToBeCleared) {
-                terminator.accept(resource);
-            }
-        }
-
-        assertEquals(Collections.emptyList(), supplier.get());
-    }
-
     private void quitNetworkMonitors() throws Exception {
-        quitResourcesThat(() -> {
+        ConcurrentUtils.quitResources(THREAD_QUIT_MAX_RETRY_COUNT, () -> {
             synchronized (mCreatedNetworkMonitors) {
                 final ArrayList<WrappedNetworkMonitor> ret =
                         new ArrayList<>(mCreatedNetworkMonitors);
                 mCreatedNetworkMonitors.clear();
                 return ret;
             }
-        }, (it) -> {
-            final WrappedNetworkMonitor nm = (WrappedNetworkMonitor) it;
+        }, nm -> {
             nm.notifyNetworkDisconnected();
             nm.awaitQuit();
         });
@@ -752,31 +735,33 @@ public class NetworkMonitorTest {
     }
 
     private void quitExecutorServices() throws Exception {
-        quitResourcesThat(() -> {
-            synchronized (mExecutorServiceToBeCleared) {
-                final ArrayList<ExecutorService> ret = new ArrayList<>(mExecutorServiceToBeCleared);
-                mExecutorServiceToBeCleared.clear();
-                return ret;
-            }
-        }, (it) -> {
-            final ExecutorService ecs = (ExecutorService) it;
-            ecs.awaitTermination(HANDLER_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-        });
+        ConcurrentUtils.quitExecutorServices(
+                THREAD_QUIT_MAX_RETRY_COUNT,
+                // ExecutorService should already have been terminated by NetworkMonitor.
+                false /* interrupt */,
+                HANDLER_TIMEOUT_MS,
+                () -> {
+                    synchronized (mExecutorServiceToBeCleared) {
+                        final ArrayList<ExecutorService> ret =
+                                new ArrayList<>(mExecutorServiceToBeCleared);
+                        mExecutorServiceToBeCleared.clear();
+                        return ret;
+                    }
+                });
     }
 
     private void quitThreads() throws Exception {
-        quitResourcesThat(() -> {
-            synchronized (mThreadsToBeCleared) {
-                final ArrayList<Thread> ret = new ArrayList<>(mThreadsToBeCleared);
-                mThreadsToBeCleared.clear();
-                return ret;
-            }
-        }, (it) -> {
-            final Thread th = (Thread) it;
-            th.interrupt();
-            th.join(HANDLER_TIMEOUT_MS);
-            if (th.isAlive()) fail("Threads did not terminate within timeout.");
-        });
+        ConcurrentUtils.quitThreads(
+                THREAD_QUIT_MAX_RETRY_COUNT,
+                true /* interrupt */,
+                HANDLER_TIMEOUT_MS,
+                () -> {
+                    synchronized (mThreadsToBeCleared) {
+                        final ArrayList<Thread> ret = new ArrayList<>(mThreadsToBeCleared);
+                        mThreadsToBeCleared.clear();
+                        return ret;
+                    }
+                });
     }
 
     @After
