@@ -430,6 +430,16 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
     }
 
     /**
+     * Abstract method for adding instructions to increment the counter and return PASS.
+     */
+    public abstract Type addCountAndPass(ApfCounterTracker.Counter counter);
+
+    /**
+     * Abstract method for adding instructions to increment the counter and return DROP.
+     */
+    public abstract Type addCountAndDrop(ApfCounterTracker.Counter counter);
+
+    /**
      * Add an instruction to the end of the program to load 32 bits from the data memory into
      * {@code register}. The source address is computed by adding the signed immediate
      * @{code offset} to the other register.
@@ -453,5 +463,12 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
         return append(new Instruction(Opcodes.STDW, src).addSigned(ofs));
     }
 
+
+    /**
+     * The abstract method to generate count trampoline instructions.
+     * @return
+     * @throws IllegalInstructionException
+     */
+    public abstract Type addCountTrampoline() throws IllegalInstructionException;
 }
 

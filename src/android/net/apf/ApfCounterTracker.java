@@ -19,8 +19,6 @@ package android.net.apf;
 import android.util.ArrayMap;
 import android.util.Log;
 
-import com.android.internal.annotations.VisibleForTesting;
-
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +36,6 @@ public class ApfCounterTracker {
      * buffer, using negative byte offsets, where -4 is equivalent to maximumApfProgramSize - 4,
      * the last writable 32bit word.
      */
-    @VisibleForTesting
     public enum Counter {
         RESERVED_OOB,  // Points to offset 0 from the end of the buffer (out-of-bounds)
         ENDIANNESS,              // APFv6 interpreter stores 0x12345678 here

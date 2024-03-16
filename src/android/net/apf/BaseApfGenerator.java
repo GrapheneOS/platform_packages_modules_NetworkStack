@@ -772,6 +772,6 @@ public abstract class BaseApfGenerator {
     private final HashMap<String, Instruction> mLabels = new HashMap<String, Instruction>();
     private final Instruction mDropLabel = new Instruction(Opcodes.LABEL);
     private final Instruction mPassLabel = new Instruction(Opcodes.LABEL);
-    private final int mVersion;
+    public final int mVersion;
     public boolean mGenerated;
 }

@@ -49,6 +49,8 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
     /**
      * Add an instruction to the end of the program to increment the counter value and
      * immediately return PASS.
+     *
+     * @param cnt the counter number to be incremented.
      */
     public final Type addCountAndPass(int cnt) {
         checkRange("CounterNumber", cnt /* value */, 1 /* lowerBound */,
@@ -68,6 +70,8 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
     /**
      * Add an instruction to the end of the program to increment the counter value and
      * immediately return DROP.
+     *
+     * @param cnt the counter number to be incremented.
      */
     public final Type addCountAndDrop(int cnt) {
         checkRange("CounterNumber", cnt /* value */, 1 /* lowerBound */,

@@ -15,6 +15,7 @@
  */
 package android.net.apf;
 
+import static android.net.apf.BaseApfGenerator.Register.R0;
 import static android.net.apf.BaseApfGenerator.Register.R1;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -25,6 +26,19 @@ import com.android.internal.annotations.VisibleForTesting;
  * @hide
  */
 public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
+
+    /**
+     * Jump to this label to terminate the program, increment the counter and indicate the packet
+     * should be passed to the AP.
+     */
+    private static final String COUNT_AND_PASS_LABEL = "__COUNT_AND_PASS__";
+
+    /**
+     * Jump to this label to terminate the program, increment counter, and indicate the packet
+     * should be dropped.
+     */
+    private static final String COUNT_AND_DROP_LABEL = "__COUNT_AND_DROP__";
+
     /**
      * Creates an ApfV4Generator instance which is able to emit instructions for the specified
      * {@code version} of the APF interpreter. Throws {@code IllegalInstructionException} if
@@ -35,7 +49,59 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
         super(version);
     }
 
-    final void addArithR1(Opcodes opcode) {
+    @Override
+    void addArithR1(Opcodes opcode) {
         append(new Instruction(opcode, R1));
+    }
+
+    /**
+     * Generates instructions to prepare to increment the specified counter and jump to the
+     * "__COUNT_AND_PASS__" label.
+     * In APFv2, it will directly return PASS.
+     *
+     * @param counter The ApfCounterTracker.Counter to increment
+     * @return Type the generator object
+     */
+    @Override
+    public ApfV4Generator addCountAndPass(ApfCounterTracker.Counter counter) {
+        if (mVersion < 4) return addJump(PASS_LABEL);
+        return addLoadImmediate(R1, counter.offset()).addJump(COUNT_AND_PASS_LABEL);
+    }
+
+    /**
+     * Generates instructions to prepare to increment the specified counter and jump to the
+     * "__COUNT_AND_DROP__" label.
+     * In APFv2, it will directly return DROP.
+     *
+     * @param counter The ApfCounterTracker.Counter to increment
+     * @return Type the generator object
+     */
+    @Override
+    public ApfV4Generator addCountAndDrop(ApfCounterTracker.Counter counter) {
+        if (mVersion < 4) return addJump(DROP_LABEL);
+        return addLoadImmediate(R1, counter.offset()).addJump(COUNT_AND_DROP_LABEL);
+    }
+
+    /**
+     * Append the count & (pass|drop) trampoline, which increments the counter at the data address
+     * pointed to by R1, then jumps to the (pass|drop) label. This saves a few bytes over inserting
+     * the entire sequence inline for every counter.
+     * This instruction is necessary to be called at the end of any APFv4 program in order to make
+     * counter incrementing logic work.
+     * In APFv2, it is a noop.
+     */
+    @Override
+    public ApfV4Generator addCountTrampoline() throws IllegalInstructionException {
+        if (mVersion < 4) return self();
+        return defineLabel(COUNT_AND_PASS_LABEL)
+                .addLoadData(R0, 0)  // R0 = *(R1 + 0)
+                .addAdd(1)           // R0++
+                .addStoreData(R0, 0) // *(R1 + 0) = R0
+                .addJump(PASS_LABEL)
+                .defineLabel(COUNT_AND_DROP_LABEL)
+                .addLoadData(R0, 0)  // R0 = *(R1 + 0)
+                .addAdd(1)           // R0++
+                .addStoreData(R0, 0) // *(R1 + 0) = R0
+                .addJump(DROP_LABEL);
     }
 }
