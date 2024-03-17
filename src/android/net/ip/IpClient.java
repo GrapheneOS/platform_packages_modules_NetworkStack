@@ -1417,45 +1417,43 @@ public class IpClient extends StateMachine {
         final CompletableFuture<String> result = new CompletableFuture<>();
 
         getHandler().post(() -> {
-            if (mApfFilter == null) {
-                // IpClient has either stopped or the interface does not support APF.
-                result.completeExceptionally(
-                        new IllegalStateException("No active APF filter."));
-            }
-            switch (cmd) {
-                case "status":
-                    result.complete(mApfFilter.isRunning() ? "running" : "paused");
-                    break;
-                case "pause":
-                    mApfFilter.pause();
-                    result.complete("success");
-                    break;
-                case "resume":
-                    mApfFilter.resume();
-                    result.complete("success");
-                    break;
-                case "install":
-                    if (optarg == null) {
-                        result.completeExceptionally(
-                                new IllegalArgumentException("No program provided"));
-                    } else if (mApfFilter.isRunning()) {
-                        result.completeExceptionally(
-                                new IllegalStateException("APF filter must be paused for install"));
-                    } else {
+            try {
+                if (mApfFilter == null) {
+                    // IpClient has either stopped or the interface does not support APF.
+                    throw new IllegalStateException("No active APF filter.");
+                }
+                switch (cmd) {
+                    case "status":
+                        result.complete(mApfFilter.isRunning() ? "running" : "paused");
+                        break;
+                    case "pause":
+                        mApfFilter.pause();
+                        result.complete("success");
+                        break;
+                    case "resume":
+                        mApfFilter.resume();
+                        result.complete("success");
+                        break;
+                    case "install":
+                        Objects.requireNonNull(optarg, "No program provided");
+                        if (mApfFilter.isRunning()) {
+                            throw new IllegalStateException("APF filter must first be paused");
+                        }
                         mCallback.installPacketFilter(HexDump.hexStringToByteArray(optarg));
                         result.complete("success");
-                    }
-                    break;
-                case "capabilities":
-                    final StringJoiner joiner = new StringJoiner(",");
-                    joiner.add(Integer.toString(mCurrentApfCapabilities.apfVersionSupported));
-                    joiner.add(Integer.toString(mCurrentApfCapabilities.maximumApfProgramSize));
-                    joiner.add(Integer.toString(mCurrentApfCapabilities.apfPacketFormat));
-                    result.complete(joiner.toString());
-                    break;
-                default:
-                    result.completeExceptionally(
-                            new IllegalArgumentException("Invalid apf read command: " + cmd));
+                        break;
+                    case "capabilities":
+                        final StringJoiner joiner = new StringJoiner(",");
+                        joiner.add(Integer.toString(mCurrentApfCapabilities.apfVersionSupported));
+                        joiner.add(Integer.toString(mCurrentApfCapabilities.maximumApfProgramSize));
+                        joiner.add(Integer.toString(mCurrentApfCapabilities.apfPacketFormat));
+                        result.complete(joiner.toString());
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Invalid apf read command: " + cmd);
+                }
+            } catch (Exception e) {
+                result.completeExceptionally(e);
             }
         });
 

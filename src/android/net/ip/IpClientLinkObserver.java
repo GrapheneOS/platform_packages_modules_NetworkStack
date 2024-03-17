@@ -566,31 +566,27 @@ public class IpClientLinkObserver {
         }
     }
 
-    // The preferred/valid in ifa_cacheinfo expressed in units of seconds, convert
-    // it to milliseconds for deprecationTime or expirationTime used in LinkAddress.
-    // If the experiment flag is not enabled, LinkAddress.LIFETIME_UNKNOWN is retuend,
-    // the same as before.
-    private long getDeprecationOrExpirationTime(@Nullable final StructIfacacheInfo cacheInfo,
-            long now, boolean deprecationTime) {
-        if (!mConfig.populateLinkAddressLifetime || (cacheInfo == null)) {
-            return LinkAddress.LIFETIME_UNKNOWN;
-        }
-        final long lifetime = deprecationTime ? cacheInfo.preferred : cacheInfo.valid;
-        return (lifetime == Integer.toUnsignedLong(INFINITE_LEASE))
-                ? LinkAddress.LIFETIME_PERMANENT
-                : now + lifetime * 1000;
-    }
-
     private void processRtNetlinkAddressMessage(RtNetlinkAddressMessage msg) {
         final StructIfaddrMsg ifaddrMsg = msg.getIfaddrHeader();
         if (ifaddrMsg.index != mIfindex) return;
 
         final StructIfacacheInfo cacheInfo = msg.getIfacacheInfo();
-        final long now = SystemClock.elapsedRealtime();
-        final long deprecationTime =
-                getDeprecationOrExpirationTime(cacheInfo, now, true /* deprecationTime */);
-        final long expirationTime =
-                getDeprecationOrExpirationTime(cacheInfo, now, false /* deprecationTime */);
+        long deprecationTime = LinkAddress.LIFETIME_UNKNOWN;
+        long expirationTime = LinkAddress.LIFETIME_UNKNOWN;
+        if (cacheInfo != null && mConfig.populateLinkAddressLifetime) {
+            deprecationTime = LinkAddress.LIFETIME_PERMANENT;
+            expirationTime = LinkAddress.LIFETIME_PERMANENT;
+
+            final long now = SystemClock.elapsedRealtime();
+            // TODO: change INFINITE_LEASE to long so the pesky conversions can be removed.
+            if (cacheInfo.preferred < Integer.toUnsignedLong(INFINITE_LEASE)) {
+                deprecationTime = now + (cacheInfo.preferred /* seconds */  * 1000);
+            }
+            if (cacheInfo.valid < Integer.toUnsignedLong(INFINITE_LEASE)) {
+                expirationTime = now + (cacheInfo.valid /* seconds */  * 1000);
+            }
+        }
+
         final LinkAddress la = new LinkAddress(msg.getIpAddress(), ifaddrMsg.prefixLen,
                 msg.getFlags(), ifaddrMsg.scope, deprecationTime, expirationTime);
 
