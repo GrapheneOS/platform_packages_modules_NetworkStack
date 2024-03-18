@@ -58,6 +58,7 @@ public class ApfCounterTracker {
         PASSED_ARP_UNICAST_REPLY,
         PASSED_NON_IP_UNICAST,
         PASSED_MDNS,
+        PASSED_MLD,
         DROPPED_ETH_BROADCAST,
         DROPPED_RA,
         DROPPED_GARP_REPLY,
