@@ -406,6 +406,10 @@ public class ApfFilter implements AndroidPacketFilter {
 
         // Listen for doze-mode transition changes to enable/disable the IPv6 multicast filter.
         mDependencies.addDeviceIdleReceiver(mDeviceIdleReceiver, mShouldHandleLightDoze);
+
+        mDependencies.onApfFilterCreated(this);
+        // mReceiveThread is created in maybeStartFilter() and halted in shutdown().
+        mDependencies.onThreadCreated(mReceiveThread);
     }
 
     /**
@@ -445,6 +449,24 @@ public class ApfFilter implements AndroidPacketFilter {
          */
         public IpClientRaInfoMetrics getIpClientRaInfoMetrics() {
             return new IpClientRaInfoMetrics();
+        }
+
+        /**
+         * Callback to be called when an ApfFilter instance is created.
+         *
+         * This method is designed to be overridden in test classes to collect created ApfFilter
+         * instances.
+         */
+        public void onApfFilterCreated(@NonNull AndroidPacketFilter apfFilter) {
+        }
+
+        /**
+         * Callback to be called when a ReceiveThread instance is created.
+         *
+         * This method is designed for overriding in test classes to collect created threads and
+         * waits for the termination.
+         */
+        public void onThreadCreated(@NonNull Thread thread) {
         }
     }
 
@@ -1189,8 +1211,7 @@ public class ApfFilter implements AndroidPacketFilter {
                     }
                 }
             }
-            maybeSetupCounter(gen, Counter.DROPPED_RA);
-            gen.addJump(mCountAndDropLabel);
+            gen.addCountAndDrop(Counter.DROPPED_RA);
             gen.defineLabel(nextFilterLabel);
         }
     }
@@ -1274,8 +1295,7 @@ public class ApfFilter implements AndroidPacketFilter {
             gen.addAdd(UDP_HEADER_LEN);
             gen.addJumpIfBytesAtR0NotEqual(mPayload, nextFilterLabel);
 
-            maybeSetupCounter(gen, Counter.DROPPED_IPV4_NATT_KEEPALIVE);
-            gen.addJump(mCountAndDropLabel);
+            gen.addCountAndDrop(Counter.DROPPED_IPV4_NATT_KEEPALIVE);
             gen.defineLabel(nextFilterLabel);
         }
 
@@ -1394,8 +1414,7 @@ public class ApfFilter implements AndroidPacketFilter {
             gen.addAddR1ToR0();
             gen.addJumpIfBytesAtR0NotEqual(mPortSeqAckFingerprint, nextFilterLabel);
 
-            maybeSetupCounter(gen, Counter.DROPPED_IPV4_KEEPALIVE_ACK);
-            gen.addJump(mCountAndDropLabel);
+            gen.addCountAndDrop(Counter.DROPPED_IPV4_KEEPALIVE_ACK);
             gen.defineLabel(nextFilterLabel);
         }
     }
@@ -1531,8 +1550,7 @@ public class ApfFilter implements AndroidPacketFilter {
             gen.addJumpIfBytesAtR0NotEqual(mIPv4Address, mCountAndDropLabel);
         }
 
-        maybeSetupCounter(gen, Counter.PASSED_ARP);
-        gen.addJump(mCountAndPassLabel);
+        gen.addCountAndPass(Counter.PASSED_ARP);
     }
 
     /**
@@ -1578,8 +1596,7 @@ public class ApfFilter implements AndroidPacketFilter {
             // NOTE: Relies on R1 containing IPv4 header offset.
             gen.addAddR1ToR0();
             gen.addJumpIfBytesAtR0NotEqual(mHardwareAddress, skipDhcpv4Filter);
-            maybeSetupCounter(gen, Counter.PASSED_DHCP);
-            gen.addJump(mCountAndPassLabel);
+            gen.addCountAndPass(Counter.PASSED_DHCP);
 
             // Drop all multicasts/broadcasts.
             gen.defineLabel(skipDhcpv4Filter);
@@ -1617,13 +1634,11 @@ public class ApfFilter implements AndroidPacketFilter {
             maybeSetupCounter(gen, Counter.PASSED_IPV4_UNICAST);
             gen.addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET);
             gen.addJumpIfBytesAtR0NotEqual(ETHER_BROADCAST, mCountAndPassLabel);
-            maybeSetupCounter(gen, Counter.DROPPED_IPV4_L2_BROADCAST);
-            gen.addJump(mCountAndDropLabel);
+            gen.addCountAndDrop(Counter.DROPPED_IPV4_L2_BROADCAST);
         }
 
         // Otherwise, pass
-        maybeSetupCounter(gen, Counter.PASSED_IPV4);
-        gen.addJump(mCountAndPassLabel);
+        gen.addCountAndPass(Counter.PASSED_IPV4);
     }
 
     @GuardedBy("this")
@@ -1721,8 +1736,7 @@ public class ApfFilter implements AndroidPacketFilter {
             // If any keepalive filter matches, drop
             generateV6KeepaliveFilters(gen);
             // Not multicast. Pass.
-            maybeSetupCounter(gen, Counter.PASSED_IPV6_UNICAST_NON_ICMP);
-            gen.addJump(mCountAndPassLabel);
+            gen.addCountAndPass(Counter.PASSED_IPV6_UNICAST_NON_ICMP);
             gen.defineLabel(skipIPv6MulticastFilterLabel);
         } else {
             generateV6KeepaliveFilters(gen);
@@ -1748,8 +1762,7 @@ public class ApfFilter implements AndroidPacketFilter {
         gen.addLoadImmediate(R0, IPV6_DEST_ADDR_OFFSET);
         gen.addJumpIfBytesAtR0NotEqual(unsolicitedNaDropPrefix, skipUnsolicitedMulticastNALabel);
 
-        maybeSetupCounter(gen, Counter.DROPPED_IPV6_MULTICAST_NA);
-        gen.addJump(mCountAndDropLabel);
+        gen.addCountAndDrop(Counter.DROPPED_IPV6_MULTICAST_NA);
         gen.defineLabel(skipUnsolicitedMulticastNALabel);
 
         // Note that this is immediately followed emitEpilogue which will:
@@ -1868,12 +1881,10 @@ public class ApfFilter implements AndroidPacketFilter {
         }
         // If QNAME doesn't match any entries in allowlist, drop the packet.
         gen.defineLabel(mDnsDropPacket);
-        maybeSetupCounter(gen, Counter.DROPPED_MDNS);
-        gen.addJump(mCountAndDropLabel);
+        gen.addCountAndDrop(Counter.DROPPED_MDNS);
 
         gen.defineLabel(mDnsAcceptPacket);
-        maybeSetupCounter(gen, Counter.PASSED_MDNS);
-        gen.addJump(mCountAndPassLabel);
+        gen.addCountAndPass(Counter.PASSED_MDNS);
 
 
         gen.defineLabel(skipMdnsFilter);
@@ -1904,8 +1915,7 @@ public class ApfFilter implements AndroidPacketFilter {
         gen.addJumpIfR0NotEquals(ECHO_PORT, skipPort7V4Filter);
 
         // Drop it.
-        maybeSetupCounter(gen, Counter.DROPPED_IPV4_TCP_PORT7_UNICAST);
-        gen.addJump(mCountAndDropLabel);
+        gen.addCountAndDrop(Counter.DROPPED_IPV4_TCP_PORT7_UNICAST);
 
         // Skip label.
         gen.defineLabel(skipPort7V4Filter);
@@ -2024,8 +2034,7 @@ public class ApfFilter implements AndroidPacketFilter {
         gen.addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET);
         maybeSetupCounter(gen, Counter.PASSED_NON_IP_UNICAST);
         gen.addJumpIfBytesAtR0NotEqual(ETHER_BROADCAST, mCountAndPassLabel);
-        maybeSetupCounter(gen, Counter.DROPPED_ETH_BROADCAST);
-        gen.addJump(mCountAndDropLabel);
+        gen.addCountAndDrop(Counter.DROPPED_ETH_BROADCAST);
 
         // Add IPv6 filters:
         gen.defineLabel(ipv6FilterLabel);
@@ -2049,6 +2058,7 @@ public class ApfFilter implements AndroidPacketFilter {
         // which will pass the packet to the application processor.
         maybeSetupCounter(gen, Counter.PASSED_IPV6_ICMP);
 
+        // TODO: remove the duplicated trampoline block after fully migrate to addCountAndXXX() API.
         // Append the count & pass trampoline, which increments the counter at the data address
         // pointed to by R1, then jumps to the pass label. This saves a few bytes over inserting
         // the entire sequence inline for every counter.
@@ -2064,6 +2074,9 @@ public class ApfFilter implements AndroidPacketFilter {
         gen.addAdd(1);                     // R0++
         gen.addStoreData(R0, 0);  // *(R1 + 0) = R0
         gen.addJump(DROP_LABEL);
+
+        // TODO: merge the addCountTrampoline() into generate() method
+        gen.addCountTrampoline();
     }
 
     /**

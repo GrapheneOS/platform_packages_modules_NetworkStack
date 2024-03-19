@@ -283,13 +283,6 @@ public class ApfTestUtils {
         private final boolean mThrowsExceptionWhenGeneratesProgram;
 
         public TestApfFilter(Context context, ApfConfiguration config,
-                MockIpClientCallback ipClientCallback, NetworkQuirkMetrics networkQuirkMetrics)
-                throws Exception {
-            this(context, config, ipClientCallback, networkQuirkMetrics, new Dependencies(context),
-                    false /* throwsExceptionWhenGeneratesProgram */, new ApfFilter.Clock());
-        }
-
-        public TestApfFilter(Context context, ApfConfiguration config,
                 MockIpClientCallback ipClientCallback, NetworkQuirkMetrics networkQuirkMetrics,
                 Dependencies dependencies) throws Exception {
             this(context, config, ipClientCallback, networkQuirkMetrics, dependencies,

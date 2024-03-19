@@ -1414,6 +1414,11 @@ public class IpClient extends StateMachine {
      * Handle "adb shell cmd apf" command.
      */
     public String apfShellCommand(String cmd, @Nullable String optarg) {
+        final long oneDayInMs = 86400 * 1000;
+        if (SystemClock.elapsedRealtime() >= oneDayInMs) {
+            return "Error: This test interface requires uptime < 24h";
+        }
+
         final CompletableFuture<String> result = new CompletableFuture<>();
 
         getHandler().post(() -> {
