@@ -39,6 +39,7 @@ import java.nio.ByteBuffer
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -51,6 +52,11 @@ class ApfV5Test {
 
     private val testPacket = byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8,
                                          9, 10, 11, 12, 13, 14, 15, 16)
+
+    @After
+    fun tearDown() {
+        ApfJniUtils.resetTransmittedPacketMemory()
+    }
 
     @Test
     fun testDataInstructionMustComeFirst() {
@@ -534,7 +540,7 @@ class ApfV5Test {
     }
 
     @Test
-    fun testV2CountAndPssDrop() {
+    fun testV2CountAndPassDrop() {
         var program = ApfV4Generator(MIN_APF_VERSION)
                 .addCountAndDrop(Counter.DROPPED_ETH_BROADCAST)
                 .addCountTrampoline()
