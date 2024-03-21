@@ -19,6 +19,8 @@ import android.net.LinkProperties;
 import android.net.NattKeepalivePacketDataParcelable;
 import android.net.TcpKeepalivePacketDataParcelable;
 
+import androidx.annotation.Nullable;
+
 import com.android.internal.util.IndentingPrintWriter;
 
 /**
@@ -91,4 +93,9 @@ public interface AndroidPacketFilter {
 
     /** Resume ApfFilter updates for testing purposes. */
     default void resume() {}
+
+    /** Return hex string of current APF snapshot for testing purposes. */
+    default @Nullable String getDataSnapshotHexString() {
+        return null;
+    }
 }

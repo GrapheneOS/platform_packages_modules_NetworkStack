@@ -472,7 +472,9 @@ public class ApfFilter implements AndroidPacketFilter {
 
     public synchronized void setDataSnapshot(byte[] data) {
         mDataSnapshot = data;
-        mApfCounterTracker.updateCountersFromData(data);
+        if (mIsRunning) {
+            mApfCounterTracker.updateCountersFromData(data);
+        }
     }
 
     private void log(String s) {
@@ -2563,6 +2565,14 @@ public class ApfFilter implements AndroidPacketFilter {
     /** Resume ApfFilter updates for testing purposes. */
     public void resume() {
         mIsRunning = true;
+    }
+
+    /** Return data snapshot as hex string for testing purposes. */
+    public synchronized @Nullable String getDataSnapshotHexString() {
+        if (mDataSnapshot == null) {
+            return null;
+        }
+        return HexDump.toHexString(mDataSnapshot, 0, mDataSnapshot.length, false /* lowercase */);
     }
 
     // TODO: move to android.net.NetworkUtils

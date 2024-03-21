@@ -459,7 +459,8 @@ public abstract class BaseApfGenerator {
                 return 0;
             }
             int size = 1;
-            int indeterminateSize = calculateRequiredIndeterminateSize();
+            int indeterminateSize = mLenFieldOverride != -1 ? mLenFieldOverride
+                    : calculateRequiredIndeterminateSize();
             for (IntImmediate imm : mIntImms) {
                 size += imm.getEncodingSize(indeterminateSize);
             }
@@ -546,7 +547,8 @@ public abstract class BaseApfGenerator {
             }
             int writingOffset = offset;
             bytecode[writingOffset++] = generateInstructionByte();
-            int indeterminateSize = calculateRequiredIndeterminateSize();
+            int indeterminateSize = mLenFieldOverride != -1 ? mLenFieldOverride
+                    : calculateRequiredIndeterminateSize();
             int startOffset = 0;
             if (mOpcode == Opcodes.EXT) {
                 // For extend opcode, always write the actual opcode first.

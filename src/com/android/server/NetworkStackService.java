@@ -607,6 +607,8 @@ public class NetworkStackService extends Service {
                 pw.println("      capabilities");
                 pw.println("        return the reported APF capabilities.");
                 pw.println("        Format: <apfVersion>,<maxProgramSize>,<packetFormat>");
+                pw.println("      read");
+                pw.println("        reads and returns the current state of APF memory.");
             }
         }
 
