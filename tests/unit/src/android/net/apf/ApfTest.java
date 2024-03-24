@@ -2438,7 +2438,7 @@ public class ApfTest {
         public RaPacketBuilder addDnsslOption(int lifetime, String... domains) {
             ByteArrayOutputStream dnssl = new ByteArrayOutputStream();
             for (String domain : domains) {
-                for (String label : domain.split(".")) {
+                for (String label : domain.split("\\.")) {
                     final byte[] bytes = label.getBytes(StandardCharsets.UTF_8);
                     dnssl.write((byte) bytes.length);
                     dnssl.write(bytes, 0, bytes.length);

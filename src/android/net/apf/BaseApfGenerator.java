@@ -459,8 +459,7 @@ public abstract class BaseApfGenerator {
                 return 0;
             }
             int size = 1;
-            int indeterminateSize = mLenFieldOverride != -1 ? mLenFieldOverride
-                    : calculateRequiredIndeterminateSize();
+            int indeterminateSize = calculateRequiredIndeterminateSize();
             for (IntImmediate imm : mIntImms) {
                 size += imm.getEncodingSize(indeterminateSize);
             }
@@ -494,21 +493,6 @@ public abstract class BaseApfGenerator {
          * Assemble value for instruction size field.
          */
         private int generateImmSizeField() {
-            // If we already know the size the length field, just use it
-            switch (mLenFieldOverride) {
-                case -1:
-                    break;
-                case 1:
-                    return 1;
-                case 2:
-                    return 2;
-                case 4:
-                    return 3;
-                default:
-                    throw new IllegalStateException(
-                            "mLenFieldOverride has invalid value: " + mLenFieldOverride);
-            }
-            // Otherwise, calculate
             int immSize = calculateRequiredIndeterminateSize();
             // Encode size field to fit in 2 bits: 0->0, 1->1, 2->2, 3->4.
             return immSize == 4 ? 3 : immSize;
@@ -547,8 +531,7 @@ public abstract class BaseApfGenerator {
             }
             int writingOffset = offset;
             bytecode[writingOffset++] = generateInstructionByte();
-            int indeterminateSize = mLenFieldOverride != -1 ? mLenFieldOverride
-                    : calculateRequiredIndeterminateSize();
+            int indeterminateSize = calculateRequiredIndeterminateSize();
             int startOffset = 0;
             if (mOpcode == Opcodes.EXT) {
                 // For extend opcode, always write the actual opcode first.
@@ -580,6 +563,20 @@ public abstract class BaseApfGenerator {
          * the instruction. This size will be stored in the immLen field.
          */
         private int calculateRequiredIndeterminateSize() {
+            // If we already know the size the length field, just use it
+            switch (mLenFieldOverride) {
+                case -1:
+                    break;
+                case 1:
+                    return 1;
+                case 2:
+                    return 2;
+                case 4:
+                    return 3;
+                default:
+                    throw new IllegalStateException(
+                            "mLenFieldOverride has invalid value: " + mLenFieldOverride);
+            }
             int maxSize = mTargetLabelSize;
             for (IntImmediate imm : mIntImms) {
                 maxSize = Math.max(maxSize, imm.calculateIndeterminateSize());
