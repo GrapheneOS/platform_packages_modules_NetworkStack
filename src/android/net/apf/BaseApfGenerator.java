@@ -22,6 +22,10 @@ import static android.net.apf.BaseApfGenerator.Register.R0;
 
 import androidx.annotation.NonNull;
 
+import com.android.net.module.util.ByteUtils;
+import com.android.net.module.util.CollectionUtils;
+import com.android.net.module.util.HexDump;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -313,7 +317,7 @@ public abstract class BaseApfGenerator {
     }
 
     class Instruction {
-        private final Opcodes mOpcode;
+        public final Opcodes mOpcode;
         private final Rbit mRbit;
         public final List<IntImmediate> mIntImms = new ArrayList<>();
         // When mOpcode is a jump:
@@ -322,7 +326,7 @@ public abstract class BaseApfGenerator {
         private String mTargetLabel;
         // When mOpcode == Opcodes.LABEL:
         private String mLabel;
-        private byte[] mBytesImm;
+        public byte[] mBytesImm;
         // Offset in bytes from the beginning of this program.
         // Set by {@link BaseApfGenerator#generate}.
         int offset;
@@ -452,6 +456,36 @@ public abstract class BaseApfGenerator {
         }
 
         /**
+         * Attempts to match {@code content} with existing data bytes. If not exist, then
+         * append the {@code content} to the data bytes.
+         * Returns the start offset of the content from the beginning of the program.
+         */
+        int maybeUpdateBytesImm(byte[] content) throws IllegalInstructionException {
+            if (mOpcode != Opcodes.JMP || mBytesImm == null) {
+                throw new IllegalInstructionException(String.format(
+                        "maybeUpdateBytesImm() is only valid for jump data instruction, mOpcode "
+                                + ":%s, mBytesImm: %s", Opcodes.JMP,
+                        mBytesImm == null ? "(empty)" : HexDump.toHexString(mBytesImm)));
+            }
+            if (mLenFieldOverride != 2) {
+                throw new IllegalInstructionException(
+                        "mLenFieldOverride must be 2, mLenFieldOverride: " + mLenFieldOverride);
+            }
+            int offsetInDataBytes = CollectionUtils.indexOfSubArray(mBytesImm, content);
+            if (offsetInDataBytes == -1) {
+                offsetInDataBytes = mBytesImm.length;
+                mBytesImm = ByteUtils.concat(mBytesImm, content);
+                // Update the length immediate (first imm) value. Due to mValue within
+                // IntImmediate being final, we must remove and re-add the value to apply changes.
+                mIntImms.remove(0);
+                addDataOffset(mBytesImm.length);
+            }
+            // Note that the data instruction encoding consumes 1 byte and the data length
+            // encoding consumes 2 bytes.
+            return 1 + mLenFieldOverride + offsetInDataBytes;
+        }
+
+        /**
          * @return size of instruction in bytes.
          */
         int size() {
@@ -563,6 +597,15 @@ public abstract class BaseApfGenerator {
          * the instruction. This size will be stored in the immLen field.
          */
         private int calculateRequiredIndeterminateSize() {
+            int maxSize = mTargetLabelSize;
+            for (IntImmediate imm : mIntImms) {
+                maxSize = Math.max(maxSize, imm.calculateIndeterminateSize());
+            }
+            if (mLenFieldOverride != -1 && maxSize > mLenFieldOverride) {
+                throw new IllegalStateException(String.format(
+                        "maxSize: %d should not be greater than mLenFieldOverride: %d", maxSize,
+                        mLenFieldOverride));
+            }
             // If we already know the size the length field, just use it
             switch (mLenFieldOverride) {
                 case -1:
@@ -576,10 +619,6 @@ public abstract class BaseApfGenerator {
                 default:
                     throw new IllegalStateException(
                             "mLenFieldOverride has invalid value: " + mLenFieldOverride);
-            }
-            int maxSize = mTargetLabelSize;
-            for (IntImmediate imm : mIntImms) {
-                maxSize = Math.max(maxSize, imm.calculateIndeterminateSize());
             }
             return maxSize;
         }

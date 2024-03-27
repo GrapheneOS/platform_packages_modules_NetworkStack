@@ -239,7 +239,8 @@ public class DhcpPacketTest {
         assertNotNull(offerPacket);
         assertEquals(rawLeaseTime, offerPacket.mLeaseTime);
         DhcpResults dhcpResults = offerPacket.toDhcpResults();  // Just check this doesn't crash.
-        assertEquals(leaseTimeMillis, offerPacket.getLeaseTimeMillis());
+        assertEquals(leaseTimeMillis,
+                offerPacket.getLeaseTimeMillis(DhcpPacket.DEFAULT_MINIMUM_LEASE));
     }
 
     @Test

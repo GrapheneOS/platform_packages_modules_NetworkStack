@@ -2753,7 +2753,7 @@ public class IpClient extends StateMachine {
         }
         mDhcpClient.sendMessage(DhcpClient.CMD_START_DHCP, new DhcpClient.Configuration(mL2Key,
                 isUsingPreconnection(), options, isManagedWifiProfile,
-                mConfiguration.mHostnameSetting));
+                mConfiguration.mHostnameSetting, mPopulateLinkAddressLifetime));
     }
 
     private boolean hasPermission(String permissionName) {

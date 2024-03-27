@@ -62,6 +62,63 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
         return addCountAndDrop(counter.value());
     }
 
+    @Override
+    public ApfV6Generator addCountAndDropIfR0Equals(long val, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException {
+        final String tgt = getUniqueLabel();
+        return addJumpIfR0NotEquals(val, tgt).addCountAndDrop(cnt).defineLabel(tgt);
+    }
+
+    @Override
+    public ApfV6Generator addCountAndPassIfR0Equals(long val, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException {
+        final String tgt = getUniqueLabel();
+        return addJumpIfR0NotEquals(val, tgt).addCountAndPass(cnt).defineLabel(tgt);
+    }
+
+    @Override
+    public ApfV6Generator addCountAndDropIfR0NotEquals(long val, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException {
+        final String tgt = getUniqueLabel();
+        return addJumpIfR0Equals(val, tgt).addCountAndDrop(cnt).defineLabel(tgt);
+    }
+
+    @Override
+    public ApfV6Generator addCountAndPassIfR0NotEquals(long val, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException {
+        final String tgt = getUniqueLabel();
+        return addJumpIfR0Equals(val, tgt).addCountAndPass(cnt).defineLabel(tgt);
+    }
+
+    @Override
+    public ApfV6Generator addCountAndDropIfR0LessThan(long val, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException {
+        if (val <= 0) {
+            throw new IllegalArgumentException("val must > 0, current val: " + val);
+        }
+        final String tgt = getUniqueLabel();
+        return addJumpIfR0GreaterThan(val - 1, tgt).addCountAndDrop(cnt).defineLabel(tgt);
+    }
+
+    @Override
+    public ApfV6Generator addCountAndPassIfR0LessThan(long val, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException {
+        if (val <= 0) {
+            throw new IllegalArgumentException("val must > 0, current val: " + val);
+        }
+        final String tgt = getUniqueLabel();
+        return addJumpIfR0GreaterThan(val - 1, tgt).addCountAndPass(cnt).defineLabel(tgt);
+    }
+
+    private int mLabelCount = 0;
+
+    /**
+     * Return a unique label string.
+     */
+    private String getUniqueLabel() {
+        return "LABEL_" + mLabelCount++;
+    }
+
     /**
      * This method is noop in APFv6.
      */

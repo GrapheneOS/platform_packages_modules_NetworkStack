@@ -1518,19 +1518,17 @@ public class ApfFilter implements AndroidPacketFilter {
         gen.addLoad16(R0, ARP_OPCODE_OFFSET);
         if (mIPv4Address == null) {
             // Drop if ARP REQUEST and we do not have an IPv4 address
-            maybeSetupCounter(gen, Counter.DROPPED_ARP_REQUEST_NO_ADDRESS);
-            gen.addJumpIfR0Equals(ARP_OPCODE_REQUEST, mCountAndDropLabel);
+            gen.addCountAndDropIfR0Equals(ARP_OPCODE_REQUEST,
+                    Counter.DROPPED_ARP_REQUEST_NO_ADDRESS);
         } else {
             gen.addJumpIfR0Equals(ARP_OPCODE_REQUEST, checkTargetIPv4); // Skip to unicast check
         }
         // Drop if unknown ARP opcode.
-        maybeSetupCounter(gen, Counter.DROPPED_ARP_UNKNOWN);
-        gen.addJumpIfR0NotEquals(ARP_OPCODE_REPLY, mCountAndDropLabel);
+        gen.addCountAndDropIfR0NotEquals(ARP_OPCODE_REPLY, Counter.DROPPED_ARP_UNKNOWN);
 
         // Drop if ARP reply source IP is 0.0.0.0
         gen.addLoad32(R0, ARP_SOURCE_IP_ADDRESS_OFFSET);
-        maybeSetupCounter(gen, Counter.DROPPED_ARP_REPLY_SPA_NO_HOST);
-        gen.addJumpIfR0Equals(IPV4_ANY_HOST_ADDRESS, mCountAndDropLabel);
+        gen.addCountAndDropIfR0Equals(IPV4_ANY_HOST_ADDRESS, Counter.DROPPED_ARP_REPLY_SPA_NO_HOST);
 
         // Pass if non-broadcast reply.
         gen.addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET);
@@ -1542,8 +1540,7 @@ public class ApfFilter implements AndroidPacketFilter {
         if (mIPv4Address == null) {
             // When there is no IPv4 address, drop GARP replies (b/29404209).
             gen.addLoad32(R0, ARP_TARGET_IP_ADDRESS_OFFSET);
-            maybeSetupCounter(gen, Counter.DROPPED_GARP_REPLY);
-            gen.addJumpIfR0Equals(IPV4_ANY_HOST_ADDRESS, mCountAndDropLabel);
+            gen.addCountAndDropIfR0Equals(IPV4_ANY_HOST_ADDRESS, Counter.DROPPED_GARP_REPLY);
         } else {
             // When there is an IPv4 address, drop unicast/broadcast requests
             // and broadcast replies with a different target IPv4 address.
@@ -1606,17 +1603,15 @@ public class ApfFilter implements AndroidPacketFilter {
             // If IPv4 destination address is in multicast range, drop.
             gen.addLoad8(R0, IPV4_DEST_ADDR_OFFSET);
             gen.addAnd(0xf0);
-            maybeSetupCounter(gen, Counter.DROPPED_IPV4_MULTICAST);
-            gen.addJumpIfR0Equals(0xe0, mCountAndDropLabel);
+            gen.addCountAndDropIfR0Equals(0xe0, Counter.DROPPED_IPV4_MULTICAST);
 
             // If IPv4 broadcast packet, drop regardless of L2 (b/30231088).
-            maybeSetupCounter(gen, Counter.DROPPED_IPV4_BROADCAST_ADDR);
             gen.addLoad32(R0, IPV4_DEST_ADDR_OFFSET);
-            gen.addJumpIfR0Equals(IPV4_BROADCAST_ADDRESS, mCountAndDropLabel);
+            gen.addCountAndDropIfR0Equals(IPV4_BROADCAST_ADDRESS,
+                    Counter.DROPPED_IPV4_BROADCAST_ADDR);
             if (mIPv4Address != null && mIPv4PrefixLength < 31) {
-                maybeSetupCounter(gen, Counter.DROPPED_IPV4_BROADCAST_NET);
                 int broadcastAddr = ipv4BroadcastAddress(mIPv4Address, mIPv4PrefixLength);
-                gen.addJumpIfR0Equals(broadcastAddr, mCountAndDropLabel);
+                gen.addCountAndDropIfR0Equals(broadcastAddr, Counter.DROPPED_IPV4_BROADCAST_NET);
             }
         }
 
@@ -1708,8 +1703,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
         // MLD packets set the router-alert hop-by-hop option.
         // TODO: be smarter about not blindly passing every packet with HBH options.
-        maybeSetupCounter(gen, Counter.PASSED_MLD);
-        gen.addJumpIfR0Equals(IPPROTO_HOPOPTS, mCountAndPassLabel);
+        gen.addCountAndPassIfR0Equals(IPPROTO_HOPOPTS, Counter.PASSED_MLD);
 
         // Drop multicast if the multicast filter is enabled.
         if (mMulticastFilter) {
@@ -1732,9 +1726,8 @@ public class ApfFilter implements AndroidPacketFilter {
 
             // Drop all other packets sent to ff00::/8 (multicast prefix).
             gen.defineLabel(dropAllIPv6MulticastsLabel);
-            maybeSetupCounter(gen, Counter.DROPPED_IPV6_NON_ICMP_MULTICAST);
             gen.addLoad8(R0, IPV6_DEST_ADDR_OFFSET);
-            gen.addJumpIfR0Equals(0xff, mCountAndDropLabel);
+            gen.addCountAndDropIfR0Equals(0xff, Counter.DROPPED_IPV6_NON_ICMP_MULTICAST);
             // If any keepalive filter matches, drop
             generateV6KeepaliveFilters(gen);
             // Not multicast. Pass.
@@ -1743,8 +1736,7 @@ public class ApfFilter implements AndroidPacketFilter {
         } else {
             generateV6KeepaliveFilters(gen);
             // If not ICMPv6, pass.
-            maybeSetupCounter(gen, Counter.PASSED_IPV6_NON_ICMP);
-            gen.addJumpIfR0NotEquals(IPPROTO_ICMPV6, mCountAndPassLabel);
+            gen.addCountAndPassIfR0NotEquals(IPPROTO_ICMPV6, Counter.PASSED_IPV6_NON_ICMP);
         }
 
         // If we got this far, the packet is ICMPv6.  Drop some specific types.
@@ -1753,8 +1745,8 @@ public class ApfFilter implements AndroidPacketFilter {
         String skipUnsolicitedMulticastNALabel = "skipUnsolicitedMulticastNA";
         gen.addLoad8(R0, ICMP6_TYPE_OFFSET);
         // Drop all router solicitations (b/32833400)
-        maybeSetupCounter(gen, Counter.DROPPED_IPV6_ROUTER_SOLICITATION);
-        gen.addJumpIfR0Equals(ICMPV6_ROUTER_SOLICITATION, mCountAndDropLabel);
+        gen.addCountAndDropIfR0Equals(ICMPV6_ROUTER_SOLICITATION,
+                Counter.DROPPED_IPV6_ROUTER_SOLICITATION);
         // If not neighbor announcements, skip filter.
         gen.addJumpIfR0NotEquals(ICMPV6_NEIGHBOR_ADVERTISEMENT, skipUnsolicitedMulticastNALabel);
         // Drop all multicast NA to ff02::/120.
@@ -1999,14 +1991,13 @@ public class ApfFilter implements AndroidPacketFilter {
 
         if (mDrop802_3Frames) {
             // drop 802.3 frames (ethtype < 0x0600)
-            maybeSetupCounter(gen, Counter.DROPPED_802_3_FRAME);
-            gen.addJumpIfR0LessThan(ETH_TYPE_MIN, mCountAndDropLabel);
+            gen.addCountAndDropIfR0LessThan(ETH_TYPE_MIN, Counter.DROPPED_802_3_FRAME);
         }
 
         // Handle ether-type black list
-        maybeSetupCounter(gen, Counter.DROPPED_ETHERTYPE_DENYLISTED);
         for (int p : mEthTypeBlackList) {
-            gen.addJumpIfR0Equals(p, mCountAndDropLabel);
+            // TODO: Refactorings increased APFv4 code size; optimize for reduction.
+            gen.addCountAndDropIfR0Equals(p, Counter.DROPPED_ETHERTYPE_DENYLISTED);
         }
 
         // Add ARP filters:

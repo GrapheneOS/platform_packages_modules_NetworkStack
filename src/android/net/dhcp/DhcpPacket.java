@@ -64,7 +64,8 @@ public abstract class DhcpPacket {
     // dhcpcd has a minimum lease of 20 seconds, but DhcpStateMachine would refuse to wake up the
     // CPU for anything shorter than 5 minutes. For sanity's sake, this must be higher than the
     // DHCP client timeout.
-    public static final int MINIMUM_LEASE = 60;
+    public static final String CONFIG_MINIMUM_LEASE = "dhcp_minimum_lease";
+    public static final int DEFAULT_MINIMUM_LEASE = 60;
     public static final int INFINITE_LEASE = (int) 0xffffffff;
 
     public static final Inet4Address INADDR_ANY = IPV4_ADDR_ANY;
@@ -1490,12 +1491,12 @@ public abstract class DhcpPacket {
     /**
      * Returns the parsed lease time, in milliseconds, or 0 for infinite.
      */
-    public long getLeaseTimeMillis() {
+    public long getLeaseTimeMillis(int defaultMinimumLease) {
         // dhcpcd treats the lack of a lease time option as an infinite lease.
         if (mLeaseTime == null || mLeaseTime == INFINITE_LEASE) {
             return 0;
-        } else if (0 <= mLeaseTime && mLeaseTime < MINIMUM_LEASE) {
-            return MINIMUM_LEASE * 1000;
+        } else if (0 <= mLeaseTime && mLeaseTime < defaultMinimumLease) {
+            return defaultMinimumLease * 1000L;
         } else {
             return (mLeaseTime & 0xffffffffL) * 1000;
         }

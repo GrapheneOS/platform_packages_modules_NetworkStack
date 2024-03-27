@@ -26,6 +26,7 @@ import static android.net.NetworkCapabilities.NET_CAPABILITY_TRUSTED;
 import static android.net.NetworkCapabilities.TRANSPORT_TEST;
 import static android.net.RouteInfo.RTN_UNICAST;
 import static android.net.dhcp.DhcpClient.EXPIRED_LEASE;
+import static android.net.dhcp.DhcpPacket.CONFIG_MINIMUM_LEASE;
 import static android.net.dhcp.DhcpPacket.DHCP_BOOTREQUEST;
 import static android.net.dhcp.DhcpPacket.DHCP_CLIENT;
 import static android.net.dhcp.DhcpPacket.DHCP_IPV6_ONLY_PREFERRED;
@@ -578,6 +579,11 @@ public abstract class IpClientIntegrationTestCommon {
                 }
 
                 @Override
+                public int getIntDeviceConfig(final String name, int defaultValue) {
+                    return Dependencies.this.getDeviceConfigPropertyInt(name, defaultValue);
+                }
+
+                @Override
                 public PowerManager.WakeLock getWakeLock(final PowerManager powerManager) {
                     return mTimeoutWakeLock;
                 }
@@ -729,6 +735,7 @@ public abstract class IpClientIntegrationTestCommon {
             setUpIpClient();
             // Enable packet retransmit alarm in DhcpClient.
             enableRealAlarm("DhcpClient." + mIfaceName + ".KICK");
+            enableRealAlarm("DhcpClient." + mIfaceName + ".RENEW");
             // Enable alarm for IPv6 autoconf via SLAAC in IpClient.
             enableRealAlarm("IpClient." + mIfaceName + ".EVENT_IPV6_AUTOCONF_TIMEOUT");
             // Enable packet retransmit alarm in Dhcp6Client.
@@ -748,6 +755,8 @@ public abstract class IpClientIntegrationTestCommon {
         // in this case and start DHCPv6 Prefix Delegation then.
         final int timeout = useNetworkStackSignature() ? 500 : (int) TEST_TIMEOUT_MS;
         setDeviceConfigProperty(IpClient.CONFIG_IPV6_AUTOCONF_TIMEOUT, timeout /* default value */);
+        // Set DHCP minimum lease.
+        setDeviceConfigProperty(DhcpPacket.CONFIG_MINIMUM_LEASE, DhcpPacket.DEFAULT_MINIMUM_LEASE);
     }
 
     protected void setUpMocks() throws Exception {
@@ -5736,6 +5745,43 @@ public abstract class IpClientIntegrationTestCommon {
                 assertLinkAddressExpirationTime(la, when);
             }
         }
+    }
+
+    @Test
+    public void testPopulateLinkAddressLifetime_onDhcpRenew() throws Exception {
+        final ProvisioningConfiguration cfg = new ProvisioningConfiguration.Builder()
+                .withoutIPv6()
+                .build();
+        setDeviceConfigProperty(CONFIG_MINIMUM_LEASE,  5/* default minimum lease */);
+        startIpClientProvisioning(cfg);
+        handleDhcpPackets(true /* isSuccessLease */, 4 /* lease duration */,
+                false /* shouldReplyRapidCommitAck */, TEST_DEFAULT_MTU,
+                null /* captivePortalApiUrl */, null /* ipv6OnlyWaitTime */,
+                null /* domainName */, null /* domainSearchList */);
+
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(any());
+
+        // Device sends ARP request for address resolution of default gateway first.
+        final ArpPacket request = getNextArpPacket();
+        assertArpRequest(request, SERVER_ADDR);
+        sendArpReply(request.senderHwAddress.toByteArray() /* dst */, ROUTER_MAC_BYTES /* srcMac */,
+                request.senderIp /* target IP */, SERVER_ADDR /* sender IP */);
+
+        // Then client sends unicast DHCPREQUEST to extend the IPv4 address lifetime, and we reply
+        // with DHCPACK to refresh the DHCP lease.
+        final DhcpPacket packet = getNextDhcpPacket();
+        assertTrue(packet instanceof DhcpRequestPacket);
+        assertDhcpRequestForReacquire(packet);
+        mPacketReader.sendResponse(buildDhcpAckPacket(packet, CLIENT_ADDR,
+                TEST_LEASE_DURATION_S, (short) TEST_DEFAULT_MTU,
+                false /* rapidCommit */, null /* captivePortalApiUrl */));
+
+        // Once the IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION flag is enabled, the IP
+        // lease will be refreshed as well as the link address lifetime by transiting to
+        // ConfiguringInterfaceState, where IpClient sends a new RTM_NEWADDR message to kernel
+        // to update the IPv4 address, therefore, we should never see provisioning failure any
+        // more.
+        verify(mCb, never()).onProvisioningFailure(any());
     }
 
     private void doDhcpHostnameSettingTest(int hostnameSetting,
