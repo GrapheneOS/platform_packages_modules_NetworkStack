@@ -2122,8 +2122,17 @@ public class IpClient extends StateMachine {
     // Returns false if we have lost provisioning, true otherwise.
     private boolean handleLinkPropertiesUpdate(boolean sendCallbacks) {
         final LinkProperties newLp = assembleLinkProperties();
+        // LinkProperties.equals just compares if the interface addresses are identical,
+        // it doesn't compare the LinkAddress objects, so it considers two LinkProperties
+        // objects are identical even with different address lifetime. However, we may want
+        // to notify the caller whenever the link address lifetime is updated, especially
+        // after we enable populating the deprecationTime/expirationTime fields. The caller
+        // can get the latest address lifetime from the onLinkPropertiesChange callback.
         if (Objects.equals(newLp, mLinkProperties)) {
-            return true;
+            if (!mPopulateLinkAddressLifetime) return true;
+            if (LinkPropertiesUtils.isIdenticalAllLinkAddresses(newLp, mLinkProperties)) {
+                return true;
+            }
         }
 
         // Set an alarm to wait for IPv6 autoconf via SLAAC to succeed after receiving an RA,

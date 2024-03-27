@@ -609,18 +609,15 @@ public abstract class BaseApfGenerator {
             // If we already know the size the length field, just use it
             switch (mLenFieldOverride) {
                 case -1:
-                    break;
+                    return maxSize;
                 case 1:
-                    return 1;
                 case 2:
-                    return 2;
                 case 4:
-                    return 3;
+                    return mLenFieldOverride;
                 default:
                     throw new IllegalStateException(
                             "mLenFieldOverride has invalid value: " + mLenFieldOverride);
             }
-            return maxSize;
         }
 
         private int calculateTargetLabelOffset() throws IllegalInstructionException {
