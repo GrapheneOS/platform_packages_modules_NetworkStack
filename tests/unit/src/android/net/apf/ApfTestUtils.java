@@ -165,8 +165,11 @@ public class ApfTestUtils {
         if (ignoreInterpreterVersion) {
             final int apfVersionIdx = ApfCounterTracker.Counter.totalSize()
                     + ApfCounterTracker.Counter.APF_VERSION.offset();
+            final int apfProgramIdIdx = ApfCounterTracker.Counter.totalSize()
+                    + ApfCounterTracker.Counter.APF_PROGRAM_ID.offset();
             for (int i = 0; i < 4; ++i) {
                 data[apfVersionIdx + i] = 0;
+                data[apfProgramIdIdx + i] = 0;
             }
         }
         // assertArrayEquals() would only print one byte, making debugging difficult.

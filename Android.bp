@@ -335,6 +335,7 @@ java_defaults {
         "net-utils-device-common-ip",
         "net-utils-device-common-netlink",
         "net-utils-device-common-struct",
+        "net-utils-device-common-struct-base",
     ],
 }
 

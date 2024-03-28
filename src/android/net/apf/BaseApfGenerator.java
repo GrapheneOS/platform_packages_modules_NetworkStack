@@ -322,7 +322,7 @@ public abstract class BaseApfGenerator {
         public final List<IntImmediate> mIntImms = new ArrayList<>();
         // When mOpcode is a jump:
         private int mTargetLabelSize;
-        private int mLenFieldOverride = -1;
+        private int mImmSizeOverride = -1;
         private String mTargetLabel;
         // When mOpcode == Opcodes.LABEL:
         private String mLabel;
@@ -445,8 +445,8 @@ public abstract class BaseApfGenerator {
             return this;
         }
 
-        Instruction overrideLenField(int size) {
-            mLenFieldOverride = size;
+        Instruction overrideImmSize(int size) {
+            mImmSizeOverride = size;
             return this;
         }
 
@@ -467,9 +467,9 @@ public abstract class BaseApfGenerator {
                                 + ":%s, mBytesImm: %s", Opcodes.JMP,
                         mBytesImm == null ? "(empty)" : HexDump.toHexString(mBytesImm)));
             }
-            if (mLenFieldOverride != 2) {
+            if (mImmSizeOverride != 2) {
                 throw new IllegalInstructionException(
-                        "mLenFieldOverride must be 2, mLenFieldOverride: " + mLenFieldOverride);
+                        "mImmSizeOverride must be 2, mImmSizeOverride: " + mImmSizeOverride);
             }
             int offsetInDataBytes = CollectionUtils.indexOfSubArray(mBytesImm, content);
             if (offsetInDataBytes == -1) {
@@ -482,7 +482,7 @@ public abstract class BaseApfGenerator {
             }
             // Note that the data instruction encoding consumes 1 byte and the data length
             // encoding consumes 2 bytes.
-            return 1 + mLenFieldOverride + offsetInDataBytes;
+            return 1 + mImmSizeOverride + offsetInDataBytes;
         }
 
         /**
@@ -601,22 +601,22 @@ public abstract class BaseApfGenerator {
             for (IntImmediate imm : mIntImms) {
                 maxSize = Math.max(maxSize, imm.calculateIndeterminateSize());
             }
-            if (mLenFieldOverride != -1 && maxSize > mLenFieldOverride) {
+            if (mImmSizeOverride != -1 && maxSize > mImmSizeOverride) {
                 throw new IllegalStateException(String.format(
-                        "maxSize: %d should not be greater than mLenFieldOverride: %d", maxSize,
-                        mLenFieldOverride));
+                        "maxSize: %d should not be greater than mImmSizeOverride: %d", maxSize,
+                        mImmSizeOverride));
             }
             // If we already know the size the length field, just use it
-            switch (mLenFieldOverride) {
+            switch (mImmSizeOverride) {
                 case -1:
                     return maxSize;
                 case 1:
                 case 2:
                 case 4:
-                    return mLenFieldOverride;
+                    return mImmSizeOverride;
                 default:
                     throw new IllegalStateException(
-                            "mLenFieldOverride has invalid value: " + mLenFieldOverride);
+                            "mImmSizeOverride has invalid value: " + mImmSizeOverride);
             }
         }
 

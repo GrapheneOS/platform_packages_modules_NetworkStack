@@ -46,7 +46,8 @@ public class ApfCounterTracker {
         FILTER_AGE_SECONDS,
         FILTER_AGE_16384THS,
         APF_VERSION,
-        PASSED_ARP,
+        APF_PROGRAM_ID,
+        PASSED_ARP,  // see also MIN_PASS_COUNTER below
         PASSED_DHCP,
         PASSED_IPV4,
         PASSED_IPV6_NON_ICMP,
@@ -58,8 +59,8 @@ public class ApfCounterTracker {
         PASSED_ARP_UNICAST_REPLY,
         PASSED_NON_IP_UNICAST,
         PASSED_MDNS,
-        PASSED_MLD,
-        DROPPED_ETH_BROADCAST,
+        PASSED_MLD,  // see also MAX_PASS_COUNTER below
+        DROPPED_ETH_BROADCAST,  // see also MIN_DROP_COUNTER below
         DROPPED_RA,
         DROPPED_GARP_REPLY,
         DROPPED_ARP_OTHER_HOST,
@@ -82,7 +83,7 @@ public class ApfCounterTracker {
         DROPPED_MDNS,
         DROPPED_IPV4_TCP_PORT7_UNICAST,
         DROPPED_ARP_NON_IPV4,
-        DROPPED_ARP_UNKNOWN;
+        DROPPED_ARP_UNKNOWN;  // see also MAX_DROP_COUNTER below
 
         /**
          * Returns the negative byte offset from the end of the APF data segment for
@@ -107,6 +108,11 @@ public class ApfCounterTracker {
             return (Counter.class.getEnumConstants().length - 1) * 4;
         }
     }
+
+    public static final Counter MIN_DROP_COUNTER = Counter.DROPPED_ETH_BROADCAST;
+    public static final Counter MAX_DROP_COUNTER = Counter.DROPPED_ARP_UNKNOWN;
+    public static final Counter MIN_PASS_COUNTER = Counter.PASSED_ARP;
+    public static final Counter MAX_PASS_COUNTER = Counter.PASSED_MLD;
 
     private static final String TAG = ApfCounterTracker.class.getSimpleName();
 

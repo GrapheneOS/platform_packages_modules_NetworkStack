@@ -120,7 +120,7 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
         }
         mIsV6 = true;
         return append(new Instruction(Opcodes.JMP, Rbit1).addUnsigned(data.length)
-                .setBytesImm(data).overrideLenField(2));
+                .setBytesImm(data).overrideImmSize(2));
     }
 
     /**
@@ -163,21 +163,21 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
      * Add an instruction to the end of the program to write 1 byte value to output buffer.
      */
     public final Type addWriteU8(int val) {
-        return append(new Instruction(Opcodes.WRITE).overrideLenField(1).addU8(val));
+        return append(new Instruction(Opcodes.WRITE).overrideImmSize(1).addU8(val));
     }
 
     /**
      * Add an instruction to the end of the program to write 2 bytes value to output buffer.
      */
     public final Type addWriteU16(int val) {
-        return append(new Instruction(Opcodes.WRITE).overrideLenField(2).addU16(val));
+        return append(new Instruction(Opcodes.WRITE).overrideImmSize(2).addU16(val));
     }
 
     /**
      * Add an instruction to the end of the program to write 4 bytes value to output buffer.
      */
     public final Type addWriteU32(long val) {
-        return append(new Instruction(Opcodes.WRITE).overrideLenField(4).addU32(val));
+        return append(new Instruction(Opcodes.WRITE).overrideImmSize(4).addU32(val));
     }
 
     /**

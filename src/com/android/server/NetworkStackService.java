@@ -85,6 +85,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -505,8 +506,13 @@ public class NetworkStackService extends Service {
 
         private String apfShellCommand(String iface, String cmd, @Nullable String optarg) {
             synchronized (mIpClients) {
-                for (WeakReference<IpClient> ipClientRef : mIpClients) {
-                    final IpClient ipClient = ipClientRef.get();
+                // HACK: An old IpClient serving the given interface name might not have been
+                // garbage collected. Since new IpClients are always appended to the list, iterate
+                // through it in reverse order to get the most up-to-date IpClient instance.
+                // Create a ListIterator at the end of the list.
+                final ListIterator it = mIpClients.listIterator(mIpClients.size());
+                while (it.hasPrevious()) {
+                    final IpClient ipClient = ((WeakReference<IpClient>) it.previous()).get();
                     if (ipClient != null && ipClient.getInterfaceName().equals(iface)) {
                         return ipClient.apfShellCommand(cmd, optarg);
                     }
