@@ -48,6 +48,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
      */
     @Override
     public ApfV6Generator addCountAndPass(ApfCounterTracker.Counter counter) {
+        checkPassCounterRange(counter);
         return addCountAndPass(counter.value());
     }
 
@@ -59,6 +60,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
      */
     @Override
     public ApfV6Generator addCountAndDrop(ApfCounterTracker.Counter counter) {
+        checkDropCounterRange(counter);
         return addCountAndDrop(counter.value());
     }
 

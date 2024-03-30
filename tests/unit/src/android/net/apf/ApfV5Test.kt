@@ -16,6 +16,9 @@
 package android.net.apf
 
 import android.net.apf.ApfCounterTracker.Counter
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_DENYLISTED
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETH_BROADCAST
+import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP
 import android.net.apf.ApfTestUtils.DROP
 import android.net.apf.ApfTestUtils.MIN_PKT_SIZE
 import android.net.apf.ApfTestUtils.PASS
@@ -218,6 +221,12 @@ class ApfV5Test {
                 byteArrayOf(1, 'A'.code.toByte(), 1, 'B'.code.toByte()),
                 ApfV4Generator.DROP_LABEL
         ) }
+        assertFailsWith<IllegalArgumentException> { gen.addCountAndDrop(PASSED_ARP) }
+        assertFailsWith<IllegalArgumentException> { gen.addCountAndPass(DROPPED_ETH_BROADCAST) }
+
+        val v4gen = ApfV4Generator(APF_VERSION_4)
+        assertFailsWith<IllegalArgumentException> { v4gen.addCountAndDrop(PASSED_ARP) }
+        assertFailsWith<IllegalArgumentException> { v4gen.addCountAndPass(DROPPED_ETH_BROADCAST) }
     }
 
     @Test
@@ -296,34 +305,34 @@ class ApfV5Test {
         )
 
         gen = ApfV6Generator()
-        gen.addCountAndPass(Counter.TOTAL_PACKETS)
+        gen.addCountAndPass(PASSED_ARP)
         program = gen.generate()
         // encoding COUNT(PASS) opcode: opcode=0, imm_len=size_of(imm), R=0, imm=counterNumber
         assertContentEquals(
                 byteArrayOf(
                         encodeInstruction(opcode = 0, immLength = 1, register = 0),
-                        0x02
+                        PASSED_ARP.value().toByte()
                 ),
                 program
         )
         assertContentEquals(
-                listOf("0: pass         2"),
+                listOf("0: pass         10"),
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 
         gen = ApfV6Generator()
-        gen.addCountAndDrop(Counter.PASSED_ALLOCATE_FAILURE)
+        gen.addCountAndDrop(DROPPED_ETHERTYPE_DENYLISTED)
         program = gen.generate()
         // encoding COUNT(DROP) opcode: opcode=0, imm_len=size_of(imm), R=1, imm=counterNumber
         assertContentEquals(
                 byteArrayOf(
                         encodeInstruction(opcode = 0, immLength = 1, register = 1),
-                        0x03
+                        DROPPED_ETHERTYPE_DENYLISTED.value().toByte()
                 ),
                 program
         )
         assertContentEquals(
-                listOf("0: drop         3"),
+                listOf("0: drop         38"),
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 
@@ -786,7 +795,7 @@ class ApfV5Test {
         assertContentEquals(ByteArray(Counter.totalSize()) { 0 }, dataRegion)
 
         program = ApfV4Generator(MIN_APF_VERSION)
-                .addCountAndPass(Counter.DROPPED_ETH_BROADCAST)
+                .addCountAndPass(PASSED_ARP)
                 .addCountTrampoline()
                 .generate()
         dataRegion = ByteArray(Counter.totalSize()) { 0 }

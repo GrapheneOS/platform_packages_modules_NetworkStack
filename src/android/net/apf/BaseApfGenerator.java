@@ -677,6 +677,26 @@ public abstract class BaseApfGenerator {
                         upperBound));
     }
 
+    static void checkPassCounterRange(ApfCounterTracker.Counter cnt) {
+        if (cnt.value() < ApfCounterTracker.MIN_PASS_COUNTER.value()
+                || cnt.value() > ApfCounterTracker.MAX_PASS_COUNTER.value()) {
+            throw new IllegalArgumentException(
+                    String.format("Counter %s, is not in range [%s, %s]", cnt,
+                            ApfCounterTracker.MIN_PASS_COUNTER,
+                            ApfCounterTracker.MAX_PASS_COUNTER));
+        }
+    }
+
+    static void checkDropCounterRange(ApfCounterTracker.Counter cnt) {
+        if (cnt.value() < ApfCounterTracker.MIN_DROP_COUNTER.value()
+                || cnt.value() > ApfCounterTracker.MAX_DROP_COUNTER.value()) {
+            throw new IllegalArgumentException(
+                    String.format("Counter %s, is not in range [%s, %s]", cnt,
+                            ApfCounterTracker.MIN_DROP_COUNTER,
+                            ApfCounterTracker.MAX_DROP_COUNTER));
+        }
+    }
+
     /**
      * Returns an overestimate of the size of the generated program. {@link #generate} may return
      * a program that is smaller.
