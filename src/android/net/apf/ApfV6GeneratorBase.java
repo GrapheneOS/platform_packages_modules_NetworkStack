@@ -17,6 +17,7 @@ package android.net.apf;
 
 import static android.net.apf.BaseApfGenerator.Rbit.Rbit0;
 import static android.net.apf.BaseApfGenerator.Rbit.Rbit1;
+import static android.net.apf.BaseApfGenerator.Register.R1;
 
 import androidx.annotation.NonNull;
 
@@ -393,6 +394,18 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
         return append(new Instruction(ExtendedOpcodes.JDNSAMATCHSAFE, Rbit1).setTargetLabel(
                 tgt).setBytesImm(names));
     }
+
+    /**
+     * Add an instruction to the end of the program to jump to {@code tgt} if the bytes of the
+     * packet at an offset specified by {@code register} match {@code bytes}
+     * R=1 means check for equal.
+     */
+    public final Type addJumpIfBytesAtR0Equal(byte[] bytes, String tgt)
+            throws IllegalInstructionException {
+        return append(new Instruction(Opcodes.JNEBS, R1).addUnsigned(
+                bytes.length).setTargetLabel(tgt).setBytesImm(bytes));
+    }
+
 
     /**
      * Check if the byte is valid dns character: A-Z,0-9,-,_

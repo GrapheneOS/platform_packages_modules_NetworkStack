@@ -528,63 +528,51 @@ public class NetworkStackService extends Service {
                     return handleDefaultCommands(cmd);
                 }
                 final PrintWriter pw = getOutPrintWriter();
-                try {
-                    switch (cmd) {
-                        case "is-uid-networking-blocked":
-                            if (!DeviceConfigUtils.isFeatureSupported(mContext,
-                                    FEATURE_IS_UID_NETWORKING_BLOCKED)) {
-                                pw.println("API is unsupported");
-                                return -1;
-                            }
+                switch (cmd) {
+                    case "is-uid-networking-blocked":
+                        if (!DeviceConfigUtils.isFeatureSupported(mContext,
+                                FEATURE_IS_UID_NETWORKING_BLOCKED)) {
+                            throw new IllegalStateException("API is unsupported");
+                        }
 
-                            // Usage : cmd network_stack is-uid-networking-blocked <uid> <metered>
-                            // If no argument, get and display the usage help.
-                            if (getRemainingArgsCount() != 2) {
-                                onHelp();
-                                return -1;
-                            }
-                            final int uid;
-                            final boolean metered;
-                            // If any fail, throws and output to the stdout.
-                            // Let the caller handle it.
-                            uid = Integer.parseInt(getNextArg());
-                            metered = Boolean.parseBoolean(getNextArg());
-                            final ConnectivityManager cm =
-                                    mContext.getSystemService(ConnectivityManager.class);
-                            pw.println(cm.isUidNetworkingBlocked(
-                                    uid, metered /* isNetworkMetered */));
-                            return 0;
-                        case "apf":
-                            // Usage: cmd network_stack apf <iface> <cmd>
-                            final String iface = getNextArg();
-                            if (iface == null) {
-                                pw.println("No <iface> specified");
-                                return -1;
-                            }
+                        // Usage : cmd network_stack is-uid-networking-blocked <uid> <metered>
+                        // If no argument, get and display the usage help.
+                        if (getRemainingArgsCount() != 2) {
+                            onHelp();
+                            throw new IllegalArgumentException("Incorrect number of arguments");
+                        }
+                        final int uid;
+                        final boolean metered;
+                        uid = Integer.parseInt(getNextArg());
+                        metered = Boolean.parseBoolean(getNextArg());
+                        final ConnectivityManager cm =
+                                mContext.getSystemService(ConnectivityManager.class);
+                        pw.println(cm.isUidNetworkingBlocked(uid, metered /* isNetworkMetered */));
+                        return 0;
+                    case "apf":
+                        // Usage: cmd network_stack apf <iface> <cmd>
+                        final String iface = getNextArg();
+                        if (iface == null) {
+                            throw new IllegalArgumentException("No <iface> specified");
+                        }
 
-                            final String subcmd = getNextArg();
-                            if (subcmd == null) {
-                                pw.println("No <cmd> specified");
-                                return -1;
-                            }
+                        final String subcmd = getNextArg();
+                        if (subcmd == null) {
+                            throw new IllegalArgumentException("No <cmd> specified");
+                        }
 
-                            final String optarg = getNextArg();
-                            if (getRemainingArgsCount() != 0) {
-                                onHelp();
-                                return -1;
-                            }
+                        final String optarg = getNextArg();
+                        if (getRemainingArgsCount() != 0) {
+                            throw new IllegalArgumentException("Too many arguments passed");
+                        }
 
-                            final String result = apfShellCommand(iface, subcmd, optarg);
-                            pw.println(result);
-                            return 0;
+                        final String result = apfShellCommand(iface, subcmd, optarg);
+                        pw.println(result);
+                        return 0;
 
-                        default:
-                            return handleDefaultCommands(cmd);
-                    }
-                } catch (Exception e) {
-                    pw.println(e);
+                    default:
+                        return handleDefaultCommands(cmd);
                 }
-                return -1;
             }
 
             @Override

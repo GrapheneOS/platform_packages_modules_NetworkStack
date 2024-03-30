@@ -223,10 +223,46 @@ class ApfV5Test {
         ) }
         assertFailsWith<IllegalArgumentException> { gen.addCountAndDrop(PASSED_ARP) }
         assertFailsWith<IllegalArgumentException> { gen.addCountAndPass(DROPPED_ETH_BROADCAST) }
+        assertFailsWith<IllegalArgumentException> {
+            gen.addCountAndDropIfR0Equals(3, PASSED_ARP)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            gen.addCountAndPassIfR0Equals(3, DROPPED_ETH_BROADCAST)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            gen.addCountAndDropIfR0NotEquals(3, PASSED_ARP)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            gen.addCountAndPassIfR0NotEquals(3, DROPPED_ETH_BROADCAST)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            gen.addCountAndDropIfR0LessThan(3, PASSED_ARP)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            gen.addCountAndPassIfR0LessThan(3, DROPPED_ETH_BROADCAST)
+        }
 
         val v4gen = ApfV4Generator(APF_VERSION_4)
         assertFailsWith<IllegalArgumentException> { v4gen.addCountAndDrop(PASSED_ARP) }
         assertFailsWith<IllegalArgumentException> { v4gen.addCountAndPass(DROPPED_ETH_BROADCAST) }
+        assertFailsWith<IllegalArgumentException> {
+            v4gen.addCountAndDropIfR0Equals(3, PASSED_ARP)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            v4gen.addCountAndPassIfR0Equals(3, DROPPED_ETH_BROADCAST)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            v4gen.addCountAndDropIfR0NotEquals(3, PASSED_ARP)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            v4gen.addCountAndPassIfR0NotEquals(3, DROPPED_ETH_BROADCAST)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            v4gen.addCountAndDropIfR0LessThan(3, PASSED_ARP)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            v4gen.addCountAndPassIfR0LessThan(3, DROPPED_ETH_BROADCAST)
+        }
     }
 
     @Test

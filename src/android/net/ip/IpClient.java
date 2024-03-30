@@ -1416,20 +1416,20 @@ public class IpClient extends StateMachine {
     public String apfShellCommand(String cmd, @Nullable String optarg) {
         final long oneDayInMs = 86400 * 1000;
         if (SystemClock.elapsedRealtime() >= oneDayInMs) {
-            return "Error: This test interface requires uptime < 24h";
+            throw new IllegalStateException("Error: This test interface requires uptime < 24h");
         }
 
         // Waiting for a "read" result cannot block the handler thread, since the result gets
         // processed on it. This is test only code, so mApfFilter going away is not a concern.
         if (cmd.equals("read")) {
             if (mApfFilter == null) {
-                return "Error: No active APF filter";
+                throw new IllegalStateException("Error: No active APF filter");
             }
             // Request a new snapshot, then wait for it.
             mApfDataSnapshotComplete.close();
             mCallback.startReadPacketFilter();
             if (!mApfDataSnapshotComplete.block(5000 /* ms */)) {
-                return "Error: Failed to read APF program";
+                throw new RuntimeException("Error: Failed to read APF program");
             }
         }
 
@@ -1474,7 +1474,7 @@ public class IpClient extends StateMachine {
                         result.complete(snapshot);
                         break;
                     default:
-                        throw new IllegalArgumentException("Invalid apf read command: " + cmd);
+                        throw new IllegalArgumentException("Invalid apf command: " + cmd);
                 }
             } catch (Exception e) {
                 result.completeExceptionally(e);

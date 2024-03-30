@@ -89,26 +89,31 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
 
     @Override
     public ApfV4Generator addCountAndDropIfR0Equals(long val, ApfCounterTracker.Counter cnt) {
+        checkDropCounterRange(cnt);
         return maybeAddLoadR1CounterOffset(cnt).addJumpIfR0Equals(val, mCountAndDropLabel);
     }
 
     @Override
     public ApfV4Generator addCountAndPassIfR0Equals(long val, ApfCounterTracker.Counter cnt) {
+        checkPassCounterRange(cnt);
         return maybeAddLoadR1CounterOffset(cnt).addJumpIfR0Equals(val, mCountAndPassLabel);
     }
 
     @Override
     public ApfV4Generator addCountAndDropIfR0NotEquals(long val, ApfCounterTracker.Counter cnt) {
+        checkDropCounterRange(cnt);
         return maybeAddLoadR1CounterOffset(cnt).addJumpIfR0NotEquals(val, mCountAndDropLabel);
     }
 
     @Override
     public ApfV4Generator addCountAndPassIfR0NotEquals(long val, ApfCounterTracker.Counter cnt) {
+        checkPassCounterRange(cnt);
         return maybeAddLoadR1CounterOffset(cnt).addJumpIfR0NotEquals(val, mCountAndPassLabel);
     }
 
     @Override
     public ApfV4Generator addCountAndDropIfR0LessThan(long val, ApfCounterTracker.Counter cnt) {
+        checkDropCounterRange(cnt);
         if (val <= 0) {
             throw new IllegalArgumentException("val must > 0, current val: " + val);
         }
@@ -117,6 +122,7 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
 
     @Override
     public ApfV4Generator addCountAndPassIfR0LessThan(long val, ApfCounterTracker.Counter cnt) {
+        checkPassCounterRange(cnt);
         if (val <= 0) {
             throw new IllegalArgumentException("val must > 0, current val: " + val);
         }

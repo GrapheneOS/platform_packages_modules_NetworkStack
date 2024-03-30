@@ -411,18 +411,6 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
     }
 
     /**
-     * Add an instruction to the end of the program to jump to {@code tgt} if the bytes of the
-     * packet at an offset specified by {@code register} match {@code bytes}
-     * R=1 means check for equal.
-     */
-    public final Type addJumpIfBytesAtR0Equal(byte[] bytes, String tgt)
-            throws IllegalInstructionException {
-        requireApfVersion(MIN_APF_VERSION_IN_DEV);
-        return append(new Instruction(Opcodes.JNEBS, R1).addUnsigned(
-                bytes.length).setTargetLabel(tgt).setBytesImm(bytes));
-    }
-
-    /**
      * Add an instruction to the end of the program to load memory slot {@code slot} into
      * {@code register}.
      */

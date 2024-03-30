@@ -67,6 +67,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     @Override
     public ApfV6Generator addCountAndDropIfR0Equals(long val, ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
+        checkDropCounterRange(cnt);
         final String tgt = getUniqueLabel();
         return addJumpIfR0NotEquals(val, tgt).addCountAndDrop(cnt).defineLabel(tgt);
     }
@@ -74,6 +75,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     @Override
     public ApfV6Generator addCountAndPassIfR0Equals(long val, ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
+        checkPassCounterRange(cnt);
         final String tgt = getUniqueLabel();
         return addJumpIfR0NotEquals(val, tgt).addCountAndPass(cnt).defineLabel(tgt);
     }
@@ -81,6 +83,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     @Override
     public ApfV6Generator addCountAndDropIfR0NotEquals(long val, ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
+        checkDropCounterRange(cnt);
         final String tgt = getUniqueLabel();
         return addJumpIfR0Equals(val, tgt).addCountAndDrop(cnt).defineLabel(tgt);
     }
@@ -88,6 +91,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     @Override
     public ApfV6Generator addCountAndPassIfR0NotEquals(long val, ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
+        checkPassCounterRange(cnt);
         final String tgt = getUniqueLabel();
         return addJumpIfR0Equals(val, tgt).addCountAndPass(cnt).defineLabel(tgt);
     }
@@ -95,6 +99,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     @Override
     public ApfV6Generator addCountAndDropIfR0LessThan(long val, ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
+        checkDropCounterRange(cnt);
         if (val <= 0) {
             throw new IllegalArgumentException("val must > 0, current val: " + val);
         }
@@ -105,6 +110,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     @Override
     public ApfV6Generator addCountAndPassIfR0LessThan(long val, ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
+        checkPassCounterRange(cnt);
         if (val <= 0) {
             throw new IllegalArgumentException("val must > 0, current val: " + val);
         }

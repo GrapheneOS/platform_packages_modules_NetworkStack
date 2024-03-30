@@ -170,6 +170,7 @@ public class ApfFilter implements AndroidPacketFilter {
         public int acceptRaMinLft;
         public boolean shouldHandleLightDoze;
         public long minMetricsSessionDurationMs;
+        public boolean enableApfV6;
     }
 
     /** A wrapper class of {@link SystemClock} to be mocked in unit tests. */
@@ -281,6 +282,7 @@ public class ApfFilter implements AndroidPacketFilter {
     private final int mAcceptRaMinLft;
     private final boolean mShouldHandleLightDoze;
 
+    private final boolean mEnableApfV6;
     private final NetworkQuirkMetrics mNetworkQuirkMetrics;
     private final IpClientRaInfoMetrics mIpClientRaInfoMetrics;
     private final ApfSessionInfoMetrics mApfSessionInfoMetrics;
@@ -378,6 +380,7 @@ public class ApfFilter implements AndroidPacketFilter {
         mClock = clock;
         mSessionStartMs = mClock.elapsedRealtime();
         mMinMetricsSessionDurationMs = config.minMetricsSessionDurationMs;
+        mEnableApfV6 = config.enableApfV6;
 
         if (mApfCapabilities.hasDataAccess()) {
             mCountAndPassLabel = "countAndPass";
@@ -1946,8 +1949,12 @@ public class ApfFilter implements AndroidPacketFilter {
     @VisibleForTesting
     protected ApfV4GeneratorBase<?> emitPrologueLocked() throws IllegalInstructionException {
         // This is guaranteed to succeed because of the check in maybeCreate.
-        ApfV4GeneratorBase<ApfV4Generator> gen = new ApfV4Generator(
-                mApfCapabilities.apfVersionSupported);
+        ApfV4GeneratorBase<?> gen;
+        if (mEnableApfV6 && mApfCapabilities.apfVersionSupported > 4) {
+            gen = new ApfV6Generator().addData();
+        } else {
+            gen = new ApfV4Generator(mApfCapabilities.apfVersionSupported);
+        }
 
         if (mApfCapabilities.hasDataAccess()) {
             // Increment TOTAL_PACKETS
