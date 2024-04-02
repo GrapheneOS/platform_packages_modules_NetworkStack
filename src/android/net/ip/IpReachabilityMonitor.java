@@ -274,6 +274,12 @@ public class IpReachabilityMonitor {
                 IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION);
         mIgnoreOrganicNudFailure = dependencies.isFeatureEnabled(context,
                 IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION);
+        // TODO: for debugging flaky test only, revert it later.
+        Log.d(TAG, "mIgnoreIncompleteIpv6DnsServerEnabled: "
+                + mIgnoreIncompleteIpv6DnsServerEnabled);
+        Log.d(TAG, "mIgnoreIncompleteIpv6DefaultRouterEnabled: "
+                + mIgnoreIncompleteIpv6DefaultRouterEnabled);
+        Log.d(TAG, "mIgnoreOrganicNudFailure is " + mIgnoreOrganicNudFailure);
         mMetricsLog = metricsLog;
         mNetd = netd;
         Preconditions.checkNotNull(mNetd);

@@ -666,8 +666,8 @@ public class ApfFilter implements AndroidPacketFilter {
         private long mMinRioRouteLifetime = Long.MAX_VALUE;
         // Minimum lifetime of RDNSSs in packet, Long.MAX_VALUE means not seen.
         private long mMinRdnssLifetime = Long.MAX_VALUE;
-        // Minimum lifetime in packet
-        private final int mMinLifetime;
+        // The time in seconds in which some of the information contained in this RA expires.
+        private final int mExpirationTime;
         // When the packet was last captured, in seconds since Unix Epoch
         private final int mLastSeen;
 
@@ -984,7 +984,7 @@ public class ApfFilter implements AndroidPacketFilter {
                         break;
                 }
             }
-            mMinLifetime = minLifetime();
+            mExpirationTime = getExpirationTime();
         }
 
         public enum MatchType {
@@ -1097,14 +1097,13 @@ public class ApfFilter implements AndroidPacketFilter {
             return MatchType.MATCH_DROP;
         }
 
-        // What is the minimum of all lifetimes within {@code packet} in seconds?
-        // Precondition: matches(packet, length) already returned true.
-        private int minLifetime() {
+        // Get the number of seconds in which some of the information contained in this RA expires.
+        private int getExpirationTime() {
             // While technically most lifetimes in the RA are u32s, as far as the RA filter is
             // concerned, INT_MAX is still a *much* longer lifetime than any filter would ever
             // reasonably be active for.
-            // Clamp minLifetime at INT_MAX.
-            int minLifetime = Integer.MAX_VALUE;
+            // Clamp expirationTime at INT_MAX.
+            int expirationTime = Integer.MAX_VALUE;
             for (PacketSection section : mPacketSections) {
                 if (section.type != PacketSection.Type.LIFETIME) {
                     continue;
@@ -1114,14 +1113,14 @@ public class ApfFilter implements AndroidPacketFilter {
                     continue;
                 }
 
-                minLifetime = (int) Math.min(minLifetime, section.lifetime);
+                expirationTime = (int) Math.min(expirationTime, section.lifetime);
             }
-            return minLifetime;
+            return expirationTime;
         }
 
-        // Filter for a fraction of the lifetime and adjust for the age of the RA.
+        // Filter for a fraction of the expiration time and adjust for the age of the RA.
         int getRemainingFilterLft(int currentTimeSeconds) {
-            int filterLifetime = ((mMinLifetime / FRACTION_OF_LIFETIME_TO_FILTER)
+            int filterLifetime = ((mExpirationTime / FRACTION_OF_LIFETIME_TO_FILTER)
                     - (currentTimeSeconds - mLastSeen));
             filterLifetime = Math.max(0, filterLifetime);
             // Clamp filterLifetime to <= 65535, so it fits in 2 bytes.

@@ -182,6 +182,28 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
     }
 
     /**
+     * Add an instruction to the end of the program to encode int value as 4 bytes to output buffer.
+     */
+    public final Type addWrite32(int val) {
+        return addWriteU32((long) val & 0xffffffffL);
+    }
+
+    /**
+     * Add an instruction to the end of the program to write 4 bytes array to output buffer.
+     */
+    public final Type addWrite32(@NonNull byte[] bytes) {
+        Objects.requireNonNull(bytes);
+        if (bytes.length != 4) {
+            throw new IllegalArgumentException(
+                    "bytes array size must be 4, current size: " + bytes.length);
+        }
+        return addWrite32(((bytes[0] & 0xff) << 24)
+                | ((bytes[1] & 0xff) << 16)
+                | ((bytes[2] & 0xff) << 8)
+                | (bytes[3] & 0xff));
+    }
+
+    /**
      * Add an instruction to the end of the program to write 1 byte value from register to output
      * buffer.
      */
