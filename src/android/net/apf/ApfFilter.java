@@ -2271,7 +2271,7 @@ public class ApfFilter implements AndroidPacketFilter {
         if (context == null || config == null || ifParams == null) return null;
         ApfCapabilities apfCapabilities =  config.apfCapabilities;
         if (apfCapabilities == null) return null;
-        if (apfCapabilities.apfVersionSupported == 0) return null;
+        if (apfCapabilities.apfVersionSupported < 2) return null;
         if (apfCapabilities.maximumApfProgramSize < 512) {
             Log.e(TAG, "Unacceptably small APF limit: " + apfCapabilities.maximumApfProgramSize);
             return null;

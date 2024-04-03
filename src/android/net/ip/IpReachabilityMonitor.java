@@ -494,7 +494,9 @@ public class IpReachabilityMonitor {
                 }
             }
 
-            if (avoidingBadLinks() || !(ip instanceof Inet6Address)) {
+            final boolean avoidingBadLinks = avoidingBadLinks();
+            Log.d(TAG, "avoidingBadLinks: " + avoidingBadLinks);
+            if (avoidingBadLinks || !(ip instanceof Inet6Address)) {
                 // We should do this unconditionally, but alas we cannot: b/31827713.
                 whatIfLp.removeDnsServer(ip);
             }
@@ -533,6 +535,15 @@ public class IpReachabilityMonitor {
                 (mLinkProperties.isIpv4Provisioned() && !whatIfLp.isIpv4Provisioned())
                         || (mLinkProperties.isIpv6Provisioned() && !whatIfLp.isIpv6Provisioned()
                                 && !ignoreIncompleteIpv6Neighbor);
+        // TODO: for debugging flaky test only, delete it later.
+        Log.d(TAG, "lostProvisioning: " + lostProvisioning);
+        Log.d(TAG, "mLinkProperties.isIpv4Provisioned(): " + mLinkProperties.isIpv4Provisioned());
+        Log.d(TAG, "mLinkProperties.isIpv6Provisioned(): " + mLinkProperties.isIpv6Provisioned());
+        Log.d(TAG, "whatIfLp.isIpv6Provisioned(): " + whatIfLp.isIpv6Provisioned());
+        Log.d(TAG, "whatIfLp.isIpv4Provisioned(): " + whatIfLp.isIpv4Provisioned());
+        Log.d(TAG, "ignoreIncompleteIpv6Neighbor: " + ignoreIncompleteIpv6Neighbor);
+        Log.d(TAG, "IP address: " + ip);
+
         final NudEventType type = getNudFailureEventType(isFromProbe(),
                 isNudFailureDueToRoam(), lostProvisioning);
 
