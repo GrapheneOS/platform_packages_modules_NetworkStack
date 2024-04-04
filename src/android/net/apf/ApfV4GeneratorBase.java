@@ -402,13 +402,21 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
 
     /**
      * Add an instruction to the end of the program to jump to {@code tgt} if the bytes of the
-     * packet at an offset specified by {@code register} don't match {@code bytes}
-     * R=0 means check for not equal
+     * packet at an offset specified by register0 don't match {@code bytes}.
+     * R=0 means check for not equal.
      */
     public final Type addJumpIfBytesAtR0NotEqual(byte[] bytes, String tgt) {
         return append(new Instruction(Opcodes.JNEBS).addUnsigned(
                 bytes.length).setTargetLabel(tgt).setBytesImm(bytes));
     }
+
+    /**
+     * Add instructions to the end of the program to increase counter and drop packet if the
+     * bytes of the packet at an offset specified by register0 don't match {@code bytes}.
+     * WARNING: may modify R1
+     */
+    public abstract Type addCountAndDropIfBytesAtR0NotEqual(byte[] bytes,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException;
 
     /**
      * Add an instruction to the end of the program to load memory slot {@code slot} into

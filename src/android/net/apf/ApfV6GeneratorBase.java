@@ -419,7 +419,7 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
 
     /**
      * Add an instruction to the end of the program to jump to {@code tgt} if the bytes of the
-     * packet at an offset specified by {@code register} match {@code bytes}
+     * packet at an offset specified by register0 match {@code bytes}.
      * R=1 means check for equal.
      */
     public final Type addJumpIfBytesAtR0Equal(byte[] bytes, String tgt)
