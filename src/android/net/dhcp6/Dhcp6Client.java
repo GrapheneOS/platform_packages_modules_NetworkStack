@@ -748,7 +748,10 @@ public class Dhcp6Client extends StateMachine {
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
             final List<IaPrefixOption> toBeRenewed = mReply.getRenewableIaPrefixes();
-            if (toBeRenewed.isEmpty()) return false;
+            if (toBeRenewed.isEmpty()) {
+                if (DBG) Log.d(TAG, "Do not send Renew message due to no renewable prefix.");
+                return false;
+            }
             return sendRenewPacket(transId, elapsedTimeMs, mReply.build(toBeRenewed));
         }
     }
@@ -766,7 +769,10 @@ public class Dhcp6Client extends StateMachine {
         @Override
         protected boolean sendPacket(int transId, long elapsedTimeMs) {
             final List<IaPrefixOption> toBeRebound = mReply.getRenewableIaPrefixes();
-            if (toBeRebound.isEmpty()) return false;
+            if (toBeRebound.isEmpty()) {
+                if (DBG) Log.d(TAG, "Do not send Rebind message due to no renewable prefix.");
+                return false;
+            }
             return sendRebindPacket(transId, elapsedTimeMs, mReply.build(toBeRebound));
         }
     }

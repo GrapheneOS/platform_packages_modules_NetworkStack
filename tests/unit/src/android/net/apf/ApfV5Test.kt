@@ -242,6 +242,9 @@ class ApfV5Test {
             gen.addCountAndPassIfR0LessThan(3, DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
+            gen.addCountAndDropIfBytesAtR0NotEqual(byteArrayOf(1), PASSED_ARP)
+        }
+        assertFailsWith<IllegalArgumentException> {
             gen.addWrite32(byteArrayOf())
         }
 
@@ -265,6 +268,9 @@ class ApfV5Test {
         }
         assertFailsWith<IllegalArgumentException> {
             v4gen.addCountAndPassIfR0LessThan(3, DROPPED_ETH_BROADCAST)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            v4gen.addCountAndDropIfBytesAtR0NotEqual(byteArrayOf(1), PASSED_ARP)
         }
     }
 
@@ -809,6 +815,20 @@ class ApfV5Test {
         counterMap = decodeCountersIntoMap(dataRegion)
         expectedMap = getInitialMap()
         expectedMap[Counter.PASSED_ARP] = 1
+        assertEquals(expectedMap, counterMap)
+
+        program = getGenerator()
+                .addLoadImmediate(R0, 1)
+                .addCountAndDropIfBytesAtR0NotEqual(
+                        byteArrayOf(5, 5), DROPPED_ETH_BROADCAST)
+                .addPass()
+                .addCountTrampoline()
+                .generate()
+        dataRegion = ByteArray(Counter.totalSize()) { 0 }
+        assertVerdict(MIN_APF_VERSION_IN_DEV, DROP, program, testPacket, dataRegion)
+        counterMap = decodeCountersIntoMap(dataRegion)
+        expectedMap = getInitialMap()
+        expectedMap[DROPPED_ETH_BROADCAST] = 1
         assertEquals(expectedMap, counterMap)
     }
 
