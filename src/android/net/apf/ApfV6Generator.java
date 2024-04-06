@@ -126,6 +126,14 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
         return addJumpIfBytesAtR0Equal(bytes, tgt).addCountAndDrop(cnt).defineLabel(tgt);
     }
 
+    @Override
+    public ApfV6Generator addCountAndPassIfBytesAtR0NotEqual(byte[] bytes,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+        checkPassCounterRange(cnt);
+        final String tgt = getUniqueLabel();
+        return addJumpIfBytesAtR0Equal(bytes, tgt).addCountAndPass(cnt).defineLabel(tgt);
+    }
+
     private int mLabelCount = 0;
 
     /**

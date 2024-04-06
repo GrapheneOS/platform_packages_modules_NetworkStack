@@ -137,6 +137,14 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
                 mCountAndDropLabel);
     }
 
+    @Override
+    public ApfV4Generator addCountAndPassIfBytesAtR0NotEqual(byte[] bytes,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+        checkPassCounterRange(cnt);
+        return maybeAddLoadR1CounterOffset(cnt).addJumpIfBytesAtR0NotEqual(bytes,
+                mCountAndPassLabel);
+    }
+
     /**
      * Append the count & (pass|drop) trampoline, which increments the counter at the data address
      * pointed to by R1, then jumps to the (pass|drop) label. This saves a few bytes over inserting
