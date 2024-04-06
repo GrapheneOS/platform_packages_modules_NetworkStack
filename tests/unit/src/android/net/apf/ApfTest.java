@@ -1997,8 +1997,8 @@ public class ApfTest {
 
     private void verifyArpFilter(byte[] program, int filterResult) {
         // Verify ARP request packet
-        assertVerdict(filterResult, program, arpRequestBroadcast(MOCK_IPV4_ADDR));
-        assertDrop(program, arpRequestBroadcast(ANOTHER_IPV4_ADDR));
+        assertPass(program, arpRequestBroadcast(MOCK_IPV4_ADDR));
+        assertVerdict(filterResult, program, arpRequestBroadcast(ANOTHER_IPV4_ADDR));
         assertDrop(program, arpRequestBroadcast(IPV4_ANY_HOST_ADDR));
 
         // Verify ARP reply packets from different source ip
@@ -2025,17 +2025,17 @@ public class ApfTest {
         TestApfFilter apfFilter = new TestApfFilter(mContext, config, ipClientCallback,
                 mNetworkQuirkMetrics, mDependencies);
 
-        // Verify initially ARP request filter and GARP filter are on.
-        verifyArpFilter(ipClientCallback.assertProgramUpdateAndGet(), DROP);
+        // Verify initially ARP request filter is off, and GARP filter is on.
+        verifyArpFilter(ipClientCallback.assertProgramUpdateAndGet(), PASS);
 
         // Inform ApfFilter of our address and verify ARP filtering is on
         LinkAddress linkAddress = new LinkAddress(InetAddress.getByAddress(MOCK_IPV4_ADDR), 24);
         LinkProperties lp = new LinkProperties();
         assertTrue(lp.addLinkAddress(linkAddress));
-        verifyArpFilter(getProgram(ipClientCallback, apfFilter, lp), PASS);
+        verifyArpFilter(getProgram(ipClientCallback, apfFilter, lp), DROP);
 
-        // Inform ApfFilter of loss of IP and verify ARP filtering is on
-        verifyArpFilter(getProgram(ipClientCallback, apfFilter, new LinkProperties()), DROP);
+        // Inform ApfFilter of loss of IP and verify ARP filtering is off
+        verifyArpFilter(getProgram(ipClientCallback, apfFilter, new LinkProperties()), PASS);
     }
 
     private static byte[] arpReply(byte[] sip, byte[] tip) {

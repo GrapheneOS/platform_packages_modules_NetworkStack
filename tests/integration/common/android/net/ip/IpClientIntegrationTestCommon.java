@@ -4302,6 +4302,15 @@ public abstract class IpClientIntegrationTestCommon {
                 NetworkStackUtils.IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION,
                 isIgnoreOrganicNudFailureEnabled);
         final ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                 // We've found that mCm.shouldAvoidBadWifi() has a flaky behavior in the root test,
+                 // probably due to the sim card in the DUT. it doesn't occur in the siganture test
+                 // since we mock the return value directly. As a result, sometimes
+                 // IpReachabilityMonitor#avoidingBadLinks() returns false, it caused the expected
+                 // onReachabilityFailure callback wasn't triggered on the test. In order to make
+                 // the root test more stable, do not use MultinetworkPolicyTracker only for IPv6
+                 // neighbor reachability checking relevant test cases, that guarantees
+                 // avoidingBadLinks() always returns true which is expected.
+                .withoutMultinetworkPolicyTracker()
                 .build();
         startIpClientProvisioning(config);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(true);

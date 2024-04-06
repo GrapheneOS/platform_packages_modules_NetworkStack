@@ -339,6 +339,10 @@ public class ApfFilter implements AndroidPacketFilter {
     @GuardedBy("this")
     private int mIPv4PrefixLength;
 
+    // Whether CLAT is enabled.
+    @GuardedBy("this")
+    private boolean mHasClat;
+
     // mIsRunning is reflects the state of the ApfFilter during integration tests. ApfFilter can be
     // paused using "adb shell cmd apf <iface> <cmd>" commands. A paused ApfFilter will not install
     // any new programs, but otherwise operate normally.
@@ -1503,6 +1507,8 @@ public class ApfFilter implements AndroidPacketFilter {
         // if unicast ARP reply
         //   pass
         // if interface has no IPv4 address
+        //   if ARP request and clat enabled
+        //      drop
         //   if target ip is 0.0.0.0
         //      drop
         // else
@@ -1518,7 +1524,7 @@ public class ApfFilter implements AndroidPacketFilter {
         gen.addJumpIfBytesAtR0NotEqual(ARP_IPV4_HEADER, mCountAndDropLabel);
 
         gen.addLoad16(R0, ARP_OPCODE_OFFSET);
-        if (mIPv4Address == null) {
+        if (mHasClat && mIPv4Address == null) {
             // Drop if ARP REQUEST and we do not have an IPv4 address
             gen.addCountAndDropIfR0Equals(ARP_OPCODE_REQUEST,
                     Counter.DROPPED_ARP_REQUEST_NO_ADDRESS);
@@ -2382,12 +2388,14 @@ public class ApfFilter implements AndroidPacketFilter {
         // NOTE: Do not keep a copy of LinkProperties as it would further duplicate state.
         final LinkAddress ipv4Address = findIPv4LinkAddress(lp);
         final byte[] addr = (ipv4Address != null) ? ipv4Address.getAddress().getAddress() : null;
-        final int prefix = (ipv4Address != null) ? ipv4Address.getPrefixLength() : 0;
-        if ((prefix == mIPv4PrefixLength) && Arrays.equals(addr, mIPv4Address)) {
+        final int pfx = (ipv4Address != null) ? ipv4Address.getPrefixLength() : 0;
+        final boolean clat = lp.getAllInterfaceNames().contains("v4-" + mInterfaceParams.name);
+        if ((pfx == mIPv4PrefixLength) && Arrays.equals(addr, mIPv4Address) && (clat == mHasClat)) {
             return;
         }
         mIPv4Address = addr;
-        mIPv4PrefixLength = prefix;
+        mIPv4PrefixLength = pfx;
+        mHasClat = clat;
         installNewProgramLocked();
     }
 
