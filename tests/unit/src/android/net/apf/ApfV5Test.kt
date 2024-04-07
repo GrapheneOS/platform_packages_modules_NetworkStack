@@ -377,7 +377,7 @@ class ApfV5Test {
                 program
         )
         assertContentEquals(
-                listOf("0: drop         38"),
+                listOf("0: drop         37"),
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 

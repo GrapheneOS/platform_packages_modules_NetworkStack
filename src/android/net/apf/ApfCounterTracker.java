@@ -47,24 +47,25 @@ public class ApfCounterTracker {
         FILTER_AGE_16384THS,
         APF_VERSION,
         APF_PROGRAM_ID,
-        PASSED_ARP,  // see also MIN_PASS_COUNTER below
+        // TODO: removing PASSED_ARP after remove LegacyApfFilter.java
+        PASSED_ARP,  // see also MIN_PASS_COUNTER below.
+        PASSED_ARP_BROADCAST_REPLY,
+        // TODO: removing PASSED_ARP_NON_IPV4 after remove LegacyApfFilter.java
+        PASSED_ARP_NON_IPV4,
+        PASSED_ARP_REQUEST,
+        PASSED_ARP_UNICAST_REPLY,
+        PASSED_ARP_UNKNOWN,
         PASSED_DHCP,
         PASSED_IPV4,
         PASSED_IPV6_NON_ICMP,
         PASSED_IPV4_UNICAST,
         PASSED_IPV6_ICMP,
         PASSED_IPV6_UNICAST_NON_ICMP,
-        PASSED_ARP_NON_IPV4,
-        PASSED_ARP_UNKNOWN,
-        PASSED_ARP_UNICAST_REPLY,
         PASSED_NON_IP_UNICAST,
         PASSED_MDNS,
         PASSED_MLD,  // see also MAX_PASS_COUNTER below
         DROPPED_ETH_BROADCAST,  // see also MIN_DROP_COUNTER below
         DROPPED_RA,
-        DROPPED_GARP_REPLY,
-        DROPPED_ARP_OTHER_HOST,
-        DROPPED_ARP_REQUEST_NO_ADDRESS,
         DROPPED_IPV4_L2_BROADCAST,
         DROPPED_IPV4_BROADCAST_ADDR,
         DROPPED_IPV4_BROADCAST_NET,
@@ -76,14 +77,18 @@ public class ApfCounterTracker {
         DROPPED_IPV6_NON_ICMP_MULTICAST,
         DROPPED_802_3_FRAME,
         DROPPED_ETHERTYPE_DENYLISTED,
-        DROPPED_ARP_REPLY_SPA_NO_HOST,
         DROPPED_IPV4_KEEPALIVE_ACK,
         DROPPED_IPV6_KEEPALIVE_ACK,
         DROPPED_IPV4_NATT_KEEPALIVE,
         DROPPED_MDNS,
         DROPPED_IPV4_TCP_PORT7_UNICAST,
         DROPPED_ARP_NON_IPV4,
-        DROPPED_ARP_UNKNOWN;  // see also MAX_DROP_COUNTER below
+        DROPPED_ARP_OTHER_HOST,
+        DROPPED_ARP_REPLY_SPA_NO_HOST,
+        DROPPED_ARP_REQUEST_ANYHOST,
+        DROPPED_ARP_REQUEST_NO_ADDRESS,
+        DROPPED_ARP_UNKNOWN,
+        DROPPED_GARP_REPLY;  // see also MAX_DROP_COUNTER below
 
         /**
          * Returns the negative byte offset from the end of the APF data segment for
@@ -110,7 +115,7 @@ public class ApfCounterTracker {
     }
 
     public static final Counter MIN_DROP_COUNTER = Counter.DROPPED_ETH_BROADCAST;
-    public static final Counter MAX_DROP_COUNTER = Counter.DROPPED_ARP_UNKNOWN;
+    public static final Counter MAX_DROP_COUNTER = Counter.DROPPED_GARP_REPLY;
     public static final Counter MIN_PASS_COUNTER = Counter.PASSED_ARP;
     public static final Counter MAX_PASS_COUNTER = Counter.PASSED_MLD;
 
