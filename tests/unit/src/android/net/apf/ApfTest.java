@@ -1999,7 +1999,7 @@ public class ApfTest {
         // Verify ARP request packet
         assertPass(program, arpRequestBroadcast(MOCK_IPV4_ADDR));
         assertVerdict(filterResult, program, arpRequestBroadcast(ANOTHER_IPV4_ADDR));
-        assertDrop(program, arpRequestBroadcast(IPV4_ANY_HOST_ADDR));
+        assertVerdict(filterResult, program, arpRequestBroadcast(IPV4_ANY_HOST_ADDR));
 
         // Verify ARP reply packets from different source ip
         assertDrop(program, arpReply(IPV4_ANY_HOST_ADDR, IPV4_ANY_HOST_ADDR));

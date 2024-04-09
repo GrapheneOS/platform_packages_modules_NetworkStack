@@ -328,7 +328,7 @@ class ApfV5Test {
                 program
         )
         assertContentEquals(
-                listOf("0: pass         129"),
+                listOf("0: pass        counter=129"),
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 
@@ -345,7 +345,7 @@ class ApfV5Test {
                 program
         )
         assertContentEquals(
-                listOf("0: drop         1000"),
+                listOf("0: drop        counter=1000"),
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 
@@ -361,7 +361,7 @@ class ApfV5Test {
                 program
         )
         assertContentEquals(
-                listOf("0: pass         10"),
+                listOf("0: pass        counter=10"),
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 
@@ -377,7 +377,7 @@ class ApfV5Test {
                 program
         )
         assertContentEquals(
-                listOf("0: drop         37"),
+                listOf("0: drop        counter=37"),
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 

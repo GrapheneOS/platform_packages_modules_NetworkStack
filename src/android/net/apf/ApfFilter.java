@@ -1499,20 +1499,14 @@ public class ApfFilter implements AndroidPacketFilter {
         //      drop
         // pass
 
-        final String checkTargetIPv4 = "checkTargetIPv4";
+        final String checkArpRequest = "checkArpRequest";
 
         // Drop if not ARP IPv4.
         gen.addLoadImmediate(R0, ARP_HEADER_OFFSET);
         gen.addCountAndDropIfBytesAtR0NotEqual(ARP_IPV4_HEADER, Counter.DROPPED_ARP_NON_IPV4);
 
         gen.addLoad16(R0, ARP_OPCODE_OFFSET);
-        if (mHasClat && mIPv4Address == null) {
-            // Drop if ARP REQUEST and we do not have an IPv4 address
-            gen.addCountAndDropIfR0Equals(ARP_OPCODE_REQUEST,
-                    Counter.DROPPED_ARP_REQUEST_NO_ADDRESS);
-        } else {
-            gen.addJumpIfR0Equals(ARP_OPCODE_REQUEST, checkTargetIPv4); // Skip to unicast check
-        }
+        gen.addJumpIfR0Equals(ARP_OPCODE_REQUEST, checkArpRequest); // Skip to unicast check
         // Drop if unknown ARP opcode.
         gen.addCountAndDropIfR0NotEquals(ARP_OPCODE_REPLY, Counter.DROPPED_ARP_UNKNOWN);
 
@@ -1524,20 +1518,36 @@ public class ApfFilter implements AndroidPacketFilter {
         gen.addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET);
         gen.addCountAndPassIfBytesAtR0NotEqual(ETHER_BROADCAST, Counter.PASSED_ARP_UNICAST_REPLY);
 
-        // Either a request, or a broadcast reply.
-        gen.defineLabel(checkTargetIPv4);
+        // It is a broadcast reply.
         if (mIPv4Address == null) {
             // When there is no IPv4 address, drop GARP replies (b/29404209).
             gen.addLoad32(R0, ARP_TARGET_IP_ADDRESS_OFFSET);
             gen.addCountAndDropIfR0Equals(IPV4_ANY_HOST_ADDRESS, Counter.DROPPED_GARP_REPLY);
         } else {
-            // When there is an IPv4 address, drop unicast/broadcast requests
-            // and broadcast replies with a different target IPv4 address.
+            // When there is an IPv4 address, drop broadcast replies with a different target IPv4
+            // address.
             gen.addLoadImmediate(R0, ARP_TARGET_IP_ADDRESS_OFFSET);
             gen.addCountAndDropIfBytesAtR0NotEqual(mIPv4Address, Counter.DROPPED_ARP_OTHER_HOST);
         }
+        gen.addCountAndPass(Counter.PASSED_ARP_BROADCAST_REPLY);
 
-        gen.addCountAndPass(Counter.PASSED_ARP);
+        // It is a request
+        gen.defineLabel(checkArpRequest);
+        if (mIPv4Address == null) {
+            // When there is no IPv4 address, drop arp request if the address is any host address.
+            if (mHasClat) {
+                // Drop if ARP REQUEST and we do not have an IPv4 address
+                gen.addCountAndDrop(Counter.DROPPED_ARP_REQUEST_NO_ADDRESS);
+            }
+            // If we're not clat, and we don't have an ipv4 address, allow all ARP request to avoid
+            // racing against DHCP.
+        } else {
+            // When there is an IPv4 address, drop unicast/broadcast requests with a different
+            // target IPv4 address.
+            gen.addLoadImmediate(R0, ARP_TARGET_IP_ADDRESS_OFFSET);
+            gen.addCountAndDropIfBytesAtR0NotEqual(mIPv4Address, Counter.DROPPED_ARP_OTHER_HOST);
+        }
+        gen.addCountAndPass(Counter.PASSED_ARP_REQUEST);
     }
 
     /**
