@@ -373,6 +373,11 @@ public class LegacyApfFilter implements AndroidPacketFilter {
     @GuardedBy("this")
     private int mIPv4PrefixLength;
 
+    // mIsRunning is reflects the state of the LegacyApfFilter during integration tests.
+    // LegacyApfFilter can be paused using "adb shell cmd apf <iface> <cmd>" commands. A paused
+    // LegacyApfFilter will not install any new programs, but otherwise operates normally.
+    private volatile boolean mIsRunning = true;
+
     private final ApfFilter.Dependencies mDependencies;
 
     @VisibleForTesting
@@ -432,7 +437,9 @@ public class LegacyApfFilter implements AndroidPacketFilter {
 
     public synchronized void setDataSnapshot(byte[] data) {
         mDataSnapshot = data;
-        mApfCounterTracker.updateCountersFromData(data);
+        if (mIsRunning) {
+            mApfCounterTracker.updateCountersFromData(data);
+        }
     }
 
     private void log(String s) {
@@ -485,7 +492,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
                 // Clear the APF memory to reset all counters upon connecting to the first AP
                 // in an SSID. This is limited to APFv4 devices because this large write triggers
                 // a crash on some older devices (b/78905546).
-                if (mApfCapabilities.hasDataAccess()) {
+                if (mIsRunning && mApfCapabilities.hasDataAccess()) {
                     byte[] zeroes = new byte[mApfCapabilities.maximumApfProgramSize];
                     if (!mIpClientCallback.installPacketFilter(zeroes)) {
                         sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
@@ -1905,7 +1912,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
             sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_GENERATE_FILTER_EXCEPTION);
             return;
         }
-        if (!mIpClientCallback.installPacketFilter(program)) {
+        if (mIsRunning && !mIpClientCallback.installPacketFilter(program)) {
             sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
         }
         mLastTimeInstalledProgram = mProgramBaseTime;
@@ -2240,6 +2247,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
 
     public synchronized void dump(IndentingPrintWriter pw) {
         pw.println("Capabilities: " + mApfCapabilities);
+        pw.println("Filter update status: " + (mIsRunning ? "RUNNING" : "PAUSED"));
         pw.println("Receive thread: " + (mReceiveThread != null ? "RUNNING" : "STOPPED"));
         pw.println("Multicast: " + (mMulticastFilter ? "DROP" : "ALLOW"));
         pw.println("Minimum RDNSS lifetime: " + mMinRdnssLifetimeSec);
@@ -2392,5 +2400,31 @@ public class LegacyApfFilter implements AndroidPacketFilter {
         if (mNetworkQuirkMetrics == null) return;
         mNetworkQuirkMetrics.setEvent(event);
         mNetworkQuirkMetrics.statsWrite();
+    }
+
+    /**
+     * Indicates whether the ApfFilter is currently running / paused for test and debugging
+     * purposes.
+     */
+    public boolean isRunning() {
+        return mIsRunning;
+    }
+
+    /** Pause ApfFilter updates for testing purposes. */
+    public void pause() {
+        mIsRunning = false;
+    }
+
+    /** Resume ApfFilter updates for testing purposes. */
+    public void resume() {
+        mIsRunning = true;
+    }
+
+    /** Return hex string of current APF snapshot for testing purposes. */
+    public synchronized @Nullable String getDataSnapshotHexString() {
+        if (mDataSnapshot == null) {
+            return null;
+        }
+        return HexDump.toHexString(mDataSnapshot, 0, mDataSnapshot.length, false /* lowercase */);
     }
 }

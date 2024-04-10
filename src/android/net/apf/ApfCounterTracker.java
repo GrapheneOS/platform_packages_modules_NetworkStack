@@ -86,8 +86,8 @@ public class ApfCounterTracker {
         DROPPED_ARP_OTHER_HOST,
         DROPPED_ARP_REPLY_SPA_NO_HOST,
         DROPPED_ARP_REQUEST_ANYHOST,
-        DROPPED_ARP_REQUEST_NO_ADDRESS,
         DROPPED_ARP_UNKNOWN,
+        DROPPED_ARP_V6_ONLY,
         DROPPED_GARP_REPLY;  // see also MAX_DROP_COUNTER below
 
         /**

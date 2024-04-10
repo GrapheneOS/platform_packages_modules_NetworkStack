@@ -61,9 +61,9 @@ public class DnsUtils {
      * is much easier than subtracting 1 (which can't be done just by adding -1, because that just
      * adds 254).
      */
-    private static final int SLOT_NEGATIVE_QDCOUNT_REMAINING = 6;
+    private static final int SLOT_NEGATIVE_QDCOUNT_REMAINING = 4;
     /** Memory slot used by the jump table. */
-    private static final int SLOT_RETURN_VALUE_INDEX = 10;
+    private static final int SLOT_RETURN_VALUE_INDEX = 5;
 
     /**
      * APF function: parse_dns_label

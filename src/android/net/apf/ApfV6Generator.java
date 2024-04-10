@@ -19,12 +19,21 @@ import static android.net.apf.BaseApfGenerator.Register.R1;
 
 import com.android.internal.annotations.VisibleForTesting;
 
+import java.util.Objects;
+
 /**
  * APFv6 assembler/generator. A tool for generating an APFv6 program.
  *
  * @hide
  */
 public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
+    /**
+     * Returns true if we support the specified {@code version}, otherwise false.
+     */
+    public static boolean supportsVersion(int version) {
+        return version >= APF_VERSION_6;
+    }
+
     /**
      * Creates an ApfV6Generator instance which is able to emit instructions for the specified
      * {@code version} of the APF interpreter. Throws {@code IllegalInstructionException} if
@@ -33,6 +42,20 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
     public ApfV6Generator() throws IllegalInstructionException {
         super();
+        addData(new byte[0]);
+    }
+
+    /**
+     * Creates an ApfV6Generator instance which is able to emit instructions for the specified
+     * {@code version} of the APF interpreter. Throws {@code IllegalInstructionException} if
+     * the requested version is unsupported.
+     * Initializes the data region with {@code bytes}.
+     */
+    @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
+    public ApfV6Generator(byte[] bytes) throws IllegalInstructionException {
+        super();
+        Objects.requireNonNull(bytes);
+        addData(bytes);
     }
 
     @Override
@@ -134,13 +157,16 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
         return addJumpIfBytesAtR0Equal(bytes, tgt).addCountAndPass(cnt).defineLabel(tgt);
     }
 
-    private int mLabelCount = 0;
+    @Override
+    public ApfV6Generator addLoadCounter(Register register, ApfCounterTracker.Counter counter)
+            throws IllegalInstructionException {
+        return append(new Instruction(Opcodes.LDDW, register).addUnsigned(counter.value()));
+    }
 
-    /**
-     * Return a unique label string.
-     */
-    private String getUniqueLabel() {
-        return "LABEL_" + mLabelCount++;
+    @Override
+    public ApfV6Generator addStoreCounter(ApfCounterTracker.Counter counter, Register register)
+            throws IllegalInstructionException {
+        return append(new Instruction(Opcodes.STDW, register).addUnsigned(counter.value()));
     }
 
     /**

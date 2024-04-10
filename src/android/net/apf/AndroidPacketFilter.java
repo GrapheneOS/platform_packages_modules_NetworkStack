@@ -84,18 +84,14 @@ public interface AndroidPacketFilter {
      * Indicates whether the ApfFilter is currently running / paused for test and debugging
      * purposes.
      */
-    default boolean isRunning() {
-        return true;
-    }
+    boolean isRunning();
 
     /** Pause ApfFilter updates for testing purposes. */
-    default void pause() {}
+    void pause();
 
     /** Resume ApfFilter updates for testing purposes. */
-    default void resume() {}
+    void resume();
 
     /** Return hex string of current APF snapshot for testing purposes. */
-    default @Nullable String getDataSnapshotHexString() {
-        return null;
-    }
+    @Nullable String getDataSnapshotHexString();
 }

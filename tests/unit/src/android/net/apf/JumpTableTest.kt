@@ -61,14 +61,14 @@ class JumpTableTest {
     @Test
     fun testValidSlotNumbers() {
         JumpTable("my_jump_table", 1)
-        JumpTable("my_jump_table", 10)
-        JumpTable("my_jump_table", 12)
+        JumpTable("my_jump_table", 4)
+        JumpTable("my_jump_table", 6)
     }
 
     @Test
     fun testGetStartLabel() {
         assertEquals("xyz", JumpTable("xyz", 3).startLabel)
-        assertEquals("abc", JumpTable("abc", 9).startLabel)
+        assertEquals("abc", JumpTable("abc", 5).startLabel)
     }
 
     @Test

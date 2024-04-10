@@ -180,6 +180,10 @@ public abstract class BaseApfGenerator {
     public enum Register {
         R0,
         R1;
+
+        Register other() {
+            return (this == R0) ? R1 : R0;
+        }
     }
 
     public enum Rbit {
@@ -750,17 +754,19 @@ public abstract class BaseApfGenerator {
         return bytecode;
     }
 
-    /**
-     * Returns true if the BaseApfGenerator supports the specified {@code version}, otherwise false.
-     */
-    public static boolean supportsVersion(int version) {
-        return version >= MIN_APF_VERSION;
-    }
-
     void requireApfVersion(int minimumVersion) throws IllegalInstructionException {
         if (mVersion < minimumVersion) {
             throw new IllegalInstructionException("Requires APF >= " + minimumVersion);
         }
+    }
+
+    private int mLabelCount = 0;
+
+    /**
+     * Return a unique label string.
+     */
+    protected String getUniqueLabel() {
+        return "LABEL_" + mLabelCount++;
     }
 
     /**
@@ -809,7 +815,7 @@ public abstract class BaseApfGenerator {
      * First memory slot containing prefilled values. Can be used in range comparisons to determine
      * if memory slot index is within prefilled slots.
      */
-    public static final int FIRST_PREFILLED_MEMORY_SLOT = IPV4_HEADER_SIZE_MEMORY_SLOT;
+    public static final int FIRST_PREFILLED_MEMORY_SLOT = 8;
 
     /**
      * Last memory slot containing prefilled values. Can be used in range comparisons to determine
@@ -818,9 +824,9 @@ public abstract class BaseApfGenerator {
     public static final int LAST_PREFILLED_MEMORY_SLOT = FILTER_AGE_MEMORY_SLOT;
 
     // This version number syncs up with APF_VERSION in hardware/google/apf/apf_interpreter.h
-    public static final int MIN_APF_VERSION = 2;
-    public static final int MIN_APF_VERSION_IN_DEV = 5;
+    public static final int APF_VERSION_2 = 2;
     public static final int APF_VERSION_4 = 4;
+    public static final int APF_VERSION_6 = 6;
 
 
     final ArrayList<Instruction> mInstructions = new ArrayList<Instruction>();
