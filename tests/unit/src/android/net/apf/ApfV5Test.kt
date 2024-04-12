@@ -15,14 +15,22 @@
  */
 package android.net.apf
 
+import android.content.Context
+import android.net.LinkAddress
+import android.net.LinkProperties
 import android.net.apf.ApfCounterTracker.Counter
+import android.net.apf.ApfCounterTracker.Counter.APF_PROGRAM_ID
+import android.net.apf.ApfCounterTracker.Counter.APF_VERSION
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REQUEST_REPLIED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_DENYLISTED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETH_BROADCAST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP
 import android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS
+import android.net.apf.ApfFilter.Dependencies
 import android.net.apf.ApfTestUtils.DROP
 import android.net.apf.ApfTestUtils.MIN_PKT_SIZE
 import android.net.apf.ApfTestUtils.PASS
+import android.net.apf.ApfTestUtils.TestApfFilter
 import android.net.apf.ApfTestUtils.assertDrop
 import android.net.apf.ApfTestUtils.assertPass
 import android.net.apf.ApfTestUtils.assertVerdict
@@ -33,20 +41,31 @@ import android.net.apf.BaseApfGenerator.DROP_LABEL
 import android.net.apf.BaseApfGenerator.IllegalInstructionException
 import android.net.apf.BaseApfGenerator.Register.R0
 import android.net.apf.BaseApfGenerator.Register.R1
+import android.system.OsConstants.ARPHRD_ETHER
 import androidx.test.filters.SmallTest
 import androidx.test.runner.AndroidJUnit4
 import com.android.net.module.util.HexDump
+import com.android.net.module.util.NetworkStackConstants.ARP_ETHER_IPV4_LEN
+import com.android.net.module.util.NetworkStackConstants.ARP_REPLY
+import com.android.net.module.util.NetworkStackConstants.ARP_REQUEST
 import com.android.net.module.util.Struct
+import com.android.net.module.util.arp.ArpPacket
 import com.android.net.module.util.structs.EthernetHeader
 import com.android.net.module.util.structs.Ipv4Header
 import com.android.net.module.util.structs.UdpHeader
+import com.android.networkstack.metrics.NetworkQuirkMetrics
+import java.net.InetAddress
 import java.nio.ByteBuffer
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import org.junit.After
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.Mock
+import org.mockito.Mockito
+import org.mockito.MockitoAnnotations
 
 /**
  * Tests for APFv6 specific instructions.
@@ -55,11 +74,32 @@ import org.junit.runner.RunWith
 @SmallTest
 class ApfV5Test {
 
+    @Mock
+    private lateinit var context: Context
+
+    @Mock
+    private lateinit var metrics: NetworkQuirkMetrics
+
+    @Mock
+    private lateinit var dependencies: Dependencies
+
     private val testPacket = byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8,
                                          9, 10, 11, 12, 13, 14, 15, 16)
+    private val hostIpv4Address = byteArrayOf(10, 0, 0, 1)
+    private val senderIpv4Address = byteArrayOf(10, 0, 0, 2)
+    private val arpBroadcastMacAddress = intArrayOf(0xff, 0xff, 0xff, 0xff, 0xff, 0xff)
+            .map { it.toByte() }.toByteArray()
+    private val senderMacAddress = intArrayOf(0x11, 0x22, 0x33, 0x44, 0x55, 0x66)
+            .map { it.toByte() }.toByteArray()
+
+    @Before
+    fun setUp() {
+        MockitoAnnotations.initMocks(this)
+    }
 
     @After
     fun tearDown() {
+        Mockito.framework().clearInlineMocks()
         ApfJniUtils.resetTransmittedPacketMemory()
     }
 
@@ -936,7 +976,7 @@ class ApfV5Test {
                 .addAllocate(14)
                 // len: 13 is less than ETH_HLEN, trigger transmit failure.
                 .addLoadImmediate(R0, 13)
-                .addStoreToMemory(R0, 10)
+                .addStoreToMemory(10, R0)
                 .addTransmitWithoutChecksum()
                 .addDrop()
                 .generate()
@@ -1202,11 +1242,67 @@ class ApfV5Test {
         assertEquals(0xff, ApfCounterTracker.getCounterValue(counterBytes, Counter.TOTAL_PACKETS))
     }
 
+    @Test
+    fun testArpTransmit() {
+        val ipClientCallback = ApfTestUtils.MockIpClientCallback()
+        val apfFilter = TestApfFilter(
+                context,
+                getDefaultConfig(),
+                ipClientCallback,
+                metrics,
+                dependencies
+        )
+        val linkAddress = LinkAddress(InetAddress.getByAddress(hostIpv4Address), 24)
+        val lp = LinkProperties()
+        lp.addLinkAddress(linkAddress)
+        ipClientCallback.resetApfProgramWait()
+        apfFilter.setLinkProperties(lp)
+        val program = ipClientCallback.assertProgramUpdateAndGet()
+        val receivedArpPacketBuf = ArpPacket.buildArpPacket(
+                arpBroadcastMacAddress,
+                senderMacAddress,
+                hostIpv4Address,
+                HexDump.hexStringToByteArray("000000000000"),
+                senderIpv4Address,
+                ARP_REQUEST.toShort()
+        )
+        val receivedArpPacket = ByteArray(ARP_ETHER_IPV4_LEN)
+        receivedArpPacketBuf.get(receivedArpPacket)
+        val data = ByteArray(Counter.totalSize()) { 0 }
+        assertVerdict(APF_VERSION_6, DROP, program, receivedArpPacket, data)
+
+        val transmittedPacket = ApfJniUtils.getTransmittedPacket()
+        val expectedArpReplyBuf = ArpPacket.buildArpPacket(
+                senderMacAddress,
+                apfFilter.mHardwareAddress,
+                senderIpv4Address,
+                senderMacAddress,
+                hostIpv4Address,
+                ARP_REPLY.toShort()
+        )
+        val expectedArpReplyPacket = ByteArray(ARP_ETHER_IPV4_LEN)
+        expectedArpReplyBuf.get(expectedArpReplyPacket)
+        assertContentEquals(
+                expectedArpReplyPacket + ByteArray(18) {0},
+                transmittedPacket
+        )
+        assertEquals(
+                mapOf<Counter, Long>(
+                        TOTAL_PACKETS to 1,
+                        DROPPED_ARP_REQUEST_REPLIED to 1
+                ),
+                decodeCountersIntoMap(data)
+        )
+        apfFilter.shutdown()
+    }
+
     private fun decodeCountersIntoMap(counterBytes: ByteArray): Map<Counter, Long> {
         val counters = Counter::class.java.enumConstants
         val ret = HashMap<Counter, Long>()
+        val skippedCounters = setOf(APF_PROGRAM_ID, APF_VERSION)
         // starting from index 2 to skip the endianness mark
         for (c in listOf(*counters).subList(2, counters.size)) {
+            if (c in skippedCounters) continue
             val value = ApfCounterTracker.getCounterValue(counterBytes, c)
             if (value != 0L) {
                 ret[c] = value
@@ -1226,6 +1322,17 @@ class ApfV5Test {
                 this.take(3)
         )
         return this.drop(3).toByteArray()
+    }
+
+    private fun getDefaultConfig(): ApfFilter.ApfConfiguration {
+        val config = ApfFilter.ApfConfiguration()
+        config.apfCapabilities =
+                ApfCapabilities(APF_VERSION_6, 4096, ARPHRD_ETHER)
+        config.multicastFilter = false
+        config.ieee802_3Filter = false
+        config.ethTypeBlackList = IntArray(0)
+        config.enableApfV6 = true
+        return config
     }
 
     companion object {

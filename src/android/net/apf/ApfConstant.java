@@ -99,4 +99,11 @@ public final class ApfConstant {
             ETH_HEADER_LEN + UDP_HEADER_LEN + DNS_QDCOUNT_OFFSET;
     public static final int MDNS_QNAME_OFFSET =
             ETH_HEADER_LEN + UDP_HEADER_LEN + DNS_HEADER_LEN;
+
+    /**
+     * Fixed byte sequence representing the following part of the ARP reply header:
+     * EtherType + HTYPE + PTYPE + HLEN + PLEN + ops reply (0x0002)
+     */
+    public static final byte[] FIXED_ARP_REPLY_HEADER =
+            new byte[]{0x08, 0x06, 0x00, 0x01, 0x08, 0x00, 0x06, 0x04, 0x00, 0x02};
 }

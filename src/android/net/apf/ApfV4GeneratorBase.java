@@ -439,7 +439,7 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      * Add an instruction to the end of the program to store {@code register} into memory slot
      * {@code slot}.
      */
-    public final Type addStoreToMemory(Register r, int slot)
+    public final Type addStoreToMemory(int slot, Register r)
             throws IllegalInstructionException {
         return append(new Instruction(ExtendedOpcodes.STM, slot, r));
     }

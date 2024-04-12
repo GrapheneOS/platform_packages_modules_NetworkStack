@@ -653,7 +653,7 @@ public class ApfTest {
         // Test store to memory.
         gen = new ApfV4Generator(APF_VERSION_2);
         gen.addLoadImmediate(R1, 1234567890);
-        gen.addStoreToMemory(R1, 12);
+        gen.addStoreToMemory(12, R1);
         gen.addLoadFromMemory(R0, 12);
         gen.addJumpIfR0Equals(1234567890, DROP_LABEL);
         assertDrop(gen);

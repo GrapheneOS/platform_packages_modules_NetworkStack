@@ -154,7 +154,7 @@ public class Bpf2Apf {
                                 memory_slot <= gen.LAST_PREFILLED_MEMORY_SLOT)) {
                     throw new IllegalArgumentException("Unhandled instruction: " + line);
                 }
-                gen.addStoreToMemory(src, memory_slot);
+                gen.addStoreToMemory(memory_slot, src);
                 break;
             case "add":
             case "and":

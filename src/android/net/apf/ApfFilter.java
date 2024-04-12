@@ -34,6 +34,7 @@ import static android.net.apf.ApfConstant.ETH_MULTICAST_MDNS_V4_MAC_ADDRESS;
 import static android.net.apf.ApfConstant.ETH_MULTICAST_MDNS_V6_MAC_ADDRESS;
 import static android.net.apf.ApfConstant.ETH_TYPE_MAX;
 import static android.net.apf.ApfConstant.ETH_TYPE_MIN;
+import static android.net.apf.ApfConstant.FIXED_ARP_REPLY_HEADER;
 import static android.net.apf.ApfConstant.ICMP6_TYPE_OFFSET;
 import static android.net.apf.ApfConstant.IPPROTO_HOPOPTS;
 import static android.net.apf.ApfConstant.IPV4_ANY_HOST_ADDRESS;
@@ -61,6 +62,7 @@ import static android.net.apf.BaseApfGenerator.IPV4_HEADER_SIZE_MEMORY_SLOT;
 import static android.net.apf.BaseApfGenerator.PACKET_SIZE_MEMORY_SLOT;
 import static android.net.apf.BaseApfGenerator.Register.R0;
 import static android.net.apf.BaseApfGenerator.Register.R1;
+import static android.net.apf.BaseApfGenerator.TX_BUFFER_OUTPUT_POINTER_MEMORY_SLOT;
 import static android.net.util.SocketUtils.makePacketSocketAddress;
 import static android.os.PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED;
 import static android.os.PowerManager.ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED;
@@ -75,11 +77,14 @@ import static android.system.OsConstants.IPPROTO_UDP;
 import static android.system.OsConstants.SOCK_CLOEXEC;
 import static android.system.OsConstants.SOCK_RAW;
 
+import static com.android.net.module.util.NetworkStackConstants.ETHER_ADDR_LEN;
 import static com.android.net.module.util.NetworkStackConstants.ETHER_BROADCAST;
+import static com.android.net.module.util.NetworkStackConstants.ETHER_SRC_ADDR_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ECHO_REQUEST_TYPE;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_NEIGHBOR_ADVERTISEMENT;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_SOLICITATION;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_LEN;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_LEN;
 
 import android.content.BroadcastReceiver;
@@ -1461,6 +1466,13 @@ public class ApfFilter implements AndroidPacketFilter {
     @GuardedBy("this")
     private int mMaxDistinctRas = 0;
 
+    private ApfV6Generator tryToConvertToApfV6Generator(ApfV4GeneratorBase<?> gen) {
+        if (gen instanceof ApfV6Generator) {
+            return (ApfV6Generator) gen;
+        }
+        return null;
+    }
+
     /**
      * Generate filter code to process ARP packets. Execution of this code ends in either the
      * DROP_LABEL or PASS_LABEL and does not fall off the end.
@@ -1549,6 +1561,24 @@ public class ApfFilter implements AndroidPacketFilter {
             gen.addLoad32(R0, ARP_TARGET_IP_ADDRESS_OFFSET);
             gen.addCountAndDropIfR0NotEquals(bytesToBEInt(mIPv4Address),
                     Counter.DROPPED_ARP_OTHER_HOST);
+
+            ApfV6Generator v6Gen = tryToConvertToApfV6Generator(gen);
+            if (mHardwareAddress != null && v6Gen != null) {
+                // Ethernet requires that all packets be at least 60 bytes long
+                v6Gen.addAllocate(60)
+                        .addPacketCopy(ETHER_SRC_ADDR_OFFSET, ETHER_ADDR_LEN)
+                        .addDataCopy(mHardwareAddress)
+                        .addDataCopy(FIXED_ARP_REPLY_HEADER)
+                        .addDataCopy(mHardwareAddress)
+                        .addWrite32(mIPv4Address)
+                        .addPacketCopy(ETHER_SRC_ADDR_OFFSET, ETHER_ADDR_LEN)
+                        .addPacketCopy(ARP_SOURCE_IP_ADDRESS_OFFSET, IPV4_ADDR_LEN)
+                        .addLoadFromMemory(R0, TX_BUFFER_OUTPUT_POINTER_MEMORY_SLOT)
+                        .addAdd(18)
+                        .addStoreToMemory(TX_BUFFER_OUTPUT_POINTER_MEMORY_SLOT, R0)
+                        .addTransmitWithoutChecksum()
+                        .addCountAndDrop(Counter.DROPPED_ARP_REQUEST_REPLIED);
+            }
         }
         // If we're not clat, and we don't have an ipv4 address, allow all ARP request to avoid
         // racing against DHCP.

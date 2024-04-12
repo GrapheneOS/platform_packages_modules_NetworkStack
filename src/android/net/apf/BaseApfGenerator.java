@@ -789,6 +789,11 @@ public abstract class BaseApfGenerator {
     public static final int MEMORY_SLOTS = 16;
 
     /**
+     * Slot #10 starts at zero, implicitly used as tx buffer output pointer.
+     */
+    public static final int TX_BUFFER_OUTPUT_POINTER_MEMORY_SLOT = 10;
+
+    /**
      * Memory slot number that is prefilled with the IPv4 header length.
      * Note that this memory slot may be overwritten by a program that
      * executes stores to this memory slot. This must be kept in sync with

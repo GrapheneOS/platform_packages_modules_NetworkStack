@@ -261,6 +261,11 @@ public class NetworkStackUtils {
     public static final String IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION =
             "ipclient_populate_link_address_lifetime_version";
 
+    /**
+     * Experiment flag to support parsing PIO P flag(DHCPv6-PD preferred).
+     */
+    public static final String IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION =
+            "ipclient_dhcpv6_pd_preferred_flag_version";
 
     /**** BEGIN Feature Kill Switch Flags ****/
 

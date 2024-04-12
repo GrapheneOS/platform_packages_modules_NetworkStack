@@ -128,7 +128,7 @@ public class DnsUtils {
         gen.addJumpIfR0NotEquals(0, labelPointerOffsetStored);
         gen.addMove(R0);
         gen.addAdd(POINTER_AND_QUESTION_HEADER_SIZE);
-        gen.addStoreToMemory(R0, SLOT_AFTER_POINTER_OFFSET);
+        gen.addStoreToMemory(SLOT_AFTER_POINTER_OFFSET, R0);
 
         /**
          * :pointer_offset_stored
@@ -149,7 +149,7 @@ public class DnsUtils {
         gen.addLoadFromMemory(R1, SLOT_CURRENT_PARSE_OFFSET);
         gen.addJumpIfR0EqualsR1(ApfV4Generator.DROP_LABEL);
         gen.addJumpIfR0GreaterThanR1(ApfV4Generator.DROP_LABEL);
-        gen.addStoreToMemory(R0, SLOT_CURRENT_PARSE_OFFSET);
+        gen.addStoreToMemory(SLOT_CURRENT_PARSE_OFFSET, R0);
 
         /** // Pointer chased. Parse starting from the pointer destination (which may also be a
          * pointer).
@@ -209,9 +209,9 @@ public class DnsUtils {
 
         // If so, offset after the pointer and question is stored in m[SLOT_AFTER_POINTER_OFFSET].
         // Move parsing offset there, clear m[SLOT_AFTER_POINTER_OFFSET], and return.
-        gen.addStoreToMemory(R0, SLOT_CURRENT_PARSE_OFFSET);
+        gen.addStoreToMemory(SLOT_CURRENT_PARSE_OFFSET, R0);
         gen.addLoadImmediate(R0, 0);
-        gen.addStoreToMemory(R0, SLOT_AFTER_POINTER_OFFSET);
+        gen.addStoreToMemory(SLOT_AFTER_POINTER_OFFSET, R0);
         gen.addJump(labelFindNextDnsQuestionReturn);
 
         // We weren't chasing a pointer. Loop, following the label chain, until we reach a
@@ -229,7 +229,7 @@ public class DnsUtils {
         // It's a pointer. Skip the pointer and question, and return.
         gen.addLoadImmediate(R0, POINTER_AND_QUESTION_HEADER_SIZE);
         gen.addAddR1ToR0();
-        gen.addStoreToMemory(R0, SLOT_CURRENT_PARSE_OFFSET);
+        gen.addStoreToMemory(SLOT_CURRENT_PARSE_OFFSET, R0);
         gen.addJump(labelFindNextDnsQuestionReturn);
 
         // R1 still contains parsing offset.
@@ -241,7 +241,7 @@ public class DnsUtils {
         gen.addJumpIfR0NotEquals(0, labelFindNextDnsQuestionLabel);
         gen.addLoadImmediate(R0, LABEL_AND_QUESTION_HEADER_SIZE);
         gen.addAddR1ToR0();
-        gen.addStoreToMemory(R0, SLOT_CURRENT_PARSE_OFFSET);
+        gen.addStoreToMemory(SLOT_CURRENT_PARSE_OFFSET, R0);
         gen.addJump(labelFindNextDnsQuestionReturn);
 
         // Non-zero length label. Consume it and continue.
@@ -256,7 +256,7 @@ public class DnsUtils {
         // Is this the last question? If so, drop.
         gen.addLoadFromMemory(R0, SLOT_NEGATIVE_QDCOUNT_REMAINING);
         gen.addAdd(1);
-        gen.addStoreToMemory(R0, SLOT_NEGATIVE_QDCOUNT_REMAINING);
+        gen.addStoreToMemory(SLOT_NEGATIVE_QDCOUNT_REMAINING, R0);
         gen.addJumpIfR0Equals(0, ApfV4Generator.DROP_LABEL);
 
         // If not, return.
@@ -286,7 +286,7 @@ public class DnsUtils {
 
         // Store return address.
         gen.addLoadImmediate(R0, jumpTable.getIndex(parsedLabel));
-        gen.addStoreToMemory(R0, SLOT_RETURN_VALUE_INDEX);
+        gen.addStoreToMemory(SLOT_RETURN_VALUE_INDEX, R0);
 
         // Call the parse_label function.
         gen.addJump(LABEL_PARSE_DNS_LABEL);
@@ -305,7 +305,7 @@ public class DnsUtils {
 
         // Prep offset of next label.
         gen.addAdd(label.length());
-        gen.addStoreToMemory(R0, SLOT_CURRENT_PARSE_OFFSET);
+        gen.addStoreToMemory(SLOT_CURRENT_PARSE_OFFSET, R0);
 
         // Match, go to next label.
         gen.addJump(nextLabel);
@@ -313,7 +313,7 @@ public class DnsUtils {
         // Match failed. Go to next name, and restart from the first match.
         gen.defineLabel(noMatchLabel);
         gen.addLoadImmediate(R1, jumpTable.getIndex(LABEL_START_MATCH));
-        gen.addStoreToMemory(R1, SLOT_RETURN_VALUE_INDEX);
+        gen.addStoreToMemory(SLOT_RETURN_VALUE_INDEX, R1);
         gen.addJump(LABEL_FIND_NEXT_DNS_QUESTION);
     }
 
@@ -365,19 +365,19 @@ public class DnsUtils {
         // using R0 instead.
         gen.addMove(R0);
         gen.addAdd(etherPlusUdpLen);
-        gen.addStoreToMemory(R0, SLOT_DNS_HEADER_OFFSET);
+        gen.addStoreToMemory(SLOT_DNS_HEADER_OFFSET, R0);
 
         gen.addAdd(DNS_QDCOUNT_OFFSET);
         gen.addMove(R1);
         gen.addLoad16Indexed(R1, 0);
         gen.addNeg(R1);
-        gen.addStoreToMemory(R1, SLOT_NEGATIVE_QDCOUNT_REMAINING);
+        gen.addStoreToMemory(SLOT_NEGATIVE_QDCOUNT_REMAINING, R1);
 
         gen.addAdd(DNS_HEADER_LEN - DNS_QDCOUNT_OFFSET);
-        gen.addStoreToMemory(R0, SLOT_CURRENT_PARSE_OFFSET);
+        gen.addStoreToMemory(SLOT_CURRENT_PARSE_OFFSET, R0);
 
         gen.addLoadImmediate(R0, 0);
-        gen.addStoreToMemory(R0, SLOT_AFTER_POINTER_OFFSET);
+        gen.addStoreToMemory(SLOT_AFTER_POINTER_OFFSET, R0);
 
         gen.addJump(LABEL_START_MATCH);
 
