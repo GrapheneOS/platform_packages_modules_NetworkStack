@@ -41,9 +41,9 @@ import android.net.apf.BaseApfGenerator.DROP_LABEL
 import android.net.apf.BaseApfGenerator.IllegalInstructionException
 import android.net.apf.BaseApfGenerator.Register.R0
 import android.net.apf.BaseApfGenerator.Register.R1
+import android.os.Build
 import android.system.OsConstants.ARPHRD_ETHER
 import androidx.test.filters.SmallTest
-import androidx.test.runner.AndroidJUnit4
 import com.android.net.module.util.HexDump
 import com.android.net.module.util.NetworkStackConstants.ARP_ETHER_IPV4_LEN
 import com.android.net.module.util.NetworkStackConstants.ARP_REPLY
@@ -54,6 +54,9 @@ import com.android.net.module.util.structs.EthernetHeader
 import com.android.net.module.util.structs.Ipv4Header
 import com.android.net.module.util.structs.UdpHeader
 import com.android.networkstack.metrics.NetworkQuirkMetrics
+import com.android.testutils.DevSdkIgnoreRule
+import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo
+import com.android.testutils.DevSdkIgnoreRunner
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import kotlin.test.assertContentEquals
@@ -61,6 +64,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mock
@@ -70,9 +74,12 @@ import org.mockito.MockitoAnnotations
 /**
  * Tests for APFv6 specific instructions.
  */
-@RunWith(AndroidJUnit4::class)
+@RunWith(DevSdkIgnoreRunner::class)
 @SmallTest
 class ApfV5Test {
+
+    @get:Rule
+    val ignoreRule = DevSdkIgnoreRule()
 
     @Mock
     private lateinit var context: Context
@@ -1242,6 +1249,8 @@ class ApfV5Test {
         assertEquals(0xff, ApfCounterTracker.getCounterValue(counterBytes, Counter.TOTAL_PACKETS))
     }
 
+    // The APFv6 code path is only turned on in V+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testArpTransmit() {
         val ipClientCallback = ApfTestUtils.MockIpClientCallback()
@@ -1331,7 +1340,6 @@ class ApfV5Test {
         config.multicastFilter = false
         config.ieee802_3Filter = false
         config.ethTypeBlackList = IntArray(0)
-        config.enableApfV6 = true
         return config
     }
 

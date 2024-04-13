@@ -173,7 +173,6 @@ public class ApfFilter implements AndroidPacketFilter {
         public int acceptRaMinLft;
         public boolean shouldHandleLightDoze;
         public long minMetricsSessionDurationMs;
-        public boolean enableApfV6;
     }
 
     /** A wrapper class of {@link SystemClock} to be mocked in unit tests. */
@@ -271,7 +270,6 @@ public class ApfFilter implements AndroidPacketFilter {
     private final int mAcceptRaMinLft;
     private final boolean mShouldHandleLightDoze;
 
-    private final boolean mEnableApfV6;
     private final NetworkQuirkMetrics mNetworkQuirkMetrics;
     private final IpClientRaInfoMetrics mIpClientRaInfoMetrics;
     private final ApfSessionInfoMetrics mApfSessionInfoMetrics;
@@ -373,7 +371,6 @@ public class ApfFilter implements AndroidPacketFilter {
         mClock = clock;
         mSessionStartMs = mClock.elapsedRealtime();
         mMinMetricsSessionDurationMs = config.minMetricsSessionDurationMs;
-        mEnableApfV6 = config.enableApfV6;
 
         // Now fill the black list from the passed array
         mEthTypeBlackList = filterEthTypeBlackList(config.ethTypeBlackList);
@@ -1951,10 +1948,6 @@ public class ApfFilter implements AndroidPacketFilter {
                 "skip_v6_keepalive_filter");
     }
 
-    private boolean shouldUseApfV6Generator() {
-        return mEnableApfV6 && mApfCapabilities.apfVersionSupported > 4;
-    }
-
     /**
      * Begin generating an APF program to:
      * <ul>
@@ -1980,14 +1973,15 @@ public class ApfFilter implements AndroidPacketFilter {
     protected ApfV4GeneratorBase<?> emitPrologueLocked() throws IllegalInstructionException {
         // This is guaranteed to succeed because of the check in maybeCreate.
         ApfV4GeneratorBase<?> gen;
-        if (shouldUseApfV6Generator()) {
+        if (SdkLevel.isAtLeastV()
+                && ApfV6Generator.supportsVersion(mApfCapabilities.apfVersionSupported)) {
             gen = new ApfV6Generator();
         } else {
             gen = new ApfV4Generator(mApfCapabilities.apfVersionSupported);
         }
 
         if (mApfCapabilities.hasDataAccess()) {
-            if (!shouldUseApfV6Generator()) {
+            if (gen instanceof ApfV4Generator) {
                 // Increment TOTAL_PACKETS.
                 // Only needed in APFv4.
                 // In APFv6, the interpreter will increase the counter on packet receive.
