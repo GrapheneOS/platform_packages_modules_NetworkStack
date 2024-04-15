@@ -39,6 +39,7 @@ import android.net.apf.BaseApfGenerator.APF_VERSION_4
 import android.net.apf.BaseApfGenerator.APF_VERSION_6
 import android.net.apf.BaseApfGenerator.DROP_LABEL
 import android.net.apf.BaseApfGenerator.IllegalInstructionException
+import android.net.apf.BaseApfGenerator.MemorySlot
 import android.net.apf.BaseApfGenerator.Register.R0
 import android.net.apf.BaseApfGenerator.Register.R1
 import android.os.Build
@@ -983,7 +984,7 @@ class ApfV5Test {
                 .addAllocate(14)
                 // len: 13 is less than ETH_HLEN, trigger transmit failure.
                 .addLoadImmediate(R0, 13)
-                .addStoreToMemory(10, R0)
+                .addStoreToMemory(MemorySlot.TX_BUFFER_OUTPUT_POINTER, R0)
                 .addTransmitWithoutChecksum()
                 .addDrop()
                 .generate()

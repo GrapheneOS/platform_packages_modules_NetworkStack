@@ -18,6 +18,7 @@ package android.net.apf;
 
 import static android.net.apf.BaseApfGenerator.APF_VERSION_4;
 import static android.net.apf.BaseApfGenerator.DROP_LABEL;
+import static android.net.apf.BaseApfGenerator.MemorySlot;
 import static android.net.apf.BaseApfGenerator.PASS_LABEL;
 import static android.net.apf.BaseApfGenerator.Register.R0;
 import static android.net.apf.BaseApfGenerator.Register.R1;
@@ -646,35 +647,35 @@ public class ApfTest {
 
         // Test load from memory.
         gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadFromMemory(R0, 0);
+        gen.addLoadFromMemory(R0, MemorySlot.SLOT_0);
         gen.addJumpIfR0Equals(0, DROP_LABEL);
         assertDrop(gen);
 
         // Test store to memory.
         gen = new ApfV4Generator(APF_VERSION_2);
         gen.addLoadImmediate(R1, 1234567890);
-        gen.addStoreToMemory(12, R1);
-        gen.addLoadFromMemory(R0, 12);
+        gen.addStoreToMemory(MemorySlot.RAM_LEN, R1);
+        gen.addLoadFromMemory(R0, MemorySlot.RAM_LEN);
         gen.addJumpIfR0Equals(1234567890, DROP_LABEL);
         assertDrop(gen);
 
         // Test filter age pre-filled memory.
         gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadFromMemory(R0, gen.FILTER_AGE_MEMORY_SLOT);
+        gen.addLoadFromMemory(R0, MemorySlot.FILTER_AGE_SECONDS);
         gen.addJumpIfR0Equals(123, DROP_LABEL);
         assertDrop(gen, new byte[MIN_PKT_SIZE], 123);
 
         // Test packet size pre-filled memory.
         gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadFromMemory(R0, gen.PACKET_SIZE_MEMORY_SLOT);
+        gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE);
         gen.addJumpIfR0Equals(MIN_PKT_SIZE, DROP_LABEL);
         assertDrop(gen);
 
         // Test IPv4 header size pre-filled memory.
         gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadFromMemory(R0, gen.IPV4_HEADER_SIZE_MEMORY_SLOT);
+        gen.addLoadFromMemory(R0, MemorySlot.IPV4_HEADER_SIZE);
         gen.addJumpIfR0Equals(20, DROP_LABEL);
-        assertDrop(gen, new byte[]{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0x45}, 0);
+        assertDrop(gen, new byte[]{0,0,0,0,0,0,0,0,0,0,0,0,8,0,0x45,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}, 0);
 
         // Test not.
         gen = new ApfV4Generator(APF_VERSION_2);
@@ -3580,7 +3581,7 @@ public class ApfTest {
         gen.addJumpIfR0NotEquals(0x11, "LABEL_159");
         gen.addLoad16(R0, 20);
         gen.addJumpIfR0AnyBitsSet(0x1fff, "LABEL_159");
-        gen.addLoadFromMemory(R1, 13);
+        gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
         gen.addLoad16Indexed(R0, 16);
         gen.addJumpIfR0NotEquals(0x44, "LABEL_159");
         gen.addLoadImmediate(R0, 50);
@@ -3633,9 +3634,9 @@ public class ApfTest {
         gen.addJump("LABEL_504");
 
         gen.defineLabel("LABEL_283");
-        gen.addLoadFromMemory(R0, 14);
+        gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE);
         gen.addJumpIfR0NotEquals(0xa6, "LABEL_496");
-        gen.addLoadFromMemory(R0, 15);
+        gen.addLoadFromMemory(R0, MemorySlot.FILTER_AGE_SECONDS);
         gen.addJumpIfR0GreaterThan(0x254, "LABEL_496");
         gen.addLoadImmediate(R0, 0);
         gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("e212507c6345648788fd6df086dd68"), "LABEL_496");
@@ -3733,7 +3734,7 @@ public class ApfTest {
         gen.addJumpIfR0NotEquals(0x11, "LABEL_151");
         gen.addLoad16(R0, 20);
         gen.addJumpIfR0AnyBitsSet(0x1fff, "LABEL_151");
-        gen.addLoadFromMemory(R1, 13);
+        gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
         gen.addLoad16Indexed(R0, 16);
         gen.addJumpIfR0NotEquals(0x44, "LABEL_151");
         gen.addLoadImmediate(R0, 50);
@@ -3854,7 +3855,7 @@ public class ApfTest {
         gen.addJumpIfR0NotEquals(0x11, "LABEL_157");
         gen.addLoad16(R0, 20);
         gen.addJumpIfR0AnyBitsSet(0x1fff, "LABEL_157");
-        gen.addLoadFromMemory(R1, 13);
+        gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
         gen.addLoad16Indexed(R0, 16);
         gen.addJumpIfR0NotEquals(0x44, "LABEL_157");
         gen.addLoadImmediate(R0, 50);
@@ -3877,14 +3878,14 @@ public class ApfTest {
         gen.addJumpIfR0NotEquals(0x11, "LABEL_243");
         gen.addLoadImmediate(R0, 26);
         gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("6b7a1f1fc0a801be"), "LABEL_243");
-        gen.addLoadFromMemory(R0, 13);
+        gen.addLoadFromMemory(R0, MemorySlot.IPV4_HEADER_SIZE);
         gen.addAdd(8);
         gen.addSwap();
         gen.addLoad16(R0, 16);
         gen.addNeg(R1);
         gen.addAddR1ToR0();
         gen.addJumpIfR0NotEquals(0x1, "LABEL_243");
-        gen.addLoadFromMemory(R0, 13);
+        gen.addLoadFromMemory(R0, MemorySlot.IPV4_HEADER_SIZE);
         gen.addAdd(14);
         gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("1194ceca"), "LABEL_243");
         gen.addAdd(8);
@@ -3996,7 +3997,7 @@ public class ApfTest {
         gen.addJumpIfR0NotEquals(0x11, "LABEL_165");
         gen.addLoad16(R0, 20);
         gen.addJumpIfR0AnyBitsSet(0x1fff, "LABEL_165");
-        gen.addLoadFromMemory(R1, 13);
+        gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
         gen.addLoad16Indexed(R0, 16);
         gen.addJumpIfR0NotEquals(0x44, "LABEL_165");
         gen.addLoadImmediate(R0, 50);
@@ -4019,7 +4020,7 @@ public class ApfTest {
         gen.addJumpIfR0NotEquals(0x6, "LABEL_225");
         gen.addLoad16(R0, 20);
         gen.addJumpIfR0AnyBitsSet(0x1fff, "LABEL_225");
-        gen.addLoadFromMemory(R1, 13);
+        gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
         gen.addLoad16Indexed(R0, 16);
         gen.addJumpIfR0NotEquals(0x7, "LABEL_225");
         gen.addLoadImmediate(R1, -148);
@@ -4063,9 +4064,9 @@ public class ApfTest {
         gen.addJump("LABEL_582");
 
         gen.defineLabel("LABEL_333");
-        gen.addLoadFromMemory(R0, 14);
+        gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE);
         gen.addJumpIfR0NotEquals(0x96, "LABEL_574");
-        gen.addLoadFromMemory(R0, 15);
+        gen.addLoadFromMemory(R0, MemorySlot.FILTER_AGE_SECONDS);
         gen.addJumpIfR0GreaterThan(0x48e, "LABEL_574");
         gen.addLoadImmediate(R0, 0);
         gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("7e9046bc700828c68e23672c86dd60"), "LABEL_574");

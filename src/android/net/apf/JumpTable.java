@@ -16,6 +16,7 @@
 
 package android.net.apf;
 
+import static android.net.apf.BaseApfGenerator.MemorySlot;
 import static android.net.apf.BaseApfGenerator.Register.R0;
 
 import androidx.annotation.NonNull;
@@ -80,16 +81,17 @@ public class JumpTable {
     /** Label to jump to to execute this jump table. */
     private final String mStartLabel;
     /** Memory slot that contains the return value index. */
-    private final int mReturnAddressMemorySlot;
+    private final MemorySlot mReturnAddressMemorySlot;
 
     private int mIndex = 0;
 
-    public JumpTable(@NonNull String startLabel, int returnAddressMemorySlot) {
+    public JumpTable(@NonNull String startLabel, MemorySlot returnAddressMemorySlot) {
         Objects.requireNonNull(startLabel);
         mStartLabel = startLabel;
-        if (returnAddressMemorySlot < 0
-                || returnAddressMemorySlot >= ApfV4Generator.FIRST_PREFILLED_MEMORY_SLOT) {
-            throw new IllegalArgumentException("Invalid memory slot " + returnAddressMemorySlot);
+        if (returnAddressMemorySlot.value < 0
+                || returnAddressMemorySlot.value >= MemorySlot.FIRST_PREFILLED.value) {
+            throw new IllegalArgumentException(
+                    "Invalid memory slot " + returnAddressMemorySlot.value);
         }
         mReturnAddressMemorySlot = returnAddressMemorySlot;
     }

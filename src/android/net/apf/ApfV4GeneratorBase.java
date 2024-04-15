@@ -430,18 +430,18 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      * Add an instruction to the end of the program to load memory slot {@code slot} into
      * {@code register}.
      */
-    public final Type addLoadFromMemory(Register r, int slot)
+    public final Type addLoadFromMemory(Register r, MemorySlot slot)
             throws IllegalInstructionException {
-        return append(new BaseApfGenerator.Instruction(ExtendedOpcodes.LDM, slot, r));
+        return append(new BaseApfGenerator.Instruction(ExtendedOpcodes.LDM, slot.value, r));
     }
 
     /**
      * Add an instruction to the end of the program to store {@code register} into memory slot
      * {@code slot}.
      */
-    public final Type addStoreToMemory(int slot, Register r)
+    public final Type addStoreToMemory(MemorySlot slot, Register r)
             throws IllegalInstructionException {
-        return append(new Instruction(ExtendedOpcodes.STM, slot, r));
+        return append(new Instruction(ExtendedOpcodes.STM, slot.value, r));
     }
 
     /**

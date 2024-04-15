@@ -25,6 +25,7 @@ import android.net.apf.ApfConstant.IPV4_SRC_ADDR_OFFSET
 import android.net.apf.ApfConstant.IPV6_NEXT_HEADER_OFFSET
 import android.net.apf.ApfConstant.TCP_UDP_DESTINATION_PORT_OFFSET
 import android.net.apf.BaseApfGenerator.APF_VERSION_4
+import android.net.apf.BaseApfGenerator.MemorySlot
 import android.net.apf.BaseApfGenerator.Register.R0
 import android.net.apf.BaseApfGenerator.Register.R1
 import android.system.OsConstants
@@ -56,8 +57,11 @@ class ApfStandaloneTest {
 
     fun runApfTest(isSuspendMode: Boolean) {
         val program = generateApfV4Program(isSuspendMode)
-        Log.w(TAG, "Program should be run in SETSUSPENDMODE $isSuspendMode: " +
-                HexDump.toHexString(program))
+        Log.w(
+            TAG,
+            "Program should be run in SETSUSPENDMODE $isSuspendMode: " +
+                HexDump.toHexString(program)
+        )
         // packet that in ethertype denylist:
         // ###[ Ethernet ]###
         //   dst       = ff:ff:ff:ff:ff:ff
@@ -72,11 +76,17 @@ class ApfStandaloneTest {
         val packetBadEtherType =
                 HexDump.hexStringToByteArray("ffffffffffff047bcb463fb588a201")
         val dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        ApfTestUtils.assertVerdict(APF_VERSION_4, ApfTestUtils.DROP,
-                program, packetBadEtherType, dataRegion)
+        ApfTestUtils.assertVerdict(
+            APF_VERSION_4,
+            ApfTestUtils.DROP,
+            program,
+            packetBadEtherType,
+            dataRegion
+        )
         assertEquals(mapOf<Counter, Long>(
                 Counter.TOTAL_PACKETS to 1,
-                Counter.DROPPED_ETHERTYPE_DENYLISTED to 1), decodeCountersIntoMap(dataRegion))
+                Counter.DROPPED_ETHERTYPE_DENYLISTED to 1
+        ), decodeCountersIntoMap(dataRegion))
 
         // dhcp request packet.
         // ###[ Ethernet ]###
@@ -124,13 +134,21 @@ class ApfStandaloneTest {
         // raw bytes:
         // ffffffffffff047bcb463fb508004500011c00010000401179d100000000ffffffff004400430108393b010106000000000b000000000000000000000000000000000000000030343a37623a63623a34363a33663a62000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000638253633501033604c0a801013204c0a80164ff
 
-        val dhcpRequestPkt = HexDump.hexStringToByteArray("ffffffffffff047bcb463fb508004500011c00010000401179d100000000ffffffff004400430108393b010106000000000b000000000000000000000000000000000000000030343a37623a63623a34363a33663a62000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000638253633501033604c0a801013204c0a80164ff")
-        ApfTestUtils.assertVerdict(APF_VERSION_4, ApfTestUtils.DROP,
-                program, dhcpRequestPkt, dataRegion)
+        val dhcpRequestPkt = HexDump.hexStringToByteArray(
+            "ffffffffffff047bcb463fb508004500011c00010000401179d100000000ffffffff004400430108393b010106000000000b000000000000000000000000000000000000000030343a37623a63623a34363a33663a62000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000638253633501033604c0a801013204c0a80164ff"
+        )
+        ApfTestUtils.assertVerdict(
+            APF_VERSION_4,
+            ApfTestUtils.DROP,
+            program,
+            dhcpRequestPkt,
+            dataRegion
+        )
         assertEquals(mapOf<Counter, Long>(
                 Counter.TOTAL_PACKETS to 2,
                 Counter.DROPPED_ETHERTYPE_DENYLISTED to 1,
-                Counter.DROPPED_DHCP_REQUEST_DISCOVERY to 1), decodeCountersIntoMap(dataRegion))
+                Counter.DROPPED_DHCP_REQUEST_DISCOVERY to 1
+        ), decodeCountersIntoMap(dataRegion))
 
         // RS packet:
         // ###[ Ethernet ]###
@@ -154,13 +172,16 @@ class ApfStandaloneTest {
         //
         // raw bytes:
         // ffffffffffff047bcb463fb586dd6000000000083afffe8000000000000030b45e42ef3d36e5ff0200000000000000000000000000028500c81d00000000
-        val rsPkt = HexDump.hexStringToByteArray("ffffffffffff047bcb463fb586dd6000000000083afffe8000000000000030b45e42ef3d36e5ff0200000000000000000000000000028500c81d00000000")
+        val rsPkt = HexDump.hexStringToByteArray(
+            "ffffffffffff047bcb463fb586dd6000000000083afffe8000000000000030b45e42ef3d36e5ff0200000000000000000000000000028500c81d00000000"
+        )
         ApfTestUtils.assertVerdict(APF_VERSION_4, ApfTestUtils.DROP, program, rsPkt, dataRegion)
         assertEquals(mapOf<Counter, Long>(
                 Counter.TOTAL_PACKETS to 3,
                 Counter.DROPPED_RS to 1,
                 Counter.DROPPED_ETHERTYPE_DENYLISTED to 1,
-                Counter.DROPPED_DHCP_REQUEST_DISCOVERY to 1), decodeCountersIntoMap(dataRegion))
+                Counter.DROPPED_DHCP_REQUEST_DISCOVERY to 1
+        ), decodeCountersIntoMap(dataRegion))
         if (isSuspendMode) {
             // Ping request packet
             // ###[ Ethernet ]###
@@ -191,14 +212,23 @@ class ApfStandaloneTest {
             //
             // raw bytes: 84
             // ffffffffffff047bcb463fb508004500001c000100004001a52d644f6154080808080800f7ff00000000
-            val pingRequestPkt = HexDump.hexStringToByteArray("ffffffffffff047bcb463fb508004500001c000100004001a52d644f6154080808080800f7ff00000000")
-            ApfTestUtils.assertVerdict(APF_VERSION_4, ApfTestUtils.DROP, program, pingRequestPkt, dataRegion)
+            val pingRequestPkt = HexDump.hexStringToByteArray(
+                "ffffffffffff047bcb463fb508004500001c000100004001a52d644f6154080808080800f7ff00000000"
+            )
+            ApfTestUtils.assertVerdict(
+                APF_VERSION_4,
+                ApfTestUtils.DROP,
+                program,
+                pingRequestPkt,
+                dataRegion
+            )
             assertEquals(mapOf<Counter, Long>(
                     Counter.TOTAL_PACKETS to 4,
                     Counter.DROPPED_RS to 1,
                     Counter.DROPPED_ICMP4_ECHO_REQUEST to 1,
                     Counter.DROPPED_ETHERTYPE_DENYLISTED to 1,
-                    Counter.DROPPED_DHCP_REQUEST_DISCOVERY to 1), decodeCountersIntoMap(dataRegion))
+                    Counter.DROPPED_DHCP_REQUEST_DISCOVERY to 1
+            ), decodeCountersIntoMap(dataRegion))
         }
     }
 
@@ -226,11 +256,11 @@ class ApfStandaloneTest {
         gen.addStoreData(R0, 0)
 
         maybeSetupCounter(gen, Counter.FILTER_AGE_SECONDS)
-        gen.addLoadFromMemory(R0, 15)
+        gen.addLoadFromMemory(R0, MemorySlot.FILTER_AGE_SECONDS)
         gen.addStoreData(R0, 0)
 
         maybeSetupCounter(gen, Counter.FILTER_AGE_16384THS)
-        gen.addLoadFromMemory(R0, 9)
+        gen.addLoadFromMemory(R0, MemorySlot.FILTER_AGE_16384THS)
         gen.addStoreData(R0, 0)
 
         // ethtype filter
@@ -257,7 +287,7 @@ class ApfStandaloneTest {
         gen.addLoad8(R0, IPV4_PROTOCOL_OFFSET)
         gen.addJumpIfR0NotEquals(OsConstants.IPPROTO_UDP.toLong(), endOfDhcpFilter)
         // Check it's addressed to DHCP client port.
-        gen.addLoadFromMemory(R1, BaseApfGenerator.IPV4_HEADER_SIZE_MEMORY_SLOT)
+        gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE)
         gen.addLoad16Indexed(R0, TCP_UDP_DESTINATION_PORT_OFFSET)
         gen.addJumpIfR0NotEquals(DHCP_SERVER_PORT.toLong(), endOfDhcpFilter)
         // drop dhcp the discovery and request
@@ -293,7 +323,7 @@ class ApfStandaloneTest {
             gen.addLoad8(R0, IPV4_PROTOCOL_OFFSET)
             gen.addJumpIfR0NotEquals(OsConstants.IPPROTO_ICMP.toLong(), endOfPingFilter)
             // Check if it is echo request
-            gen.addLoadFromMemory(R1, BaseApfGenerator.IPV4_HEADER_SIZE_MEMORY_SLOT)
+            gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE)
             gen.addLoad8Indexed(R0, ETH_HEADER_LEN)
             gen.addJumpIfR0NotEquals(8, endOfPingFilter)
             // drop ping request

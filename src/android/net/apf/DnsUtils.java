@@ -16,6 +16,7 @@
 
 package android.net.apf;
 
+import static android.net.apf.BaseApfGenerator.MemorySlot;
 import static android.net.apf.BaseApfGenerator.Register.R0;
 import static android.net.apf.BaseApfGenerator.Register.R1;
 
@@ -47,23 +48,23 @@ public class DnsUtils {
     private static final int POINTER_AND_QUESTION_HEADER_SIZE = POINTER_SIZE + QUESTION_HEADER_SIZE;
 
     /** Memory slot that stores the offset within the packet of the DNS header. */
-    private static final int SLOT_DNS_HEADER_OFFSET = 1;
+    private static final MemorySlot SLOT_DNS_HEADER_OFFSET = MemorySlot.SLOT_1;
     /** Memory slot that stores the current parsing offset. */
-    private static final int SLOT_CURRENT_PARSE_OFFSET = 2;
+    private static final MemorySlot SLOT_CURRENT_PARSE_OFFSET = MemorySlot.SLOT_2;
     /**
      * Memory slot that stores the offset after the current question, if the code is currently
      * parsing a pointer, or 0 if it is not.
      */
-    private static final int SLOT_AFTER_POINTER_OFFSET = 3;
+    private static final MemorySlot SLOT_AFTER_POINTER_OFFSET = MemorySlot.SLOT_3;
     /**
      * Contains qdcount remaining, as a negative number. For example, will be -1 when starting to
      * parse a DNS packet with one question in it. It's stored as a negative number because adding 1
      * is much easier than subtracting 1 (which can't be done just by adding -1, because that just
      * adds 254).
      */
-    private static final int SLOT_NEGATIVE_QDCOUNT_REMAINING = 4;
+    private static final MemorySlot SLOT_NEGATIVE_QDCOUNT_REMAINING = MemorySlot.SLOT_4;
     /** Memory slot used by the jump table. */
-    private static final int SLOT_RETURN_VALUE_INDEX = 5;
+    private static final MemorySlot SLOT_RETURN_VALUE_INDEX = MemorySlot.SLOT_5;
 
     /**
      * APF function: parse_dns_label

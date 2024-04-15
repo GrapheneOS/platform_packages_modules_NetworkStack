@@ -16,6 +16,7 @@
 
 package android.net.apf
 
+import android.net.apf.BaseApfGenerator.MemorySlot
 import android.net.apf.BaseApfGenerator.Register.R0
 import androidx.test.filters.SmallTest
 import androidx.test.runner.AndroidJUnit4
@@ -45,36 +46,31 @@ class JumpTableTest {
     @Test(expected = NullPointerException::class)
     fun testNullStartLabel() {
         // Can't use "null" because the method is @NonNull.
-        JumpTable(AtomicReference<String>(null).get(), 10)
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun testNegativeSlot() {
-        JumpTable("my_jump_table", -1)
+        JumpTable(AtomicReference<String>(null).get(), MemorySlot.SLOT_0)
     }
 
     @Test(expected = IllegalArgumentException::class)
     fun testSlotTooLarge() {
-        JumpTable("my_jump_table", 13)
+        JumpTable("my_jump_table", MemorySlot.IPV4_HEADER_SIZE)
     }
 
     @Test
     fun testValidSlotNumbers() {
-        JumpTable("my_jump_table", 1)
-        JumpTable("my_jump_table", 4)
-        JumpTable("my_jump_table", 6)
+        JumpTable("my_jump_table", MemorySlot.SLOT_1)
+        JumpTable("my_jump_table", MemorySlot.SLOT_4)
+        JumpTable("my_jump_table", MemorySlot.SLOT_6)
     }
 
     @Test
     fun testGetStartLabel() {
-        assertEquals("xyz", JumpTable("xyz", 3).startLabel)
-        assertEquals("abc", JumpTable("abc", 5).startLabel)
+        assertEquals("xyz", JumpTable("xyz", MemorySlot.SLOT_3).startLabel)
+        assertEquals("abc", JumpTable("abc", MemorySlot.SLOT_5).startLabel)
     }
 
     @Test
     fun testCodeGeneration() {
         val name = "my_jump_table"
-        val slot = 7
+        val slot = MemorySlot.SLOT_7
 
         val j = JumpTable(name, slot)
         j.addLabel("foo")
