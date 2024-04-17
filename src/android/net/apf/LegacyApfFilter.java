@@ -1518,6 +1518,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
 
         // MLD packets set the router-alert hop-by-hop option.
         // TODO: be smarter about not blindly passing every packet with HBH options.
+        maybeSetupCounter(gen, Counter.PASSED_MLD);
         gen.addJumpIfR0Equals(IPPROTO_HOPOPTS, mCountAndPassLabel);
 
         // Drop multicast if the multicast filter is enabled.

@@ -79,6 +79,8 @@ import static com.android.net.module.util.NetworkStackConstants.NEIGHBOR_ADVERTI
 import static com.android.net.module.util.NetworkStackConstants.NEIGHBOR_ADVERTISEMENT_FLAG_SOLICITED;
 import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_AUTONOMOUS;
 import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_ON_LINK;
+import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION;
+import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION;
 import static com.android.testutils.MiscAsserts.assertThrows;
 import static com.android.testutils.ParcelUtils.parcelingRoundTrip;
@@ -250,6 +252,7 @@ import java.io.FileDescriptor;
 import java.io.FileReader;
 import java.io.IOException;
 import java.lang.annotation.ElementType;
+import java.lang.annotation.Repeatable;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
@@ -327,14 +330,18 @@ public abstract class IpClientIntegrationTestCommon {
         String reason();
     }
 
-    /**
-     * Indicates that a test requires to enable the experiment flag that populates the link address
-     * lifetime when receiving RTM_NEWADDR netlink message.
-     */
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.METHOD})
-    private @interface PopulateLinkAddressLifetime {
+    @Repeatable(FlagArray.class)
+    @interface Flag {
+        String name();
         boolean enabled();
+    }
+
+    @Target({ElementType.METHOD})
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface FlagArray {
+        Flag[] value();
     }
 
     /**** BEGIN signature required test members ****/
@@ -733,23 +740,10 @@ public abstract class IpClientIntegrationTestCommon {
         setFeatureEnabled(NetworkStackUtils.IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION,
                 true /* isDhcp6PrefixDelegationEnabled */);
 
-        // Enable populating the IP Link Address lifetime if test case requires.
-        final PopulateLinkAddressLifetime anno =
-                testMethod.getAnnotation(PopulateLinkAddressLifetime.class);
-        final boolean populateLinkAddressLifetime = (anno == null) ? false : anno.enabled();
-        setFeatureEnabled(NetworkStackUtils.IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION,
-                populateLinkAddressLifetime);
-
-        // Disable the experiment flag IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION
-        // for testIpReachabilityMonitor_incompleteIpv6DnsServerInDualStack_flagoff testcase, given
-        // the experiment flag is read at IpReachabilityMonitor constructor so we have to turn it
-        // off before creating the IpClient instance.
-        // TODO: cleanup this code as well when cleaning up the experiment flag.
-        if (testMethodName.equals(
-                "testIpReachabilityMonitor_incompleteIpv6DnsServerInDualStack_flagoff")) {
-            setFeatureEnabled(
-                    NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION,
-                    false /* enabled */);
+        // Set flags based on test method annotations.
+        final Flag[] flags = testMethod.getAnnotationsByType(Flag.class);
+        for (Flag flag : flags) {
+            setFeatureEnabled(flag.name(), flag.enabled());
         }
 
         setUpTapInterface();
@@ -4273,10 +4267,9 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION, enabled = false)
     public void testIpReachabilityMonitor_ignoreIpv4DefaultRouterOrganicNudFailure_flagoff()
             throws Exception {
-        setFeatureEnabled(NetworkStackUtils.IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION,
-                false /* ignoreOrganicNudFailure */);
         prepareIpReachabilityMonitorIpv4AddressResolutionTest();
 
         ArpPacket packet;
@@ -4312,7 +4305,7 @@ public abstract class IpClientIntegrationTestCommon {
         setDhcpFeatures(true /* isRapidCommitEnabled */,
                 false /* isDhcpIpConflictDetectEnabled */);
         setFeatureEnabled(
-                NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION,
+                IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION,
                 isIgnoreIncompleteIpv6DnsServerEnabled);
         setFeatureEnabled(
                 NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION,
@@ -4932,7 +4925,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @PopulateLinkAddressLifetime(enabled = true)
+    @Flag(name =  IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION, enabled = true)
     public void testDhcp6Pd() throws Exception {
         final IpPrefix prefix = new IpPrefix("2001:db8:1::/64");
         prepareDhcp6PdTest();
@@ -5719,7 +5712,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @PopulateLinkAddressLifetime(enabled = true)
+    @Flag(name =  IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION, enabled = true)
     public void testPopulateLinkAddressLifetime() throws Exception {
         final LinkProperties lp = doDualStackProvisioning();
         final long now = SystemClock.elapsedRealtime();
@@ -5741,7 +5734,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @PopulateLinkAddressLifetime(enabled = true)
+    @Flag(name =  IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION, enabled = true)
     public void testPopulateLinkAddressLifetime_infiniteLeaseDuration() throws Exception {
         final ProvisioningConfiguration cfg = new ProvisioningConfiguration.Builder()
                 .withoutIPv6()
@@ -5765,7 +5758,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @PopulateLinkAddressLifetime(enabled = true)
+    @Flag(name =  IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION, enabled = true)
     public void testPopulateLinkAddressLifetime_minimalLeaseDuration() throws Exception {
         final ProvisioningConfiguration cfg = new ProvisioningConfiguration.Builder()
                 .withoutIPv6()
@@ -5792,7 +5785,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @PopulateLinkAddressLifetime(enabled = true)
+    @Flag(name =  IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION, enabled = true)
     public void testPopulateLinkAddressLifetime_onDhcpRenew() throws Exception {
         final ProvisioningConfiguration cfg = new ProvisioningConfiguration.Builder()
                 .withoutIPv6()

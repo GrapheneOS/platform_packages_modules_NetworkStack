@@ -86,6 +86,11 @@ public interface AndroidPacketFilter {
      */
     boolean isRunning();
 
+    /**
+     * Indicates whether the clat interface is added or removed.
+     */
+    default void updateClatInterfaceState(boolean add) {}
+
     /** Pause ApfFilter updates for testing purposes. */
     void pause();
 
