@@ -2142,7 +2142,7 @@ public class ApfFilter implements AndroidPacketFilter {
             }
             emitEpilogue(gen);
             program = gen.generate();
-        } catch (IllegalInstructionException|IllegalStateException e) {
+        } catch (IllegalInstructionException | IllegalStateException | IllegalArgumentException e) {
             Log.e(TAG, "Failed to generate APF program.", e);
             sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_GENERATE_FILTER_EXCEPTION);
             return;
