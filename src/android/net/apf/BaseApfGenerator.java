@@ -37,8 +37,9 @@ import java.util.List;
  */
 public abstract class BaseApfGenerator {
 
-    public BaseApfGenerator(int mVersion) {
+    public BaseApfGenerator(int mVersion, boolean mDisableCounterRangeCheck) {
         this.mVersion = mVersion;
+        this.mDisableCounterRangeCheck = mDisableCounterRangeCheck;
     }
 
     /**
@@ -55,7 +56,7 @@ public abstract class BaseApfGenerator {
         // An optional unsigned immediate value can be provided to encode the counter number.
         // If the value is non-zero, the instruction increments the counter.
         // The counter is located (-4 * counter number) bytes from the end of the data region.
-        // It is a U32 big-endian value and is always incremented by 1.
+        // It is a U32 native-endian value and is always incremented by 1.
         // This is more or less equivalent to: lddw R0, -N4; add R0,1; stdw R0, -N4; {pass,drop}
         // e.g. "pass", "pass 1", "drop", "drop 1"
         PASSDROP(0),
@@ -681,7 +682,8 @@ public abstract class BaseApfGenerator {
                         upperBound));
     }
 
-    static void checkPassCounterRange(ApfCounterTracker.Counter cnt) {
+    void checkPassCounterRange(ApfCounterTracker.Counter cnt) {
+        if (mDisableCounterRangeCheck) return;
         if (cnt.value() < ApfCounterTracker.MIN_PASS_COUNTER.value()
                 || cnt.value() > ApfCounterTracker.MAX_PASS_COUNTER.value()) {
             throw new IllegalArgumentException(
@@ -691,7 +693,8 @@ public abstract class BaseApfGenerator {
         }
     }
 
-    static void checkDropCounterRange(ApfCounterTracker.Counter cnt) {
+    void checkDropCounterRange(ApfCounterTracker.Counter cnt) {
+        if (mDisableCounterRangeCheck) return;
         if (cnt.value() < ApfCounterTracker.MIN_DROP_COUNTER.value()
                 || cnt.value() > ApfCounterTracker.MAX_DROP_COUNTER.value()) {
             throw new IllegalArgumentException(
@@ -882,4 +885,5 @@ public abstract class BaseApfGenerator {
     private final Instruction mPassLabel = new Instruction(Opcodes.LABEL);
     public final int mVersion;
     public boolean mGenerated;
+    private final boolean mDisableCounterRangeCheck;
 }

@@ -19,6 +19,8 @@ package android.net.apf;
 import android.util.ArrayMap;
 import android.util.Log;
 
+import com.android.internal.annotations.VisibleForTesting;
+
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -112,6 +114,19 @@ public class ApfCounterTracker {
          */
         public static int totalSize() {
             return (Counter.class.getEnumConstants().length - 1) * 4;
+        }
+
+        /**
+         * Returns the counter enum based on the offset.
+         */
+        @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
+        public static Counter getCounterEnumFromOffset(int offset) {
+            for (Counter cnt : Counter.class.getEnumConstants()) {
+                if (cnt.offset() == offset) {
+                    return cnt;
+                }
+            }
+            return RESERVED_OOB;
         }
     }
 

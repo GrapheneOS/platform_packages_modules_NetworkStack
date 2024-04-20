@@ -39,8 +39,8 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
      */
     private static final String COUNT_AND_DROP_LABEL = "__COUNT_AND_DROP__";
 
-    private final String mCountAndDropLabel;
-    private final String mCountAndPassLabel;
+    public final String mCountAndDropLabel;
+    public final String mCountAndPassLabel;
 
     /**
      * Returns true if we support the specified {@code version}, otherwise false.
@@ -55,11 +55,21 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
      * the requested version is unsupported.
      */
     @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
-    public ApfV4Generator(int version) throws IllegalInstructionException {
+    public ApfV4Generator(int version, boolean disableCounterRangeCheck)
+            throws IllegalInstructionException {
         // make sure mVersion is not greater than 4 when using this class
-        super(version >= 4 ? 4 : version);
+        super(version >= 4 ? 4 : version, disableCounterRangeCheck);
         mCountAndDropLabel = version >= 4 ? COUNT_AND_DROP_LABEL : DROP_LABEL;
         mCountAndPassLabel = version >= 4 ? COUNT_AND_PASS_LABEL : PASS_LABEL;
+    }
+
+    /**
+     * Creates an ApfV4Generator instance which is able to emit instructions for the specified
+     * {@code version} of the APF interpreter. Throws {@code IllegalInstructionException} if
+     * the requested version is unsupported.
+     */
+    public ApfV4Generator(int version) throws IllegalInstructionException {
+        this(version, false);
     }
 
     @Override
