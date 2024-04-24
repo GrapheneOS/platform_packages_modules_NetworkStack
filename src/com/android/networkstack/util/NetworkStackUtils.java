@@ -157,11 +157,6 @@ public class NetworkStackUtils {
             new String [] {"https://www.google.com/generate_204"};
 
     /**
-     * Minimum module version at which to enable the DHCP Rapid Commit option.
-     */
-    public static final String DHCP_RAPID_COMMIT_VERSION = "dhcp_rapid_commit_version";
-
-    /**
      * Minimum module version at which to enable the IP address conflict detection feature.
      */
     public static final String DHCP_IP_CONFLICT_DETECT_VERSION = "dhcp_ip_conflict_detect_version";

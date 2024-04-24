@@ -37,7 +37,6 @@ import static com.android.net.module.util.NetworkStackConstants.INFINITE_LEASE;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ALL;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ANY;
 import static com.android.net.module.util.NetworkStackConstants.TAG_SYSTEM_DHCP_SERVER;
-import static com.android.networkstack.util.NetworkStackUtils.DHCP_RAPID_COMMIT_VERSION;
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
 import static java.lang.Integer.toUnsignedLong;
@@ -122,8 +121,6 @@ public class DhcpServer extends StateMachine {
     private FileDescriptor mSocket;
     @Nullable
     private IDhcpEventCallbacks mEventCallbacks;
-
-    private final boolean mDhcpRapidCommitEnabled;
 
     // States.
     private final StoppedState mStoppedState = new StoppedState();
@@ -275,8 +272,6 @@ public class DhcpServer extends StateMachine {
         mDeps = deps;
         mClock = deps.makeClock();
         mLeaseRepo = deps.makeLeaseRepository(mServingParams, mLog, mClock);
-        mDhcpRapidCommitEnabled =
-                deps.isFeatureNotChickenedOut(context, DHCP_RAPID_COMMIT_VERSION);
 
         // CHECKSTYLE:OFF IndentationCheck
         addState(mStoppedState);
@@ -552,7 +547,7 @@ public class DhcpServer extends StateMachine {
             final DhcpLease lease;
             final MacAddress clientMac = getMacAddr(packet);
             try {
-                if (mDhcpRapidCommitEnabled && packet.mRapidCommit) {
+                if (packet.mRapidCommit) {
                     lease = mLeaseRepo.getCommittedLease(packet.getExplicitClientIdOrNull(),
                             clientMac, packet.mRelayIp, packet.mHostName);
                     transmitAck(packet, lease, clientMac);
@@ -741,7 +736,7 @@ public class DhcpServer extends StateMachine {
                 mServingParams.getServerInet4Addr(), null /* domainName */, hostname,
                 mServingParams.metered, (short) mServingParams.linkMtu,
                 // TODO (b/144402437): advertise the URL if known
-                packet.mRapidCommit && mDhcpRapidCommitEnabled, null /* captivePortalApiUrl */);
+                packet.mRapidCommit, null /* captivePortalApiUrl */);
 
         return transmitOfferOrAckPacket(ackPacket, DhcpAckPacket.class.getSimpleName(), packet,
                 lease, clientMac, broadcastFlag);

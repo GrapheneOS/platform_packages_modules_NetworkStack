@@ -56,7 +56,6 @@ import static com.android.net.module.util.NetworkStackConstants.IPV4_CONFLICT_AN
 import static com.android.net.module.util.NetworkStackConstants.IPV4_CONFLICT_PROBE_NUM;
 import static com.android.net.module.util.SocketUtils.closeSocketQuietly;
 import static com.android.networkstack.util.NetworkStackUtils.DHCP_IP_CONFLICT_DETECT_VERSION;
-import static com.android.networkstack.util.NetworkStackUtils.DHCP_RAPID_COMMIT_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.DHCP_SLOW_RETRANSMISSION_VERSION;
 
 import android.content.Context;
@@ -600,13 +599,6 @@ public class DhcpClient extends StateMachine {
     }
 
     /**
-     * check whether or not to support DHCP Rapid Commit option.
-     */
-    public boolean isDhcpRapidCommitEnabled() {
-        return mDependencies.isFeatureNotChickenedOut(mContext, DHCP_RAPID_COMMIT_VERSION);
-    }
-
-    /**
      * check whether or not to support IP address conflict detection and DHCPDECLINE.
      */
     public boolean isDhcpIpConflictDetectEnabled() {
@@ -623,7 +615,7 @@ public class DhcpClient extends StateMachine {
 
     private void recordMetricEnabledFeatures() {
         mMetrics.setDhcpEnabledFeature(DhcpFeature.DF_INITREBOOT);
-        if (isDhcpRapidCommitEnabled()) mMetrics.setDhcpEnabledFeature(DhcpFeature.DF_RAPIDCOMMIT);
+        mMetrics.setDhcpEnabledFeature(DhcpFeature.DF_RAPIDCOMMIT);
         if (isDhcpIpConflictDetectEnabled()) mMetrics.setDhcpEnabledFeature(DhcpFeature.DF_DAD);
         if (mConfiguration.isPreconnectionEnabled) {
             mMetrics.setDhcpEnabledFeature(DhcpFeature.DF_FILS);
@@ -800,7 +792,7 @@ public class DhcpClient extends StateMachine {
         // taking Rapid Commit option, in order to prevent the potential interoperability issue
         // and be able to rollback later. See {@link DHCP_TIMEOUT_MS} for the (re)transmission
         // schedule with 10% jitter.
-        final boolean requestRapidCommit = isDhcpRapidCommitEnabled() && (getSecs() <= 4);
+        final boolean requestRapidCommit = (getSecs() <= 4);
         final ByteBuffer packet = DhcpPacket.buildDiscoverPacket(
                 DhcpPacket.ENCAP_L2, mTransactionId, getSecs(), mHwAddr,
                 DO_UNICAST, getRequestedParams(), requestRapidCommit, maybeGetHostnameForSending(),
@@ -1391,7 +1383,7 @@ public class DhcpClient extends StateMachine {
         }
 
         protected void receivePacket(DhcpPacket packet) {
-            receiveOfferOrAckPacket(packet, isDhcpRapidCommitEnabled());
+            receiveOfferOrAckPacket(packet, true /* acceptRapidCommit */);
         }
     }
 
