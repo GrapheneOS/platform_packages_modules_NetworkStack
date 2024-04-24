@@ -127,7 +127,7 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      * the sum of {@code offset} and the value in register R1.
      */
     public final Type addLoad8Indexed(Register r, int ofs) {
-        return append(new Instruction(Opcodes.LDBX, r).addPacketOffset(ofs));
+        return append(new Instruction(Opcodes.LDBX, r).addTwosCompUnsigned(ofs));
     }
 
     /**
@@ -136,7 +136,7 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      * the sum of {@code offset} and the value in register R1.
      */
     public final Type addLoad16Indexed(Register r, int ofs) {
-        return append(new Instruction(Opcodes.LDHX, r).addPacketOffset(ofs));
+        return append(new Instruction(Opcodes.LDHX, r).addTwosCompUnsigned(ofs));
     }
 
     /**
@@ -145,7 +145,7 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      * the sum of {@code offset} and the value in register R1.
      */
     public final Type addLoad32Indexed(Register r, int ofs) {
-        return append(new Instruction(Opcodes.LDWX, r).addPacketOffset(ofs));
+        return append(new Instruction(Opcodes.LDWX, r).addTwosCompUnsigned(ofs));
     }
 
     /**

@@ -410,6 +410,30 @@ java_library {
     ],
 }
 
+java_library {
+    name: "ApfGeneratorLib",
+    defaults: ["NetworkStackReleaseApiLevel"],
+    srcs: [
+        "src/android/net/apf/ApfConstant.java",
+        "src/android/net/apf/ApfCounterTracker.java",
+        "src/android/net/apf/ApfV4Generator.java",
+        "src/android/net/apf/ApfV4GeneratorBase.java",
+        "src/android/net/apf/ApfV6Generator.java",
+        "src/android/net/apf/ApfV6GeneratorBase.java",
+        "src/android/net/apf/BaseApfGenerator.java",
+    ],
+    libs: [
+        "androidx.annotation_annotation",
+        "framework-annotations-lib",
+    ],
+    static_libs: [
+        "net-utils-framework-common",
+    ],
+    visibility: [
+        "//packages/modules/Connectivity/tests/cts/net",
+    ],
+}
+
 java_genrule {
     name: "NetworkStackJarJarRules",
     tool_files: [
