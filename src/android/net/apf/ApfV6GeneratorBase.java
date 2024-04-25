@@ -21,9 +21,12 @@ import static android.net.apf.BaseApfGenerator.Register.R1;
 
 import androidx.annotation.NonNull;
 
+import com.android.net.module.util.CollectionUtils;
 import com.android.net.module.util.HexDump;
 
+import java.util.Collections;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * The abstract class for APFv6 assembler/generator.
@@ -417,8 +420,9 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
      * packet at an offset specified by register0 match {@code bytes}.
      * R=1 means check for equal.
      */
-    public final Type addJumpIfBytesAtR0Equal(byte[] bytes, String tgt)
+    public final Type addJumpIfBytesAtR0Equal(@NonNull byte[] bytes, String tgt)
             throws IllegalInstructionException {
+        validateBytes(bytes);
         return append(new Instruction(Opcodes.JNEBS, R1).addUnsigned(
                 bytes.length).setTargetLabel(tgt).setBytesImm(bytes));
     }
@@ -463,6 +467,62 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
         if (names[len - 1] != 0) {
             throw new IllegalArgumentException(errorMessage);
         }
+    }
+
+    private Type addJumpIfOneOfHelper(Register reg, @NonNull Set<Long> values,
+            boolean jumpOnMatch, @NonNull String tgt) {
+        if (CollectionUtils.isEmpty(values) || values.size() > 33 || values.size() < 2) {
+            throw new IllegalArgumentException(
+                    "size of values set must be >= 2 and <= 33, current size: " + values.size());
+        }
+        final Long max = Collections.max(values);
+        final Long min = Collections.min(values);
+        checkRange("max value in set", max, 0, 4294967295L);
+        checkRange("min value in set", min, 0, 4294967295L);
+        final int maxImmSize = Math.max(0, calculateImmSize(max.intValue(), false));
+
+        // imm3(u8): top 5 bits - number of following u8/be16/be32 values - 2
+        // middle 2 bits - 1..4 length of immediates - 1
+        // bottom 1 bit - =0 jmp if in set, =1 if not in set
+        Instruction instruction = new Instruction(ExtendedOpcodes.JONEOF, reg)
+                .setTargetLabel(tgt)
+                .addU8((values.size() - 2) << 3 | (maxImmSize - 1) << 1 | (jumpOnMatch ? 0 : 1));
+        for (Long v : values) {
+            switch (maxImmSize) {
+                case 1:
+                    instruction.addU8(v.intValue());
+                    break;
+                case 2:
+                    instruction.addU16(v.intValue());
+                    break;
+                // case 3: instruction.addU24(v); break; -- not supported by generator
+                case 4:
+                    instruction.addU32(v);
+                    break;
+                default:
+                    throw new IllegalArgumentException(
+                            "immLen is not in {1, 2, 4}, immLen: " + maxImmSize);
+            }
+        }
+        return append(instruction);
+    }
+
+    /**
+     * Add an instruction to the end of the program to jump to {@code tgt} if {@code reg} is
+     * one of the {@code values}.
+     */
+    public final Type addJumpIfOneOf(Register reg, @NonNull Set<Long> values,
+            @NonNull String tgt) {
+        return addJumpIfOneOfHelper(reg, values, true /* jumpOnMatch */, tgt);
+    }
+
+    /**
+     * Add an instruction to the end of the program to jump to {@code tgt} if {@code reg} is
+     * not one of the {@code values}.
+     */
+    public final Type addJumpIfNoneOf(Register reg, @NonNull Set<Long> values,
+            @NonNull String tgt) {
+        return addJumpIfOneOfHelper(reg, values, false /* jumpOnMatch */, tgt);
     }
 
     @Override

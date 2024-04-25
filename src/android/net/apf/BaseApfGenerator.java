@@ -170,7 +170,16 @@ public abstract class BaseApfGenerator {
         //       "jdnsane R0,label,0xc,\002aa\005local\0\0"
 
         JDNSAMATCH(44),
-        JDNSAMATCHSAFE(46);
+        JDNSAMATCHSAFE(46),
+        // Jump if register is [not] one of the list of values
+        // R bit - specifies the register (R0/R1) to test
+        // imm1: Extended opcode
+        // imm2: Jump label offset
+        // imm3(u8): top 5 bits - number of following u8/be16/be32 values - 1
+        //        middle 2 bits - 1..4 length of immediates - 1
+        //        bottom 1 bit  - =0 jmp if in set, =1 if not in set
+        // imm4(imm3 * 1/2/3/4 bytes): the *UNIQUE* values to compare against
+        JONEOF(47);
 
         final int value;
 
@@ -659,7 +668,7 @@ public abstract class BaseApfGenerator {
     /**
      * Calculate the size of the imm.
      */
-    private static int calculateImmSize(int imm, boolean signed) {
+    static int calculateImmSize(int imm, boolean signed) {
         if (imm == 0) {
             return 0;
         }

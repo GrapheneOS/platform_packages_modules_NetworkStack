@@ -159,7 +159,6 @@ public class IpClientLinkObserver {
     private final NetworkInformationShim mShim;
     private final AlarmManager.OnAlarmListener mExpirePref64Alarm;
 
-    private boolean mClatInterfaceExists;
     private long mNat64PrefixExpiry;
 
     /**
@@ -515,17 +514,11 @@ public class IpClientLinkObserver {
     private void updateClatInterfaceLinkState(@Nullable final String ifname, short nlMsgType) {
         switch (nlMsgType) {
             case NetlinkConstants.RTM_NEWLINK:
-                if (mClatInterfaceExists) break;
-                maybeLog("clatInterfaceAdded", ifname);
                 mCallback.onClatInterfaceStateUpdate(true /* add interface */);
-                mClatInterfaceExists = true;
                 break;
 
             case NetlinkConstants.RTM_DELLINK:
-                if (!mClatInterfaceExists) break;
-                maybeLog("clatInterfaceRemoved", ifname);
                 mCallback.onClatInterfaceStateUpdate(false /* remove interface */);
-                mClatInterfaceExists = false;
                 break;
 
             default:
