@@ -315,6 +315,15 @@ class ApfV5Test {
         assertFailsWith<IllegalArgumentException> {
             gen.addJumpIfOneOf(R0, List(34) { (it + 1).toLong() }.toSet(), PASS_LABEL)
         }
+        assertFailsWith<IllegalArgumentException> {
+            gen.addJumpIfBytesAtR0EqualsAnyOf(listOf(ByteArray(2048) { 1 }), PASS_LABEL )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            gen.addJumpIfBytesAtR0EqualsAnyOf(
+                    listOf(byteArrayOf(1), byteArrayOf(1, 2)),
+                    PASS_LABEL
+            )
+        }
 
         val v4gen = ApfV4Generator(APF_VERSION_4)
         assertFailsWith<IllegalArgumentException> { v4gen.addCountAndDrop(PASSED_ARP) }
@@ -697,6 +706,25 @@ class ApfV5Test {
         assertContentEquals(listOf(
                 "0: joneof      r0, DROP, { 0, 128, 256, 65536 }",
                 "20: jnoneof     r1, DROP, { 0, 128, 256, 65536 }"
+        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+
+        gen = ApfV6Generator()
+        gen.addJumpIfBytesAtR0EqualsAnyOf(listOf(byteArrayOf(1, 2), byteArrayOf(3, 4)), DROP_LABEL)
+        gen.addJumpIfBytesAtR0EqualNoneOf(listOf(byteArrayOf(1, 2), byteArrayOf(3, 4)), DROP_LABEL)
+        gen.addJumpIfBytesAtR0EqualNoneOf(listOf(byteArrayOf(1, 1), byteArrayOf(1, 1)), DROP_LABEL)
+        program = gen.generate().skipEmptyData()
+        assertContentEquals(byteArrayOf(
+                encodeInstruction(opcode = 20, immLength = 2, register = 1),
+                0, 15, 8, 2, 1, 2, 3, 4,
+                encodeInstruction(opcode = 20, immLength = 2, register = 0),
+                0, 6, 8, 2, 1, 2, 3, 4,
+                encodeInstruction(opcode = 20, immLength = 1, register = 0),
+                1, 2, 1, 1
+        ), program)
+        assertContentEquals(listOf(
+                "0: jbseq       r0, 0x2, DROP, { 0102, 0304 }",
+                "9: jbsne       r0, 0x2, DROP, { 0102, 0304 }",
+                "18: jbsne       r0, 0x2, DROP, 0101"
         ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
     }
 
@@ -1290,6 +1318,49 @@ class ApfV5Test {
         val counterBytes = intArrayOf(0xff, 0, 0, 0, 0x78, 0x56, 0x34, 0x12)
                 .map { it.toByte() }.toByteArray()
         assertEquals(0xff, ApfCounterTracker.getCounterValue(counterBytes, Counter.TOTAL_PACKETS))
+    }
+
+    @Test
+    fun testJumpMultipleByteSequencesMatch() {
+        var program = ApfV6Generator()
+                .addLoadImmediate(R0, 0)
+                .addJumpIfBytesAtR0EqualsAnyOf(
+                        listOf(byteArrayOf(1, 2, 3), byteArrayOf(6, 5, 4)),
+                        DROP_LABEL
+                )
+                .addPass()
+                .generate()
+        assertDrop(APF_VERSION_6, program, testPacket)
+
+        program = ApfV6Generator()
+                .addLoadImmediate(R0, 2)
+                .addJumpIfBytesAtR0EqualsAnyOf(
+                        listOf(byteArrayOf(1, 2, 3), byteArrayOf(6, 5, 4)),
+                        DROP_LABEL
+                )
+                .addPass()
+                .generate()
+        assertPass(APF_VERSION_6, program, testPacket)
+
+        program = ApfV6Generator()
+                .addLoadImmediate(R0, 1)
+                .addJumpIfBytesAtR0EqualNoneOf(
+                        listOf(byteArrayOf(1, 2, 3), byteArrayOf(6, 5, 4)),
+                        DROP_LABEL
+                )
+                .addPass()
+                .generate()
+        assertDrop(APF_VERSION_6, program, testPacket)
+
+        program = ApfV6Generator()
+                .addLoadImmediate(R0, 0)
+                .addJumpIfBytesAtR0EqualNoneOf(
+                        listOf(byteArrayOf(1, 2, 3), byteArrayOf(6, 5, 4)),
+                        DROP_LABEL
+                )
+                .addPass()
+                .generate()
+        assertPass(APF_VERSION_6, program, testPacket)
     }
 
     @Test
