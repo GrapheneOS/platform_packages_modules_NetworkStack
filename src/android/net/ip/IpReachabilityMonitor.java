@@ -523,10 +523,12 @@ public class IpReachabilityMonitor {
             mNeighborWatchList.remove(event.ip);
         }
 
-        final boolean lostProvisioning =
-                (mLinkProperties.isIpv4Provisioned() && !whatIfLp.isIpv4Provisioned())
-                        || (mLinkProperties.isIpv6Provisioned() && !whatIfLp.isIpv6Provisioned()
-                                && !ignoreIncompleteIpv6Neighbor);
+        final boolean lostIpv4Provisioning =
+                mLinkProperties.isIpv4Provisioned() && !whatIfLp.isIpv4Provisioned();
+        final boolean lostIpv6Provisioning =
+                mLinkProperties.isIpv6Provisioned() && !whatIfLp.isIpv6Provisioned()
+                        && !ignoreIncompleteIpv6Neighbor;
+        final boolean lostProvisioning = lostIpv4Provisioning || lostIpv6Provisioning;
         final NudEventType type = getNudFailureEventType(isFromProbe(),
                 isNudFailureDueToRoam(), lostProvisioning);
 

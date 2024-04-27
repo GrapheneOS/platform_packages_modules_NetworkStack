@@ -421,7 +421,7 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      */
     public final Type addJumpIfBytesAtR0NotEqual(@NonNull byte[] bytes, String tgt) {
         validateBytes(bytes);
-        return append(new Instruction(Opcodes.JNEBS).addUnsigned(
+        return append(new Instruction(Opcodes.JBSMATCH).addUnsigned(
                 bytes.length).setTargetLabel(tgt).setBytesImm(bytes));
     }
 

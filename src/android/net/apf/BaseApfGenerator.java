@@ -84,7 +84,12 @@ public abstract class BaseApfGenerator {
         JGT(17),   // Compare greater than and branch, e.g. "jgt R0,5,label"
         JLT(18),   // Compare less than and branch, e.g. "jlt R0,5,label"
         JSET(19),  // Compare any bits set and branch, e.g. "jset R0,5,label"
-        JNEBS(20), // Compare not equal byte sequence, e.g. "jnebs R0,5,label,0x1122334455"
+        // Compare not equal byte sequence, e.g. "jnebs R0,5,label,0x1122334455"
+        // NOTE: Only APFv6+ implements R=1 'jbseq' version and multi match
+        // imm1 is jmp target, imm2 is (cnt - 1) * 2048 + compare_len,
+        // which is followed by cnt * compare_len bytes to compare against.
+        // Warning: do not specify the same byte sequence multiple times.
+        JBSMATCH(20),
         EXT(21),   // Followed by immediate indicating ExtendedOpcodes.
         LDDW(22),  // Load 4 bytes from data memory address (register + immediate): "lddw R0, [5]R1"
         STDW(23),  // Store 4 bytes to data memory address (register + immediate): "stdw R0, [5]R1"

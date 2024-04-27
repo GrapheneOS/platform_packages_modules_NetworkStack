@@ -21,7 +21,6 @@ import static android.net.apf.BaseApfGenerator.Register.R1;
 
 import androidx.annotation.NonNull;
 
-import com.android.net.module.util.CollectionUtils;
 import com.android.net.module.util.HexDump;
 
 import java.util.Collections;
@@ -423,7 +422,7 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
     public final Type addJumpIfBytesAtR0Equal(@NonNull byte[] bytes, String tgt)
             throws IllegalInstructionException {
         validateBytes(bytes);
-        return append(new Instruction(Opcodes.JNEBS, R1).addUnsigned(
+        return append(new Instruction(Opcodes.JBSMATCH, R1).addUnsigned(
                 bytes.length).setTargetLabel(tgt).setBytesImm(bytes));
     }
 
@@ -471,7 +470,7 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
 
     private Type addJumpIfOneOfHelper(Register reg, @NonNull Set<Long> values,
             boolean jumpOnMatch, @NonNull String tgt) {
-        if (CollectionUtils.isEmpty(values) || values.size() > 33 || values.size() < 2) {
+        if (values == null || values.size() < 2 || values.size() > 33)  {
             throw new IllegalArgumentException(
                     "size of values set must be >= 2 and <= 33, current size: " + values.size());
         }
@@ -479,7 +478,9 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
         final Long min = Collections.min(values);
         checkRange("max value in set", max, 0, 4294967295L);
         checkRange("min value in set", min, 0, 4294967295L);
-        final int maxImmSize = Math.max(0, calculateImmSize(max.intValue(), false));
+        // Since sets are always of size > 1 and in range [0, uint32_max], max is guaranteed > 0,
+        // so maxImmSize can never be 0.
+        final int maxImmSize = calculateImmSize(max.intValue(), false);
 
         // imm3(u8): top 5 bits - number of following u8/be16/be32 values - 2
         // middle 2 bits - 1..4 length of immediates - 1
