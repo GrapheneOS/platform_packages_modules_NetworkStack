@@ -64,6 +64,7 @@ import com.android.networkstack.R;
 import com.android.networkstack.metrics.IpReachabilityMonitorMetrics;
 
 import java.io.PrintWriter;
+import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.util.ArrayList;
@@ -449,17 +450,20 @@ public class IpReachabilityMonitor {
         maybeRestoreNeighborParameters();
     }
 
-    private boolean shouldIgnoreIncompleteIpv6Neighbor(@Nullable final NeighborEvent prev,
+    private boolean shouldIgnoreIncompleteNeighbor(@Nullable final NeighborEvent prev,
             @NonNull final NeighborEvent event) {
-        // If it isn't IPv6 neighbor, return false.
-        if (!(event.ip instanceof Inet6Address)) return false;
+        if (!(event.ip instanceof Inet6Address || event.ip instanceof Inet4Address)) {
+            Log.e(TAG, "Invalid IP address " + event.ip);
+            return false;
+        }
 
         // If neighbor isn't in the watch list, return false.
         if (!mNeighborWatchList.containsKey(event.ip)) return false;
 
-        // For on-link IPv6 DNS server or default router that never ever responds to address
-        // resolution, kernel will send RTM_NEWNEIGH with NUD_FAILED to user space directly,
-        // and there is no netlink neighbor events related to this neighbor received before.
+        // For on-link IPv4/v6 DNS server or default router that never ever responds to
+        // address resolution(e.g. ARP or NS), kernel will send RTM_NEWNEIGH with NUD_FAILED
+        // to user space directly, and there is no netlink neighbor events related to this
+        // neighbor received before.
         return (prev == null && event.nudState == StructNdMsg.NUD_FAILED);
     }
 
@@ -497,7 +501,7 @@ public class IpReachabilityMonitor {
         final boolean ignoreIncompleteIpv6DnsServer =
                 mIgnoreIncompleteIpv6DnsServerEnabled
                         && isNeighborDnsServer(event)
-                        && shouldIgnoreIncompleteIpv6Neighbor(prev, event);
+                        && shouldIgnoreIncompleteNeighbor(prev, event);
 
         // Generally Router Advertisement should take SLLA option, then device won't do address
         // resolution for default router's IPv6 link-local address automatically. But sometimes
@@ -505,7 +509,7 @@ public class IpReachabilityMonitor {
         final boolean ignoreIncompleteIpv6DefaultRouter =
                 mIgnoreIncompleteIpv6DefaultRouterEnabled
                         && isNeighborDefaultRouter(event)
-                        && shouldIgnoreIncompleteIpv6Neighbor(prev, event);
+                        && shouldIgnoreIncompleteNeighbor(prev, event);
 
         // Only ignore the incomplete IPv6 neighbor iff IPv4 is still provisioned. For IPv6-only
         // networks, we MUST not ignore any incomplete IPv6 neighbor.
