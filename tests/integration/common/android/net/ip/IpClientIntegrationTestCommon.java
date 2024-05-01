@@ -4293,9 +4293,8 @@ public abstract class IpClientIntegrationTestCommon {
         socket.send(pkt);
     }
 
-    private void runIpReachabilityMonitorAddressResolutionTest(final String dnsServer,
-            final Inet6Address targetIp,
-            final boolean expectNeighborLost) throws Exception {
+    private void prepareIpReachabilityMonitorAddressResolutionTest(final String dnsServer,
+            final Inet6Address targetIp) throws Exception {
         mNetworkAgentThread =
                 new HandlerThread(IpClientIntegrationTestCommon.class.getSimpleName());
         mNetworkAgentThread.start();
@@ -4303,14 +4302,14 @@ public abstract class IpClientIntegrationTestCommon {
         setDhcpFeatures(true /* isRapidCommitEnabled */,
                 false /* isDhcpIpConflictDetectEnabled */);
         final ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
-                 // We've found that mCm.shouldAvoidBadWifi() has a flaky behavior in the root test,
-                 // probably due to the sim card in the DUT. it doesn't occur in the siganture test
-                 // since we mock the return value directly. As a result, sometimes
-                 // IpReachabilityMonitor#avoidingBadLinks() returns false, it caused the expected
-                 // onReachabilityFailure callback wasn't triggered on the test. In order to make
-                 // the root test more stable, do not use MultinetworkPolicyTracker only for IPv6
-                 // neighbor reachability checking relevant test cases, that guarantees
-                 // avoidingBadLinks() always returns true which is expected.
+                // We've found that mCm.shouldAvoidBadWifi() has a flaky behavior in the root test,
+                // probably due to the sim card in the DUT. it doesn't occur in the siganture test
+                // since we mock the return value directly. As a result, sometimes
+                // IpReachabilityMonitor#avoidingBadLinks() returns false, it caused the expected
+                // onReachabilityFailure callback wasn't triggered on the test. In order to make
+                // the root test more stable, do not use MultinetworkPolicyTracker only for IPv6
+                // neighbor reachability checking relevant test cases, that guarantees
+                // avoidingBadLinks() always returns true which is expected.
                 .withoutMultinetworkPolicyTracker()
                 .build();
         startIpClientProvisioning(config);
@@ -4336,6 +4335,12 @@ public abstract class IpClientIntegrationTestCommon {
         final byte[] data = new byte[100];
         random.nextBytes(data);
         sendUdpPacketToNetwork(mNetworkAgent.getNetwork(), dnsServerIp, 1234 /* port */, data);
+    }
+
+    private void runIpReachabilityMonitorAddressResolutionTest(final String dnsServer,
+            final Inet6Address targetIp,
+            final boolean expectNeighborLost) throws Exception {
+        prepareIpReachabilityMonitorAddressResolutionTest(dnsServer, targetIp);
 
         // Wait for the multicast NSes but never respond to them, that results in the on-link
         // DNS gets lost and onReachabilityLost callback will be invoked.
@@ -4445,6 +4450,65 @@ public abstract class IpClientIntegrationTestCommon {
         runIpReachabilityMonitorAddressResolutionTest(IPV6_OFF_LINK_DNS_SERVER,
                 ROUTER_LINK_LOCAL /* targetIp */,
                 true /* expectNeighborLost */);
+    }
+
+    private void runIpReachabilityMonitorIncompleteIpv6NeighborTest(final String dnsServer,
+            final Inet6Address targetIp) throws Exception {
+        prepareIpReachabilityMonitorAddressResolutionTest(dnsServer, targetIp);
+
+        // Simulate the default router was reachable by responding to multicast NS(not for DAD).
+        NeighborSolicitation ns;
+        while ((ns = getNextNeighborSolicitation()) != null) {
+            if (ns.ipv6Hdr.dstIp.isMulticastAddress() // Solicited-node multicast address
+                    && ns.nsHdr.target.equals(targetIp)) {
+                final ByteBuffer na = NeighborAdvertisement.build(ROUTER_MAC /* srcMac */,
+                        ns.ethHdr.srcMac /* dstMac */, ROUTER_LINK_LOCAL /* srcIp */,
+                        ns.ipv6Hdr.srcIp /* dstIp */,
+                        NEIGHBOR_ADVERTISEMENT_FLAG_ROUTER | NEIGHBOR_ADVERTISEMENT_FLAG_SOLICITED,
+                        targetIp);
+                mPacketReader.sendResponse(na);
+                break;
+            }
+        }
+
+        // Trigger the NUD probe manually by sending CMD_CONFIRM command, this will force to start
+        // probing for all neighbors in the watchlist including default router and on-link DNS.
+        mIIpClient.confirmConfiguration();
+
+        // Wait for the next unicast NS probes, but don't respond to them, which should trigger
+        // reachability failure callback because the probe status is from probed to failed, rather
+        // than incomplete to failed.
+        while ((ns = getNextNeighborSolicitation()) != null) {
+            // Respond to NS for default router, it's used to avoid triggering multiple
+            // onReachabilityFailure callbacks.
+            if (!targetIp.equals(ROUTER_LINK_LOCAL)) {
+                final ByteBuffer na = NeighborAdvertisement.build(ROUTER_MAC /* srcMac */,
+                        ns.ethHdr.srcMac /* dstMac */, ROUTER_LINK_LOCAL /* srcIp */,
+                        ns.ipv6Hdr.srcIp /* dstIp */,
+                        NEIGHBOR_ADVERTISEMENT_FLAG_ROUTER | NEIGHBOR_ADVERTISEMENT_FLAG_SOLICITED,
+                        ROUTER_LINK_LOCAL);
+                mPacketReader.sendResponse(na);
+            }
+        }
+        assertNotifyNeighborLost(targetIp, NudEventType.NUD_CONFIRM_FAILED_CRITICAL);
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION, enabled = false)
+    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION, enabled = true)
+    @Flag(name = IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION, enabled = false)
+    public void testIpReachabilityMonitor_ignoreIpv6DefaultRouter_everReachable() throws Exception {
+        runIpReachabilityMonitorIncompleteIpv6NeighborTest(IPV6_OFF_LINK_DNS_SERVER,
+                ROUTER_LINK_LOCAL /* targetIp */);
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION, enabled = true)
+    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION, enabled = false)
+    @Flag(name = IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION, enabled = false)
+    public void testIpReachabilityMonitor_ignoreIpv6Dns_everReachable() throws Exception {
+        runIpReachabilityMonitorIncompleteIpv6NeighborTest(IPV6_ON_LINK_DNS_SERVER,
+                ipv6Addr(IPV6_ON_LINK_DNS_SERVER) /* targetIp */);
     }
 
     @Test

@@ -15,15 +15,15 @@
  */
 package android.net.apf
 
-import android.net.apf.ApfConstant.DHCP_SERVER_PORT
-import android.net.apf.ApfConstant.ETH_HEADER_LEN
-import android.net.apf.ApfConstant.ICMP6_TYPE_OFFSET
-import android.net.apf.ApfConstant.IPV4_BROADCAST_ADDRESS
-import android.net.apf.ApfConstant.IPV4_DEST_ADDR_OFFSET
-import android.net.apf.ApfConstant.IPV4_PROTOCOL_OFFSET
-import android.net.apf.ApfConstant.IPV4_SRC_ADDR_OFFSET
-import android.net.apf.ApfConstant.IPV6_NEXT_HEADER_OFFSET
-import android.net.apf.ApfConstant.TCP_UDP_DESTINATION_PORT_OFFSET
+import android.net.apf.ApfConstants.DHCP_SERVER_PORT
+import android.net.apf.ApfConstants.ETH_HEADER_LEN
+import android.net.apf.ApfConstants.ICMP6_TYPE_OFFSET
+import android.net.apf.ApfConstants.IPV4_BROADCAST_ADDRESS
+import android.net.apf.ApfConstants.IPV4_DEST_ADDR_OFFSET
+import android.net.apf.ApfConstants.IPV4_PROTOCOL_OFFSET
+import android.net.apf.ApfConstants.IPV4_SRC_ADDR_OFFSET
+import android.net.apf.ApfConstants.IPV6_NEXT_HEADER_OFFSET
+import android.net.apf.ApfConstants.TCP_UDP_DESTINATION_PORT_OFFSET
 import android.net.apf.BaseApfGenerator.APF_VERSION_4
 import android.net.apf.BaseApfGenerator.MemorySlot
 import android.net.apf.BaseApfGenerator.Register.R0

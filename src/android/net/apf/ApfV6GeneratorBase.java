@@ -17,6 +17,7 @@ package android.net.apf;
 
 import static android.net.apf.BaseApfGenerator.Rbit.Rbit0;
 import static android.net.apf.BaseApfGenerator.Rbit.Rbit1;
+import static android.net.apf.BaseApfGenerator.Register.R0;
 import static android.net.apf.BaseApfGenerator.Register.R1;
 
 import androidx.annotation.NonNull;
@@ -41,14 +42,17 @@ import java.util.Set;
 public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> extends
         ApfV4GeneratorBase<Type> {
 
+    final int mMaximumApfProgramSize;
+
     /**
      * Creates an ApfV6GeneratorBase instance which is able to emit instructions for the specified
      * {@code version} of the APF interpreter. Throws {@code IllegalInstructionException} if
      * the requested version is unsupported.
      *
      */
-    public ApfV6GeneratorBase() throws IllegalInstructionException {
+    public ApfV6GeneratorBase(int maximumApfProgramSize) throws IllegalInstructionException {
         super(APF_VERSION_6, false);
+        this.mMaximumApfProgramSize = maximumApfProgramSize;
     }
 
     /**
@@ -123,6 +127,14 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
         }
         return append(new Instruction(Opcodes.JMP, Rbit1).addUnsigned(data.length)
                 .setBytesImm(data).overrideImmSize(2));
+    }
+
+    /**
+     * Add an instruction to the end of the program to set the exception buffer size.
+     * @param bufSize the exception buffer size
+     */
+    public final Type addExceptionBuffer(int bufSize) throws IllegalInstructionException {
+        return append(new Instruction(ExtendedOpcodes.EXCEPTIONBUFFER).addU16(bufSize));
     }
 
     /**
@@ -599,8 +611,8 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
     }
 
     @Override
-    void addArithR1(Opcodes opcode) {
-        append(new Instruction(opcode, R1));
+    void addR0ArithR1(Opcodes opcode) {
+        append(new Instruction(opcode, R0));  // APFv6+: R0 op= R1
     }
 
     /**

@@ -414,7 +414,7 @@ java_library {
     name: "ApfGeneratorLib",
     defaults: ["NetworkStackReleaseApiLevel"],
     srcs: [
-        "src/android/net/apf/ApfConstant.java",
+        "src/android/net/apf/ApfConstants.java",
         "src/android/net/apf/ApfCounterTracker.java",
         "src/android/net/apf/ApfV4Generator.java",
         "src/android/net/apf/ApfV4GeneratorBase.java",

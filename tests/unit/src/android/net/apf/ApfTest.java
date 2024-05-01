@@ -3531,7 +3531,7 @@ public class ApfTest {
     @Test
     public void testApfGeneratorPropagation() throws IllegalInstructionException {
         ApfV4Generator v4Gen = new ApfV4Generator(APF_VERSION_4);
-        ApfV6Generator v6Gen = new ApfV6Generator();
+        ApfV6Generator v6Gen = new ApfV6Generator(1024);
         assertEquals(4, deriveApfGeneratorVersion(v4Gen));
         assertEquals(6, deriveApfGeneratorVersion(v6Gen));
     }

@@ -18,9 +18,9 @@ package android.net.apf;
 /**
  * The class which declares constants used in ApfFilter and unit tests.
  */
-public final class ApfConstant {
+public final class ApfConstants {
 
-    private ApfConstant() {}
+    private ApfConstants() {}
     public static final int ETH_HEADER_LEN = 14;
     public static final int ETH_DEST_ADDR_OFFSET = 0;
     public static final int ETH_ETHERTYPE_OFFSET = 12;
