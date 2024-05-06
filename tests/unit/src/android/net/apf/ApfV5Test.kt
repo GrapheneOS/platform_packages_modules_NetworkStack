@@ -16,6 +16,7 @@
 package android.net.apf
 
 import android.content.Context
+import android.net.InetAddresses
 import android.net.LinkAddress
 import android.net.LinkProperties
 import android.net.apf.ApfCounterTracker.Counter
@@ -59,6 +60,7 @@ import com.android.networkstack.metrics.NetworkQuirkMetrics
 import com.android.testutils.DevSdkIgnoreRule
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo
 import com.android.testutils.DevSdkIgnoreRunner
+import java.net.Inet6Address
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import kotlin.test.assertContentEquals
@@ -100,8 +102,12 @@ class ApfV5Test {
     private val senderIpv4Address = byteArrayOf(10, 0, 0, 2)
     private val arpBroadcastMacAddress = intArrayOf(0xff, 0xff, 0xff, 0xff, 0xff, 0xff)
             .map { it.toByte() }.toByteArray()
-    private val senderMacAddress = intArrayOf(0x11, 0x22, 0x33, 0x44, 0x55, 0x66)
+    private val senderMacAddress = intArrayOf(0x01, 0x22, 0x33, 0x44, 0x55, 0x66)
             .map { it.toByte() }.toByteArray()
+    private val hostIpv6AddressList = listOf(
+        InetAddresses.parseNumericAddress("2001::200:1a:3344:1122") as Inet6Address,
+        InetAddresses.parseNumericAddress("2001::100:1b:4455:6677") as Inet6Address
+    )
 
     @Before
     fun setUp() {
@@ -1467,6 +1473,46 @@ class ApfV5Test {
                 decodeCountersIntoMap(data)
         )
         apfFilter.shutdown()
+    }
+
+    @Test
+    fun testApfProgramUpdate() {
+        val ipClientCallback = ApfTestUtils.MockIpClientCallback()
+        val apfFilter = TestApfFilter(
+            context,
+            getDefaultConfig(),
+            ipClientCallback,
+            metrics,
+            dependencies
+        )
+
+        val lp = LinkProperties()
+
+        // add IPv4 address, expect to have apf program update
+        ipClientCallback.resetApfProgramWait()
+        val linkAddress = LinkAddress(InetAddress.getByAddress(hostIpv4Address), 24)
+        lp.addLinkAddress(linkAddress)
+        apfFilter.setLinkProperties(lp)
+        ipClientCallback.assertProgramUpdateAndGet()
+
+        // add the same IPv4 address, expect to have no apf program update
+        ipClientCallback.resetApfProgramWait()
+        apfFilter.setLinkProperties(lp)
+        ipClientCallback.assertNoProgramUpdate()
+
+        // add IPv6 addresses, expect to have apf program update
+        ipClientCallback.resetApfProgramWait()
+        for (addr in hostIpv6AddressList) {
+            lp.addLinkAddress(LinkAddress(addr, 64))
+        }
+
+        apfFilter.setLinkProperties(lp)
+        ipClientCallback.assertProgramUpdateAndGet()
+
+        // add the same IPv6 addresses, expect to have no apf program update
+        ipClientCallback.resetApfProgramWait()
+        apfFilter.setLinkProperties(lp)
+        ipClientCallback.assertNoProgramUpdate()
     }
 
     private fun decodeCountersIntoMap(counterBytes: ByteArray): Map<Counter, Long> {
