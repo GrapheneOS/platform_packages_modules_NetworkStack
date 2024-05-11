@@ -231,6 +231,7 @@ public class ApfFilter implements AndroidPacketFilter {
     private final TokenBucket mTokenBucket;
 
     @VisibleForTesting
+    @NonNull
     public byte[] mHardwareAddress;
     @VisibleForTesting
     public ReceiveThread mReceiveThread;
@@ -1566,7 +1567,7 @@ public class ApfFilter implements AndroidPacketFilter {
                     Counter.DROPPED_ARP_OTHER_HOST);
 
             ApfV6Generator v6Gen = tryToConvertToApfV6Generator(gen);
-            if (mHardwareAddress != null && v6Gen != null) {
+            if (v6Gen != null) {
                 // Ethernet requires that all packets be at least 60 bytes long
                 v6Gen.addAllocate(60)
                         .addPacketCopy(ETHER_SRC_ADDR_OFFSET, ETHER_ADDR_LEN)

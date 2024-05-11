@@ -366,6 +366,23 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
     public final Type addJumpIfR0AnyBitsSet(long val, String tgt) {
         return append(new Instruction(Opcodes.JSET).addTwosCompUnsigned(val).setTargetLabel(tgt));
     }
+
+    /**
+     * Add an instruction to the end of the program to count and drop packet if register R0's
+     * value has any bits set that are also set in {@code value}.
+     * WARNING: may modify R1
+     */
+    public abstract Type addCountAndDropIfR0AnyBitsSet(long val, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException;
+
+    /**
+     * Add an instruction to the end of the program to count and pass packet if register R0's
+     * value has any bits set that are also set in {@code value}.
+     * WARNING: may modify R1
+     */
+    public abstract Type addCountAndPassIfR0AnyBitsSet(long val, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException;
+
     /**
      * Add an instruction to the end of the program to jump to {@code target} if register R0's
      * value equals register R1's value.

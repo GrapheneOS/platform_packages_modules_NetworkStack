@@ -131,6 +131,18 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
     }
 
     @Override
+    public ApfV4Generator addCountAndDropIfR0AnyBitsSet(long val, ApfCounterTracker.Counter cnt) {
+        checkDropCounterRange(cnt);
+        return maybeAddLoadCounterOffset(R1, cnt).addJumpIfR0AnyBitsSet(val, mCountAndDropLabel);
+    }
+
+    @Override
+    public ApfV4Generator addCountAndPassIfR0AnyBitsSet(long val, ApfCounterTracker.Counter cnt) {
+        checkPassCounterRange(cnt);
+        return maybeAddLoadCounterOffset(R1, cnt).addJumpIfR0AnyBitsSet(val, mCountAndPassLabel);
+    }
+
+    @Override
     public ApfV4Generator addCountAndDropIfR0LessThan(long val, ApfCounterTracker.Counter cnt) {
         checkDropCounterRange(cnt);
         if (val <= 0) {
