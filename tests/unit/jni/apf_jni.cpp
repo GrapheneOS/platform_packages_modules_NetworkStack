@@ -26,8 +26,8 @@
 #include "apf_interpreter.h"
 #include "disassembler.h"
 #include "nativehelper/scoped_primitive_array.h"
-#include "v5/apf_interpreter.h"
-#include "v5/test_buf_allocator.h"
+#include "v7/apf_interpreter.h"
+#include "v7/test_buf_allocator.h"
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #define LOG_TAG "NetworkStackUtils-JNI"

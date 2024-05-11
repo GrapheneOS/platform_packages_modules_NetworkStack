@@ -101,6 +101,7 @@ import android.stats.connectivity.NetworkQuirkEvent;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.text.format.DateUtils;
+import android.util.ArraySet;
 import android.util.Log;
 import android.util.SparseArray;
 
@@ -137,9 +138,9 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * For networks that support packet filtering via APF programs, {@code ApfFilter}
@@ -328,7 +329,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
     // Our IPv6 addresses
     @GuardedBy("this")
-    private List<byte[]> mIPv6Addresses = new ArrayList<>();
+    private Set<Inet6Address> mIPv6Addresses = new ArraySet<>();
 
     // Whether CLAT is enabled.
     @GuardedBy("this")
@@ -2384,18 +2385,18 @@ public class ApfFilter implements AndroidPacketFilter {
     }
 
     /** Retrieve the IPv6 LinkAddress list, otherwise return empty list. */
-    private static List<LinkAddress> retrieveIPv6LinkAddress(LinkProperties lp) {
-        final List<LinkAddress> ipv6AddressList = new ArrayList<>();
+    private static Set<Inet6Address> retrieveIPv6LinkAddress(LinkProperties lp) {
+        final Set<Inet6Address> ipv6Addresses = new ArraySet<>();
 
-        for (LinkAddress address: lp.getLinkAddresses()) {
+        for (LinkAddress address : lp.getLinkAddresses()) {
             if (!(address.getAddress() instanceof Inet6Address)) {
                 continue;
             }
 
-            ipv6AddressList.add(address);
+            ipv6Addresses.add((Inet6Address) address.getAddress());
         }
 
-        return ipv6AddressList;
+        return ipv6Addresses;
     }
 
     public synchronized void setLinkProperties(LinkProperties lp) {
@@ -2403,21 +2404,17 @@ public class ApfFilter implements AndroidPacketFilter {
         final LinkAddress ipv4Address = retrieveIPv4LinkAddress(lp);
         final byte[] addr = (ipv4Address != null) ? ipv4Address.getAddress().getAddress() : null;
         final int prefix = (ipv4Address != null) ? ipv4Address.getPrefixLength() : 0;
-        final List<LinkAddress> ipv6Addresses = retrieveIPv6LinkAddress(lp);
-        final List<byte[]> addrList = new ArrayList<>();
-        for (LinkAddress v6Addr: ipv6Addresses) {
-            addrList.add(v6Addr.getAddress().getAddress());
-        }
+        final Set<Inet6Address> ipv6Addresses = retrieveIPv6LinkAddress(lp);
 
         if ((prefix == mIPv4PrefixLength)
                 && Arrays.equals(addr, mIPv4Address)
-                && isByteArrayListEquals(addrList, mIPv6Addresses)
+                && ipv6Addresses.equals(mIPv6Addresses)
         ) {
             return;
         }
         mIPv4Address = addr;
         mIPv4PrefixLength = prefix;
-        mIPv6Addresses = addrList;
+        mIPv6Addresses = ipv6Addresses;
 
         installNewProgramLocked();
     }
@@ -2496,8 +2493,8 @@ public class ApfFilter implements AndroidPacketFilter {
             pw.println("IPv4 address: " + InetAddress.getByAddress(mIPv4Address).getHostAddress());
             pw.println("IPv6 addresses: ");
             pw.increaseIndent();
-            for (byte[] addr: mIPv6Addresses) {
-                pw.println(Inet6Address.getByAddress(addr));
+            for (Inet6Address addr: mIPv6Addresses) {
+                pw.println(addr.getHostAddress());
             }
             pw.decreaseIndent();
         } catch (UnknownHostException|NullPointerException e) {}
@@ -2652,33 +2649,6 @@ public class ApfFilter implements AndroidPacketFilter {
                 + (uint8(bytes[3]));
     }
 
-    private static boolean isByteArrayListEquals(List<byte[]> a, List<byte[]> b) {
-        if (a.size() != b.size()) {
-            return false;
-        }
-
-        final Comparator<byte[]> byteArrayComparator = (first, second) -> {
-            int length = Math.min(first.length, second.length);
-            for (int i = 0; i < length; i++) {
-                if (first[i] != second[i]) {
-                    return Byte.compare(first[i], second[i]);
-                }
-            }
-
-            return Integer.compare(first.length, second.length);
-        };
-
-        // sort these 2 list first, it can be replaced by Arrays::compareUnsigned after API level 33
-        a.sort(byteArrayComparator);
-        b.sort(byteArrayComparator);
-        for (int i = 0; i < a.size(); i++) {
-            if (!Arrays.equals(a.get(i), b.get(i))) {
-                return false;
-            }
-        }
-
-        return true;
-    }
     private static byte[] concatArrays(final byte[]... arr) {
         int size = 0;
         for (byte[] a : arr) {
