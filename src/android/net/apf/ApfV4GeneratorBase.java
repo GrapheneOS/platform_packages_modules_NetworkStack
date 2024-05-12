@@ -26,6 +26,7 @@ import android.annotation.NonNull;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * APF assembler/generator.  A tool for generating an APF program.
@@ -456,6 +457,38 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      * WARNING: may modify R1
      */
     public abstract Type addCountAndPassIfBytesAtR0NotEqual(byte[] bytes,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException;
+
+    /**
+     * Add instructions to the end of the program to increase counter and pass packet if the
+     * value in register0 is one of {@code values}.
+     * WARNING: may modify R1
+     */
+    public abstract Type addCountAndPassIfR0IsOneOf(@NonNull Set<Long> values,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException;
+
+    /**
+     * Add instructions to the end of the program to increase counter and drop packet if the
+     * value in register0 is one of {@code values}.
+     * WARNING: may modify R1
+     */
+    public abstract Type addCountAndDropIfR0IsOneOf(@NonNull Set<Long> values,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException;
+
+    /**
+     * Add instructions to the end of the program to increase counter and pass packet if the
+     * value in register0 is none of {@code values}.
+     * WARNING: may modify R1
+     */
+    public abstract Type addCountAndPassIfR0IsNoneOf(@NonNull Set<Long> values,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException;
+
+    /**
+     * Add instructions to the end of the program to increase counter and drop packet if the
+     * value in register0 is none of {@code values}.
+     * WARNING: may modify R1
+     */
+    public abstract Type addCountAndDropIfR0IsNoneOf(@NonNull Set<Long> values,
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException;
 
     /**

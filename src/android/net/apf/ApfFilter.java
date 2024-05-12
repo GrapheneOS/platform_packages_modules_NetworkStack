@@ -1820,7 +1820,6 @@ public class ApfFilter implements AndroidPacketFilter {
         final String skipMdnsFilter = "skip_mdns_filter";
         final String checkMdnsUdpPort = "check_mdns_udp_port";
         final String mDnsAcceptPacket = "mdns_accept_packet";
-        final String mDnsDropPacket = "mdns_drop_packet";
 
         // Only turn on the filter if multicast filter is on and the qname allowlist is non-empty.
         if (!mMulticastFilter || mMdnsAllowList.isEmpty()) {
@@ -1896,23 +1895,27 @@ public class ApfFilter implements AndroidPacketFilter {
         gen.addLoadImmediate(R0, MDNS_QNAME_OFFSET);
         gen.addAddR1ToR0();
 
+        ApfV6Generator v6Gen = tryToConvertToApfV6Generator(gen);
+
         // Check first QNAME against allowlist
         for (int i = 0; i < mMdnsAllowList.size(); ++i) {
-            final String mDnsNextAllowedQnameCheck = "mdns_next_allowed_qname_check" + i;
             final byte[] encodedQname = encodeQname(mMdnsAllowList.get(i));
-            gen.addJumpIfBytesAtR0NotEqual(encodedQname, mDnsNextAllowedQnameCheck);
-            // QNAME matched
-            gen.addJump(mDnsAcceptPacket);
-            // QNAME not matched
-            gen.defineLabel(mDnsNextAllowedQnameCheck);
+            if (v6Gen != null) {
+                v6Gen.addJumpIfBytesAtR0Equal(encodedQname, mDnsAcceptPacket);
+            } else {
+                final String mDnsNextAllowedQnameCheck = "mdns_next_allowed_qname_check" + i;
+                gen.addJumpIfBytesAtR0NotEqual(encodedQname, mDnsNextAllowedQnameCheck);
+                // QNAME matched
+                gen.addJump(mDnsAcceptPacket);
+                // QNAME not matched
+                gen.defineLabel(mDnsNextAllowedQnameCheck);
+            }
         }
         // If QNAME doesn't match any entries in allowlist, drop the packet.
-        gen.defineLabel(mDnsDropPacket);
         gen.addCountAndDrop(Counter.DROPPED_MDNS);
 
         gen.defineLabel(mDnsAcceptPacket);
         gen.addCountAndPass(Counter.PASSED_MDNS);
-
 
         gen.defineLabel(skipMdnsFilter);
     }
