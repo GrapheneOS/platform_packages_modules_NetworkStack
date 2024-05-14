@@ -19,7 +19,7 @@ package android.net.apf;
 import static android.net.apf.BaseApfGenerator.MemorySlot;
 import static android.net.apf.BaseApfGenerator.Register.R0;
 
-import androidx.annotation.NonNull;
+import android.annotation.NonNull;
 
 import java.util.LinkedHashMap;
 import java.util.Map;

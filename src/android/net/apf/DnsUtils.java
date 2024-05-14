@@ -23,7 +23,7 @@ import static android.net.apf.BaseApfGenerator.Register.R1;
 import static com.android.net.module.util.NetworkStackConstants.ETHER_HEADER_LEN;
 import static com.android.net.module.util.NetworkStackConstants.UDP_HEADER_LEN;
 
-import androidx.annotation.NonNull;
+import android.annotation.NonNull;
 
 /**
  * Utility class that generates generating APF filters for DNS packets.

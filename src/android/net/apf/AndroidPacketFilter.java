@@ -15,11 +15,10 @@
  */
 package android.net.apf;
 
+import android.annotation.Nullable;
 import android.net.LinkProperties;
 import android.net.NattKeepalivePacketDataParcelable;
 import android.net.TcpKeepalivePacketDataParcelable;
-
-import androidx.annotation.Nullable;
 
 import com.android.internal.util.IndentingPrintWriter;
 

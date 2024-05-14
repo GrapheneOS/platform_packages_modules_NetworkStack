@@ -329,6 +329,21 @@ class ApfNewTest {
             gen.addCountAndPassIfR0IsNoneOf(setOf(3), DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
+            gen.addCountAndDropIfBytesAtR0EqualsAnyOf(listOf(byteArrayOf(1)), PASSED_ARP)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            gen.addCountAndPassIfBytesAtR0EqualsAnyOf(listOf(byteArrayOf(1)), DROPPED_ETH_BROADCAST)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            gen.addCountAndDropIfBytesAtR0EqualsNoneOf(listOf(byteArrayOf(1)), PASSED_ARP)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            gen.addCountAndPassIfBytesAtR0EqualsNoneOf(
+                    listOf(byteArrayOf(1)),
+                    DROPPED_ETH_BROADCAST
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
             gen.addWrite32(byteArrayOf())
         }
         assertFailsWith<IllegalArgumentException> {
@@ -394,6 +409,24 @@ class ApfNewTest {
         }
         assertFailsWith<IllegalArgumentException> {
             v4gen.addCountAndPassIfR0IsNoneOf(setOf(3), DROPPED_ETH_BROADCAST)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            v4gen.addCountAndDropIfBytesAtR0EqualsAnyOf(listOf(byteArrayOf(1)), PASSED_ARP)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            v4gen.addCountAndPassIfBytesAtR0EqualsAnyOf(
+                    listOf(byteArrayOf(1)),
+                    DROPPED_ETH_BROADCAST
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            v4gen.addCountAndDropIfBytesAtR0EqualsNoneOf(listOf(byteArrayOf(1)), PASSED_ARP)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            v4gen.addCountAndPassIfBytesAtR0EqualsNoneOf(
+                    listOf(byteArrayOf(1)),
+                    DROPPED_ETH_BROADCAST
+            )
         }
     }
 
@@ -1108,6 +1141,70 @@ class ApfNewTest {
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
                 .addCountAndPassIfR0IsNoneOf(setOf(122, 124), PASSED_ARP)
+                .addPass()
+                .addCountTrampoline()
+                .generate()
+        dataRegion = ByteArray(Counter.totalSize()) { 0 }
+        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
+        counterMap = decodeCountersIntoMap(dataRegion)
+        expectedMap = getInitialMap()
+        expectedMap[PASSED_ARP] = 1
+        assertEquals(expectedMap, counterMap)
+
+        program = getGenerator()
+                .addLoadImmediate(R0, 0)
+                .addCountAndDropIfBytesAtR0EqualsAnyOf(
+                        listOf(byteArrayOf(1, 2), byteArrayOf(3, 4)),
+                        DROPPED_ETH_BROADCAST
+                )
+                .addPass()
+                .addCountTrampoline()
+                .generate()
+        dataRegion = ByteArray(Counter.totalSize()) { 0 }
+        assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
+        counterMap = decodeCountersIntoMap(dataRegion)
+        expectedMap = getInitialMap()
+        expectedMap[DROPPED_ETH_BROADCAST] = 1
+        assertEquals(expectedMap, counterMap)
+
+        program = getGenerator()
+                .addLoadImmediate(R0, 0)
+                .addCountAndPassIfBytesAtR0EqualsAnyOf(
+                        listOf(byteArrayOf(1, 2), byteArrayOf(3, 4)),
+                        PASSED_ARP
+                )
+                .addPass()
+                .addCountTrampoline()
+                .generate()
+        dataRegion = ByteArray(Counter.totalSize()) { 0 }
+        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
+        counterMap = decodeCountersIntoMap(dataRegion)
+        expectedMap = getInitialMap()
+        expectedMap[PASSED_ARP] = 1
+        assertEquals(expectedMap, counterMap)
+
+        program = getGenerator()
+                .addLoadImmediate(R0, 0)
+                .addCountAndDropIfBytesAtR0EqualsNoneOf(
+                        listOf(byteArrayOf(1, 3), byteArrayOf(3, 4)),
+                        DROPPED_ETH_BROADCAST
+                )
+                .addPass()
+                .addCountTrampoline()
+                .generate()
+        dataRegion = ByteArray(Counter.totalSize()) { 0 }
+        assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
+        counterMap = decodeCountersIntoMap(dataRegion)
+        expectedMap = getInitialMap()
+        expectedMap[DROPPED_ETH_BROADCAST] = 1
+        assertEquals(expectedMap, counterMap)
+
+        program = getGenerator()
+                .addLoadImmediate(R0, 0)
+                .addCountAndPassIfBytesAtR0EqualsNoneOf(
+                        listOf(byteArrayOf(1, 3), byteArrayOf(3, 4)),
+                        PASSED_ARP
+                )
                 .addPass()
                 .addCountTrampoline()
                 .generate()
