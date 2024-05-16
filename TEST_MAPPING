@@ -1,4 +1,25 @@
 {
+  "captiveportal-networkstack-resolve-tethering-mainline-presubmit": [
+    // These are unit tests only, so they don't actually require any modules to be installed.
+    // We must specify at least one module here or the tests won't run. Use the same set as CTS
+    // so in theory the infra would not need to reinstall/reboot devices to run both.
+    {
+      "name": "NetworkStackTests"
+    },
+    // This is used to verify NetworkStackRootTests with all latest modules listed below on
+    // preivous OS platforms.
+    {
+      "name": "NetworkStackRootTests"
+    }
+  ],
+  "captiveportal-networkstack-mainline-presubmit": [
+    // This is used to verify NetworkStackRootTests with latest CaptivePortalLoginGoogle.apk
+    // but with other modules on different version(e.g. an older tethering module to verify
+    // backwards compatibility of APIs).
+    {
+      "name": "NetworkStackRootTests"
+    }
+  ],
   "presubmit": [
     {
       "name": "NetworkStackTests"
