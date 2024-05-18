@@ -25,7 +25,9 @@ import android.net.apf.ApfCounterTracker.Counter.APF_VERSION
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REQUEST_REPLIED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_DENYLISTED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETH_BROADCAST
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP
+import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_FROM_DHCPV4_SERVER
 import android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS
 import android.net.apf.ApfFilter.Dependencies
 import android.net.apf.ApfTestUtils.DROP
@@ -533,7 +535,7 @@ class ApfNewTest {
                 program
         )
         assertContentEquals(
-                listOf("0: drop        counter=37"),
+                listOf("0: drop        counter=39"),
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 
@@ -582,14 +584,14 @@ class ApfNewTest {
                 byteArrayOf(
                         encodeInstruction(opcode = 14, immLength = 2, register = 1), 1, 0
                 ) + largeByteArray + byteArrayOf(
-                        encodeInstruction(opcode = 21, immLength = 1, register = 0), 48, 6, 49
+                        encodeInstruction(opcode = 21, immLength = 1, register = 0), 48, 6, 41
                 ),
                 program
         )
         assertContentEquals(
                 listOf(
                         "0: data        256, " + "01".repeat(256),
-                        "259: debugbuf    size=1585"
+                        "259: debugbuf    size=1577"
                 ),
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
@@ -875,7 +877,7 @@ class ApfNewTest {
                 .generate()
         assertContentEquals(listOf(
                 "0: data        9, 112233445566778899",
-                "12: debugbuf    size=1812",
+                "12: debugbuf    size=1804",
                 "16: allocate    18",
                 "20: datacopy    src=3, len=6",
                 "23: datacopy    src=4, len=3",
@@ -1089,6 +1091,58 @@ class ApfNewTest {
         program = getGenerator()
                 .addLoadImmediate(R0, 1)
                 .addCountAndPassIfR0AnyBitsSet(0xffff, PASSED_ARP)
+                .addPass()
+                .addCountTrampoline()
+                .generate()
+        dataRegion = ByteArray(Counter.totalSize()) { 0 }
+        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
+        counterMap = decodeCountersIntoMap(dataRegion)
+        expectedMap = getInitialMap()
+        expectedMap[PASSED_ARP] = 1
+        assertEquals(expectedMap, counterMap)
+
+        program = getGenerator()
+                .addLoadImmediate(R0, 123)
+                .addCountAndDropIfR0IsOneOf(setOf(123), DROPPED_ETH_BROADCAST)
+                .addPass()
+                .addCountTrampoline()
+                .generate()
+        dataRegion = ByteArray(Counter.totalSize()) { 0 }
+        assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
+        counterMap = decodeCountersIntoMap(dataRegion)
+        expectedMap = getInitialMap()
+        expectedMap[DROPPED_ETH_BROADCAST] = 1
+        assertEquals(expectedMap, counterMap)
+
+        program = getGenerator()
+                .addLoadImmediate(R0, 123)
+                .addCountAndPassIfR0IsOneOf(setOf(123), PASSED_ARP)
+                .addPass()
+                .addCountTrampoline()
+                .generate()
+        dataRegion = ByteArray(Counter.totalSize()) { 0 }
+        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
+        counterMap = decodeCountersIntoMap(dataRegion)
+        expectedMap = getInitialMap()
+        expectedMap[PASSED_ARP] = 1
+        assertEquals(expectedMap, counterMap)
+
+        program = getGenerator()
+                .addLoadImmediate(R0, 123)
+                .addCountAndDropIfR0IsNoneOf(setOf(124), DROPPED_ETH_BROADCAST)
+                .addPass()
+                .addCountTrampoline()
+                .generate()
+        dataRegion = ByteArray(Counter.totalSize()) { 0 }
+        assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
+        counterMap = decodeCountersIntoMap(dataRegion)
+        expectedMap = getInitialMap()
+        expectedMap[DROPPED_ETH_BROADCAST] = 1
+        assertEquals(expectedMap, counterMap)
+
+        program = getGenerator()
+                .addLoadImmediate(R0, 123)
+                .addCountAndPassIfR0IsNoneOf(setOf(124), PASSED_ARP)
                 .addPass()
                 .addCountTrampoline()
                 .generate()
@@ -1632,6 +1686,87 @@ class ApfNewTest {
         assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
         // offset 3 in the data region should contain if the interpreter is APFv6 mode or not
         assertEquals(1, dataRegion[3])
+    }
+
+    @Test
+    fun testIPv4PacketFilterOnV6OnlyNetwork() {
+        val ipClientCallback = ApfTestUtils.MockIpClientCallback()
+        val apfFilter = TestApfFilter(
+                context,
+                getDefaultConfig(),
+                ipClientCallback,
+                metrics,
+                dependencies
+        )
+        apfFilter.updateClatInterfaceState(true)
+        val program = ipClientCallback.assertProgramUpdateAndGet()
+
+        // Using scapy to generate IPv4 mDNS packet:
+        //   eth = Ether(src="E8:9F:80:66:60:BB", dst="01:00:5E:00:00:FB")
+        //   ip = IP(src="192.168.1.1")
+        //   udp = UDP(sport=5353, dport=5353)
+        //   dns = DNS(qd=DNSQR(qtype="PTR", qname="a.local"))
+        //   p = eth/ip/udp/dns
+        val mdnsPkt = "01005e0000fbe89f806660bb080045000035000100004011d812c0a80101e00000f" +
+                      "b14e914e900214d970000010000010000000000000161056c6f63616c00000c0001"
+        val data = ByteArray(Counter.totalSize()) { 0 }
+        assertVerdict(APF_VERSION_6, DROP, program, HexDump.hexStringToByteArray(mdnsPkt), data)
+
+        // Using scapy to generate DHCP4 offer packet:
+        //   ether = Ether(src='00:11:22:33:44:55', dst='ff:ff:ff:ff:ff:ff')
+        //   ip = IP(src='192.168.1.1', dst='255.255.255.255')
+        //   udp = UDP(sport=67, dport=68)
+        //   bootp = BOOTP(op=2,
+        //                 yiaddr='192.168.1.100',
+        //                 siaddr='192.168.1.1',
+        //                 chaddr=b'\x00\x11\x22\x33\x44\x55')
+        //   dhcp_options = [('message-type', 'offer'),
+        //                   ('server_id', '192.168.1.1'),
+        //                   ('subnet_mask', '255.255.255.0'),
+        //                   ('router', '192.168.1.1'),
+        //                   ('lease_time', 86400),
+        //                   ('name_server', '8.8.8.8'),
+        //                   'end']
+        //   dhcp = DHCP(options=dhcp_options)
+        //   dhcp_offer_packet = ether/ip/udp/bootp/dhcp
+        val dhcp4Pkt = "ffffffffffff00112233445508004500012e000100004011b815c0a80101ffffffff0043" +
+                       "0044011a5ffc02010600000000000000000000000000c0a80164c0a80101000000000011" +
+                       "223344550000000000000000000000000000000000000000000000000000000000000000" +
+                       "000000000000000000000000000000000000000000000000000000000000000000000000" +
+                       "000000000000000000000000000000000000000000000000000000000000000000000000" +
+                       "000000000000000000000000000000000000000000000000000000000000000000000000" +
+                       "000000000000000000000000000000000000000000000000000000000000000000000000" +
+                       "0000000000000000000000000000000000000000000000000000638253633501023604c0" +
+                       "a801010104ffffff000304c0a80101330400015180060408080808ff"
+        assertVerdict(APF_VERSION_6, PASS, program, HexDump.hexStringToByteArray(dhcp4Pkt), data)
+
+        // Using scapy to generate DHCP4 offer packet:
+        //   eth = Ether(src="E8:9F:80:66:60:BB", dst="01:00:5E:00:00:FB")
+        //   ip = IP(src="192.168.1.10", dst="192.168.1.20")  # IPv4
+        //   udp = UDP(sport=12345, dport=53)
+        //   dns = DNS(qd=DNSQR(qtype="PTR", qname="a.local"))
+        //   pkt = eth / ip / udp / dns
+        //   fragments = fragment(pkt, fragsize=30)
+        //   fragments[1]
+        val fragmentedUdpPkt = "01005e0000fbe89f806660bb08004500001d000100034011f75dc0a8010ac0a8" +
+                               "01146f63616c00000c0001"
+        assertVerdict(
+                APF_VERSION_6,
+                DROP,
+                program,
+                HexDump.hexStringToByteArray(fragmentedUdpPkt),
+                data
+        )
+
+        assertEquals(
+                mapOf<Counter, Long>(
+                        TOTAL_PACKETS to 3,
+                        DROPPED_IPV4_NON_DHCP4 to 2,
+                        PASSED_IPV4_FROM_DHCPV4_SERVER to 1,
+                ),
+                decodeCountersIntoMap(data)
+        )
+        apfFilter.shutdown()
     }
 
     // The APFv6 code path is only turned on in V+

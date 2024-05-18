@@ -694,6 +694,12 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
     @Override
     public Type addCountAndPassIfR0IsOneOf(@NonNull Set<Long> values,
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+        if (values.isEmpty()) {
+            throw new IllegalArgumentException("values cannot be empty");
+        }
+        if (values.size() == 1) {
+            return addCountAndPassIfR0Equals(values.iterator().next(), cnt);
+        }
         final String tgt = getUniqueLabel();
         return addJumpIfNoneOf(R0, values, tgt).addCountAndPass(cnt).defineLabel(tgt);
     }
@@ -701,6 +707,12 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
     @Override
     public Type addCountAndDropIfR0IsOneOf(@NonNull Set<Long> values,
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+        if (values.isEmpty()) {
+            throw new IllegalArgumentException("values cannot be empty");
+        }
+        if (values.size() == 1) {
+            return addCountAndDropIfR0Equals(values.iterator().next(), cnt);
+        }
         final String tgt = getUniqueLabel();
         return addJumpIfNoneOf(R0, values, tgt).addCountAndDrop(cnt).defineLabel(tgt);
     }
@@ -708,6 +720,12 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
     @Override
     public Type addCountAndPassIfR0IsNoneOf(@NonNull Set<Long> values,
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+        if (values.isEmpty()) {
+            throw new IllegalArgumentException("values cannot be empty");
+        }
+        if (values.size() == 1) {
+            return addCountAndPassIfR0NotEquals(values.iterator().next(), cnt);
+        }
         final String tgt = getUniqueLabel();
         return addJumpIfOneOf(R0, values, tgt).addCountAndPass(cnt).defineLabel(tgt);
     }
@@ -747,6 +765,12 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
     @Override
     public Type addCountAndDropIfR0IsNoneOf(@NonNull Set<Long> values,
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+        if (values.isEmpty()) {
+            throw new IllegalArgumentException("values cannot be empty");
+        }
+        if (values.size() == 1) {
+            return addCountAndDropIfR0NotEquals(values.iterator().next(), cnt);
+        }
         final String tgt = getUniqueLabel();
         return addJumpIfOneOf(R0, values, tgt).addCountAndDrop(cnt).defineLabel(tgt);
     }

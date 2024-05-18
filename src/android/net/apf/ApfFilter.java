@@ -26,6 +26,7 @@ import static android.net.apf.ApfConstants.ARP_SOURCE_IP_ADDRESS_OFFSET;
 import static android.net.apf.ApfConstants.ARP_TARGET_IP_ADDRESS_OFFSET;
 import static android.net.apf.ApfConstants.DHCP_CLIENT_MAC_OFFSET;
 import static android.net.apf.ApfConstants.DHCP_CLIENT_PORT;
+import static android.net.apf.ApfConstants.DHCP_SERVER_PORT;
 import static android.net.apf.ApfConstants.ECHO_PORT;
 import static android.net.apf.ApfConstants.ETH_DEST_ADDR_OFFSET;
 import static android.net.apf.ApfConstants.ETH_ETHERTYPE_OFFSET;
@@ -57,6 +58,7 @@ import static android.net.apf.ApfConstants.MDNS_QDCOUNT_OFFSET;
 import static android.net.apf.ApfConstants.MDNS_QNAME_OFFSET;
 import static android.net.apf.ApfConstants.TCP_HEADER_SIZE_OFFSET;
 import static android.net.apf.ApfConstants.TCP_UDP_DESTINATION_PORT_OFFSET;
+import static android.net.apf.ApfConstants.TCP_UDP_SOURCE_PORT_OFFSET;
 import static android.net.apf.BaseApfGenerator.MemorySlot;
 import static android.net.apf.BaseApfGenerator.Register.R0;
 import static android.net.apf.BaseApfGenerator.Register.R1;
@@ -1602,6 +1604,13 @@ public class ApfFilter implements AndroidPacketFilter {
             throws IllegalInstructionException {
         // Here's a basic summary of what the IPv4 filter program does:
         //
+        // if the network is IPv6 only network:
+        //   if the packet is fragmented:
+        //     drop
+        //   if the packet is a dhcp packet comes from server:
+        //     pass
+        //   else
+        //     drop
         // if filtering multicast (i.e. multicast lock not held):
         //   if it's DHCP destined to our MAC:
         //     pass
@@ -1615,16 +1624,30 @@ public class ApfFilter implements AndroidPacketFilter {
         //   drop
         // pass
 
+        if (mHasClat) {
+            // Check 1) it's not a fragment. 2) it's UDP.
+            // Load 16 bit frag flags/offset field, 8 bit ttl, 8 bit protocol
+            gen.addLoad32(R0, IPV4_FRAGMENT_OFFSET_OFFSET);
+            gen.addOr(0xFF00);
+            gen.addCountAndDropIfR0NotEquals(0xFF11, Counter.DROPPED_IPV4_NON_DHCP4);
+            // Check it's addressed to DHCP client port.
+            gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
+            gen.addLoad32Indexed(R0, TCP_UDP_SOURCE_PORT_OFFSET);
+            gen.addCountAndDropIfR0NotEquals(DHCP_SERVER_PORT << 16 | DHCP_CLIENT_PORT,
+                    Counter.DROPPED_IPV4_NON_DHCP4);
+            gen.addCountAndPass(Counter.PASSED_IPV4_FROM_DHCPV4_SERVER);
+            return;
+        }
+
         if (mMulticastFilter) {
             final String skipDhcpv4Filter = "skip_dhcp_v4_filter";
 
             // Pass DHCP addressed to us.
-            // Check it's UDP.
-            gen.addLoad8(R0, IPV4_PROTOCOL_OFFSET);
-            gen.addJumpIfR0NotEquals(IPPROTO_UDP, skipDhcpv4Filter);
-            // Check it's not a fragment or is the initial fragment.
-            gen.addLoad16(R0, IPV4_FRAGMENT_OFFSET_OFFSET);
-            gen.addJumpIfR0AnyBitsSet(IPV4_FRAGMENT_OFFSET_MASK, skipDhcpv4Filter);
+            // Check 1) it's not a fragment. 2) it's UDP.
+            // Load 16 bit frag flags/offset field, 8 bit ttl, 8 bit protocol
+            gen.addLoad32(R0, IPV4_FRAGMENT_OFFSET_OFFSET);
+            gen.addOr(0xFF00);
+            gen.addJumpIfR0NotEquals(0xFF11, skipDhcpv4Filter);
             // Check it's addressed to DHCP client port.
             gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
             gen.addLoad16Indexed(R0, TCP_UDP_DESTINATION_PORT_OFFSET);
@@ -2040,9 +2063,12 @@ public class ApfFilter implements AndroidPacketFilter {
         }
 
         // Handle ether-type black list
-        for (int p : mEthTypeBlackList) {
-            // TODO: Refactorings increased APFv4 code size; optimize for reduction.
-            gen.addCountAndDropIfR0Equals(p, Counter.DROPPED_ETHERTYPE_DENYLISTED);
+        if (mEthTypeBlackList.length > 0) {
+            final Set<Long> deniedEtherTypes = new ArraySet<>();
+            for (int p : mEthTypeBlackList) {
+                deniedEtherTypes.add((long) p);
+            }
+            gen.addCountAndDropIfR0IsOneOf(deniedEtherTypes, Counter.DROPPED_ETHERTYPE_DENYLISTED);
         }
 
         // Add ARP filters:

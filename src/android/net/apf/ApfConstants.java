@@ -57,6 +57,7 @@ public final class ApfConstants {
     public static final int IPPROTO_HOPOPTS = 0;
 
     // NOTE: this must be added to the IPv4 header length in MemorySlot.IPV4_HEADER_SIZE
+    public static final int TCP_UDP_SOURCE_PORT_OFFSET = ETH_HEADER_LEN;
     public static final int TCP_UDP_DESTINATION_PORT_OFFSET = ETH_HEADER_LEN + 2;
     public static final int UDP_HEADER_LEN = 8;
 
