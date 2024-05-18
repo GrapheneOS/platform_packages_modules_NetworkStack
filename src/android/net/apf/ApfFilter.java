@@ -884,6 +884,9 @@ public class ApfFilter implements AndroidPacketFilter {
                 throw new InvalidRaException("Not an ICMP6 router advertisement");
             }
 
+            // Ignore destination MAC address.
+            addIgnoreSection(6 /* Size of MAC address */);
+
             // Ignore the flow label and low 4 bits of traffic class.
             addMatchUntil(IPV6_FLOW_LABEL_OFFSET);
             addIgnoreSection(IPV6_FLOW_LABEL_LEN);
