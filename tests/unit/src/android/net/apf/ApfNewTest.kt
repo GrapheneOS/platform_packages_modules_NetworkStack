@@ -22,12 +22,15 @@ import android.net.LinkProperties
 import android.net.apf.ApfCounterTracker.Counter
 import android.net.apf.ApfCounterTracker.Counter.APF_PROGRAM_ID
 import android.net.apf.ApfCounterTracker.Counter.APF_VERSION
+import android.net.apf.ApfCounterTracker.Counter.CORRUPT_DNS_PACKET
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REQUEST_REPLIED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_DENYLISTED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETH_BROADCAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4
+import android.net.apf.ApfCounterTracker.Counter.PASSED_ALLOCATE_FAILURE
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_FROM_DHCPV4_SERVER
+import android.net.apf.ApfCounterTracker.Counter.PASSED_TRANSMIT_FAILURE
 import android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS
 import android.net.apf.ApfFilter.Dependencies
 import android.net.apf.ApfTestUtils.DROP
@@ -898,27 +901,15 @@ class ApfNewTest {
                 .generate()
         assertDrop(APF_VERSION_6, program, testPacket)
 
-        var dataRegion = ByteArray(Counter.totalSize()) { 0 }
         program = ApfV6Generator(defaultMaximumApfProgramSize)
                 .addCountAndDrop(Counter.DROPPED_ETH_BROADCAST)
                 .generate()
-        assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
-        var counterMap = decodeCountersIntoMap(dataRegion)
-        assertEquals(mapOf<Counter, Long>(
-                Counter.TOTAL_PACKETS to 1,
-                Counter.DROPPED_ETH_BROADCAST to 1
-        ), counterMap)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, DROPPED_ETH_BROADCAST)
 
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
         program = ApfV6Generator(defaultMaximumApfProgramSize)
                 .addCountAndPass(Counter.PASSED_ARP)
                 .generate()
-        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        assertEquals(mapOf<Counter, Long>(
-                Counter.TOTAL_PACKETS to 1,
-                Counter.PASSED_ARP to 1
-        ), counterMap)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP)
     }
 
     @Test
@@ -952,22 +943,22 @@ class ApfNewTest {
     @Test
     fun testV4CountAndPassDropCompareR0() {
         doTestCountAndPassDropCompareR0(
-                { mutableMapOf() },
-                { ApfV4Generator(APF_VERSION_4) }
+                getGenerator = { ApfV4Generator(APF_VERSION_4) },
+                incTotal = false
         )
     }
 
     @Test
     fun testV6CountAndPassDropCompareR0() {
         doTestCountAndPassDropCompareR0(
-                { mutableMapOf(Counter.TOTAL_PACKETS to 1) },
-                { ApfV6Generator(defaultMaximumApfProgramSize) }
+                getGenerator = { ApfV6Generator(defaultMaximumApfProgramSize) },
+                incTotal = true
         )
     }
 
     private fun doTestCountAndPassDropCompareR0(
-            getInitialMap: () -> MutableMap<Counter, Long>,
-            getGenerator: () -> ApfV4GeneratorBase<*>
+            getGenerator: () -> ApfV4GeneratorBase<*>,
+            incTotal: Boolean
     ) {
         var program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -975,12 +966,13 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        var dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
-        var counterMap = decodeCountersIntoMap(dataRegion)
-        var expectedMap = getInitialMap()
-        expectedMap[Counter.DROPPED_ETH_BROADCAST] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                testPacket,
+                DROPPED_ETH_BROADCAST,
+                incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -988,12 +980,7 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[Counter.PASSED_ARP] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1001,12 +988,13 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[Counter.DROPPED_ETH_BROADCAST] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                testPacket,
+                DROPPED_ETH_BROADCAST,
+                incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1014,12 +1002,7 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[Counter.PASSED_ARP] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1027,12 +1010,13 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[Counter.DROPPED_ETH_BROADCAST] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                testPacket,
+                DROPPED_ETH_BROADCAST,
+                incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1040,12 +1024,7 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[Counter.PASSED_ARP] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
 
         program = getGenerator()
                 .addLoadImmediate(R0, 1)
@@ -1054,12 +1033,13 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[DROPPED_ETH_BROADCAST] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                testPacket,
+                DROPPED_ETH_BROADCAST,
+                incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 1)
@@ -1068,12 +1048,7 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[PASSED_ARP] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
 
         program = getGenerator()
                 .addLoadImmediate(R0, 1)
@@ -1081,12 +1056,13 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[DROPPED_ETH_BROADCAST] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                testPacket,
+                DROPPED_ETH_BROADCAST,
+                incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 1)
@@ -1094,12 +1070,7 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[PASSED_ARP] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1107,12 +1078,13 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[DROPPED_ETH_BROADCAST] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                testPacket,
+                DROPPED_ETH_BROADCAST,
+                incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1120,12 +1092,7 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[PASSED_ARP] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1133,12 +1100,13 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[DROPPED_ETH_BROADCAST] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                testPacket,
+                DROPPED_ETH_BROADCAST,
+                incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1146,12 +1114,7 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[PASSED_ARP] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1159,12 +1122,13 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[DROPPED_ETH_BROADCAST] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                testPacket,
+                DROPPED_ETH_BROADCAST,
+                incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1172,12 +1136,7 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[PASSED_ARP] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1185,12 +1144,13 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[DROPPED_ETH_BROADCAST] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                testPacket,
+                DROPPED_ETH_BROADCAST,
+                incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1198,12 +1158,7 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[PASSED_ARP] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
 
         program = getGenerator()
                 .addLoadImmediate(R0, 0)
@@ -1214,12 +1169,13 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[DROPPED_ETH_BROADCAST] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                testPacket,
+                DROPPED_ETH_BROADCAST,
+                incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 0)
@@ -1230,12 +1186,7 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[PASSED_ARP] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
 
         program = getGenerator()
                 .addLoadImmediate(R0, 0)
@@ -1246,12 +1197,13 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[DROPPED_ETH_BROADCAST] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                testPacket,
+                DROPPED_ETH_BROADCAST,
+                incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 0)
@@ -1262,12 +1214,7 @@ class ApfNewTest {
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        expectedMap = getInitialMap()
-        expectedMap[PASSED_ARP] = 1
-        assertEquals(expectedMap, counterMap)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
     }
 
     @Test
@@ -1276,23 +1223,19 @@ class ApfNewTest {
                 .addCountAndDrop(Counter.DROPPED_ETH_BROADCAST)
                 .addCountTrampoline()
                 .generate()
-        var dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
-        var counterMap = decodeCountersIntoMap(dataRegion)
-        assertEquals(mapOf<Counter, Long>(
-                Counter.DROPPED_ETH_BROADCAST to 1
-        ), counterMap)
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                testPacket,
+                DROPPED_ETH_BROADCAST,
+                incTotal = false
+        )
 
         program = ApfV4Generator(APF_VERSION_4)
                 .addCountAndPass(Counter.PASSED_ARP)
                 .addCountTrampoline()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        assertEquals(mapOf<Counter, Long>(
-                Counter.PASSED_ARP to 1
-        ), counterMap)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = false)
     }
 
     @Test
@@ -1321,13 +1264,7 @@ class ApfNewTest {
                 .addAllocate(65535)
                 .addDrop()
                 .generate()
-        val dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
-        val counterMap = decodeCountersIntoMap(dataRegion)
-        assertEquals(mapOf<Counter, Long>(
-                Counter.TOTAL_PACKETS to 1,
-                Counter.PASSED_ALLOCATE_FAILURE to 1
-        ), counterMap)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ALLOCATE_FAILURE)
     }
 
     @Test
@@ -1340,13 +1277,7 @@ class ApfNewTest {
                 .addTransmitWithoutChecksum()
                 .addDrop()
                 .generate()
-        val dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
-        val counterMap = decodeCountersIntoMap(dataRegion)
-        assertEquals(mapOf<Counter, Long>(
-                Counter.TOTAL_PACKETS to 1,
-                Counter.PASSED_TRANSMIT_FAILURE to 1
-        ), counterMap)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_TRANSMIT_FAILURE)
     }
 
     @Test
@@ -1468,26 +1399,14 @@ class ApfNewTest {
                 .addJumpIfPktAtR0ContainDnsQ(needlesMatch, 0x01, DROP_LABEL) // arg2=qtype
                 .addPass()
                 .generate()
-        var dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, DROP, program, badUdpPayload, dataRegion)
-        var counterMap = decodeCountersIntoMap(dataRegion)
-        assertEquals(mapOf<Counter, Long>(
-                Counter.TOTAL_PACKETS to 1,
-                Counter.CORRUPT_DNS_PACKET to 1
-        ), counterMap)
+        verifyProgramRun(APF_VERSION_6, program, badUdpPayload, CORRUPT_DNS_PACKET, result = DROP)
 
         program = ApfV6Generator(defaultMaximumApfProgramSize)
                 .addLoadImmediate(R0, 0)
                 .addJumpIfPktAtR0ContainDnsQSafe(needlesMatch, 0x01, DROP_LABEL) // arg2=qtype
                 .addPass()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, PASS, program, badUdpPayload, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        assertEquals(mapOf<Counter, Long>(
-                Counter.TOTAL_PACKETS to 1,
-                Counter.CORRUPT_DNS_PACKET to 1
-        ), counterMap)
+        verifyProgramRun(APF_VERSION_6, program, badUdpPayload, CORRUPT_DNS_PACKET, result = PASS)
     }
 
     @Test
@@ -1573,26 +1492,14 @@ class ApfNewTest {
                 .addJumpIfPktAtR0ContainDnsA(needlesMatch, DROP_LABEL)
                 .addPass()
                 .generate()
-        var dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, DROP, program, badUdpPayload, dataRegion)
-        var counterMap = decodeCountersIntoMap(dataRegion)
-        assertEquals(mapOf<Counter, Long>(
-                Counter.TOTAL_PACKETS to 1,
-                Counter.CORRUPT_DNS_PACKET to 1
-        ), counterMap)
+        verifyProgramRun(APF_VERSION_6, program, badUdpPayload, CORRUPT_DNS_PACKET, result = DROP)
 
         program = ApfV6Generator(defaultMaximumApfProgramSize)
                 .addLoadImmediate(R0, 0)
                 .addJumpIfPktAtR0ContainDnsASafe(needlesMatch, DROP_LABEL)
                 .addPass()
                 .generate()
-        dataRegion = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, PASS, program, badUdpPayload, dataRegion)
-        counterMap = decodeCountersIntoMap(dataRegion)
-        assertEquals(mapOf<Counter, Long>(
-                Counter.TOTAL_PACKETS to 1,
-                Counter.CORRUPT_DNS_PACKET to 1
-        ), counterMap)
+        verifyProgramRun(APF_VERSION_6, program, badUdpPayload, CORRUPT_DNS_PACKET, result = PASS)
     }
 
     @Test
@@ -1709,8 +1616,12 @@ class ApfNewTest {
         //   p = eth/ip/udp/dns
         val mdnsPkt = "01005e0000fbe89f806660bb080045000035000100004011d812c0a80101e00000f" +
                       "b14e914e900214d970000010000010000000000000161056c6f63616c00000c0001"
-        val data = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, DROP, program, HexDump.hexStringToByteArray(mdnsPkt), data)
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                HexDump.hexStringToByteArray(mdnsPkt),
+                DROPPED_IPV4_NON_DHCP4
+        )
 
         // Using scapy to generate DHCP4 offer packet:
         //   ether = Ether(src='00:11:22:33:44:55', dst='ff:ff:ff:ff:ff:ff')
@@ -1738,7 +1649,12 @@ class ApfNewTest {
                        "000000000000000000000000000000000000000000000000000000000000000000000000" +
                        "0000000000000000000000000000000000000000000000000000638253633501023604c0" +
                        "a801010104ffffff000304c0a80101330400015180060408080808ff"
-        assertVerdict(APF_VERSION_6, PASS, program, HexDump.hexStringToByteArray(dhcp4Pkt), data)
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                HexDump.hexStringToByteArray(dhcp4Pkt),
+                PASSED_IPV4_FROM_DHCPV4_SERVER
+        )
 
         // Using scapy to generate DHCP4 offer packet:
         //   eth = Ether(src="E8:9F:80:66:60:BB", dst="01:00:5E:00:00:FB")
@@ -1750,21 +1666,11 @@ class ApfNewTest {
         //   fragments[1]
         val fragmentedUdpPkt = "01005e0000fbe89f806660bb08004500001d000100034011f75dc0a8010ac0a8" +
                                "01146f63616c00000c0001"
-        assertVerdict(
+        verifyProgramRun(
                 APF_VERSION_6,
-                DROP,
                 program,
                 HexDump.hexStringToByteArray(fragmentedUdpPkt),
-                data
-        )
-
-        assertEquals(
-                mapOf<Counter, Long>(
-                        TOTAL_PACKETS to 3,
-                        DROPPED_IPV4_NON_DHCP4 to 2,
-                        PASSED_IPV4_FROM_DHCPV4_SERVER to 1,
-                ),
-                decodeCountersIntoMap(data)
+                DROPPED_IPV4_NON_DHCP4
         )
         apfFilter.shutdown()
     }
@@ -1797,8 +1703,7 @@ class ApfNewTest {
         )
         val receivedArpPacket = ByteArray(ARP_ETHER_IPV4_LEN)
         receivedArpPacketBuf.get(receivedArpPacket)
-        val data = ByteArray(Counter.totalSize()) { 0 }
-        assertVerdict(APF_VERSION_6, DROP, program, receivedArpPacket, data)
+        verifyProgramRun(APF_VERSION_6, program, receivedArpPacket, DROPPED_ARP_REQUEST_REPLIED)
 
         val transmittedPacket = ApfJniUtils.getTransmittedPacket()
         val expectedArpReplyBuf = ArpPacket.buildArpPacket(
@@ -1814,13 +1719,6 @@ class ApfNewTest {
         assertContentEquals(
                 expectedArpReplyPacket + ByteArray(18) {0},
                 transmittedPacket
-        )
-        assertEquals(
-                mapOf<Counter, Long>(
-                        TOTAL_PACKETS to 1,
-                        DROPPED_ARP_REQUEST_REPLIED to 1
-                ),
-                decodeCountersIntoMap(data)
         )
         apfFilter.shutdown()
     }
@@ -1863,6 +1761,24 @@ class ApfNewTest {
         ipClientCallback.resetApfProgramWait()
         apfFilter.setLinkProperties(lp)
         ipClientCallback.assertNoProgramUpdate()
+    }
+
+    private fun verifyProgramRun(
+            version: Int,
+            program: ByteArray,
+            pkt: ByteArray,
+            targetCnt: Counter,
+            cntMap: MutableMap<Counter, Long> = mutableMapOf(),
+            dataRegion: ByteArray = ByteArray(Counter.totalSize()) { 0 },
+            incTotal: Boolean = true,
+            result: Int = if (targetCnt.name.startsWith("PASSED")) PASS else DROP
+    ) {
+        assertVerdict(version, result, program, pkt, dataRegion)
+        cntMap[targetCnt] = cntMap.getOrDefault(targetCnt, 0) + 1
+        if (incTotal) {
+            cntMap[TOTAL_PACKETS] = cntMap.getOrDefault(TOTAL_PACKETS, 0) + 1
+        }
+        assertEquals(cntMap, decodeCountersIntoMap(dataRegion))
     }
 
     private fun decodeCountersIntoMap(counterBytes: ByteArray): Map<Counter, Long> {
