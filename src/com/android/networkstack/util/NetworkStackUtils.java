@@ -226,6 +226,13 @@ public class NetworkStackUtils {
             "ip_reachability_ignore_organic_nud_failure_version";
 
     /**
+     * Experiment flag to ignore all NUD failures from the neighbor that has never ever entered the
+     * reachable state.
+     */
+    public static final String IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION =
+            "ip_reachability_ignore_never_reachable_neighbor_version";
+
+    /**
      * Experiment flag to enable DHCPv6 Prefix Delegation(RFC8415) in IpClient.
      */
     public static final String IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION =

@@ -82,6 +82,7 @@ import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_ON_LINK
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION;
+import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION;
 import static com.android.testutils.MiscAsserts.assertThrows;
@@ -4452,11 +4453,11 @@ public abstract class IpClientIntegrationTestCommon {
                 true /* expectNeighborLost */);
     }
 
-    private void runIpReachabilityMonitorIncompleteIpv6NeighborTest(final String dnsServer,
+    private void runIpReachabilityMonitorEverReachableIpv6NeighborTest(final String dnsServer,
             final Inet6Address targetIp) throws Exception {
         prepareIpReachabilityMonitorAddressResolutionTest(dnsServer, targetIp);
 
-        // Simulate the default router was reachable by responding to multicast NS(not for DAD).
+        // Simulate the default router/DNS was reachable by responding to multicast NS(not for DAD).
         NeighborSolicitation ns;
         while ((ns = getNextNeighborSolicitation()) != null) {
             if (ns.ipv6Hdr.dstIp.isMulticastAddress() // Solicited-node multicast address
@@ -4498,7 +4499,7 @@ public abstract class IpClientIntegrationTestCommon {
     @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION, enabled = true)
     @Flag(name = IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION, enabled = false)
     public void testIpReachabilityMonitor_ignoreIpv6DefaultRouter_everReachable() throws Exception {
-        runIpReachabilityMonitorIncompleteIpv6NeighborTest(IPV6_OFF_LINK_DNS_SERVER,
+        runIpReachabilityMonitorEverReachableIpv6NeighborTest(IPV6_OFF_LINK_DNS_SERVER,
                 ROUTER_LINK_LOCAL /* targetIp */);
     }
 
@@ -4507,8 +4508,38 @@ public abstract class IpClientIntegrationTestCommon {
     @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION, enabled = false)
     public void testIpReachabilityMonitor_ignoreIpv6Dns_everReachable() throws Exception {
-        runIpReachabilityMonitorIncompleteIpv6NeighborTest(IPV6_ON_LINK_DNS_SERVER,
+        runIpReachabilityMonitorEverReachableIpv6NeighborTest(IPV6_ON_LINK_DNS_SERVER,
                 ipv6Addr(IPV6_ON_LINK_DNS_SERVER) /* targetIp */);
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
+    public void testIpReachabilityMonitor_ignoreNeverReachableIpv6Dns() throws Exception {
+        runIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER,
+                ipv6Addr(IPV6_ON_LINK_DNS_SERVER), false /* expectNeighborLost */);
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
+    public void testIpReachabilityMonitor_ignoreNeverReachableIpv6Dns_butEverReachable()
+            throws Exception {
+        runIpReachabilityMonitorEverReachableIpv6NeighborTest(IPV6_ON_LINK_DNS_SERVER,
+                ipv6Addr(IPV6_ON_LINK_DNS_SERVER) /* targetIp */);
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
+    public void testIpReachabilityMonitor_ignoreNeverReachableIpv6DefaultRouter() throws Exception {
+        runIpReachabilityMonitorAddressResolutionTest(IPV6_OFF_LINK_DNS_SERVER,
+                ROUTER_LINK_LOCAL, false /* expectNeighborLost */);
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
+    public void testIpReachabilityMonitor_ignoreNeverReachableIpv6DefaultRouter_butEverReachable()
+            throws Exception {
+        runIpReachabilityMonitorEverReachableIpv6NeighborTest(IPV6_ON_LINK_DNS_SERVER,
+                ROUTER_LINK_LOCAL /* targetIp */);
     }
 
     @Test
@@ -5448,12 +5479,12 @@ public abstract class IpClientIntegrationTestCommon {
         // Sometimes privacy address or route may appear later along with onLinkPropertiesChange
         // callback, in this case we wait a bit longer to see all of these properties appeared and
         // then verify if they are what we are looking for.
-        if (lp.getLinkAddresses().size() < 5 || lp.getRoutes().size() < 4) {
+        if (lp.getLinkAddresses().size() < 5) { // 1 IPv6 link-local and 4 global IPv6 addresses
+                                                // derived from prefix1 and prefix2
             final CompletableFuture<LinkProperties> lpFuture = new CompletableFuture<>();
             verifyWithTimeout(inOrder, mCb).onLinkPropertiesChange(argThat(x -> {
                 if (!x.isIpv6Provisioned()) return false;
                 if (x.getLinkAddresses().size() != 5) return false;
-                if (x.getRoutes().size() != 4) return false;
                 lpFuture.complete(x);
                 return true;
             }));

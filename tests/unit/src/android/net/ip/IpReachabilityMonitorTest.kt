@@ -59,6 +59,7 @@ import com.android.net.module.util.netlink.StructNdMsg.NUD_PROBE
 import com.android.net.module.util.netlink.StructNdMsg.NUD_REACHABLE
 import com.android.net.module.util.netlink.StructNdMsg.NUD_STALE
 import com.android.networkstack.metrics.IpReachabilityMonitorMetrics
+import com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION
 import com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION
 import com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_MCAST_RESOLICIT_VERSION
 import com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION
@@ -114,6 +115,8 @@ private val TEST_IPV6_LINKADDR = LinkAddress("2001:db8::123/64")
 private val TEST_IPV6_LINKLOCAL_LINKADDR = LinkAddress("fe80::123/64")
 private val TEST_IPV6_LINKLOCAL_GATEWAY = parseNumericAddress("fe80::1") as Inet6Address
 private val TEST_IPV6_LINKLOCAL_SCOPED_GATEWAY = parseNumericAddress("fe80::1%21") as Inet6Address
+private val TEST_IPV6_LINKLOCAL_GATEWAY2 = parseNumericAddress("fe80::2") as Inet6Address
+private val TEST_IPV6_LINKLOCAL_SCOPED_GATEWAY2 = parseNumericAddress("fe80::2%22") as Inet6Address
 
 // DNSes inside IP prefix
 private val TEST_IPV4_DNS = parseNumericAddress("192.168.222.1") as Inet4Address
@@ -342,7 +345,6 @@ class IpReachabilityMonitorTest {
 
         neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV4_DNS, NUD_FAILED))
         verify(callback, timeout(TEST_TIMEOUT_MS)).notifyLost(
-            eq(TEST_IPV4_DNS),
             anyString(),
             eq(NUD_ORGANIC_FAILED_CRITICAL)
         )
@@ -353,13 +355,20 @@ class IpReachabilityMonitorTest {
         lostNeighbor: InetAddress,
         eventType: NudEventType
     ) {
-        runLoseProvisioningTest(newLp, lostNeighbor, eventType, true /* expectedNotifyLost */)
+        runLoseProvisioningTest(
+                newLp,
+                lostNeighbor,
+                eventType,
+                false, /* everReachable */
+                true /* expectedNotifyLost */
+        )
     }
 
     private fun runLoseProvisioningTest(
         newLp: LinkProperties,
         lostNeighbor: InetAddress,
         eventType: NudEventType,
+        everReachable: Boolean,
         expectedNotifyLost: Boolean
     ) {
         reachabilityMonitor.updateLinkProperties(newLp)
@@ -368,18 +377,24 @@ class IpReachabilityMonitorTest {
         neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_GATEWAY, NUD_STALE))
         neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV4_DNS, NUD_STALE))
         neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_DNS, NUD_STALE))
+        if (everReachable) {
+            neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV4_DNS, NUD_REACHABLE))
+            neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV4_GATEWAY, NUD_REACHABLE))
+            neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_DNS, NUD_REACHABLE))
+            neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_GATEWAY, NUD_REACHABLE))
+        }
 
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(lostNeighbor, NUD_PROBE))
         neighborMonitor.enqueuePacket(makeNewNeighMessage(lostNeighbor, NUD_FAILED))
         handlerThread.waitForIdle(TEST_TIMEOUT_MS)
 
         if (expectedNotifyLost) {
             verify(callback, timeout(TEST_TIMEOUT_MS)).notifyLost(
-                eq(lostNeighbor),
                 anyString(),
                 eq(eventType)
             )
         } else {
-             verify(callback, never()).notifyLost(eq(lostNeighbor), anyString(), any())
+             verify(callback, never()).notifyLost(anyString(), any())
         }
     }
 
@@ -415,7 +430,7 @@ class IpReachabilityMonitorTest {
 
         neighborMonitor.enqueuePacket(makeNewNeighMessage(lostNeighbor, NUD_FAILED))
         handlerThread.waitForIdle(TEST_TIMEOUT_MS)
-        verify(callback, never()).notifyLost(any(), anyString(), any(NudEventType::class.java))
+        verify(callback, never()).notifyLost(anyString(), any(NudEventType::class.java))
         verifyNudFailureMetrics(eventType, ipType, lostNeighborType)
     }
 
@@ -429,7 +444,6 @@ class IpReachabilityMonitorTest {
         neighborMonitor.enqueuePacket(makeNewNeighMessage(neighbor, NUD_REACHABLE, macaddr))
         handlerThread.waitForIdle(TEST_TIMEOUT_MS)
         verify(callback, never()).notifyLost(
-            eq(neighbor),
             anyString(),
             any(NudEventType::class.java)
         )
@@ -470,6 +484,7 @@ class IpReachabilityMonitorTest {
             TEST_LINK_PROPERTIES,
             TEST_IPV4_DNS,
             NUD_ORGANIC_FAILED_CRITICAL,
+            false /* everReachable */,
             false /* expectedNotifyLost */
         )
     }
@@ -481,6 +496,7 @@ class IpReachabilityMonitorTest {
             TEST_LINK_PROPERTIES,
             TEST_IPV6_DNS,
             NUD_ORGANIC_FAILED_CRITICAL,
+            false /* everReachable */,
             false /* expectedNotifyLost */
         )
     }
@@ -492,6 +508,7 @@ class IpReachabilityMonitorTest {
             TEST_LINK_PROPERTIES,
             TEST_IPV4_GATEWAY,
             NUD_ORGANIC_FAILED_CRITICAL,
+            false /* everReachable */,
             false /* expectedNotifyLost */
         )
     }
@@ -503,7 +520,202 @@ class IpReachabilityMonitorTest {
             TEST_LINK_PROPERTIES,
             TEST_IPV6_GATEWAY,
             NUD_ORGANIC_FAILED_CRITICAL,
+            false /* everReachable */,
             false /* expectedNotifyLost */
+        )
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
+    fun testLoseProvisioning_ignoreNeverReachableIpv6GatewayLost() {
+        runLoseProvisioningTest(
+            TEST_LINK_PROPERTIES,
+            TEST_IPV6_GATEWAY,
+            NUD_ORGANIC_FAILED_CRITICAL,
+            false /* everReachable */,
+            false /* expectedNotifyLost */
+        )
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
+    fun testLoseProvisioning_ignoreNeverReachableIpv6DnsLost() {
+        runLoseProvisioningTest(
+            TEST_LINK_PROPERTIES,
+            TEST_IPV6_DNS,
+            NUD_ORGANIC_FAILED_CRITICAL,
+            false /* everReachable */,
+            false /* expectedNotifyLost */
+        )
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
+    fun testLoseProvisioning_notIgnoreEverReachableIpv6GatewayLost() {
+        runLoseProvisioningTest(
+            TEST_LINK_PROPERTIES,
+            TEST_IPV6_GATEWAY,
+            NUD_ORGANIC_FAILED_CRITICAL,
+            true /* everReachable */,
+            true /* expectedNotifyLost */
+        )
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
+    fun testLoseProvisioning_notIgnoreEverReachableIpv6DnsLost() {
+        runLoseProvisioningTest(
+            TEST_LINK_PROPERTIES,
+            TEST_IPV6_DNS,
+            NUD_ORGANIC_FAILED_CRITICAL,
+            true /* everReachable */,
+            true /* expectedNotifyLost */
+        )
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
+    fun testLoseProvisioning_ignoreNeverReachableIpv4DnsLost() {
+        runLoseProvisioningTest(
+            TEST_LINK_PROPERTIES,
+            TEST_IPV4_DNS,
+            NUD_ORGANIC_FAILED_CRITICAL,
+            false /* everReachable */,
+            false /* expectedNotifyLost */
+        )
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
+    fun testLoseProvisioning_notIgnoreEverReachableIpv4GatewayLost() {
+        runLoseProvisioningTest(
+            TEST_LINK_PROPERTIES,
+            TEST_IPV4_GATEWAY,
+            NUD_ORGANIC_FAILED_CRITICAL,
+            true /* everReachable */,
+            true /* expectedNotifyLost */
+        )
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
+    fun testLoseProvisioning_notIgnoreEverReachableIpv4DnsLost() {
+        runLoseProvisioningTest(
+            TEST_LINK_PROPERTIES,
+            TEST_IPV4_DNS,
+            NUD_ORGANIC_FAILED_CRITICAL,
+            true /* everReachable */,
+            true /* expectedNotifyLost */
+        )
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
+    fun testLoseProvisioning_ignoreNeverReachableIpv6GatewayLost_withTwoIPv6DnsServers() {
+        reachabilityMonitor.updateLinkProperties(TEST_DUAL_LINK_PROPERTIES)
+
+        // IPv6 default router is never reachable, but two DNS servers do.
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV4_DNS, NUD_REACHABLE))
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV4_GATEWAY, NUD_REACHABLE))
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_DNS, NUD_REACHABLE))
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_DNS2, NUD_REACHABLE))
+
+        // Push a NUD_FAILED event to IPv6 default router, this event should not trigger
+        // onReachabilityFailure callback given it's never reachable.
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_GATEWAY, NUD_PROBE))
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_GATEWAY, NUD_FAILED))
+        handlerThread.waitForIdle(TEST_TIMEOUT_MS)
+
+        verify(callback, never()).notifyLost(anyString(), any())
+
+        // Then another NUD_FAILED from one of DNS servers, this event should not trigger
+        // onReachabilityFailure callback either.
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_DNS, NUD_PROBE))
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_DNS, NUD_FAILED))
+        handlerThread.waitForIdle(TEST_TIMEOUT_MS)
+
+        verify(callback, never()).notifyLost(anyString(), any())
+
+        // Then we lost all IPv6 DNS servers, onReachabilityFailure callback should be triggered.
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_DNS2, NUD_PROBE))
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_DNS2, NUD_FAILED))
+        handlerThread.waitForIdle(TEST_TIMEOUT_MS)
+
+        verify(callback, timeout(TEST_TIMEOUT_MS)).notifyLost(
+            anyString(),
+            eq(NUD_ORGANIC_FAILED_CRITICAL)
+        )
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
+    fun testLoseProvisioning_ignoreNeverReachableIpv6DnsLost_withTwoIPv6Routes() {
+        val TEST_DUAL_IPV6_ROUTERS_LINK_PROPERTIES = LinkProperties().apply {
+            interfaceName = TEST_IFACE.name
+            addLinkAddress(TEST_IPV4_LINKADDR)
+            addLinkAddress(TEST_IPV6_LINKADDR)
+            addLinkAddress(TEST_IPV6_LINKLOCAL_LINKADDR)
+
+            // Add on link routes
+            addRoute(RouteInfo(TEST_IPV4_LINKADDR, null /* gateway */, TEST_IFACE.name))
+            addRoute(RouteInfo(TEST_IPV6_LINKADDR, null /* gateway */, TEST_IFACE.name))
+            addRoute(RouteInfo(TEST_IPV6_LINKLOCAL_LINKADDR, null /* gateway */, TEST_IFACE.name))
+
+            // Add default routes: one IPv4 default route and two IPv6 default routes.
+            addRoute(RouteInfo(IpPrefix(parseNumericAddress("0.0.0.0"), 0), TEST_IPV4_GATEWAY))
+            addRoute(
+                RouteInfo(
+                    IpPrefix(parseNumericAddress("::"), 0),
+                    TEST_IPV6_LINKLOCAL_SCOPED_GATEWAY
+                )
+            )
+            addRoute(
+                RouteInfo(
+                    IpPrefix(parseNumericAddress("::"), 0),
+                    TEST_IPV6_LINKLOCAL_SCOPED_GATEWAY2
+                )
+            )
+
+            addDnsServer(TEST_IPV4_DNS)
+            addDnsServer(TEST_IPV6_DNS)
+        }
+
+        reachabilityMonitor.updateLinkProperties(TEST_DUAL_IPV6_ROUTERS_LINK_PROPERTIES)
+
+        // IPv6 DNS is never reachable, but two default gateways do.
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV4_DNS, NUD_REACHABLE))
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV4_GATEWAY, NUD_REACHABLE))
+        neighborMonitor.enqueuePacket(
+            makeNewNeighMessage(TEST_IPV6_LINKLOCAL_GATEWAY, NUD_REACHABLE)
+        )
+        neighborMonitor.enqueuePacket(
+            makeNewNeighMessage(TEST_IPV6_LINKLOCAL_GATEWAY2, NUD_REACHABLE)
+        )
+
+        // Push a NUD_FAILED event to IPv6 DNS server, this event should not trigger
+        // onReachabilityFailure callback given it's never reachable.
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_DNS, NUD_PROBE))
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_DNS, NUD_FAILED))
+        handlerThread.waitForIdle(TEST_TIMEOUT_MS)
+
+        verify(callback, never()).notifyLost(anyString(), any())
+
+        // Then another NUD_FAILED from one of IPv6 gateways, this event should not trigger
+        // onReachabilityFailure callback either.
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_LINKLOCAL_GATEWAY, NUD_PROBE))
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_LINKLOCAL_GATEWAY, NUD_FAILED))
+        handlerThread.waitForIdle(TEST_TIMEOUT_MS)
+
+        verify(callback, never()).notifyLost(anyString(), any())
+
+        // Then we lost all IPv6 gateways, onReachabilityFailure callback should be triggered.
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_LINKLOCAL_GATEWAY2, NUD_PROBE))
+        neighborMonitor.enqueuePacket(makeNewNeighMessage(TEST_IPV6_LINKLOCAL_GATEWAY2, NUD_FAILED))
+        handlerThread.waitForIdle(TEST_TIMEOUT_MS)
+
+        verify(callback, timeout(TEST_TIMEOUT_MS)).notifyLost(
+            anyString(),
+            eq(NUD_ORGANIC_FAILED_CRITICAL)
         )
     }
 
@@ -805,7 +1017,6 @@ class IpReachabilityMonitorTest {
     ) {
         neighborMonitor.enqueuePacket(makeNewNeighMessage(neighbor, NUD_REACHABLE, TEST_MAC_2))
         verify(callback, timeout(TEST_TIMEOUT_MS)).notifyLost(
-            eq(neighbor),
             anyString(),
             eq(eventType)
         )
@@ -816,7 +1027,7 @@ class IpReachabilityMonitorTest {
         neighbor: InetAddress,
     ) {
         neighborMonitor.enqueuePacket(makeNewNeighMessage(neighbor, NUD_REACHABLE, TEST_MAC_2))
-        verify(callback, never()).notifyLost(eq(neighbor), anyString(), any())
+        verify(callback, never()).notifyLost(anyString(), any())
         verifyNudFailureMetricsNotReported()
     }
 

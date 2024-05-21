@@ -2391,7 +2391,7 @@ public class IpClient extends StateMachine {
                     mLog,
                     new IpReachabilityMonitor.Callback() {
                         @Override
-                        public void notifyLost(InetAddress ip, String logMsg, NudEventType type) {
+                        public void notifyLost(String logMsg, NudEventType type) {
                             final int version = mCallback.getInterfaceVersion();
                             if (version >= VERSION_ADDED_REACHABILITY_FAILURE) {
                                 final int reason = nudEventTypeToInt(type);
