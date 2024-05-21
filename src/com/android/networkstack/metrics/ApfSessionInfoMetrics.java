@@ -162,7 +162,7 @@ public class ApfSessionInfoMetrics {
                 return CounterName.CN_DROPPED_IPV6_NON_ICMP_MULTICAST;
             case DROPPED_802_3_FRAME:
                 return CounterName.CN_DROPPED_802_3_FRAME;
-            case DROPPED_ETHERTYPE_DENYLISTED:
+            case DROPPED_ETHERTYPE_NOT_ALLOWED:
                 return CounterName.CN_DROPPED_ETHERTYPE_DENYLISTED;
             case DROPPED_ARP_REPLY_SPA_NO_HOST:
                 return CounterName.CN_DROPPED_ARP_REPLY_SPA_NO_HOST;

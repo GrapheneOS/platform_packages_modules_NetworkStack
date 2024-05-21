@@ -129,7 +129,7 @@ public class ApfSessionInfoMetricsTest {
         verifyCounterName(Counter.DROPPED_IPV6_NON_ICMP_MULTICAST,
                 CounterName.CN_DROPPED_IPV6_NON_ICMP_MULTICAST);
         verifyCounterName(Counter.DROPPED_802_3_FRAME, CounterName.CN_DROPPED_802_3_FRAME);
-        verifyCounterName(Counter.DROPPED_ETHERTYPE_DENYLISTED,
+        verifyCounterName(Counter.DROPPED_ETHERTYPE_NOT_ALLOWED,
                 CounterName.CN_DROPPED_ETHERTYPE_DENYLISTED);
         verifyCounterName(Counter.DROPPED_ARP_REPLY_SPA_NO_HOST,
                 CounterName.CN_DROPPED_ARP_REPLY_SPA_NO_HOST);

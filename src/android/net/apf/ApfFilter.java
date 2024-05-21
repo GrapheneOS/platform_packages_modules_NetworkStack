@@ -2056,19 +2056,24 @@ public class ApfFilter implements AndroidPacketFilter {
         // insert IPv6 filter to drop, pass, or fall off the end for ICMPv6 packets
 
         gen.addLoad16(R0, ETH_ETHERTYPE_OFFSET);
-
-        if (mDrop802_3Frames) {
-            // drop 802.3 frames (ethtype < 0x0600)
-            gen.addCountAndDropIfR0LessThan(ETH_TYPE_MIN, Counter.DROPPED_802_3_FRAME);
-        }
-
-        // Handle ether-type black list
-        if (mEthTypeBlackList.length > 0) {
-            final Set<Long> deniedEtherTypes = new ArraySet<>();
-            for (int p : mEthTypeBlackList) {
-                deniedEtherTypes.add((long) p);
+        if (SdkLevel.isAtLeastV()) {
+            // IPv4, ARP, IPv6, EAPOL, WAPI
+            gen.addCountAndDropIfR0IsNoneOf(Set.of(0x0800L, 0x0806L, 0x86DDL, 0x888EL, 0x88B4L),
+                    Counter.DROPPED_ETHERTYPE_NOT_ALLOWED);
+        } else  {
+            if (mDrop802_3Frames) {
+                // drop 802.3 frames (ethtype < 0x0600)
+                gen.addCountAndDropIfR0LessThan(ETH_TYPE_MIN, Counter.DROPPED_802_3_FRAME);
             }
-            gen.addCountAndDropIfR0IsOneOf(deniedEtherTypes, Counter.DROPPED_ETHERTYPE_DENYLISTED);
+            // Handle ether-type black list
+            if (mEthTypeBlackList.length > 0) {
+                final Set<Long> deniedEtherTypes = new ArraySet<>();
+                for (int p : mEthTypeBlackList) {
+                    deniedEtherTypes.add((long) p);
+                }
+                gen.addCountAndDropIfR0IsOneOf(deniedEtherTypes,
+                        Counter.DROPPED_ETHERTYPE_NOT_ALLOWED);
+            }
         }
 
         // Add ARP filters:
@@ -2182,7 +2187,7 @@ public class ApfFilter implements AndroidPacketFilter {
             emitEpilogue(gen);
             program = gen.generate();
         } catch (IllegalInstructionException | IllegalStateException | IllegalArgumentException e) {
-            Log.e(TAG, "Failed to generate APF program.", e);
+            Log.wtf(TAG, "Failed to generate APF program.", e);
             sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_GENERATE_FILTER_EXCEPTION);
             return;
         }

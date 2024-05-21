@@ -213,7 +213,7 @@ public class IpClient extends StateMachine {
     private final IpProvisioningMetrics mIpProvisioningMetrics = new IpProvisioningMetrics();
     private final NetworkQuirkMetrics mNetworkQuirkMetrics;
 
-    private boolean mHasClatInterface = false;
+    private boolean mHasSeenClatInterface = false;
 
     /**
      * Dump all state machine and connectivity packet logs to the specified writer.
@@ -992,12 +992,12 @@ public class IpClient extends StateMachine {
                     @Override
                     public void onClatInterfaceStateUpdate(boolean add) {
                         getHandler().post(() -> {
-                            if (mHasClatInterface == add) return;
+                            if (mHasSeenClatInterface == add) return;
                             // Clat interface information is spliced into LinkProperties by
                             // ConnectivityService, so it cannot be added to the LinkProperties
                             // here as those propagate back to ConnectivityService.
                             mCallback.setNeighborDiscoveryOffload(add ? false : true);
-                            mHasClatInterface = add;
+                            mHasSeenClatInterface = add;
                             if (mApfFilter != null) {
                                 mApfFilter.updateClatInterfaceState(add);
                             }
@@ -2558,7 +2558,7 @@ public class IpClient extends StateMachine {
         }
         apfConfig.shouldHandleLightDoze = mApfShouldHandleLightDoze;
         apfConfig.minMetricsSessionDurationMs = mApfCounterPollingIntervalMs;
-        apfConfig.hasClatInterface = mHasClatInterface;
+        apfConfig.hasClatInterface = mHasSeenClatInterface;
         return mDependencies.maybeCreateApfFilter(mContext, apfConfig, mInterfaceParams,
                 mCallback, mNetworkQuirkMetrics, mUseNewApfFilter);
     }
@@ -3046,6 +3046,13 @@ public class IpClient extends StateMachine {
 
         @Override
         public void enter() {
+            // While it's possible that a stale clat interface still exists when IpClient starts,
+            // such an interface would not be used for the network that IpClient is currently
+            // running on, so it's OK to ignore it. This means that there is no need to check
+            // whether a clat interface exists when IpClient starts - even if one did exist, it's
+            // guaranteed to be stale. As a result, mHasSeenClatInterface can always be set to false
+            // at the beginning.
+            mHasSeenClatInterface = false;
             mApfFilter = maybeCreateApfFilter(mCurrentApfCapabilities);
             // TODO: investigate the effects of any multicast filtering racing/interfering with the
             // rest of this IP configuration startup.

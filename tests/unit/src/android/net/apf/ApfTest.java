@@ -91,6 +91,7 @@ import androidx.test.filters.SmallTest;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.HexDump;
+import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.DnsPacket;
 import com.android.net.module.util.Inet4AddressUtils;
 import com.android.net.module.util.NetworkStackConstants;
@@ -1207,9 +1208,14 @@ public class ApfTest {
 
         byte[] program = ipClientCallback.assertProgramUpdateAndGet();
 
-        // Verify empty packet of 100 zero bytes is passed
         ByteBuffer packet = ByteBuffer.wrap(new byte[100]);
-        assertPass(program, packet.array());
+        if (SdkLevel.isAtLeastV()) {
+            // Verify empty packet of 100 zero bytes is dropped
+            assertDrop(program, packet.array());
+        } else {
+            // Verify empty packet of 100 zero bytes is passed
+            assertPass(program, packet.array());
+        }
 
         // Verify unicast IPv4 packet is passed
         put(packet, ETH_DEST_ADDR_OFFSET, TestApfFilter.MOCK_MAC_ADDR);
@@ -1894,6 +1900,7 @@ public class ApfTest {
     }
 
     @Test
+    @DevSdkIgnoreRule.IgnoreAfter(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     public void testApfFilter802_3() throws Exception {
         MockIpClientCallback ipClientCallback = new MockIpClientCallback();
         ApfConfiguration config = getDefaultConfig();
@@ -1936,6 +1943,7 @@ public class ApfTest {
     }
 
     @Test
+    @DevSdkIgnoreRule.IgnoreAfter(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     public void testApfFilterEthTypeBL() throws Exception {
         final int[] emptyBlackList = {};
         final int[] ipv4BlackList = {ETH_P_IP};

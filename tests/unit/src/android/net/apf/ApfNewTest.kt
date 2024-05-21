@@ -24,12 +24,14 @@ import android.net.apf.ApfCounterTracker.Counter.APF_PROGRAM_ID
 import android.net.apf.ApfCounterTracker.Counter.APF_VERSION
 import android.net.apf.ApfCounterTracker.Counter.CORRUPT_DNS_PACKET
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REQUEST_REPLIED
-import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_DENYLISTED
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_NOT_ALLOWED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETH_BROADCAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ALLOCATE_FAILURE
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP
+import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_FROM_DHCPV4_SERVER
+import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP
 import android.net.apf.ApfCounterTracker.Counter.PASSED_TRANSMIT_FAILURE
 import android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS
 import android.net.apf.ApfFilter.Dependencies
@@ -527,13 +529,13 @@ class ApfNewTest {
         )
 
         gen = ApfV6Generator(defaultMaximumApfProgramSize)
-        gen.addCountAndDrop(DROPPED_ETHERTYPE_DENYLISTED)
+        gen.addCountAndDrop(DROPPED_ETHERTYPE_NOT_ALLOWED)
         program = gen.generate().skipDataAndDebug()
         // encoding COUNT(DROP) opcode: opcode=0, imm_len=size_of(imm), R=1, imm=counterNumber
         assertContentEquals(
                 byteArrayOf(
                         encodeInstruction(opcode = 0, immLength = 1, register = 1),
-                        DROPPED_ETHERTYPE_DENYLISTED.value().toByte()
+                        DROPPED_ETHERTYPE_NOT_ALLOWED.value().toByte()
                 ),
                 program
         )
@@ -1217,6 +1219,67 @@ class ApfNewTest {
         verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
     }
 
+    private fun doTestEtherTypeAllowListFilter(apfVersion: Int) {
+        val ipClientCallback = ApfTestUtils.MockIpClientCallback()
+        val apfFilter = TestApfFilter(
+                context,
+                getDefaultConfig(apfVersion),
+                ipClientCallback,
+                metrics,
+                dependencies
+        )
+
+        val program = ipClientCallback.assertProgramUpdateAndGet()
+
+        // Using scapy to generate IPv4 mDNS packet:
+        //   eth = Ether(src="E8:9F:80:66:60:BB", dst="01:00:5E:00:00:FB")
+        //   ip = IP(src="192.168.1.1")
+        //   udp = UDP(sport=5353, dport=5353)
+        //   dns = DNS(qd=DNSQR(qtype="PTR", qname="a.local"))
+        //   p = eth/ip/udp/dns
+        val mdnsPkt = "01005e0000fbe89f806660bb080045000035000100004011d812c0a80101e00000f" +
+                      "b14e914e900214d970000010000010000000000000161056c6f63616c00000c0001"
+        verifyProgramRun(APF_VERSION_6, program, HexDump.hexStringToByteArray(mdnsPkt), PASSED_IPV4)
+
+        // Using scapy to generate RA packet:
+        //  eth = Ether(src="E8:9F:80:66:60:BB", dst="33:33:00:00:00:01")
+        //  ip6 = IPv6(src="fe80::1", dst="ff02::1")
+        //  icmp6 = ICMPv6ND_RA(routerlifetime=3600, retranstimer=3600)
+        //  p = eth/ip6/icmp6
+        val raPkt = "333300000001e89f806660bb86dd6000000000103afffe800000000000000000000000" +
+                    "000001ff0200000000000000000000000000018600600700080e100000000000000e10"
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                HexDump.hexStringToByteArray(raPkt),
+                PASSED_IPV6_ICMP
+        )
+
+        // Using scapy to generate ethernet packet with type 0x88A2:
+        //  p = Ether(type=0x88A2)/Raw(load="01")
+        val ethPkt = "ffffffffffff047bcb463fb588a23031"
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                HexDump.hexStringToByteArray(ethPkt),
+                DROPPED_ETHERTYPE_NOT_ALLOWED
+        )
+
+        apfFilter.shutdown()
+    }
+
+    @Test
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    fun testV4EtherTypeAllowListFilter() {
+        doTestEtherTypeAllowListFilter(APF_VERSION_4)
+    }
+
+    @Test
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    fun testV6EtherTypeAllowListFilter() {
+        doTestEtherTypeAllowListFilter(APF_VERSION_6)
+    }
+
     @Test
     fun testV4CountAndPassDrop() {
         var program = ApfV4Generator(APF_VERSION_4)
@@ -1816,10 +1879,10 @@ class ApfNewTest {
         return this.drop(7).toByteArray()
     }
 
-    private fun getDefaultConfig(): ApfFilter.ApfConfiguration {
+    private fun getDefaultConfig(apfVersion: Int = APF_VERSION_6): ApfFilter.ApfConfiguration {
         val config = ApfFilter.ApfConfiguration()
         config.apfCapabilities =
-                ApfCapabilities(APF_VERSION_6, 4096, ARPHRD_ETHER)
+                ApfCapabilities(apfVersion, 4096, ARPHRD_ETHER)
         config.multicastFilter = false
         config.ieee802_3Filter = false
         config.ethTypeBlackList = IntArray(0)
