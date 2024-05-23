@@ -337,6 +337,22 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
     }
 
     /**
+     * Add instructions to the end of the program to increase counter and drop packet if R0 greater
+     * than {@code val}
+     * WARNING: may modify R1
+     */
+    public abstract Type addCountAndDropIfR0GreaterThan(long val, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException;
+
+    /**
+     * Add instructions to the end of the program to increase counter and pass packet if R0 greater
+     * than {@code val}
+     * WARNING: may modify R1
+     */
+    public abstract Type addCountAndPassIfR0GreaterThan(long val, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException;
+
+    /**
      * Add an instruction to the end of the program to jump to {@code target} if register R0's
      * value is less than {@code value}.
      */

@@ -166,6 +166,26 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
     }
 
     @Override
+    public ApfV4Generator addCountAndDropIfR0GreaterThan(long val, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException {
+        checkDropCounterRange(cnt);
+        if (val < 0 || val >= 4294967295L) {
+            throw new IllegalArgumentException("val must >= 0 and < 2^32-1, current val: " + val);
+        }
+        return maybeAddLoadCounterOffset(R1, cnt).addJumpIfR0GreaterThan(val, mCountAndDropLabel);
+    }
+
+    @Override
+    public ApfV4Generator addCountAndPassIfR0GreaterThan(long val, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException {
+        checkPassCounterRange(cnt);
+        if (val < 0 || val >= 4294967295L) {
+            throw new IllegalArgumentException("val must >= 0 and < 2^32-1, current val: " + val);
+        }
+        return maybeAddLoadCounterOffset(R1, cnt).addJumpIfR0GreaterThan(val, mCountAndPassLabel);
+    }
+
+    @Override
     public ApfV4Generator addCountAndDropIfBytesAtR0NotEqual(byte[] bytes,
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
         checkDropCounterRange(cnt);

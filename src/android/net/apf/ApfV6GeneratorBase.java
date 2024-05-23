@@ -678,6 +678,26 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
     }
 
     @Override
+    public Type addCountAndDropIfR0GreaterThan(long val, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException {
+        if (val < 0 || val >= 4294967295L) {
+            throw new IllegalArgumentException("val must >= 0 and < 2^32-1, current val: " + val);
+        }
+        final String tgt = getUniqueLabel();
+        return addJumpIfR0LessThan(val + 1, tgt).addCountAndDrop(cnt).defineLabel(tgt);
+    }
+
+    @Override
+    public Type addCountAndPassIfR0GreaterThan(long val, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException {
+        if (val < 0 || val >= 4294967295L) {
+            throw new IllegalArgumentException("val must >= 0 and < 2^32-1, current val: " + val);
+        }
+        final String tgt = getUniqueLabel();
+        return addJumpIfR0LessThan(val + 1, tgt).addCountAndPass(cnt).defineLabel(tgt);
+    }
+
+    @Override
     public final Type addCountAndDropIfBytesAtR0NotEqual(byte[] bytes,
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
         final String tgt = getUniqueLabel();
