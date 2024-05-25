@@ -107,7 +107,6 @@ import com.android.testutils.DevSdkIgnoreRunner;
 import libcore.io.Streams;
 
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -1485,76 +1484,6 @@ public class ApfTest {
             gen.addNop();
         }
         assertEquals(count, gen.generate().length);
-    }
-
-    @Test
-    public void testQnameEncoding() {
-        String[] qname = new String[]{"abcd", "ef", "日本"};
-        byte[] encodedQname = ApfFilter.encodeQname(qname);
-        Assert.assertArrayEquals(
-                new byte[]{0x04, 0x61, 0x62, 0x63, 0x64, 0x02, 0x65, 0x66, 0x06, (byte) 0xe6,
-                        (byte) 0x97, (byte) 0xa5, (byte) 0xe6, (byte) 0x9c, (byte) 0xac, 0x00},
-                encodedQname);
-    }
-
-    @Test
-    public void testApfFilterMdns() throws Exception {
-        final byte[] unicastIpv4Addr = {(byte) 192, 0, 2, 63};
-
-        MockIpClientCallback ipClientCallback = new MockIpClientCallback();
-        LinkAddress link = new LinkAddress(InetAddress.getByAddress(unicastIpv4Addr), 24);
-        LinkProperties lp = new LinkProperties();
-        lp.addLinkAddress(link);
-
-        ApfConfiguration config = getDefaultConfig();
-        TestApfFilter apfFilter = new TestApfFilter(mContext, config, ipClientCallback,
-                mNetworkQuirkMetrics, mDependencies);
-        apfFilter.setLinkProperties(lp);
-
-        // Construct IPv4 mDNS packet
-        byte[] mdnsv4packet = makeMdnsV4Packet("test.local");
-        byte[] mdnsv6packet = makeMdnsV6Packet("test.local");
-        byte[] program = ipClientCallback.assertProgramUpdateAndGet();
-        // mDNSv4 packet is passed if no mDns filter is turned on
-        assertPass(program, mdnsv4packet);
-        // mDNSv6 packet is passed if no mDNS filter is turned on
-        assertPass(program, mdnsv6packet);
-
-        // mDNSv4 packet with qname in the allowlist is passed
-        apfFilter.addToMdnsAllowList(new String[]{"test", "local"});
-        apfFilter.addToMdnsAllowList(new String[]{"abcd", "local"});
-        apfFilter.setMulticastFilter(true);
-        program = ipClientCallback.assertProgramUpdateAndGet();
-        assertPass(program, mdnsv4packet);
-        assertPass(program, mdnsv6packet);
-        // If packet contains more than one qname, pass the packet
-        mdnsv4packet = makeMdnsV4Packet("cccc.local", "dddd.local");
-        mdnsv6packet = makeMdnsV6Packet("cccc.local", "dddd.local");
-        assertPass(program, mdnsv4packet);
-        assertPass(program, mdnsv6packet);
-        // If packet doesn't contain any qname, pass the packet
-        mdnsv4packet = makeMdnsV4Packet();
-        mdnsv6packet = makeMdnsV6Packet();
-        assertPass(program, mdnsv4packet);
-        assertPass(program, mdnsv6packet);
-
-        mdnsv4packet = makeMdnsV4Packet("abcd.local");
-        mdnsv6packet = makeMdnsV6Packet("abcd.local");
-        assertPass(program, mdnsv4packet);
-        assertPass(program, mdnsv6packet);
-
-        // mDNSv4 packet with qname not in the allowlist is dropped
-        mdnsv4packet = makeMdnsV4Packet("ffff.local");
-        mdnsv6packet = makeMdnsV6Packet("ffff.local");
-        assertDrop(program, mdnsv4packet);
-        assertDrop(program, mdnsv6packet);
-
-        apfFilter.removeFromAllowList(new String[]{"abcd", "local"});
-        program = ipClientCallback.assertProgramUpdateAndGet();
-        mdnsv4packet = makeMdnsV4Packet("abcd.local");
-        mdnsv6packet = makeMdnsV6Packet("abcd.local");
-        assertDrop(program, mdnsv4packet);
-        assertDrop(program, mdnsv6packet);
     }
 
     private ApfV4Generator generateDnsFilter(boolean ipv6, String... labels) throws Exception {

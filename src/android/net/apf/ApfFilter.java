@@ -54,8 +54,6 @@ import static android.net.apf.ApfConstants.IPV6_HEADER_LEN;
 import static android.net.apf.ApfConstants.IPV6_NEXT_HEADER_OFFSET;
 import static android.net.apf.ApfConstants.IPV6_SRC_ADDR_OFFSET;
 import static android.net.apf.ApfConstants.MDNS_PORT;
-import static android.net.apf.ApfConstants.MDNS_QDCOUNT_OFFSET;
-import static android.net.apf.ApfConstants.MDNS_QNAME_OFFSET;
 import static android.net.apf.ApfConstants.TCP_HEADER_SIZE_OFFSET;
 import static android.net.apf.ApfConstants.TCP_UDP_DESTINATION_PORT_OFFSET;
 import static android.net.apf.ApfConstants.TCP_UDP_SOURCE_PORT_OFFSET;
@@ -124,7 +122,6 @@ import com.android.networkstack.metrics.IpClientRaInfoMetrics;
 import com.android.networkstack.metrics.NetworkQuirkMetrics;
 import com.android.networkstack.util.NetworkStackUtils;
 
-import java.io.ByteArrayOutputStream;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.Inet4Address;
@@ -136,7 +133,6 @@ import java.net.UnknownHostException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -1436,6 +1432,7 @@ public class ApfFilter implements AndroidPacketFilter {
     @GuardedBy("this")
     private final SparseArray<KeepalivePacket> mKeepalivePackets = new SparseArray<>();
     @GuardedBy("this")
+    // TODO: change the mMdnsAllowList to proper type for APFv6 based mDNS offload
     private final List<String[]> mMdnsAllowList = new ArrayList<>();
 
     // We don't want to filter an RA for it's whole lifetime as it'll be expired by the time we ever
@@ -1821,19 +1818,6 @@ public class ApfFilter implements AndroidPacketFilter {
         gen.defineLabel(skipUnsolicitedMulticastNALabel);
     }
 
-    /** Encodes qname in TLV pattern. */
-    @VisibleForTesting
-    public static byte[] encodeQname(String[] labels) {
-        final ByteArrayOutputStream out = new ByteArrayOutputStream();
-        for (String label : labels) {
-            byte[] labelBytes = label.getBytes(StandardCharsets.UTF_8);
-            out.write(labelBytes.length);
-            out.write(labelBytes, 0, labelBytes.length);
-        }
-        out.write(0);
-        return out.toByteArray();
-    }
-
     /**
      * Generate filter code to process mDNS packets. Execution of this code ends in * DROP_LABEL
      * or PASS_LABEL if the packet is mDNS packets. Otherwise, skip this check.
@@ -1844,7 +1828,6 @@ public class ApfFilter implements AndroidPacketFilter {
         final String skipMdnsv4Filter = "skip_mdns_v4_filter";
         final String skipMdnsFilter = "skip_mdns_filter";
         final String checkMdnsUdpPort = "check_mdns_udp_port";
-        final String mDnsAcceptPacket = "mdns_accept_packet";
 
         // Only turn on the filter if multicast filter is on and the qname allowlist is non-empty.
         if (!mMulticastFilter || mMdnsAllowList.isEmpty()) {
@@ -1852,14 +1835,6 @@ public class ApfFilter implements AndroidPacketFilter {
         }
 
         // Here's a basic summary of what the mDNS filter program does:
-        //
-        // if it is a multicast mDNS packet
-        //    if QDCOUNT != 1
-        //       pass
-        //    else if the QNAME is in the allowlist
-        //       pass
-        //    else:
-        //       drop
         //
         // A packet is considered as a multicast mDNS packet if it matches all the following
         // conditions
@@ -1911,37 +1886,9 @@ public class ApfFilter implements AndroidPacketFilter {
         gen.addLoad16Indexed(R0, TCP_UDP_DESTINATION_PORT_OFFSET);
         gen.addJumpIfR0NotEquals(MDNS_PORT, skipMdnsFilter);
 
-        gen.addLoad16Indexed(R0, MDNS_QDCOUNT_OFFSET);
-        // If QDCOUNT != 1, pass the packet
-        gen.addJumpIfR0NotEquals(1, mDnsAcceptPacket);
+        // TODO: implement APFv6 mDNS offload
 
-        // If QDCOUNT == 1, matches the QNAME with allowlist.
-        // Load offset for the first QNAME.
-        gen.addLoadImmediate(R0, MDNS_QNAME_OFFSET);
-        gen.addAddR1ToR0();
-
-        ApfV6Generator v6Gen = tryToConvertToApfV6Generator(gen);
-
-        // Check first QNAME against allowlist
-        for (int i = 0; i < mMdnsAllowList.size(); ++i) {
-            final byte[] encodedQname = encodeQname(mMdnsAllowList.get(i));
-            if (v6Gen != null) {
-                v6Gen.addJumpIfBytesAtR0Equal(encodedQname, mDnsAcceptPacket);
-            } else {
-                final String mDnsNextAllowedQnameCheck = "mdns_next_allowed_qname_check" + i;
-                gen.addJumpIfBytesAtR0NotEqual(encodedQname, mDnsNextAllowedQnameCheck);
-                // QNAME matched
-                gen.addJump(mDnsAcceptPacket);
-                // QNAME not matched
-                gen.defineLabel(mDnsNextAllowedQnameCheck);
-            }
-        }
-        // If QNAME doesn't match any entries in allowlist, drop the packet.
-        gen.addCountAndDrop(Counter.DROPPED_MDNS);
-
-        gen.defineLabel(mDnsAcceptPacket);
-        gen.addCountAndPass(Counter.PASSED_MDNS);
-
+        // end of mDNS filter
         gen.defineLabel(skipMdnsFilter);
     }
 
@@ -2375,22 +2322,6 @@ public class ApfFilter implements AndroidPacketFilter {
         if (mMulticastFilter == isEnabled) return;
         mMulticastFilter = isEnabled;
         installNewProgramLocked();
-    }
-
-    /** Adds qname to the mDNS allowlist */
-    public synchronized void addToMdnsAllowList(String[] labels) {
-        mMdnsAllowList.add(labels);
-        if (mMulticastFilter) {
-            installNewProgramLocked();
-        }
-    }
-
-    /** Removes qname from the mDNS allowlist */
-    public synchronized void removeFromAllowList(String[] labels) {
-        mMdnsAllowList.removeIf(e -> Arrays.equals(labels, e));
-        if (mMulticastFilter) {
-            installNewProgramLocked();
-        }
     }
 
     @VisibleForTesting
