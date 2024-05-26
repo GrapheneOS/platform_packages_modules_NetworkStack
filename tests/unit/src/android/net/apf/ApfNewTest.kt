@@ -1875,7 +1875,12 @@ class ApfNewTest {
         if (incTotal) {
             cntMap[TOTAL_PACKETS] = cntMap.getOrDefault(TOTAL_PACKETS, 0) + 1
         }
-        assertEquals(cntMap, decodeCountersIntoMap(dataRegion))
+        val errMsg = "Counter is not increased properly. To debug: \n" +
+                     " apf_run --program ${HexDump.toHexString(program)} " +
+                     "--packet ${HexDump.toHexString(pkt)} " +
+                     "--data ${HexDump.toHexString(dataRegion)} --age 0 " +
+                     "${if (version == APF_VERSION_6) "--v6" else "" } --trace  | less \n"
+        assertEquals(cntMap, decodeCountersIntoMap(dataRegion), errMsg)
     }
 
     private fun decodeCountersIntoMap(counterBytes: ByteArray): Map<Counter, Long> {
