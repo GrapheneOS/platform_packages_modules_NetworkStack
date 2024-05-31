@@ -46,10 +46,6 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-// In some branches, this may be module_current instead of module_34 if the SDK prebuilts are not
-// yet dropped there, meaning module_34 cannot be used yet.
-module_34_version = "module_34"
-
 // TODO: remove this default and replace with ConnectivityNextEnableDefaults. This will need to be
 // done separately in each branch due to merge conflicts.
 // Defaults to enable/disable java targets that depend on
@@ -88,7 +84,7 @@ java_defaults {
 java_defaults {
     name: "NetworkStackReleaseApiLevel",
     defaults: ["NetworkStackReleaseTargetSdk"],
-    sdk_version: module_34_version,
+    sdk_version: "module_current",
     libs: [
         "framework-configinfrastructure",
         "framework-connectivity.stubs.module_lib",
@@ -221,7 +217,7 @@ java_library {
         "framework-tethering",
         "framework-wifi",
     ],
-    sdk_version: module_34_version,
+    sdk_version: "module_34",
     visibility: ["//visibility:private"],
 }
 
