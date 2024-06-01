@@ -43,7 +43,7 @@ import android.net.apf.ApfTestUtils.assertDrop
 import android.net.apf.ApfTestUtils.assertPass
 import android.net.apf.ApfTestUtils.assertVerdict
 import android.net.apf.BaseApfGenerator.APF_VERSION_2
-import android.net.apf.BaseApfGenerator.APF_VERSION_4
+import android.net.apf.BaseApfGenerator.APF_VERSION_3
 import android.net.apf.BaseApfGenerator.APF_VERSION_6
 import android.net.apf.BaseApfGenerator.DROP_LABEL
 import android.net.apf.BaseApfGenerator.IllegalInstructionException
@@ -381,7 +381,7 @@ class ApfNewTest {
             )
         }
 
-        val v4gen = ApfV4Generator(APF_VERSION_4)
+        val v4gen = ApfV4Generator(APF_VERSION_3)
         assertFailsWith<IllegalArgumentException> { v4gen.addCountAndDrop(PASSED_ARP) }
         assertFailsWith<IllegalArgumentException> { v4gen.addCountAndPass(DROPPED_ETH_BROADCAST) }
         assertFailsWith<IllegalArgumentException> {
@@ -930,7 +930,7 @@ class ApfNewTest {
     fun testLoadStoreCounter() {
         doTestLoadStoreCounter (
                 { mutableMapOf() },
-                { ApfV4Generator(APF_VERSION_4) }
+                { ApfV4Generator(APF_VERSION_3) }
         )
         doTestLoadStoreCounter (
                 { mutableMapOf(TOTAL_PACKETS to 1) },
@@ -957,7 +957,7 @@ class ApfNewTest {
     @Test
     fun testV4CountAndPassDropCompareR0() {
         doTestCountAndPassDropCompareR0(
-                getGenerator = { ApfV4Generator(APF_VERSION_4) },
+                getGenerator = { ApfV4Generator(APF_VERSION_3) },
                 incTotal = false
         )
     }
@@ -1305,7 +1305,7 @@ class ApfNewTest {
     @Test
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     fun testV4EtherTypeAllowListFilter() {
-        doTestEtherTypeAllowListFilter(APF_VERSION_4)
+        doTestEtherTypeAllowListFilter(APF_VERSION_3)
     }
 
     @Test
@@ -1316,7 +1316,7 @@ class ApfNewTest {
 
     @Test
     fun testV4CountAndPassDrop() {
-        var program = ApfV4Generator(APF_VERSION_4)
+        var program = ApfV4Generator(APF_VERSION_3)
                 .addCountAndDrop(Counter.DROPPED_ETH_BROADCAST)
                 .addCountTrampoline()
                 .generate()
@@ -1328,7 +1328,7 @@ class ApfNewTest {
                 incTotal = false
         )
 
-        program = ApfV4Generator(APF_VERSION_4)
+        program = ApfV4Generator(APF_VERSION_3)
                 .addCountAndPass(Counter.PASSED_ARP)
                 .addCountTrampoline()
                 .generate()

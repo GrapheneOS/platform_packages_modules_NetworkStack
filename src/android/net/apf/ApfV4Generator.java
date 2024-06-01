@@ -64,9 +64,9 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
     public ApfV4Generator(int version, boolean disableCounterRangeCheck)
             throws IllegalInstructionException {
         // make sure mVersion is not greater than 4 when using this class
-        super(version >= 4 ? 4 : version, disableCounterRangeCheck);
-        mCountAndDropLabel = version >= 4 ? COUNT_AND_DROP_LABEL : DROP_LABEL;
-        mCountAndPassLabel = version >= 4 ? COUNT_AND_PASS_LABEL : PASS_LABEL;
+        super(version > 4 ? 4 : version, disableCounterRangeCheck);
+        mCountAndDropLabel = version > 2 ? COUNT_AND_DROP_LABEL : DROP_LABEL;
+        mCountAndPassLabel = version > 2 ? COUNT_AND_PASS_LABEL : PASS_LABEL;
     }
 
     /**
@@ -325,7 +325,7 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
      */
     public final ApfV4Generator addLoadData(Register dst, int ofs)
             throws IllegalInstructionException {
-        requireApfVersion(APF_VERSION_4);
+        requireApfVersion(3);
         return append(new Instruction(Opcodes.LDDW, dst).addSigned(ofs));
     }
 
@@ -337,21 +337,21 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
      */
     public final ApfV4Generator addStoreData(Register src, int ofs)
             throws IllegalInstructionException {
-        requireApfVersion(APF_VERSION_4);
+        requireApfVersion(3);
         return append(new Instruction(Opcodes.STDW, src).addSigned(ofs));
     }
 
     @Override
     public ApfV4Generator addLoadCounter(Register register, ApfCounterTracker.Counter counter)
             throws IllegalInstructionException {
-        if (mVersion < 4) return self();
+        if (mVersion <= 2) return self();
         return maybeAddLoadCounterOffset(register.other(), counter).addLoadData(register, 0);
     }
 
     @Override
     public ApfV4Generator addStoreCounter(ApfCounterTracker.Counter counter, Register register)
             throws IllegalInstructionException {
-        if (mVersion < 4) return self();
+        if (mVersion <= 2) return self();
         return maybeAddLoadCounterOffset(register.other(), counter).addStoreData(register, 0);
     }
 
@@ -365,7 +365,7 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
      */
     @Override
     public ApfV4Generator addCountTrampoline() throws IllegalInstructionException {
-        if (mVersion < 4) return self();
+        if (mVersion <= 2) return self();
         return defineLabel(COUNT_AND_PASS_LABEL)
                 .addLoadData(R0, 0)  // R0 = *(R1 + 0)
                 .addAdd(1)           // R0++
@@ -385,7 +385,7 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
     void updateExceptionBufferSize(int programSize) { }
 
     private ApfV4Generator maybeAddLoadCounterOffset(Register reg, ApfCounterTracker.Counter cnt) {
-        if (mVersion < 4) return self();
+        if (mVersion <= 2) return self();
         return addLoadImmediate(reg, cnt.offset());
     }
 }

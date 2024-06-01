@@ -17,7 +17,7 @@
 package android.net.apf;
 
 import static android.net.apf.ApfCounterTracker.Counter.getCounterEnumFromOffset;
-import static android.net.apf.BaseApfGenerator.APF_VERSION_4;
+import static android.net.apf.BaseApfGenerator.APF_VERSION_3;
 import static android.net.apf.BaseApfGenerator.DROP_LABEL;
 import static android.net.apf.BaseApfGenerator.MemorySlot;
 import static android.net.apf.BaseApfGenerator.PASS_LABEL;
@@ -835,23 +835,23 @@ public class ApfTest {
         ApfV4Generator gen;
 
         // Load data with no offset: lddw R0, [0 + r1]
-        gen = new ApfV4Generator(APF_VERSION_4);
+        gen = new ApfV4Generator(APF_VERSION_3);
         gen.addLoadData(R0, 0);
         assertProgramEquals(new byte[]{LDDW_OP | SIZE0}, gen.generate());
 
         // Store data with 8bit negative offset: lddw r0, [-42 + r1]
-        gen = new ApfV4Generator(APF_VERSION_4);
+        gen = new ApfV4Generator(APF_VERSION_3);
         gen.addStoreData(R0, -42);
         assertProgramEquals(new byte[]{STDW_OP | SIZE8, -42}, gen.generate());
 
         // Store data to R1 with 16bit negative offset: stdw r1, [-0x1122 + r0]
-        gen = new ApfV4Generator(APF_VERSION_4);
+        gen = new ApfV4Generator(APF_VERSION_3);
         gen.addStoreData(R1, -0x1122);
         assertProgramEquals(new byte[]{STDW_OP | SIZE16 | R1_REG, (byte)0xEE, (byte)0xDE},
                 gen.generate());
 
         // Load data to R1 with 32bit negative offset: lddw r1, [0xDEADBEEF + r0]
-        gen = new ApfV4Generator(APF_VERSION_4);
+        gen = new ApfV4Generator(APF_VERSION_3);
         gen.addLoadData(R1, 0xDEADBEEF);
         assertProgramEquals(
                 new byte[]{LDDW_OP | SIZE32 | R1_REG,
@@ -869,12 +869,12 @@ public class ApfTest {
         byte[] expected_data = data.clone();
 
         // No memory access instructions: should leave the data segment untouched.
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_4);
+        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3);
         assertDataMemoryContents(PASS, gen.generate(), packet, data, expected_data);
 
         // Expect value 0x87654321 to be stored starting from address -11 from the end of the
         // data buffer, in big-endian order.
-        gen = new ApfV4Generator(APF_VERSION_4);
+        gen = new ApfV4Generator(APF_VERSION_3);
         gen.addLoadImmediate(R0, 0x87654321);
         gen.addLoadImmediate(R1, -5);
         gen.addStoreData(R0, -6);  // -5 + -6 = -11 (offset +5 with data_len=16)
@@ -891,7 +891,7 @@ public class ApfTest {
     @Test
     public void testApfDataRead() throws IllegalInstructionException, Exception {
         // Program that DROPs if address 10 (-6) contains 0x87654321.
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_4);
+        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3);
         gen.addLoadImmediate(R1, 1000);
         gen.addLoadData(R0, -1006);  // 1000 + -1006 = -6 (offset +10 with data_len=16)
         gen.addJumpIfR0Equals(0x87654321, DROP_LABEL);
@@ -920,7 +920,7 @@ public class ApfTest {
      */
     @Test
     public void testApfDataReadModifyWrite() throws IllegalInstructionException, Exception {
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_4);
+        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3);
         gen.addLoadImmediate(R1, -22);
         gen.addLoadData(R0, 0);  // Load from address 32 -22 + 0 = 10
         gen.addAdd(0x78453412);  // 87654321 + 78453412 = FFAA7733
@@ -947,7 +947,7 @@ public class ApfTest {
         byte[] expected_data = data;
 
         // Program that DROPs unconditionally. This is our the baseline.
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_4);
+        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3);
         gen.addLoadImmediate(R0, 3);
         gen.addLoadData(R1, 7);
         gen.addJump(DROP_LABEL);
@@ -957,7 +957,7 @@ public class ApfTest {
         // 3 instructions, all normal opcodes (LI, LDDW, JMP) with 1 byte immediate = 6 byte program
         // 32 byte data length, for a total of 38 byte ram len.
         // APFv6 needs to round this up to be a multiple of 4, so 40.
-        gen = new ApfV4Generator(APF_VERSION_4);
+        gen = new ApfV4Generator(APF_VERSION_3);
         gen.addLoadImmediate(R0, 20);
         if (mApfVersion == 4) {
             gen.addLoadData(R1, 15);  // R0(20)+15+U32[0..3] >= 6 prog + 32 data, so invalid
@@ -968,21 +968,21 @@ public class ApfTest {
         assertDataMemoryContents(PASS, gen.generate(), packet, data, expected_data);
 
         // Subtracting an immediate should work...
-        gen = new ApfV4Generator(APF_VERSION_4);
+        gen = new ApfV4Generator(APF_VERSION_3);
         gen.addLoadImmediate(R0, 20);
         gen.addLoadData(R1, -4);
         gen.addJump(DROP_LABEL);
         assertDataMemoryContents(DROP, gen.generate(), packet, data, expected_data);
 
         // ...and underflowing simply wraps around to the end of the buffer...
-        gen = new ApfV4Generator(APF_VERSION_4);
+        gen = new ApfV4Generator(APF_VERSION_3);
         gen.addLoadImmediate(R0, 20);
         gen.addLoadData(R1, -30);
         gen.addJump(DROP_LABEL);
         assertDataMemoryContents(DROP, gen.generate(), packet, data, expected_data);
 
         // ...but doesn't allow accesses before the start of the buffer
-        gen = new ApfV4Generator(APF_VERSION_4);
+        gen = new ApfV4Generator(APF_VERSION_3);
         gen.addLoadImmediate(R0, 20);
         gen.addLoadData(R1, -1000);
         gen.addJump(DROP_LABEL);  // Not reached.
@@ -3467,7 +3467,7 @@ public class ApfTest {
 
     @Test
     public void testApfGeneratorPropagation() throws IllegalInstructionException {
-        ApfV4Generator v4Gen = new ApfV4Generator(APF_VERSION_4);
+        ApfV4Generator v4Gen = new ApfV4Generator(APF_VERSION_3);
         ApfV6Generator v6Gen = new ApfV6Generator(1024);
         assertEquals(4, deriveApfGeneratorVersion(v4Gen));
         assertEquals(6, deriveApfGeneratorVersion(v6Gen));
@@ -3475,7 +3475,7 @@ public class ApfTest {
 
     @Test
     public void testFullApfV4ProgramGenerationIPV6() throws IllegalInstructionException {
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_4);
+        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3);
         gen.addLoadImmediate(R1, -4);
         gen.addLoadData(R0, 0);
         gen.addAdd(1);
@@ -3628,7 +3628,7 @@ public class ApfTest {
 
     @Test
     public void testFullApfV4ProgramGenerationIPV4() throws IllegalInstructionException {
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_4);
+        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3);
         gen.addLoadImmediate(R1, -4);
         gen.addLoadData(R0, 0);
         gen.addAdd(1);
@@ -3749,7 +3749,7 @@ public class ApfTest {
 
     @Test
     public void testFullApfV4ProgramGenerationNatTKeepAliveV4() throws IllegalInstructionException {
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_4, true);
+        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3, true);
         gen.addLoadImmediate(R1, -4);
         gen.addLoadData(R0, 0);
         gen.addAdd(1);
@@ -3864,7 +3864,7 @@ public class ApfTest {
 
     @Test
     public void testInfiniteLifetimeFullApfV4ProgramGeneration() throws IllegalInstructionException {
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_4, true);
+        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3, true);
         gen.addLoadCounter(R0, getCounterEnumFromOffset(-8));
         gen.addAdd(1);
         gen.addStoreData(R0, 0);

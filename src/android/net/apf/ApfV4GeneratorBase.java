@@ -621,7 +621,7 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      */
     public final Type addIncrementCounter(ApfCounterTracker.Counter counter, int val)
             throws IllegalInstructionException {
-        if (mVersion < 4) return self();
+        if (mVersion <= 2) return self();
         return addLoadCounter(R0, counter).addAdd(val).addStoreCounter(counter, R0);
     }
 
