@@ -44,15 +44,22 @@ public final class ApfConstants {
     // IPv6 header as don't care.
     public static final int IPV6_FLOW_LABEL_OFFSET = ETH_HEADER_LEN + 1;
     public static final int IPV6_FLOW_LABEL_LEN = 3;
+    public static final int IPV6_PAYLOAD_LEN_OFFSET = ETH_HEADER_LEN + 4;
     public static final int IPV6_NEXT_HEADER_OFFSET = ETH_HEADER_LEN + 6;
+    public static final int IPV6_HOP_LIMIT_OFFSET = ETH_HEADER_LEN + 7;
     public static final int IPV6_SRC_ADDR_OFFSET = ETH_HEADER_LEN + 8;
     public static final int IPV6_DEST_ADDR_OFFSET = ETH_HEADER_LEN + 24;
     public static final int IPV6_HEADER_LEN = 40;
     // The IPv6 all nodes address ff02::1
     public static final byte[] IPV6_ALL_NODES_ADDRESS =
             { (byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
+    // The IPv6 solicited nodes multicast address prefix ff02::1:ffXX:X/104
+    public static final byte[] IPV6_SOLICITED_NODES_PREFIX =
+            { (byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, (byte) 0xff};
 
     public static final int ICMP6_TYPE_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN;
+    public static final int ICMP6_CODE_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN + 1;
+    public static final int ICMP6_NS_TARGET_IP_OFFSET = ICMP6_TYPE_OFFSET + 8;
 
     public static final int IPPROTO_HOPOPTS = 0;
 

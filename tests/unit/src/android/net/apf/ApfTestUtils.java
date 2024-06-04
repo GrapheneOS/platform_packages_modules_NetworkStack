@@ -291,7 +291,7 @@ public class ApfTestUtils {
      * The test apf filter class.
      */
     public static class TestApfFilter extends ApfFilter implements TestAndroidPacketFilter {
-        public static final byte[] MOCK_MAC_ADDR = {1, 2, 3, 4, 5, 6};
+        public static final byte[] MOCK_MAC_ADDR = {2, 3, 4, 5, 6, 7};
         private static final byte[] MOCK_IPV4_ADDR = {10, 0, 0, 1};
 
         private FileDescriptor mWriteSocket;
