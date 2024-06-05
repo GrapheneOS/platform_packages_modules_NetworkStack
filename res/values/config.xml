@@ -108,12 +108,14 @@
 
     <!-- Whether the APF Filter in the device should filter out IEEE 802.3 Frames
          Those frames are identified by the field Eth-type having values
-         less than 0x600 -->
+         less than 0x600.
+         This configuration has been deprecated and is not functional in Android V+. -->
     <bool name="config_apfDrop802_3Frames">true</bool>
 
     <!-- An array of Denylisted EtherType, packets with EtherTypes within this array
-         will be dropped
-         TODO: are these proper values? -->
+         will be dropped.
+         TODO: are these proper values?
+         This configuration has been deprecated and is not functional in Android V+. -->
     <integer-array name="config_apfEthTypeDenyList">
         <item>0x88A2</item>
         <item>0x88A4</item>

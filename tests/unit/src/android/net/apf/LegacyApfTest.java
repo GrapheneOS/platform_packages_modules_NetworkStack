@@ -16,20 +16,9 @@
 
 package android.net.apf;
 
-import static android.net.apf.ApfCounterTracker.Counter.getCounterEnumFromOffset;
-import static android.net.apf.BaseApfGenerator.APF_VERSION_3;
-import static android.net.apf.BaseApfGenerator.DROP_LABEL;
-import static android.net.apf.BaseApfGenerator.MemorySlot;
-import static android.net.apf.BaseApfGenerator.PASS_LABEL;
-import static android.net.apf.BaseApfGenerator.Register.R0;
-import static android.net.apf.BaseApfGenerator.Register.R1;
-import static android.net.apf.ApfJniUtils.compareBpfApf;
-import static android.net.apf.ApfJniUtils.compileToBpf;
 import static android.net.apf.ApfJniUtils.dropsAllPackets;
 import static android.net.apf.ApfTestUtils.DROP;
-import static android.net.apf.ApfTestUtils.MIN_PKT_SIZE;
 import static android.net.apf.ApfTestUtils.PASS;
-import static android.net.apf.ApfTestUtils.assertProgramEquals;
 import static android.os.PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED;
 import static android.os.PowerManager.ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED;
 import static android.system.OsConstants.ARPHRD_ETHER;
@@ -37,18 +26,15 @@ import static android.system.OsConstants.ETH_P_ARP;
 import static android.system.OsConstants.ETH_P_IP;
 import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
-import static android.system.OsConstants.IPPROTO_IPV6;
 import static android.system.OsConstants.IPPROTO_TCP;
 import static android.system.OsConstants.IPPROTO_UDP;
 
 import static com.android.net.module.util.HexDump.hexStringToByteArray;
-import static com.android.net.module.util.HexDump.toHexString;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ECHO_REQUEST_TYPE;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
@@ -62,28 +48,24 @@ import static org.mockito.Mockito.verify;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.net.InetAddresses;
 import android.net.IpPrefix;
 import android.net.LinkAddress;
 import android.net.LinkProperties;
-import android.net.MacAddress;
 import android.net.NattKeepalivePacketDataParcelable;
 import android.net.TcpKeepalivePacketDataParcelable;
 import android.net.apf.ApfCounterTracker.Counter;
 import android.net.apf.ApfFilter.ApfConfiguration;
 import android.net.apf.ApfTestUtils.MockIpClientCallback;
 import android.net.apf.ApfTestUtils.TestApfFilter;
-import android.net.apf.BaseApfGenerator.IllegalInstructionException;
+import android.net.apf.ApfTestUtils.TestLegacyApfFilter;
 import android.net.metrics.IpConnectivityLog;
 import android.os.Build;
 import android.os.PowerManager;
 import android.stats.connectivity.NetworkQuirkEvent;
 import android.system.ErrnoException;
-import android.text.TextUtils;
 import android.text.format.DateUtils;
 import android.util.ArrayMap;
 import android.util.Log;
-import android.util.Pair;
 
 import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
@@ -91,10 +73,7 @@ import androidx.test.filters.SmallTest;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.HexDump;
 import com.android.modules.utils.build.SdkLevel;
-import com.android.net.module.util.DnsPacket;
-import com.android.net.module.util.Inet4AddressUtils;
 import com.android.net.module.util.NetworkStackConstants;
-import com.android.net.module.util.PacketBuilder;
 import com.android.networkstack.metrics.ApfSessionInfoMetrics;
 import com.android.networkstack.metrics.IpClientRaInfoMetrics;
 import com.android.networkstack.metrics.NetworkQuirkMetrics;
@@ -122,14 +101,11 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.Inet4Address;
-import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -142,7 +118,7 @@ import java.util.Random;
 @DevSdkIgnoreRunner.MonitorThreadLeak
 @RunWith(DevSdkIgnoreRunner.class)
 @SmallTest
-public class ApfTest {
+public class LegacyApfTest {
     private static final int APF_VERSION_2 = 2;
 
     @Rule
@@ -324,686 +300,6 @@ public class ApfTest {
 
     private void assertVerdict(int expected, byte[] program, byte[] packet) {
         ApfTestUtils.assertVerdict(mApfVersion, expected, program, packet);
-    }
-
-    /**
-     * Test each instruction by generating a program containing the instruction,
-     * generating bytecode for that program and running it through the
-     * interpreter to verify it functions correctly.
-     */
-    @Test
-    public void testApfInstructions() throws IllegalInstructionException {
-        // Empty program should pass because having the program counter reach the
-        // location immediately after the program indicates the packet should be
-        // passed to the AP.
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_2);
-        assertPass(gen);
-
-        // Test pass opcode
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addPass();
-        gen.addJump(DROP_LABEL);
-        assertPass(gen);
-
-        // Test jumping to pass label.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addJump(PASS_LABEL);
-        byte[] program = gen.generate();
-        assertEquals(1, program.length);
-        assertEquals((14 << 3) | (0 << 1) | 0, program[0]);
-        assertPass(program, new byte[MIN_PKT_SIZE], 0);
-
-        // Test jumping to drop label.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addJump(DROP_LABEL);
-        program = gen.generate();
-        assertEquals(2, program.length);
-        assertEquals((14 << 3) | (1 << 1) | 0, program[0]);
-        assertEquals(1, program[1]);
-        assertDrop(program, new byte[15], 15);
-
-        // Test jumping if equal to 0.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addJumpIfR0Equals(0, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test jumping if not equal to 0.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addJumpIfR0NotEquals(0, DROP_LABEL);
-        assertPass(gen);
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1);
-        gen.addJumpIfR0NotEquals(0, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test jumping if registers equal.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addJumpIfR0EqualsR1(DROP_LABEL);
-        assertDrop(gen);
-
-        // Test jumping if registers not equal.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addJumpIfR0NotEqualsR1(DROP_LABEL);
-        assertPass(gen);
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1);
-        gen.addJumpIfR0NotEqualsR1(DROP_LABEL);
-        assertDrop(gen);
-
-        // Test load immediate.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1234567890);
-        gen.addJumpIfR0Equals(1234567890, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test add.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addAdd(1234567890);
-        gen.addJumpIfR0Equals(1234567890, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test add with a small signed negative value.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addAdd(-1);
-        gen.addJumpIfR0Equals(-1, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test subtract.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addAdd(-1234567890);
-        gen.addJumpIfR0Equals(-1234567890, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test or.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addOr(1234567890);
-        gen.addJumpIfR0Equals(1234567890, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test and.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1234567890);
-        gen.addAnd(123456789);
-        gen.addJumpIfR0Equals(1234567890 & 123456789, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test left shift.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1234567890);
-        gen.addLeftShift(1);
-        gen.addJumpIfR0Equals(1234567890 << 1, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test right shift.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1234567890);
-        gen.addRightShift(1);
-        gen.addJumpIfR0Equals(1234567890 >> 1, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test multiply.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 123456789);
-        gen.addMul(2);
-        gen.addJumpIfR0Equals(123456789 * 2, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test divide.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1234567890);
-        gen.addDiv(2);
-        gen.addJumpIfR0Equals(1234567890 / 2, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test divide by zero.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addDiv(0);
-        gen.addJump(DROP_LABEL);
-        assertPass(gen);
-
-        // Test add.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R1, 1234567890);
-        gen.addAddR1ToR0();
-        gen.addJumpIfR0Equals(1234567890, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test subtract.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R1, -1234567890);
-        gen.addAddR1ToR0();
-        gen.addJumpIfR0Equals(-1234567890, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test or.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R1, 1234567890);
-        gen.addOrR0WithR1();
-        gen.addJumpIfR0Equals(1234567890, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test and.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1234567890);
-        gen.addLoadImmediate(R1, 123456789);
-        gen.addAndR0WithR1();
-        gen.addJumpIfR0Equals(1234567890 & 123456789, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test left shift.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1234567890);
-        gen.addLoadImmediate(R1, 1);
-        gen.addLeftShiftR0ByR1();
-        gen.addJumpIfR0Equals(1234567890 << 1, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test right shift.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1234567890);
-        gen.addLoadImmediate(R1, -1);
-        gen.addLeftShiftR0ByR1();
-        gen.addJumpIfR0Equals(1234567890 >> 1, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test multiply.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 123456789);
-        gen.addLoadImmediate(R1, 2);
-        gen.addMulR0ByR1();
-        gen.addJumpIfR0Equals(123456789 * 2, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test divide.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1234567890);
-        gen.addLoadImmediate(R1, 2);
-        gen.addDivR0ByR1();
-        gen.addJumpIfR0Equals(1234567890 / 2, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test divide by zero.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addDivR0ByR1();
-        gen.addJump(DROP_LABEL);
-        assertPass(gen);
-
-        // Test byte load.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoad8(R0, 1);
-        gen.addJumpIfR0Equals(45, DROP_LABEL);
-        assertDrop(gen, new byte[]{123,45,0,0,0,0,0,0,0,0,0,0,0,0,0}, 0);
-
-        // Test out of bounds load.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoad8(R0, 16);
-        gen.addJumpIfR0Equals(0, DROP_LABEL);
-        assertPass(gen, new byte[]{123,45,0,0,0,0,0,0,0,0,0,0,0,0,0}, 0);
-
-        // Test half-word load.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoad16(R0, 1);
-        gen.addJumpIfR0Equals((45 << 8) | 67, DROP_LABEL);
-        assertDrop(gen, new byte[]{123,45,67,0,0,0,0,0,0,0,0,0,0,0,0}, 0);
-
-        // Test word load.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoad32(R0, 1);
-        gen.addJumpIfR0Equals((45 << 24) | (67 << 16) | (89 << 8) | 12, DROP_LABEL);
-        assertDrop(gen, new byte[]{123,45,67,89,12,0,0,0,0,0,0,0,0,0,0}, 0);
-
-        // Test byte indexed load.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R1, 1);
-        gen.addLoad8Indexed(R0, 0);
-        gen.addJumpIfR0Equals(45, DROP_LABEL);
-        assertDrop(gen, new byte[]{123,45,0,0,0,0,0,0,0,0,0,0,0,0,0}, 0);
-
-        // Test out of bounds indexed load.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R1, 8);
-        gen.addLoad8Indexed(R0, 8);
-        gen.addJumpIfR0Equals(0, DROP_LABEL);
-        assertPass(gen, new byte[]{123,45,0,0,0,0,0,0,0,0,0,0,0,0,0}, 0);
-
-        // Test half-word indexed load.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R1, 1);
-        gen.addLoad16Indexed(R0, 0);
-        gen.addJumpIfR0Equals((45 << 8) | 67, DROP_LABEL);
-        assertDrop(gen, new byte[]{123,45,67,0,0,0,0,0,0,0,0,0,0,0,0}, 0);
-
-        // Test word indexed load.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R1, 1);
-        gen.addLoad32Indexed(R0, 0);
-        gen.addJumpIfR0Equals((45 << 24) | (67 << 16) | (89 << 8) | 12, DROP_LABEL);
-        assertDrop(gen, new byte[]{123,45,67,89,12,0,0,0,0,0,0,0,0,0,0}, 0);
-
-        // Test jumping if greater than.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addJumpIfR0GreaterThan(0, DROP_LABEL);
-        assertPass(gen);
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1);
-        gen.addJumpIfR0GreaterThan(0, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test jumping if less than.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addJumpIfR0LessThan(0, DROP_LABEL);
-        assertPass(gen);
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addJumpIfR0LessThan(1, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test jumping if any bits set.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addJumpIfR0AnyBitsSet(3, DROP_LABEL);
-        assertPass(gen);
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1);
-        gen.addJumpIfR0AnyBitsSet(3, DROP_LABEL);
-        assertDrop(gen);
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 3);
-        gen.addJumpIfR0AnyBitsSet(3, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test jumping if register greater than.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addJumpIfR0GreaterThanR1(DROP_LABEL);
-        assertPass(gen);
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 2);
-        gen.addLoadImmediate(R1, 1);
-        gen.addJumpIfR0GreaterThanR1(DROP_LABEL);
-        assertDrop(gen);
-
-        // Test jumping if register less than.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addJumpIfR0LessThanR1(DROP_LABEL);
-        assertPass(gen);
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R1, 1);
-        gen.addJumpIfR0LessThanR1(DROP_LABEL);
-        assertDrop(gen);
-
-        // Test jumping if any bits set in register.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R1, 3);
-        gen.addJumpIfR0AnyBitsSetR1(DROP_LABEL);
-        assertPass(gen);
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R1, 3);
-        gen.addLoadImmediate(R0, 1);
-        gen.addJumpIfR0AnyBitsSetR1(DROP_LABEL);
-        assertDrop(gen);
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R1, 3);
-        gen.addLoadImmediate(R0, 3);
-        gen.addJumpIfR0AnyBitsSetR1(DROP_LABEL);
-        assertDrop(gen);
-
-        // Test load from memory.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadFromMemory(R0, MemorySlot.SLOT_0);
-        gen.addJumpIfR0Equals(0, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test store to memory.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R1, 1234567890);
-        gen.addStoreToMemory(MemorySlot.RAM_LEN, R1);
-        gen.addLoadFromMemory(R0, MemorySlot.RAM_LEN);
-        gen.addJumpIfR0Equals(1234567890, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test filter age pre-filled memory.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadFromMemory(R0, MemorySlot.FILTER_AGE_SECONDS);
-        gen.addJumpIfR0Equals(123, DROP_LABEL);
-        assertDrop(gen, new byte[MIN_PKT_SIZE], 123);
-
-        // Test packet size pre-filled memory.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE);
-        gen.addJumpIfR0Equals(MIN_PKT_SIZE, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test IPv4 header size pre-filled memory.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadFromMemory(R0, MemorySlot.IPV4_HEADER_SIZE);
-        gen.addJumpIfR0Equals(20, DROP_LABEL);
-        assertDrop(gen, new byte[]{0,0,0,0,0,0,0,0,0,0,0,0,8,0,0x45,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}, 0);
-
-        // Test not.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1234567890);
-        gen.addNot(R0);
-        gen.addJumpIfR0Equals(~1234567890, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test negate.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1234567890);
-        gen.addNeg(R0);
-        gen.addJumpIfR0Equals(-1234567890, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test move.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R1, 1234567890);
-        gen.addMove(R0);
-        gen.addJumpIfR0Equals(1234567890, DROP_LABEL);
-        assertDrop(gen);
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1234567890);
-        gen.addMove(R1);
-        gen.addJumpIfR0Equals(1234567890, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test swap.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R1, 1234567890);
-        gen.addSwap();
-        gen.addJumpIfR0Equals(1234567890, DROP_LABEL);
-        assertDrop(gen);
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1234567890);
-        gen.addSwap();
-        gen.addJumpIfR0Equals(0, DROP_LABEL);
-        assertDrop(gen);
-
-        // Test jump if bytes not equal.
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1);
-        gen.addJumpIfBytesAtR0NotEqual(new byte[]{123}, DROP_LABEL);
-        program = gen.generate();
-        assertEquals(6, program.length);
-        assertEquals((13 << 3) | (1 << 1) | 0, program[0]);
-        assertEquals(1, program[1]);
-        assertEquals(((20 << 3) | (1 << 1) | 0) - 256, program[2]);
-        assertEquals(1, program[3]);
-        assertEquals(1, program[4]);
-        assertEquals(123, program[5]);
-        assertDrop(program, new byte[MIN_PKT_SIZE], 0);
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1);
-        gen.addJumpIfBytesAtR0NotEqual(new byte[]{123}, DROP_LABEL);
-        byte[] packet123 = {0,123,0,0,0,0,0,0,0,0,0,0,0,0,0};
-        assertPass(gen, packet123, 0);
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addJumpIfBytesAtR0NotEqual(new byte[]{123}, DROP_LABEL);
-        assertDrop(gen, packet123, 0);
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1);
-        gen.addJumpIfBytesAtR0NotEqual(new byte[]{1, 2, 30, 4, 5}, DROP_LABEL);
-        byte[] packet12345 = {0,1,2,3,4,5,0,0,0,0,0,0,0,0,0};
-        assertDrop(gen, packet12345, 0);
-        gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R0, 1);
-        gen.addJumpIfBytesAtR0NotEqual(new byte[]{1, 2, 3, 4, 5}, DROP_LABEL);
-        assertPass(gen, packet12345, 0);
-    }
-
-    @Test(expected = ApfV4Generator.IllegalInstructionException.class)
-    public void testApfGeneratorWantsV2OrGreater() throws Exception {
-        // The minimum supported APF version is 2.
-        new ApfV4Generator(1);
-    }
-
-    @Test
-    public void testApfDataOpcodesWantApfV3() throws IllegalInstructionException, Exception {
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_2);
-        try {
-            gen.addStoreData(R0, 0);
-            fail();
-        } catch (IllegalInstructionException expected) {
-            /* pass */
-        }
-        try {
-            gen.addLoadData(R0, 0);
-            fail();
-        } catch (IllegalInstructionException expected) {
-            /* pass */
-        }
-    }
-
-    /**
-     * Test that the generator emits immediates using the shortest possible encoding.
-     */
-    @Test
-    public void testImmediateEncoding() throws IllegalInstructionException {
-        ApfV4Generator gen;
-
-        // 0-byte immediate: li R0, 0
-        gen = new ApfV4Generator(4);
-        gen.addLoadImmediate(R0, 0);
-        assertProgramEquals(new byte[]{LI_OP | SIZE0}, gen.generate());
-
-        // 1-byte immediate: li R0, 42
-        gen = new ApfV4Generator(4);
-        gen.addLoadImmediate(R0, 42);
-        assertProgramEquals(new byte[]{LI_OP | SIZE8, 42}, gen.generate());
-
-        // 2-byte immediate: li R1, 0x1234
-        gen = new ApfV4Generator(4);
-        gen.addLoadImmediate(R1, 0x1234);
-        assertProgramEquals(new byte[]{LI_OP | SIZE16 | R1_REG, 0x12, 0x34}, gen.generate());
-
-        // 4-byte immediate: li R0, 0x12345678
-        gen = new ApfV4Generator(3);
-        gen.addLoadImmediate(R0, 0x12345678);
-        assertProgramEquals(
-                new byte[]{LI_OP | SIZE32, 0x12, 0x34, 0x56, 0x78},
-                gen.generate());
-    }
-
-    /**
-     * Test that the generator emits negative immediates using the shortest possible encoding.
-     */
-    @Test
-    public void testNegativeImmediateEncoding() throws IllegalInstructionException {
-        ApfV4Generator gen;
-
-        // 1-byte negative immediate: li R0, -42
-        gen = new ApfV4Generator(3);
-        gen.addLoadImmediate(R0, -42);
-        assertProgramEquals(new byte[]{LI_OP | SIZE8, -42}, gen.generate());
-
-        // 2-byte negative immediate: li R1, -0x1122
-        gen = new ApfV4Generator(3);
-        gen.addLoadImmediate(R1, -0x1122);
-        assertProgramEquals(new byte[]{LI_OP | SIZE16 | R1_REG, (byte)0xEE, (byte)0xDE},
-                gen.generate());
-
-        // 4-byte negative immediate: li R0, -0x11223344
-        gen = new ApfV4Generator(3);
-        gen.addLoadImmediate(R0, -0x11223344);
-        assertProgramEquals(
-                new byte[]{LI_OP | SIZE32, (byte)0xEE, (byte)0xDD, (byte)0xCC, (byte)0xBC},
-                gen.generate());
-    }
-
-    /**
-     * Test that the generator correctly emits positive and negative immediates for LDDW/STDW.
-     */
-    @Test
-    public void testLoadStoreDataEncoding() throws IllegalInstructionException {
-        ApfV4Generator gen;
-
-        // Load data with no offset: lddw R0, [0 + r1]
-        gen = new ApfV4Generator(APF_VERSION_3);
-        gen.addLoadData(R0, 0);
-        assertProgramEquals(new byte[]{LDDW_OP | SIZE0}, gen.generate());
-
-        // Store data with 8bit negative offset: lddw r0, [-42 + r1]
-        gen = new ApfV4Generator(APF_VERSION_3);
-        gen.addStoreData(R0, -42);
-        assertProgramEquals(new byte[]{STDW_OP | SIZE8, -42}, gen.generate());
-
-        // Store data to R1 with 16bit negative offset: stdw r1, [-0x1122 + r0]
-        gen = new ApfV4Generator(APF_VERSION_3);
-        gen.addStoreData(R1, -0x1122);
-        assertProgramEquals(new byte[]{STDW_OP | SIZE16 | R1_REG, (byte)0xEE, (byte)0xDE},
-                gen.generate());
-
-        // Load data to R1 with 32bit negative offset: lddw r1, [0xDEADBEEF + r0]
-        gen = new ApfV4Generator(APF_VERSION_3);
-        gen.addLoadData(R1, 0xDEADBEEF);
-        assertProgramEquals(
-                new byte[]{LDDW_OP | SIZE32 | R1_REG,
-                        (byte)0xDE, (byte)0xAD, (byte)0xBE, (byte)0xEF},
-                gen.generate());
-    }
-
-    /**
-     * Test that the interpreter correctly executes STDW with a negative 8bit offset
-     */
-    @Test
-    public void testApfDataWrite() throws IllegalInstructionException, Exception {
-        byte[] packet = new byte[MIN_PKT_SIZE];
-        byte[] data = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
-        byte[] expected_data = data.clone();
-
-        // No memory access instructions: should leave the data segment untouched.
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3);
-        assertDataMemoryContents(PASS, gen.generate(), packet, data, expected_data);
-
-        // Expect value 0x87654321 to be stored starting from address -11 from the end of the
-        // data buffer, in big-endian order.
-        gen = new ApfV4Generator(APF_VERSION_3);
-        gen.addLoadImmediate(R0, 0x87654321);
-        gen.addLoadImmediate(R1, -5);
-        gen.addStoreData(R0, -6);  // -5 + -6 = -11 (offset +5 with data_len=16)
-        expected_data[5] = (byte)0x87;
-        expected_data[6] = (byte)0x65;
-        expected_data[7] = (byte)0x43;
-        expected_data[8] = (byte)0x21;
-        assertDataMemoryContents(PASS, gen.generate(), packet, data, expected_data);
-    }
-
-    /**
-     * Test that the interpreter correctly executes LDDW with a negative 16bit offset
-     */
-    @Test
-    public void testApfDataRead() throws IllegalInstructionException, Exception {
-        // Program that DROPs if address 10 (-6) contains 0x87654321.
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3);
-        gen.addLoadImmediate(R1, 1000);
-        gen.addLoadData(R0, -1006);  // 1000 + -1006 = -6 (offset +10 with data_len=16)
-        gen.addJumpIfR0Equals(0x87654321, DROP_LABEL);
-        byte[] program = gen.generate();
-        byte[] packet = new byte[MIN_PKT_SIZE];
-
-        // Content is incorrect (last byte does not match) -> PASS
-        byte[] data = new byte[16];
-        data[10] = (byte)0x87;
-        data[11] = (byte)0x65;
-        data[12] = (byte)0x43;
-        data[13] = (byte)0x00;  // != 0x21
-        byte[] expected_data = data.clone();
-        assertDataMemoryContents(PASS, program, packet, data, expected_data);
-
-        // Fix the last byte -> conditional jump taken -> DROP
-        data[13] = (byte)0x21;
-        expected_data = data;
-        assertDataMemoryContents(DROP, program, packet, data, expected_data);
-    }
-
-    /**
-     * Test that the interpreter correctly executes LDDW followed by a STDW.
-     * To cover a few more edge cases, LDDW has a 0bit offset, while STDW has a positive 8bit
-     * offset.
-     */
-    @Test
-    public void testApfDataReadModifyWrite() throws IllegalInstructionException, Exception {
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3);
-        gen.addLoadImmediate(R1, -22);
-        gen.addLoadData(R0, 0);  // Load from address 32 -22 + 0 = 10
-        gen.addAdd(0x78453412);  // 87654321 + 78453412 = FFAA7733
-        gen.addStoreData(R0, 4);  // Write back to address 32 -22 + 4 = 14
-
-        byte[] packet = new byte[MIN_PKT_SIZE];
-        byte[] data = new byte[32];
-        data[10] = (byte)0x87;
-        data[11] = (byte)0x65;
-        data[12] = (byte)0x43;
-        data[13] = (byte)0x21;
-        byte[] expected_data = data.clone();
-        expected_data[14] = (byte)0xFF;
-        expected_data[15] = (byte)0xAA;
-        expected_data[16] = (byte)0x77;
-        expected_data[17] = (byte)0x33;
-        assertDataMemoryContents(PASS, gen.generate(), packet, data, expected_data);
-    }
-
-    @Test
-    public void testApfDataBoundChecking() throws IllegalInstructionException, Exception {
-        byte[] packet = new byte[MIN_PKT_SIZE];
-        byte[] data = new byte[32];
-        byte[] expected_data = data;
-
-        // Program that DROPs unconditionally. This is our the baseline.
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3);
-        gen.addLoadImmediate(R0, 3);
-        gen.addLoadData(R1, 7);
-        gen.addJump(DROP_LABEL);
-        assertDataMemoryContents(DROP, gen.generate(), packet, data, expected_data);
-
-        // Same program as before, but this time we're trying to load past the end of the data.
-        // 3 instructions, all normal opcodes (LI, LDDW, JMP) with 1 byte immediate = 6 byte program
-        // 32 byte data length, for a total of 38 byte ram len.
-        // APFv6 needs to round this up to be a multiple of 4, so 40.
-        gen = new ApfV4Generator(APF_VERSION_3);
-        gen.addLoadImmediate(R0, 20);
-        if (mApfVersion == 4) {
-            gen.addLoadData(R1, 15);  // R0(20)+15+U32[0..3] >= 6 prog + 32 data, so invalid
-        } else {
-            gen.addLoadData(R1, 17);  // R0(20)+17+U32[0..3] >= 6 prog + 2 pad + 32 data, so invalid
-        }
-        gen.addJump(DROP_LABEL);  // Not reached.
-        assertDataMemoryContents(PASS, gen.generate(), packet, data, expected_data);
-
-        // Subtracting an immediate should work...
-        gen = new ApfV4Generator(APF_VERSION_3);
-        gen.addLoadImmediate(R0, 20);
-        gen.addLoadData(R1, -4);
-        gen.addJump(DROP_LABEL);
-        assertDataMemoryContents(DROP, gen.generate(), packet, data, expected_data);
-
-        // ...and underflowing simply wraps around to the end of the buffer...
-        gen = new ApfV4Generator(APF_VERSION_3);
-        gen.addLoadImmediate(R0, 20);
-        gen.addLoadData(R1, -30);
-        gen.addJump(DROP_LABEL);
-        assertDataMemoryContents(DROP, gen.generate(), packet, data, expected_data);
-
-        // ...but doesn't allow accesses before the start of the buffer
-        gen = new ApfV4Generator(APF_VERSION_3);
-        gen.addLoadImmediate(R0, 20);
-        gen.addLoadData(R1, -1000);
-        gen.addJump(DROP_LABEL);  // Not reached.
-        assertDataMemoryContents(PASS, gen.generate(), packet, data, expected_data);
-    }
-
-    /**
-     * Generate some BPF programs, translate them to APF, then run APF and BPF programs
-     * over packet traces and verify both programs filter out the same packets.
-     */
-    @Test
-    public void testApfAgainstBpf() throws Exception {
-        String[] tcpdump_filters = new String[]{ "udp", "tcp", "icmp", "icmp6", "udp port 53",
-                "arp", "dst 239.255.255.250", "arp or tcp or udp port 53", "net 192.168.1.0/24",
-                "arp or icmp6 or portrange 53-54", "portrange 53-54 or portrange 100-50000",
-                "tcp[tcpflags] & (tcp-ack|tcp-fin) != 0 and (ip[2:2] > 57 or icmp)" };
-        String pcap_filename = stageFile(R.raw.apf);
-        for (String tcpdump_filter : tcpdump_filters) {
-            byte[] apf_program = Bpf2Apf.convert(compileToBpf(tcpdump_filter));
-            assertTrue("Failed to match for filter: " + tcpdump_filter,
-                    compareBpfApf(mApfVersion, tcpdump_filter, pcap_filename, apf_program));
-        }
     }
 
     /**
@@ -1289,372 +585,6 @@ public class ApfTest {
         assertDrop(program, packet.array());
         put(packet, IPV6_DEST_ADDR_OFFSET, IPV6_ALL_ROUTERS_ADDRESS);
         assertDrop(program, packet.array());
-    }
-
-    private static void fillQuestionSection(ByteBuffer buf, String... qnames) throws IOException {
-        buf.put(new DnsPacket.DnsHeader(0 /* id */, 0 /* flags */, qnames.length, 0 /* ancount */)
-                .getBytes());
-        for (String qname : qnames) {
-            buf.put(DnsPacket.DnsRecord.makeQuestion(qname, 0 /* nsType */, 0 /* nsClass */)
-                    .getBytes());
-        }
-    }
-
-    private static byte[] makeMdnsV4Packet(String... qnames) throws IOException {
-        final ByteBuffer buf = ByteBuffer.wrap(new byte[256]);
-        final PacketBuilder builder = new PacketBuilder(buf);
-        builder.writeL2Header(MacAddress.fromString("11:22:33:44:55:66"),
-                MacAddress.fromBytes(ETH_MULTICAST_MDNS_v4_MAC_ADDRESS),
-                (short) ETH_P_IP);
-        builder.writeIpv4Header((byte) 0 /* tos */, (short) 0 /* id */,
-                (short) 0 /* flagsAndFragmentOffset */, (byte) 0 /* ttl */, (byte) IPPROTO_UDP,
-                (Inet4Address) Inet4Address.getByAddress(IPV4_SOURCE_ADDR),
-                (Inet4Address) Inet4Address.getByAddress(IPV4_MDNS_MULTICAST_ADDR));
-        builder.writeUdpHeader((short) MDNS_UDP_PORT, (short) MDNS_UDP_PORT);
-        fillQuestionSection(buf, qnames);
-        return builder.finalizePacket().array();
-    }
-
-    private static byte[] makeMdnsV6Packet(String... qnames) throws IOException {
-        ByteBuffer buf = ByteBuffer.wrap(new byte[256]);
-        final PacketBuilder builder = new PacketBuilder(buf);
-        builder.writeL2Header(MacAddress.fromString("11:22:33:44:55:66"),
-                MacAddress.fromBytes(ETH_MULTICAST_MDNS_V6_MAC_ADDRESS),
-                (short) ETH_P_IPV6);
-        builder.writeIpv6Header(0x680515ca /* vtf */, (byte) IPPROTO_UDP, (short) 0 /* hopLimit */,
-                (Inet6Address) InetAddress.getByAddress(IPV6_ANOTHER_ADDR),
-                (Inet6Address) Inet6Address.getByAddress(IPV6_MDNS_MULTICAST_ADDR));
-        builder.writeUdpHeader((short) MDNS_UDP_PORT, (short) MDNS_UDP_PORT);
-        fillQuestionSection(buf, qnames);
-        return builder.finalizePacket().array();
-    }
-
-    private static void putLabel(ByteBuffer buf, String label) {
-        final byte[] bytes = label.getBytes(StandardCharsets.UTF_8);
-        buf.put((byte) bytes.length);
-        buf.put(bytes);
-    }
-
-    private static void putPointer(ByteBuffer buf, int offset) {
-        short pointer = (short) (offset | 0xc000);
-        buf.putShort(pointer);
-    }
-
-
-    // Simplistic DNS compression code that intentionally does not depend on production code.
-    private static List<Pair<Integer, String>> getDnsLabels(int startOffset, String... names) {
-        // Maps all possible name suffixes to packet offsets.
-        final HashMap<String, Integer> mPointerOffsets = new HashMap<>();
-        final List<Pair<Integer, String>> out = new ArrayList<>();
-        int offset = startOffset;
-        for (int i = 0; i < names.length; i++) {
-            String name = names[i];
-            while (true) {
-                if (name.length() == 0) {
-                    out.add(label(""));
-                    offset += 1 + 4;  // 1-byte label, DNS query
-                    break;
-                }
-
-                final int pointerOffset = mPointerOffsets.getOrDefault(name, -1);
-                if (pointerOffset != -1) {
-                    out.add(pointer(pointerOffset));
-                    offset += 2 + 4; // 2-byte pointer, DNS query
-                    break;
-                }
-
-                mPointerOffsets.put(name, offset);
-
-                final int indexOfDot = name.indexOf(".");
-                final String label;
-                if (indexOfDot == -1) {
-                    label = name;
-                    name = "";
-                } else {
-                    label = name.substring(0, indexOfDot);
-                    name = name.substring(indexOfDot + 1);
-                }
-                out.add(label(label));
-                offset += 1 + label.length();
-            }
-        }
-        return out;
-    }
-
-    static Pair<Integer, String> label(String label) {
-        return Pair.create(label.length(), label);
-    }
-
-    static Pair<Integer, String> pointer(int offset) {
-        return Pair.create(0xc000 | offset, null);
-    }
-
-    @Test
-    public void testGetDnsLabels() throws Exception {
-        int startOffset = 12;
-        List<Pair<Integer, String>> actual = getDnsLabels(startOffset, "myservice.tcp.local");
-        assertEquals(4, actual.size());
-        assertEquals(label("myservice"), actual.get(0));
-        assertEquals(label("tcp"), actual.get(1));
-        assertEquals(label("local"), actual.get(2));
-        assertEquals(label(""), actual.get(3));
-
-        startOffset = 30;
-        actual = getDnsLabels(startOffset,
-                "myservice.tcp.local", "foo.tcp.local", "myhostname.local", "bar.udp.local",
-                "foo.myhostname.local");
-        final int tcpLocalOffset = startOffset + 1 + "myservice".length();
-        final int localOffset = startOffset + 1 + "myservice".length() + 1 + "tcp".length();
-        final int myhostnameLocalOffset = 30
-                + 1 + "myservice".length() + 1 + "tcp".length() + 1 + "local".length() + 1 + 4
-                + 1 + "foo".length() + 2 + 4;
-
-        assertEquals(13, actual.size());
-        assertEquals(label("myservice"), actual.get(0));
-        assertEquals(label("tcp"), actual.get(1));
-        assertEquals(label("local"), actual.get(2));
-        assertEquals(label(""), actual.get(3));
-        assertEquals(label("foo"), actual.get(4));
-        assertEquals(pointer(tcpLocalOffset), actual.get(5));
-        assertEquals(label("myhostname"), actual.get(6));
-        assertEquals(pointer(localOffset), actual.get(7));
-        assertEquals(label("bar"), actual.get(8));
-        assertEquals(label("udp"), actual.get(9));
-        assertEquals(pointer(localOffset), actual.get(10));
-        assertEquals(label("foo"), actual.get(11));
-        assertEquals(pointer(myhostnameLocalOffset), actual.get(12));
-
-    }
-
-    private static byte[] makeMdnsCompressedV6Packet(String... names) throws IOException {
-        ByteBuffer questions = ByteBuffer.allocate(1500);
-        questions.put(new DnsPacket.DnsHeader(123, 0, names.length, 0).getBytes());
-        final List<Pair<Integer, String>> labels = getDnsLabels(questions.position(), names);
-        for (Pair<Integer, String> label : labels) {
-            final String name = label.second;
-            if (name == null) {
-                putPointer(questions, label.first);
-            } else {
-                putLabel(questions, name);
-            }
-            if (TextUtils.isEmpty(name)) {
-                questions.put(new byte[4]);
-            }
-        }
-        questions.flip();
-
-        ByteBuffer buf = PacketBuilder.allocate(/*hasEther=*/ true, IPPROTO_IPV6, IPPROTO_UDP,
-                questions.limit());
-        final PacketBuilder builder = new PacketBuilder(buf);
-        builder.writeL2Header(MacAddress.fromString("11:22:33:44:55:66"),
-                MacAddress.fromBytes(ETH_MULTICAST_MDNS_V6_MAC_ADDRESS),
-                (short) ETH_P_IPV6);
-        builder.writeIpv6Header(0x680515ca /* vtf */, (byte) IPPROTO_UDP, (short) 0 /* hopLimit */,
-                (Inet6Address) InetAddress.getByAddress(IPV6_ANOTHER_ADDR),
-                (Inet6Address) Inet6Address.getByAddress(IPV6_MDNS_MULTICAST_ADDR));
-        builder.writeUdpHeader((short) MDNS_UDP_PORT, (short) MDNS_UDP_PORT);
-
-        buf.put(questions);
-
-        return builder.finalizePacket().array();
-    }
-
-    private static byte[] makeMdnsCompressedV6Packet() throws IOException {
-        return makeMdnsCompressedV6Packet("myservice.tcp.local", "googlecast.tcp.local",
-                "matter.tcp.local", "myhostname.local");
-    }
-
-    private static byte[] makeMdnsCompressedV6PacketWithManyNames() throws IOException {
-        return makeMdnsCompressedV6Packet("myservice.tcp.local", "googlecast.tcp.local",
-                "matter.tcp.local", "myhostname.local", "myhostname2.local", "myhostname3.local",
-                "myhostname4.local", "myhostname5.local", "myhostname6.local", "myhostname7.local");
-
-    }
-
-    @Test
-    public void testAddNopAddsOneByte() throws Exception {
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addNop();
-        assertEquals(1, gen.generate().length);
-
-        final int count = 42;
-        gen = new ApfV4Generator(APF_VERSION_2);
-        for (int i = 0; i < count; i++) {
-            gen.addNop();
-        }
-        assertEquals(count, gen.generate().length);
-    }
-
-    private ApfV4Generator generateDnsFilter(boolean ipv6, String... labels) throws Exception {
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_2);
-        gen.addLoadImmediate(R1, ipv6 ? IPV6_HEADER_LEN : IPV4_HEADER_LEN);
-        DnsUtils.generateFilter(gen, labels);
-        return gen;
-    }
-
-    private void doTestDnsParsing(boolean expectPass, boolean ipv6, String filterName,
-            byte[] pkt) throws Exception {
-        final String[] labels = filterName.split(/*regex=*/ "[.]");
-        ApfV4Generator gen = generateDnsFilter(ipv6, labels);
-
-        // Hack to prevent the APF instruction limit triggering.
-        for (int i = 0; i < 500; i++) {
-            gen.addNop();
-        }
-
-        byte[] program = gen.generate();
-        Log.d(TAG, "prog_len=" + program.length);
-        if (expectPass) {
-            assertPass(program, pkt, 0);
-        } else {
-            assertDrop(program, pkt, 0);
-        }
-    }
-
-    private void doTestDnsParsing(boolean expectPass, boolean ipv6, String filterName,
-            String... packetNames) throws Exception {
-        final byte[] pkt = ipv6 ? makeMdnsV6Packet(packetNames) : makeMdnsV4Packet(packetNames);
-        doTestDnsParsing(expectPass, ipv6, filterName, pkt);
-    }
-
-    @Test
-    public void testDnsParsing() throws Exception {
-        final boolean ipv4 = false, ipv6 = true;
-
-        // Packets with one question.
-        // Names don't start with _ because DnsPacket thinks such names are invalid.
-        doTestDnsParsing(true, ipv6, "googlecast.tcp.local", "googlecast.tcp.local");
-        doTestDnsParsing(true, ipv4, "googlecast.tcp.local", "googlecast.tcp.local");
-        doTestDnsParsing(false, ipv6, "googlecast.tcp.lozal", "googlecast.tcp.local");
-        doTestDnsParsing(false, ipv4, "googlecast.tcp.lozal", "googlecast.tcp.local");
-        doTestDnsParsing(false, ipv6, "googlecast.udp.local", "googlecast.tcp.local");
-        doTestDnsParsing(false, ipv4, "googlecast.udp.local", "googlecast.tcp.local");
-
-        // Packets with multiple questions that can't be compressed. Not realistic for MDNS since
-        // everything ends in .local, but useful to ensure only the non-compression code is tested.
-        doTestDnsParsing(true, ipv6, "googlecast.tcp.local",
-                "googlecast.tcp.local", "developer.android.com");
-        doTestDnsParsing(true, ipv4, "googlecast.tcp.local",
-                "developer.android.com", "googlecast.tcp.local");
-        doTestDnsParsing(false, ipv4, "googlecast.tcp.local",
-                "developer.android.com", "googlecast.tcp.invalid");
-        doTestDnsParsing(true, ipv6, "googlecast.tcp.local",
-                "developer.android.com", "www.google.co.jp", "googlecast.tcp.local");
-        doTestDnsParsing(false, ipv4, "veryverylongservicename.tcp.local",
-                "www.google.co.jp", "veryverylongservicename.tcp.invalid");
-        doTestDnsParsing(true, ipv6, "googlecast.tcp.local",
-                "www.google.co.jp", "googlecast.tcp.local", "developer.android.com");
-
-        // Name with duplicate labels.
-        doTestDnsParsing(true, ipv6, "local.tcp.local", "local.tcp.local");
-
-        final byte[] pkt = makeMdnsCompressedV6Packet();
-        doTestDnsParsing(true, ipv6, "googlecast.tcp.local", pkt);
-        doTestDnsParsing(true, ipv6, "matter.tcp.local", pkt);
-        doTestDnsParsing(true, ipv6, "myservice.tcp.local", pkt);
-        doTestDnsParsing(false, ipv6, "otherservice.tcp.local", pkt);
-    }
-
-    private void doTestDnsParsingProgramLength(int expectedLength,
-            String filterName) throws Exception {
-        final String[] labels = filterName.split(/*regex=*/ "[.]");
-
-        ApfV4Generator gen = generateDnsFilter(/*ipv6=*/ true, labels);
-        assertEquals("Program for " + filterName + " had unexpected length:",
-                expectedLength, gen.generate().length);
-    }
-
-    /**
-     * Rough metric of code size. Checks how large the generated filter is in various scenarios.
-     * Helps ensure any changes to the code do not substantially increase APF code size.
-     */
-    @Test
-    public void testDnsParsingProgramLength() throws Exception {
-        doTestDnsParsingProgramLength(237, "MyDevice.local");
-        doTestDnsParsingProgramLength(285, "_googlecast.tcp.local");
-        doTestDnsParsingProgramLength(291, "_googlecast12345.tcp.local");
-        doTestDnsParsingProgramLength(244, "_googlecastZtcp.local");
-        doTestDnsParsingProgramLength(249, "_googlecastZtcp12345.local");
-    }
-
-    private void doTestDnsParsingNecessaryOverhead(int expectedNecessaryOverhead,
-            String filterName, byte[] pkt, String description) throws Exception {
-        final String[] labels = filterName.split(/*regex=*/ "[.]");
-
-        // Check that the generated code, when the program contains the specified number of extra
-        // bytes, is capable of dropping the packet.
-        ApfV4Generator gen = generateDnsFilter(/*ipv6=*/ true, labels);
-        for (int i = 0; i < expectedNecessaryOverhead; i++) {
-            gen.addNop();
-        }
-        final byte[] programWithJustEnoughOverhead = gen.generate();
-        assertVerdict(
-                "Overhead too low: filter for " + filterName + " with " + expectedNecessaryOverhead
-                        + " extra instructions unexpectedly passed " + description,
-                DROP, programWithJustEnoughOverhead, pkt, 0);
-
-        if (expectedNecessaryOverhead == 0) return;
-
-        // Check that the generated code, without the specified number of extra program bytes,
-        // cannot correctly drop the packet because it hits the interpreter instruction limit.
-        gen = generateDnsFilter(/*ipv6=*/ true, labels);
-        for (int i = 0; i < expectedNecessaryOverhead - 1; i++) {
-            gen.addNop();
-        }
-        final byte[] programWithNotEnoughOverhead = gen.generate();
-
-        assertVerdict(
-                "Overhead too high: filter for " + filterName + " with " + expectedNecessaryOverhead
-                        + " extra instructions unexpectedly dropped " + description,
-                PASS, programWithNotEnoughOverhead, pkt, 0);
-    }
-
-    private void doTestDnsParsingNecessaryOverhead(int expectedNecessaryOverhead,
-            String filterName, String... packetNames) throws Exception {
-        doTestDnsParsingNecessaryOverhead(expectedNecessaryOverhead, filterName,
-                makeMdnsV6Packet(packetNames),
-                "IPv6 MDNS packet containing: " + Arrays.toString(packetNames));
-    }
-
-    /**
-     * Rough metric of filter efficiency. Because the filter uses backwards jumps, on complex
-     * packets it will not finish running before the interpreter hits the maximum number of allowed
-     * instructions (== number of bytes in the program) and unconditionally accepts the packet.
-     * This test checks much extra code the program must contain in order for the generated filter
-     * to successfully drop the packet. It helps ensure any changes to the code do not reduce the
-     * complexity of packets that the APF code can drop.
-     */
-    @Test
-    public void testDnsParsingNecessaryOverhead() throws Exception {
-        // Simple packets can be parsed with zero extra code.
-        doTestDnsParsingNecessaryOverhead(0, "googlecast.tcp.local",
-                "matter.tcp.local", "developer.android.com");
-
-        doTestDnsParsingNecessaryOverhead(0, "googlecast.tcp.local",
-                "developer.android.com", "matter.tcp.local");
-
-        doTestDnsParsingNecessaryOverhead(0, "googlecast.tcp.local",
-                "developer.android.com", "matter.tcp.local", "www.google.co.jp");
-
-        doTestDnsParsingNecessaryOverhead(0, "googlecast.tcp.local",
-                "developer.android.com", "matter.tcp.local", "www.google.co.jp",
-                "example.org");
-
-        // More complicated packets cause more instructions to be run and can only be dropped if
-        // the program contains lots of extra code.
-        doTestDnsParsingNecessaryOverhead(57, "googlecast.tcp.local",
-                "developer.android.com", "matter.tcp.local", "www.google.co.jp",
-                "example.org", "otherexample.net");
-
-        doTestDnsParsingNecessaryOverhead(115, "googlecast.tcp.local",
-                "developer.android.com", "matter.tcp.local", "www.google.co.jp",
-                "example.org", "otherexample.net", "docs.new");
-
-        doTestDnsParsingNecessaryOverhead(0, "foo.tcp.local",
-                makeMdnsCompressedV6Packet(), "compressed packet");
-
-        doTestDnsParsingNecessaryOverhead(235, "foo.tcp.local",
-                makeMdnsCompressedV6PacketWithManyNames(), "compressed packet with many names");
     }
 
     @Test
@@ -2456,23 +1386,6 @@ public class ApfTest {
         return builder.build();
     }
 
-    @Test
-    public void testRaToString() throws Exception {
-        MockIpClientCallback cb = new MockIpClientCallback();
-        ApfConfiguration config = getDefaultConfig();
-        TestApfFilter apfFilter = new TestApfFilter(mContext, config, cb, mNetworkQuirkMetrics,
-                mDependencies);
-
-        byte[] packet = buildLargeRa();
-        ApfFilter.Ra ra = apfFilter.new Ra(packet, packet.length);
-        String expected = "RA fe80::1234:abcd -> ff02::1 1800s "
-                + "2001:db8:a::/64 600s/300s fd95:d1e:12::/64 86400s/43200s "
-                + "DNS 7200s 2001:db8:1::1 2001:db8:1::2 "
-                + "RIO 1200s 64:ff9b::/96 RIO 2100s 2000::/3 "
-                + "RIO 2400s ::/0 RIO 1500s 2001:db8:c:d::/64 ";
-        assertEquals(expected, ra.toString());
-    }
-
     // Verify that the last program pushed to the IpClient.Callback properly filters the
     // given packet for the given lifetime.
     private void verifyRaLifetime(byte[] program, ByteBuffer packet, int lifetime) {
@@ -3114,37 +2027,34 @@ public class ApfTest {
         assertDrop(program, ra);
     }
 
-    @Test
-    public void testBroadcastAddress() throws Exception {
-        assertEqualsIp("255.255.255.255", ApfFilter.ipv4BroadcastAddress(IPV4_ANY_HOST_ADDR, 0));
-        assertEqualsIp("0.0.0.0", ApfFilter.ipv4BroadcastAddress(IPV4_ANY_HOST_ADDR, 32));
-        assertEqualsIp("0.0.3.255", ApfFilter.ipv4BroadcastAddress(IPV4_ANY_HOST_ADDR, 22));
-        assertEqualsIp("0.255.255.255", ApfFilter.ipv4BroadcastAddress(IPV4_ANY_HOST_ADDR, 8));
-
-        assertEqualsIp("255.255.255.255", ApfFilter.ipv4BroadcastAddress(MOCK_IPV4_ADDR, 0));
-        assertEqualsIp("10.0.0.1", ApfFilter.ipv4BroadcastAddress(MOCK_IPV4_ADDR, 32));
-        assertEqualsIp("10.0.0.255", ApfFilter.ipv4BroadcastAddress(MOCK_IPV4_ADDR, 24));
-        assertEqualsIp("10.0.255.255", ApfFilter.ipv4BroadcastAddress(MOCK_IPV4_ADDR, 16));
-    }
-
-    public void assertEqualsIp(String expected, int got) throws Exception {
-        int want = Inet4AddressUtils.inet4AddressToIntHTH(
-                (Inet4Address) InetAddresses.parseNumericAddress(expected));
-        assertEquals(want, got);
-    }
-
     private TestAndroidPacketFilter makeTestApfFilter(ApfConfiguration config,
-            MockIpClientCallback ipClientCallback) throws Exception {
-        return new TestApfFilter(mContext, config, ipClientCallback, mNetworkQuirkMetrics,
+            MockIpClientCallback ipClientCallback, boolean isLegacy) throws Exception {
+        final TestAndroidPacketFilter apfFilter;
+        if (isLegacy) {
+            apfFilter = new TestLegacyApfFilter(mContext, config, ipClientCallback,
+                    mIpConnectivityLog, mNetworkQuirkMetrics, mDependencies, mClock);
+        } else {
+            apfFilter = new TestApfFilter(mContext, config, ipClientCallback, mNetworkQuirkMetrics,
                     mDependencies, mClock);
+        }
+        return apfFilter;
     }
 
+    // LegacyApfFilter ignores zero lifetime RAs (doesn't update program) but ApfFilter won't.
+    private void verifyUpdateProgramForZeroLifetimeRa(MockIpClientCallback ipClientCallback,
+            boolean isLegacy) {
+        if (isLegacy) {
+            ipClientCallback.assertNoProgramUpdate();
+        } else {
+            ipClientCallback.assertProgramUpdateAndGet();
+        }
+    }
 
-    @Test
-    public void testInstallPacketFilterFailure() throws Exception {
+    private void verifyInstallPacketFilterFailure(boolean isLegacy) throws Exception {
         final MockIpClientCallback ipClientCallback = new MockIpClientCallback(false);
         final ApfConfiguration config = getDefaultConfig();
-        final TestAndroidPacketFilter apfFilter = makeTestApfFilter(config, ipClientCallback);
+        final TestAndroidPacketFilter apfFilter =
+                makeTestApfFilter(config, ipClientCallback, isLegacy);
         verify(mNetworkQuirkMetrics).setEvent(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
         verify(mNetworkQuirkMetrics).statsWrite();
         reset(mNetworkQuirkMetrics);
@@ -3155,14 +2065,23 @@ public class ApfTest {
         verify(mNetworkQuirkMetrics).statsWrite();
     }
 
+    @Test
+    public void testInstallPacketFilterFailure() throws Exception {
+        verifyInstallPacketFilterFailure(false /* isLegacy */);
+    }
 
     @Test
-    public void testApfProgramOverSize() throws Exception {
+    public void testInstallPacketFilterFailure_LegacyApfFilter() throws Exception {
+        verifyInstallPacketFilterFailure(true /* isLegacy */);
+    }
+
+    private void verifyApfProgramOverSize(boolean isLegacy) throws Exception {
         final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
         final ApfConfiguration config = getDefaultConfig();
         final ApfCapabilities capabilities = new ApfCapabilities(2, 512, ARPHRD_ETHER);
         config.apfCapabilities = capabilities;
-        final TestAndroidPacketFilter apfFilter = makeTestApfFilter(config, ipClientCallback);
+        final TestAndroidPacketFilter apfFilter =
+                makeTestApfFilter(config, ipClientCallback, isLegacy);
         byte[] program = ipClientCallback.assertProgramUpdateAndGet();
         final byte[] ra = buildLargeRa();
         apfFilter.pretendPacketReceived(ra);
@@ -3173,12 +2092,27 @@ public class ApfTest {
     }
 
     @Test
-    public void testGenerateApfProgramException() throws Exception {
+    public void testApfProgramOverSize() throws Exception {
+        verifyApfProgramOverSize(false /* isLegacy */);
+    }
+
+    @Test
+    public void testApfProgramOverSize_LegacyApfFilter() throws Exception {
+        verifyApfProgramOverSize(true /* isLegacy */);
+    }
+
+    private void verifyGenerateApfProgramException(boolean isLegacy) throws Exception {
         final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
         final ApfConfiguration config = getDefaultConfig();
         final TestAndroidPacketFilter apfFilter;
-        apfFilter = new TestApfFilter(mContext, config, ipClientCallback, mNetworkQuirkMetrics,
-                mDependencies, true /* throwsExceptionWhenGeneratesProgram */);
+        if (isLegacy) {
+            apfFilter = new TestLegacyApfFilter(mContext, config, ipClientCallback,
+                    mIpConnectivityLog, mNetworkQuirkMetrics, mDependencies,
+                    true /* throwsExceptionWhenGeneratesProgram */);
+        } else {
+            apfFilter = new TestApfFilter(mContext, config, ipClientCallback, mNetworkQuirkMetrics,
+                    mDependencies, true /* throwsExceptionWhenGeneratesProgram */);
+        }
         synchronized (apfFilter) {
             apfFilter.installNewProgramLocked();
         }
@@ -3187,7 +2121,16 @@ public class ApfTest {
     }
 
     @Test
-    public void testApfSessionInfoMetrics() throws Exception {
+    public void testGenerateApfProgramException() throws Exception {
+        verifyGenerateApfProgramException(false /* isLegacy */);
+    }
+
+    @Test
+    public void testGenerateApfProgramException_LegacyApfFilter() throws Exception {
+        verifyGenerateApfProgramException(true /* isLegacy */);
+    }
+
+    private void verifyApfSessionInfoMetrics(boolean isLegacy) throws Exception {
         final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
         final ApfConfiguration config = getDefaultConfig();
         final ApfCapabilities capabilities = new ApfCapabilities(4, 4096, ARPHRD_ETHER);
@@ -3195,7 +2138,8 @@ public class ApfTest {
         final long startTimeMs = 12345;
         final long durationTimeMs = config.minMetricsSessionDurationMs;
         doReturn(startTimeMs).when(mClock).elapsedRealtime();
-        final TestAndroidPacketFilter apfFilter = makeTestApfFilter(config, ipClientCallback);
+        final TestAndroidPacketFilter apfFilter =
+                makeTestApfFilter(config, ipClientCallback, isLegacy);
         int maxProgramSize = 0;
         int numProgramUpdated = 0;
         byte[] program = ipClientCallback.assertProgramUpdateAndGet();
@@ -3267,13 +2211,23 @@ public class ApfTest {
     }
 
     @Test
-    public void testIpClientRaInfoMetrics() throws Exception {
+    public void testApfSessionInfoMetrics() throws Exception {
+        verifyApfSessionInfoMetrics(false /* isLegacy */);
+    }
+
+    @Test
+    public void testApfSessionInfoMetrics_LegacyApfFilter() throws Exception {
+        verifyApfSessionInfoMetrics(true /* isLegacy */);
+    }
+
+    private void verifyIpClientRaInfoMetrics(boolean isLegacy) throws Exception {
         final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
         final ApfConfiguration config = getDefaultConfig();
         final long startTimeMs = 12345;
         final long durationTimeMs = config.minMetricsSessionDurationMs;
         doReturn(startTimeMs).when(mClock).elapsedRealtime();
-        final TestAndroidPacketFilter apfFilter = makeTestApfFilter(config, ipClientCallback);
+        final TestAndroidPacketFilter apfFilter =
+                makeTestApfFilter(config, ipClientCallback, isLegacy);
         byte[] program = ipClientCallback.assertProgramUpdateAndGet();
 
         final int routerLifetime = 1000;
@@ -3318,20 +2272,27 @@ public class ApfTest {
         apfFilter.pretendPacketReceived(raInvalid.build());
         ipClientCallback.assertNoProgramUpdate();
         apfFilter.pretendPacketReceived(raZeroRouterLifetime.build());
-        ipClientCallback.assertProgramUpdateAndGet();
+        verifyUpdateProgramForZeroLifetimeRa(ipClientCallback, isLegacy);
         apfFilter.pretendPacketReceived(raZeroPioValidLifetime.build());
-        ipClientCallback.assertProgramUpdateAndGet();
+        verifyUpdateProgramForZeroLifetimeRa(ipClientCallback, isLegacy);
         apfFilter.pretendPacketReceived(raZeroRdnssLifetime.build());
-        ipClientCallback.assertProgramUpdateAndGet();
+        verifyUpdateProgramForZeroLifetimeRa(ipClientCallback, isLegacy);
         apfFilter.pretendPacketReceived(raZeroRioRouteLifetime.build());
-        ipClientCallback.assertProgramUpdateAndGet();
+        verifyUpdateProgramForZeroLifetimeRa(ipClientCallback, isLegacy);
 
         // Write metrics data to statsd pipeline when shutdown.
         doReturn(startTimeMs + durationTimeMs).when(mClock).elapsedRealtime();
         apfFilter.shutdown();
 
         // Verify each metric fields in IpClientRaInfoMetrics.
-        verify(mIpClientRaInfoMetrics).setMaxNumberOfDistinctRas(6);
+        if (isLegacy) {
+            // LegacyApfFilter will purge expired RAs before adding new RA. Every time a new zero
+            // lifetime RA is received, zero lifetime RAs except the newly added one will be
+            // cleared, so the number of distinct RAs is 3 (ra1, ra2 and the newly added RA).
+            verify(mIpClientRaInfoMetrics).setMaxNumberOfDistinctRas(3);
+        } else {
+            verify(mIpClientRaInfoMetrics).setMaxNumberOfDistinctRas(6);
+        }
         verify(mIpClientRaInfoMetrics).setNumberOfZeroLifetimeRas(4);
         verify(mIpClientRaInfoMetrics).setNumberOfParsingErrorRas(1);
         verify(mIpClientRaInfoMetrics).setLowestRouterLifetimeSeconds(routerLifetime);
@@ -3339,6 +2300,16 @@ public class ApfTest {
         verify(mIpClientRaInfoMetrics).setLowestRioRouteLifetimeSeconds(routeLifetime);
         verify(mIpClientRaInfoMetrics).setLowestRdnssLifetimeSeconds(rdnssLifetime);
         verify(mIpClientRaInfoMetrics).statsWrite();
+    }
+
+    @Test
+    public void testIpClientRaInfoMetrics() throws Exception {
+        verifyIpClientRaInfoMetrics(false /* isLegacy */);
+    }
+
+    @Test
+    public void testIpClientRaInfoMetrics_LegacyApfFilter() throws Exception {
+        verifyIpClientRaInfoMetrics(true /* isLegacy */);
     }
 
     private void verifyNoMetricsWrittenForShortDuration(boolean isLegacy) throws Exception {
@@ -3349,7 +2320,8 @@ public class ApfTest {
 
         // Verify no metrics data written to statsd for duration less than durationTimeMs.
         doReturn(startTimeMs).when(mClock).elapsedRealtime();
-        final TestAndroidPacketFilter apfFilter = makeTestApfFilter(config, ipClientCallback);
+        final TestAndroidPacketFilter apfFilter =
+                makeTestApfFilter(config, ipClientCallback, isLegacy);
         doReturn(startTimeMs + durationTimeMs - 1).when(mClock).elapsedRealtime();
         apfFilter.shutdown();
         verify(mApfSessionInfoMetrics, never()).statsWrite();
@@ -3375,560 +2347,5 @@ public class ApfTest {
     @Test
     public void testNoMetricsWrittenForShortDuration_LegacyApfFilter() throws Exception {
         verifyNoMetricsWrittenForShortDuration(true /* isLegacy */);
-    }
-
-    private int deriveApfGeneratorVersion(ApfV4GeneratorBase<?> gen) {
-        if (gen instanceof ApfV4Generator) {
-            return 4;
-        } else if (gen instanceof ApfV6Generator) {
-            return 6;
-        }
-        return -1;
-    }
-
-    @Test
-    public void testApfGeneratorPropagation() throws IllegalInstructionException {
-        ApfV4Generator v4Gen = new ApfV4Generator(APF_VERSION_3);
-        ApfV6Generator v6Gen = new ApfV6Generator(1024);
-        assertEquals(4, deriveApfGeneratorVersion(v4Gen));
-        assertEquals(6, deriveApfGeneratorVersion(v6Gen));
-    }
-
-    @Test
-    public void testFullApfV4ProgramGenerationIPV6() throws IllegalInstructionException {
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3);
-        gen.addLoadImmediate(R1, -4);
-        gen.addLoadData(R0, 0);
-        gen.addAdd(1);
-        gen.addStoreData(R0, 0);
-        gen.addLoad16(R0, 12);
-        gen.addLoadImmediate(R1, -108);
-        gen.addJumpIfR0LessThan(0x600, "LABEL_504");
-        gen.addLoadImmediate(R1, -112);
-        gen.addJumpIfR0Equals(0x88a2, "LABEL_504");
-        gen.addJumpIfR0Equals(0x88a4, "LABEL_504");
-        gen.addJumpIfR0Equals(0x88b8, "LABEL_504");
-        gen.addJumpIfR0Equals(0x88cd, "LABEL_504");
-        gen.addJumpIfR0Equals(0x88e1, "LABEL_504");
-        gen.addJumpIfR0Equals(0x88e3, "LABEL_504");
-        gen.addJumpIfR0NotEquals(0x806, "LABEL_116");
-        gen.addLoadImmediate(R0, 14);
-        gen.addLoadImmediate(R1, -36);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("000108000604"), "LABEL_498");
-        gen.addLoad16(R0, 20);
-        gen.addJumpIfR0Equals(0x1, "LABEL_102");
-        gen.addLoadImmediate(R1, -40);
-        gen.addJumpIfR0NotEquals(0x2, "LABEL_498");
-        gen.addLoad32(R0, 28);
-        gen.addLoadImmediate(R1, -116);
-        gen.addJumpIfR0Equals(0x0, "LABEL_504");
-        gen.addLoadImmediate(R0, 0);
-        gen.addLoadImmediate(R1, -44);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("ffffffffffff"), "LABEL_498");
-
-        gen.defineLabel("LABEL_102");
-        gen.addLoad32(R0, 38);
-        gen.addLoadImmediate(R1, -64);
-        gen.addJumpIfR0Equals(0x0, "LABEL_504");
-        gen.addLoadImmediate(R1, -8);
-        gen.addJump("LABEL_498");
-
-        gen.defineLabel("LABEL_116");
-        gen.addLoad16(R0, 12);
-        gen.addJumpIfR0NotEquals(0x800, "LABEL_207");
-        gen.addLoad8(R0, 23);
-        gen.addJumpIfR0NotEquals(0x11, "LABEL_159");
-        gen.addLoad16(R0, 20);
-        gen.addJumpIfR0AnyBitsSet(0x1fff, "LABEL_159");
-        gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-        gen.addLoad16Indexed(R0, 16);
-        gen.addJumpIfR0NotEquals(0x44, "LABEL_159");
-        gen.addLoadImmediate(R0, 50);
-        gen.addAddR1ToR0();
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("e212507c6345"), "LABEL_159");
-        gen.addLoadImmediate(R1, -12);
-        gen.addJump("LABEL_498");
-
-        gen.defineLabel("LABEL_159");
-        gen.addLoad8(R0, 30);
-        gen.addAnd(240);
-        gen.addLoadImmediate(R1, -84);
-        gen.addJumpIfR0Equals(0xe0, "LABEL_504");
-        gen.addLoadImmediate(R1, -76);
-        gen.addLoad32(R0, 30);
-        gen.addJumpIfR0Equals(0xffffffff, "LABEL_504");
-        gen.addLoadImmediate(R1, -24);
-        gen.addLoadImmediate(R0, 0);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("ffffffffffff"), "LABEL_498");
-        gen.addLoadImmediate(R1, -72);
-        gen.addJump("LABEL_504");
-        gen.addLoadImmediate(R1, -16);
-        gen.addJump("LABEL_498");
-
-        gen.defineLabel("LABEL_207");
-        gen.addJumpIfR0Equals(0x86dd, "LABEL_231");
-        gen.addLoadImmediate(R0, 0);
-        gen.addLoadImmediate(R1, -48);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("ffffffffffff"), "LABEL_498");
-        gen.addLoadImmediate(R1, -56);
-        gen.addJump("LABEL_504");
-
-        gen.defineLabel("LABEL_231");
-        gen.addLoad8(R0, 20);
-        gen.addJumpIfR0Equals(0x3a, "LABEL_249");
-        gen.addLoadImmediate(R1, -104);
-        gen.addLoad8(R0, 38);
-        gen.addJumpIfR0Equals(0xff, "LABEL_504");
-        gen.addLoadImmediate(R1, -32);
-        gen.addJump("LABEL_498");
-
-        gen.defineLabel("LABEL_249");
-        gen.addLoad8(R0, 54);
-        gen.addLoadImmediate(R1, -88);
-        gen.addJumpIfR0Equals(0x85, "LABEL_504");
-        gen.addJumpIfR0NotEquals(0x88, "LABEL_283");
-        gen.addLoadImmediate(R0, 38);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("ff0200000000000000000000000000"), "LABEL_283");
-        gen.addLoadImmediate(R1, -92);
-        gen.addJump("LABEL_504");
-
-        gen.defineLabel("LABEL_283");
-        gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE);
-        gen.addJumpIfR0NotEquals(0xa6, "LABEL_496");
-        gen.addLoadFromMemory(R0, MemorySlot.FILTER_AGE_SECONDS);
-        gen.addJumpIfR0GreaterThan(0x254, "LABEL_496");
-        gen.addLoadImmediate(R0, 0);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("e212507c6345648788fd6df086dd68"), "LABEL_496");
-        gen.addLoadImmediate(R0, 18);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("00703afffe800000000000002a0079e10abc1539fe80000000000000e01250fffe7c63458600"), "LABEL_496");
-        gen.addLoadImmediate(R0, 58);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("4000"), "LABEL_496");
-        gen.addLoad16(R0, 60);
-        gen.addJumpIfR0LessThan(0x254, "LABEL_496");
-        gen.addLoadImmediate(R0, 62);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("0000000000000000"), "LABEL_496");
-        gen.addLoadImmediate(R0, 78);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("19050000"), "LABEL_496");
-        gen.addLoad32(R0, 82);
-        gen.addJumpIfR0LessThan(0x254, "LABEL_496");
-        gen.addLoadImmediate(R0, 86);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("2001486048600000000000000000646420014860486000000000000000000064"), "LABEL_496");
-        gen.addLoadImmediate(R0, 118);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("030440c0"), "LABEL_496");
-        gen.addLoad32(R0, 122);
-        gen.addJumpIfR0LessThan(0x254, "LABEL_496");
-        gen.addLoad32(R0, 126);
-        gen.addJumpIfR0LessThan(0x254, "LABEL_496");
-        gen.addLoadImmediate(R0, 130);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("00000000"), "LABEL_496");
-        gen.addLoadImmediate(R0, 134);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("2a0079e10abc15390000000000000000"), "LABEL_496");
-        gen.addLoadImmediate(R1, -60);
-        gen.addJump("LABEL_504");
-
-        gen.defineLabel("LABEL_496");
-        gen.addLoadImmediate(R1, -28);
-
-        gen.defineLabel("LABEL_498");
-        gen.addLoadData(R0, 0);
-        gen.addAdd(1);
-        gen.addStoreData(R0, 0);
-        gen.addJump(PASS_LABEL);
-
-        gen.defineLabel("LABEL_504");
-        gen.addLoadData(R0, 0);
-        gen.addAdd(1);
-        gen.addStoreData(R0, 0);
-        gen.addJump(DROP_LABEL);
-
-        byte[] program = gen.generate();
-        final String programString = toHexString(program).toLowerCase();
-        final String referenceProgramHexString = "6bfcb03a01b8120c6b949401e906006b907c01e288a27c01dd88a47c01d888b87c01d388cd7c01ce88e17c01c988e384004008066a0e6bdca401af000600010800060412147a1e016bd88401a300021a1c6b8c7c01a00000686bd4a4018c0006ffffffffffff1a266bc07c018900006bf874017e120c84005408000a17821f1112149c00181fffab0d2a108211446a3239a20506e212507c63456bf47401530a1e52f06bac7c014e00e06bb41a1e7e00000141ffffffff6be868a4012d0006ffffffffffff6bb874012e6bf07401237c001386dd686bd0a401100006ffffffffffff6bc87401110a147a0d3a6b980a267c010300ff6be072f90a366ba87af8858218886a26a2040fff02000000000000000000000000006ba472ddaa0e82d0a6aa0f8c00c9025468a2b60fe212507c6345648788fd6df086dd686a12a28b2600703afffe800000000000002a0079e10abc1539fe80000000000000e01250fffe7c634586006a3aa284024000123c94007d02546a3ea2700800000000000000006a4ea26704190500001a5294006002546a56a23b2020014860486000000000000000006464200148604860000000000000000000646a76a23204030440c01a7a94002b02541a7e94002402546c0082a21a04000000006c0086a204102a0079e10abc153900000000000000006bc472086be4b03a01b87206b03a01b87201";
-        assertEquals(referenceProgramHexString, programString);
-    }
-
-    @Test
-    public void testFullApfV4ProgramGenerationIPV4() throws IllegalInstructionException {
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3);
-        gen.addLoadImmediate(R1, -4);
-        gen.addLoadData(R0, 0);
-        gen.addAdd(1);
-        gen.addStoreData(R0, 0);
-        gen.addLoad16(R0, 12);
-        gen.addLoadImmediate(R1, -108);
-        gen.addJumpIfR0LessThan(0x600, "LABEL_283");
-        gen.addLoadImmediate(R1, -112);
-        gen.addJumpIfR0Equals(0x88a2, "LABEL_283");
-        gen.addJumpIfR0Equals(0x88a4, "LABEL_283");
-        gen.addJumpIfR0Equals(0x88b8, "LABEL_283");
-        gen.addJumpIfR0Equals(0x88cd, "LABEL_283");
-        gen.addJumpIfR0Equals(0x88e1, "LABEL_283");
-        gen.addJumpIfR0Equals(0x88e3, "LABEL_283");
-        gen.addJumpIfR0NotEquals(0x806, "LABEL_109");
-        gen.addLoadImmediate(R0, 14);
-        gen.addLoadImmediate(R1, -36);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("000108000604"), "LABEL_277");
-        gen.addLoad16(R0, 20);
-        gen.addJumpIfR0Equals(0x1, "LABEL_94");
-        gen.addLoadImmediate(R1, -40);
-        gen.addJumpIfR0NotEquals(0x2, "LABEL_277");
-        gen.addLoad32(R0, 28);
-        gen.addLoadImmediate(R1, -116);
-        gen.addJumpIfR0Equals(0x0, "LABEL_283");
-        gen.addLoadImmediate(R0, 0);
-        gen.addLoadImmediate(R1, -44);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("ffffffffffff"), "LABEL_277");
-
-        gen.defineLabel("LABEL_94");
-        gen.addLoadImmediate(R0, 38);
-        gen.addLoadImmediate(R1, -68);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("c0a801b3"), "LABEL_283");
-        gen.addLoadImmediate(R1, -8);
-        gen.addJump("LABEL_277");
-
-        gen.defineLabel("LABEL_109");
-        gen.addLoad16(R0, 12);
-        gen.addJumpIfR0NotEquals(0x800, "LABEL_204");
-        gen.addLoad8(R0, 23);
-        gen.addJumpIfR0NotEquals(0x11, "LABEL_151");
-        gen.addLoad16(R0, 20);
-        gen.addJumpIfR0AnyBitsSet(0x1fff, "LABEL_151");
-        gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-        gen.addLoad16Indexed(R0, 16);
-        gen.addJumpIfR0NotEquals(0x44, "LABEL_151");
-        gen.addLoadImmediate(R0, 50);
-        gen.addAddR1ToR0();
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("f683d58f832b"), "LABEL_151");
-        gen.addLoadImmediate(R1, -12);
-        gen.addJump("LABEL_277");
-
-        gen.defineLabel("LABEL_151");
-        gen.addLoad8(R0, 30);
-        gen.addAnd(240);
-        gen.addLoadImmediate(R1, -84);
-        gen.addJumpIfR0Equals(0xe0, "LABEL_283");
-        gen.addLoadImmediate(R1, -76);
-        gen.addLoad32(R0, 30);
-        gen.addJumpIfR0Equals(0xffffffff, "LABEL_283");
-        gen.addLoadImmediate(R1, -80);
-        gen.addJumpIfR0Equals(0xc0a801ff, "LABEL_283");
-        gen.addLoadImmediate(R1, -24);
-        gen.addLoadImmediate(R0, 0);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("ffffffffffff"), "LABEL_277");
-        gen.addLoadImmediate(R1, -72);
-        gen.addJump("LABEL_283");
-        gen.addLoadImmediate(R1, -16);
-        gen.addJump("LABEL_277");
-
-        gen.defineLabel("LABEL_204");
-        gen.addJumpIfR0Equals(0x86dd, "LABEL_225");
-        gen.addLoadImmediate(R0, 0);
-        gen.addLoadImmediate(R1, -48);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("ffffffffffff"), "LABEL_277");
-        gen.addLoadImmediate(R1, -56);
-        gen.addJump("LABEL_283");
-
-        gen.defineLabel("LABEL_225");
-        gen.addLoad8(R0, 20);
-        gen.addJumpIfR0Equals(0x3a, "LABEL_241");
-        gen.addLoadImmediate(R1, -104);
-        gen.addLoad8(R0, 38);
-        gen.addJumpIfR0Equals(0xff, "LABEL_283");
-        gen.addLoadImmediate(R1, -32);
-        gen.addJump("LABEL_277");
-
-        gen.defineLabel("LABEL_241");
-        gen.addLoad8(R0, 54);
-        gen.addLoadImmediate(R1, -88);
-        gen.addJumpIfR0Equals(0x85, "LABEL_283");
-        gen.addJumpIfR0NotEquals(0x88, "LABEL_275");
-        gen.addLoadImmediate(R0, 38);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("ff0200000000000000000000000000"), "LABEL_275");
-        gen.addLoadImmediate(R1, -92);
-        gen.addJump("LABEL_283");
-
-        gen.defineLabel("LABEL_275");
-        gen.addLoadImmediate(R1, -28);
-
-        gen.defineLabel("LABEL_277");
-        gen.addLoadData(R0, 0);
-        gen.addAdd(1);
-        gen.addStoreData(R0, 0);
-        gen.addJump(PASS_LABEL);
-
-        gen.defineLabel("LABEL_283");
-        gen.addLoadData(R0, 0);
-        gen.addAdd(1);
-        gen.addStoreData(R0, 0);
-        gen.addJump(DROP_LABEL);
-
-        byte[] program = gen.generate();
-        final String programString = toHexString(program).toLowerCase();
-        final String referenceProgramHexString = "6bfcb03a01b8120c6b9494010c06006b907c010588a27c010088a47c00fb88b87c00f688cd7c00f188e17c00ec88e384003908066a0e6bdca2d40600010800060412147a18016bd882ca021a1c6b8c7ac900686bd4a2b706ffffffffffff6a266bbca2b204c0a801b36bf872a8120c84005808000a17821e1112149c00171fffab0d2a108210446a3239a20406f683d58f832b6bf4727e0a1e52f06bac7a7be06bb41a1e7e0000006effffffff6bb07e00000063c0a801ff6be868a25106ffffffffffff6bb872536bf072497c001086dd686bd0a23806ffffffffffff6bc8723a0a147a0b3a6b980a267a2eff6be072240a366ba87a23858218886a26a2040fff02000000000000000000000000006ba472086be4b03a01b87206b03a01b87201";
-        assertEquals(referenceProgramHexString, programString);
-    }
-
-    @Test
-    public void testFullApfV4ProgramGenerationNatTKeepAliveV4() throws IllegalInstructionException {
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3, true);
-        gen.addLoadImmediate(R1, -4);
-        gen.addLoadData(R0, 0);
-        gen.addAdd(1);
-        gen.addStoreData(R0, 0);
-        gen.addLoad16(R0, 12);
-        gen.addCountAndDropIfR0LessThan(0x600, getCounterEnumFromOffset(-108));
-        gen.addLoadImmediate(R1, -112);
-        gen.addJumpIfR0Equals(0x88a2, gen.mCountAndDropLabel);
-        gen.addJumpIfR0Equals(0x88a4, gen.mCountAndDropLabel);
-        gen.addJumpIfR0Equals(0x88b8, gen.mCountAndDropLabel);
-        gen.addJumpIfR0Equals(0x88cd, gen.mCountAndDropLabel);
-        gen.addJumpIfR0Equals(0x88e1, gen.mCountAndDropLabel);
-        gen.addJumpIfR0Equals(0x88e3, gen.mCountAndDropLabel);
-        gen.addJumpIfR0NotEquals(0x806, "LABEL_115");
-        gen.addLoadImmediate(R0, 14);
-        gen.addCountAndPassIfBytesAtR0NotEqual(hexStringToByteArray("000108000604"), getCounterEnumFromOffset(-36));
-        gen.addLoad16(R0, 20);
-        gen.addJumpIfR0Equals(0x1, "LABEL_100");
-        gen.addCountAndPassIfR0NotEquals(0x2, getCounterEnumFromOffset(-40));
-        gen.addLoad32(R0, 28);
-        gen.addCountAndDropIfR0Equals(0x0, getCounterEnumFromOffset(-116));
-        gen.addLoadImmediate(R0, 0);
-        gen.addCountAndPassIfBytesAtR0NotEqual(hexStringToByteArray("ffffffffffff"), getCounterEnumFromOffset(-44));
-
-        gen.defineLabel("LABEL_100");
-        gen.addLoadImmediate(R0, 38);
-        gen.addCountAndDropIfBytesAtR0NotEqual(hexStringToByteArray("c0a801be"), getCounterEnumFromOffset(-68));
-        gen.addCountAndPass(getCounterEnumFromOffset(-8));
-
-        gen.defineLabel("LABEL_115");
-        gen.addLoad16(R0, 12);
-        gen.addJumpIfR0NotEquals(0x800, "LABEL_263");
-        gen.addLoad8(R0, 23);
-        gen.addJumpIfR0NotEquals(0x11, "LABEL_157");
-        gen.addLoad16(R0, 20);
-        gen.addJumpIfR0AnyBitsSet(0x1fff, "LABEL_157");
-        gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-        gen.addLoad16Indexed(R0, 16);
-        gen.addJumpIfR0NotEquals(0x44, "LABEL_157");
-        gen.addLoadImmediate(R0, 50);
-        gen.addAddR1ToR0();
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("ea42226789c0"), "LABEL_157");
-        gen.addCountAndPass(getCounterEnumFromOffset(-12));
-
-        gen.defineLabel("LABEL_157");
-        gen.addLoad8(R0, 30);
-        gen.addAnd(240);
-        gen.addCountAndDropIfR0Equals(0xe0, getCounterEnumFromOffset(-84));
-        gen.addLoadImmediate(R1, -76);
-        gen.addLoad32(R0, 30);
-        gen.addJumpIfR0Equals(0xffffffff, gen.mCountAndDropLabel);
-        gen.addCountAndDropIfR0Equals(0xc0a801ff, getCounterEnumFromOffset(-80));
-        gen.addLoad8(R0, 23);
-        gen.addJumpIfR0NotEquals(0x11, "LABEL_243");
-        gen.addLoadImmediate(R0, 26);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("6b7a1f1fc0a801be"), "LABEL_243");
-        gen.addLoadFromMemory(R0, MemorySlot.IPV4_HEADER_SIZE);
-        gen.addAdd(8);
-        gen.addSwap();
-        gen.addLoad16(R0, 16);
-        gen.addNeg(R1);
-        gen.addAddR1ToR0();
-        gen.addJumpIfR0NotEquals(0x1, "LABEL_243");
-        gen.addLoadFromMemory(R0, MemorySlot.IPV4_HEADER_SIZE);
-        gen.addAdd(14);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("1194ceca"), "LABEL_243");
-        gen.addAdd(8);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("ff"), "LABEL_243");
-        gen.addCountAndDrop(getCounterEnumFromOffset(-128));
-
-        gen.defineLabel("LABEL_243");
-        gen.addLoadImmediate(R1, -24);
-        gen.addLoadImmediate(R0, 0);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("ffffffffffff"), gen.mCountAndPassLabel);
-        gen.addCountAndDrop(getCounterEnumFromOffset(-72));
-        gen.addCountAndPass(getCounterEnumFromOffset(-16));
-
-        gen.defineLabel("LABEL_263");
-        gen.addJumpIfR0Equals(0x86dd, "LABEL_284");
-        gen.addLoadImmediate(R0, 0);
-        gen.addCountAndPassIfBytesAtR0NotEqual(hexStringToByteArray("ffffffffffff"), getCounterEnumFromOffset(-48));
-        gen.addCountAndDrop(getCounterEnumFromOffset(-56));
-
-        gen.defineLabel("LABEL_284");
-        gen.addLoad8(R0, 20);
-        gen.addJumpIfR0Equals(0x0, gen.mCountAndPassLabel);
-        gen.addJumpIfR0Equals(0x3a, "LABEL_303");
-        gen.addLoadImmediate(R1, -104);
-        gen.addLoad8(R0, 38);
-        gen.addJumpIfR0Equals(0xff, gen.mCountAndDropLabel);
-        gen.addCountAndPass(getCounterEnumFromOffset(-32));
-
-        gen.defineLabel("LABEL_303");
-        gen.addLoad8(R0, 54);
-        gen.addLoadImmediate(R1, -88);
-        gen.addJumpIfR0Equals(0x85, gen.mCountAndDropLabel);
-        gen.addJumpIfR0NotEquals(0x88, "LABEL_337");
-        gen.addLoadImmediate(R0, 38);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("ff0200000000000000000000000000"), "LABEL_337");
-        gen.addCountAndDrop(getCounterEnumFromOffset(-92));
-
-        gen.defineLabel("LABEL_337");
-        gen.addLoadImmediate(R1, -28);
-
-        gen.addCountTrampoline();
-
-        byte[] program = gen.generate();
-        final String programString = toHexString(program).toLowerCase();
-        final String referenceProgramHexString = "6bfcb03a01b8120c6b9494014a06006b907c014388a27c013e88a47c013988b87c013488cd7c012f88e17c012a88e384003f08066a0e6bdca40110000600010800060412147a1c016bd884010400021a1c6b8c7c01010000686bd4a2ef06ffffffffffff6a266bbca2ea04c0a801be6bf872e0120c84008d08000a17821e1112149c00171fffab0d2a108210446a3239a20406ea42226789c06bf472b60a1e52f06bac7ab3e06bb41a1e7e000000a6ffffffff6bb07e0000009bc0a801ff0a178230116a1aa223086b7a1f1fc0a801beaa0d3a08aa221210ab2139821501aa0d3a0ea20a041194ceca3a08a20401ff6b8072666be868a25406ffffffffffff6bb872566bf0724c7c001086dd686bd0a23b06ffffffffffff6bc8723d0a147a32007a0b3a6b980a267a2eff6be072240a366ba87a23858218886a26a2040fff02000000000000000000000000006ba472086be4b03a01b87206b03a01b87201";
-        assertEquals(referenceProgramHexString, programString);
-    }
-
-    @Test
-    public void testInfiniteLifetimeFullApfV4ProgramGeneration() throws IllegalInstructionException {
-        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3, true);
-        gen.addLoadCounter(R0, getCounterEnumFromOffset(-8));
-        gen.addAdd(1);
-        gen.addStoreData(R0, 0);
-        gen.addLoad16(R0, 12);
-        gen.addCountAndDropIfR0LessThan(0x600, getCounterEnumFromOffset(-120));
-        gen.addLoadImmediate(R1, -124);
-        gen.addJumpIfR0Equals(0x88a2, gen.mCountAndDropLabel);
-        gen.addJumpIfR0Equals(0x88a4, gen.mCountAndDropLabel);
-        gen.addJumpIfR0Equals(0x88b8, gen.mCountAndDropLabel);
-        gen.addJumpIfR0Equals(0x88cd, gen.mCountAndDropLabel);
-        gen.addJumpIfR0Equals(0x88e1, gen.mCountAndDropLabel);
-        gen.addJumpIfR0Equals(0x88e3, gen.mCountAndDropLabel);
-        gen.addJumpIfR0NotEquals(0x806, "LABEL_122");
-        gen.addLoadImmediate(R0, 14);
-        gen.addCountAndDropIfBytesAtR0NotEqual(hexStringToByteArray("000108000604"), getCounterEnumFromOffset(-152));
-        gen.addLoad16(R0, 20);
-        gen.addJumpIfR0Equals(0x1, "LABEL_104");
-        gen.addCountAndDropIfR0NotEquals(0x2, getCounterEnumFromOffset(-156));
-        gen.addLoad32(R0, 28);
-        gen.addCountAndDropIfR0Equals(0x0, getCounterEnumFromOffset(-128));
-        gen.addLoadImmediate(R0, 0);
-        gen.addCountAndPassIfBytesAtR0NotEqual(hexStringToByteArray("ffffffffffff"), getCounterEnumFromOffset(-56));
-
-        gen.defineLabel("LABEL_104");
-        gen.addLoadImmediate(R0, 38);
-        gen.addCountAndDropIfBytesAtR0NotEqual(hexStringToByteArray("c0a801ec"), getCounterEnumFromOffset(-80));
-        gen.addCountAndPass(getCounterEnumFromOffset(-20));
-
-        gen.defineLabel("LABEL_122");
-        gen.addLoad16(R0, 12);
-        gen.addJumpIfR0NotEquals(0x800, "LABEL_249");
-        gen.addLoad8(R0, 23);
-        gen.addJumpIfR0NotEquals(0x11, "LABEL_165");
-        gen.addLoad16(R0, 20);
-        gen.addJumpIfR0AnyBitsSet(0x1fff, "LABEL_165");
-        gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-        gen.addLoad16Indexed(R0, 16);
-        gen.addJumpIfR0NotEquals(0x44, "LABEL_165");
-        gen.addLoadImmediate(R0, 50);
-        gen.addAddR1ToR0();
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("7e9046bc7008"), "LABEL_165");
-        gen.addCountAndPass(getCounterEnumFromOffset(-24));
-
-        gen.defineLabel("LABEL_165");
-        gen.addLoad8(R0, 30);
-        gen.addAnd(240);
-        gen.addCountAndDropIfR0Equals(0xe0, getCounterEnumFromOffset(-96));
-        gen.addLoadImmediate(R1, -88);
-        gen.addLoad32(R0, 30);
-        gen.addJumpIfR0Equals(0xffffffff, gen.mCountAndDropLabel);
-        gen.addCountAndDropIfR0Equals(0xc0a801ff, getCounterEnumFromOffset(-92));
-        gen.addLoad8(R0, 23);
-        gen.addJumpIfR0NotEquals(0x6, "LABEL_225");
-        gen.addLoad16(R0, 20);
-        gen.addJumpIfR0AnyBitsSet(0x1fff, "LABEL_225");
-        gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-        gen.addLoad16Indexed(R0, 16);
-        gen.addJumpIfR0NotEquals(0x7, "LABEL_225");
-        gen.addCountAndDrop(getCounterEnumFromOffset(-148));
-
-        gen.defineLabel("LABEL_225");
-        gen.addLoadImmediate(R1, -36);
-        gen.addLoadImmediate(R0, 0);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("ffffffffffff"), gen.mCountAndPassLabel);
-        gen.addCountAndDrop(getCounterEnumFromOffset(-84));
-        gen.addCountAndPass(getCounterEnumFromOffset(-28));
-
-        gen.defineLabel("LABEL_249");
-        gen.addJumpIfR0Equals(0x86dd, "LABEL_273");
-        gen.addLoadImmediate(R0, 0);
-        gen.addCountAndPassIfBytesAtR0NotEqual(hexStringToByteArray("ffffffffffff"), getCounterEnumFromOffset(-60));
-        gen.addCountAndDrop(getCounterEnumFromOffset(-68));
-
-        gen.defineLabel("LABEL_273");
-        gen.addLoad8(R0, 20);
-        gen.addJumpIfR0Equals(0x0, gen.mCountAndPassLabel);
-        gen.addJumpIfR0Equals(0x3a, "LABEL_297");
-        gen.addLoadImmediate(R1, -116);
-        gen.addLoad8(R0, 38);
-        gen.addJumpIfR0Equals(0xff, gen.mCountAndDropLabel);
-        gen.addCountAndPass(getCounterEnumFromOffset(-44));
-
-        gen.defineLabel("LABEL_297");
-        gen.addLoad8(R0, 54);
-        gen.addCountAndDropIfR0Equals(0x85, getCounterEnumFromOffset(-100));
-        gen.addJumpIfR0NotEquals(0x88, "LABEL_333");
-        gen.addLoadImmediate(R0, 38);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("ff0200000000000000000000000000"), "LABEL_333");
-        gen.addCountAndDrop(getCounterEnumFromOffset(-104));
-
-        gen.defineLabel("LABEL_333");
-        gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE);
-        gen.addJumpIfR0NotEquals(0x96, "LABEL_574");
-        gen.addLoadFromMemory(R0, MemorySlot.FILTER_AGE_SECONDS);
-        gen.addJumpIfR0GreaterThan(0x48e, "LABEL_574");
-        gen.addLoadImmediate(R0, 0);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("7e9046bc700828c68e23672c86dd60"), "LABEL_574");
-        gen.addLoadImmediate(R0, 18);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("00603afffe800000000000002ac68efffe23672c"), "LABEL_574");
-        gen.addLoadImmediate(R0, 54);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("8600"), "LABEL_574");
-        gen.addLoadImmediate(R0, 58);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("40c0"), "LABEL_574");
-        gen.addLoad16(R0, 60);
-        gen.addJumpIfR0Equals(0x0, "LABEL_574");
-        gen.addJumpIfR0LessThan(0xb4, "LABEL_421");
-        gen.addJumpIfR0LessThan(0x91e, "LABEL_574");
-        gen.addJumpIfR0GreaterThan(0x1b58, "LABEL_574");
-
-        gen.defineLabel("LABEL_421");
-        gen.addLoadImmediate(R0, 62);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("0000000000000000010128c68e23672c05010000000005dc030440c0"), "LABEL_574");
-        gen.addLoad32(R0, 90);
-        gen.addJumpIfR0Equals(0x0, "LABEL_574");
-        gen.addJumpIfR0LessThan(0xb4, "LABEL_480");
-        gen.addJumpIfR0LessThan(0x55555555, "LABEL_574");
-        gen.addJumpIfR0GreaterThan(0xffffffffL, "LABEL_574");
-
-        gen.defineLabel("LABEL_480");
-        gen.addLoad32(R0, 94);
-        gen.addJumpIfR0LessThan(0x55555555, "LABEL_574");
-        gen.addJumpIfR0GreaterThan(0xffffffffL, "LABEL_574");
-        gen.addLoadImmediate(R0, 98);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("000000002401fa000480f000000000000000000019030000"), "LABEL_574");
-        gen.addLoad32(R0, 122);
-        gen.addJumpIfR0Equals(0x0, "LABEL_574");
-        gen.addJumpIfR0LessThan(0x78, "LABEL_547");
-        gen.addJumpIfR0LessThan(0x91e, "LABEL_574");
-        gen.addJumpIfR0GreaterThan(0x1b58, "LABEL_574");
-
-        gen.defineLabel("LABEL_547");
-        gen.addLoadImmediate(R0, 126);
-        gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("2401fa000480f00000000000000000010701"), "LABEL_574");
-        gen.addCountAndDrop(getCounterEnumFromOffset(-72));
-
-        gen.defineLabel("LABEL_574");
-        gen.addLoadImmediate(R1, -40);
-
-        gen.addCountTrampoline();
-
-        byte[] program = gen.generate();
-        final String programString = toHexString(program).toLowerCase();
-        final String referenceProgramHexString = "6bf8b03a01b8120c6b8894023706006b847c023088a27c022b88a47c022688b87c022188cd7c021c88e17c021788e384004608066a0e6dff68a40202000600010800060412147a1f016dff648401f500021a1c6b807c01ec0000686bc8a401d80006ffffffffffff6a266bb0a401d10004c0a801ec6bec7401c6120c84007808000a17821f1112149c00181fffab0d2a108211446a3239a205067e9046bc70086be874019b0a1e52f06ba07c019600e06ba81a1e7e00000189ffffffff6ba47e0000017ec0a801ff0a1782140612149c000d1fffab0d2a108206076dff6c7401656bdc68a401510006ffffffffffff6bac7401526be47401477c001386dd686bc4a401340006ffffffffffff6bbc7401350a147c012800007a0e3a6b8c0a267c012200ff6bd47401170a366b9c7c011400858218886a26a2040fff02000000000000000000000000006b9872f9aa0e82ec96aa0f8c00e5048e68a2d20f7e9046bc700828c68e23672c86dd606a12a2b91400603afffe800000000000002ac68efffe23672c6a36a2b20286006a3aa2ab0240c0123c7aa600920ab494009e091e8c00991b586a3ea2781c0000000000000000010128c68e23672c05010000000005dc030440c01a5a7a73009212b49600000067555555558e0000005effffffff1a5e9600000053555555558e0000004affffffff6a62a22d18000000002401fa000480f0000000000000000000190300001a7a7a2800920a78940020091e8c001b1b586a7ea204122401fa000480f000000000000000000107016bb872086bd8b03a01b87206b03a01b87201";
-        assertEquals(referenceProgramHexString, programString);
     }
 }

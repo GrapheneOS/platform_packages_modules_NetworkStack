@@ -79,10 +79,12 @@
             <item type="integer" name="config_evaluating_bandwidth_max_retry_timer_ms"/>
 
             <!-- Whether the APF Filter in the device should filter out IEEE 802.3 Frames
-            Those frames are identified by the field Eth-type having values less than 0x600 -->
+            Those frames are identified by the field Eth-type having values less than 0x600.
+            This configuration has been deprecated and is not functional in Android V+ -->
             <item type="bool" name="config_apfDrop802_3Frames"/>
             <!-- An array of Denylisted EtherType, packets with EtherTypes within this array
-            will be dropped -->
+            will be dropped.
+            This configuration has been deprecated and is not functional in Android V+ -->
             <item type="array" name="config_apfEthTypeDenyList"/>
             <!-- Icon used for connected captive portal notifications on wifi networks,
             notifying that internet access is now available or that a venue info page is

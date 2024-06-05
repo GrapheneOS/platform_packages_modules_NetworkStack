@@ -57,6 +57,7 @@ import android.net.apf.BaseApfGenerator.Register.R1
 import android.net.ip.IpClient.IpClientCallbacksWrapper
 import android.os.Build
 import android.system.OsConstants.ARPHRD_ETHER
+import android.system.OsConstants.IFA_F_TENTATIVE
 import androidx.test.filters.SmallTest
 import com.android.net.module.util.HexDump
 import com.android.net.module.util.InterfaceParams
@@ -137,6 +138,14 @@ class ApfNewTest {
             .map{ it.toByte() }.toByteArray(),
         // 2001::100:1b:4455:6677
         intArrayOf(0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x01, 0, 0, 0x1b, 0x44, 0x55, 0x66, 0x77)
+            .map{ it.toByte() }.toByteArray()
+    )
+    private val hostIpv6TentativeAddresses = listOf(
+        // 2001::200:1a:1234:5678
+        intArrayOf(0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x02, 0, 0, 0x1a, 0x12, 0x34, 0x56, 0x78)
+            .map{ it.toByte() }.toByteArray(),
+        // 2001::100:1b:1234:5678
+        intArrayOf(0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x01, 0, 0, 0x1b, 0x12, 0x34, 0x56, 0x78)
             .map{ it.toByte() }.toByteArray()
     )
     private val hostAnycast6Addresses = listOf(
@@ -2207,6 +2216,18 @@ class ApfNewTest {
         // add the same IPv6 addresses, expect to have no apf program update
         apfFilter.setLinkProperties(lp)
         verify(ipClientCallback, times(4)).installPacketFilter(any())
+
+        // add more tentative IPv6 addresses, expect to have apf program update
+        for (addr in hostIpv6TentativeAddresses) {
+            lp.addLinkAddress(LinkAddress(InetAddress.getByAddress(addr), 64, IFA_F_TENTATIVE, 0))
+        }
+
+        apfFilter.setLinkProperties(lp)
+        verify(ipClientCallback, times(5)).installPacketFilter(any())
+
+        // add the same IPv6 addresses, expect to have no apf program update
+        apfFilter.setLinkProperties(lp)
+        verify(ipClientCallback, times(5)).installPacketFilter(any())
         apfFilter.shutdown()
     }
 
