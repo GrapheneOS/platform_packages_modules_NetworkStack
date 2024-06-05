@@ -1355,15 +1355,13 @@ public class IpClient extends StateMachine {
         // Thread-unsafe access to mApfFilter but just used for debugging.
         final AndroidPacketFilter apfFilter = mApfFilter;
         final android.net.shared.ProvisioningConfiguration provisioningConfig = mConfiguration;
-        final ApfCapabilities apfCapabilities = (provisioningConfig != null)
-                ? provisioningConfig.mApfCapabilities : null;
+        final ApfCapabilities apfCapabilities = mCurrentApfCapabilities;
 
         IndentingPrintWriter pw = new IndentingPrintWriter(writer, "  ");
         pw.println(mTag + " APF dump:");
         pw.increaseIndent();
-        if (apfFilter != null && apfCapabilities != null
-                && apfCapabilities.apfVersionSupported > 0) {
-            if (apfCapabilities.hasDataAccess()) {
+        if (apfFilter != null) {
+            if (apfCapabilities != null && apfCapabilities.hasDataAccess()) {
                 // Request a new snapshot, then wait for it.
                 mApfDataSnapshotComplete.close();
                 mCallback.startReadPacketFilter("dumpsys");
