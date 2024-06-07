@@ -1361,7 +1361,7 @@ public class IpClient extends StateMachine {
         pw.println(mTag + " APF dump:");
         pw.increaseIndent();
         if (apfFilter != null) {
-            if (apfCapabilities != null && apfCapabilities.hasDataAccess()) {
+            if (apfCapabilities != null && apfFilter.hasDataAccess(apfCapabilities)) {
                 // Request a new snapshot, then wait for it.
                 mApfDataSnapshotComplete.close();
                 mCallback.startReadPacketFilter("dumpsys");

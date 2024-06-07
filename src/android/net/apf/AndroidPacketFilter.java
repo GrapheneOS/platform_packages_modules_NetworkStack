@@ -15,6 +15,7 @@
  */
 package android.net.apf;
 
+import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.net.LinkProperties;
 import android.net.NattKeepalivePacketDataParcelable;
@@ -98,4 +99,12 @@ public interface AndroidPacketFilter {
 
     /** Return hex string of current APF snapshot for testing purposes. */
     @Nullable String getDataSnapshotHexString();
+
+    /**
+     * Determines whether the APF interpreter advertises support for the data buffer access
+     * opcodes LDDW (LoaD Data Word) and STDW (STore Data Word).
+     */
+    default boolean hasDataAccess(@NonNull ApfCapabilities capabilities) {
+        return capabilities.hasDataAccess();
+    }
 }

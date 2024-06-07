@@ -340,7 +340,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
     // Our IPv6 non-tentative addresses
     @GuardedBy("this")
-    private Set<Inet6Address> mIPv6Addresses = new ArraySet<>();
+    private Set<Inet6Address> mIPv6NonTentativeAddresses = new ArraySet<>();
 
     // Our tentative IPv6 addresses
     @GuardedBy("this")
@@ -501,6 +501,17 @@ public class ApfFilter implements AndroidPacketFilter {
 
             return addresses;
         }
+
+        /**
+         * Loads the existing ND traffic class for the specific interface from the file
+         * /proc/sys/net/ipv6/conf/{ifname}/ndisc_tclass.
+         *
+         * If the file does not exist or the interface is not found,
+         * the function returns 0..255, 0 as default ND traffic class.
+         */
+        public int getNdTrafficClass(@NonNull String ifname) {
+            return ProcfsParsingUtils.getNdTrafficClass(ifname);
+        }
     }
 
     public synchronized void setDataSnapshot(byte[] data) {
@@ -560,7 +571,7 @@ public class ApfFilter implements AndroidPacketFilter {
                 // Clear the APF memory to reset all counters upon connecting to the first AP
                 // in an SSID. This is limited to APFv4 devices because this large write triggers
                 // a crash on some older devices (b/78905546).
-                if (mIsRunning && mApfCapabilities.hasDataAccess()) {
+                if (mIsRunning && hasDataAccess(mApfCapabilities)) {
                     byte[] zeroes = new byte[mApfCapabilities.maximumApfProgramSize];
                     if (!mIpClientCallback.installPacketFilter(zeroes)) {
                         sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
@@ -1790,7 +1801,7 @@ public class ApfFilter implements AndroidPacketFilter {
     @GuardedBy("this")
     private List<byte[]> getUnicastIpv6Addresses() {
         final List<byte[]> addresses = new ArrayList<>();
-        for (Inet6Address addr : mIPv6Addresses) {
+        for (Inet6Address addr : mIPv6NonTentativeAddresses) {
             addresses.add(addr.getAddress());
         }
 
@@ -2127,7 +2138,7 @@ public class ApfFilter implements AndroidPacketFilter {
             gen = new ApfV4Generator(mApfCapabilities.apfVersionSupported);
         }
 
-        if (mApfCapabilities.hasDataAccess()) {
+        if (hasDataAccess(mApfCapabilities)) {
             if (gen instanceof ApfV4Generator) {
                 // Increment TOTAL_PACKETS.
                 // Only needed in APFv4.
@@ -2249,7 +2260,7 @@ public class ApfFilter implements AndroidPacketFilter {
         final byte[] program;
         int programMinLft = Integer.MAX_VALUE;
         int maximumApfProgramSize = mApfCapabilities.maximumApfProgramSize;
-        if (mApfCapabilities.hasDataAccess()) {
+        if (hasDataAccess(mApfCapabilities)) {
             // Reserve space for the counters.
             maximumApfProgramSize -= Counter.totalSize();
         }
@@ -2552,14 +2563,14 @@ public class ApfFilter implements AndroidPacketFilter {
         if ((prefix == mIPv4PrefixLength)
                 && Arrays.equals(addr, mIPv4Address)
                 && ipv6Addresses.first.equals(mIPv6TentativeAddresses)
-                && ipv6Addresses.second.equals(mIPv6Addresses)
+                && ipv6Addresses.second.equals(mIPv6NonTentativeAddresses)
         ) {
             return;
         }
         mIPv4Address = addr;
         mIPv4PrefixLength = prefix;
         mIPv6TentativeAddresses = ipv6Addresses.first;
-        mIPv6Addresses = ipv6Addresses.second;
+        mIPv6NonTentativeAddresses = ipv6Addresses.second;
 
         installNewProgramLocked();
     }
@@ -2638,7 +2649,7 @@ public class ApfFilter implements AndroidPacketFilter {
             pw.println("IPv4 address: " + InetAddress.getByAddress(mIPv4Address).getHostAddress());
             pw.println("IPv6 addresses: ");
             pw.increaseIndent();
-            for (Inet6Address addr: mIPv6Addresses) {
+            for (Inet6Address addr: mIPv6NonTentativeAddresses) {
                 pw.println(addr.getHostAddress());
             }
             pw.decreaseIndent();
@@ -2711,7 +2722,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
         pw.println("APF packet counters: ");
         pw.increaseIndent();
-        if (!mApfCapabilities.hasDataAccess()) {
+        if (!hasDataAccess(mApfCapabilities)) {
             pw.println("APF counters not supported");
         } else if (mDataSnapshot == null) {
             pw.println("No last snapshot.");

@@ -53,13 +53,18 @@ public final class ApfConstants {
     // The IPv6 all nodes address ff02::1
     public static final byte[] IPV6_ALL_NODES_ADDRESS =
             { (byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
+    // The IPv6 unspecified address ::
+    public static final byte[] IPV6_UNSPECIFIED_ADDRESS =
+            {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     // The IPv6 solicited nodes multicast address prefix ff02::1:ffXX:X/104
     public static final byte[] IPV6_SOLICITED_NODES_PREFIX =
             { (byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, (byte) 0xff};
 
     public static final int ICMP6_TYPE_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN;
     public static final int ICMP6_CODE_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN + 1;
+    public static final int ICMP6_CHECKSUM_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN + 2;
     public static final int ICMP6_NS_TARGET_IP_OFFSET = ICMP6_TYPE_OFFSET + 8;
+    public static final int ICMP6_NS_OPTION_TYPE_OFFSET = ICMP6_NS_TARGET_IP_OFFSET + 16;
 
     public static final int IPPROTO_HOPOPTS = 0;
 
@@ -90,6 +95,11 @@ public final class ApfConstants {
     // TODO: Select a proper max length
     public static final int APF_MAX_ETH_TYPE_BLACK_LIST_LEN = 20;
 
+    // The ethernet solicited nodes multicast address prefix 33:33:FF:xx:xx:xx
+    public static final byte[] ETH_SOLICITED_NODES_PREFIX =
+            {(byte) 0x33, (byte) 0x33, (byte) 0xff};
+    public static final byte[] ETH_MULTICAST_IPV6_ALL_NODES_MAC_ADDRESS =
+            { (byte) 0x33, (byte) 0x33, 0, 0, 0, 1};
     public static final byte[] ETH_MULTICAST_MDNS_V4_MAC_ADDRESS =
             {(byte) 0x01, (byte) 0x00, (byte) 0x5e, (byte) 0x00, (byte) 0x00, (byte) 0xfb};
     public static final byte[] ETH_MULTICAST_MDNS_V6_MAC_ADDRESS =

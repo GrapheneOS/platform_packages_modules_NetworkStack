@@ -126,7 +126,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
      * When APFv4 is supported, loads R1 with the offset of the specified counter.
      */
     private void maybeSetupCounter(ApfV4Generator gen, Counter c) {
-        if (mApfCapabilities.hasDataAccess()) {
+        if (hasDataAccess(mApfCapabilities)) {
             gen.addLoadImmediate(R1, c.offset());
         }
     }
@@ -408,7 +408,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
         mSessionStartMs = mClock.elapsedRealtime();
         mMinMetricsSessionDurationMs = config.minMetricsSessionDurationMs;
 
-        if (mApfCapabilities.hasDataAccess()) {
+        if (hasDataAccess(mApfCapabilities)) {
             mCountAndPassLabel = "countAndPass";
             mCountAndDropLabel = "countAndDrop";
         } else {
@@ -492,7 +492,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
                 // Clear the APF memory to reset all counters upon connecting to the first AP
                 // in an SSID. This is limited to APFv4 devices because this large write triggers
                 // a crash on some older devices (b/78905546).
-                if (mIsRunning && mApfCapabilities.hasDataAccess()) {
+                if (mIsRunning && hasDataAccess(mApfCapabilities)) {
                     byte[] zeroes = new byte[mApfCapabilities.maximumApfProgramSize];
                     if (!mIpClientCallback.installPacketFilter(zeroes)) {
                         sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
@@ -1728,7 +1728,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
         // This is guaranteed to succeed because of the check in maybeCreate.
         ApfV4Generator gen = new ApfV4Generator(mApfCapabilities.apfVersionSupported);
 
-        if (mApfCapabilities.hasDataAccess()) {
+        if (hasDataAccess(mApfCapabilities)) {
             // Increment TOTAL_PACKETS
             maybeSetupCounter(gen, Counter.TOTAL_PACKETS);
             gen.addLoadData(R0, 0);  // load counter
@@ -1831,7 +1831,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
     private void emitEpilogue(ApfV4Generator gen) throws IllegalInstructionException {
         // If APFv4 is unsupported, no epilogue is necessary: if execution reached this far, it
         // will just fall-through to the PASS label.
-        if (!mApfCapabilities.hasDataAccess()) return;
+        if (!hasDataAccess(mApfCapabilities)) return;
 
         // Execution will reach the bottom of the program if none of the filters match,
         // which will pass the packet to the application processor.
@@ -1867,7 +1867,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
         final byte[] program;
         long programMinLifetime = Long.MAX_VALUE;
         long maximumApfProgramSize = mApfCapabilities.maximumApfProgramSize;
-        if (mApfCapabilities.hasDataAccess()) {
+        if (hasDataAccess(mApfCapabilities)) {
             // Reserve space for the counters.
             maximumApfProgramSize -= Counter.totalSize();
         }
@@ -2323,7 +2323,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
 
         pw.println("APF packet counters: ");
         pw.increaseIndent();
-        if (!mApfCapabilities.hasDataAccess()) {
+        if (!hasDataAccess(mApfCapabilities)) {
             pw.println("APF counters not supported");
         } else if (mDataSnapshot == null) {
             pw.println("No last snapshot.");
