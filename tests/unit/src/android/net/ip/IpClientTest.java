@@ -83,6 +83,7 @@ import android.system.OsConstants;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.netlink.NduseroptMessage;
 import com.android.net.module.util.netlink.RtNetlinkAddressMessage;
@@ -884,7 +885,8 @@ public class IpClientTest {
                 any(), configCaptor.capture(), any(), any(), any(), anyBoolean());
         final ApfConfiguration actual = configCaptor.getValue();
         assertNotNull(actual);
-        assertEquals(4, actual.apfCapabilities.apfVersionSupported);
+        int expectedApfVersion = SdkLevel.isAtLeastS() ? 4 : 3;
+        assertEquals(expectedApfVersion, actual.apfCapabilities.apfVersionSupported);
         assertEquals(4096, actual.apfCapabilities.maximumApfProgramSize);
         assertEquals(4, actual.apfCapabilities.apfPacketFormat);
 

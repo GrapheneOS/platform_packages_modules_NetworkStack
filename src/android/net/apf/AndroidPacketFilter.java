@@ -105,6 +105,6 @@ public interface AndroidPacketFilter {
      * opcodes LDDW (LoaD Data Word) and STDW (STore Data Word).
      */
     default boolean hasDataAccess(@NonNull ApfCapabilities capabilities) {
-        return capabilities.hasDataAccess();
+        return capabilities.apfVersionSupported > 2;
     }
 }

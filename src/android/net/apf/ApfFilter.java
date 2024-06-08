@@ -1799,13 +1799,24 @@ public class ApfFilter implements AndroidPacketFilter {
     }
 
     @GuardedBy("this")
-    private List<byte[]> getUnicastIpv6Addresses() {
+    private List<byte[]> getIpv6Addresses(
+            boolean includeNonTentative, boolean includeTentative, boolean includeAnycast) {
         final List<byte[]> addresses = new ArrayList<>();
-        for (Inet6Address addr : mIPv6NonTentativeAddresses) {
-            addresses.add(addr.getAddress());
+        if (includeNonTentative) {
+            for (Inet6Address addr : mIPv6NonTentativeAddresses) {
+                addresses.add(addr.getAddress());
+            }
         }
 
-        addresses.addAll(mDependencies.getAnycast6Addresses(mInterfaceParams.name));
+        if (includeTentative) {
+            for (Inet6Address addr : mIPv6TentativeAddresses) {
+                addresses.add(addr.getAddress());
+            }
+        }
+
+        if (includeAnycast) {
+            addresses.addAll(mDependencies.getAnycast6Addresses(mInterfaceParams.name));
+        }
         return addresses;
     }
 
@@ -1821,7 +1832,10 @@ public class ApfFilter implements AndroidPacketFilter {
     @GuardedBy("this")
     private void generateNsFilterLocked(ApfV6Generator v6Gen)
             throws IllegalInstructionException {
-        final List<byte[]> allIPv6Addrs = getUnicastIpv6Addresses();
+        final List<byte[]> allIPv6Addrs = getIpv6Addresses(
+                true /* includeNonTentative */,
+                true /* includeTentative */,
+                true /* includeAnycast */);
         if (allIPv6Addrs.isEmpty()) {
             // There is no IPv6 link local address.
             v6Gen.addCountAndDrop(DROPPED_IPV6_NS_NO_ADDRESS);

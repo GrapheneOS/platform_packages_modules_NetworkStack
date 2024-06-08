@@ -47,6 +47,7 @@ import android.stats.connectivity.IpType;
 import android.stats.connectivity.NudEventType;
 import android.stats.connectivity.NudNeighborType;
 import android.text.TextUtils;
+import android.util.ArraySet;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -69,7 +70,6 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -248,7 +248,7 @@ public class IpReachabilityMonitor {
     private final boolean mIgnoreOrganicNudFailure;
     private final boolean mIgnoreNeverReachableNeighbor;
     // A set to track whether a neighbor has ever entered NUD_REACHABLE state before.
-    private final Set<InetAddress> mEverReachableNeighbors = new HashSet<>();
+    private final Set<InetAddress> mEverReachableNeighbors = new ArraySet<>();
 
     public IpReachabilityMonitor(
             Context context, InterfaceParams ifParams, Handler h, SharedLog log, Callback callback,
