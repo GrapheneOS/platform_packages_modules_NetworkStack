@@ -500,6 +500,22 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException;
 
     /**
+     * Add instructions to the end of the program to increase counter and drop packet if the
+     * bytes of the packet at an offset specified by register0 match {@code bytes}.
+     * WARNING: may modify R1
+     */
+    public abstract Type addCountAndDropIfBytesAtR0Equal(byte[] bytes,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException;
+
+    /**
+     * Add instructions to the end of the program to increase counter and pass packet if the
+     * bytes of the packet at an offset specified by register0 match {@code bytes}.
+     * WARNING: may modify R1
+     */
+    public abstract Type addCountAndPassIfBytesAtR0Equal(byte[] bytes,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException;
+
+    /**
      * Add instructions to the end of the program to increase counter and pass packet if the
      * value in register0 is one of {@code values}.
      * WARNING: may modify R1

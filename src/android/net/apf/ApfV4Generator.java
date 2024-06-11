@@ -202,6 +202,20 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
     }
 
     @Override
+    public ApfV4Generator addCountAndDropIfBytesAtR0Equal(byte[] bytes,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+        final String tgt = getUniqueLabel();
+        return addJumpIfBytesAtR0NotEqual(bytes, tgt).addCountAndDrop(cnt).defineLabel(tgt);
+    }
+
+    @Override
+    public ApfV4Generator addCountAndPassIfBytesAtR0Equal(byte[] bytes,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+        final String tgt = getUniqueLabel();
+        return addJumpIfBytesAtR0NotEqual(bytes, tgt).addCountAndPass(cnt).defineLabel(tgt);
+    }
+
+    @Override
     public ApfV4Generator addCountAndPassIfR0IsOneOf(@NonNull Set<Long> values,
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
         if (values.isEmpty()) {

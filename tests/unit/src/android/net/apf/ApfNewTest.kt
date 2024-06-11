@@ -375,6 +375,12 @@ class ApfNewTest {
             gen.addCountAndDropIfBytesAtR0NotEqual(byteArrayOf(1), PASSED_ARP)
         }
         assertFailsWith<IllegalArgumentException> {
+            gen.addCountAndDropIfBytesAtR0Equal(byteArrayOf(1), PASSED_ARP)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            gen.addCountAndPassIfBytesAtR0Equal(byteArrayOf(1), DROPPED_ETH_BROADCAST)
+        }
+        assertFailsWith<IllegalArgumentException> {
             gen.addCountAndDropIfR0AnyBitsSet(3, PASSED_ARP)
         }
         assertFailsWith<IllegalArgumentException> {
@@ -446,6 +452,12 @@ class ApfNewTest {
         }
         assertFailsWith<IllegalArgumentException> {
             v4gen.addCountAndPassIfR0NotEquals(3, DROPPED_ETH_BROADCAST)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            v4gen.addCountAndDropIfBytesAtR0Equal(byteArrayOf(1), PASSED_ARP)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            v4gen.addCountAndPassIfBytesAtR0Equal(byteArrayOf(1), DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
             v4gen.addCountAndDropIfR0LessThan(3, PASSED_ARP)
@@ -1298,6 +1310,30 @@ class ApfNewTest {
                         listOf(byteArrayOf(1, 3), byteArrayOf(3, 4)),
                         PASSED_ARP
                 )
+                .addPass()
+                .addCountTrampoline()
+                .generate()
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
+
+        program = getGenerator()
+                .addLoadImmediate(R0, 1)
+                .addCountAndDropIfBytesAtR0Equal(
+                        byteArrayOf(2, 3), DROPPED_ETH_BROADCAST)
+                .addPass()
+                .addCountTrampoline()
+                .generate()
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                testPacket,
+                DROPPED_ETH_BROADCAST,
+                incTotal = incTotal
+        )
+
+        program = getGenerator()
+                .addLoadImmediate(R0, 1)
+                .addCountAndPassIfBytesAtR0Equal(
+                        byteArrayOf(2, 3), PASSED_ARP)
                 .addPass()
                 .addCountTrampoline()
                 .generate()

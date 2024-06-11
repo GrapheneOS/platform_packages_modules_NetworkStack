@@ -712,6 +712,20 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
     }
 
     @Override
+    public final Type addCountAndDropIfBytesAtR0Equal(byte[] bytes,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+        final String tgt = getUniqueLabel();
+        return addJumpIfBytesAtR0NotEqual(bytes, tgt).addCountAndDrop(cnt).defineLabel(tgt);
+    }
+
+    @Override
+    public final Type addCountAndPassIfBytesAtR0Equal(byte[] bytes,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+        final String tgt = getUniqueLabel();
+        return addJumpIfBytesAtR0NotEqual(bytes, tgt).addCountAndPass(cnt).defineLabel(tgt);
+    }
+
+    @Override
     public Type addCountAndPassIfR0IsOneOf(@NonNull Set<Long> values,
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
         if (values.isEmpty()) {
