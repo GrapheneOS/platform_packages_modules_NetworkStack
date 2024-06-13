@@ -16,15 +16,17 @@
 
 package com.android.networkstack.metrics;
 
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 import android.net.dhcp.DhcpPacket;
 import android.net.metrics.DhcpErrorEvent;
 import android.stats.connectivity.DhcpErrorCode;
 import android.stats.connectivity.DhcpFeature;
 import android.stats.connectivity.DisconnectCode;
 import android.stats.connectivity.HostnameTransResult;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import android.stats.connectivity.Ipv6ProvisioningMode;
 
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
@@ -86,6 +88,7 @@ public class NetworkIpProvisioningMetricsTest {
         // The maximum number of DHCP error code counts is MAX_DHCP_ERROR_COUNT
         assertEquals(mMetrics.MAX_DHCP_ERROR_COUNT, mStats.getDhcpSession().getErrorCodeCount());
     }
+
     @Test
     public void testIpProvisioningMetrics_CollectMetrics() throws Exception {
         final NetworkIpProvisioningReported mStats;
@@ -157,5 +160,25 @@ public class NetworkIpProvisioningMetricsTest {
             assertTrue(mStats.getIpv6LatencyMicros() >= 1000);
             assertTrue(mStats.getProvisioningDurationMicros() >= 1000);
         }
+    }
+
+    @Test
+    public void testIpProvisioningMetrics_setIpv6ProvisioningMode() throws Exception {
+        final IpProvisioningMetrics metrics = new IpProvisioningMetrics();
+        metrics.reset();
+
+        metrics.setIpv6ProvisioningMode(Ipv6ProvisioningMode.IPV6_PROV_MODE_SLAAC);
+        metrics.setIPv6ProvisionedLatencyOnFirstTime(true);
+        metrics.setDisconnectCode(DisconnectCode.DC_NORMAL_TERMINATION);
+
+        // don't allow to override the previous metircs.
+        metrics.setIpv6ProvisioningMode(Ipv6ProvisioningMode.IPV6_PROV_MODE_DHCP6_PD_HEURISTIC);
+
+        final NetworkIpProvisioningReported stats = metrics.statsWrite();
+
+        assertTrue(stats.getIpv4LatencyMicros() == 0);
+        assertTrue(stats.getIpv6LatencyMicros() > 0);
+        assertEquals(Ipv6ProvisioningMode.IPV6_PROV_MODE_SLAAC, stats.getIpv6ProvisioningMode());
+        assertEquals(DisconnectCode.DC_NORMAL_TERMINATION, stats.getDisconnectCode());
     }
 }

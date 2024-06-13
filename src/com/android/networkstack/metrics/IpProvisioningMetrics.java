@@ -16,11 +16,14 @@
 
 package com.android.networkstack.metrics;
 
+import static android.stats.connectivity.Ipv6ProvisioningMode.IPV6_PROV_MODE_UNKNOWN;
+
 import android.net.util.Stopwatch;
 import android.stats.connectivity.DhcpErrorCode;
 import android.stats.connectivity.DhcpFeature;
 import android.stats.connectivity.DisconnectCode;
 import android.stats.connectivity.HostnameTransResult;
+import android.stats.connectivity.Ipv6ProvisioningMode;
 
 import com.android.net.module.util.ConnectivityUtils;
 
@@ -147,6 +150,15 @@ public class IpProvisioningMetrics {
     }
 
     /**
+     * Write the IPv6 provisioning mode proto into mStatsBuilder. This API should be called only
+     * once during the provisioning lifetime cycle.
+     */
+    public void setIpv6ProvisioningMode(final Ipv6ProvisioningMode mode) {
+        if (mode == IPV6_PROV_MODE_UNKNOWN || mStatsBuilder.hasIpv6ProvisioningMode()) return;
+        mStatsBuilder.setIpv6ProvisioningMode(mode);
+    }
+
+    /**
      * Write the NetworkIpProvisioningReported proto into statsd.
      */
     public NetworkIpProvisioningReported statsWrite() {
@@ -166,7 +178,8 @@ public class IpProvisioningMetrics {
                 stats.getProvisioningDurationMicros(),
                 stats.getDisconnectCode().getNumber(),
                 DhcpSession,
-                stats.getRandomNumber());
+                stats.getRandomNumber(),
+                stats.getIpv6ProvisioningMode().getNumber());
         mWatch.reset();
         return stats;
     }

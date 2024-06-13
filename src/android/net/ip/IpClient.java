@@ -46,6 +46,7 @@ import static com.android.net.module.util.NetworkStackConstants.RFC7421_PREFIX_L
 import static com.android.net.module.util.NetworkStackConstants.VENDOR_SPECIFIC_IE_ID;
 import static com.android.networkstack.apishim.ConstantsShim.IFA_F_MANAGETEMPADDR;
 import static com.android.networkstack.apishim.ConstantsShim.IFA_F_NOPREFIXROUTE;
+import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_ARP_OFFLOAD_FORCE_DISABLE;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_LIGHT_DOZE_FORCE_DISABLE;
 import static com.android.networkstack.util.NetworkStackUtils.APF_NEW_RA_FILTER_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.APF_POLLING_COUNTERS_VERSION;
@@ -711,6 +712,7 @@ public class IpClient extends StateMachine {
     private final boolean mApfShouldHandleLightDoze;
     private final boolean mEnableApfPollingCounters;
     private final boolean mPopulateLinkAddressLifetime;
+    private final boolean mApfShouldHandleArpOffload;
 
     private InterfaceParams mInterfaceParams;
 
@@ -957,6 +959,8 @@ public class IpClient extends StateMachine {
         // Light doze mode status checking API is only available at T or later releases.
         mApfShouldHandleLightDoze = SdkLevel.isAtLeastT() && mDependencies.isFeatureNotChickenedOut(
                 mContext, APF_HANDLE_LIGHT_DOZE_FORCE_DISABLE);
+        mApfShouldHandleArpOffload = mDependencies.isFeatureNotChickenedOut(
+                mContext, APF_HANDLE_ARP_OFFLOAD_FORCE_DISABLE);
         mPopulateLinkAddressLifetime = mDependencies.isFeatureEnabled(context,
                 IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION);
 
@@ -2563,6 +2567,7 @@ public class IpClient extends StateMachine {
             apfConfig.acceptRaMinLft = 0;
         }
         apfConfig.shouldHandleLightDoze = mApfShouldHandleLightDoze;
+        apfConfig.shouldHandleArpOffload = mApfShouldHandleArpOffload;
         apfConfig.minMetricsSessionDurationMs = mApfCounterPollingIntervalMs;
         apfConfig.hasClatInterface = mHasSeenClatInterface;
         return mDependencies.maybeCreateApfFilter(mContext, apfConfig, mInterfaceParams,

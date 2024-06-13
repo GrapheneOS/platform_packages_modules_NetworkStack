@@ -190,6 +190,7 @@ public class ApfFilter implements AndroidPacketFilter {
         public boolean shouldHandleLightDoze;
         public long minMetricsSessionDurationMs;
         public boolean hasClatInterface;
+        public boolean shouldHandleArpOffload;
     }
 
     /** A wrapper class of {@link SystemClock} to be mocked in unit tests. */
@@ -287,6 +288,7 @@ public class ApfFilter implements AndroidPacketFilter {
     // and PIO valid lifetimes.
     private final int mAcceptRaMinLft;
     private final boolean mShouldHandleLightDoze;
+    private final boolean mShouldHandleArpOffload;
 
     private final NetworkQuirkMetrics mNetworkQuirkMetrics;
     private final IpClientRaInfoMetrics mIpClientRaInfoMetrics;
@@ -390,6 +392,7 @@ public class ApfFilter implements AndroidPacketFilter {
         mMinRdnssLifetimeSec = config.minRdnssLifetimeSec;
         mAcceptRaMinLft = config.acceptRaMinLft;
         mShouldHandleLightDoze = config.shouldHandleLightDoze;
+        mShouldHandleArpOffload = config.shouldHandleArpOffload;
         mDependencies = dependencies;
         mNetworkQuirkMetrics = networkQuirkMetrics;
         mIpClientRaInfoMetrics = dependencies.getIpClientRaInfoMetrics();
@@ -1631,7 +1634,7 @@ public class ApfFilter implements AndroidPacketFilter {
                     Counter.DROPPED_ARP_OTHER_HOST);
 
             ApfV6Generator v6Gen = tryToConvertToApfV6Generator(gen);
-            if (v6Gen != null) {
+            if (v6Gen != null && mShouldHandleArpOffload) {
                 // Ethernet requires that all packets be at least 60 bytes long
                 v6Gen.addAllocate(60)
                         .addPacketCopy(ETHER_SRC_ADDR_OFFSET, ETHER_ADDR_LEN)

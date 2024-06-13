@@ -31,6 +31,7 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HOST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ALLOCATE_FAILURE
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP
+import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_REQUEST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_FROM_DHCPV4_SERVER
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP
@@ -1916,6 +1917,41 @@ class ApfNewTest {
     }
 
     @Test
+    fun testArpOffloadDisabled() {
+        val apfConfig = getDefaultConfig()
+        apfConfig.shouldHandleArpOffload = false
+        val apfFilter =
+            ApfFilter(
+                context,
+                apfConfig,
+                ifParams,
+                ipClientCallback,
+                metrics,
+                dependencies
+            )
+        verify(ipClientCallback, times(2)).installPacketFilter(any())
+        val linkAddress = LinkAddress(InetAddress.getByAddress(hostIpv4Address), 24)
+        val lp = LinkProperties()
+        lp.addLinkAddress(linkAddress)
+        apfFilter.setLinkProperties(lp)
+        val programCaptor = ArgumentCaptor.forClass(ByteArray::class.java)
+        verify(ipClientCallback, times(3)).installPacketFilter(programCaptor.capture())
+        val program = programCaptor.value
+        val receivedArpPacketBuf = ArpPacket.buildArpPacket(
+            arpBroadcastMacAddress,
+            senderMacAddress,
+            hostIpv4Address,
+            HexDump.hexStringToByteArray("000000000000"),
+            senderIpv4Address,
+            ARP_REQUEST.toShort()
+        )
+        val receivedArpPacket = ByteArray(ARP_ETHER_IPV4_LEN)
+        receivedArpPacketBuf.get(receivedArpPacket)
+        verifyProgramRun(APF_VERSION_6, program, receivedArpPacket, PASSED_ARP_REQUEST)
+        apfFilter.shutdown()
+    }
+
+    @Test
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     fun testNsFilterNoIPv6() {
         `when`(dependencies.getAnycast6Addresses(any())).thenReturn(listOf())
@@ -2332,6 +2368,7 @@ class ApfNewTest {
         config.multicastFilter = false
         config.ieee802_3Filter = false
         config.ethTypeBlackList = IntArray(0)
+        config.shouldHandleArpOffload = true
         return config
     }
 }

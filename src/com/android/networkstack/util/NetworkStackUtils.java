@@ -300,6 +300,12 @@ public class NetworkStackUtils {
     public static final String IGNORE_TCP_INFO_FOR_BLOCKED_UIDS =
             "ignore_tcp_info_for_blocked_uids";
 
+    /**
+     * Kill switch flag to disable the feature of handle arp offload in Apf.
+     */
+    public static final String APF_HANDLE_ARP_OFFLOAD_FORCE_DISABLE =
+            "apf_handle_arp_offload_force_disable";
+
     static {
         System.loadLibrary("networkstackutilsjni");
     }

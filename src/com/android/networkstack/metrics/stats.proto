@@ -107,6 +107,9 @@ message NetworkIpProvisioningReported {
 
     // The random number between 0 ~ 999 for sampling
     optional int32 random_number = 7;
+
+    // Check which IPv6 provisioning mode is used for current connection
+    optional .android.stats.connectivity.Ipv6ProvisioningMode ipv6_provisioning_mode = 8;
 }
 
 /**
