@@ -28,7 +28,6 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_NOT_ALLOWED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETH_BROADCAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID
-import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_NO_ADDRESS
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HOST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ALLOCATE_FAILURE
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP
@@ -36,6 +35,7 @@ import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_FROM_DHCPV4_SERVER
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_MULTIPLE_OPTIONS
+import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_ADDRESS
 import android.net.apf.ApfCounterTracker.Counter.PASSED_TRANSMIT_FAILURE
 import android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS
 import android.net.apf.ApfFilter.Dependencies
@@ -1941,12 +1941,12 @@ class ApfNewTest {
         val nsPkt = "01020304050600010203040586DD6000000000183AFF200100000000000" +
                     "00200001A1122334420010000000000000200001A334411228700452900" +
                     "00000020010000000000000200001A33441122"
-        // when there is no IPv6 addresses -> drop NS packet
+        // when there is no IPv6 addresses -> pass NS packet
         verifyProgramRun(
                 APF_VERSION_6,
                 program,
                 HexDump.hexStringToByteArray(nsPkt),
-                DROPPED_IPV6_NS_NO_ADDRESS
+                PASSED_IPV6_NS_NO_ADDRESS
         )
 
         apfFilter.shutdown()
