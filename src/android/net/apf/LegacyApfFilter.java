@@ -435,11 +435,13 @@ public class LegacyApfFilter implements AndroidPacketFilter {
         mDependencies.onThreadCreated(mReceiveThread);
     }
 
-    public synchronized void setDataSnapshot(byte[] data) {
+    @Override
+    public synchronized String setDataSnapshot(byte[] data) {
         mDataSnapshot = data;
         if (mIsRunning) {
             mApfCounterTracker.updateCountersFromData(data);
         }
+        return mApfCounterTracker.getCounters().toString();
     }
 
     private void log(String s) {

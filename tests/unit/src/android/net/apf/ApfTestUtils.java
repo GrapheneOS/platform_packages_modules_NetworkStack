@@ -247,13 +247,13 @@ public class ApfTestUtils {
         private boolean mInstallPacketFilterReturn = true;
 
         MockIpClientCallback() {
-            super(mock(IIpClientCallbacks.class), mock(SharedLog.class),
-                    NetworkInformationShimImpl.newInstance());
+            super(mock(IIpClientCallbacks.class), mock(SharedLog.class), mock(SharedLog.class),
+                    NetworkInformationShimImpl.newInstance(), false);
         }
 
         MockIpClientCallback(boolean installPacketFilterReturn) {
-            super(mock(IIpClientCallbacks.class), mock(SharedLog.class),
-                    NetworkInformationShimImpl.newInstance());
+            super(mock(IIpClientCallbacks.class), mock(SharedLog.class), mock(SharedLog.class),
+                    NetworkInformationShimImpl.newInstance(), false);
             mInstallPacketFilterReturn = installPacketFilterReturn;
         }
 

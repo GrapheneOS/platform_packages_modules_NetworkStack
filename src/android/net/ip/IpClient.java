@@ -200,15 +200,19 @@ import java.util.stream.Collectors;
 public class IpClient extends StateMachine {
     private static final String TAG = IpClient.class.getSimpleName();
     private static final boolean DBG = false;
+    private final boolean mApfDebug;
 
     // For message logging.
     private static final Class[] sMessageClasses = { IpClient.class, DhcpClient.class };
     private static final SparseArray<String> sWhatToString =
             MessageUtils.findMessageNames(sMessageClasses);
-    // Two static concurrent hashmaps of interface name to logging classes.
-    // One holds StateMachine logs and the other connectivity packet logs.
+    // Static concurrent hashmaps of interface name to logging classes.
+    // This map holds StateMachine logs.
     private static final ConcurrentHashMap<String, SharedLog> sSmLogs = new ConcurrentHashMap<>();
+    // This map holds connectivity packet logs.
     private static final ConcurrentHashMap<String, LocalLog> sPktLogs = new ConcurrentHashMap<>();
+    // This map holds Apf logs.
+    private static final ConcurrentHashMap<String, SharedLog> sApfLogs = new ConcurrentHashMap<>();
     private final NetworkStackIpMemoryStore mIpMemoryStore;
     private final NetworkInformationShim mShim = NetworkInformationShimImpl.newInstance();
     private final IpProvisioningMetrics mIpProvisioningMetrics = new IpProvisioningMetrics();
@@ -225,6 +229,12 @@ public class IpClient extends StateMachine {
             if (skippedIfaces.contains(ifname)) continue;
 
             writer.println(String.format("--- BEGIN %s ---", ifname));
+
+            final SharedLog apfLog = sApfLogs.get(ifname);
+            if (apfLog != null) {
+                writer.println("APF log:");
+                apfLog.dump(null, writer, null);
+            }
 
             final SharedLog smLog = sSmLogs.get(ifname);
             if (smLog != null) {
@@ -267,16 +277,24 @@ public class IpClient extends StateMachine {
     public static class IpClientCallbacksWrapper {
         private static final String PREFIX = "INVOKE ";
         private final IIpClientCallbacks mCallback;
+        @NonNull
         private final SharedLog mLog;
+        @NonNull
+        private final SharedLog mApfLog;
         @NonNull
         private final NetworkInformationShim mShim;
 
+        private final boolean mApfDebug;
+
         @VisibleForTesting
-        protected IpClientCallbacksWrapper(IIpClientCallbacks callback, SharedLog log,
-                @NonNull NetworkInformationShim shim) {
+        protected IpClientCallbacksWrapper(IIpClientCallbacks callback, @NonNull SharedLog log,
+                @NonNull SharedLog apfLog, @NonNull NetworkInformationShim shim,
+                boolean apfDebug) {
             mCallback = callback;
             mLog = log;
+            mApfLog = apfLog;
             mShim = shim;
+            mApfDebug = apfDebug;
         }
 
         private void log(String msg) {
@@ -397,6 +415,9 @@ public class IpClient extends StateMachine {
         public boolean installPacketFilter(byte[] filter) {
             log("installPacketFilter(byte[" + filter.length + "])");
             try {
+                if (mApfDebug) {
+                    mApfLog.log("updated APF program: " + HexDump.toHexString(filter));
+                }
                 mCallback.installPacketFilter(filter);
             } catch (RemoteException e) {
                 log("Failed to call installPacketFilter", e);
@@ -683,6 +704,7 @@ public class IpClient extends StateMachine {
     private final WakeupMessage mProvisioningTimeoutAlarm;
     private final WakeupMessage mDhcpActionTimeoutAlarm;
     private final SharedLog mLog;
+    private final SharedLog mApfLog;
     private final LocalLog mConnectivityPacketLog;
     private final MessageHandlingLogger mMsgStateLogger;
     private final IpConnectivityLog mMetricsLog;
@@ -931,8 +953,11 @@ public class IpClient extends StateMachine {
         mLog = sSmLogs.get(mInterfaceName);
         sPktLogs.putIfAbsent(mInterfaceName, new LocalLog(MAX_PACKET_RECORDS));
         mConnectivityPacketLog = sPktLogs.get(mInterfaceName);
+        sApfLogs.putIfAbsent(mInterfaceName, new SharedLog(10 /* maxRecords */, mTag));
+        mApfLog = sApfLogs.get(mInterfaceName);
+        mApfDebug = Log.isLoggable(ApfFilter.class.getSimpleName(), Log.DEBUG);
         mMsgStateLogger = new MessageHandlingLogger();
-        mCallback = new IpClientCallbacksWrapper(callback, mLog, mShim);
+        mCallback = new IpClientCallbacksWrapper(callback, mLog, mApfLog, mShim, mApfDebug);
 
         // TODO: Consider creating, constructing, and passing in some kind of
         // InterfaceController.Dependencies class.
@@ -1374,7 +1399,9 @@ public class IpClient extends StateMachine {
                 }
             }
             apfFilter.dump(pw);
-
+            pw.println("APF log:");
+            pw.println("mApfDebug: " + mApfDebug);
+            mApfLog.dump(fd, pw, args);
         } else {
             pw.print("No active ApfFilter; ");
             if (provisioningConfig == null) {
@@ -3342,7 +3369,8 @@ public class IpClient extends StateMachine {
 
                 case EVENT_READ_PACKET_FILTER_COMPLETE: {
                     if (mApfFilter != null) {
-                        mApfFilter.setDataSnapshot((byte[]) msg.obj);
+                        String snapShotStr = mApfFilter.setDataSnapshot((byte[]) msg.obj);
+                        mLog.log("readPacketFilterComplete, ApfCounters: " + snapShotStr);
                     }
                     mApfDataSnapshotComplete.open();
                     break;

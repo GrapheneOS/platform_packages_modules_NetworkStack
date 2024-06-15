@@ -44,9 +44,9 @@ public interface AndroidPacketFilter {
     void setMulticastFilter(boolean isEnabled);
 
     /**
-     * Set the APF data snapshot.
+     * Set the APF data snapshot and return the latest counter snapshot as a String.
      */
-    void setDataSnapshot(byte[] data);
+    String setDataSnapshot(byte[] data);
 
     /**
      * Add TCP keepalive ack packet filter.
