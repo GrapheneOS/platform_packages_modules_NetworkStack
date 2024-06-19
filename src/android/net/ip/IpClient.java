@@ -30,6 +30,7 @@ import static android.net.ip.IpReachabilityMonitor.INVALID_REACHABILITY_LOSS_TYP
 import static android.net.ip.IpReachabilityMonitor.nudEventTypeToInt;
 import static android.net.util.SocketUtils.makePacketSocketAddress;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
+import static android.stats.connectivity.NetworkQuirkEvent.QE_DHCP6_HEURISTIC_TRIGGERED;
 import static android.system.OsConstants.AF_PACKET;
 import static android.system.OsConstants.ETH_P_ARP;
 import static android.system.OsConstants.ETH_P_IPV6;
@@ -3413,6 +3414,8 @@ public class IpClient extends StateMachine {
                     if (!hasIpv6Address(mLinkProperties)
                             && mLinkProperties.hasIpv6DefaultRoute()) {
                         Log.d(TAG, "Network supports IPv6 but not autoconf, starting DHCPv6 PD");
+                        mNetworkQuirkMetrics.setEvent(QE_DHCP6_HEURISTIC_TRIGGERED);
+                        mNetworkQuirkMetrics.statsWrite();
                         startDhcp6PrefixDelegation();
                     }
                     break;
