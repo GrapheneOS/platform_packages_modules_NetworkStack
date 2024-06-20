@@ -18,6 +18,7 @@ package android.net.ip;
 
 import static android.net.ip.IpClientLinkObserver.CONFIG_SOCKET_RECV_BUFSIZE;
 import static android.net.ip.IpClientLinkObserver.SOCKET_RECV_BUFSIZE;
+import static android.system.OsConstants.ARPHRD_ETHER;
 import static android.system.OsConstants.RT_SCOPE_UNIVERSE;
 
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
@@ -806,16 +807,21 @@ public class IpClientTest {
                         conf(links(TEST_LOCAL_ADDRESSES), prefixes(TEST_PREFIXES), ips()));
         if (isApfSupported) {
             config.withApfCapabilities(new ApfCapabilities(4 /* version */,
-                    4096 /* maxProgramSize */, 4 /* format */));
+                    4096 /* maxProgramSize */, ARPHRD_ETHER));
         }
 
         ipc.startProvisioning(config.build());
         final ArgumentCaptor<ApfConfiguration> configCaptor = ArgumentCaptor.forClass(
                 ApfConfiguration.class);
-        verify(mDependencies, timeout(TEST_TIMEOUT_MS)).maybeCreateApfFilter(
-                any(), configCaptor.capture(), any(), any(), any(), anyBoolean());
+        if (isApfSupported) {
+            verify(mDependencies, timeout(TEST_TIMEOUT_MS)).maybeCreateApfFilter(
+                    any(), configCaptor.capture(), any(), any(), any(), anyBoolean());
+        } else {
+            verify(mDependencies, never()).maybeCreateApfFilter(
+                    any(), configCaptor.capture(), any(), any(), any(), anyBoolean());
+        }
 
-        return configCaptor.getValue();
+        return isApfSupported ? configCaptor.getValue() : null;
     }
 
     @Test @IgnoreAfter(Build.VERSION_CODES.R)
@@ -872,11 +878,10 @@ public class IpClientTest {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
                 false /* isApfSupported */);
-        assertNull(config.apfCapabilities);
-        clearInvocations(mDependencies);
+        assertNull(config);
 
         ipc.updateApfCapabilities(new ApfCapabilities(4 /* version */, 4096 /* maxProgramSize */,
-                4 /* format */));
+                ARPHRD_ETHER));
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
 
         final ArgumentCaptor<ApfConfiguration> configCaptor = ArgumentCaptor.forClass(
@@ -885,10 +890,8 @@ public class IpClientTest {
                 any(), configCaptor.capture(), any(), any(), any(), anyBoolean());
         final ApfConfiguration actual = configCaptor.getValue();
         assertNotNull(actual);
-        int expectedApfVersion = SdkLevel.isAtLeastS() ? 4 : 3;
-        assertEquals(expectedApfVersion, actual.apfCapabilities.apfVersionSupported);
-        assertEquals(4096, actual.apfCapabilities.maximumApfProgramSize);
-        assertEquals(4, actual.apfCapabilities.apfPacketFormat);
+        assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, actual.apfVersionSupported);
+        assertEquals(4096, actual.maximumApfProgramSize);
 
         verifyShutdown(ipc);
     }
@@ -897,8 +900,9 @@ public class IpClientTest {
     public void testDumpApfFilter_withNoException() throws Exception {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
-                false /* isApfSupported */);
-        assertNull(config.apfCapabilities);
+                true /* isApfSupported */);
+        assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, config.apfVersionSupported);
+        assertEquals(4096, config.maximumApfProgramSize);
         clearInvocations(mDependencies);
         ipc.dump(mFd, mWriter, null /* args */);
         verifyShutdown(ipc);
@@ -909,11 +913,12 @@ public class IpClientTest {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
                 true /* isApfSupported */);
-        assertNotNull(config.apfCapabilities);
+        assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, config.apfVersionSupported);
+        assertEquals(4096, config.maximumApfProgramSize);
         clearInvocations(mDependencies);
 
         final ApfCapabilities newApfCapabilities = new ApfCapabilities(4 /* version */,
-                8192 /* maxProgramSize */, 4 /* format */);
+                8192 /* maxProgramSize */, ARPHRD_ETHER);
         ipc.updateApfCapabilities(newApfCapabilities);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
         verify(mDependencies, never()).maybeCreateApfFilter(any(), any(), any(), any(), any(),
@@ -926,7 +931,8 @@ public class IpClientTest {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
                 true /* isApfSupported */);
-        assertNotNull(config.apfCapabilities);
+        assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, config.apfVersionSupported);
+        assertEquals(4096, config.maximumApfProgramSize);
         clearInvocations(mDependencies);
 
         ipc.updateApfCapabilities(null /* apfCapabilities */);

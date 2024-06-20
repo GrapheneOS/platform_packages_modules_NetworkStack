@@ -32,6 +32,7 @@ import static android.net.util.SocketUtils.makePacketSocketAddress;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.stats.connectivity.NetworkQuirkEvent.QE_DHCP6_HEURISTIC_TRIGGERED;
 import static android.system.OsConstants.AF_PACKET;
+import static android.system.OsConstants.ARPHRD_ETHER;
 import static android.system.OsConstants.ETH_P_ARP;
 import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.IFA_F_NODAD;
@@ -1391,7 +1392,8 @@ public class IpClient extends StateMachine {
         pw.println(mTag + " APF dump:");
         pw.increaseIndent();
         if (apfFilter != null) {
-            if (apfCapabilities != null && apfFilter.hasDataAccess(apfCapabilities)) {
+            if (apfCapabilities != null && apfFilter.hasDataAccess(
+                    apfCapabilities.apfVersionSupported)) {
                 // Request a new snapshot, then wait for it.
                 mApfDataSnapshotComplete.close();
                 mCallback.startReadPacketFilter("dumpsys");
@@ -2557,17 +2559,22 @@ public class IpClient extends StateMachine {
     @Nullable
     private AndroidPacketFilter maybeCreateApfFilter(final ApfCapabilities apfCaps) {
         ApfFilter.ApfConfiguration apfConfig = new ApfFilter.ApfConfiguration();
-        apfConfig.apfCapabilities = apfCaps;
-        if (apfCaps != null && !SdkLevel.isAtLeastS()) {
+        if (apfCaps == null) {
+            return null;
+        }
+        // For now only support generating programs for Ethernet frames. If this restriction is
+        // lifted the program generator will need its offsets adjusted.
+        if (apfCaps.apfPacketFormat != ARPHRD_ETHER) return null;
+        if (SdkLevel.isAtLeastS()) {
+            apfConfig.apfVersionSupported = apfCaps.apfVersionSupported;
+        } else {
             // Due to potential OEM modifications in Android R, reconfigure
             // apfVersionSupported using apfCapabilities.hasDataAccess() to ensure safe data
             // region access within ApfFilter.
-            int apfVersionSupported = apfCaps.hasDataAccess() ? 3 : 2;
-            apfConfig.apfCapabilities = new ApfCapabilities(apfVersionSupported,
-                    apfCaps.maximumApfProgramSize, apfCaps.apfPacketFormat);
+            apfConfig.apfVersionSupported = apfCaps.hasDataAccess() ? 3 : 2;
         }
-        if (apfConfig.apfCapabilities != null && !SdkLevel.isAtLeastV()
-                && apfConfig.apfCapabilities.apfVersionSupported <= 4) {
+        apfConfig.maximumApfProgramSize = apfCaps.maximumApfProgramSize;
+        if (!SdkLevel.isAtLeastV() && apfConfig.apfVersionSupported <= 4) {
             apfConfig.installableProgramSizeClamp = 1024;
         }
         apfConfig.multicastFilter = mMulticastFiltering;

@@ -57,7 +57,6 @@ import android.net.apf.BaseApfGenerator.Register.R0
 import android.net.apf.BaseApfGenerator.Register.R1
 import android.net.ip.IpClient.IpClientCallbacksWrapper
 import android.os.Build
-import android.system.OsConstants.ARPHRD_ETHER
 import android.system.OsConstants.IFA_F_TENTATIVE
 import androidx.test.filters.SmallTest
 import com.android.net.module.util.HexDump
@@ -2363,8 +2362,8 @@ class ApfNewTest {
 
     private fun getDefaultConfig(apfVersion: Int = APF_VERSION_6): ApfFilter.ApfConfiguration {
         val config = ApfFilter.ApfConfiguration()
-        config.apfCapabilities =
-                ApfCapabilities(apfVersion, 4096, ARPHRD_ETHER)
+        config.apfVersionSupported = apfVersion
+        config.maximumApfProgramSize = 4096
         config.multicastFilter = false
         config.ieee802_3Filter = false
         config.ethTypeBlackList = IntArray(0)

@@ -32,7 +32,6 @@ import static android.net.apf.ApfTestUtils.PASS;
 import static android.net.apf.ApfTestUtils.assertProgramEquals;
 import static android.os.PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED;
 import static android.os.PowerManager.ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED;
-import static android.system.OsConstants.ARPHRD_ETHER;
 import static android.system.OsConstants.ETH_P_ARP;
 import static android.system.OsConstants.ETH_P_IP;
 import static android.system.OsConstants.ETH_P_IPV6;
@@ -234,8 +233,6 @@ public class ApfTest {
 
     private static final String TAG = "ApfTest";
     // Expected return codes from APF interpreter.
-    private static final ApfCapabilities MOCK_APF_CAPABILITIES =
-            new ApfCapabilities(2, 4096, ARPHRD_ETHER);
 
     private static final boolean DROP_MULTICAST = true;
     private static final boolean ALLOW_MULTICAST = false;
@@ -261,7 +258,8 @@ public class ApfTest {
 
     private static ApfConfiguration getDefaultConfig() {
         ApfFilter.ApfConfiguration config = new ApfConfiguration();
-        config.apfCapabilities = MOCK_APF_CAPABILITIES;
+        config.apfVersionSupported = 2;
+        config.maximumApfProgramSize = 4096;
         config.multicastFilter = ALLOW_MULTICAST;
         config.ieee802_3Filter = ALLOW_802_3_FRAMES;
         config.ethTypeBlackList = new int[0];
@@ -1020,8 +1018,8 @@ public class ApfTest {
         lp.addLinkAddress(link);
 
         ApfConfiguration config = getDefaultConfig();
-        ApfCapabilities MOCK_APF_PCAP_CAPABILITIES = new ApfCapabilities(4, 1700, ARPHRD_ETHER);
-        config.apfCapabilities = MOCK_APF_PCAP_CAPABILITIES;
+        config.apfVersionSupported = 4;
+        config.maximumApfProgramSize = 1700;
         config.multicastFilter = DROP_MULTICAST;
         config.ieee802_3Filter = DROP_802_3_FRAMES;
         TestApfFilter apfFilter = new TestApfFilter(mContext, config, ipClientCallback,
@@ -3160,8 +3158,8 @@ public class ApfTest {
     public void testApfProgramOverSize() throws Exception {
         final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
         final ApfConfiguration config = getDefaultConfig();
-        final ApfCapabilities capabilities = new ApfCapabilities(2, 512, ARPHRD_ETHER);
-        config.apfCapabilities = capabilities;
+        config.apfVersionSupported = 2;
+        config.maximumApfProgramSize = 512;
         final TestAndroidPacketFilter apfFilter = makeTestApfFilter(config, ipClientCallback);
         byte[] program = ipClientCallback.assertProgramUpdateAndGet();
         final byte[] ra = buildLargeRa();
@@ -3190,8 +3188,8 @@ public class ApfTest {
     public void testApfSessionInfoMetrics() throws Exception {
         final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
         final ApfConfiguration config = getDefaultConfig();
-        final ApfCapabilities capabilities = new ApfCapabilities(4, 4096, ARPHRD_ETHER);
-        config.apfCapabilities = capabilities;
+        config.apfVersionSupported = 4;
+        config.maximumApfProgramSize = 4096;
         final long startTimeMs = 12345;
         final long durationTimeMs = config.minMetricsSessionDurationMs;
         doReturn(startTimeMs).when(mClock).elapsedRealtime();
