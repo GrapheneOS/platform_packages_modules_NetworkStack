@@ -19,6 +19,8 @@ package android.net.ip;
 import static android.net.ip.IpClientLinkObserver.CONFIG_SOCKET_RECV_BUFSIZE;
 import static android.net.ip.IpClientLinkObserver.SOCKET_RECV_BUFSIZE;
 import static android.system.OsConstants.ARPHRD_ETHER;
+import static android.system.OsConstants.IFA_F_PERMANENT;
+import static android.system.OsConstants.IFA_F_TENTATIVE;
 import static android.system.OsConstants.RT_SCOPE_UNIVERSE;
 
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
@@ -68,6 +70,7 @@ import android.net.LinkProperties;
 import android.net.MacAddress;
 import android.net.NetworkStackIpMemoryStore;
 import android.net.RouteInfo;
+import android.net.apf.AndroidPacketFilter;
 import android.net.apf.ApfCapabilities;
 import android.net.apf.ApfFilter.ApfConfiguration;
 import android.net.ip.IpClientLinkObserver.IpClientNetlinkMonitor;
@@ -177,6 +180,7 @@ public class IpClientTest {
     @Mock private FileDescriptor mFd;
     @Mock private PrintWriter mWriter;
     @Mock private IpClientNetlinkMonitor mNetlinkMonitor;
+    @Mock private AndroidPacketFilter mApfFilter;
 
     private InterfaceParams mIfParams;
     private INetlinkMessageProcessor mNetlinkMessageProcessor;
@@ -939,6 +943,31 @@ public class IpClientTest {
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
         verify(mDependencies, never()).maybeCreateApfFilter(any(), any(), any(), any(), any(),
                 anyBoolean());
+        verifyShutdown(ipc);
+    }
+
+    @Test
+    public void testLinkPropertiesUpdate_callSetLinkPropertiesOnApfFilter() throws Exception {
+        when(mDependencies.maybeCreateApfFilter(any(), any(), any(), any(), any(), anyBoolean()))
+                .thenReturn(mApfFilter);
+        final IpClient ipc = makeIpClient(TEST_IFNAME);
+        verifyApfFilterCreatedOnStart(ipc, true /* isApfSupported */);
+        onInterfaceAddressUpdated(
+                new LinkAddress(TEST_GLOBAL_ADDRESS, IFA_F_TENTATIVE, RT_SCOPE_UNIVERSE),
+                IFA_F_TENTATIVE);
+        // mApfFilter.setLinkProperties() is called both in IpClient#handleLinkPropertiesUpdate()
+        // and IpClient#setLinkProperties().
+        verify(mApfFilter, timeout(TEST_TIMEOUT_MS).times(2)).setLinkProperties(any());
+        // LinkAddress flag change will trigger mApfFilter.setLinkProperties()
+        onInterfaceAddressUpdated(
+                new LinkAddress(TEST_GLOBAL_ADDRESS, IFA_F_PERMANENT, RT_SCOPE_UNIVERSE),
+                IFA_F_PERMANENT);
+        // mApfFilter.setLinkProperties() is called only in IpClient#handleLinkPropertiesUpdate().
+        // IpClient#setLinkProperties() is not called because Objects.equals(newLp,
+        // mLinkProperties) returns true and IpClient#handleLinkPropertiesUpdate() is terminated.
+        verify(mApfFilter, timeout(TEST_TIMEOUT_MS).times(3)).setLinkProperties(any());
+        clearInvocations(mDependencies);
+        clearInvocations(mApfFilter);
         verifyShutdown(ipc);
     }
 

@@ -1729,7 +1729,8 @@ public class LegacyApfFilter implements AndroidPacketFilter {
     @GuardedBy("this")
     protected ApfV4Generator emitPrologueLocked() throws IllegalInstructionException {
         // This is guaranteed to succeed because of the check in maybeCreate.
-        ApfV4Generator gen = new ApfV4Generator(mApfVersionSupported);
+        ApfV4Generator gen = new ApfV4Generator(mApfVersionSupported, mMaximumApfProgramSize,
+                mMaximumApfProgramSize);
 
         if (hasDataAccess(mApfVersionSupported)) {
             // Increment TOTAL_PACKETS

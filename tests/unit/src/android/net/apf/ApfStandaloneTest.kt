@@ -54,6 +54,8 @@ import org.junit.runner.RunWith
 class ApfStandaloneTest {
 
     private val etherTypeDenyList = listOf(0x88A2, 0x88A4, 0x88B8, 0x88CD, 0x88E1, 0x88E3)
+    private val ramSize = 1024
+    private val clampSize = 1024
 
     fun runApfTest(isSuspendMode: Boolean) {
         val program = generateApfV4Program(isSuspendMode)
@@ -248,7 +250,7 @@ class ApfStandaloneTest {
         val endOfDhcpFilter = "endOfDhcpFilter"
         val endOfRsFilter = "endOfRsFiler"
         val endOfPingFilter = "endOfPingFilter"
-        val gen = ApfV4Generator(APF_VERSION_4)
+        val gen = ApfV4Generator(APF_VERSION_4, ramSize, clampSize)
 
         maybeSetupCounter(gen, Counter.TOTAL_PACKETS)
         gen.addLoadData(R0, 0)

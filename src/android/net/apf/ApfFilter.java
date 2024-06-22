@@ -2211,9 +2211,11 @@ public class ApfFilter implements AndroidPacketFilter {
         ApfV4GeneratorBase<?> gen;
         if (SdkLevel.isAtLeastV()
                 && ApfV6Generator.supportsVersion(mApfVersionSupported)) {
-            gen = new ApfV6Generator(mMaximumApfProgramSize);
+            gen = new ApfV6Generator(mApfVersionSupported, mMaximumApfProgramSize,
+                    mInstallableProgramSizeClamp);
         } else {
-            gen = new ApfV4Generator(mApfVersionSupported);
+            gen = new ApfV4Generator(mApfVersionSupported, mMaximumApfProgramSize,
+                    mInstallableProgramSizeClamp);
         }
 
         if (hasDataAccess(mApfVersionSupported)) {

@@ -40,17 +40,15 @@ import java.util.Set;
 public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> extends
         ApfV4GeneratorBase<Type> {
 
-    final int mMaximumApfProgramSize;
-
     /**
      * Creates an ApfV6GeneratorBase instance which is able to emit instructions for the specified
      * {@code version} of the APF interpreter. Throws {@code IllegalInstructionException} if
      * the requested version is unsupported.
      *
      */
-    public ApfV6GeneratorBase(int maximumApfProgramSize) throws IllegalInstructionException {
-        super(APF_VERSION_6, false);
-        this.mMaximumApfProgramSize = maximumApfProgramSize;
+    public ApfV6GeneratorBase(int version, int ramSize, int clampSize)
+            throws IllegalInstructionException {
+        super(version, ramSize, clampSize, false);
     }
 
     /**
@@ -709,20 +707,6 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
         final String tgt = getUniqueLabel();
         return addJumpIfBytesAtR0Equal(bytes, tgt).addCountAndPass(cnt).defineLabel(tgt);
-    }
-
-    @Override
-    public final Type addCountAndDropIfBytesAtR0Equal(byte[] bytes,
-            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
-        final String tgt = getUniqueLabel();
-        return addJumpIfBytesAtR0NotEqual(bytes, tgt).addCountAndDrop(cnt).defineLabel(tgt);
-    }
-
-    @Override
-    public final Type addCountAndPassIfBytesAtR0Equal(byte[] bytes,
-            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
-        final String tgt = getUniqueLabel();
-        return addJumpIfBytesAtR0NotEqual(bytes, tgt).addCountAndPass(cnt).defineLabel(tgt);
     }
 
     @Override

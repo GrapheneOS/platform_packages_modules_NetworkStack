@@ -61,10 +61,10 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
      * the requested version is unsupported.
      */
     @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
-    public ApfV4Generator(int version, boolean disableCounterRangeCheck)
+    public ApfV4Generator(int version, int ramSize, int clampSize, boolean disableCounterRangeCheck)
             throws IllegalInstructionException {
         // make sure mVersion is not greater than 4 when using this class
-        super(version > 4 ? 4 : version, disableCounterRangeCheck);
+        super(version > 4 ? 4 : version, ramSize, clampSize, disableCounterRangeCheck);
         mCountAndDropLabel = version > 2 ? COUNT_AND_DROP_LABEL : DROP_LABEL;
         mCountAndPassLabel = version > 2 ? COUNT_AND_PASS_LABEL : PASS_LABEL;
     }
@@ -74,8 +74,9 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
      * {@code version} of the APF interpreter. Throws {@code IllegalInstructionException} if
      * the requested version is unsupported.
      */
-    public ApfV4Generator(int version) throws IllegalInstructionException {
-        this(version, false);
+    public ApfV4Generator(int version, int ramSize, int clampSize)
+            throws IllegalInstructionException {
+        this(version, ramSize, clampSize, false);
     }
 
     @Override
@@ -199,20 +200,6 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
         checkPassCounterRange(cnt);
         return maybeAddLoadCounterOffset(R1, cnt).addJumpIfBytesAtR0NotEqual(bytes,
                 mCountAndPassLabel);
-    }
-
-    @Override
-    public ApfV4Generator addCountAndDropIfBytesAtR0Equal(byte[] bytes,
-            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
-        final String tgt = getUniqueLabel();
-        return addJumpIfBytesAtR0NotEqual(bytes, tgt).addCountAndDrop(cnt).defineLabel(tgt);
-    }
-
-    @Override
-    public ApfV4Generator addCountAndPassIfBytesAtR0Equal(byte[] bytes,
-            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
-        final String tgt = getUniqueLabel();
-        return addJumpIfBytesAtR0NotEqual(bytes, tgt).addCountAndPass(cnt).defineLabel(tgt);
     }
 
     @Override

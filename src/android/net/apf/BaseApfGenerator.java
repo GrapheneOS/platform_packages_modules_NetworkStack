@@ -39,9 +39,12 @@ import java.util.Objects;
  */
 public abstract class BaseApfGenerator {
 
-    public BaseApfGenerator(int mVersion, boolean mDisableCounterRangeCheck) {
-        this.mVersion = mVersion;
-        this.mDisableCounterRangeCheck = mDisableCounterRangeCheck;
+    public BaseApfGenerator(int version, int ramSize, int clampSize,
+            boolean disableCounterRangeCheck) {
+        this.mVersion = version;
+        this.mRamSize = ramSize;
+        this.mClampSize = clampSize;
+        this.mDisableCounterRangeCheck = disableCounterRangeCheck;
     }
 
     /**
@@ -954,6 +957,8 @@ public abstract class BaseApfGenerator {
     private final Instruction mDropLabel = new Instruction(Opcodes.LABEL);
     private final Instruction mPassLabel = new Instruction(Opcodes.LABEL);
     public final int mVersion;
+    public final int mRamSize;
+    public final int mClampSize;
     public boolean mGenerated;
     private final boolean mDisableCounterRangeCheck;
 }

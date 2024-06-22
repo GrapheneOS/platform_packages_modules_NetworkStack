@@ -2163,17 +2163,20 @@ public class IpClient extends StateMachine {
     // Returns false if we have lost provisioning, true otherwise.
     private boolean handleLinkPropertiesUpdate(boolean sendCallbacks) {
         final LinkProperties newLp = assembleLinkProperties();
-        // LinkProperties.equals just compares if the interface addresses are identical,
-        // it doesn't compare the LinkAddress objects, so it considers two LinkProperties
-        // objects are identical even with different address lifetime. However, we may want
-        // to notify the caller whenever the link address lifetime is updated, especially
-        // after we enable populating the deprecationTime/expirationTime fields. The caller
-        // can get the latest address lifetime from the onLinkPropertiesChange callback.
+
+        // We need to call mApfFilter.setLinkProperties(newLp) every time there is a LinkAddress
+        // change because ApfFilter needs to know when addresses change from tentative to
+        // non-tentative. setLinkProperties() inside IpClient won't be called if the
+        // LinkProperties.equal() check returns true. The LinkProperties.equal() check does not
+        // currently take into account the LinkAddress flag change.
+        // It is OK to call mApfFilter.setLinkProperties() multiple times because if IP
+        // addresses are not updated, ApfFilter won't generate new program.
+        if (mApfFilter != null) {
+            mApfFilter.setLinkProperties(newLp);
+        }
+
         if (Objects.equals(newLp, mLinkProperties)) {
-            if (!mPopulateLinkAddressLifetime) return true;
-            if (LinkPropertiesUtils.isIdenticalAllLinkAddresses(newLp, mLinkProperties)) {
-                return true;
-            }
+            return true;
         }
 
         // Set an alarm to wait for IPv6 autoconf via SLAAC to succeed after receiving an RA,
@@ -2568,9 +2571,11 @@ public class IpClient extends StateMachine {
         if (SdkLevel.isAtLeastS()) {
             apfConfig.apfVersionSupported = apfCaps.apfVersionSupported;
         } else {
-            // Due to potential OEM modifications in Android R, reconfigure
-            // apfVersionSupported using apfCapabilities.hasDataAccess() to ensure safe data
-            // region access within ApfFilter.
+            // In Android R, ApfCapabilities#hasDataAccess() can be modified by OEMs. The
+            // ApfFilter logic uses ApfCapabilities.apfVersionSupported to determine whether
+            // data region access is supported. Therefore, we need to recalculate
+            // ApfCapabilities.apfVersionSupported based on the return value of
+            // ApfCapabilities#hasDataAccess().
             apfConfig.apfVersionSupported = apfCaps.hasDataAccess() ? 3 : 2;
         }
         apfConfig.maximumApfProgramSize = apfCaps.maximumApfProgramSize;

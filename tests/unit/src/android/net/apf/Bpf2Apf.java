@@ -16,6 +16,7 @@
 
 package android.net.apf;
 
+import static android.net.apf.BaseApfGenerator.APF_VERSION_3;
 import static android.net.apf.BaseApfGenerator.MemorySlot;
 import static android.net.apf.BaseApfGenerator.Register.R0;
 import static android.net.apf.BaseApfGenerator.Register.R1;
@@ -39,6 +40,8 @@ import java.io.InputStreamReader;
  *                                      android.net.apf.Bpf2Apf
  */
 public class Bpf2Apf {
+    private static int sRamSize = 1024;
+    private static int sClampSize = 1024;
     private static int parseImm(String line, String arg) {
         if (!arg.startsWith("#0x")) {
             throw new IllegalArgumentException("Unhandled instruction: " + line);
@@ -316,7 +319,7 @@ public class Bpf2Apf {
      * program and return it.
      */
     public static byte[] convert(String bpf) throws IllegalInstructionException {
-        ApfV4Generator gen = new ApfV4Generator(3);
+        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3, sRamSize, sClampSize);
         for (String line : bpf.split("\\n")) convertLine(line, gen);
         return gen.generate();
     }
@@ -329,7 +332,7 @@ public class Bpf2Apf {
         BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
         String line = null;
         StringBuilder responseData = new StringBuilder();
-        ApfV4Generator gen = new ApfV4Generator(3);
+        ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3, sRamSize, sClampSize);
         while ((line = in.readLine()) != null) convertLine(line, gen);
         System.out.write(gen.generate());
     }

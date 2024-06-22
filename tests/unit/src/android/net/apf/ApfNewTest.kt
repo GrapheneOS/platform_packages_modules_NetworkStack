@@ -113,7 +113,8 @@ class ApfNewTest {
 
     @Mock private lateinit var ipClientCallback: IpClientCallbacksWrapper
 
-    private val defaultMaximumApfProgramSize = 2048
+    private val ramSize = 2048
+    private val clampSize = 2048
 
     private val loInterfaceParams = InterfaceParams.getByName("lo")
 
@@ -180,16 +181,16 @@ class ApfNewTest {
 
     @Test
     fun testDataInstructionMustComeFirst() {
-        var gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        var gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addAllocateR0()
         assertFailsWith<IllegalInstructionException> { gen.addData(ByteArray(3) { 0x01 }) }
     }
 
     @Test
     fun testApfInstructionEncodingSizeCheck() {
-        var gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        var gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         assertFailsWith<IllegalArgumentException> {
-            ApfV6Generator(ByteArray(65536) { 0x01 }, defaultMaximumApfProgramSize)
+            ApfV6Generator(ByteArray(65536) { 0x01 }, APF_VERSION_6, ramSize, clampSize)
         }
         assertFailsWith<IllegalArgumentException> { gen.addAllocate(65536) }
         assertFailsWith<IllegalArgumentException> { gen.addAllocate(-1) }
@@ -438,7 +439,7 @@ class ApfNewTest {
             )
         }
 
-        val v4gen = ApfV4Generator(APF_VERSION_3)
+        val v4gen = ApfV4Generator(APF_VERSION_3, ramSize, clampSize)
         assertFailsWith<IllegalArgumentException> { v4gen.addCountAndDrop(PASSED_ARP) }
         assertFailsWith<IllegalArgumentException> { v4gen.addCountAndPass(DROPPED_ETH_BROADCAST) }
         assertFailsWith<IllegalArgumentException> {
@@ -516,7 +517,7 @@ class ApfNewTest {
     fun testValidateDnsNames() {
         // '%' is a valid label character in mDNS subtype
         // byte == 0xff means it is a '*' wildcard, which is a valid encoding.
-        val program = ApfV6Generator(defaultMaximumApfProgramSize).addJumpIfPktAtR0ContainDnsQ(
+        val program = ApfV6Generator(ramSize, ramSize, clampSize).addJumpIfPktAtR0ContainDnsQ(
                 byteArrayOf(1, '%'.code.toByte(), 0, 0),
                 1,
                 DROP_LABEL
@@ -528,7 +529,7 @@ class ApfNewTest {
 
     @Test
     fun testApfInstructionsEncoding() {
-        val v4gen = ApfV4Generator(APF_VERSION_2)
+        val v4gen = ApfV4Generator(APF_VERSION_2, ramSize, clampSize)
         v4gen.addPass()
         var program = v4gen.generate()
         // encoding PASS opcode: opcode=0, imm_len=0, R=0
@@ -541,7 +542,7 @@ class ApfNewTest {
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 
-        var gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        var gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addDrop()
         program = gen.generate().skipDataAndDebug()
         // encoding DROP opcode: opcode=0, imm_len=0, R=1
@@ -554,7 +555,7 @@ class ApfNewTest {
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addCountAndPass(129)
         program = gen.generate().skipDataAndDebug()
         // encoding COUNT(PASS) opcode: opcode=0, imm_len=size_of(imm), R=0, imm=counterNumber
@@ -570,7 +571,7 @@ class ApfNewTest {
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addCountAndDrop(1000)
         program = gen.generate().skipDataAndDebug()
         // encoding COUNT(DROP) opcode: opcode=0, imm_len=size_of(imm), R=1, imm=counterNumber
@@ -587,7 +588,7 @@ class ApfNewTest {
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addCountAndPass(PASSED_ARP)
         program = gen.generate().skipDataAndDebug()
         // encoding COUNT(PASS) opcode: opcode=0, imm_len=size_of(imm), R=0, imm=counterNumber
@@ -603,7 +604,7 @@ class ApfNewTest {
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addCountAndDrop(DROPPED_ETHERTYPE_NOT_ALLOWED)
         program = gen.generate().skipDataAndDebug()
         // encoding COUNT(DROP) opcode: opcode=0, imm_len=size_of(imm), R=1, imm=counterNumber
@@ -619,7 +620,7 @@ class ApfNewTest {
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addAllocateR0()
         gen.addAllocate(1500)
         program = gen.generate().skipDataAndDebug()
@@ -641,7 +642,7 @@ class ApfNewTest {
                 "2: allocate    1500"
         ), ApfJniUtils.disassembleApf(program).map { it.trim() })
 
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addTransmitWithoutChecksum()
         gen.addTransmitL4(30, 40, 50, 256, true)
         program = gen.generate().skipDataAndDebug()
@@ -658,7 +659,7 @@ class ApfNewTest {
         ), ApfJniUtils.disassembleApf(program).map { it.trim() })
 
         val largeByteArray = ByteArray(256) { 0x01 }
-        gen = ApfV6Generator(largeByteArray, defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(largeByteArray, APF_VERSION_6, ramSize, clampSize)
         program = gen.generate()
         assertContentEquals(
                 byteArrayOf(
@@ -676,7 +677,7 @@ class ApfNewTest {
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addWriteU8(0x01)
         gen.addWriteU16(0x0102)
         gen.addWriteU32(0x01020304)
@@ -717,7 +718,7 @@ class ApfNewTest {
                 "35: write       0xfffefdfc"
         ), ApfJniUtils.disassembleApf(program).map { it.trim() })
 
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addWriteU8(R0)
         gen.addWriteU16(R0)
         gen.addWriteU32(R0)
@@ -742,7 +743,7 @@ class ApfNewTest {
                 "10: ewrite4     r1"
         ), ApfJniUtils.disassembleApf(program).map { it.trim() })
 
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addDataCopy(0, 10)
         gen.addDataCopy(1, 5)
         gen.addPacketCopy(1000, 255)
@@ -759,7 +760,7 @@ class ApfNewTest {
                 "5: pktcopy     src=1000, len=255"
         ), ApfJniUtils.disassembleApf(program).map { it.trim() })
 
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addDataCopyFromR0(5)
         gen.addPacketCopyFromR0(5)
         gen.addDataCopyFromR0LenR1()
@@ -778,7 +779,7 @@ class ApfNewTest {
                 "8: epktcopy     src=r0, len=r1"
         ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
 
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addJumpIfBytesAtR0Equal(byteArrayOf('a'.code.toByte()), ApfV4Generator.DROP_LABEL)
         program = gen.generate().skipDataAndDebug()
         assertContentEquals(byteArrayOf(
@@ -792,7 +793,7 @@ class ApfNewTest {
         ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
 
         val qnames = byteArrayOf(1, 'A'.code.toByte(), 1, 'B'.code.toByte(), 0, 0)
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addJumpIfPktAtR0DoesNotContainDnsQ(qnames, 0x0c, ApfV4Generator.DROP_LABEL)
         gen.addJumpIfPktAtR0ContainDnsQ(qnames, 0x0c, ApfV4Generator.DROP_LABEL)
         program = gen.generate().skipDataAndDebug()
@@ -806,7 +807,7 @@ class ApfNewTest {
                 "10: jdnsqeq     r0, DROP, 12, (1)A(1)B(0)(0)"
         ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
 
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addJumpIfPktAtR0DoesNotContainDnsQSafe(qnames, 0x0c, ApfV4Generator.DROP_LABEL)
         gen.addJumpIfPktAtR0ContainDnsQSafe(qnames, 0x0c, ApfV4Generator.DROP_LABEL)
         program = gen.generate().skipDataAndDebug()
@@ -820,7 +821,7 @@ class ApfNewTest {
                 "10: jdnsqeqsafe r0, DROP, 12, (1)A(1)B(0)(0)"
         ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
 
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addJumpIfPktAtR0DoesNotContainDnsA(qnames, ApfV4Generator.DROP_LABEL)
         gen.addJumpIfPktAtR0ContainDnsA(qnames, ApfV4Generator.DROP_LABEL)
         program = gen.generate().skipDataAndDebug()
@@ -834,7 +835,7 @@ class ApfNewTest {
                 "9: jdnsaeq     r0, DROP, (1)A(1)B(0)(0)"
         ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
 
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addJumpIfPktAtR0DoesNotContainDnsASafe(qnames, ApfV4Generator.DROP_LABEL)
         gen.addJumpIfPktAtR0ContainDnsASafe(qnames, ApfV4Generator.DROP_LABEL)
         program = gen.generate().skipDataAndDebug()
@@ -848,7 +849,7 @@ class ApfNewTest {
                 "9: jdnsaeqsafe r0, DROP, (1)A(1)B(0)(0)"
         ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
 
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addJumpIfOneOf(R1, List(32) { (it + 1).toLong() }.toSet(), DROP_LABEL)
         gen.addJumpIfOneOf(R0, setOf(0, 257, 65536), DROP_LABEL)
         gen.addJumpIfNoneOf(R0, setOf(1, 2, 3), DROP_LABEL)
@@ -862,7 +863,7 @@ class ApfNewTest {
                 encodeInstruction(21, 1, 0), 47, 1, 9, 1, 2, 3
         ), program)
 
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addJumpIfOneOf(R0, setOf(0, 128, 256, 65536), DROP_LABEL)
         gen.addJumpIfNoneOf(R1, setOf(0, 128, 256, 65536), DROP_LABEL)
         program = gen.generate().skipDataAndDebug()
@@ -871,7 +872,7 @@ class ApfNewTest {
                 "20: jnoneof     r1, DROP, { 0, 128, 256, 65536 }"
         ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
 
-        gen = ApfV6Generator(defaultMaximumApfProgramSize)
+        gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addJumpIfBytesAtR0EqualsAnyOf(listOf(byteArrayOf(1, 2), byteArrayOf(3, 4)), DROP_LABEL)
         gen.addJumpIfBytesAtR0EqualNoneOf(listOf(byteArrayOf(1, 2), byteArrayOf(3, 4)), DROP_LABEL)
         gen.addJumpIfBytesAtR0EqualNoneOf(listOf(byteArrayOf(1, 1), byteArrayOf(1, 1)), DROP_LABEL)
@@ -893,7 +894,7 @@ class ApfNewTest {
 
     @Test
     fun testWriteToTxBuffer() {
-        var program = ApfV6Generator(defaultMaximumApfProgramSize)
+        var program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addAllocate(14)
                 .addWriteU8(0x01)
                 .addWriteU16(0x0203)
@@ -920,7 +921,7 @@ class ApfNewTest {
 
     @Test
     fun testCopyToTxBuffer() {
-        var program = ApfV6Generator(byteArrayOf(33, 34, 35), defaultMaximumApfProgramSize)
+        var program = ApfV6Generator(byteArrayOf(33, 34, 35), APF_VERSION_6, ramSize, clampSize)
                 .addAllocate(14)
                 .addDataCopy(3, 2) // arg1=src, arg2=len
                 .addDataCopy(5, 1) // arg1=src, arg2=len
@@ -947,7 +948,7 @@ class ApfNewTest {
 
     @Test
     fun testCopyContentToTxBuffer() {
-        val program = ApfV6Generator(defaultMaximumApfProgramSize)
+        val program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addAllocate(18)
                 .addDataCopy(HexDump.hexStringToByteArray("112233445566"))
                 .addDataCopy(HexDump.hexStringToByteArray("223344"))
@@ -972,18 +973,18 @@ class ApfNewTest {
 
     @Test
     fun testPassDrop() {
-        var program = ApfV6Generator(defaultMaximumApfProgramSize)
+        var program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addDrop()
                 .addPass()
                 .generate()
         assertDrop(APF_VERSION_6, program, testPacket)
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addCountAndDrop(Counter.DROPPED_ETH_BROADCAST)
                 .generate()
         verifyProgramRun(APF_VERSION_6, program, testPacket, DROPPED_ETH_BROADCAST)
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addCountAndPass(Counter.PASSED_ARP)
                 .generate()
         verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP)
@@ -993,11 +994,11 @@ class ApfNewTest {
     fun testLoadStoreCounter() {
         doTestLoadStoreCounter (
                 { mutableMapOf() },
-                { ApfV4Generator(APF_VERSION_3) }
+                { ApfV4Generator(APF_VERSION_3, ramSize, clampSize) }
         )
         doTestLoadStoreCounter (
                 { mutableMapOf(TOTAL_PACKETS to 1) },
-                { ApfV6Generator(defaultMaximumApfProgramSize) }
+                { ApfV6Generator(APF_VERSION_6, ramSize, clampSize) }
         )
     }
 
@@ -1020,7 +1021,7 @@ class ApfNewTest {
     @Test
     fun testV4CountAndPassDropCompareR0() {
         doTestCountAndPassDropCompareR0(
-                getGenerator = { ApfV4Generator(APF_VERSION_3) },
+                getGenerator = { ApfV4Generator(APF_VERSION_3, ramSize, clampSize) },
                 incTotal = false
         )
     }
@@ -1028,7 +1029,7 @@ class ApfNewTest {
     @Test
     fun testV6CountAndPassDropCompareR0() {
         doTestCountAndPassDropCompareR0(
-                getGenerator = { ApfV6Generator(defaultMaximumApfProgramSize) },
+                getGenerator = { ApfV6Generator(APF_VERSION_6, ramSize, clampSize) },
                 incTotal = true
         )
     }
@@ -1405,7 +1406,7 @@ class ApfNewTest {
 
     @Test
     fun testV4CountAndPassDrop() {
-        var program = ApfV4Generator(APF_VERSION_3)
+        var program = ApfV4Generator(APF_VERSION_3, ramSize, clampSize)
                 .addCountAndDrop(Counter.DROPPED_ETH_BROADCAST)
                 .addCountTrampoline()
                 .generate()
@@ -1417,7 +1418,7 @@ class ApfNewTest {
                 incTotal = false
         )
 
-        program = ApfV4Generator(APF_VERSION_3)
+        program = ApfV4Generator(APF_VERSION_3, ramSize, clampSize)
                 .addCountAndPass(Counter.PASSED_ARP)
                 .addCountTrampoline()
                 .generate()
@@ -1426,7 +1427,7 @@ class ApfNewTest {
 
     @Test
     fun testV2CountAndPassDrop() {
-        var program = ApfV4Generator(APF_VERSION_2)
+        var program = ApfV4Generator(APF_VERSION_2, ramSize, clampSize)
                 .addCountAndDrop(Counter.DROPPED_ETH_BROADCAST)
                 .addCountTrampoline()
                 .generate()
@@ -1434,7 +1435,7 @@ class ApfNewTest {
         assertVerdict(APF_VERSION_6, DROP, program, testPacket, dataRegion)
         assertContentEquals(ByteArray(Counter.totalSize()) { 0 }, dataRegion)
 
-        program = ApfV4Generator(APF_VERSION_2)
+        program = ApfV4Generator(APF_VERSION_2, ramSize, clampSize)
                 .addCountAndPass(PASSED_ARP)
                 .addCountTrampoline()
                 .generate()
@@ -1445,7 +1446,7 @@ class ApfNewTest {
 
     @Test
     fun testAllocateFailure() {
-        val program = ApfV6Generator(defaultMaximumApfProgramSize)
+        val program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 // allocate size: 65535 > sizeof(apf_test_buffer): 1514, trigger allocate failure.
                 .addAllocate(65535)
                 .addDrop()
@@ -1455,7 +1456,7 @@ class ApfNewTest {
 
     @Test
     fun testTransmitFailure() {
-        val program = ApfV6Generator(defaultMaximumApfProgramSize)
+        val program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addAllocate(14)
                 // len: 13 is less than ETH_HLEN, trigger transmit failure.
                 .addLoadImmediate(R0, 13)
@@ -1491,7 +1492,7 @@ class ApfNewTest {
                 0x00, 0x00, 0x01, 0x80, 0x01, 0x00, 0x00, 0x00, 0x78, 0x00, 0x04, 0xc0, 0xa8, 0x01,
                 0x09,
         ).map { it.toByte() }.toByteArray()
-        val program = ApfV6Generator(etherIpv4UdpPacket, defaultMaximumApfProgramSize)
+        val program = ApfV6Generator(etherIpv4UdpPacket, APF_VERSION_6, ramSize, clampSize)
                 .addAllocate(etherIpv4UdpPacket.size)
                 .addDataCopy(3, etherIpv4UdpPacket.size) // arg1=src, arg2=len
                 .addTransmitL4(
@@ -1537,28 +1538,28 @@ class ApfNewTest {
                 0x00, 0x01, 0x00, 0x01 // type = A, class = 0x0001
         ).map { it.toByte() }.toByteArray()
 
-        var program = ApfV6Generator(defaultMaximumApfProgramSize)
+        var program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 0)
                 .addJumpIfPktAtR0ContainDnsQ(needlesMatch, 0x01, DROP_LABEL) // arg2=qtype
                 .addPass()
                 .generate()
         assertDrop(APF_VERSION_6, program, udpPayload)
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 0)
                 .addJumpIfPktAtR0ContainDnsQSafe(needlesMatch, 0x01, DROP_LABEL)
                 .addPass()
                 .generate()
         assertDrop(APF_VERSION_6, program, udpPayload)
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 0)
                 .addJumpIfPktAtR0DoesNotContainDnsQ(needlesMatch, 0x01, DROP_LABEL) // arg2=qtype
                 .addPass()
                 .generate()
         assertPass(APF_VERSION_6, program, udpPayload)
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 0)
                 .addJumpIfPktAtR0DoesNotContainDnsQSafe(needlesMatch, 0x01, DROP_LABEL) // arg2=qtype
                 .addPass()
@@ -1580,14 +1581,14 @@ class ApfNewTest {
                 0x00, 0x01, 0x00, 0x01 // type = A, class = 0x0001
         ).map { it.toByte() }.toByteArray()
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 0)
                 .addJumpIfPktAtR0ContainDnsQ(needlesMatch, 0x01, DROP_LABEL) // arg2=qtype
                 .addPass()
                 .generate()
         verifyProgramRun(APF_VERSION_6, program, badUdpPayload, CORRUPT_DNS_PACKET, result = DROP)
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 0)
                 .addJumpIfPktAtR0ContainDnsQSafe(needlesMatch, 0x01, DROP_LABEL) // arg2=qtype
                 .addPass()
@@ -1626,28 +1627,28 @@ class ApfNewTest {
                 0x00, 0x04, 0xc0, 0xa8, 0x01, 0x09 // rdlengh = 4, rdata = 192.168.1.9
         ).map { it.toByte() }.toByteArray()
 
-        var program = ApfV6Generator(defaultMaximumApfProgramSize)
+        var program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 0)
                 .addJumpIfPktAtR0ContainDnsA(needlesMatch, DROP_LABEL)
                 .addPass()
                 .generate()
         assertDrop(APF_VERSION_6, program, udpPayload)
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 0)
                 .addJumpIfPktAtR0ContainDnsASafe(needlesMatch, DROP_LABEL)
                 .addPass()
                 .generate()
         assertDrop(APF_VERSION_6, program, udpPayload)
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 0)
                 .addJumpIfPktAtR0DoesNotContainDnsA(needlesMatch, DROP_LABEL)
                 .addPass()
                 .generate()
         assertPass(APF_VERSION_6, program, udpPayload)
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 0)
                 .addJumpIfPktAtR0DoesNotContainDnsASafe(needlesMatch, DROP_LABEL)
                 .addPass()
@@ -1673,14 +1674,14 @@ class ApfNewTest {
                 0x00, 0x04, 0xc0, 0xa8, 0x01, 0x09 // rdlengh = 4, rdata = 192.168.1.9
         ).map { it.toByte() }.toByteArray()
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 0)
                 .addJumpIfPktAtR0ContainDnsA(needlesMatch, DROP_LABEL)
                 .addPass()
                 .generate()
         verifyProgramRun(APF_VERSION_6, program, badUdpPayload, CORRUPT_DNS_PACKET, result = DROP)
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 0)
                 .addJumpIfPktAtR0ContainDnsASafe(needlesMatch, DROP_LABEL)
                 .addPass()
@@ -1697,7 +1698,7 @@ class ApfNewTest {
 
     @Test
     fun testJumpMultipleByteSequencesMatch() {
-        var program = ApfV6Generator(defaultMaximumApfProgramSize)
+        var program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 0)
                 .addJumpIfBytesAtR0EqualsAnyOf(
                         listOf(byteArrayOf(1, 2, 3), byteArrayOf(6, 5, 4)),
@@ -1707,7 +1708,7 @@ class ApfNewTest {
                 .generate()
         assertDrop(APF_VERSION_6, program, testPacket)
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 2)
                 .addJumpIfBytesAtR0EqualsAnyOf(
                         listOf(byteArrayOf(1, 2, 3), byteArrayOf(6, 5, 4)),
@@ -1717,7 +1718,7 @@ class ApfNewTest {
                 .generate()
         assertPass(APF_VERSION_6, program, testPacket)
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 1)
                 .addJumpIfBytesAtR0EqualNoneOf(
                         listOf(byteArrayOf(1, 2, 3), byteArrayOf(6, 5, 4)),
@@ -1727,7 +1728,7 @@ class ApfNewTest {
                 .generate()
         assertDrop(APF_VERSION_6, program, testPacket)
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 0)
                 .addJumpIfBytesAtR0EqualNoneOf(
                         listOf(byteArrayOf(1, 2, 3), byteArrayOf(6, 5, 4)),
@@ -1740,28 +1741,28 @@ class ApfNewTest {
 
     @Test
     fun testJumpOneOf() {
-        var program = ApfV6Generator(defaultMaximumApfProgramSize)
+        var program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 255)
                 .addJumpIfOneOf(R0, setOf(1, 2, 3, 128, 255), DROP_LABEL)
                 .addPass()
                 .generate()
         assertDrop(APF_VERSION_6, program, testPacket)
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 254)
                 .addJumpIfOneOf(R0, setOf(1, 2, 3, 128, 255), DROP_LABEL)
                 .addPass()
                 .generate()
         assertPass(APF_VERSION_6, program, testPacket)
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 254)
                 .addJumpIfNoneOf(R0, setOf(1, 2, 3, 128, 255), DROP_LABEL)
                 .addPass()
                 .generate()
         assertDrop(APF_VERSION_6, program, testPacket)
 
-        program = ApfV6Generator(defaultMaximumApfProgramSize)
+        program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoadImmediate(R0, 255)
                 .addJumpIfNoneOf(R0, setOf(1, 2, 3, 128, 255), DROP_LABEL)
                 .addPass()
@@ -1771,10 +1772,10 @@ class ApfNewTest {
 
     @Test
     fun testDebugBuffer() {
-        val program = ApfV6Generator(defaultMaximumApfProgramSize)
+        val program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addLoad8(R0, 255)
                 .generate()
-        val dataRegion = ByteArray(defaultMaximumApfProgramSize - program.size) { 0 }
+        val dataRegion = ByteArray(ramSize - program.size) { 0 }
 
         assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
         // offset 3 in the data region should contain if the interpreter is APFv6 mode or not
