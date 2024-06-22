@@ -182,7 +182,7 @@ public class ApfFilter implements AndroidPacketFilter {
     // Helper class for specifying functional filter parameters.
     public static class ApfConfiguration {
         public int apfVersionSupported;
-        public int maximumApfProgramSize;
+        public int apfRamSize;
         public int installableProgramSizeClamp = Integer.MAX_VALUE;
         public boolean multicastFilter;
         public boolean ieee802_3Filter;
@@ -243,8 +243,9 @@ public class ApfFilter implements AndroidPacketFilter {
     private static final boolean DBG = true;
     private static final boolean VDBG = false;
 
-    public final int mApfVersionSupported;
-    public final int mMaximumApfProgramSize;
+    private final int mApfVersionSupported;
+    private final int mApfRamSize;
+    private final int mMaximumApfProgramSize;
     private final int mInstallableProgramSizeClamp;
     private final IpClientCallbacksWrapper mIpClientCallback;
     private final InterfaceParams mInterfaceParams;
@@ -252,7 +253,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
     @VisibleForTesting
     @NonNull
-    public byte[] mHardwareAddress;
+    public final byte[] mHardwareAddress;
     @VisibleForTesting
     public ReceiveThread mReceiveThread;
     @GuardedBy("this")
@@ -387,8 +388,18 @@ public class ApfFilter implements AndroidPacketFilter {
             IpClientCallbacksWrapper ipClientCallback, NetworkQuirkMetrics networkQuirkMetrics,
             Dependencies dependencies, Clock clock) {
         mApfVersionSupported = config.apfVersionSupported;
-        mMaximumApfProgramSize = config.maximumApfProgramSize;
+        mApfRamSize = config.apfRamSize;
         mInstallableProgramSizeClamp = config.installableProgramSizeClamp;
+        int maximumApfProgramSize = mApfRamSize;
+        if (hasDataAccess(mApfVersionSupported)) {
+            // Reserve space for the counters.
+            maximumApfProgramSize -= Counter.totalSize();
+        }
+        // Prevent generating (and thus installing) larger programs
+        if (maximumApfProgramSize > mInstallableProgramSizeClamp) {
+            maximumApfProgramSize = mInstallableProgramSizeClamp;
+        }
+        mMaximumApfProgramSize = maximumApfProgramSize;
         mIpClientCallback = ipClientCallback;
         mInterfaceParams = ifParams;
         mMulticastFilter = config.multicastFilter;
@@ -418,14 +429,15 @@ public class ApfFilter implements AndroidPacketFilter {
         // 3 seconds.
         mTokenBucket = new TokenBucket(3_000 /* deltaMs */, 20 /* capacity */, 20 /* tokens */);
 
+        mHardwareAddress = mInterfaceParams.macAddr.toByteArray();
         // TODO: ApfFilter should not generate programs until IpClient sends provisioning success.
-        maybeStartFilter();
+        startFilter();
 
         // Listen for doze-mode transition changes to enable/disable the IPv6 multicast filter.
         mDependencies.addDeviceIdleReceiver(mDeviceIdleReceiver, mShouldHandleLightDoze);
 
         mDependencies.onApfFilterCreated(this);
-        // mReceiveThread is created in maybeStartFilter() and halted in shutdown().
+        // mReceiveThread is created in startFilter() and halted in shutdown().
         mDependencies.onThreadCreated(mReceiveThread);
     }
 
@@ -578,30 +590,29 @@ public class ApfFilter implements AndroidPacketFilter {
      * filters to ignore useless RAs.
      */
     @VisibleForTesting
-    public void maybeStartFilter() {
+    public void startFilter() {
+        synchronized (this) {
+            // Clear the APF memory to reset all counters upon connecting to the first AP
+            // in an SSID. This is limited to APFv3 devices because this large write triggers
+            // a crash on some older devices (b/78905546).
+            if (hasDataAccess(mApfVersionSupported)) {
+                byte[] zeroes = new byte[mMaximumApfProgramSize];
+                if (!mIpClientCallback.installPacketFilter(zeroes)) {
+                    sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
+                }
+            }
+
+            // Install basic filters
+            installNewProgramLocked();
+        }
         FileDescriptor socket;
         try {
-            mHardwareAddress = mInterfaceParams.macAddr.toByteArray();
-            synchronized(this) {
-                // Clear the APF memory to reset all counters upon connecting to the first AP
-                // in an SSID. This is limited to APFv4 devices because this large write triggers
-                // a crash on some older devices (b/78905546).
-                if (mIsRunning && hasDataAccess(mApfVersionSupported)) {
-                    byte[] zeroes = new byte[mMaximumApfProgramSize];
-                    if (!mIpClientCallback.installPacketFilter(zeroes)) {
-                        sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
-                    }
-                }
-
-                // Install basic filters
-                installNewProgramLocked();
-            }
             socket = Os.socket(AF_PACKET, SOCK_RAW | SOCK_CLOEXEC, 0);
             NetworkStackUtils.attachRaFilter(socket);
             SocketAddress addr = makePacketSocketAddress(ETH_P_IPV6, mInterfaceParams.index);
             Os.bind(socket, addr);
         } catch(SocketException|ErrnoException e) {
-            Log.e(TAG, "Error starting filter", e);
+            Log.wtf(TAG, "Error starting filter", e);
             return;
         }
         mReceiveThread = new ReceiveThread(socket);
@@ -2211,10 +2222,10 @@ public class ApfFilter implements AndroidPacketFilter {
         ApfV4GeneratorBase<?> gen;
         if (SdkLevel.isAtLeastV()
                 && ApfV6Generator.supportsVersion(mApfVersionSupported)) {
-            gen = new ApfV6Generator(mApfVersionSupported, mMaximumApfProgramSize,
+            gen = new ApfV6Generator(mApfVersionSupported, mApfRamSize,
                     mInstallableProgramSizeClamp);
         } else {
-            gen = new ApfV4Generator(mApfVersionSupported, mMaximumApfProgramSize,
+            gen = new ApfV4Generator(mApfVersionSupported, mApfRamSize,
                     mInstallableProgramSizeClamp);
         }
 
@@ -2339,16 +2350,6 @@ public class ApfFilter implements AndroidPacketFilter {
         ArrayList<Ra> rasToFilter = new ArrayList<>();
         final byte[] program;
         int programMinLft = Integer.MAX_VALUE;
-        int maximumApfProgramSize = mMaximumApfProgramSize;
-        if (hasDataAccess(mApfVersionSupported)) {
-            // Reserve space for the counters.
-            maximumApfProgramSize -= Counter.totalSize();
-        }
-
-        // Prevent generating (and thus installing) larger programs
-        if (maximumApfProgramSize > mInstallableProgramSizeClamp) {
-            maximumApfProgramSize = mInstallableProgramSizeClamp;
-        }
 
         // Ensure the entire APF program uses the same time base.
         int timeSeconds = secondsSinceBoot();
@@ -2361,8 +2362,8 @@ public class ApfFilter implements AndroidPacketFilter {
             emitEpilogue(gen);
 
             // Can't fit the program even without any RA filters?
-            if (gen.programLengthOverEstimate() > maximumApfProgramSize) {
-                Log.e(TAG, "Program exceeds maximum size " + maximumApfProgramSize);
+            if (gen.programLengthOverEstimate() > mMaximumApfProgramSize) {
+                Log.e(TAG, "Program exceeds maximum size " + mMaximumApfProgramSize);
                 sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
                 return;
             }
@@ -2372,7 +2373,7 @@ public class ApfFilter implements AndroidPacketFilter {
                 if (ra.getRemainingFilterLft(timeSeconds) <= 0) continue;
                 ra.generateFilterLocked(gen, timeSeconds);
                 // Stop if we get too big.
-                if (gen.programLengthOverEstimate() > maximumApfProgramSize) {
+                if (gen.programLengthOverEstimate() > mMaximumApfProgramSize) {
                     if (VDBG) Log.d(TAG, "Past maximum program size, skipping RAs");
                     sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
                     break;
@@ -2518,8 +2519,8 @@ public class ApfFilter implements AndroidPacketFilter {
         if (!ApfV4Generator.supportsVersion(config.apfVersionSupported)) {
             return null;
         }
-        if (config.maximumApfProgramSize < 512) {
-            Log.e(TAG, "Unacceptably small APF limit: " + config.maximumApfProgramSize);
+        if (config.apfRamSize < 512) {
+            Log.e(TAG, "Unacceptably small APF limit: " + config.apfRamSize);
             return null;
         }
 
@@ -2543,7 +2544,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
         // Collect and send ApfSessionInfoMetrics.
         mApfSessionInfoMetrics.setVersion(mApfVersionSupported);
-        mApfSessionInfoMetrics.setMemorySize(mMaximumApfProgramSize);
+        mApfSessionInfoMetrics.setMemorySize(mApfRamSize);
         mApfSessionInfoMetrics.setApfSessionDurationSeconds(
                 (int) (sessionDurationMs / DateUtils.SECOND_IN_MILLIS));
         mApfSessionInfoMetrics.setNumOfTimesApfProgramUpdated(mNumProgramUpdates);
@@ -2714,7 +2715,7 @@ public class ApfFilter implements AndroidPacketFilter {
     public synchronized void dump(IndentingPrintWriter pw) {
         pw.println(String.format(
                 "Capabilities: { apfVersionSupported: %d, maximumApfProgramSize: %d }",
-                mApfVersionSupported, mMaximumApfProgramSize));
+                mApfVersionSupported, mApfRamSize));
         pw.println("InstallableProgramSizeClamp: " + mInstallableProgramSizeClamp);
         pw.println("Filter update status: " + (mIsRunning ? "RUNNING" : "PAUSED"));
         pw.println("Receive thread: " + (mReceiveThread != null ? "RUNNING" : "STOPPED"));

@@ -2578,7 +2578,7 @@ public class IpClient extends StateMachine {
             // ApfCapabilities#hasDataAccess().
             apfConfig.apfVersionSupported = apfCaps.hasDataAccess() ? 3 : 2;
         }
-        apfConfig.maximumApfProgramSize = apfCaps.maximumApfProgramSize;
+        apfConfig.apfRamSize = apfCaps.maximumApfProgramSize;
         if (!SdkLevel.isAtLeastV() && apfConfig.apfVersionSupported <= 4) {
             apfConfig.installableProgramSizeClamp = 1024;
         }

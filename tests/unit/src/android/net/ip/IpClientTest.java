@@ -895,7 +895,7 @@ public class IpClientTest {
         final ApfConfiguration actual = configCaptor.getValue();
         assertNotNull(actual);
         assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, actual.apfVersionSupported);
-        assertEquals(4096, actual.maximumApfProgramSize);
+        assertEquals(4096, actual.apfRamSize);
 
         verifyShutdown(ipc);
     }
@@ -906,7 +906,7 @@ public class IpClientTest {
         final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
                 true /* isApfSupported */);
         assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, config.apfVersionSupported);
-        assertEquals(4096, config.maximumApfProgramSize);
+        assertEquals(4096, config.apfRamSize);
         clearInvocations(mDependencies);
         ipc.dump(mFd, mWriter, null /* args */);
         verifyShutdown(ipc);
@@ -918,7 +918,7 @@ public class IpClientTest {
         final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
                 true /* isApfSupported */);
         assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, config.apfVersionSupported);
-        assertEquals(4096, config.maximumApfProgramSize);
+        assertEquals(4096, config.apfRamSize);
         clearInvocations(mDependencies);
 
         final ApfCapabilities newApfCapabilities = new ApfCapabilities(4 /* version */,
@@ -936,7 +936,7 @@ public class IpClientTest {
         final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
                 true /* isApfSupported */);
         assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, config.apfVersionSupported);
-        assertEquals(4096, config.maximumApfProgramSize);
+        assertEquals(4096, config.apfRamSize);
         clearInvocations(mDependencies);
 
         ipc.updateApfCapabilities(null /* apfCapabilities */);

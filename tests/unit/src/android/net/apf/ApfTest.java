@@ -263,7 +263,7 @@ public class ApfTest {
     private static ApfConfiguration getDefaultConfig() {
         ApfFilter.ApfConfiguration config = new ApfConfiguration();
         config.apfVersionSupported = 2;
-        config.maximumApfProgramSize = 4096;
+        config.apfRamSize = 4096;
         config.multicastFilter = ALLOW_MULTICAST;
         config.ieee802_3Filter = ALLOW_802_3_FRAMES;
         config.ethTypeBlackList = new int[0];
@@ -1023,7 +1023,7 @@ public class ApfTest {
 
         ApfConfiguration config = getDefaultConfig();
         config.apfVersionSupported = 4;
-        config.maximumApfProgramSize = 1700;
+        config.apfRamSize = 1700;
         config.multicastFilter = DROP_MULTICAST;
         config.ieee802_3Filter = DROP_802_3_FRAMES;
         TestApfFilter apfFilter = new TestApfFilter(mContext, config, ipClientCallback,
@@ -3163,7 +3163,7 @@ public class ApfTest {
         final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
         final ApfConfiguration config = getDefaultConfig();
         config.apfVersionSupported = 2;
-        config.maximumApfProgramSize = 512;
+        config.apfRamSize = 512;
         final TestAndroidPacketFilter apfFilter = makeTestApfFilter(config, ipClientCallback);
         byte[] program = ipClientCallback.assertProgramUpdateAndGet();
         final byte[] ra = buildLargeRa();
@@ -3193,7 +3193,7 @@ public class ApfTest {
         final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
         final ApfConfiguration config = getDefaultConfig();
         config.apfVersionSupported = 4;
-        config.maximumApfProgramSize = 4096;
+        config.apfRamSize = 4096;
         final long startTimeMs = 12345;
         final long durationTimeMs = config.minMetricsSessionDurationMs;
         doReturn(startTimeMs).when(mClock).elapsedRealtime();

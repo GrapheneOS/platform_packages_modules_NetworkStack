@@ -394,7 +394,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
             IpConnectivityLog log, NetworkQuirkMetrics networkQuirkMetrics,
             ApfFilter.Dependencies dependencies, ApfFilter.Clock clock) {
         mApfVersionSupported = config.apfVersionSupported;
-        mMaximumApfProgramSize = config.maximumApfProgramSize;
+        mMaximumApfProgramSize = config.apfRamSize;
         mIpClientCallback = ipClientCallback;
         mInterfaceParams = ifParams;
         mMulticastFilter = config.multicastFilter;
@@ -2076,8 +2076,8 @@ public class LegacyApfFilter implements AndroidPacketFilter {
         if (!ApfV4Generator.supportsVersion(config.apfVersionSupported)) {
             return null;
         }
-        if (config.maximumApfProgramSize < 512) {
-            Log.e(TAG, "Unacceptably small APF limit: " + config.maximumApfProgramSize);
+        if (config.apfRamSize < 512) {
+            Log.e(TAG, "Unacceptably small APF limit: " + config.apfRamSize);
             return null;
         }
 

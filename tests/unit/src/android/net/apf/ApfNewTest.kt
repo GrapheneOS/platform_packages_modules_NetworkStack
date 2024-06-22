@@ -2364,7 +2364,7 @@ class ApfNewTest {
     private fun getDefaultConfig(apfVersion: Int = APF_VERSION_6): ApfFilter.ApfConfiguration {
         val config = ApfFilter.ApfConfiguration()
         config.apfVersionSupported = apfVersion
-        config.maximumApfProgramSize = 4096
+        config.apfRamSize = 4096
         config.multicastFilter = false
         config.ieee802_3Filter = false
         config.ethTypeBlackList = IntArray(0)
