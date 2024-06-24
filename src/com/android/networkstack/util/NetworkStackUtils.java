@@ -277,12 +277,6 @@ public class NetworkStackUtils {
     /**** BEGIN Feature Kill Switch Flags ****/
 
     /**
-     * Kill switch flag to disable the feature of handle light doze mode in Apf.
-     */
-    public static final String APF_HANDLE_LIGHT_DOZE_FORCE_DISABLE =
-            "apf_handle_light_doze_force_disable";
-
-    /**
      * Kill switch flag to disable the feature of skipping Tcp socket info polling when light
      * doze mode is enabled.
      */
@@ -302,9 +296,10 @@ public class NetworkStackUtils {
 
     /**
      * Kill switch flag to disable the feature of handle arp offload in Apf.
+     * Warning: the following flag String is incorrect. The feature that is not chickened out is
+     * "ARP offload" not "ARP offload force disabled".
      */
-    public static final String APF_HANDLE_ARP_OFFLOAD_FORCE_DISABLE =
-            "apf_handle_arp_offload_force_disable";
+    public static final String APF_HANDLE_ARP_OFFLOAD = "apf_handle_arp_offload_force_disable";
 
     static {
         System.loadLibrary("networkstackutilsjni");

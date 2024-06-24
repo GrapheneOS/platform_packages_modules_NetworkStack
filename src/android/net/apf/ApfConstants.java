@@ -65,7 +65,40 @@ public final class ApfConstants {
     public static final int ICMP6_CHECKSUM_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN + 2;
     public static final int ICMP6_NS_TARGET_IP_OFFSET = ICMP6_TYPE_OFFSET + 8;
     public static final int ICMP6_NS_OPTION_TYPE_OFFSET = ICMP6_NS_TARGET_IP_OFFSET + 16;
+    // From RFC4861:
+    public static final int ICMP6_RA_HEADER_LEN = 16;
+    public static final int ICMP6_RA_CHECKSUM_OFFSET =
+            ETH_HEADER_LEN + IPV6_HEADER_LEN + 2;
+    public static final int ICMP6_RA_CHECKSUM_LEN = 2;
+    public static final int ICMP6_RA_OPTION_OFFSET =
+            ETH_HEADER_LEN + IPV6_HEADER_LEN + ICMP6_RA_HEADER_LEN;
+    public static final int ICMP6_RA_ROUTER_LIFETIME_OFFSET =
+            ETH_HEADER_LEN + IPV6_HEADER_LEN + 6;
+    public static final int ICMP6_RA_ROUTER_LIFETIME_LEN = 2;
+    // Prefix information option.
+    public static final int ICMP6_PREFIX_OPTION_TYPE = 3;
+    public static final int ICMP6_PREFIX_OPTION_VALID_LIFETIME_OFFSET = 4;
+    public static final int ICMP6_PREFIX_OPTION_VALID_LIFETIME_LEN = 4;
+    public static final int ICMP6_PREFIX_OPTION_PREFERRED_LIFETIME_LEN = 4;
 
+    // From RFC4861: source link-layer address
+    public static final int ICMP6_SOURCE_LL_ADDRESS_OPTION_TYPE = 1;
+    // From RFC4861: mtu size option
+    public static final int ICMP6_MTU_OPTION_TYPE = 5;
+    // From RFC6106: Recursive DNS Server option
+    public static final int ICMP6_RDNSS_OPTION_TYPE = 25;
+    // From RFC6106: DNS Search List option
+    public static final int ICMP6_DNSSL_OPTION_TYPE = 31;
+    // From RFC8910: Captive-Portal option
+    public static final int ICMP6_CAPTIVE_PORTAL_OPTION_TYPE = 37;
+    // From RFC8781: PREF64 option
+    public static final int ICMP6_PREF64_OPTION_TYPE = 38;
+
+    // From RFC4191: Route Information option
+    public static final int ICMP6_ROUTE_INFO_OPTION_TYPE = 24;
+    // Above three options all have the same format:
+    public static final int ICMP6_4_BYTE_LIFETIME_OFFSET = 4;
+    public static final int ICMP6_4_BYTE_LIFETIME_LEN = 4;
     public static final int IPPROTO_HOPOPTS = 0;
 
     // NOTE: this must be added to the IPv4 header length in MemorySlot.IPV4_HEADER_SIZE

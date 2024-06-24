@@ -47,10 +47,8 @@ import static com.android.net.module.util.HexDump.toHexString;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ECHO_REQUEST_TYPE;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -1759,32 +1757,14 @@ public class ApfTest {
         doTestApfFilterMulticastPingWhileDozing(true /* isLightDozing */);
     }
 
-    @Test
-    @DevSdkIgnoreRule.IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
-    public void testShouldHandleLightDozeKillSwitch() throws Exception {
-        final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
-        final ApfConfiguration configuration = getDefaultConfig();
-        configuration.shouldHandleLightDoze = false;
-        final ApfFilter apfFilter = TestApfFilter.createTestApfFilter(mContext, ipClientCallback,
-                configuration, mNetworkQuirkMetrics, mDependencies);
-        final ArgumentCaptor<BroadcastReceiver> receiverCaptor =
-                ArgumentCaptor.forClass(BroadcastReceiver.class);
-        verify(mDependencies).addDeviceIdleReceiver(receiverCaptor.capture(), anyBoolean());
-        final BroadcastReceiver receiver = receiverCaptor.getValue();
-        doReturn(true).when(mPowerManager).isDeviceLightIdleMode();
-        receiver.onReceive(mContext, new Intent(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED));
-        assertFalse(apfFilter.isInDozeMode());
-    }
-
     private void doTestApfFilterMulticastPingWhileDozing(boolean isLightDozing) throws Exception {
         final MockIpClientCallback ipClientCallback = new MockIpClientCallback();
         final ApfConfiguration configuration = getDefaultConfig();
-        configuration.shouldHandleLightDoze = true;
         final ApfFilter apfFilter = TestApfFilter.createTestApfFilter(mContext, ipClientCallback,
                 configuration, mNetworkQuirkMetrics, mDependencies);
         final ArgumentCaptor<BroadcastReceiver> receiverCaptor =
                 ArgumentCaptor.forClass(BroadcastReceiver.class);
-        verify(mDependencies).addDeviceIdleReceiver(receiverCaptor.capture(), anyBoolean());
+        verify(mDependencies).addDeviceIdleReceiver(receiverCaptor.capture());
         final BroadcastReceiver receiver = receiverCaptor.getValue();
 
         // Construct a multicast ICMPv6 ECHO request.
