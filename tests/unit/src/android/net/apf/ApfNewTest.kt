@@ -64,15 +64,23 @@ import com.android.net.module.util.InterfaceParams
 import com.android.net.module.util.NetworkStackConstants.ARP_ETHER_IPV4_LEN
 import com.android.net.module.util.NetworkStackConstants.ARP_REPLY
 import com.android.net.module.util.NetworkStackConstants.ARP_REQUEST
+import com.android.net.module.util.NetworkStackConstants.ETHER_HEADER_LEN
+import com.android.net.module.util.NetworkStackConstants.ICMPV6_NA_HEADER_LEN
+import com.android.net.module.util.NetworkStackConstants.ICMPV6_NS_HEADER_LEN
+import com.android.net.module.util.NetworkStackConstants.IPV6_HEADER_LEN
 import com.android.net.module.util.Struct
 import com.android.net.module.util.arp.ArpPacket
 import com.android.net.module.util.structs.EthernetHeader
 import com.android.net.module.util.structs.Ipv4Header
 import com.android.net.module.util.structs.UdpHeader
 import com.android.networkstack.metrics.NetworkQuirkMetrics
+import com.android.networkstack.packets.NeighborAdvertisement
+import com.android.networkstack.packets.NeighborSolicitation
+import com.android.networkstack.util.NetworkStackUtils
 import com.android.testutils.DevSdkIgnoreRule
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo
 import com.android.testutils.DevSdkIgnoreRunner
+import java.net.Inet6Address
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import kotlin.test.assertContentEquals
@@ -131,8 +139,12 @@ class ApfNewTest {
     private val senderIpv4Address = byteArrayOf(10, 0, 0, 2)
     private val arpBroadcastMacAddress = intArrayOf(0xff, 0xff, 0xff, 0xff, 0xff, 0xff)
             .map { it.toByte() }.toByteArray()
-    private val senderMacAddress = intArrayOf(0x01, 0x22, 0x33, 0x44, 0x55, 0x66)
-        .map { it.toByte() }.toByteArray()
+    private val senderMacAddress = intArrayOf(0x02, 0x22, 0x33, 0x44, 0x55, 0x66)
+            .map { it.toByte() }.toByteArray()
+    private val senderIpv6Address =
+        // 2001::200:1a:1122:3344
+        intArrayOf(0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x02, 0, 0, 0x1a, 0x11, 0x22, 0x33, 0x44)
+            .map{ it.toByte() }.toByteArray()
     private val hostIpv6Addresses = listOf(
         // 2001::200:1a:3344:1122
         intArrayOf(0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x02, 0, 0, 0x1a, 0x33, 0x44, 0x11, 0x22)
@@ -2254,6 +2266,71 @@ class ApfNewTest {
     }
 
     @Test
+    fun testNdOffloadDisabled() {
+        val apfConfig = getDefaultConfig()
+        apfConfig.shouldHandleNdOffload = false
+        val apfFilter =
+            ApfFilter(
+                context,
+                apfConfig,
+                ifParams,
+                ipClientCallback,
+                metrics,
+                dependencies
+            )
+        val lp = LinkProperties()
+        for (addr in hostIpv6Addresses) {
+            lp.addLinkAddress(LinkAddress(InetAddress.getByAddress(addr), 64))
+        }
+
+        apfFilter.setLinkProperties(lp)
+        val programCaptor = ArgumentCaptor.forClass(ByteArray::class.java)
+        verify(ipClientCallback, times(3)).installPacketFilter(programCaptor.capture())
+        val program = programCaptor.allValues.last()
+        val validIpv6Addresses = hostIpv6Addresses + hostAnycast6Addresses
+        for (addr in validIpv6Addresses) {
+            // unicast solicited NS request
+            val receivedUcastNsPacket = generateNsPacket(
+                senderMacAddress,
+                apfFilter.mHardwareAddress,
+                senderIpv6Address,
+                addr,
+                addr
+            )
+
+            verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                receivedUcastNsPacket,
+                PASSED_IPV6_ICMP
+            )
+
+            val solicitedMcastAddr = NetworkStackUtils.ipv6AddressToSolicitedNodeMulticast(
+                InetAddress.getByAddress(addr) as Inet6Address
+            )!!
+            val mcastDa = NetworkStackUtils.ipv6MulticastToEthernetMulticast(solicitedMcastAddr)
+                .toByteArray()
+
+            // multicast solicited NS request
+            var receivedMcastNsPacket = generateNsPacket(
+                senderMacAddress,
+                mcastDa,
+                senderIpv6Address,
+                solicitedMcastAddr.address,
+                addr
+            )
+
+            verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                receivedMcastNsPacket,
+                PASSED_IPV6_ICMP
+            )
+        }
+        apfFilter.shutdown()
+    }
+
+    @Test
     fun testApfProgramUpdate() {
         val apfFilter =
             ApfFilter(
@@ -2369,6 +2446,53 @@ class ApfNewTest {
         config.ieee802_3Filter = false
         config.ethTypeBlackList = IntArray(0)
         config.shouldHandleArpOffload = true
+        config.shouldHandleNdOffload = true
         return config
+    }
+
+    private fun generateNsPacket(
+        srcMac: ByteArray,
+        dstMac: ByteArray,
+        srcIp: ByteArray,
+        dstIp: ByteArray,
+        target: ByteArray,
+    ): ByteArray {
+        val nsPacketBuf = NeighborSolicitation.build(
+            MacAddress.fromBytes(srcMac),
+            MacAddress.fromBytes(dstMac),
+            InetAddress.getByAddress(srcIp) as Inet6Address,
+            InetAddress.getByAddress(dstIp) as Inet6Address,
+            InetAddress.getByAddress(target) as Inet6Address
+        )
+
+        val nsPacket = ByteArray(
+            ETHER_HEADER_LEN + IPV6_HEADER_LEN + ICMPV6_NS_HEADER_LEN + 8 // option length
+        )
+        nsPacketBuf.get(nsPacket)
+        return nsPacket
+    }
+
+    private fun generateNaPacket(
+        srcMac: ByteArray,
+        dstMac: ByteArray,
+        srcIp: ByteArray,
+        dstIp: ByteArray,
+        flags: Int,
+        target: ByteArray,
+    ): ByteArray {
+        val naPacketBuf = NeighborAdvertisement.build(
+            MacAddress.fromBytes(srcMac),
+            MacAddress.fromBytes(dstMac),
+            InetAddress.getByAddress(srcIp) as Inet6Address,
+            InetAddress.getByAddress(dstIp) as Inet6Address,
+            flags,
+            InetAddress.getByAddress(target) as Inet6Address
+        )
+        val naPacket = ByteArray(
+            ETHER_HEADER_LEN + IPV6_HEADER_LEN + ICMPV6_NA_HEADER_LEN + 8 // lla option length
+        )
+
+        naPacketBuf.get(naPacket)
+        return naPacket
     }
 }

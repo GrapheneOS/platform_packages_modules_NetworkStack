@@ -49,6 +49,7 @@ import static com.android.net.module.util.NetworkStackConstants.VENDOR_SPECIFIC_
 import static com.android.networkstack.apishim.ConstantsShim.IFA_F_MANAGETEMPADDR;
 import static com.android.networkstack.apishim.ConstantsShim.IFA_F_NOPREFIXROUTE;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_ARP_OFFLOAD;
+import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_ND_OFFLOAD;
 import static com.android.networkstack.util.NetworkStackUtils.APF_NEW_RA_FILTER_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.APF_POLLING_COUNTERS_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION;
@@ -735,6 +736,7 @@ public class IpClient extends StateMachine {
     private final boolean mEnableApfPollingCounters;
     private final boolean mPopulateLinkAddressLifetime;
     private final boolean mApfShouldHandleArpOffload;
+    private final boolean mApfShouldHandleNdOffload;
 
     private InterfaceParams mInterfaceParams;
 
@@ -983,6 +985,8 @@ public class IpClient extends StateMachine {
                         IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION);
         mApfShouldHandleArpOffload = mDependencies.isFeatureNotChickenedOut(
                 mContext, APF_HANDLE_ARP_OFFLOAD);
+        mApfShouldHandleNdOffload = mDependencies.isFeatureNotChickenedOut(
+                mContext, APF_HANDLE_ND_OFFLOAD);
         mPopulateLinkAddressLifetime = mDependencies.isFeatureEnabled(context,
                 IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION);
 
@@ -2602,6 +2606,7 @@ public class IpClient extends StateMachine {
             apfConfig.acceptRaMinLft = 0;
         }
         apfConfig.shouldHandleArpOffload = mApfShouldHandleArpOffload;
+        apfConfig.shouldHandleNdOffload = mApfShouldHandleNdOffload;
         apfConfig.minMetricsSessionDurationMs = mApfCounterPollingIntervalMs;
         apfConfig.hasClatInterface = mHasSeenClatInterface;
         return mDependencies.maybeCreateApfFilter(mContext, apfConfig, mInterfaceParams,

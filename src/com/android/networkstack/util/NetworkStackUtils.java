@@ -301,6 +301,11 @@ public class NetworkStackUtils {
      */
     public static final String APF_HANDLE_ARP_OFFLOAD = "apf_handle_arp_offload_force_disable";
 
+    /**
+     * Kill switch flag to disable the feature of handle nd offload in Apf.
+     */
+    public static final String APF_HANDLE_ND_OFFLOAD = "apf_handle_nd_offload";
+
     static {
         System.loadLibrary("networkstackutilsjni");
     }

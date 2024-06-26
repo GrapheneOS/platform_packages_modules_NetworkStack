@@ -210,6 +210,7 @@ public class ApfFilter implements AndroidPacketFilter {
         public long minMetricsSessionDurationMs;
         public boolean hasClatInterface;
         public boolean shouldHandleArpOffload;
+        public boolean shouldHandleNdOffload;
     }
 
     /** A wrapper class of {@link SystemClock} to be mocked in unit tests. */
@@ -309,6 +310,7 @@ public class ApfFilter implements AndroidPacketFilter {
     // and PIO valid lifetimes.
     private final int mAcceptRaMinLft;
     private final boolean mShouldHandleArpOffload;
+    private final boolean mShouldHandleNdOffload;
 
     private final NetworkQuirkMetrics mNetworkQuirkMetrics;
     private final IpClientRaInfoMetrics mIpClientRaInfoMetrics;
@@ -417,6 +419,7 @@ public class ApfFilter implements AndroidPacketFilter {
         mMinRdnssLifetimeSec = config.minRdnssLifetimeSec;
         mAcceptRaMinLft = config.acceptRaMinLft;
         mShouldHandleArpOffload = config.shouldHandleArpOffload;
+        mShouldHandleNdOffload = config.shouldHandleNdOffload;
         mDependencies = dependencies;
         mNetworkQuirkMetrics = networkQuirkMetrics;
         mIpClientRaInfoMetrics = dependencies.getIpClientRaInfoMetrics();
@@ -2029,7 +2032,7 @@ public class ApfFilter implements AndroidPacketFilter {
         // Not ICMPv6 NS -> skip.
         gen.addLoad8(R0, ICMP6_TYPE_OFFSET); // warning: also used further below.
         final ApfV6Generator v6Gen = tryToConvertToApfV6Generator(gen);
-        if (v6Gen != null) {
+        if (v6Gen != null && mShouldHandleNdOffload) {
             final String skipNsPacketFilter = v6Gen.getUniqueLabel();
             v6Gen.addJumpIfR0NotEquals(ICMPV6_NEIGHBOR_SOLICITATION, skipNsPacketFilter);
             generateNsFilterLocked(v6Gen);
