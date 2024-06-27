@@ -50,7 +50,6 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.os.AsyncTask;
 import android.os.Build;
-import android.os.Handler;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.RemoteException;
@@ -67,6 +66,7 @@ import android.util.SparseArray;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.DeviceConfigUtils;
@@ -133,11 +133,10 @@ public class TcpSocketTracker {
     private int mMinPacketsThreshold = DEFAULT_DATA_STALL_MIN_PACKETS_THRESHOLD;
     private int mTcpPacketsFailRateThreshold = DEFAULT_TCP_PACKETS_FAIL_PERCENTAGE;
 
-    // These variables are initialized when the NetworkMonitor enters DefaultState,
-    // and can only be accessed on the NetworkMonitor state machine thread after
-    // the NetworkMonitor state machine has been started.
     // TODO: Remove doze mode solution since uid networking blocked traffic is filtered out by
     //  the info provided by bpf maps.
+    private final Object mDozeModeLock = new Object();
+    @GuardedBy("mDozeModeLock")
     private boolean mInDozeMode = false;
 
     // These variables are initialized when the NetworkMonitor enters DefaultState,
@@ -227,21 +226,9 @@ public class TcpSocketTracker {
                     family, InetDiagMessage.buildInetDiagReqForAliveTcpSockets(family));
         }
         mDependencies.addDeviceConfigChangedListener(mConfigListener);
-
-        mCm = mDependencies.getContext().getSystemService(ConnectivityManager.class);
-    }
-
-    /**
-     * Called from NetworkMonitor to notify NetworkMonitor is created.
-     * This is for initializing TcpSocketTracker from default state.
-     */
-    public void init(@NonNull final Handler handler, @NonNull LinkProperties lp,
-            @NonNull NetworkCapabilities nc) {
         mDependencies.addDeviceIdleReceiver(mDeviceIdleReceiver, mShouldDisableInDeepDoze,
-                mShouldDisableInLightDoze, handler);
-        setOpportunisticMode(false);
-        setLinkProperties(lp);
-        setNetworkCapabilities(nc);
+                mShouldDisableInLightDoze);
+        mCm = mDependencies.getContext().getSystemService(ConnectivityManager.class);
     }
 
     @Nullable
@@ -267,7 +254,9 @@ public class TcpSocketTracker {
         // Traffic will be restricted in doze mode. TCP info may not reflect the correct network
         // behavior.
         // TODO: Traffic may be restricted by other reason. Get the restriction info from bpf in T+.
-        if (mInDozeMode) return false;
+        synchronized (mDozeModeLock) {
+            if (mInDozeMode) return false;
+        }
 
         FileDescriptor fd = null;
 
@@ -475,8 +464,10 @@ public class TcpSocketTracker {
     public boolean isDataStallSuspected() {
         // Skip checking data stall since the traffic will be restricted and it will not be real
         // network stall.
-        if (mInDozeMode) return false;
-
+        // TODO: Traffic may be restricted by other reason. Get the restriction info from bpf in T+.
+        synchronized (mDozeModeLock) {
+            if (mInDozeMode) return false;
+        }
         final boolean ret = (getLatestPacketFailPercentage() >= getTcpPacketsFailRateThreshold());
         if (ret) {
             log("data stall suspected, uids: " + mLatestReportedUids.toString());
@@ -649,9 +640,11 @@ public class TcpSocketTracker {
     }
 
     private void setDozeMode(boolean isEnabled) {
-        if (mInDozeMode == isEnabled) return;
-        mInDozeMode = isEnabled;
-        logd("Doze mode enabled=" + mInDozeMode);
+        synchronized (mDozeModeLock) {
+            if (mInDozeMode == isEnabled) return;
+            mInDozeMode = isEnabled;
+            logd("Doze mode enabled=" + mInDozeMode);
+        }
     }
 
     public void setOpportunisticMode(boolean isEnabled) {
@@ -755,8 +748,7 @@ public class TcpSocketTracker {
         /** Add receiver for detecting doze mode change to control TCP detection. */
         @TargetApi(Build.VERSION_CODES.TIRAMISU)
         public void addDeviceIdleReceiver(@NonNull final BroadcastReceiver receiver,
-                boolean shouldDisableInDeepDoze, boolean shouldDisableInLightDoze,
-                @NonNull final Handler handler) {
+                boolean shouldDisableInDeepDoze, boolean shouldDisableInLightDoze) {
             // No need to register receiver if no related feature is enabled.
             if (!shouldDisableInDeepDoze && !shouldDisableInLightDoze) return;
 
@@ -767,8 +759,7 @@ public class TcpSocketTracker {
             if (shouldDisableInLightDoze) {
                 intentFilter.addAction(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED);
             }
-            mContext.registerReceiver(receiver, intentFilter, null /* broadcastPermission */,
-                    handler);
+            mContext.registerReceiver(receiver, intentFilter);
         }
 
         /** Remove broadcast receiver. */

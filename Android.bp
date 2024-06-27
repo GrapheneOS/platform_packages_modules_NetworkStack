@@ -78,7 +78,7 @@ java_defaults {
 java_defaults {
     name: "NetworkStackReleaseTargetSdk",
     min_sdk_version: "30",
-    target_sdk_version: "34",
+    target_sdk_version: "35",
 }
 
 java_defaults {

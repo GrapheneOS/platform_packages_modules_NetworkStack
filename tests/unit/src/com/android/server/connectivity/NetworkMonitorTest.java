@@ -633,7 +633,6 @@ public class NetworkMonitorTest {
         doReturn(0).when(mRandom).nextInt();
 
         doReturn(mNetd).when(mTstDependencies).getNetd();
-        doNothing().when(mTst).init(any(), any(), any());
         // DNS probe timeout should not be defined more than half of HANDLER_TIMEOUT_MS. Otherwise,
         // it will fail the test because of timeout expired for querying AAAA and A sequentially.
         doReturn(200).when(mResources)
@@ -2731,30 +2730,12 @@ public class NetworkMonitorTest {
     }
 
     @Test
-    public void testTcpSocketTracker_init() throws Exception {
-        setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
-        final WrappedNetworkMonitor wnm = makeCellMeteredNetworkMonitor();
-        // makeCellMeteredNetworkMonitor() creates the NM first and then assign
-        // new NetworkCapabilities, so notifyNMCreated() will start with a empty NC
-        // then update CELL_METERED_CAPABILITIES in the follow up call.
-        final InOrder inOrder = inOrder(mTst);
-        inOrder.verify(mTst).init(
-                eq(wnm.getHandler()),
-                eq(new LinkProperties()),
-                eq(new NetworkCapabilities(null)));
-        inOrder.verify(mTst).setNetworkCapabilities(eq(CELL_METERED_CAPABILITIES));
-    }
-
-    @Test
     public void testDataStall_setOpportunisticMode() {
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
         WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         InOrder inOrder = inOrder(mTst);
-        // Initialized.
-        inOrder.verify(mTst).init(
-                eq(wnm.getHandler()),
-                eq(new LinkProperties()),
-                eq(new NetworkCapabilities(null)));
+        // Initialized with default value.
+        inOrder.verify(mTst).setOpportunisticMode(false);
 
         // Strict mode.
         wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig("dns.google", new InetAddress[0]));

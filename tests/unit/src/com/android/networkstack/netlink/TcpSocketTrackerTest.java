@@ -55,8 +55,6 @@ import android.net.MarkMaskParcel;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.os.Build;
-import android.os.Handler;
-import android.os.Looper;
 import android.os.PowerManager;
 import android.util.Log;
 import android.util.Log.TerribleFailureHandler;
@@ -739,20 +737,12 @@ public class TcpSocketTrackerTest {
             boolean featureEnabled) throws Exception {
         final TcpSocketTracker tst = new TcpSocketTracker(mDependencies, mNetwork);
         tst.setNetworkCapabilities(CELL_NOT_METERED_CAPABILITIES);
-
-        // Verify that device idle mode receiver does not register as the event for NM creation
-        // is not yet received.
-        verify(mDependencies, never()).addDeviceIdleReceiver(any(),
-                anyBoolean(), anyBoolean(), any());
-
-        final Handler nmHandler = new Handler(Looper.getMainLooper());
-        tst.init(nmHandler, new LinkProperties(), CELL_NOT_METERED_CAPABILITIES);
         final ArgumentCaptor<BroadcastReceiver> receiverCaptor =
                 ArgumentCaptor.forClass(BroadcastReceiver.class);
 
         // Enable doze mode with 1 netlink message.
         verify(mDependencies).addDeviceIdleReceiver(receiverCaptor.capture(),
-                anyBoolean(), anyBoolean(), eq(nmHandler));
+                anyBoolean(), anyBoolean());
         final BroadcastReceiver receiver = receiverCaptor.getValue();
         if (dozeModeType == DEEP_DOZE) {
             doReturn(true).when(mPowerManager).isDeviceIdleMode();

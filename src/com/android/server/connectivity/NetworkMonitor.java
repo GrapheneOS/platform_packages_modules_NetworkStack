@@ -987,7 +987,9 @@ public class NetworkMonitor extends StateMachine {
             final TcpSocketTracker tst = getTcpSocketTracker();
             if (tst != null) {
                 // Initialization.
-                tst.init(getHandler(), mLinkProperties, mNetworkCapabilities);
+                tst.setOpportunisticMode(false);
+                tst.setLinkProperties(mLinkProperties);
+                tst.setNetworkCapabilities(mNetworkCapabilities);
             }
             Log.d(TAG, "Starting on network " + mNetwork
                     + " with capport HTTPS URL " + Arrays.toString(mCaptivePortalHttpsUrls)
