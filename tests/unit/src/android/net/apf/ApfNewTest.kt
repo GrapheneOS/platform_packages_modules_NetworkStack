@@ -29,14 +29,17 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETH_BROADCAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HOST
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_REPLIED_NON_DAD
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ALLOCATE_FAILURE
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_REQUEST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_FROM_DHCPV4_SERVER
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP
-import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_MULTIPLE_OPTIONS
+import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_DAD
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_ADDRESS
+import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_SLLA_OPTION
+import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_TENTATIVE
 import android.net.apf.ApfCounterTracker.Counter.PASSED_TRANSMIT_FAILURE
 import android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS
 import android.net.apf.ApfFilter.Dependencies
@@ -181,8 +184,12 @@ class ApfNewTest {
         MockitoAnnotations.initMocks(this)
         // mock anycast6 address from /proc/net/anycast6
         `when`(dependencies.getAnycast6Addresses(any())).thenReturn(hostAnycast6Addresses)
-        // mock host mac address and ethernet multicast addresses from /proc/net/dev_mcast
+
+        // mock ether multicast mac address from /proc/net/dev_mcast
         `when`(dependencies.getEtherMulticastAddresses(any())).thenReturn(hostMulticastMacAddresses)
+
+        // mock nd traffic class from /proc/sys/net/ipv6/conf/{ifname}/ndisc_tclass
+        `when`(dependencies.getNdTrafficClass(any())).thenReturn(0)
     }
 
     @After
@@ -628,7 +635,7 @@ class ApfNewTest {
                 program
         )
         assertContentEquals(
-                listOf("0: drop        counter=43"),
+                listOf("0: drop        counter=46"),
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 
@@ -677,14 +684,14 @@ class ApfNewTest {
                 byteArrayOf(
                         encodeInstruction(opcode = 14, immLength = 2, register = 1), 1, 0
                 ) + largeByteArray + byteArrayOf(
-                        encodeInstruction(opcode = 21, immLength = 1, register = 0), 48, 6, 25
+                        encodeInstruction(opcode = 21, immLength = 1, register = 0), 48, 6, 13
                 ),
                 program
         )
         assertContentEquals(
                 listOf(
                         "0: data        256, " + "01".repeat(256),
-                        "259: debugbuf    size=1561"
+                        "259: debugbuf    size=1549"
                 ),
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
@@ -970,7 +977,7 @@ class ApfNewTest {
                 .generate()
         assertContentEquals(listOf(
                 "0: data        9, 112233445566778899",
-                "12: debugbuf    size=1788",
+                "12: debugbuf    size=1776",
                 "16: allocate    18",
                 "20: datacopy    src=3, len=6",
                 "23: datacopy    src=4, len=3",
@@ -2014,11 +2021,13 @@ class ApfNewTest {
         )
         verify(ipClientCallback, times(2)).installPacketFilter(any())
 
-        // validate Ethernet dst address check
-
         val lp = LinkProperties()
         for (addr in hostIpv6Addresses) {
             lp.addLinkAddress(LinkAddress(InetAddress.getByAddress(addr), 64))
+        }
+
+        for (addr in hostIpv6TentativeAddresses) {
+            lp.addLinkAddress(LinkAddress(InetAddress.getByAddress(addr), 64, IFA_F_TENTATIVE, 0))
         }
 
         apfFilter.setLinkProperties(lp)
@@ -2028,14 +2037,16 @@ class ApfNewTest {
         verify(ipClientCallback, times(4)).installPacketFilter(programCaptor.capture())
         val program = programCaptor.value
 
+        // validate Ethernet dst address check
         // Using scapy to generate IPv6 NS packet:
         // eth = Ether(src="00:01:02:03:04:05", dst="00:05:04:03:02:01")
         // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::200:1a:3344:1122", hlim=255)
         // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:3344:1122")
-        // pkt = eth/ip6/icmp6
-        val nonHostDstMacNsPkt = "00050403020100010203040586DD6000000000183AFF2001000000000000" +
-                                 "0200001A1122334420010000000000000200001A33441122870045290000" +
-                                 "000020010000000000000200001A33441122"
+        // icmp6_opt = ICMPv6NDOptDstLLAddr(lladdr="00:01:02:03:04:05")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val nonHostDstMacNsPkt = "00050403020100010203040586DD6000000000203AFF2001000000000000" +
+                                 "0200001A1122334420010000000000000200001A3344112287003D170000" +
+                                 "000020010000000000000200001A334411220201000102030405"
         // invalid unicast ether dst -> pass
         verifyProgramRun(
             APF_VERSION_6,
@@ -2048,48 +2059,52 @@ class ApfNewTest {
         // eth = Ether(src="00:01:02:03:04:05", dst="33:33:ff:03:02:01")
         // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::200:1a:3344:1122", hlim=255)
         // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:3344:1122")
-        // pkt = eth/ip6/icmp6
-        val nonMcastDstMacNsPkt = "3333ff03020100010203040586DD6000000000183AFF2001000000000000" +
-                                  "0200001A1122334420010000000000000200001A33441122870045290000" +
-                                  "000020010000000000000200001A33441122"
+        // icmp6_opt = ICMPv6NDOptDstLLAddr(lladdr="00:01:02:03:04:05")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val nonMcastDstMacNsPkt = "3333FF03020100010203040586DD6000000000203AFF20010000000000" +
+                                  "000200001A1122334420010000000000000200001A3344112287003D17" +
+                                  "0000000020010000000000000200001A334411220201000102030405"
         // mcast dst mac is not one of solicited mcast mac derived from one of device's ip -> pass
         verifyProgramRun(
-                APF_VERSION_6,
-                program,
-                HexDump.hexStringToByteArray(nonMcastDstMacNsPkt),
-                DROPPED_IPV6_NS_OTHER_HOST
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(nonMcastDstMacNsPkt),
+            DROPPED_IPV6_NS_OTHER_HOST
         )
 
         // Using scapy to generate IPv6 NS packet:
         // eth = Ether(src="00:01:02:03:04:05", dst="33:33:ff:44:11:22")
         // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::200:1a:3344:1122", hlim=255)
         // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:3344:1122")
-        // pkt = eth/ip6/icmp6
-        val hostMcastDstMacNsPkt = "3333ff44112200010203040586DD6000000000183AFF2001000000000000" +
-                                   "0200001A1122334420010000000000000200001A33441122870045290000" +
-                                   "000020010000000000000200001A33441122"
-        // mcast dst mac is one of solicited mcast mac derived from one of device's ip -> pass
+        // icmp6_opt = ICMPv6NDOptSrcLLAddr(lladdr="00:01:02:03:04:05")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val hostMcastDstMacNsPkt = "3333FF44112200010203040586DD6000000000203AFF20010000000000" +
+                                   "000200001A1122334420010000000000000200001A3344112287003E17" +
+                                   "0000000020010000000000000200001A334411220101000102030405"
+        // mcast dst mac is one of solicited mcast mac derived from one of device's ip
+        // -> drop and replied
         verifyProgramRun(
-                APF_VERSION_6,
-                program,
-                HexDump.hexStringToByteArray(hostMcastDstMacNsPkt),
-                PASSED_IPV6_ICMP
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(hostMcastDstMacNsPkt),
+            DROPPED_IPV6_NS_REPLIED_NON_DAD
         )
 
         // Using scapy to generate IPv6 NS packet:
         // eth = Ether(src="00:01:02:03:04:05", dst="FF:FF:FF:FF:FF:FF")
         // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::200:1a:3344:1122", hlim=255)
         // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:3344:1122")
-        // pkt = eth/ip6/icmp6
-        val broadcastNsPkt = "FFFFFFFFFFFF00010203040586DD6000000000183AFF2001000000000000" +
-                             "0200001A1122334420010000000000000200001A33441122870045290000" +
-                             "000020010000000000000200001A33441122"
-        // mcast dst mac is broadcast address -> pass
+        // icmp6_opt = ICMPv6NDOptSrcLLAddr(lladdr="00:01:02:03:04:05")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val broadcastNsPkt = "FFFFFFFFFFFF00010203040586DD6000000000203AFF200100000000000002000" +
+                             "01A1122334420010000000000000200001A3344112287003E1700000000200100" +
+                             "00000000000200001A334411220101000102030405"
+        // mcast dst mac is broadcast address -> drop and replied
         verifyProgramRun(
-                APF_VERSION_6,
-                program,
-                HexDump.hexStringToByteArray(broadcastNsPkt),
-                PASSED_IPV6_ICMP
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(broadcastNsPkt),
+            DROPPED_IPV6_NS_REPLIED_NON_DAD
         )
 
         // validate IPv6 dst address check
@@ -2098,80 +2113,87 @@ class ApfNewTest {
         // eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
         // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::200:1a:3344:1122", hlim=255)
         // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:3344:1122")
-        // pkt = eth/ip6/icmp6
-        val validHostDstIpNsPkt = "02030405060700010203040586DD6000000000183AFF200100000000000" +
-                                  "00200001A1122334420010000000000000200001A334411228700452900" +
-                                  "00000020010000000000000200001A33441122"
-        // dst ip is one of device's ip -> Pass
+        // icmp6_opt = ICMPv6NDOptSrcLLAddr(lladdr="00:01:02:03:04:05")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val validHostDstIpNsPkt = "02030405060700010203040586DD6000000000203AFF200100000000000" +
+                                  "00200001A1122334420010000000000000200001A3344112287003E1700" +
+                                  "00000020010000000000000200001A334411220101000102030405"
+        // dst ip is one of device's ip -> drop and replied
         verifyProgramRun(
             APF_VERSION_6,
             program,
             HexDump.hexStringToByteArray(validHostDstIpNsPkt),
-            PASSED_IPV6_ICMP
+            DROPPED_IPV6_NS_REPLIED_NON_DAD
         )
 
         // Using scapy to generate IPv6 NS packet:
         // eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
         // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::100:1b:aabb:ccdd", hlim=255)
         // icmp6 = ICMPv6ND_NS(tgt="2001::100:1b:aabb:ccdd")
-        // pkt = eth/ip6/icmp6
-        val validHostAnycastDstIpNsPkt = "02030405060700010203040586DD6000000000183AFF20010000" +
+        // icmp6_opt = ICMPv6NDOptSrcLLAddr(lladdr="00:01:02:03:04:05")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val validHostAnycastDstIpNsPkt = "02030405060700010203040586DD6000000000203AFF20010000" +
                                          "000000000200001A1122334420010000000000000100001BAABB" +
-                                         "CCDD8700E0C00000000020010000000000000100001BAABBCCDD"
-        // dst ip is device's anycast address -> Pass
+                                         "CCDD8700D9AE0000000020010000000000000100001BAABBCCDD" +
+                                         "0101000102030405"
+        // dst ip is device's anycast address -> drop and replied
         verifyProgramRun(
             APF_VERSION_6,
             program,
             HexDump.hexStringToByteArray(validHostAnycastDstIpNsPkt),
-            PASSED_IPV6_ICMP
+            DROPPED_IPV6_NS_REPLIED_NON_DAD
         )
 
         // Using scapy to generate IPv6 NS packet:
         // eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
         // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::200:1a:4444:5555", hlim=255)
         // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:3344:1122")
-        // pkt = eth/ip6/icmp6
-        val nonHostUcastDstIpNsPkt = "02030405060700010203040586DD6000000000183AFF200100000000" +
-                                     "00000200001A1122334420010000000000000200001A444455558700" +
-                                     "EFF50000000020010000000000000200001A33441122"
+        // icmp6_opt = ICMPv6NDOptSrcLLAddr(lladdr="00:01:02:03:04:05")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val nonHostUcastDstIpNsPkt = "02030405060700010203040586DD6000000000203AFF2001000000000" +
+                                     "0000200001A1122334420010000000000000200001A444455558700E8" +
+                                     "E30000000020010000000000000200001A334411220101000102030405"
         // unicast dst ip is not one of device's ip -> pass
         verifyProgramRun(
-                APF_VERSION_6,
-                program,
-                HexDump.hexStringToByteArray(nonHostUcastDstIpNsPkt),
-                DROPPED_IPV6_NS_OTHER_HOST
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(nonHostUcastDstIpNsPkt),
+            DROPPED_IPV6_NS_OTHER_HOST
         )
 
         // Using scapy to generate IPv6 NS packet:
         // eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
         // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="ff02::1:ff44:1133", hlim=255)
         // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:3344:1122")
-        // pkt = eth/ip6/icmp6
-        val nonHostMcastDstIpNsPkt = "02030405060700010203040586DD6000000000183AFF200100000000" +
-                                     "00000200001A11223344FF0200000000000000000001FF4411338700" +
-                                     "9C2E0000000020010000000000000200001A33441122"
+        // icmp6_opt = ICMPv6NDOptSrcLLAddr(lladdr="00:01:02:03:04:05")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val nonHostMcastDstIpNsPkt = "02030405060700010203040586DD6000000000203AFF2001000000000" +
+                                     "0000200001A11223344FF0200000000000000000001FF441133870095" +
+                                     "1C0000000020010000000000000200001A334411220101000102030405"
         // mcast dst ip is not one of solicited mcast ip derived from one of device's ip -> pass
         verifyProgramRun(
-                APF_VERSION_6,
-                program,
-                HexDump.hexStringToByteArray(nonHostMcastDstIpNsPkt),
-                DROPPED_IPV6_NS_OTHER_HOST
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(nonHostMcastDstIpNsPkt),
+            DROPPED_IPV6_NS_OTHER_HOST
         )
 
         // Using scapy to generate IPv6 NS packet:
         // eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
         // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="ff02::1:ff44:1122", hlim=255)
         // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:3344:1122")
-        // pkt = eth/ip6/icmp6
-        val hostMcastDstIpNsPkt = "02030405060700010203040586DD6000000000183AFF200100000000" +
-                                  "00000200001A11223344FF0200000000000000000001FF4411228700" +
-                                  "9C2E0000000020010000000000000200001A33441122"
-        // mcast dst ip is one of solicited mcast ip derived from one of device's ip -> pass
+        // icmp6_opt = ICMPv6NDOptSrcLLAddr(lladdr="00:01:02:03:04:05")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val hostMcastDstIpNsPkt = "02030405060700010203040586DD6000000000203AFF2001000000000000" +
+                                  "0200001A11223344FF0200000000000000000001FF4411228700952D0000" +
+                                  "000020010000000000000200001A334411220101000102030405"
+        // mcast dst ip is one of solicited mcast ip derived from one of device's ip
+        //   -> drop and replied
         verifyProgramRun(
-                APF_VERSION_6,
-                program,
-                HexDump.hexStringToByteArray(hostMcastDstIpNsPkt),
-                PASSED_IPV6_ICMP
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(hostMcastDstIpNsPkt),
+            DROPPED_IPV6_NS_REPLIED_NON_DAD
         )
 
         // validate IPv6 NS payload check
@@ -2191,24 +2213,6 @@ class ApfNewTest {
                 program,
                 HexDump.hexStringToByteArray(shortNsPkt),
                 DROPPED_IPV6_NS_INVALID
-        )
-
-        // Using scapy to generate IPv6 NS packet:
-        // eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
-        // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::200:1a:3344:1122", hlim=255)
-        // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:3344:1122")
-        // icmp6_opt_1 = ICMPv6NDOptSrcLLAddr(lladdr="01:02:03:04:05:06")
-        // icmp6_opt_2 = ICMPv6NDOptUnknown(type=14, len=6, data='\x11\x22\x33\x44\x55\x66')
-        // pkt = eth/ip6/icmp6/icmp6_opt_1/icmp6_opt_2
-        val longNsPkt = "02030405060700010203040586DD6000000000283AFF20010000000000000200001A11" +
-                        "22334420010000000000000200001A3344112287009339000000002001000000000000" +
-                        "0200001A3344112201010102030405060E06112233445566"
-        // payload len > 32 -> pass
-        verifyProgramRun(
-                APF_VERSION_6,
-                program,
-                HexDump.hexStringToByteArray(longNsPkt),
-                PASSED_IPV6_NS_MULTIPLE_OPTIONS
         )
 
         // Using scapy to generate IPv6 NS packet:
@@ -2262,7 +2266,313 @@ class ApfNewTest {
                 DROPPED_IPV6_NS_INVALID
         )
 
+        // Using scapy to generate IPv6 NS packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+        // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::200:1a:3344:1122", hlim=255)
+        // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:1234:5678")
+        // icmp6_opt = ICMPv6NDOptSrcLLAddr(lladdr="01:02:03:04:05:06")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val tentativeTargetIpNsPkt = "02030405060700010203040586DD6000000000203AFF200100000000" +
+                                     "00000200001A1122334420010000000000000200001A334411228700" +
+                                     "16CE0000000020010000000000000200001A123456780101010203040506"
+        // target ip is one of tentative address -> pass
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                HexDump.hexStringToByteArray(tentativeTargetIpNsPkt),
+                PASSED_IPV6_NS_TENTATIVE
+        )
+
+        // Using scapy to generate IPv6 NS packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+        // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::200:1a:3344:1122", hlim=255)
+        // icmp6 = ICMPv6ND_NS(tgt="2001::200:1c:2255:6666")
+        // icmp6_opt = ICMPv6NDOptSrcLLAddr(lladdr="01:02:03:04:05:06")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val invalidTargetIpNsPkt = "02030405060700010203040586DD6000000000203AFF200100000000000" +
+                                   "00200001A1122334420010000000000000200001A334411228700F6BC00" +
+                                   "00000020010000000000000200001C225566660101010203040506"
+        // target ip is none of {non-tentative, anycast} -> drop
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                HexDump.hexStringToByteArray(invalidTargetIpNsPkt),
+                DROPPED_IPV6_NS_OTHER_HOST
+        )
+
+        // Using scapy to generate IPv6 NS packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+        // ip6 = IPv6(src="::", dst="ff02::1:ff44:1122", hlim=255)
+        // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:3344:1122")
+        // icmp6_opt = ICMPv6NDOptDstLLAddr(lladdr="02:03:04:05:06:07")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val dadNsPkt = "02030405060700010203040586DD6000000000203AFF000000000000000000000000000" +
+                       "00000FF0200000000000000000001FF4411228700F4A800000000200100000000000002" +
+                       "00001A334411220201020304050607"
+        // DAD NS request -> pass
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                HexDump.hexStringToByteArray(dadNsPkt),
+                PASSED_IPV6_NS_DAD
+        )
+
+        // Using scapy to generate IPv6 NS packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+        // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::200:1a:3344:1122", hlim=255)
+        // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:3344:1122")
+        // pkt = eth/ip6/icmp6
+        val noOptionNsPkt = "02030405060700010203040586DD6000000000183AFF2001000000000000020000" +
+                            "1A1122334420010000000000000200001A33441122870045290000000020010000" +
+                            "000000000200001A33441122"
+        // payload len < 32 -> pass
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                HexDump.hexStringToByteArray(noOptionNsPkt),
+                PASSED_IPV6_NS_NO_SLLA_OPTION
+        )
+
+        // Using scapy to generate IPv6 NS packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+        // ip6 = IPv6(src="ff01::200:1a:1122:3344", dst="2001::200:1a:3344:1122", hlim=255)
+        // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:3344:1122")
+        // icmp6_opt = ICMPv6NDOptSrcLLAddr(lladdr="01:02:03:04:05:06")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val nonDadMcastSrcIpPkt = "02030405060700010203040586DD6000000000203AFFFF01000000000000" +
+                                  "0200001A1122334420010000000000000200001A3344112287005C130000" +
+                                  "000020010000000000000200001A334411220101010203040506"
+        // non-DAD src IPv6 is FF::/8 -> drop
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                HexDump.hexStringToByteArray(nonDadMcastSrcIpPkt),
+                DROPPED_IPV6_NS_INVALID
+        )
+
+        // Using scapy to generate IPv6 NS packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+        // ip6 = IPv6(src="0001::200:1a:1122:3344", dst="2001::200:1a:3344:1122", hlim=255)
+        // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:3344:1122")
+        // icmp6_opt = ICMPv6NDOptSrcLLAddr(lladdr="01:02:03:04:05:06")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val nonDadLoopbackSrcIpPkt = "02030405060700010203040586DD6000000000203AFF0001000000000" +
+                                     "0000200001A1122334420010000000000000200001A3344112287005B" +
+                                     "140000000020010000000000000200001A334411220101010203040506"
+        // non-DAD src IPv6 is 00::/8 -> drop
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                HexDump.hexStringToByteArray(nonDadLoopbackSrcIpPkt),
+                DROPPED_IPV6_NS_INVALID
+        )
+
+        // Using scapy to generate IPv6 NS packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+        // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::200:1a:3344:1122", hlim=255)
+        // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:3344:1122")
+        // icmp6_opt1 = ICMPv6NDOptDstLLAddr(lladdr="01:02:03:04:05:06")
+        // icmp6_opt2 = ICMPv6NDOptSrcLLAddr(lladdr="01:02:03:04:05:06")
+        // pkt = eth/ip6/icmp6/icmp6_opt1/icmp6_opt2
+        val sllaNotFirstOptionNsPkt = "02030405060700010203040586DD6000000000283AFF200100000000" +
+                                      "00000200001A1122334420010000000000000200001A334411228700" +
+                                      "2FFF0000000020010000000000000200001A33441122020101020304" +
+                                      "05060101010203040506"
+        // non-DAD with multiple options, SLLA in 2nd option -> pass
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                HexDump.hexStringToByteArray(sllaNotFirstOptionNsPkt),
+                PASSED_IPV6_NS_NO_SLLA_OPTION
+        )
+
+        // Using scapy to generate IPv6 NS packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+        // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::200:1a:3344:1122", hlim=255)
+        // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:3344:1122")
+        // icmp6_opt = ICMPv6NDOptDstLLAddr(lladdr="01:02:03:04:05:06")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val noSllaOptionNsPkt = "02030405060700010203040586DD6000000000203AFF200100000000000002" +
+                                "00001A1122334420010000000000000200001A3344112287003A1400000000" +
+                                "20010000000000000200001A334411220201010203040506"
+        // non-DAD with one option but not SLLA -> pass
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                HexDump.hexStringToByteArray(noSllaOptionNsPkt),
+                PASSED_IPV6_NS_NO_SLLA_OPTION
+        )
+
+        // Using scapy to generate IPv6 NS packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+        // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::200:1a:3344:1122", hlim=255)
+        // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:3344:1122")
+        // icmp6_opt = ICMPv6NDOptSrcLLAddr(lladdr="01:02:03:04:05:06")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val mcastMacSllaOptionNsPkt = "02030405060700010203040586DD6000000000203AFF200100000000" +
+                                      "00000200001A1122334420010000000000000200001A334411228700" +
+                                      "3B140000000020010000000000000200001A33441122010101020304" +
+                                      "0506"
+        // non-DAD, SLLA is multicast MAC -> drop
+        verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                HexDump.hexStringToByteArray(mcastMacSllaOptionNsPkt),
+                DROPPED_IPV6_NS_INVALID
+        )
         apfFilter.shutdown()
+    }
+
+    // The APFv6 code path is only turned on in V+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testNaTransmit() {
+        val apfFilter =
+            ApfFilter(
+                context,
+                getDefaultConfig(),
+                ifParams,
+                ipClientCallback,
+                metrics,
+                dependencies
+            )
+        val lp = LinkProperties()
+        for (addr in hostIpv6Addresses) {
+            lp.addLinkAddress(LinkAddress(InetAddress.getByAddress(addr), 64))
+        }
+
+        apfFilter.setLinkProperties(lp)
+        val programCaptor = ArgumentCaptor.forClass(ByteArray::class.java)
+        verify(ipClientCallback, times(3)).installPacketFilter(programCaptor.capture())
+        val program = programCaptor.allValues.last()
+        val validIpv6Addresses = hostIpv6Addresses + hostAnycast6Addresses
+        for (addr in validIpv6Addresses) {
+            // unicast solicited NS request
+            val receivedUcastNsPacket = generateNsPacket(
+                senderMacAddress,
+                apfFilter.mHardwareAddress,
+                senderIpv6Address,
+                addr,
+                addr
+            )
+
+            verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                receivedUcastNsPacket,
+                DROPPED_IPV6_NS_REPLIED_NON_DAD
+            )
+
+            val transmittedUcastPacket = ApfJniUtils.getTransmittedPacket()
+            val expectedUcastNaPacket = generateNaPacket(
+                apfFilter.mHardwareAddress,
+                senderMacAddress,
+                addr,
+                senderIpv6Address,
+                0xe0000000.toInt(), //  R=1, S=1, O=1
+                addr
+            )
+
+            assertContentEquals(
+                expectedUcastNaPacket,
+                transmittedUcastPacket
+            )
+
+            val solicitedMcastAddr = NetworkStackUtils.ipv6AddressToSolicitedNodeMulticast(
+                InetAddress.getByAddress(addr) as Inet6Address
+            )!!
+            val mcastDa = NetworkStackUtils.ipv6MulticastToEthernetMulticast(solicitedMcastAddr)
+                .toByteArray()
+
+            // multicast solicited NS request
+            var receivedMcastNsPacket = generateNsPacket(
+                senderMacAddress,
+                mcastDa,
+                senderIpv6Address,
+                solicitedMcastAddr.address,
+                addr
+            )
+
+            verifyProgramRun(
+                APF_VERSION_6,
+                program,
+                receivedMcastNsPacket,
+                DROPPED_IPV6_NS_REPLIED_NON_DAD
+            )
+
+            val transmittedMcastPacket = ApfJniUtils.getTransmittedPacket()
+            val expectedMcastNaPacket = generateNaPacket(
+                apfFilter.mHardwareAddress,
+                senderMacAddress,
+                addr,
+                senderIpv6Address,
+                0xe0000000.toInt(), // R=1, S=1, O=1
+                addr
+            )
+
+            assertContentEquals(
+                expectedMcastNaPacket,
+                transmittedMcastPacket
+            )
+        }
+
+        apfFilter.shutdown()
+    }
+
+    // The APFv6 code path is only turned on in V+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testNaTransmitWithTclass() {
+        // mock nd traffic class from /proc/sys/net/ipv6/conf/{ifname}/ndisc_tclass to 20
+        `when`(dependencies.getNdTrafficClass(any())).thenReturn(20)
+        val apfFilter =
+            ApfFilter(
+                context,
+                getDefaultConfig(),
+                ifParams,
+                ipClientCallback,
+                metrics,
+                dependencies
+            )
+
+        val lp = LinkProperties()
+        for (addr in hostIpv6Addresses) {
+            lp.addLinkAddress(LinkAddress(InetAddress.getByAddress(addr), 64))
+        }
+        apfFilter.setLinkProperties(lp)
+        val programCaptor = ArgumentCaptor.forClass(ByteArray::class.java)
+        verify(ipClientCallback, times(3)).installPacketFilter(programCaptor.capture())
+        val program = programCaptor.allValues.last()
+        // Using scapy to generate IPv6 NS packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+        // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="ff02::1:ff44:1122", hlim=255, tc=20)
+        // icmp6 = ICMPv6ND_NS(tgt="2001::200:1a:3344:1122")
+        // icmp6_opt = ICMPv6NDOptSrcLLAddr(lladdr="00:01:02:03:04:05")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val hostMcastDstIpNsPkt = "02030405060700010203040586DD6140000000203AFF2001000000000000" +
+                "0200001A11223344FF0200000000000000000001FF4411228700952D0000" +
+                "000020010000000000000200001A334411220101000102030405"
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(hostMcastDstIpNsPkt),
+            DROPPED_IPV6_NS_REPLIED_NON_DAD
+        )
+
+        val transmitPkt = ApfJniUtils.getTransmittedPacket()
+        // Using scapy to generate IPv6 NA packet:
+        // eth = Ether(src="02:03:04:05:06:07", dst="00:01:02:03:04:05")
+        // ip6 = IPv6(src="2001::200:1a:3344:1122", dst="2001::200:1a:1122:3344", hlim=255, tc=20)
+        // icmp6 = ICMPv6ND_NA(tgt="2001::200:1a:3344:1122", R=1, S=1, O=1)
+        // icmp6_opt = ICMPv6NDOptDstLLAddr(lladdr="02:03:04:05:06:07")
+        // pkt = eth/ip6/icmp6/icmp6_opt
+        val expectedNaPacket = "00010203040502030405060786DD6140000000203AFF2001000000000000020" +
+                "0001A3344112220010000000000000200001A1122334488005610E000000020" +
+                "010000000000000200001A334411220201020304050607"
+        assertContentEquals(
+            HexDump.hexStringToByteArray(expectedNaPacket),
+            transmitPkt
+        )
     }
 
     @Test
