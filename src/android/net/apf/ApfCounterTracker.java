@@ -50,6 +50,7 @@ public class ApfCounterTracker {
         APF_VERSION,
         APF_PROGRAM_ID,
         // TODO: removing PASSED_ARP after remove LegacyApfFilter.java
+        // The counter sequence should keep the same as ApfSessionInfoMetrics.java
         PASSED_ARP,  // see also MIN_PASS_COUNTER below.
         PASSED_ARP_BROADCAST_REPLY,
         // TODO: removing PASSED_ARP_NON_IPV4 after remove LegacyApfFilter.java

@@ -2250,8 +2250,7 @@ public class ApfFilter implements AndroidPacketFilter {
     protected ApfV4GeneratorBase<?> emitPrologueLocked() throws IllegalInstructionException {
         // This is guaranteed to succeed because of the check in maybeCreate.
         ApfV4GeneratorBase<?> gen;
-        if (SdkLevel.isAtLeastV()
-                && ApfV6Generator.supportsVersion(mApfVersionSupported)) {
+        if (shouldUseApfV6Generator()) {
             gen = new ApfV6Generator(mApfVersionSupported, mApfRamSize,
                     mInstallableProgramSizeClamp);
         } else {
@@ -2686,6 +2685,15 @@ public class ApfFilter implements AndroidPacketFilter {
         }
         mHasClat = add;
         installNewProgramLocked();
+    }
+
+    @Override
+    public boolean supportNdOffload() {
+        return shouldUseApfV6Generator() && mShouldHandleNdOffload;
+    }
+
+    private boolean shouldUseApfV6Generator() {
+        return SdkLevel.isAtLeastV() && ApfV6Generator.supportsVersion(mApfVersionSupported);
     }
 
     /**

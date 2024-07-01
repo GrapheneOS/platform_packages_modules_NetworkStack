@@ -106,4 +106,11 @@ public interface AndroidPacketFilter {
     default boolean hasDataAccess(int apfVersionSupported) {
         return apfVersionSupported > 2;
     }
+
+    /**
+     * Whether the ApfFilter supports generating ND offload code.
+     */
+    default boolean supportNdOffload() {
+        return false;
+    }
 }

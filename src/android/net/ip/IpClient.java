@@ -1023,10 +1023,15 @@ public class IpClient extends StateMachine {
                     public void onClatInterfaceStateUpdate(boolean add) {
                         getHandler().post(() -> {
                             if (mHasSeenClatInterface == add) return;
-                            // Clat interface information is spliced into LinkProperties by
-                            // ConnectivityService, so it cannot be added to the LinkProperties
-                            // here as those propagate back to ConnectivityService.
-                            mCallback.setNeighborDiscoveryOffload(add ? false : true);
+                            // If Apf is not supported or Apf doesn't support ND offload, then
+                            // configure the vendor ND offload feature based on the Clat
+                            // interface state.
+                            if (mApfFilter == null || !mApfFilter.supportNdOffload()) {
+                                // Clat interface information is spliced into LinkProperties by
+                                // ConnectivityService, so it cannot be added to the LinkProperties
+                                // here as those propagate back to ConnectivityService.
+                                mCallback.setNeighborDiscoveryOffload(add ? false : true);
+                            }
                             mHasSeenClatInterface = add;
                             if (mApfFilter != null) {
                                 mApfFilter.updateClatInterfaceState(add);
@@ -3104,6 +3109,10 @@ public class IpClient extends StateMachine {
             // at the beginning.
             mHasSeenClatInterface = false;
             mApfFilter = maybeCreateApfFilter(mCurrentApfCapabilities);
+            // If Apf supports ND offload, then turn off the vendor ND offload feature.
+            if (mApfFilter != null && mApfFilter.supportNdOffload()) {
+                mCallback.setNeighborDiscoveryOffload(false);
+            }
             // TODO: investigate the effects of any multicast filtering racing/interfering with the
             // rest of this IP configuration startup.
             if (mApfFilter == null) {
@@ -3561,6 +3570,10 @@ public class IpClient extends StateMachine {
                     final ApfCapabilities apfCapabilities = (ApfCapabilities) msg.obj;
                     if (handleUpdateApfCapabilities(apfCapabilities)) {
                         mApfFilter = maybeCreateApfFilter(apfCapabilities);
+                        // If Apf supports ND offload, then turn off the vendor ND offload feature.
+                        if (mApfFilter != null && mApfFilter.supportNdOffload()) {
+                            mCallback.setNeighborDiscoveryOffload(false);
+                        }
                     }
                     break;
 
