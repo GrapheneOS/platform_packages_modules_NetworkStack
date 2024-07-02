@@ -19,6 +19,7 @@ package com.android.server;
 import static android.net.dhcp.IDhcpServer.STATUS_INVALID_ARGUMENT;
 import static android.net.dhcp.IDhcpServer.STATUS_SUCCESS;
 import static android.net.dhcp.IDhcpServer.STATUS_UNKNOWN_ERROR;
+import static android.net.util.RawSocketUtils.sendRawPacketDownStream;
 
 import static com.android.net.module.util.DeviceConfigUtils.getResBooleanConfig;
 import static com.android.net.module.util.FeatureVersions.FEATURE_IS_UID_NETWORKING_BLOCKED;
@@ -549,6 +550,27 @@ public class NetworkStackService extends Service {
                                 mContext.getSystemService(ConnectivityManager.class);
                         pw.println(cm.isUidNetworkingBlocked(uid, metered /* isNetworkMetered */));
                         return 0;
+                    case "send-raw-packet-downstream": {
+                        // Usage : cmd network_stack send-raw-packet-downstream <packet type>
+                        //         <interface> <destination MAC address> <packet-in-hex>
+                        // If no argument, get and display the usage help.
+                        if (getRemainingArgsCount() != 4) {
+                            onHelp();
+                            throw new IllegalArgumentException("Incorrect number of arguments");
+                        }
+                        final String packetTypeHex = getNextArg();
+                        final int packetType = Integer.parseInt(packetTypeHex, 16);
+                        final String iface = getNextArg();
+                        final String destMac = getNextArg();
+                        final String packetInHex = getNextArg();
+                        try {
+                            sendRawPacketDownStream(
+                                    mContext, packetType, iface, destMac, packetInHex);
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                        return 0;
+                    }
                     case "apf":
                         // Usage: cmd network_stack apf <iface> <cmd>
                         final String iface = getNextArg();
@@ -585,6 +607,14 @@ public class NetworkStackService extends Service {
                 pw.println("    Get whether the networking is blocked for given uid and metered.");
                 pw.println("    <uid>: The target uid.");
                 pw.println("    <metered>: [true|false], Whether the target network is metered.");
+                pw.println("  send-raw-packet-downstream <packet type> <interface>"
+                        + " <destination MAC address> <packet-in-hex>");
+                pw.println("    Send raw packet for testing purpose.");
+                pw.println("    <packet type>: L2 header type of this packet.");
+                pw.println("    <interface>: Target interface name, note that this is limited");
+                pw.println("      to tethering downstream for security considerations.");
+                pw.println("    <packet_in_hex>: A valid hexadecimal representation of ");
+                pw.println("      a packet starting from L2 header.");
                 pw.println("  apf <iface> <cmd>");
                 pw.println("    APF utility commands for integration tests.");
                 pw.println("    <iface>: the network interface the provided command operates on.");

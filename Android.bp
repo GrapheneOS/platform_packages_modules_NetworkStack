@@ -69,6 +69,7 @@ java_defaults {
         "framework-connectivity",
         "framework-connectivity-t",
         "framework-statsd",
+        "framework-tethering",
         "framework-wifi",
     ],
 }
@@ -90,6 +91,7 @@ java_defaults {
         "framework-connectivity.stubs.module_lib",
         "framework-connectivity-t",
         "framework-statsd",
+        "framework-tethering",
         "framework-wifi",
     ],
 }

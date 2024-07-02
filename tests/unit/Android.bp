@@ -32,7 +32,7 @@ java_defaults {
         "kotlin-reflect",
         "mockito-target-extended-minus-junit4",
         "net-tests-utils",
-        //"net-utils-framework-common",
+        "net-utils-framework-common",
         "testables",
     ],
     libs: [
