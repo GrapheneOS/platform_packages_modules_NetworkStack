@@ -21,6 +21,11 @@ import static android.system.OsConstants.AF_PACKET;
 import static android.system.OsConstants.SOCK_NONBLOCK;
 import static android.system.OsConstants.SOCK_RAW;
 
+import static com.android.net.module.util.NetworkStackConstants.ETHER_ADDR_LEN;
+import static com.android.net.module.util.NetworkStackConstants.ETHER_DST_ADDR_OFFSET;
+import static com.android.net.module.util.NetworkStackConstants.ETHER_TYPE_LENGTH;
+import static com.android.net.module.util.NetworkStackConstants.ETHER_TYPE_OFFSET;
+
 import android.annotation.RequiresPermission;
 import android.content.Context;
 import android.net.TetheringManager;
@@ -33,6 +38,7 @@ import com.android.internal.util.HexDump;
 import java.io.FileDescriptor;
 import java.net.NetworkInterface;
 import java.net.SocketAddress;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -52,15 +58,18 @@ public class RawSocketUtils {
      * for security considerations.
      */
     @RequiresPermission(NETWORK_SETTINGS)
-    public static void sendRawPacketDownStream(@NonNull Context context, int packetType,
-                                     @NonNull String ifaceName, @NonNull String destMacHex,
+    public static void sendRawPacketDownStream(@NonNull Context context, @NonNull String ifaceName,
                                      @NonNull String packetInHex) throws Exception {
         // 1. Verify Tethering Downstream Interface.
         enforceTetheredInterface(context, ifaceName);
 
         // 2. Hex to Byte Array Conversion
-        final byte[] destMac = HexDump.hexStringToByteArray(destMacHex);
         final byte[] packetData = HexDump.hexStringToByteArray(packetInHex);
+        final byte[] destMac = Arrays.copyOfRange(packetData, ETHER_DST_ADDR_OFFSET,
+                ETHER_DST_ADDR_OFFSET + ETHER_ADDR_LEN);
+        final byte[] etherTypeBytes = Arrays.copyOfRange(packetData, ETHER_TYPE_OFFSET,
+                ETHER_TYPE_OFFSET + ETHER_TYPE_LENGTH);
+        final int etherType = ((etherTypeBytes[0] & 0xFF) << 8) | (etherTypeBytes[1] & 0xFF);
 
         // 3. Obtain Network Interface
         final NetworkInterface iface = NetworkInterface.getByName(ifaceName);
@@ -70,7 +79,7 @@ public class RawSocketUtils {
 
         // 4. Construct and Send Packet.
         final SocketAddress addr = SocketUtils.makePacketSocketAddress(
-                packetType,
+                etherType,
                 iface.getIndex(),
                 destMac
         );

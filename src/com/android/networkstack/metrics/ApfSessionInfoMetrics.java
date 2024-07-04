@@ -20,7 +20,10 @@ import static android.net.apf.ApfCounterTracker.Counter.DROPPED_802_3_FRAME;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_NON_IPV4;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_OTHER_HOST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REPLY_SPA_NO_HOST;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REQUEST_ANYHOST;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REQUEST_REPLIED;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_UNKNOWN;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_V6_ONLY;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_NOT_ALLOWED;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ETH_BROADCAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_GARP_REPLY;
@@ -30,34 +33,49 @@ import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_KEEPALIVE_A
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_L2_BROADCAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_MULTICAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NATT_KEEPALIVE;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_TCP_PORT7_UNICAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_KEEPALIVE_ACK;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST_NA;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST_PING;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NON_ICMP_MULTICAST;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HOST;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_REPLIED_NON_DAD;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ROUTER_SOLICITATION;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_MDNS;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_RA;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_BROADCAST_REPLY;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_NON_IPV4;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_REQUEST;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_UNICAST_REPLY;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_UNKNOWN;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_DHCP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_FROM_DHCPV4_SERVER;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_UNICAST;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NON_ICMP;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_DAD;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_ADDRESS;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_SLLA_OPTION;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_TENTATIVE;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_UNICAST_NON_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_MDNS;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_MLD;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_NON_IP_UNICAST;
 import static android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS;
 import static android.stats.connectivity.CounterName.CN_DROPPED_802_3_FRAME;
 import static android.stats.connectivity.CounterName.CN_DROPPED_ARP_NON_IPV4;
 import static android.stats.connectivity.CounterName.CN_DROPPED_ARP_OTHER_HOST;
 import static android.stats.connectivity.CounterName.CN_DROPPED_ARP_REPLY_SPA_NO_HOST;
+import static android.stats.connectivity.CounterName.CN_DROPPED_ARP_REQUEST_ANYHOST;
+import static android.stats.connectivity.CounterName.CN_DROPPED_ARP_REQUEST_REPLIED;
 import static android.stats.connectivity.CounterName.CN_DROPPED_ARP_UNKNOWN;
-import static android.stats.connectivity.CounterName.CN_DROPPED_ETHERTYPE_DENYLISTED;
+import static android.stats.connectivity.CounterName.CN_DROPPED_ARP_V6_ONLY;
+import static android.stats.connectivity.CounterName.CN_DROPPED_ETHERTYPE_NOT_ALLOWED;
 import static android.stats.connectivity.CounterName.CN_DROPPED_ETH_BROADCAST;
 import static android.stats.connectivity.CounterName.CN_DROPPED_GARP_REPLY;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_BROADCAST_ADDR;
@@ -66,23 +84,35 @@ import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_KEEPALIVE_A
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_L2_BROADCAST;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_MULTICAST;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_NATT_KEEPALIVE;
+import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_NON_DHCP4;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_KEEPALIVE_ACK;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_MULTICAST;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_MULTICAST_NA;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_MULTICAST_PING;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_NON_ICMP_MULTICAST;
+import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_NS_INVALID;
+import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_NS_OTHER_HOST;
+import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_NS_REPLIED_NON_DAD;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_ROUTER_SOLICITATION;
 import static android.stats.connectivity.CounterName.CN_DROPPED_MDNS;
 import static android.stats.connectivity.CounterName.CN_DROPPED_RA;
 import static android.stats.connectivity.CounterName.CN_PASSED_ARP;
+import static android.stats.connectivity.CounterName.CN_PASSED_ARP_BROADCAST_REPLY;
+import static android.stats.connectivity.CounterName.CN_PASSED_ARP_REQUEST;
 import static android.stats.connectivity.CounterName.CN_PASSED_ARP_UNICAST_REPLY;
 import static android.stats.connectivity.CounterName.CN_PASSED_DHCP;
 import static android.stats.connectivity.CounterName.CN_PASSED_IPV4;
+import static android.stats.connectivity.CounterName.CN_PASSED_IPV4_FROM_DHCPV4_SERVER;
 import static android.stats.connectivity.CounterName.CN_PASSED_IPV4_UNICAST;
 import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_ICMP;
 import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_NON_ICMP;
+import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_NS_DAD;
+import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_NS_NO_ADDRESS;
+import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_NS_NO_SLLA_OPTION;
+import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_NS_TENTATIVE;
 import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_UNICAST_NON_ICMP;
 import static android.stats.connectivity.CounterName.CN_PASSED_MDNS;
+import static android.stats.connectivity.CounterName.CN_PASSED_MLD;
 import static android.stats.connectivity.CounterName.CN_PASSED_NON_IP_UNICAST;
 import static android.stats.connectivity.CounterName.CN_TOTAL_PACKETS;
 import static android.stats.connectivity.CounterName.CN_UNKNOWN;
@@ -110,42 +140,44 @@ public class ApfSessionInfoMetrics {
                 Map.entry(TOTAL_PACKETS, CN_TOTAL_PACKETS),
                 // The counter sequence should be keep the same in ApfCounterTracker.java
                 Map.entry(PASSED_ARP, CN_PASSED_ARP),
-                // TODO: add PASSED_ARP_BROADCAST_REPLY,
+                Map.entry(PASSED_ARP_BROADCAST_REPLY, CN_PASSED_ARP_BROADCAST_REPLY),
                 // deprecated in ApfFilter, PASSED_ARP_NON_IPV4 ==> DROPPED_ARP_NON_IPV4
                 Map.entry(PASSED_ARP_NON_IPV4, CN_UNKNOWN),
-                // TODO: add PASSED_ARP_REQUEST,
+                Map.entry(PASSED_ARP_REQUEST, CN_PASSED_ARP_REQUEST),
                 Map.entry(PASSED_ARP_UNICAST_REPLY, CN_PASSED_ARP_UNICAST_REPLY),
                 // deprecated in ApfFilter, PASSED_ARP_UNKNOWN  ==> DROPPED_ARP_UNKNOWN
                 Map.entry(PASSED_ARP_UNKNOWN, CN_UNKNOWN),
                 Map.entry(PASSED_DHCP, CN_PASSED_DHCP),
                 Map.entry(PASSED_IPV4, CN_PASSED_IPV4),
-                // TODO: add PASSED_IPV4_FROM_DHCPV4_SERVER,
+                Map.entry(PASSED_IPV4_FROM_DHCPV4_SERVER, CN_PASSED_IPV4_FROM_DHCPV4_SERVER),
                 Map.entry(PASSED_IPV4_UNICAST, CN_PASSED_IPV4_UNICAST),
                 Map.entry(PASSED_IPV6_ICMP, CN_PASSED_IPV6_ICMP),
                 Map.entry(PASSED_IPV6_NON_ICMP, CN_PASSED_IPV6_NON_ICMP),
-                // TODO: add PASSED_IPV6_NS_MULTIPLE_OPTIONS,
-                // TODO: add PASSED_IPV6_NS_NO_ADDRESS,
+                Map.entry(PASSED_IPV6_NS_DAD, CN_PASSED_IPV6_NS_DAD),
+                Map.entry(PASSED_IPV6_NS_NO_ADDRESS, CN_PASSED_IPV6_NS_NO_ADDRESS),
+                Map.entry(PASSED_IPV6_NS_NO_SLLA_OPTION, CN_PASSED_IPV6_NS_NO_SLLA_OPTION),
+                Map.entry(PASSED_IPV6_NS_TENTATIVE, CN_PASSED_IPV6_NS_TENTATIVE),
                 Map.entry(PASSED_IPV6_UNICAST_NON_ICMP, CN_PASSED_IPV6_UNICAST_NON_ICMP),
                 Map.entry(PASSED_NON_IP_UNICAST, CN_PASSED_NON_IP_UNICAST),
                 Map.entry(PASSED_MDNS, CN_PASSED_MDNS),
-                // TODO: add PASSED_MLD,
+                Map.entry(PASSED_MLD, CN_PASSED_MLD),
                 Map.entry(DROPPED_ETH_BROADCAST, CN_DROPPED_ETH_BROADCAST),
                 Map.entry(DROPPED_RA, CN_DROPPED_RA),
                 Map.entry(DROPPED_IPV4_L2_BROADCAST, CN_DROPPED_IPV4_L2_BROADCAST),
                 Map.entry(DROPPED_IPV4_BROADCAST_ADDR, CN_DROPPED_IPV4_BROADCAST_ADDR),
                 Map.entry(DROPPED_IPV4_BROADCAST_NET, CN_DROPPED_IPV4_BROADCAST_NET),
                 Map.entry(DROPPED_IPV4_MULTICAST, CN_DROPPED_IPV4_MULTICAST),
-                // TODO: add DROPPED_IPV4_NON_DHCP4,
+                Map.entry(DROPPED_IPV4_NON_DHCP4, CN_DROPPED_IPV4_NON_DHCP4),
                 Map.entry(DROPPED_IPV6_ROUTER_SOLICITATION, CN_DROPPED_IPV6_ROUTER_SOLICITATION),
                 Map.entry(DROPPED_IPV6_MULTICAST_NA, CN_DROPPED_IPV6_MULTICAST_NA),
                 Map.entry(DROPPED_IPV6_MULTICAST, CN_DROPPED_IPV6_MULTICAST),
                 Map.entry(DROPPED_IPV6_MULTICAST_PING, CN_DROPPED_IPV6_MULTICAST_PING),
                 Map.entry(DROPPED_IPV6_NON_ICMP_MULTICAST, CN_DROPPED_IPV6_NON_ICMP_MULTICAST),
-                // TODO: add DROPPED_IPV6_NS_INVALID,
-                // TODO: add DROPPED_IPV6_NS_OTHER_HOST,
+                Map.entry(DROPPED_IPV6_NS_INVALID, CN_DROPPED_IPV6_NS_INVALID),
+                Map.entry(DROPPED_IPV6_NS_OTHER_HOST, CN_DROPPED_IPV6_NS_OTHER_HOST),
+                Map.entry(DROPPED_IPV6_NS_REPLIED_NON_DAD, CN_DROPPED_IPV6_NS_REPLIED_NON_DAD),
                 Map.entry(DROPPED_802_3_FRAME, CN_DROPPED_802_3_FRAME),
-                // TODO: add new metrics CN_DROPPED_ETHERTYPE_NOT_ALLOWED
-                Map.entry(DROPPED_ETHERTYPE_NOT_ALLOWED, CN_DROPPED_ETHERTYPE_DENYLISTED),
+                Map.entry(DROPPED_ETHERTYPE_NOT_ALLOWED, CN_DROPPED_ETHERTYPE_NOT_ALLOWED),
                 Map.entry(DROPPED_IPV4_KEEPALIVE_ACK, CN_DROPPED_IPV4_KEEPALIVE_ACK),
                 Map.entry(DROPPED_IPV6_KEEPALIVE_ACK, CN_DROPPED_IPV6_KEEPALIVE_ACK),
                 Map.entry(DROPPED_IPV4_NATT_KEEPALIVE, CN_DROPPED_IPV4_NATT_KEEPALIVE),
@@ -155,10 +187,10 @@ public class ApfSessionInfoMetrics {
                 Map.entry(DROPPED_ARP_NON_IPV4, CN_DROPPED_ARP_NON_IPV4),
                 Map.entry(DROPPED_ARP_OTHER_HOST, CN_DROPPED_ARP_OTHER_HOST),
                 Map.entry(DROPPED_ARP_REPLY_SPA_NO_HOST, CN_DROPPED_ARP_REPLY_SPA_NO_HOST),
-                // TODO: add DROPPED_ARP_REQUEST_ANYHOST,
-                // TODO: add DROPPED_ARP_REQUEST_REPLIED,
+                Map.entry(DROPPED_ARP_REQUEST_ANYHOST, CN_DROPPED_ARP_REQUEST_ANYHOST),
+                Map.entry(DROPPED_ARP_REQUEST_REPLIED, CN_DROPPED_ARP_REQUEST_REPLIED),
                 Map.entry(DROPPED_ARP_UNKNOWN, CN_DROPPED_ARP_UNKNOWN),
-                // TODO: add DROPPED_ARP_V6_ONLY,
+                Map.entry(DROPPED_ARP_V6_ONLY, CN_DROPPED_ARP_V6_ONLY),
                 Map.entry(DROPPED_GARP_REPLY, CN_DROPPED_GARP_REPLY)
             )
     );

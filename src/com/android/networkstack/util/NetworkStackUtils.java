@@ -274,6 +274,11 @@ public class NetworkStackUtils {
     public static final String IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION =
             "ipclient_dhcpv6_pd_preferred_flag_version";
 
+    /**
+     * Experiment flag to enable Discovery of Designated Resolvers (DDR).
+     */
+    public static final String DNS_DDR_VERSION = "dns_ddr_version";
+
     /**** BEGIN Feature Kill Switch Flags ****/
 
     /**

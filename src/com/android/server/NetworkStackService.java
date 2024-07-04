@@ -551,21 +551,17 @@ public class NetworkStackService extends Service {
                         pw.println(cm.isUidNetworkingBlocked(uid, metered /* isNetworkMetered */));
                         return 0;
                     case "send-raw-packet-downstream": {
-                        // Usage : cmd network_stack send-raw-packet-downstream <packet type>
-                        //         <interface> <destination MAC address> <packet-in-hex>
+                        // Usage : cmd network_stack send-raw-packet-downstream
+                        //         <interface> <packet-in-hex>
                         // If no argument, get and display the usage help.
-                        if (getRemainingArgsCount() != 4) {
+                        if (getRemainingArgsCount() != 2) {
                             onHelp();
                             throw new IllegalArgumentException("Incorrect number of arguments");
                         }
-                        final String packetTypeHex = getNextArg();
-                        final int packetType = Integer.parseInt(packetTypeHex, 16);
                         final String iface = getNextArg();
-                        final String destMac = getNextArg();
                         final String packetInHex = getNextArg();
                         try {
-                            sendRawPacketDownStream(
-                                    mContext, packetType, iface, destMac, packetInHex);
+                            sendRawPacketDownStream(mContext, iface, packetInHex);
                         } catch (Exception e) {
                             throw new RuntimeException(e);
                         }
@@ -607,10 +603,8 @@ public class NetworkStackService extends Service {
                 pw.println("    Get whether the networking is blocked for given uid and metered.");
                 pw.println("    <uid>: The target uid.");
                 pw.println("    <metered>: [true|false], Whether the target network is metered.");
-                pw.println("  send-raw-packet-downstream <packet type> <interface>"
-                        + " <destination MAC address> <packet-in-hex>");
+                pw.println("  send-raw-packet-downstream <interface> <packet-in-hex>");
                 pw.println("    Send raw packet for testing purpose.");
-                pw.println("    <packet type>: L2 header type of this packet.");
                 pw.println("    <interface>: Target interface name, note that this is limited");
                 pw.println("      to tethering downstream for security considerations.");
                 pw.println("    <packet_in_hex>: A valid hexadecimal representation of ");

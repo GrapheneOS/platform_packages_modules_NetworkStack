@@ -48,11 +48,14 @@ class RawSocketUtilsTest {
     @get:Rule
     val ignoreRule = DevSdkIgnoreRule()
     companion object {
-        const val TEST_IFINDEX = 123
-        const val TEST_IFACENAME = "wlan0"
-        const val TEST_DST_MAC = "1234567890AB"
-        const val TEST_PACKET_IN_HEX = "DEADBEEF"
-        const val TEST_PACKET_TYPE = 0x88A4
+        private const val TEST_IFINDEX = 123
+        private const val TEST_IFACENAME = "wlan0"
+        private const val TEST_SRC_MAC = "FFFFFFFFFFFF"
+        private const val TEST_DST_MAC = "1234567890AB"
+        private const val TEST_INVALID_PACKET_IN_HEX = "DEADBEEF"
+        private const val TEST_PACKET_TYPE_IN_HEX = "88A4"
+        private const val TEST_VALID_PACKET_IN_HEX =
+                TEST_DST_MAC + TEST_SRC_MAC + TEST_PACKET_TYPE_IN_HEX
     }
     @Mock
     private lateinit var mockContext: Context
@@ -95,16 +98,30 @@ class RawSocketUtilsTest {
         assertFailsWith<SecurityException> {
             RawSocketUtils.sendRawPacketDownStream(
                 mockContext,
-                TEST_PACKET_TYPE,
                 TEST_IFACENAME,
-                TEST_DST_MAC,
-                TEST_PACKET_IN_HEX
+                TEST_INVALID_PACKET_IN_HEX
             )
         }
     }
 
     @Test
-    fun sendRawPacketDownStream_validTetheredInterface() {
+    fun sendRawPacketDownStream_invalidPacket() {
+        doAnswer {
+            val callback = it.arguments[1] as TetheringManager.TetheringEventCallback
+            callback.onTetheredInterfacesChanged(listOf(TEST_IFACENAME))
+        }.`when`(mockTetheringManager).registerTetheringEventCallback(any(), any())
+
+        assertFailsWith<ArrayIndexOutOfBoundsException> {
+            RawSocketUtils.sendRawPacketDownStream(
+                    mockContext,
+                    TEST_IFACENAME,
+                    TEST_INVALID_PACKET_IN_HEX
+            )
+        }
+    }
+
+    @Test
+    fun sendRawPacketDownStream_validPacket() {
         doAnswer {
             val callback = it.arguments[1] as TetheringManager.TetheringEventCallback
             callback.onTetheredInterfacesChanged(listOf(TEST_IFACENAME))
@@ -112,10 +129,8 @@ class RawSocketUtilsTest {
 
         RawSocketUtils.sendRawPacketDownStream(
             mockContext,
-            TEST_PACKET_TYPE,
             TEST_IFACENAME,
-            TEST_DST_MAC,
-            TEST_PACKET_IN_HEX
+            TEST_VALID_PACKET_IN_HEX
         )
 
         // Verify interactions with mocked static methods.
@@ -132,8 +147,8 @@ class RawSocketUtilsTest {
                 any()
             )
         }
-        assertEquals(TEST_PACKET_IN_HEX, HexDump.toHexString(packetDataCaptor.value))
-        assertEquals(TEST_PACKET_IN_HEX.length / 2, packetDataLengthCaptor.value)
+        assertEquals(TEST_VALID_PACKET_IN_HEX, HexDump.toHexString(packetDataCaptor.value))
+        assertEquals(TEST_VALID_PACKET_IN_HEX.length / 2, packetDataLengthCaptor.value)
         // TODO: Verify ifindex and packetType once the members of PacketSocketAddress
         //  can be accessed.
         ExtendedMockito.verify { SocketUtils.closeSocket(eq(fileDescriptorCaptor.value)) }
