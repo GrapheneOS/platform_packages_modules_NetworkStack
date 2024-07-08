@@ -20,8 +20,6 @@ import android.net.LinkAddress
 import android.net.LinkProperties
 import android.net.MacAddress
 import android.net.apf.ApfCounterTracker.Counter
-import android.net.apf.ApfCounterTracker.Counter.APF_PROGRAM_ID
-import android.net.apf.ApfCounterTracker.Counter.APF_VERSION
 import android.net.apf.ApfCounterTracker.Counter.CORRUPT_DNS_PACKET
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REQUEST_REPLIED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_NOT_ALLOWED
@@ -43,6 +41,8 @@ import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_TENTATIVE
 import android.net.apf.ApfCounterTracker.Counter.PASSED_TRANSMIT_FAILURE
 import android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS
 import android.net.apf.ApfFilter.Dependencies
+import android.net.apf.ApfTestHelpers.Companion.decodeCountersIntoMap
+import android.net.apf.ApfTestHelpers.Companion.verifyProgramRun
 import android.net.apf.ApfTestUtils.DROP
 import android.net.apf.ApfTestUtils.MIN_PKT_SIZE
 import android.net.apf.ApfTestUtils.PASS
@@ -2688,44 +2688,6 @@ class ApfNewTest {
         apfFilter.setLinkProperties(lp)
         verify(ipClientCallback, times(5)).installPacketFilter(any())
         apfFilter.shutdown()
-    }
-
-    private fun verifyProgramRun(
-            version: Int,
-            program: ByteArray,
-            pkt: ByteArray,
-            targetCnt: Counter,
-            cntMap: MutableMap<Counter, Long> = mutableMapOf(),
-            dataRegion: ByteArray = ByteArray(Counter.totalSize()) { 0 },
-            incTotal: Boolean = true,
-            result: Int = if (targetCnt.name.startsWith("PASSED")) PASS else DROP
-    ) {
-        assertVerdict(version, result, program, pkt, dataRegion)
-        cntMap[targetCnt] = cntMap.getOrDefault(targetCnt, 0) + 1
-        if (incTotal) {
-            cntMap[TOTAL_PACKETS] = cntMap.getOrDefault(TOTAL_PACKETS, 0) + 1
-        }
-        val errMsg = "Counter is not increased properly. To debug: \n" +
-                     " apf_run --program ${HexDump.toHexString(program)} " +
-                     "--packet ${HexDump.toHexString(pkt)} " +
-                     "--data ${HexDump.toHexString(dataRegion)} --age 0 " +
-                     "${if (version == APF_VERSION_6) "--v6" else "" } --trace  | less \n"
-        assertEquals(cntMap, decodeCountersIntoMap(dataRegion), errMsg)
-    }
-
-    private fun decodeCountersIntoMap(counterBytes: ByteArray): Map<Counter, Long> {
-        val counters = Counter::class.java.enumConstants
-        val ret = HashMap<Counter, Long>()
-        val skippedCounters = setOf(APF_PROGRAM_ID, APF_VERSION)
-        // starting from index 2 to skip the endianness mark
-        for (c in listOf(*counters).subList(2, counters.size)) {
-            if (c in skippedCounters) continue
-            val value = ApfCounterTracker.getCounterValue(counterBytes, c)
-            if (value != 0L) {
-                ret[c] = value
-            }
-        }
-        return ret
     }
 
     private fun encodeInstruction(opcode: Int, immLength: Int, register: Int): Byte {
