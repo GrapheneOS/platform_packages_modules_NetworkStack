@@ -265,7 +265,6 @@ public class ApfFilter implements AndroidPacketFilter {
     private static final boolean DBG = true;
     private static final boolean VDBG = false;
 
-    private final int mApfVersionSupported;
     private final int mApfRamSize;
     private final int mMaximumApfProgramSize;
     private final int mInstallableProgramSizeClamp;
@@ -273,6 +272,8 @@ public class ApfFilter implements AndroidPacketFilter {
     private final InterfaceParams mInterfaceParams;
     private final TokenBucket mTokenBucket;
 
+    @VisibleForTesting
+    public final int mApfVersionSupported;
     @VisibleForTesting
     @NonNull
     public final byte[] mHardwareAddress;

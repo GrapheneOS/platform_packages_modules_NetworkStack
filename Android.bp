@@ -14,32 +14,6 @@
 // limitations under the License.
 //
 
-// The network stack can be compiled using system_current (non-finalized) SDK, or finalized system_X
-// SDK. There is also a variant that uses system_current SDK and runs in the system process
-// (InProcessNetworkStack). The following structure is used to create the build rules:
-//
-//                          NetworkStackAndroidLibraryDefaults <-- common defaults for android libs
-//                                            /    \
-//           +NetworkStackApiStableShims --> /      \ <-- +NetworkStackApiCurrentShims
-//           +NetworkStackReleaseApiLevel   /        \    +NetworkStackDevApiLevel
-//           +jarjar apishim.api[latest].* /          \
-//            to apishim.*                /            \
-//                                       /              \
-//                                      /                \
-//                                     /                  \               android libs w/ all code
-//                                    / <- +module src/ -> \              (also used in unit tests)
-//                                   /                      \                        |
-//               NetworkStackApiStableLib               NetworkStackApiCurrentLib <--*
-//                          |                                     |
-//                          | <--   +NetworkStackAppDefaults  --> |
-//                          |          (APK build params)         |
-//                          |                                     |
-//                          | <-- +NetworkStackReleaseApiLevel    | <-- +NetworkStackDevApiLevel
-//                          |                                     |
-//                          |                                     |
-//                NetworkStackApiStable          NetworkStack, InProcessNetworkStack, <-- APKs
-//                                                         TestNetworkStack
-
 // Common defaults to define SDK level
 package {
     default_team: "trendy_team_fwk_core_networking",
@@ -54,24 +28,6 @@ package {
 java_defaults {
     name: "NetworkStackNextEnableDefaults",
     enabled: true,
-}
-
-// This is a placeholder comment to avoid merge conflicts
-// as the above target may have different "enabled" values
-// depending on the branch
-
-java_defaults {
-    name: "NetworkStackDevApiLevel",
-    min_sdk_version: "30",
-    sdk_version: "module_current",
-    libs: [
-        "framework-configinfrastructure",
-        "framework-connectivity",
-        "framework-connectivity-t",
-        "framework-statsd",
-        "framework-tethering",
-        "framework-wifi",
-    ],
 }
 
 // Common defaults for NetworkStack integration tests, root tests and coverage tests
@@ -264,7 +220,7 @@ java_library {
     name: "NetworkStackApiCurrentShims",
     defaults: [
         "NetworkStackShimsDefaults",
-        "NetworkStackDevApiLevel",
+        "NetworkStackReleaseApiLevel",
         "ConnectivityNextEnableDefaults",
     ],
     static_libs: [
@@ -345,7 +301,7 @@ java_defaults {
 android_library {
     name: "NetworkStackApiCurrentLib",
     defaults: [
-        "NetworkStackDevApiLevel",
+        "NetworkStackReleaseApiLevel",
         "NetworkStackAndroidLibraryDefaults",
         "ConnectivityNextEnableDefaults",
     ],
@@ -486,7 +442,7 @@ android_app {
     name: "InProcessNetworkStack",
     defaults: [
         "NetworkStackAppDefaults",
-        "NetworkStackDevApiLevel",
+        "NetworkStackReleaseApiLevel",
         "ConnectivityNextEnableDefaults",
     ],
     static_libs: ["NetworkStackApiCurrentLib"],
@@ -509,7 +465,7 @@ android_library {
     name: "NetworkStackNextManifestBase",
     defaults: [
         "NetworkStackAppDefaults",
-        "NetworkStackDevApiLevel",
+        "NetworkStackReleaseApiLevel",
         "ConnectivityNextEnableDefaults",
     ],
     static_libs: ["NetworkStackApiCurrentLib"],
@@ -521,7 +477,7 @@ android_app {
     name: "NetworkStackNext",
     defaults: [
         "NetworkStackAppDefaults",
-        "NetworkStackDevApiLevel",
+        "NetworkStackReleaseApiLevel",
         "ConnectivityNextEnableDefaults",
     ],
     static_libs: ["NetworkStackNextManifestBase"],
