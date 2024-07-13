@@ -276,7 +276,7 @@ public class ApfFilter implements AndroidPacketFilter {
     public final int mApfVersionSupported;
     @VisibleForTesting
     @NonNull
-    public byte[] mHardwareAddress;
+    public final byte[] mHardwareAddress;
     @VisibleForTesting
     public ReceiveThread mReceiveThread;
     @GuardedBy("this")
@@ -446,14 +446,15 @@ public class ApfFilter implements AndroidPacketFilter {
         // 3 seconds.
         mTokenBucket = new TokenBucket(3_000 /* deltaMs */, 20 /* capacity */, 20 /* tokens */);
 
+        mHardwareAddress = mInterfaceParams.macAddr.toByteArray();
         // TODO: ApfFilter should not generate programs until IpClient sends provisioning success.
-        maybeStartFilter();
+        startFilter();
 
         // Listen for doze-mode transition changes to enable/disable the IPv6 multicast filter.
         mDependencies.addDeviceIdleReceiver(mDeviceIdleReceiver);
 
         mDependencies.onApfFilterCreated(this);
-        // mReceiveThread is created in maybeStartFilter() and halted in shutdown().
+        // mReceiveThread is created in startFilter() and halted in shutdown().
         mDependencies.onThreadCreated(mReceiveThread);
     }
 
@@ -605,30 +606,29 @@ public class ApfFilter implements AndroidPacketFilter {
      * filters to ignore useless RAs.
      */
     @VisibleForTesting
-    public void maybeStartFilter() {
+    public void startFilter() {
+        synchronized (this) {
+            // Clear the APF memory to reset all counters upon connecting to the first AP
+            // in an SSID. This is limited to APFv3 devices because this large write triggers
+            // a crash on some older devices (b/78905546).
+            if (hasDataAccess(mApfVersionSupported)) {
+                byte[] zeroes = new byte[mApfRamSize];
+                if (!mIpClientCallback.installPacketFilter(zeroes)) {
+                    sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
+                }
+            }
+
+            // Install basic filters
+            installNewProgramLocked();
+        }
         FileDescriptor socket;
         try {
-            mHardwareAddress = mInterfaceParams.macAddr.toByteArray();
-            synchronized(this) {
-                // Clear the APF memory to reset all counters upon connecting to the first AP
-                // in an SSID. This is limited to APFv4 devices because this large write triggers
-                // a crash on some older devices (b/78905546).
-                if (mIsRunning && hasDataAccess(mApfVersionSupported)) {
-                    byte[] zeroes = new byte[mApfRamSize];
-                    if (!mIpClientCallback.installPacketFilter(zeroes)) {
-                        sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
-                    }
-                }
-
-                // Install basic filters
-                installNewProgramLocked();
-            }
             socket = Os.socket(AF_PACKET, SOCK_RAW | SOCK_CLOEXEC, 0);
             NetworkStackUtils.attachRaFilter(socket);
             SocketAddress addr = makePacketSocketAddress(ETH_P_IPV6, mInterfaceParams.index);
             Os.bind(socket, addr);
         } catch(SocketException|ErrnoException e) {
-            Log.e(TAG, "Error starting filter", e);
+            Log.wtf(TAG, "Error starting filter", e);
             return;
         }
         mReceiveThread = new ReceiveThread(socket);

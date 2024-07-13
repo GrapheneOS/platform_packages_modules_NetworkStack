@@ -23,11 +23,17 @@ import android.net.apf.ApfTestUtils.DROP
 import android.net.apf.ApfTestUtils.PASS
 import android.net.apf.ApfTestUtils.assertVerdict
 import android.net.apf.BaseApfGenerator.APF_VERSION_6
+import android.net.ip.IpClient
 import com.android.net.module.util.HexDump
 import kotlin.test.assertEquals
+import org.mockito.ArgumentCaptor
+import org.mockito.Mockito.clearInvocations
+import org.mockito.Mockito.timeout
+import org.mockito.Mockito.verify
 
 class ApfTestHelpers private constructor() {
     companion object {
+        const val TIMEOUT_MS: Long = 1000
         fun verifyProgramRun(
             version: Int,
             program: ByteArray,
@@ -66,6 +72,22 @@ class ApfTestHelpers private constructor() {
                 }
             }
             return ret
+        }
+
+        fun consumeInstalledProgram(
+            ipClientCb: IpClient.IpClientCallbacksWrapper,
+            installCnt: Int
+        ): ByteArray {
+            val programCaptor = ArgumentCaptor.forClass(
+                ByteArray::class.java
+            )
+
+            verify(ipClientCb, timeout(TIMEOUT_MS).times(installCnt)).installPacketFilter(
+                programCaptor.capture()
+            )
+
+            clearInvocations<Any>(ipClientCb)
+            return programCaptor.value
         }
     }
 }

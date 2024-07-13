@@ -1183,4 +1183,13 @@ class ApfFilterTest {
         apfFilter.setLinkProperties(lp)
         verify(ipClientCallback, times(5)).installPacketFilter(any())
     }
+
+    @Test
+    fun testApfFilterInitializationCleanUpTheApfMemoryRegion() {
+        val apfFilter = getApfFilter()
+        val programCaptor = ArgumentCaptor.forClass(ByteArray::class.java)
+        verify(ipClientCallback, times(2)).installPacketFilter(programCaptor.capture())
+        val program = programCaptor.allValues.first()
+        assertContentEquals(ByteArray(4096) { 0 }, program)
+    }
 }
