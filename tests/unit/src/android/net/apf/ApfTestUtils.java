@@ -28,7 +28,6 @@ import static org.mockito.Mockito.mock;
 import android.content.Context;
 import android.net.LinkAddress;
 import android.net.LinkProperties;
-import android.net.MacAddress;
 import android.net.apf.BaseApfGenerator.IllegalInstructionException;
 import android.net.ip.IIpClientCallbacks;
 import android.net.ip.IpClient;
@@ -295,8 +294,6 @@ public class ApfTestUtils {
         public static final byte[] MOCK_MAC_ADDR = {2, 3, 4, 5, 6, 7};
         private static final byte[] MOCK_IPV4_ADDR = {10, 0, 0, 1};
 
-        private static final InterfaceParams LOCAL_PARAMS = InterfaceParams.getByName("lo");
-
         private FileDescriptor mWriteSocket;
         private long mCurrentTimeMs = SystemClock.elapsedRealtime();
         private final MockIpClientCallback mMockIpClientCb;
@@ -328,8 +325,7 @@ public class ApfTestUtils {
                 MockIpClientCallback ipClientCallback, NetworkQuirkMetrics networkQuirkMetrics,
                 Dependencies dependencies, boolean throwsExceptionWhenGeneratesProgram,
                 ApfFilter.Clock clock) throws Exception {
-            super(context, config, new InterfaceParams("lo", LOCAL_PARAMS.index,
-                            MacAddress.fromBytes(MOCK_MAC_ADDR)), ipClientCallback,
+            super(context, config, InterfaceParams.getByName("lo"), ipClientCallback,
                     networkQuirkMetrics, dependencies, clock);
             mMockIpClientCb = ipClientCallback;
             mThrowsExceptionWhenGeneratesProgram = throwsExceptionWhenGeneratesProgram;
@@ -373,7 +369,8 @@ public class ApfTestUtils {
         }
 
         @Override
-        public synchronized void startFilter() {
+        public synchronized void maybeStartFilter() {
+            mHardwareAddress = MOCK_MAC_ADDR;
             installNewProgramLocked();
 
             // Create two sockets, "readSocket" and "mWriteSocket" and connect them together.
