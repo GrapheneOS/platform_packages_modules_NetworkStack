@@ -39,6 +39,7 @@ import android.net.apf.BaseApfGenerator.APF_VERSION_3
 import android.net.apf.BaseApfGenerator.APF_VERSION_6
 import android.net.ip.IpClient.IpClientCallbacksWrapper
 import android.os.Build
+import android.os.SystemClock
 import android.system.OsConstants.IFA_F_TENTATIVE
 import androidx.test.filters.SmallTest
 import com.android.internal.annotations.GuardedBy
@@ -171,6 +172,7 @@ class ApfFilterTest {
                 mApfFilterCreated.add(invocation.getArgument(0))
             }
         }.`when`(dependencies).onApfFilterCreated(any())
+        `when`(dependencies.elapsedRealtime()).thenReturn(SystemClock.elapsedRealtime())
     }
 
     private fun shutdownApfFilters() {

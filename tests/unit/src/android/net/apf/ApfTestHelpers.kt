@@ -74,6 +74,7 @@ class ApfTestHelpers private constructor() {
             return ret
         }
 
+        @JvmStatic
         fun consumeInstalledProgram(
             ipClientCb: IpClient.IpClientCallbacksWrapper,
             installCnt: Int

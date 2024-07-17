@@ -19,18 +19,23 @@ package android.net.apf;
 import static android.net.apf.ApfJniUtils.dropsAllPackets;
 import static android.net.apf.ApfTestUtils.DROP;
 import static android.net.apf.ApfTestUtils.PASS;
+import static android.net.apf.ApfTestUtils.TIMEOUT_MS;
+import static android.system.OsConstants.AF_UNIX;
 import static android.system.OsConstants.ETH_P_ARP;
 import static android.system.OsConstants.ETH_P_IP;
 import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
 import static android.system.OsConstants.IPPROTO_TCP;
 import static android.system.OsConstants.IPPROTO_UDP;
+import static android.system.OsConstants.SOCK_STREAM;
 
 import static com.android.net.module.util.HexDump.hexStringToByteArray;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ECHO_REQUEST_TYPE;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -48,13 +53,15 @@ import android.net.NattKeepalivePacketDataParcelable;
 import android.net.TcpKeepalivePacketDataParcelable;
 import android.net.apf.ApfCounterTracker.Counter;
 import android.net.apf.ApfFilter.ApfConfiguration;
-import android.net.apf.ApfTestUtils.MockIpClientCallback;
-import android.net.apf.ApfTestUtils.TestLegacyApfFilter;
+import android.net.ip.IIpClientCallbacks;
+import android.net.ip.IpClient;
 import android.net.metrics.IpConnectivityLog;
 import android.os.Build;
+import android.os.ConditionVariable;
 import android.os.PowerManager;
 import android.stats.connectivity.NetworkQuirkEvent;
 import android.system.ErrnoException;
+import android.system.Os;
 import android.text.format.DateUtils;
 import android.util.ArrayMap;
 import android.util.Log;
@@ -64,7 +71,10 @@ import androidx.test.filters.SmallTest;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.HexDump;
+import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.NetworkStackConstants;
+import com.android.net.module.util.SharedLog;
+import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.networkstack.metrics.ApfSessionInfoMetrics;
 import com.android.networkstack.metrics.IpClientRaInfoMetrics;
 import com.android.networkstack.metrics.NetworkQuirkMetrics;
@@ -73,6 +83,7 @@ import com.android.testutils.ConcurrentUtils;
 import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRunner;
 
+import libcore.io.IoUtils;
 import libcore.io.Streams;
 
 import org.junit.After;
@@ -88,6 +99,7 @@ import org.mockito.MockitoAnnotations;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -1883,5 +1895,151 @@ public class LegacyApfTest {
         apfFilter2.shutdown();
         verify(mApfSessionInfoMetrics).statsWrite();
         verify(mIpClientRaInfoMetrics).statsWrite();
+    }
+
+    /**
+     * The Mock ip client callback class.
+     */
+    private static class MockIpClientCallback extends IpClient.IpClientCallbacksWrapper {
+        private final ConditionVariable mGotApfProgram = new ConditionVariable();
+        private byte[] mLastApfProgram;
+        private boolean mInstallPacketFilterReturn = true;
+
+        MockIpClientCallback() {
+            super(mock(IIpClientCallbacks.class), mock(SharedLog.class), mock(SharedLog.class),
+                    NetworkInformationShimImpl.newInstance(), false);
+        }
+
+        MockIpClientCallback(boolean installPacketFilterReturn) {
+            super(mock(IIpClientCallbacks.class), mock(SharedLog.class), mock(SharedLog.class),
+                    NetworkInformationShimImpl.newInstance(), false);
+            mInstallPacketFilterReturn = installPacketFilterReturn;
+        }
+
+        @Override
+        public boolean installPacketFilter(byte[] filter) {
+            mLastApfProgram = filter;
+            mGotApfProgram.open();
+            return mInstallPacketFilterReturn;
+        }
+
+        /**
+         * Reset the apf program and wait for the next update.
+         */
+        public void resetApfProgramWait() {
+            mGotApfProgram.close();
+        }
+
+        /**
+         * Assert the program is update within TIMEOUT_MS and return the program.
+         */
+        public byte[] assertProgramUpdateAndGet() {
+            assertTrue(mGotApfProgram.block(TIMEOUT_MS));
+            return mLastApfProgram;
+        }
+
+        /**
+         * Assert the program is not update within TIMEOUT_MS.
+         */
+        public void assertNoProgramUpdate() {
+            assertFalse(mGotApfProgram.block(TIMEOUT_MS));
+        }
+    }
+
+    /**
+     * The test legacy apf filter class.
+     */
+    private static class TestLegacyApfFilter extends LegacyApfFilter
+            implements TestAndroidPacketFilter {
+        public static final byte[] MOCK_MAC_ADDR = {1, 2, 3, 4, 5, 6};
+        private static final byte[] MOCK_IPV4_ADDR = {10, 0, 0, 1};
+
+        private FileDescriptor mWriteSocket;
+        private final MockIpClientCallback mMockIpClientCb;
+        private final boolean mThrowsExceptionWhenGeneratesProgram;
+
+        TestLegacyApfFilter(Context context, ApfFilter.ApfConfiguration config,
+                MockIpClientCallback ipClientCallback, IpConnectivityLog ipConnectivityLog,
+                NetworkQuirkMetrics networkQuirkMetrics) throws Exception {
+            this(context, config, ipClientCallback, ipConnectivityLog, networkQuirkMetrics,
+                    new ApfFilter.Dependencies(context),
+                    false /* throwsExceptionWhenGeneratesProgram */, new ApfFilter.Clock());
+        }
+
+        TestLegacyApfFilter(Context context, ApfFilter.ApfConfiguration config,
+                MockIpClientCallback ipClientCallback, IpConnectivityLog ipConnectivityLog,
+                NetworkQuirkMetrics networkQuirkMetrics, ApfFilter.Dependencies dependencies,
+                boolean throwsExceptionWhenGeneratesProgram) throws Exception {
+            this(context, config, ipClientCallback, ipConnectivityLog, networkQuirkMetrics,
+                    dependencies, throwsExceptionWhenGeneratesProgram, new ApfFilter.Clock());
+        }
+
+        TestLegacyApfFilter(Context context, ApfFilter.ApfConfiguration config,
+                MockIpClientCallback ipClientCallback, IpConnectivityLog ipConnectivityLog,
+                NetworkQuirkMetrics networkQuirkMetrics, ApfFilter.Dependencies dependencies,
+                ApfFilter.Clock clock) throws Exception {
+            this(context, config, ipClientCallback, ipConnectivityLog, networkQuirkMetrics,
+                    dependencies, false /* throwsExceptionWhenGeneratesProgram */, clock);
+        }
+
+        TestLegacyApfFilter(Context context, ApfFilter.ApfConfiguration config,
+                MockIpClientCallback ipClientCallback, IpConnectivityLog ipConnectivityLog,
+                NetworkQuirkMetrics networkQuirkMetrics, ApfFilter.Dependencies dependencies,
+                boolean throwsExceptionWhenGeneratesProgram, ApfFilter.Clock clock)
+                throws Exception {
+            super(context, config, InterfaceParams.getByName("lo"), ipClientCallback,
+                    ipConnectivityLog, networkQuirkMetrics, dependencies, clock);
+            mMockIpClientCb = ipClientCallback;
+            mThrowsExceptionWhenGeneratesProgram = throwsExceptionWhenGeneratesProgram;
+        }
+
+        /**
+         * Pretend an RA packet has been received and show it to LegacyApfFilter.
+         */
+        public void pretendPacketReceived(byte[] packet) throws IOException, ErrnoException {
+            mMockIpClientCb.resetApfProgramWait();
+            // ApfFilter's ReceiveThread will be waiting to read this.
+            Os.write(mWriteSocket, packet, 0, packet.length);
+        }
+
+        @Override
+        public synchronized void maybeStartFilter() {
+            mHardwareAddress = MOCK_MAC_ADDR;
+            installNewProgramLocked();
+
+            // Create two sockets, "readSocket" and "mWriteSocket" and connect them together.
+            FileDescriptor readSocket = new FileDescriptor();
+            mWriteSocket = new FileDescriptor();
+            try {
+                Os.socketpair(AF_UNIX, SOCK_STREAM, 0, mWriteSocket, readSocket);
+            } catch (ErrnoException e) {
+                fail();
+                return;
+            }
+            // Now pass readSocket to ReceiveThread as if it was setup to read raw RAs.
+            // This allows us to pretend RA packets have been received via pretendPacketReceived().
+            mReceiveThread = new ReceiveThread(readSocket);
+            mReceiveThread.start();
+        }
+
+        @Override
+        public synchronized void shutdown() {
+            super.shutdown();
+            if (mReceiveThread != null) {
+                mReceiveThread.halt();
+                mReceiveThread = null;
+            }
+            IoUtils.closeQuietly(mWriteSocket);
+        }
+
+        @Override
+        @GuardedBy("this")
+        protected ApfV4Generator emitPrologueLocked() throws
+                BaseApfGenerator.IllegalInstructionException {
+            if (mThrowsExceptionWhenGeneratesProgram) {
+                throw new IllegalStateException();
+            }
+            return super.emitPrologueLocked();
+        }
     }
 }
