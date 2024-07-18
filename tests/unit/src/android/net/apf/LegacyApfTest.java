@@ -17,10 +17,10 @@
 package android.net.apf;
 
 import static android.net.apf.ApfJniUtils.dropsAllPackets;
-import static android.net.apf.ApfTestUtils.DROP;
-import static android.net.apf.ApfTestUtils.PASS;
-import static android.net.apf.ApfTestUtils.TIMEOUT_MS;
+import static android.net.apf.ApfTestHelpers.TIMEOUT_MS;
 import static android.system.OsConstants.AF_UNIX;
+import static android.net.apf.ApfTestHelpers.DROP;
+import static android.net.apf.ApfTestHelpers.PASS;
 import static android.system.OsConstants.ETH_P_ARP;
 import static android.system.OsConstants.ETH_P_IP;
 import static android.system.OsConstants.ETH_P_IPV6;
@@ -249,58 +249,58 @@ public class LegacyApfTest {
     }
 
     private void assertPass(ApfV4Generator gen) throws ApfV4Generator.IllegalInstructionException {
-        ApfTestUtils.assertPass(mApfVersion, gen);
+        ApfTestHelpers.assertPass(mApfVersion, gen);
     }
 
     private void assertDrop(ApfV4Generator gen) throws ApfV4Generator.IllegalInstructionException {
-        ApfTestUtils.assertDrop(mApfVersion, gen);
+        ApfTestHelpers.assertDrop(mApfVersion, gen);
     }
 
     private void assertPass(byte[] program, byte[] packet) {
-        ApfTestUtils.assertPass(mApfVersion, program, packet);
+        ApfTestHelpers.assertPass(mApfVersion, program, packet);
     }
 
     private void assertDrop(byte[] program, byte[] packet) {
-        ApfTestUtils.assertDrop(mApfVersion, program, packet);
+        ApfTestHelpers.assertDrop(mApfVersion, program, packet);
     }
 
     private void assertPass(byte[] program, byte[] packet, int filterAge) {
-        ApfTestUtils.assertPass(mApfVersion, program, packet, filterAge);
+        ApfTestHelpers.assertPass(mApfVersion, program, packet, filterAge);
     }
 
     private void assertDrop(byte[] program, byte[] packet, int filterAge) {
-        ApfTestUtils.assertDrop(mApfVersion, program, packet, filterAge);
+        ApfTestHelpers.assertDrop(mApfVersion, program, packet, filterAge);
     }
 
     private void assertPass(ApfV4Generator gen, byte[] packet, int filterAge)
             throws ApfV4Generator.IllegalInstructionException {
-        ApfTestUtils.assertPass(mApfVersion, gen, packet, filterAge);
+        ApfTestHelpers.assertPass(mApfVersion, gen, packet, filterAge);
     }
 
     private void assertDrop(ApfV4Generator gen, byte[] packet, int filterAge)
             throws ApfV4Generator.IllegalInstructionException {
-        ApfTestUtils.assertDrop(mApfVersion, gen, packet, filterAge);
+        ApfTestHelpers.assertDrop(mApfVersion, gen, packet, filterAge);
     }
 
     private void assertDataMemoryContents(int expected, byte[] program, byte[] packet,
             byte[] data, byte[] expectedData) throws Exception {
-        ApfTestUtils.assertDataMemoryContents(mApfVersion, expected, program, packet, data,
+        ApfTestHelpers.assertDataMemoryContents(mApfVersion, expected, program, packet, data,
                 expectedData, false /* ignoreInterpreterVersion */);
     }
 
     private void assertDataMemoryContentsIgnoreVersion(int expected, byte[] program,
             byte[] packet, byte[] data, byte[] expectedData) throws Exception {
-        ApfTestUtils.assertDataMemoryContents(mApfVersion, expected, program, packet, data,
+        ApfTestHelpers.assertDataMemoryContents(mApfVersion, expected, program, packet, data,
                 expectedData, true /* ignoreInterpreterVersion */);
     }
 
     private void assertVerdict(String msg, int expected, byte[] program,
             byte[] packet, int filterAge) {
-        ApfTestUtils.assertVerdict(mApfVersion, msg, expected, program, packet, filterAge);
+        ApfTestHelpers.assertVerdict(mApfVersion, msg, expected, program, packet, filterAge);
     }
 
     private void assertVerdict(int expected, byte[] program, byte[] packet) {
-        ApfTestUtils.assertVerdict(mApfVersion, expected, program, packet);
+        ApfTestHelpers.assertVerdict(mApfVersion, expected, program, packet);
     }
 
     /**
