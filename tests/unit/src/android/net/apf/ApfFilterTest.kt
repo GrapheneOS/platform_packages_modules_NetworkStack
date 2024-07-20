@@ -19,8 +19,13 @@ import android.content.Context
 import android.net.LinkAddress
 import android.net.LinkProperties
 import android.net.MacAddress
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_NON_IPV4
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REPLY_SPA_NO_HOST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REQUEST_REPLIED
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_UNKNOWN
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_V6_ONLY
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_NOT_ALLOWED
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_GARP_REPLY
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HOST
@@ -413,6 +418,144 @@ class ApfFilterTest {
             program,
             HexDump.hexStringToByteArray(fragmentedUdpPkt),
             DROPPED_IPV4_NON_DHCP4
+        )
+    }
+
+    @Test
+    fun testArpFilterDropInvalidPktsWhenClatEnabled() {
+        val apfFilter = getApfFilter()
+        ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 2)
+        apfFilter.updateClatInterfaceState(true)
+        val program = ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 1)
+
+        // Drop ARP request packet when clat is enabled
+        // Using scapy to generate ARP request packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // arp = ARP()
+        // pkt = eth/arp
+        val arpPkt = """
+            010203040506000102030405080600010800060400015c857e3c74e1c0a8012200000000000000000000
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(arpPkt),
+            DROPPED_ARP_V6_ONLY
+        )
+    }
+
+    @Test
+    fun testArpFilterDropInvalidPktsWhenClatDisabled() {
+        val apfFilter = getApfFilter()
+        val program = ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 2)
+
+        // Drop ARP request packet with invalid hw type
+        // Using scapy to generate ARP request packet with invalid hw type :
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // arp = ARP(hwtype=3)
+        // pkt = eth/arp
+        val invalidHwTypePkt = """
+            01020304050600010203040508060003080000040001c0a8012200000000
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(invalidHwTypePkt),
+            DROPPED_ARP_NON_IPV4
+        )
+
+        // Drop ARP request packet with invalid proto type
+        // Using scapy to generate ARP request packet with invalid proto type:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // arp = ARP(ptype=20)
+        // pkt = eth/arp
+        val invalidProtoTypePkt = """
+            010203040506000102030405080600010014060000015c857e3c74e1000000000000
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(invalidProtoTypePkt),
+            DROPPED_ARP_NON_IPV4
+        )
+
+        // Drop ARP request packet with invalid hw len
+        // Using scapy to generate ARP request packet with invalid hw len:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // arp = ARP(hwlen=20)
+        // pkt = eth/arp
+        val invalidHwLenPkt = """
+            01020304050600010203040508060001080014040001000000000000000000000000
+            0000000000000000c0a8012200000000000000000000000000000000000000000000
+            0000
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(invalidHwLenPkt),
+            DROPPED_ARP_NON_IPV4
+        )
+
+        // Drop ARP request packet with invalid proto len
+        // Using scapy to generate ARP request packet with invalid proto len:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // arp = ARP(plen=20)
+        // pkt = eth/arp
+        val invalidProtoLenPkt = """
+            010203040506000102030405080600010800061400015c857e3c74e1000000000000
+            00000000000000000000000000000000000000000000000000000000000000000000
+            000000000000
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(invalidProtoLenPkt),
+            DROPPED_ARP_NON_IPV4
+        )
+
+        // Drop ARP request packet with invalid opcode
+        // Using scapy to generate ARP request packet with invalid opcode:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // arp = ARP(op=5)
+        // pkt = eth/arp
+        val invalidOpPkt = """
+            010203040506000102030405080600010800060400055c857e3c74e1c0a8012200000000000000000000
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(invalidOpPkt),
+            DROPPED_ARP_UNKNOWN
+        )
+
+        // Drop ARP reply packet with zero source protocol address
+        // Using scapy to generate ARP request packet with zero source protocol address:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // arp = ARP(op=2, psrc="0.0.0.0)
+        // pkt = eth/arp
+        val noHostArpReplyPkt = """
+            010203040506000102030405080600010800060400025c857e3c74e10000000000000000000000000000
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(noHostArpReplyPkt),
+            DROPPED_ARP_REPLY_SPA_NO_HOST
+        )
+
+        // Drop ARP reply packet with ethernet broadcast destination
+        // Using scapy to generate ARP reply packet with ethernet broadcast destination:
+        // eth = Ether(src="00:01:02:03:04:05", dst="FF:FF:FF:FF:FF:FF")
+        // arp = ARP(op=2, pdst="0.0.0.0")
+        // pkt = eth/arp
+        val garpReplyPkt = """
+            ffffffffffff000102030405080600010800060400025c857e3c74e1c0a8012200000000000000000000
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(garpReplyPkt),
+            DROPPED_GARP_REPLY
         )
     }
 
