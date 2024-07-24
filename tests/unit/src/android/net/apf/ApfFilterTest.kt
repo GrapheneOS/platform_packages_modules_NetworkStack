@@ -20,6 +20,7 @@ import android.net.LinkAddress
 import android.net.LinkProperties
 import android.net.MacAddress
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_NON_IPV4
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_OTHER_HOST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REPLY_SPA_NO_HOST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REQUEST_REPLIED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_UNKNOWN
@@ -30,7 +31,9 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HOST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_REPLIED_NON_DAD
+import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_BROADCAST_REPLY
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_REQUEST
+import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_UNICAST_REPLY
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_FROM_DHCPV4_SERVER
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP
@@ -422,7 +425,7 @@ class ApfFilterTest {
     }
 
     @Test
-    fun testArpFilterDropInvalidPktsWhenClatEnabled() {
+    fun testArpFilterDropPktsOnV6OnlyNetwork() {
         val apfFilter = getApfFilter()
         ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 2)
         apfFilter.updateClatInterfaceState(true)
@@ -445,7 +448,7 @@ class ApfFilterTest {
     }
 
     @Test
-    fun testArpFilterDropInvalidPktsWhenClatDisabled() {
+    fun testArpFilterDropPktsNoIPv4() {
         val apfFilter = getApfFilter()
         val program = ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 2)
 
@@ -556,6 +559,106 @@ class ApfFilterTest {
             program,
             HexDump.hexStringToByteArray(garpReplyPkt),
             DROPPED_GARP_REPLY
+        )
+    }
+
+    @Test
+    fun testArpFilterPassPktsNoIPv4() {
+        val apfFilter = getApfFilter()
+        val program = ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 2)
+        // Pass non-broadcast ARP reply packet
+        // Using scapy to generate unicast ARP reply packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // arp = ARP(op=2, psrc="1.2.3.4")
+        // pkt = eth/arp
+        val nonBcastArpReplyPkt = """
+            010203040506000102030405080600010800060400025c857e3c74e10102030400000000000000000000
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(nonBcastArpReplyPkt),
+            PASSED_ARP_UNICAST_REPLY
+        )
+
+        // Pass ARP request packet if device doesn't have any IPv4 address
+        // Using scapy to generate ARP request packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="FF:FF:FF:FF:FF:FF")
+        // arp = ARP(op=1, pdst="1.2.3.4")
+        // pkt = eth/arp
+        val arpRequestPkt = """
+            ffffffffffff000102030405080600010800060400015c857e3c74e1c0a8012200000000000001020304
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(arpRequestPkt),
+            PASSED_ARP_REQUEST
+        )
+    }
+
+    @Test
+    fun testArpFilterDropPktsWithIPv4() {
+        val apfFilter = getApfFilter()
+        ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 2)
+        val linkAddress = LinkAddress(InetAddress.getByAddress(hostIpv4Address), 24)
+        val lp = LinkProperties()
+        lp.addLinkAddress(linkAddress)
+        apfFilter.setLinkProperties(lp)
+        val program = ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 1)
+        // Drop ARP reply packet is not for the device
+        // Using scapy to generate ARP reply packet not for the device:
+        // eth = Ether(src="00:01:02:03:04:05", dst="FF:FF:FF:FF:FF:FF")
+        // arp = ARP(op=2, pdst="1.2.3.4")
+        // pkt = eth/arp
+        val otherHostArpReplyPkt = """
+            ffffffffffff000102030405080600010800060400025c857e3c74e1c0a8012200000000000001020304
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(otherHostArpReplyPkt),
+            DROPPED_ARP_OTHER_HOST
+        )
+
+        // Drop broadcast ARP request packet not for the device
+        // Using scapy to generate ARP broadcast request packet not for the device:
+        // eth = Ether(src="00:01:02:03:04:05", dst="FF:FF:FF:FF:FF:FF")
+        // arp = ARP(op=1, pdst="1.2.3.4")
+        // pkt = eth/arp
+        val otherHostArpRequestPkt = """
+            ffffffffffff000102030405080600010800060400015c857e3c74e1c0a8012200000000000001020304
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(otherHostArpRequestPkt),
+            DROPPED_ARP_OTHER_HOST
+        )
+    }
+
+    @Test
+    fun testArpFilterPassPktsWithIPv4() {
+        val apfFilter = getApfFilter()
+        ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 2)
+        val linkAddress = LinkAddress(InetAddress.getByAddress(hostIpv4Address), 24)
+        val lp = LinkProperties()
+        lp.addLinkAddress(linkAddress)
+        apfFilter.setLinkProperties(lp)
+        val program = ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 1)
+
+        // Using scapy to generate ARP broadcast reply packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="FF:FF:FF:FF:FF:FF")
+        // arp = ARP(op=2, pdst="10.0.0.1")
+        // pkt = eth/arp
+        val bcastArpReplyPkt = """
+            ffffffffffff000102030405080600010800060400025c857e3c74e1c0a801220000000000000a000001
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(bcastArpReplyPkt),
+            PASSED_ARP_BROADCAST_REPLY
         )
     }
 
