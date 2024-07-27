@@ -27,20 +27,31 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_UNKNOWN
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_V6_ONLY
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_NOT_ALLOWED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_GARP_REPLY
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_BROADCAST_ADDR
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_BROADCAST_NET
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_MULTICAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_L2_BROADCAST
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST_NA
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NON_ICMP_MULTICAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HOST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_REPLIED_NON_DAD
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_BROADCAST_REPLY
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_REQUEST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_UNICAST_REPLY
+import android.net.apf.ApfCounterTracker.Counter.PASSED_DHCP
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_FROM_DHCPV4_SERVER
+import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_UNICAST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP
+import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NON_ICMP
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_DAD
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_ADDRESS
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_SLLA_OPTION
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_TENTATIVE
+import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_UNICAST_NON_ICMP
+import android.net.apf.ApfCounterTracker.Counter.PASSED_MLD
 import android.net.apf.ApfFilter.Dependencies
 import android.net.apf.ApfTestHelpers.Companion.verifyProgramRun
 import android.net.apf.BaseApfGenerator.APF_VERSION_3
@@ -369,6 +380,49 @@ class ApfFilterTest {
             DROPPED_IPV4_NON_DHCP4
         )
 
+        // Using scapy to generate non UDP protocol packet:
+        //   ether = Ether(src='00:11:22:33:44:55', dst='ff:ff:ff:ff:ff:ff')
+        //   ip = IP(src='192.168.1.1', dst='255.255.255.255', proto=12)
+        //   pkt = ether/ip
+        val nonUdpPkt = """
+            ffffffffffff00112233445508004500001400010000400cb934c0a80101ffffffff
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(nonUdpPkt),
+            DROPPED_IPV4_NON_DHCP4
+        )
+
+        // Using scapy to generate fragmented UDP protocol packet:
+        //   ether = Ether(src='00:11:22:33:44:55', dst='ff:ff:ff:ff:ff:ff')
+        //   ip = IP(src='192.168.1.1', dst='255.255.255.255', flags=1, frag=10, proto=17)
+        //   pkt = ether/ip
+        val fragmentUdpPkt = """
+            ffffffffffff0011223344550800450000140001200a40119925c0a80101ffffffff
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(fragmentUdpPkt),
+            DROPPED_IPV4_NON_DHCP4
+        )
+
+        // Using scapy to generate destination port is not DHCP client port packet:
+        //   ether = Ether(src='00:11:22:33:44:55', dst='ff:ff:ff:ff:ff:ff')
+        //   ip = IP(src='192.168.1.1', dst='255.255.255.255')
+        //   udp = UDP(dport=70)
+        //   pkt = ether/ip/udp
+        val nonDhcpServerPkt = """
+            ffffffffffff00112233445508004500001c000100004011b927c0a80101ffffffff0035004600083dba
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(nonDhcpServerPkt),
+            DROPPED_IPV4_NON_DHCP4
+        )
+
         // Using scapy to generate DHCP4 offer packet:
         //   ether = Ether(src='00:11:22:33:44:55', dst='ff:ff:ff:ff:ff:ff')
         //   ip = IP(src='192.168.1.1', dst='255.255.255.255')
@@ -425,6 +479,124 @@ class ApfFilterTest {
     }
 
     @Test
+    fun testIPv4MulticastPacketFilter() {
+        val apfConfig = getDefaultConfig()
+        apfConfig.multicastFilter = true
+        val apfFilter = getApfFilter(apfConfig)
+        ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 2)
+        val linkAddress = LinkAddress(InetAddress.getByAddress(hostIpv4Address), 24)
+        val lp = LinkProperties()
+        lp.addLinkAddress(linkAddress)
+        apfFilter.setLinkProperties(lp)
+        val program = ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 1)
+
+        // Using scapy to generate DHCP4 offer packet:
+        //   ether = Ether(src='00:11:22:33:44:55', dst='ff:ff:ff:ff:ff:ff')
+        //   ip = IP(src='192.168.1.1', dst='255.255.255.255')
+        //   udp = UDP(sport=67, dport=68)
+        //   bootp = BOOTP(op=2,
+        //                 yiaddr='192.168.1.100',
+        //                 siaddr='192.168.1.1',
+        //                 chaddr=b'\x02\x03\x04\x05\x06\x07')
+        //   dhcp_options = [('message-type', 'offer'),
+        //                   ('server_id', '192.168.1.1'),
+        //                   ('subnet_mask', '255.255.255.0'),
+        //                   ('router', '192.168.1.1'),
+        //                   ('lease_time', 86400),
+        //                   ('name_server', '8.8.8.8'),
+        //                   'end']
+        //   dhcp = DHCP(options=dhcp_options)
+        //   dhcp_offer_packet = ether/ip/udp/bootp/dhcp
+        val dhcp4Pkt = """
+            ffffffffffff00112233445508004500012e000100004011b815c0a80101ffffffff0043
+            0044011a5ffc02010600000000000000000000000000c0a80164c0a80101000000000203
+            040506070000000000000000000000000000000000000000000000000000000000000000
+            000000000000000000000000000000000000000000000000000000000000000000000000
+            000000000000000000000000000000000000000000000000000000000000000000000000
+            000000000000000000000000000000000000000000000000000000000000000000000000
+            000000000000000000000000000000000000000000000000000000000000000000000000
+            0000000000000000000000000000000000000000000000000000638253633501023604c0
+            a801010104ffffff000304c0a80101330400015180060408080808ff
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(dhcp4Pkt),
+            PASSED_DHCP
+        )
+
+        // Using scapy to generate non DHCP multicast packet:
+        //   ether = Ether(src='00:11:22:33:44:55', dst='ff:ff:ff:ff:ff:ff')
+        //   ip = IP(src='192.168.1.1', dst='224.0.0.1', proto=21)
+        //   pkt = ether/ip
+        val nonDhcpMcastPkt = """
+            ffffffffffff001122334455080045000014000100004015d929c0a80101e0000001
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(nonDhcpMcastPkt),
+            DROPPED_IPV4_MULTICAST
+        )
+
+        // Using scapy to generate non DHCP broadcast packet:
+        //   ether = Ether(src='00:11:22:33:44:55', dst='ff:ff:ff:ff:ff:ff')
+        //   ip = IP(src='192.168.1.1', dst='255.255.255.255', proto=21)
+        //   pkt = ether/ip
+        val nonDhcpBcastPkt = """
+            ffffffffffff001122334455080045000014000100004015b92bc0a80101ffffffff
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(nonDhcpBcastPkt),
+            DROPPED_IPV4_BROADCAST_ADDR
+        )
+
+        // Using scapy to generate non DHCP subnet broadcast packet:
+        //   ether = Ether(src='00:11:22:33:44:55', dst='ff:ff:ff:ff:ff:ff')
+        //   ip = IP(src='192.168.1.1', dst='10.0.0.255', proto=21)
+        //   pkt = ether/ip
+        val nonDhcpNetBcastPkt = """
+            ffffffffffff001122334455080045000014000100004015ae2cc0a801010a0000ff
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(nonDhcpNetBcastPkt),
+            DROPPED_IPV4_BROADCAST_NET
+        )
+
+        // Using scapy to generate non DHCP unicast packet:
+        //   ether = Ether(src='00:11:22:33:44:55', dst='02:03:04:05:06:07')
+        //   ip = IP(src='192.168.1.1', dst='192.168.1.2', proto=21)
+        //   pkt = ether/ip
+        val nonDhcpUcastPkt = """
+            020304050607001122334455080045000014000100004015f780c0a80101c0a80102
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(nonDhcpUcastPkt),
+            PASSED_IPV4_UNICAST
+        )
+
+        // Using scapy to generate non DHCP unicast packet with broadcast ether destination:
+        //   ether = Ether(src='00:11:22:33:44:55', dst='ff:ff:ff:ff:ff:ff')
+        //   ip = IP(src='192.168.1.1', dst='192.168.1.2', proto=21)
+        //   pkt = ether/ip
+        val nonDhcpUcastL2BcastPkt = """
+            ffffffffffff001122334455080045000014000100004015f780c0a80101c0a80102
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(nonDhcpUcastL2BcastPkt),
+            DROPPED_IPV4_L2_BROADCAST
+        )
+    }
+
+    @Test
     fun testArpFilterDropPktsOnV6OnlyNetwork() {
         val apfFilter = getApfFilter()
         ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 2)
@@ -444,6 +616,152 @@ class ApfFilterTest {
             program,
             HexDump.hexStringToByteArray(arpPkt),
             DROPPED_ARP_V6_ONLY
+        )
+    }
+
+    @Test
+    fun testIPv6MulticastPacketFilter() {
+        val apfConfig = getDefaultConfig()
+        apfConfig.multicastFilter = true
+        val apfFilter = getApfFilter(apfConfig)
+        ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 2)
+        val lp = LinkProperties()
+        for (addr in hostIpv6Addresses) {
+            lp.addLinkAddress(LinkAddress(InetAddress.getByAddress(addr), 64))
+        }
+        apfFilter.setLinkProperties(lp)
+        val program = ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 1)
+
+        // Using scapy to generate non ICMPv6 sent to ff00::/8 (multicast prefix) packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="ff00::1", nh=59)
+        // pkt = eth/ip6
+        val nonIcmpv6McastPkt = """
+            ffffffffffff00112233445586dd6000000000003b4020010000000000000200001a11223344ff00000
+            0000000000000000000000000
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(nonIcmpv6McastPkt),
+            DROPPED_IPV6_NON_ICMP_MULTICAST
+        )
+
+        // Using scapy to generate non ICMPv6 unicast packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::200:1a:3344:5566", nh=59)
+        // pkt = eth/ip6
+        val nonIcmpv6UcastPkt = """
+            ffffffffffff00112233445586dd6000000000003b4020010000000000000200001a112233442001000
+            0000000000200001a33445566
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(nonIcmpv6UcastPkt),
+            PASSED_IPV6_UNICAST_NON_ICMP
+        )
+    }
+
+    @Test
+    fun testIPv6MulticastPacketFilterInDozeMode() {
+        val apfConfig = getDefaultConfig()
+        apfConfig.multicastFilter = true
+        val apfFilter = getApfFilter(apfConfig)
+        ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 2)
+        val lp = LinkProperties()
+        for (addr in hostIpv6Addresses) {
+            lp.addLinkAddress(LinkAddress(InetAddress.getByAddress(addr), 64))
+        }
+        apfFilter.setLinkProperties(lp)
+        apfFilter.setDozeMode(true)
+        val program = ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 2)
+        // Using scapy to generate non ICMPv6 sent to ff00::/8 (multicast prefix) packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="ff00::1", nh=59)
+        // pkt = eth/ip6
+        val nonIcmpv6McastPkt = """
+            ffffffffffff00112233445586dd6000000000003b4020010000000000000200001a11223344ff00000
+            0000000000000000000000000
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(nonIcmpv6McastPkt),
+            DROPPED_IPV6_NON_ICMP_MULTICAST
+        )
+
+        // Using scapy to generate ICMPv6 echo sent to ff00::/8 (multicast prefix) packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+        // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="ff00::1", hlim=255)
+        // icmp6 = ICMPv6EchoRequest()
+        // pkt = eth/ip6/icmp6
+        val icmpv6EchoPkt = """
+            02030405060700010203040586dd6000000000083aff20010000000000000200001a11223344ff00000
+            000000000000000000000000180001a3a00000000
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(icmpv6EchoPkt),
+            DROPPED_IPV6_NON_ICMP_MULTICAST
+        )
+    }
+
+    @Test
+    fun testIPv6PacketFilter() {
+        val apfFilter = getApfFilter()
+        ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 2)
+        val lp = LinkProperties()
+        for (addr in hostIpv6Addresses) {
+            lp.addLinkAddress(LinkAddress(InetAddress.getByAddress(addr), 64))
+        }
+        apfFilter.setLinkProperties(lp)
+        val program = ApfTestHelpers.consumeInstalledProgram(ipClientCallback, installCnt = 1)
+        // Using scapy to generate non ICMPv6 packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::200:1a:3344:1122", nh=59)
+        // pkt = eth/ip6
+        val nonIcmpv6Pkt = """
+            ffffffffffff00112233445586dd6000000000003b4020010000000000000200001a112233442001000
+            0000000000200001a33441122
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(nonIcmpv6Pkt),
+            PASSED_IPV6_NON_ICMP
+        )
+
+        // Using scapy to generate ICMPv6 NA sent to ff02::/120 packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="ff02::1")
+        // icmp6 = ICMPv6ND_NA()
+        // pkt = eth/ip6/icmp6
+        val icmpv6McastNaPkt = """
+            01020304050600010203040586dd6000000000183aff20010000000000000200001a11223344ff02000
+            000000000000000000000000188007227a000000000000000000000000000000000000000
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(icmpv6McastNaPkt),
+            DROPPED_IPV6_MULTICAST_NA
+        )
+
+        // Using scapy to generate IPv6 packet with hop-by-hop option:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::200:1a:3344:1122", nh=0)
+        // pkt = eth/ip6
+        val ipv6WithHopByHopOptionPkt = """
+            01020304050600010203040586dd600000000000004020010000000000000200001a112233442001000
+            0000000000200001a33441122
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(ipv6WithHopByHopOptionPkt),
+            PASSED_MLD
         )
     }
 
