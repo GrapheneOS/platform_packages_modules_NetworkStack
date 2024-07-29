@@ -24,6 +24,30 @@ import static android.net.ip.IIpClient.PROV_IPV6_DISABLED;
 import static android.net.ip.IIpClient.PROV_IPV6_LINKLOCAL;
 import static android.net.ip.IIpClient.PROV_IPV6_SLAAC;
 import static android.net.ip.IIpClientCallbacks.DTIM_MULTIPLIER_RESET;
+import static android.net.ip.IpClient.IpClientCommands.CMD_ADDRESSES_CLEARED;
+import static android.net.ip.IpClient.IpClientCommands.CMD_ADD_KEEPALIVE_PACKET_FILTER_TO_APF;
+import static android.net.ip.IpClient.IpClientCommands.CMD_COMPLETE_PRECONNECTION;
+import static android.net.ip.IpClient.IpClientCommands.CMD_CONFIRM;
+import static android.net.ip.IpClient.IpClientCommands.CMD_JUMP_RUNNING_TO_STOPPING;
+import static android.net.ip.IpClient.IpClientCommands.CMD_JUMP_STOPPING_TO_STOPPED;
+import static android.net.ip.IpClient.IpClientCommands.CMD_REMOVE_KEEPALIVE_PACKET_FILTER_FROM_APF;
+import static android.net.ip.IpClient.IpClientCommands.CMD_SET_DTIM_MULTIPLIER_AFTER_DELAY;
+import static android.net.ip.IpClient.IpClientCommands.CMD_SET_MULTICAST_FILTER;
+import static android.net.ip.IpClient.IpClientCommands.CMD_START;
+import static android.net.ip.IpClient.IpClientCommands.CMD_STOP;
+import static android.net.ip.IpClient.IpClientCommands.CMD_TERMINATE_AFTER_STOP;
+import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_APF_CAPABILITIES;
+import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_APF_DATA_SNAPSHOT;
+import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_HTTP_PROXY;
+import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_L2INFORMATION;
+import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_L2KEY_CLUSTER;
+import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_TCP_BUFFER_SIZES;
+import static android.net.ip.IpClient.IpClientCommands.EVENT_DHCPACTION_TIMEOUT;
+import static android.net.ip.IpClient.IpClientCommands.EVENT_IPV6_AUTOCONF_TIMEOUT;
+import static android.net.ip.IpClient.IpClientCommands.EVENT_NETLINK_LINKPROPERTIES_CHANGED;
+import static android.net.ip.IpClient.IpClientCommands.EVENT_PRE_DHCP_ACTION_COMPLETE;
+import static android.net.ip.IpClient.IpClientCommands.EVENT_PROVISIONING_TIMEOUT;
+import static android.net.ip.IpClient.IpClientCommands.EVENT_READ_PACKET_FILTER_COMPLETE;
 import static android.net.ip.IpClientLinkObserver.IpClientNetlinkMonitor;
 import static android.net.ip.IpClientLinkObserver.IpClientNetlinkMonitor.INetlinkMessageProcessor;
 import static android.net.ip.IpReachabilityMonitor.INVALID_REACHABILITY_LOSS_TYPE;
@@ -206,7 +230,7 @@ public class IpClient extends StateMachine {
     private final boolean mApfDebug;
 
     // For message logging.
-    private static final Class[] sMessageClasses = { IpClient.class, DhcpClient.class };
+    private static final Class[] sMessageClasses = { IpClientCommands.class, DhcpClient.class };
     private static final SparseArray<String> sWhatToString =
             MessageUtils.findMessageNames(sMessageClasses);
     // Static concurrent hashmaps of interface name to logging classes.
@@ -540,39 +564,48 @@ public class IpClient extends StateMachine {
     static final String ACCEPT_RA_MIN_LFT = "accept_ra_min_lft";
     private static final String DAD_TRANSMITS = "dad_transmits";
 
-    // Below constants are picked up by MessageUtils and exempt from ProGuard optimization.
-    private static final int CMD_TERMINATE_AFTER_STOP             = 1;
-    private static final int CMD_STOP                             = 2;
-    private static final int CMD_START                            = 3;
-    private static final int CMD_CONFIRM                          = 4;
-    private static final int EVENT_PRE_DHCP_ACTION_COMPLETE       = 5;
-    // Triggered by IpClientLinkObserver to communicate netlink events.
-    private static final int EVENT_NETLINK_LINKPROPERTIES_CHANGED = 6;
-    private static final int CMD_UPDATE_TCP_BUFFER_SIZES          = 7;
-    private static final int CMD_UPDATE_HTTP_PROXY                = 8;
-    private static final int CMD_SET_MULTICAST_FILTER             = 9;
-    private static final int EVENT_PROVISIONING_TIMEOUT           = 10;
-    private static final int EVENT_DHCPACTION_TIMEOUT             = 11;
-    private static final int EVENT_READ_PACKET_FILTER_COMPLETE    = 12;
-    private static final int CMD_ADD_KEEPALIVE_PACKET_FILTER_TO_APF = 13;
-    private static final int CMD_REMOVE_KEEPALIVE_PACKET_FILTER_FROM_APF = 14;
-    private static final int CMD_UPDATE_L2KEY_CLUSTER = 15;
-    private static final int CMD_COMPLETE_PRECONNECTION = 16;
-    private static final int CMD_UPDATE_L2INFORMATION = 17;
-    private static final int CMD_SET_DTIM_MULTIPLIER_AFTER_DELAY = 18;
-    private static final int CMD_UPDATE_APF_CAPABILITIES = 19;
-    private static final int EVENT_IPV6_AUTOCONF_TIMEOUT = 20;
-    private static final int CMD_UPDATE_APF_DATA_SNAPSHOT = 21;
+    /**
+     * The IpClientCommands constant values.
+     *
+     * @hide
+     */
+    public static class IpClientCommands {
+        private IpClientCommands() {
+        }
+
+        // Below constants are picked up by MessageUtils and exempt from ProGuard optimization.
+        static final int CMD_TERMINATE_AFTER_STOP = 1;
+        static final int CMD_STOP = 2;
+        static final int CMD_START = 3;
+        static final int CMD_CONFIRM = 4;
+        static final int EVENT_PRE_DHCP_ACTION_COMPLETE = 5;
+        // Triggered by IpClientLinkObserver to communicate netlink events.
+        static final int EVENT_NETLINK_LINKPROPERTIES_CHANGED = 6;
+        static final int CMD_UPDATE_TCP_BUFFER_SIZES = 7;
+        static final int CMD_UPDATE_HTTP_PROXY = 8;
+        static final int CMD_SET_MULTICAST_FILTER = 9;
+        static final int EVENT_PROVISIONING_TIMEOUT = 10;
+        static final int EVENT_DHCPACTION_TIMEOUT = 11;
+        static final int EVENT_READ_PACKET_FILTER_COMPLETE = 12;
+        static final int CMD_ADD_KEEPALIVE_PACKET_FILTER_TO_APF = 13;
+        static final int CMD_REMOVE_KEEPALIVE_PACKET_FILTER_FROM_APF = 14;
+        static final int CMD_UPDATE_L2KEY_CLUSTER = 15;
+        static final int CMD_COMPLETE_PRECONNECTION = 16;
+        static final int CMD_UPDATE_L2INFORMATION = 17;
+        static final int CMD_SET_DTIM_MULTIPLIER_AFTER_DELAY = 18;
+        static final int CMD_UPDATE_APF_CAPABILITIES = 19;
+        static final int EVENT_IPV6_AUTOCONF_TIMEOUT = 20;
+        static final int CMD_UPDATE_APF_DATA_SNAPSHOT = 21;
+        // Internal commands to use instead of trying to call transitionTo() inside
+        // a given State's enter() method. Calling transitionTo() from enter/exit
+        // encounters a Log.wtf() that can cause trouble on eng builds.
+        static final int CMD_ADDRESSES_CLEARED = 100;
+        static final int CMD_JUMP_RUNNING_TO_STOPPING = 101;
+        static final int CMD_JUMP_STOPPING_TO_STOPPED = 102;
+    }
 
     private static final int ARG_LINKPROP_CHANGED_LINKSTATE_DOWN = 0;
     private static final int ARG_LINKPROP_CHANGED_LINKSTATE_UP = 1;
-
-    // Internal commands to use instead of trying to call transitionTo() inside
-    // a given State's enter() method. Calling transitionTo() from enter/exit
-    // encounters a Log.wtf() that can cause trouble on eng builds.
-    private static final int CMD_ADDRESSES_CLEARED                = 100;
-    private static final int CMD_JUMP_RUNNING_TO_STOPPING         = 101;
-    private static final int CMD_JUMP_STOPPING_TO_STOPPED         = 102;
 
     // IpClient shares a handler with DhcpClient: commands must not overlap
     public static final int DHCPCLIENT_CMD_BASE = 1000;

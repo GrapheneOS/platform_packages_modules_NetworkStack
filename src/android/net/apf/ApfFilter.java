@@ -438,13 +438,30 @@ public class ApfFilter implements AndroidPacketFilter {
 
         mHardwareAddress = mInterfaceParams.macAddr.toByteArray();
         // TODO: ApfFilter should not generate programs until IpClient sends provisioning success.
-        startFilter();
+        synchronized (this) {
+            // Clear the APF memory to reset all counters upon connecting to the first AP
+            // in an SSID. This is limited to APFv3 devices because this large write triggers
+            // a crash on some older devices (b/78905546).
+            if (hasDataAccess(mApfVersionSupported)) {
+                byte[] zeroes = new byte[mApfRamSize];
+                if (!mIpClientCallback.installPacketFilter(zeroes)) {
+                    sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
+                }
+            }
+
+            // Install basic filters
+            installNewProgramLocked();
+        }
+        FileDescriptor socket = mDependencies.createRaReaderSocket(mInterfaceParams.index);
+        if (socket != null) {
+            mReceiveThread = new ReceiveThread(socket);
+            mReceiveThread.start();
+        }
 
         // Listen for doze-mode transition changes to enable/disable the IPv6 multicast filter.
         mDependencies.addDeviceIdleReceiver(mDeviceIdleReceiver);
 
         mDependencies.onApfFilterCreated(this);
-        // mReceiveThread is created in startFilter() and halted in shutdown().
         if (mReceiveThread != null) {
             mDependencies.onThreadCreated(mReceiveThread);
         }
@@ -616,33 +633,6 @@ public class ApfFilter implements AndroidPacketFilter {
         }
 
         return bl.stream().mapToInt(Integer::intValue).toArray();
-    }
-
-    /**
-     * Attempt to start listening for RAs and, if RAs are received, generating and installing
-     * filters to ignore useless RAs.
-     */
-    @VisibleForTesting
-    public void startFilter() {
-        synchronized (this) {
-            // Clear the APF memory to reset all counters upon connecting to the first AP
-            // in an SSID. This is limited to APFv3 devices because this large write triggers
-            // a crash on some older devices (b/78905546).
-            if (hasDataAccess(mApfVersionSupported)) {
-                byte[] zeroes = new byte[mApfRamSize];
-                if (!mIpClientCallback.installPacketFilter(zeroes)) {
-                    sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
-                }
-            }
-
-            // Install basic filters
-            installNewProgramLocked();
-        }
-        FileDescriptor socket = mDependencies.createRaReaderSocket(mInterfaceParams.index);
-        if (socket != null) {
-            mReceiveThread = new ReceiveThread(socket);
-            mReceiveThread.start();
-        }
     }
 
     // Returns seconds since device boot.

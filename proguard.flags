@@ -1,4 +1,4 @@
--keepclassmembers class com.android.networkstack.android.net.ip.IpClient {
+-keepclassmembers class com.android.networkstack.android.net.ip.IpClient$IpClientCommands {
     static final int CMD_*;
     static final int EVENT_*;
 }

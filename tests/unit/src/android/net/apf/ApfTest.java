@@ -3340,7 +3340,8 @@ public class ApfTest {
         verify(mIpClientRaInfoMetrics).statsWrite();
     }
 
-    private void verifyNoMetricsWrittenForShortDuration(boolean isLegacy) throws Exception {
+    @Test
+    public void testNoMetricsWrittenForShortDuration() throws Exception {
         final ApfConfiguration config = getDefaultConfig();
         final long startTimeMs = 12345;
         final long durationTimeMs = config.minMetricsSessionDurationMs;
@@ -3363,16 +3364,6 @@ public class ApfTest {
         apfFilter2.shutdown();
         verify(mApfSessionInfoMetrics).statsWrite();
         verify(mIpClientRaInfoMetrics).statsWrite();
-    }
-
-    @Test
-    public void testNoMetricsWrittenForShortDuration() throws Exception {
-        verifyNoMetricsWrittenForShortDuration(false /* isLegacy */);
-    }
-
-    @Test
-    public void testNoMetricsWrittenForShortDuration_LegacyApfFilter() throws Exception {
-        verifyNoMetricsWrittenForShortDuration(true /* isLegacy */);
     }
 
     private int deriveApfGeneratorVersion(ApfV4GeneratorBase<?> gen) {
