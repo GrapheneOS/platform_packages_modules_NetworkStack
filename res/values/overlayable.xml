@@ -94,15 +94,6 @@
             <item type="bool" name="config_validate_dun_networks"/>
             <!-- Configuration for including DHCP client domain search list option. -->
             <item type="bool" name="config_dhcp_client_domain_search_list"/>
-            <!-- Configuration for force enable APFv6 ND offload.
-                 The APF ND offload code is enabled by default if the device preloads a NetworkStack
-                 module that is at least version 350090000. If a device is preloaded with an older
-                 NetworkStack module but still wants to enable this feature when it receives a
-                 mainline update, OEMs can use this overlay to force-enable the feature.
-                 If OEMs decide to opt in to this feature, they must ensure the APFv6 ND offload
-                 logic is tested properly.
-             -->
-            <item type="bool" name="config_force_enable_apfv6_nd_offload"/>
         </policy>
     </overlayable>
 </resources>

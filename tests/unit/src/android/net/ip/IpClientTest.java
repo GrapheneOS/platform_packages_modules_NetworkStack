@@ -35,7 +35,6 @@ import static com.android.net.module.util.netlink.NetlinkConstants.RTM_NEWROUTE;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTN_UNICAST;
 import static com.android.net.module.util.netlink.StructNlMsgHdr.NLM_F_ACK;
 import static com.android.net.module.util.netlink.StructNlMsgHdr.NLM_F_REQUEST;
-import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_ND_OFFLOAD;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -66,8 +65,6 @@ import android.annotation.SuppressLint;
 import android.app.AlarmManager;
 import android.content.ContentResolver;
 import android.content.Context;
-import android.content.pm.PackageInfo;
-import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.net.ConnectivityManager;
 import android.net.INetd;
@@ -194,8 +191,6 @@ public class IpClientTest {
     @Mock private PrintWriter mWriter;
     @Mock private IpClientNetlinkMonitor mNetlinkMonitor;
     @Mock private AndroidPacketFilter mApfFilter;
-    @Mock private PackageManager mPackageManager;
-    @Mock private PackageInfo mNetworkStackPackageInfo;
 
     private InterfaceParams mIfParams;
     private INetlinkMessageProcessor mNetlinkMessageProcessor;
@@ -221,14 +216,7 @@ public class IpClientTest {
         when(mDependencies.makeIpClientNetlinkMonitor(
                 any(), any(), any(), anyInt(), any())).thenReturn(mNetlinkMonitor);
         when(mNetlinkMonitor.start()).thenReturn(true);
-        doReturn(mPackageManager).when(mContext).getPackageManager();
-        doReturn("com.android.networkstack").when(mContext).getPackageName();
-        doReturn(mNetworkStackPackageInfo).when(mPackageManager)
-                .getPackageInfo("com.android.networkstack",
-                        PackageManager.MATCH_FACTORY_ONLY);
-        doReturn(350820280L).when(mNetworkStackPackageInfo).getLongVersionCode();
-        doReturn(true).when(
-                mDependencies).isFeatureNotChickenedOut(mContext, APF_HANDLE_ND_OFFLOAD);
+
         mIfParams = null;
     }
 
@@ -1037,53 +1025,6 @@ public class IpClientTest {
         verify(mCb, times(1)).setNeighborDiscoveryOffload(true);
         clearInvocations(mApfFilter);
         clearInvocations(mCb);
-    }
-
-    @Test
-    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-    public void testDisableApfNdOffloadIfFactoryNetworkStackVersionIsOld() throws Exception {
-        final ArgumentCaptor<ApfConfiguration> configCaptor = ArgumentCaptor.forClass(
-                ApfConfiguration.class);
-        doReturn(mApfFilter).when(mDependencies).maybeCreateApfFilter(any(), any(), any(), any(),
-                any(), anyBoolean());
-        final IpClient ipc = makeIpClient(TEST_IFNAME);
-        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
-                .withoutIPv4()
-                .withoutIpReachabilityMonitor()
-                .withApfCapabilities(new ApfCapabilities(APF_VERSION_6,
-                        4096 /* maxProgramSize */, ARPHRD_ETHER))
-                .build();
-        ipc.startProvisioning(config);
-        verify(mDependencies, timeout(TEST_TIMEOUT_MS)).maybeCreateApfFilter(any(),
-                configCaptor.capture(), any(), any(), any(), anyBoolean());
-        verifyShutdown(ipc);
-        final ApfConfiguration apfConfiguration = configCaptor.getValue();
-        assertFalse(apfConfiguration.shouldHandleNdOffload);
-    }
-
-    @Test
-    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-    public void testEnableApfNdOffloadIfFactoryNetworkStackVersionIsNewerEnough() throws Exception {
-        final ArgumentCaptor<ApfConfiguration> configCaptor = ArgumentCaptor.forClass(
-                ApfConfiguration.class);
-        doReturn(mApfFilter).when(mDependencies)
-                .maybeCreateApfFilter(any(), any(), any(), any(), any(), anyBoolean());
-        doReturn(350911000L).when(mNetworkStackPackageInfo).getLongVersionCode();
-        final IpClient ipc = makeIpClient(TEST_IFNAME);
-        verify(mDependencies).isFeatureNotChickenedOut(mContext, APF_HANDLE_ND_OFFLOAD);
-        verify(mNetworkStackPackageInfo).getLongVersionCode();
-        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
-                .withoutIPv4()
-                .withoutIpReachabilityMonitor()
-                .withApfCapabilities(new ApfCapabilities(APF_VERSION_6,
-                        4096 /* maxProgramSize */, ARPHRD_ETHER))
-                .build();
-        ipc.startProvisioning(config);
-        verify(mDependencies, timeout(TEST_TIMEOUT_MS)).maybeCreateApfFilter(any(),
-                configCaptor.capture(), any(), any(), any(), anyBoolean());
-        verifyShutdown(ipc);
-        final ApfConfiguration apfConfiguration = configCaptor.getValue();
-        assertTrue(apfConfiguration.shouldHandleNdOffload);
     }
 
     @Test
