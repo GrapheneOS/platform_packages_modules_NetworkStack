@@ -143,7 +143,7 @@ public class LegacyApfTest {
     @Mock private NetworkQuirkMetrics mNetworkQuirkMetrics;
     @Mock private ApfSessionInfoMetrics mApfSessionInfoMetrics;
     @Mock private IpClientRaInfoMetrics mIpClientRaInfoMetrics;
-    @Mock private ApfFilter.Clock mClock;
+    @Mock private LegacyApfFilter.Clock mClock;
     @GuardedBy("mApfFilterCreated")
     private final ArrayList<AndroidPacketFilter> mApfFilterCreated = new ArrayList<>();
     @GuardedBy("mThreadsToBeCleared")
@@ -1887,7 +1887,7 @@ public class LegacyApfTest {
 
         // Verify metrics data written to statsd for duration greater than or equal to
         // durationTimeMs.
-        ApfFilter.Clock clock = mock(ApfFilter.Clock.class);
+        LegacyApfFilter.Clock clock = mock(LegacyApfFilter.Clock.class);
         doReturn(startTimeMs).when(clock).elapsedRealtime();
         final TestAndroidPacketFilter apfFilter2 = new TestLegacyApfFilter(mContext, config,
                 ipClientCallback, mIpConnectivityLog, mNetworkQuirkMetrics, mDependencies, clock);
@@ -1963,7 +1963,7 @@ public class LegacyApfTest {
                 NetworkQuirkMetrics networkQuirkMetrics) throws Exception {
             this(context, config, ipClientCallback, ipConnectivityLog, networkQuirkMetrics,
                     new ApfFilter.Dependencies(context),
-                    false /* throwsExceptionWhenGeneratesProgram */, new ApfFilter.Clock());
+                    false /* throwsExceptionWhenGeneratesProgram */, new Clock());
         }
 
         TestLegacyApfFilter(Context context, ApfFilter.ApfConfiguration config,
@@ -1971,13 +1971,13 @@ public class LegacyApfTest {
                 NetworkQuirkMetrics networkQuirkMetrics, ApfFilter.Dependencies dependencies,
                 boolean throwsExceptionWhenGeneratesProgram) throws Exception {
             this(context, config, ipClientCallback, ipConnectivityLog, networkQuirkMetrics,
-                    dependencies, throwsExceptionWhenGeneratesProgram, new ApfFilter.Clock());
+                    dependencies, throwsExceptionWhenGeneratesProgram, new Clock());
         }
 
         TestLegacyApfFilter(Context context, ApfFilter.ApfConfiguration config,
                 MockIpClientCallback ipClientCallback, IpConnectivityLog ipConnectivityLog,
                 NetworkQuirkMetrics networkQuirkMetrics, ApfFilter.Dependencies dependencies,
-                ApfFilter.Clock clock) throws Exception {
+                Clock clock) throws Exception {
             this(context, config, ipClientCallback, ipConnectivityLog, networkQuirkMetrics,
                     dependencies, false /* throwsExceptionWhenGeneratesProgram */, clock);
         }
@@ -1985,7 +1985,7 @@ public class LegacyApfTest {
         TestLegacyApfFilter(Context context, ApfFilter.ApfConfiguration config,
                 MockIpClientCallback ipClientCallback, IpConnectivityLog ipConnectivityLog,
                 NetworkQuirkMetrics networkQuirkMetrics, ApfFilter.Dependencies dependencies,
-                boolean throwsExceptionWhenGeneratesProgram, ApfFilter.Clock clock)
+                boolean throwsExceptionWhenGeneratesProgram, Clock clock)
                 throws Exception {
             super(context, config, InterfaceParams.getByName("lo"), ipClientCallback,
                     ipConnectivityLog, networkQuirkMetrics, dependencies, clock);

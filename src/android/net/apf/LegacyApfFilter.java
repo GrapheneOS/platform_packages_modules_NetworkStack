@@ -53,6 +53,7 @@ import android.net.metrics.ApfStats;
 import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.RaEvent;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.stats.connectivity.NetworkQuirkEvent;
 import android.system.ErrnoException;
 import android.system.Os;
@@ -134,6 +135,16 @@ public class LegacyApfFilter implements AndroidPacketFilter {
     // Otherwise, they're just aliases for PASS_LABEL and DROP_LABEL.
     private final String mCountAndPassLabel;
     private final String mCountAndDropLabel;
+
+    /** A wrapper class of {@link SystemClock} to be mocked in unit tests. */
+    public static class Clock {
+        /**
+         * @see SystemClock#elapsedRealtime
+         */
+        public long elapsedRealtime() {
+            return SystemClock.elapsedRealtime();
+        }
+    }
 
     // Thread to listen for RAs.
     @VisibleForTesting
@@ -346,7 +357,7 @@ public class LegacyApfFilter implements AndroidPacketFilter {
     // Minimum session time for metrics, duration less than this time will not be logged.
     private final long mMinMetricsSessionDurationMs;
 
-    private final ApfFilter.Clock mClock;
+    private final Clock mClock;
     private final NetworkQuirkMetrics mNetworkQuirkMetrics;
     private final IpClientRaInfoMetrics mIpClientRaInfoMetrics;
     private final ApfSessionInfoMetrics mApfSessionInfoMetrics;
@@ -385,14 +396,14 @@ public class LegacyApfFilter implements AndroidPacketFilter {
             InterfaceParams ifParams, IpClientCallbacksWrapper ipClientCallback,
             IpConnectivityLog log, NetworkQuirkMetrics networkQuirkMetrics) {
         this(context, config, ifParams, ipClientCallback, log, networkQuirkMetrics,
-                new ApfFilter.Dependencies(context), new ApfFilter.Clock());
+                new ApfFilter.Dependencies(context), new Clock());
     }
 
     @VisibleForTesting
     public LegacyApfFilter(Context context, ApfFilter.ApfConfiguration config,
             InterfaceParams ifParams, IpClientCallbacksWrapper ipClientCallback,
             IpConnectivityLog log, NetworkQuirkMetrics networkQuirkMetrics,
-            ApfFilter.Dependencies dependencies, ApfFilter.Clock clock) {
+            ApfFilter.Dependencies dependencies, Clock clock) {
         mApfVersionSupported = config.apfVersionSupported;
         mMaximumApfProgramSize = config.apfRamSize;
         mIpClientCallback = ipClientCallback;
