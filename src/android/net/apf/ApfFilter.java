@@ -208,6 +208,7 @@ public class ApfFilter implements AndroidPacketFilter {
         public boolean hasClatInterface;
         public boolean shouldHandleArpOffload;
         public boolean shouldHandleNdOffload;
+        public boolean shouldHandleMdnsOffload;
     }
 
 
@@ -285,6 +286,7 @@ public class ApfFilter implements AndroidPacketFilter {
     private final int mAcceptRaMinLft;
     private final boolean mShouldHandleArpOffload;
     private final boolean mShouldHandleNdOffload;
+    private final boolean mShouldHandleMdnsOffload;
 
     private final NetworkQuirkMetrics mNetworkQuirkMetrics;
     private final IpClientRaInfoMetrics mIpClientRaInfoMetrics;
@@ -390,6 +392,7 @@ public class ApfFilter implements AndroidPacketFilter {
         mAcceptRaMinLft = config.acceptRaMinLft;
         mShouldHandleArpOffload = config.shouldHandleArpOffload;
         mShouldHandleNdOffload = config.shouldHandleNdOffload;
+        mShouldHandleMdnsOffload = config.shouldHandleMdnsOffload;
         mDependencies = dependencies;
         mNetworkQuirkMetrics = networkQuirkMetrics;
         mIpClientRaInfoMetrics = dependencies.getIpClientRaInfoMetrics();
@@ -2667,6 +2670,11 @@ public class ApfFilter implements AndroidPacketFilter {
     @Override
     public boolean supportNdOffload() {
         return shouldUseApfV6Generator() && mShouldHandleNdOffload;
+    }
+
+    @Override
+    public boolean shouldUseMdnsOffload() {
+        return shouldUseApfV6Generator() && mShouldHandleMdnsOffload;
     }
 
     private boolean shouldUseApfV6Generator() {

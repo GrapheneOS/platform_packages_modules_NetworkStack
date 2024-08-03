@@ -31,6 +31,7 @@ import static android.net.ip.IpClient.IpClientCommands.CMD_CONFIRM;
 import static android.net.ip.IpClient.IpClientCommands.CMD_JUMP_RUNNING_TO_STOPPING;
 import static android.net.ip.IpClient.IpClientCommands.CMD_JUMP_STOPPING_TO_STOPPED;
 import static android.net.ip.IpClient.IpClientCommands.CMD_REMOVE_KEEPALIVE_PACKET_FILTER_FROM_APF;
+import static android.net.ip.IpClient.IpClientCommands.CMD_REMOVE_OFFLOAD_SERVICE;
 import static android.net.ip.IpClient.IpClientCommands.CMD_SET_DTIM_MULTIPLIER_AFTER_DELAY;
 import static android.net.ip.IpClient.IpClientCommands.CMD_SET_MULTICAST_FILTER;
 import static android.net.ip.IpClient.IpClientCommands.CMD_START;
@@ -41,6 +42,7 @@ import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_APF_DATA_SNAPS
 import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_HTTP_PROXY;
 import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_L2INFORMATION;
 import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_L2KEY_CLUSTER;
+import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_OFFLOAD_SERVICE;
 import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_TCP_BUFFER_SIZES;
 import static android.net.ip.IpClient.IpClientCommands.EVENT_DHCPACTION_TIMEOUT;
 import static android.net.ip.IpClient.IpClientCommands.EVENT_IPV6_AUTOCONF_TIMEOUT;
@@ -52,9 +54,12 @@ import static android.net.ip.IpClientLinkObserver.IpClientNetlinkMonitor;
 import static android.net.ip.IpClientLinkObserver.IpClientNetlinkMonitor.INetlinkMessageProcessor;
 import static android.net.ip.IpReachabilityMonitor.INVALID_REACHABILITY_LOSS_TYPE;
 import static android.net.ip.IpReachabilityMonitor.nudEventTypeToInt;
+import static android.net.nsd.OffloadEngine.OFFLOAD_CAPABILITY_BYPASS_MULTICAST_LOCK;
+import static android.net.nsd.OffloadEngine.OFFLOAD_TYPE_REPLY;
 import static android.net.util.SocketUtils.makePacketSocketAddress;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.stats.connectivity.NetworkQuirkEvent.QE_DHCP6_HEURISTIC_TRIGGERED;
+import static android.stats.connectivity.NetworkQuirkEvent.QE_DHCP6_PD_PROVISIONED;
 import static android.system.OsConstants.AF_PACKET;
 import static android.system.OsConstants.ARPHRD_ETHER;
 import static android.system.OsConstants.ETH_P_ARP;
@@ -109,7 +114,9 @@ import android.net.Uri;
 import android.net.apf.AndroidPacketFilter;
 import android.net.apf.ApfCapabilities;
 import android.net.apf.ApfFilter;
+import android.net.apf.ApfMdnsUtils;
 import android.net.apf.LegacyApfFilter;
+import android.net.apf.MdnsOffloadRule;
 import android.net.dhcp.DhcpClient;
 import android.net.dhcp.DhcpPacket;
 import android.net.dhcp6.Dhcp6Client;
@@ -118,6 +125,9 @@ import android.net.metrics.IpManagerEvent;
 import android.net.networkstack.aidl.dhcp.DhcpOption;
 import android.net.networkstack.aidl.ip.ReachabilityLossInfoParcelable;
 import android.net.networkstack.aidl.ip.ReachabilityLossReason;
+import android.net.nsd.NsdManager;
+import android.net.nsd.OffloadEngine;
+import android.net.nsd.OffloadServiceInfo;
 import android.net.shared.InitialConfiguration;
 import android.net.shared.Layer2Information;
 import android.net.shared.ProvisioningConfiguration;
@@ -146,6 +156,7 @@ import android.util.SparseArray;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.HexDump;
@@ -181,6 +192,7 @@ import com.android.server.NetworkStackService.NetworkStackServiceManager;
 
 import java.io.File;
 import java.io.FileDescriptor;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
@@ -595,6 +607,8 @@ public class IpClient extends StateMachine {
         static final int CMD_UPDATE_APF_CAPABILITIES = 19;
         static final int EVENT_IPV6_AUTOCONF_TIMEOUT = 20;
         static final int CMD_UPDATE_APF_DATA_SNAPSHOT = 21;
+        static final int CMD_UPDATE_OFFLOAD_SERVICE = 22;
+        static final int CMD_REMOVE_OFFLOAD_SERVICE = 23;
         // Internal commands to use instead of trying to call transitionTo() inside
         // a given State's enter() method. Calling transitionTo() from enter/exit
         // encounters a Log.wtf() that can cause trouble on eng builds.
@@ -770,6 +784,7 @@ public class IpClient extends StateMachine {
     private final boolean mPopulateLinkAddressLifetime;
     private final boolean mApfShouldHandleArpOffload;
     private final boolean mApfShouldHandleNdOffload;
+    private final boolean mApfShouldHandleMdnsOffload;
 
     private InterfaceParams mInterfaceParams;
 
@@ -785,6 +800,10 @@ public class IpClient extends StateMachine {
     private String mTcpBufferSizes;
     private ProxyInfo mHttpProxy;
     private AndroidPacketFilter mApfFilter;
+    private final NsdManager mNsdManager;
+    @Nullable
+    private OffloadEngine mOffloadEngine;
+    private final List<OffloadServiceInfo> mOffloadServiceInfos = new ArrayList<>();
     private String mL2Key; // The L2 key for this network, for writing into the memory store
     private String mCluster; // The cluster for this network, for writing into the memory store
     private int mCreatorUid; // Uid of app creating the wifi configuration
@@ -999,6 +1018,7 @@ public class IpClient extends StateMachine {
         // InterfaceController.Dependencies class.
         mNetd = deps.getNetd(mContext);
         mInterfaceCtrl = new InterfaceController(mInterfaceName, mNetd, mLog);
+        mNsdManager = context.getSystemService(NsdManager.class);
 
         mDhcp6PrefixDelegationEnabled = mDependencies.isFeatureEnabled(mContext,
                 IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION);
@@ -1021,6 +1041,8 @@ public class IpClient extends StateMachine {
                 mContext, APF_HANDLE_ARP_OFFLOAD);
         mApfShouldHandleNdOffload = mDependencies.isFeatureNotChickenedOut(
                 mContext, APF_HANDLE_ND_OFFLOAD);
+        // TODO: turn on APF mDNS offload.
+        mApfShouldHandleMdnsOffload = false;
         mPopulateLinkAddressLifetime = mDependencies.isFeatureEnabled(context,
                 IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION);
 
@@ -2251,6 +2273,13 @@ public class IpClient extends StateMachine {
         // the gratuitous NA to update the first-hop router's neighbor cache entry.
         maybeSendMulticastNSes(newLp);
 
+        final boolean gainedV6 = !mLinkProperties.isIpv6Provisioned() && newLp.isIpv6Provisioned();
+        // mDelegatedPrefixes is updated as part of the call to assembleLinkProperties() above.
+        if (gainedV6 && !mDelegatedPrefixes.isEmpty()) {
+            mNetworkQuirkMetrics.setEvent(QE_DHCP6_PD_PROVISIONED);
+            mNetworkQuirkMetrics.statsWrite();
+        }
+
         // Either success IPv4 or IPv6 provisioning triggers new LinkProperties update,
         // wait for the provisioning completion and record the latency.
         mIpProvisioningMetrics.setIPv4ProvisionedLatencyOnFirstTime(newLp.isIpv4Provisioned());
@@ -2646,6 +2675,7 @@ public class IpClient extends StateMachine {
         }
         apfConfig.shouldHandleArpOffload = mApfShouldHandleArpOffload;
         apfConfig.shouldHandleNdOffload = mApfShouldHandleNdOffload;
+        apfConfig.shouldHandleMdnsOffload = mApfShouldHandleMdnsOffload;
         apfConfig.minMetricsSessionDurationMs = mApfCounterPollingIntervalMs;
         apfConfig.hasClatInterface = mHasSeenClatInterface;
         return mDependencies.maybeCreateApfFilter(getHandler(), mContext, apfConfig,
@@ -2664,6 +2694,9 @@ public class IpClient extends StateMachine {
             return false;
         }
         if (mApfFilter != null) {
+            if (SdkLevel.isAtLeastV() && mOffloadEngine != null) {
+                unregisterOffloadEngine();
+            }
             mApfFilter.shutdown();
         }
         mCurrentApfCapabilities = apfCapabilities;
@@ -3129,6 +3162,37 @@ public class IpClient extends StateMachine {
         return mConfiguration.mIPv4ProvisioningMode != PROV_IPV4_DISABLED;
     }
 
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    private OffloadEngine createMdnsOffloadEngine() {
+        return new OffloadEngine() {
+            @Override
+            public void onOffloadServiceUpdated(@NonNull OffloadServiceInfo info) {
+                sendMessage(CMD_UPDATE_OFFLOAD_SERVICE, info);
+            }
+
+            @Override
+            public void onOffloadServiceRemoved(@NonNull OffloadServiceInfo info) {
+                sendMessage(CMD_REMOVE_OFFLOAD_SERVICE, info);
+            }
+        };
+    }
+
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    private void registerOffloadEngine() {
+        mOffloadEngine = createMdnsOffloadEngine();
+        mNsdManager.registerOffloadEngine(mInterfaceName,
+                OFFLOAD_TYPE_REPLY,
+                OFFLOAD_CAPABILITY_BYPASS_MULTICAST_LOCK,
+                Runnable::run, mOffloadEngine);
+    }
+
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    private void unregisterOffloadEngine() {
+        mNsdManager.unregisterOffloadEngine(mOffloadEngine);
+        mOffloadServiceInfos.clear();
+        mOffloadEngine = null;
+    }
+
     class RunningState extends State {
         private ConnectivityPacketTracker mPacketTracker;
         private boolean mDhcpActionInFlight;
@@ -3143,9 +3207,14 @@ public class IpClient extends StateMachine {
             // at the beginning.
             mHasSeenClatInterface = false;
             mApfFilter = maybeCreateApfFilter(mCurrentApfCapabilities);
-            // If Apf supports ND offload, then turn off the vendor ND offload feature.
-            if (mApfFilter != null && mApfFilter.supportNdOffload()) {
-                mCallback.setNeighborDiscoveryOffload(false);
+            if (mApfFilter != null) {
+                // If Apf supports ND offload, then turn off the vendor ND offload feature.
+                if (mApfFilter.supportNdOffload()) {
+                    mCallback.setNeighborDiscoveryOffload(false);
+                }
+                if (mApfFilter.shouldUseMdnsOffload()) {
+                    registerOffloadEngine();
+                }
             }
             // TODO: investigate the effects of any multicast filtering racing/interfering with the
             // rest of this IP configuration startup.
@@ -3207,6 +3276,9 @@ public class IpClient extends StateMachine {
             }
 
             if (mApfFilter != null) {
+                if (SdkLevel.isAtLeastV() && mOffloadEngine != null) {
+                    unregisterOffloadEngine();
+                }
                 mApfFilter.shutdown();
                 mApfFilter = null;
             }
@@ -3354,6 +3426,18 @@ public class IpClient extends StateMachine {
             }
         }
 
+        private void updateApfMdnsOffloadReplyRules() {
+            if (SdkLevel.isAtLeastV() && mApfFilter != null) {
+                try {
+                    final List<MdnsOffloadRule> rules =
+                            ApfMdnsUtils.extractOffloadReplyRule(mOffloadServiceInfos);
+                    mApfFilter.updateMdnsOffloadReplyRules(rules);
+                } catch (IOException e) {
+                    Log.wtf(TAG, "Failed to extract MdnsOffloadRule", e);
+                }
+            }
+        }
+
         @Override
         public boolean processMessage(Message msg) {
             switch (msg.what) {
@@ -3453,7 +3537,19 @@ public class IpClient extends StateMachine {
                     }
                     break;
                 }
-
+                case CMD_UPDATE_OFFLOAD_SERVICE: {
+                    final OffloadServiceInfo info = (OffloadServiceInfo) msg.obj;
+                    mOffloadServiceInfos.removeIf(i -> i.getKey().equals(info.getKey()));
+                    mOffloadServiceInfos.add(info);
+                    updateApfMdnsOffloadReplyRules();
+                    break;
+                }
+                case CMD_REMOVE_OFFLOAD_SERVICE: {
+                    final OffloadServiceInfo info = (OffloadServiceInfo) msg.obj;
+                    mOffloadServiceInfos.removeIf(i -> i.getKey().equals(info.getKey()));
+                    updateApfMdnsOffloadReplyRules();
+                    break;
+                }
                 case EVENT_DHCPACTION_TIMEOUT:
                     stopDhcpAction();
                     break;
@@ -3604,9 +3700,15 @@ public class IpClient extends StateMachine {
                     final ApfCapabilities apfCapabilities = (ApfCapabilities) msg.obj;
                     if (handleUpdateApfCapabilities(apfCapabilities)) {
                         mApfFilter = maybeCreateApfFilter(apfCapabilities);
-                        // If Apf supports ND offload, then turn off the vendor ND offload feature.
-                        if (mApfFilter != null && mApfFilter.supportNdOffload()) {
-                            mCallback.setNeighborDiscoveryOffload(false);
+                        if (mApfFilter != null) {
+                            // If Apf supports ND offload, then turn off the vendor ND offload
+                            // feature.
+                            if (mApfFilter.supportNdOffload()) {
+                                mCallback.setNeighborDiscoveryOffload(false);
+                            }
+                            if (mApfFilter.shouldUseMdnsOffload()) {
+                                registerOffloadEngine();
+                            }
                         }
                     }
                     break;
