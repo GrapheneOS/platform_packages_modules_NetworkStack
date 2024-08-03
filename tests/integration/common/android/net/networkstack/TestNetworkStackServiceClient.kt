@@ -23,6 +23,7 @@ import android.content.ServiceConnection
 import android.content.pm.PackageManager.MATCH_SYSTEM_ONLY
 import android.net.INetworkStackConnector
 import android.os.IBinder
+import android.os.UserHandle
 import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlin.test.fail
@@ -82,7 +83,15 @@ class TestNetworkStackServiceClient private constructor() : NetworkStackClientBa
     private fun init() {
         val bindIntent = Intent(testNetworkStackServiceAction)
         bindIntent.component = getNetworkStackComponent(bindIntent.action)
-        context.bindService(bindIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+        // Use UserHandle.SYSTEM to bind to the test network stack service as user 0. Otherwise on a
+        // multi-user device where current user is not user 0, this intent will start another test
+        // service for the current user which is not expected.
+        context.bindServiceAsUser(
+            bindIntent,
+            serviceConnection,
+            Context.BIND_AUTO_CREATE,
+            UserHandle.SYSTEM
+        )
     }
 
     fun disconnect() {

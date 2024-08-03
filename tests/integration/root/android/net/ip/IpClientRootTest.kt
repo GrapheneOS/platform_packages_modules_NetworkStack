@@ -16,6 +16,7 @@
 
 package android.net.ip
 
+import android.Manifest.permission.INTERACT_ACROSS_USERS_FULL
 import android.Manifest.permission.NETWORK_SETTINGS
 import android.Manifest.permission.READ_DEVICE_CONFIG
 import android.Manifest.permission.WRITE_DEVICE_CONFIG
@@ -83,7 +84,7 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
             // Connect to the NetworkStack only once, as it is relatively expensive (~50ms plus any
             // polling time waiting for the test UID to be allowed), and there should be minimal
             // side-effects between tests compared to reconnecting every time.
-            automation.adoptShellPermissionIdentity(NETWORK_SETTINGS)
+            automation.adoptShellPermissionIdentity(NETWORK_SETTINGS, INTERACT_ACROSS_USERS_FULL)
             try {
                 automation.executeShellCommand("su root service call network_stack " +
                         "$ALLOW_TEST_UID_INDEX i32 " + Process.myUid())
