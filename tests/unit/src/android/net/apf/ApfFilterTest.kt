@@ -19,6 +19,7 @@ import android.content.Context
 import android.net.LinkAddress
 import android.net.LinkProperties
 import android.net.MacAddress
+import android.net.NattKeepalivePacketDataParcelable
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_NON_IPV4
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_OTHER_HOST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REPLY_SPA_NO_HOST
@@ -31,6 +32,7 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_BROADCAST_ADDR
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_BROADCAST_NET
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_L2_BROADCAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_MULTICAST
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NATT_KEEPALIVE
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST_NA
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NON_ICMP_MULTICAST
@@ -664,6 +666,100 @@ class ApfFilterTest {
             program,
             HexDump.hexStringToByteArray(arpPkt),
             DROPPED_ARP_V6_ONLY
+        )
+    }
+
+    @Test
+    fun testIPv4NattKeepaliveFilter() {
+        val srcAddr = byteArrayOf(10, 0, 0, 5)
+        val dstAddr = byteArrayOf(10, 0, 0, 6)
+        val srcPort = 1024
+        val dstPort = 4500
+
+        // src: 10.0.0.5:1024
+        // dst: 10.0.0.6:4500
+        val parcel = NattKeepalivePacketDataParcelable()
+        parcel.srcAddress = InetAddress.getByAddress(srcAddr).address
+        parcel.srcPort = srcPort
+        parcel.dstAddress = InetAddress.getByAddress(dstAddr).address
+        parcel.dstPort = dstPort
+
+        val apfConfig = getDefaultConfig()
+        apfConfig.multicastFilter = true
+        apfConfig.ieee802_3Filter = true
+        val apfFilter = getApfFilter(apfConfig)
+        consumeInstalledProgram(ipClientCallback, installCnt = 2)
+        apfFilter.addNattKeepalivePacketFilter(1, parcel)
+        val program = consumeInstalledProgram(ipClientCallback, installCnt = 1)
+
+        // Drop IPv4 keepalive response packet
+        // Using scapy to generate IPv4 NAT-T keepalive ack packet with payload 0xff:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // ip = IP(src='10.0.0.6', dst='10.0.0.5')
+        // udp = UDP(sport=4500, dport=1024)
+        // payload = NAT_KEEPALIVE(nat_keepalive=0xff)
+        // pkt = eth/ip/udp/payload
+        val validNattPkt = """
+            01020304050600010203040508004500001d00010000401166c50a0000060a000005119404000009d73cff
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(validNattPkt),
+            DROPPED_IPV4_NATT_KEEPALIVE
+        )
+
+        // Pass IPv4 keepalive response packet with 0xfe payload
+        // Using scapy to generate IPv4 NAT-T keepalive ack packet with payload 0xfe:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // ip = IP(src='10.0.0.6', dst='10.0.0.5')
+        // udp = UDP(sport=4500, dport=1024)
+        // payload = NAT_KEEPALIVE(nat_keepalive=0xfe)
+        // pkt = eth/ip/udp/payload
+        val invalidNattPkt = """
+            01020304050600010203040508004500001d00010000401166c50a0000060a000005119404000009d83cfe
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(invalidNattPkt),
+            PASSED_IPV4_UNICAST
+        )
+
+        // Pass IPv4 non-keepalive response packet from the same source address
+        // Using scapy to generate IPv4 NAT-T keepalive ack packet with payload 0xfe:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // ip = IP(src='10.0.0.6', dst='10.0.0.5')
+        // udp = UDP(sport=4500, dport=1024)
+        // payload = Raw(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09')
+        // pkt = eth/ip/udp/payload
+        val nonNattPkt = """
+            01020304050600010203040508004500002600010000401166bc0a0000060a000005119404000012c2120
+            0010203040506070809
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(nonNattPkt),
+            PASSED_IPV4_UNICAST
+        )
+
+        // Pass IPv4 non-keepalive response packet from other source address
+        // Using scapy to generate IPv4 NAT-T keepalive ack packet with payload 0xfe:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // ip = IP(src='10.0.0.7', dst='10.0.0.5')
+        // udp = UDP(sport=4500, dport=1024)
+        // payload = Raw(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09')
+        // pkt = eth/ip/udp/payload
+        val otherSrcNonNattPkt = """
+            01020304050600010203040508004500002600010000401166bb0a0000070a000005119404000012c2110
+            0010203040506070809
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(otherSrcNonNattPkt),
+            PASSED_IPV4_UNICAST
         )
     }
 

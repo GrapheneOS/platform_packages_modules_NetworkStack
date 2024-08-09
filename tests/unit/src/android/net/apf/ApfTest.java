@@ -73,7 +73,6 @@ import android.net.IpPrefix;
 import android.net.LinkAddress;
 import android.net.LinkProperties;
 import android.net.MacAddress;
-import android.net.NattKeepalivePacketDataParcelable;
 import android.net.TcpKeepalivePacketDataParcelable;
 import android.net.apf.ApfCounterTracker.Counter;
 import android.net.apf.ApfFilter.ApfConfiguration;
@@ -2190,60 +2189,6 @@ public class ApfTest {
         packet.putInt(IPV6_TCP_SEQ_NUM_OFFSET, seq);
         packet.putInt(IPV6_TCP_ACK_NUM_OFFSET, ack);
         return packet.array();
-    }
-
-    @Test
-    public void testApfFilterNattKeepalivePacket() throws Exception {
-        final ApfConfiguration config = getDefaultConfig();
-        config.multicastFilter = DROP_MULTICAST;
-        config.ieee802_3Filter = DROP_802_3_FRAMES;
-        final ApfFilter apfFilter = getApfFilter(config);
-        consumeInstalledProgram(mIpClientCb, 1 /* installCnt */);
-        byte[] program;
-        final int srcPort = 1024;
-        final int dstPort = 4500;
-        final int slot1 = 1;
-        // NAT-T keepalive
-        final byte[] kaPayload = {(byte) 0xff};
-        final byte[] nonKaPayload = {(byte) 0xfe};
-
-        // src: 10.0.0.5, port: 1024
-        // dst: 10.0.0.6, port: 4500
-        InetAddress srcAddr = InetAddress.getByAddress(IPV4_KEEPALIVE_SRC_ADDR);
-        InetAddress dstAddr = InetAddress.getByAddress(IPV4_KEEPALIVE_DST_ADDR);
-
-        final NattKeepalivePacketDataParcelable parcel = new NattKeepalivePacketDataParcelable();
-        parcel.srcAddress = srcAddr.getAddress();
-        parcel.srcPort = srcPort;
-        parcel.dstAddress = dstAddr.getAddress();
-        parcel.dstPort = dstPort;
-
-        apfFilter.addNattKeepalivePacketFilter(slot1, parcel);
-        program = consumeInstalledProgram(mIpClientCb, 1 /* installCnt */);
-
-        // Verify IPv4 keepalive packet is dropped
-        // src: 10.0.0.6, port: 4500
-        // dst: 10.0.0.5, port: 1024
-        byte[] pkt = ipv4UdpPacket(IPV4_KEEPALIVE_DST_ADDR,
-                    IPV4_KEEPALIVE_SRC_ADDR, dstPort, srcPort, 1 /* dataLength */);
-        System.arraycopy(kaPayload, 0, pkt, IPV4_UDP_PAYLOAD_OFFSET, kaPayload.length);
-        assertDrop(program, pkt);
-
-        // Verify a packet with payload length 1 byte but it is not 0xff will pass the filter.
-        System.arraycopy(nonKaPayload, 0, pkt, IPV4_UDP_PAYLOAD_OFFSET, nonKaPayload.length);
-        assertPass(program, pkt);
-
-        // Verify IPv4 non-keepalive response packet from the same source address is passed
-        assertPass(program,
-                ipv4UdpPacket(IPV4_KEEPALIVE_DST_ADDR, IPV4_KEEPALIVE_SRC_ADDR,
-                        dstPort, srcPort, 10 /* dataLength */));
-
-        // Verify IPv4 non-keepalive response packet from other source address is passed
-        assertPass(program,
-                ipv4UdpPacket(IPV4_ANOTHER_ADDR, IPV4_KEEPALIVE_SRC_ADDR,
-                        dstPort, srcPort, 10 /* dataLength */));
-
-        apfFilter.removeKeepalivePacketFilter(slot1);
     }
 
     private static byte[] ipv4UdpPacket(byte[] sip, byte[] dip, int sport,
