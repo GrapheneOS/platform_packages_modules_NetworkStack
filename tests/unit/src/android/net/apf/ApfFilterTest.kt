@@ -36,6 +36,7 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_L2_BROADCAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_MULTICAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NATT_KEEPALIVE
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_TCP_PORT7_UNICAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST_NA
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NON_ICMP_MULTICAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID
@@ -54,7 +55,6 @@ import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_DAD
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_ADDRESS
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_SLLA_OPTION
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_TENTATIVE
-import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_UNICAST_NON_ICMP
 import android.net.apf.ApfCounterTracker.Counter.PASSED_MLD
 import android.net.apf.ApfFilter.Dependencies
 import android.net.apf.ApfTestHelpers.Companion.TIMEOUT_MS
@@ -880,46 +880,59 @@ class ApfFilterTest {
     }
 
     @Test
-    fun testIPv6MulticastPacketFilter() {
-        val apfConfig = getDefaultConfig()
-        apfConfig.multicastFilter = true
-        val apfFilter = getApfFilter(apfConfig)
-        consumeInstalledProgram(ipClientCallback, installCnt = 2)
-        val lp = LinkProperties()
-        for (addr in hostIpv6Addresses) {
-            lp.addLinkAddress(LinkAddress(InetAddress.getByAddress(addr), 64))
-        }
-        apfFilter.setLinkProperties(lp)
-        val program = consumeInstalledProgram(ipClientCallback, installCnt = 1)
+    fun testIPv4TcpPort7Filter() {
+        val apfFilter = getApfFilter()
+        val program = consumeInstalledProgram(ipClientCallback, installCnt = 2)
 
-        // Using scapy to generate non ICMPv6 sent to ff00::/8 (multicast prefix) packet:
+        // Drop IPv4 TCP port 7 packet
+        // Using scapy to generate IPv4 TCP port 7 packet:
         // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
-        // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="ff00::1", nh=59)
-        // pkt = eth/ip6
-        val nonIcmpv6McastPkt = """
-            ffffffffffff00112233445586dd6000000000003b4020010000000000000200001a11223344ff00000
-            0000000000000000000000000
+        // ip = IP(src='10.0.0.6', dst='10.0.0.5')
+        // tcp = TCP(dport=7)
+        // pkt = eth/ip/tcp
+        val tcpPort7Pkt = """
+            01020304050600010203040508004500002800010000400666c50a0000060a00000500140007000000000
+            0000000500220007bbd0000
         """.replace("\\s+".toRegex(), "").trim()
         verifyProgramRun(
             APF_VERSION_6,
             program,
-            HexDump.hexStringToByteArray(nonIcmpv6McastPkt),
-            DROPPED_IPV6_NON_ICMP_MULTICAST
+            HexDump.hexStringToByteArray(tcpPort7Pkt),
+            DROPPED_IPV4_TCP_PORT7_UNICAST
         )
 
-        // Using scapy to generate non ICMPv6 unicast packet:
+        // Pass IPv4 TCP initial fragment packet
+        // Using scapy to generate IPv4 TCP initial fragment packet:
         // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
-        // ip6 = IPv6(src="2001::200:1a:1122:3344", dst="2001::200:1a:3344:5566", nh=59)
-        // pkt = eth/ip6
-        val nonIcmpv6UcastPkt = """
-            ffffffffffff00112233445586dd6000000000003b4020010000000000000200001a112233442001000
-            0000000000200001a33445566
+        // ip = IP(src='10.0.0.6', dst='10.0.0.5', flags=1, frag=0)
+        // tcp = TCP()
+        // pkt = eth/ip/tcp
+        val initialFragmentTcpPkt = """
+            01020304050600010203040508004500002800012000400646c50a0000060a00000500140050000000000
+            0000000500220007b740000
         """.replace("\\s+".toRegex(), "").trim()
         verifyProgramRun(
             APF_VERSION_6,
             program,
-            HexDump.hexStringToByteArray(nonIcmpv6UcastPkt),
-            PASSED_IPV6_UNICAST_NON_ICMP
+            HexDump.hexStringToByteArray(initialFragmentTcpPkt),
+            PASSED_IPV4
+        )
+
+        // Pass IPv4 TCP fragment packet
+        // Using scapy to generate IPv4 TCP fragment packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // ip = IP(src='10.0.0.6', dst='10.0.0.5', flags=1, frag=100)
+        // tcp = TCP()
+        // pkt = eth/ip/tcp
+        val fragmentTcpPkt = """
+            01020304050600010203040508004500002800012064400646610a0000060a00000500140050000000000
+            0000000500220007b740000
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(fragmentTcpPkt),
+            PASSED_IPV4
         )
     }
 
