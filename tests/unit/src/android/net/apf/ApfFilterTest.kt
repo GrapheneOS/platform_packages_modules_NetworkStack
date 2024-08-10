@@ -20,6 +20,7 @@ import android.net.LinkAddress
 import android.net.LinkProperties
 import android.net.MacAddress
 import android.net.NattKeepalivePacketDataParcelable
+import android.net.TcpKeepalivePacketDataParcelable
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_NON_IPV4
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_OTHER_HOST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REPLY_SPA_NO_HOST
@@ -30,6 +31,7 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_NOT_ALLOWED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_GARP_REPLY
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_BROADCAST_ADDR
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_BROADCAST_NET
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_KEEPALIVE_ACK
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_L2_BROADCAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_MULTICAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NATT_KEEPALIVE
@@ -666,6 +668,120 @@ class ApfFilterTest {
             program,
             HexDump.hexStringToByteArray(arpPkt),
             DROPPED_ARP_V6_ONLY
+        )
+    }
+
+    @Test
+    fun testIPv4TcpKeepaliveFilter() {
+        val srcAddr = byteArrayOf(10, 0, 0, 5)
+        val dstAddr = byteArrayOf(10, 0, 0, 6)
+        val srcPort = 12345
+        val dstPort = 54321
+        val seqNum = 2123456789
+        val ackNum = 1234567890
+
+        // src: 10.0.0.5:12345
+        // dst: 10.0.0.6:54321
+        val parcel = TcpKeepalivePacketDataParcelable()
+        parcel.srcAddress = InetAddress.getByAddress(srcAddr).address
+        parcel.srcPort = srcPort
+        parcel.dstAddress = InetAddress.getByAddress(dstAddr).address
+        parcel.dstPort = dstPort
+        parcel.seq = seqNum
+        parcel.ack = ackNum
+
+        val apfConfig = getDefaultConfig()
+        apfConfig.multicastFilter = true
+        apfConfig.ieee802_3Filter = true
+        val apfFilter = getApfFilter(apfConfig)
+        consumeInstalledProgram(ipClientCallback, installCnt = 2)
+        apfFilter.addTcpKeepalivePacketFilter(1, parcel)
+        var program = consumeInstalledProgram(ipClientCallback, installCnt = 1)
+
+        // Drop IPv4 keepalive ack
+        // Using scapy to generate IPv4 TCP keepalive ack packet with seq + 1:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // ip = IP(src='10.0.0.6', dst='10.0.0.5')
+        // tcp = TCP(sport=54321, dport=12345, flags="A", seq=1234567890, ack=2123456790)
+        // pkt = eth/ip/tcp
+        val keepaliveAckPkt = """
+            01020304050600010203040508004500002800010000400666c50a0000060a000005d4313039499602d2
+            7e916116501020004b4f0000
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(keepaliveAckPkt),
+            DROPPED_IPV4_KEEPALIVE_ACK
+        )
+
+        // Pass IPv4 non-keepalive ack from the same source address
+        // Using scapy to generate IPv4 TCP non-keepalive ack from the same source address:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // ip = IP(src='10.0.0.6', dst='10.0.0.5')
+        // tcp = TCP(sport=54321, dport=12345, flags="A", seq=1234567990, ack=2123456789)
+        // pkt = eth/ip/tcp
+        val nonKeepaliveAckPkt1 = """
+            01020304050600010203040508004500002800010000400666c50a0000060a000005d431303949960336
+            7e916115501020004aec0000
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(nonKeepaliveAckPkt1),
+            PASSED_IPV4_UNICAST
+        )
+
+        // Pass IPv4 non-keepalive ack from the same source address
+        // Using scapy to generate IPv4 TCP non-keepalive ack from the same source address:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // ip = IP(src='10.0.0.6', dst='10.0.0.5')
+        // tcp = TCP(sport=54321, dport=12345, flags="A", seq=1234567890, ack=2123456790)
+        // payload = Raw(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09')
+        // pkt = eth/ip/tcp/payload
+        val nonKeepaliveAckPkt2 = """
+            01020304050600010203040508004500003200010000400666bb0a0000060a000005d4313039499602d27
+            e91611650102000372c000000010203040506070809
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(nonKeepaliveAckPkt2),
+            PASSED_IPV4_UNICAST
+        )
+
+        // Pass IPv4 keepalive ack from another address
+        // Using scapy to generate IPv4 TCP keepalive ack from another address:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // ip = IP(src='10.0.0.7', dst='10.0.0.5')
+        // tcp = TCP(sport=23456, dport=65432, flags="A", seq=2123456780, ack=1123456789)
+        // pkt = eth/ip/tcp
+        val otherSrcKeepaliveAck = """
+            01020304050600010203040508004500002800010000400666c40a0000070a0000055ba0ff987e91610c4
+            2f697155010200066e60000
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(otherSrcKeepaliveAck),
+            PASSED_IPV4_UNICAST
+        )
+
+        // test IPv4 packets when TCP keepalive filter is removed
+        apfFilter.removeKeepalivePacketFilter(1)
+        program = consumeInstalledProgram(ipClientCallback, installCnt = 1)
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(keepaliveAckPkt),
+            PASSED_IPV4_UNICAST
+        )
+
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            HexDump.hexStringToByteArray(otherSrcKeepaliveAck),
+            PASSED_IPV4_UNICAST
         )
     }
 
