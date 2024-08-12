@@ -42,7 +42,6 @@ import static android.system.OsConstants.ETH_P_IP;
 import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
 import static android.system.OsConstants.IPPROTO_IPV6;
-import static android.system.OsConstants.IPPROTO_TCP;
 import static android.system.OsConstants.IPPROTO_UDP;
 import static android.system.OsConstants.SOCK_STREAM;
 
@@ -1073,25 +1072,12 @@ public class ApfTest {
     private static final int IP_HEADER_OFFSET = ETH_HEADER_LEN;
 
     private static final int IPV4_HEADER_LEN          = 20;
-    private static final int IPV4_TOTAL_LENGTH_OFFSET = IP_HEADER_OFFSET + 2;
     private static final int IPV4_PROTOCOL_OFFSET     = IP_HEADER_OFFSET + 9;
-    private static final int IPV4_SRC_ADDR_OFFSET     = IP_HEADER_OFFSET + 12;
     private static final int IPV4_DEST_ADDR_OFFSET    = IP_HEADER_OFFSET + 16;
 
-    private static final int IPV4_TCP_HEADER_LEN           = 20;
     private static final int IPV4_TCP_HEADER_OFFSET        = IP_HEADER_OFFSET + IPV4_HEADER_LEN;
-    private static final int IPV4_TCP_SRC_PORT_OFFSET      = IPV4_TCP_HEADER_OFFSET + 0;
-    private static final int IPV4_TCP_DEST_PORT_OFFSET     = IPV4_TCP_HEADER_OFFSET + 2;
-    private static final int IPV4_TCP_SEQ_NUM_OFFSET       = IPV4_TCP_HEADER_OFFSET + 4;
-    private static final int IPV4_TCP_ACK_NUM_OFFSET       = IPV4_TCP_HEADER_OFFSET + 8;
-    private static final int IPV4_TCP_HEADER_LENGTH_OFFSET = IPV4_TCP_HEADER_OFFSET + 12;
-    private static final int IPV4_TCP_HEADER_FLAG_OFFSET   = IPV4_TCP_HEADER_OFFSET + 13;
 
     private static final int IPV4_UDP_HEADER_OFFSET    = IP_HEADER_OFFSET + IPV4_HEADER_LEN;
-    private static final int IPV4_UDP_SRC_PORT_OFFSET  = IPV4_UDP_HEADER_OFFSET + 0;
-    private static final int IPV4_UDP_DEST_PORT_OFFSET = IPV4_UDP_HEADER_OFFSET + 2;
-    private static final int IPV4_UDP_LENGTH_OFFSET    = IPV4_UDP_HEADER_OFFSET + 4;
-    private static final int IPV4_UDP_PAYLOAD_OFFSET   = IPV4_UDP_HEADER_OFFSET + 8;
     private static final byte[] IPV4_BROADCAST_ADDRESS =
             {(byte) 255, (byte) 255, (byte) 255, (byte) 255};
 
@@ -1101,10 +1087,6 @@ public class ApfTest {
     private static final int IPV6_SRC_ADDR_OFFSET        = IP_HEADER_OFFSET + 8;
     private static final int IPV6_DEST_ADDR_OFFSET       = IP_HEADER_OFFSET + 24;
     private static final int IPV6_PAYLOAD_OFFSET = IP_HEADER_OFFSET + IPV6_HEADER_LEN;
-    private static final int IPV6_TCP_SRC_PORT_OFFSET    = IPV6_PAYLOAD_OFFSET + 0;
-    private static final int IPV6_TCP_DEST_PORT_OFFSET   = IPV6_PAYLOAD_OFFSET + 2;
-    private static final int IPV6_TCP_SEQ_NUM_OFFSET     = IPV6_PAYLOAD_OFFSET + 4;
-    private static final int IPV6_TCP_ACK_NUM_OFFSET     = IPV6_PAYLOAD_OFFSET + 8;
     // The IPv6 all nodes address ff02::1
     private static final byte[] IPV6_ALL_NODES_ADDRESS   =
             { (byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
@@ -1118,25 +1100,18 @@ public class ApfTest {
     private static final int ICMP6_TYPE_OFFSET           = IP_HEADER_OFFSET + IPV6_HEADER_LEN;
     private static final int ICMP6_ROUTER_SOLICITATION   = 133;
     private static final int ICMP6_ROUTER_ADVERTISEMENT  = 134;
-    private static final int ICMP6_NEIGHBOR_SOLICITATION = 135;
     private static final int ICMP6_NEIGHBOR_ANNOUNCEMENT = 136;
 
     private static final int ICMP6_RA_HEADER_LEN = 16;
     private static final int ICMP6_RA_CHECKSUM_OFFSET =
             IP_HEADER_OFFSET + IPV6_HEADER_LEN + 2;
-    private static final int ICMP6_RA_ROUTER_LIFETIME_OFFSET =
-            IP_HEADER_OFFSET + IPV6_HEADER_LEN + 6;
     private static final int ICMP6_RA_REACHABLE_TIME_OFFSET =
             IP_HEADER_OFFSET + IPV6_HEADER_LEN + 8;
-    private static final int ICMP6_RA_RETRANSMISSION_TIMER_OFFSET =
-            IP_HEADER_OFFSET + IPV6_HEADER_LEN + 12;
     private static final int ICMP6_RA_OPTION_OFFSET =
             IP_HEADER_OFFSET + IPV6_HEADER_LEN + ICMP6_RA_HEADER_LEN;
 
     private static final int ICMP6_PREFIX_OPTION_TYPE                      = 3;
     private static final int ICMP6_PREFIX_OPTION_LEN                       = 32;
-    private static final int ICMP6_PREFIX_OPTION_VALID_LIFETIME_OFFSET     = 4;
-    private static final int ICMP6_PREFIX_OPTION_PREFERRED_LIFETIME_OFFSET = 8;
 
     // From RFC6106: Recursive DNS Server option
     private static final int ICMP6_RDNSS_OPTION_TYPE = 25;
@@ -1147,8 +1122,6 @@ public class ApfTest {
     private static final int ICMP6_ROUTE_INFO_OPTION_TYPE = 24;
     // Above three options all have the same format:
     private static final int ICMP6_4_BYTE_OPTION_LEN      = 8;
-    private static final int ICMP6_4_BYTE_LIFETIME_OFFSET = 4;
-    private static final int ICMP6_4_BYTE_LIFETIME_LEN    = 4;
 
     private static final int UDP_HEADER_LEN              = 8;
     private static final int UDP_DESTINATION_PORT_OFFSET = ETH_HEADER_LEN + 22;
@@ -1186,7 +1159,6 @@ public class ApfTest {
     private static final byte[] IPV4_MDNS_MULTICAST_ADDR = {(byte) 224, 0, 0, (byte) 251};
     private static final byte[] IPV6_MDNS_MULTICAST_ADDR =
             {(byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (byte) 0xfb};
-    private static final int IPV6_UDP_DEST_PORT_OFFSET = IPV6_PAYLOAD_OFFSET + 2;
     private static final int MDNS_UDP_PORT = 5353;
 
     private static void setIpv4VersionFields(ByteBuffer packet) {
@@ -1990,72 +1962,8 @@ public class ApfTest {
         return packet.array();
     }
 
-    private static final byte[] IPV4_KEEPALIVE_SRC_ADDR = {10, 0, 0, 5};
-    private static final byte[] IPV4_KEEPALIVE_DST_ADDR = {10, 0, 0, 6};
-    private static final byte[] IPV4_ANOTHER_ADDR = {10, 0 , 0, 7};
-    private static final byte[] IPV6_KEEPALIVE_SRC_ADDR =
-            {(byte) 0x24, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (byte) 0xfa, (byte) 0xf1};
-    private static final byte[] IPV6_KEEPALIVE_DST_ADDR =
-            {(byte) 0x24, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (byte) 0xfa, (byte) 0xf2};
     private static final byte[] IPV6_ANOTHER_ADDR =
             {(byte) 0x24, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (byte) 0xfa, (byte) 0xf5};
-
-    private static byte[] ipv4TcpPacket(byte[] sip, byte[] dip, int sport,
-            int dport, int seq, int ack, int dataLength) {
-        final int totalLength = dataLength + IPV4_HEADER_LEN + IPV4_TCP_HEADER_LEN;
-
-        ByteBuffer packet = ByteBuffer.wrap(new byte[totalLength + ETH_HEADER_LEN]);
-
-        // Ethertype and IPv4 header
-        setIpv4VersionFields(packet);
-        packet.putShort(IPV4_TOTAL_LENGTH_OFFSET, (short) totalLength);
-        packet.put(IPV4_PROTOCOL_OFFSET, (byte) IPPROTO_TCP);
-        put(packet, IPV4_SRC_ADDR_OFFSET, sip);
-        put(packet, IPV4_DEST_ADDR_OFFSET, dip);
-        packet.putShort(IPV4_TCP_SRC_PORT_OFFSET, (short) sport);
-        packet.putShort(IPV4_TCP_DEST_PORT_OFFSET, (short) dport);
-        packet.putInt(IPV4_TCP_SEQ_NUM_OFFSET, seq);
-        packet.putInt(IPV4_TCP_ACK_NUM_OFFSET, ack);
-
-        // TCP header length 5(20 bytes), reserved 3 bits, NS=0
-        packet.put(IPV4_TCP_HEADER_LENGTH_OFFSET, (byte) 0x50);
-        // TCP flags: ACK set
-        packet.put(IPV4_TCP_HEADER_FLAG_OFFSET, (byte) 0x10);
-        return packet.array();
-    }
-
-    private static byte[] ipv6TcpPacket(byte[] sip, byte[] tip, int sport,
-            int dport, int seq, int ack) {
-        ByteBuffer packet = ByteBuffer.wrap(new byte[100]);
-        setIpv6VersionFields(packet);
-        packet.put(IPV6_NEXT_HEADER_OFFSET, (byte) IPPROTO_TCP);
-        put(packet, IPV6_SRC_ADDR_OFFSET, sip);
-        put(packet, IPV6_DEST_ADDR_OFFSET, tip);
-        packet.putShort(IPV6_TCP_SRC_PORT_OFFSET, (short) sport);
-        packet.putShort(IPV6_TCP_DEST_PORT_OFFSET, (short) dport);
-        packet.putInt(IPV6_TCP_SEQ_NUM_OFFSET, seq);
-        packet.putInt(IPV6_TCP_ACK_NUM_OFFSET, ack);
-        return packet.array();
-    }
-
-    private static byte[] ipv4UdpPacket(byte[] sip, byte[] dip, int sport,
-            int dport, int dataLength) {
-        final int totalLength = dataLength + IPV4_HEADER_LEN + UDP_HEADER_LEN;
-        final int udpLength = UDP_HEADER_LEN + dataLength;
-        ByteBuffer packet = ByteBuffer.wrap(new byte[totalLength + ETH_HEADER_LEN]);
-
-        // Ethertype and IPv4 header
-        setIpv4VersionFields(packet);
-        packet.putShort(IPV4_TOTAL_LENGTH_OFFSET, (short) totalLength);
-        packet.put(IPV4_PROTOCOL_OFFSET, (byte) IPPROTO_UDP);
-        put(packet, IPV4_SRC_ADDR_OFFSET, sip);
-        put(packet, IPV4_DEST_ADDR_OFFSET, dip);
-        packet.putShort(IPV4_UDP_SRC_PORT_OFFSET, (short) sport);
-        packet.putShort(IPV4_UDP_DEST_PORT_OFFSET, (short) dport);
-        packet.putShort(IPV4_UDP_LENGTH_OFFSET, (short) udpLength);
-
-        return packet.array();
-    }
 
     private static class RaPacketBuilder {
         final ByteArrayOutputStream mPacket = new ByteArrayOutputStream();
