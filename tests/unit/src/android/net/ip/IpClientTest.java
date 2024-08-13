@@ -26,11 +26,6 @@ import static android.system.OsConstants.IFA_F_TENTATIVE;
 import static android.system.OsConstants.RT_SCOPE_UNIVERSE;
 
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
-import static com.android.net.module.util.NetworkStackConstants.TYPE_A;
-import static com.android.net.module.util.NetworkStackConstants.TYPE_AAAA;
-import static com.android.net.module.util.NetworkStackConstants.TYPE_PTR;
-import static com.android.net.module.util.NetworkStackConstants.TYPE_SRV;
-import static com.android.net.module.util.NetworkStackConstants.TYPE_TXT;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTM_NEWLINK;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTPROT_KERNEL;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTM_DELROUTE;
@@ -49,7 +44,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.anyString;
@@ -84,14 +78,10 @@ import android.net.RouteInfo;
 import android.net.apf.AndroidPacketFilter;
 import android.net.apf.ApfCapabilities;
 import android.net.apf.ApfFilter.ApfConfiguration;
-import android.net.apf.MdnsOffloadRule;
 import android.net.ip.IpClientLinkObserver.IpClientNetlinkMonitor;
 import android.net.ip.IpClientLinkObserver.IpClientNetlinkMonitor.INetlinkMessageProcessor;
 import android.net.ipmemorystore.NetworkAttributes;
 import android.net.metrics.IpConnectivityLog;
-import android.net.nsd.NsdManager;
-import android.net.nsd.OffloadEngine;
-import android.net.nsd.OffloadServiceInfo;
 import android.net.shared.InitialConfiguration;
 import android.net.shared.Layer2Information;
 import android.net.shared.ProvisioningConfiguration;
@@ -142,6 +132,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+
 
 /**
  * Tests for IpClient.
@@ -200,7 +191,6 @@ public class IpClientTest {
     @Mock private PrintWriter mWriter;
     @Mock private IpClientNetlinkMonitor mNetlinkMonitor;
     @Mock private AndroidPacketFilter mApfFilter;
-    @Mock private NsdManager mNsdManager;
 
     private InterfaceParams mIfParams;
     private INetlinkMessageProcessor mNetlinkMessageProcessor;
@@ -226,7 +216,7 @@ public class IpClientTest {
         when(mDependencies.makeIpClientNetlinkMonitor(
                 any(), any(), any(), anyInt(), any())).thenReturn(mNetlinkMonitor);
         when(mNetlinkMonitor.start()).thenReturn(true);
-        doReturn(mNsdManager).when(mContext).getSystemService(eq(NsdManager.class));
+
         mIfParams = null;
     }
 
@@ -1059,92 +1049,6 @@ public class IpClientTest {
         inOrder.verify(mCb, never()).setNeighborDiscoveryOffload(anyBoolean());
         clearInvocations(mApfFilter);
         clearInvocations(mCb);
-    }
-
-    private static final String TEST_SERVICE_NAME = "NsdChat";
-    private static final String TEST_SERVICE_TYPE = "_http._tcp.local";
-    private static final String TEST_HOST_NAME = "Android.local";
-    private static final byte[] TEST_RAW_PACKET = new byte[]{1, 2, 3, 4, 5};
-    private static final byte[] ENCODED_FULL_TEST_SERVICE_NAME =
-            new byte[]{7, 'N', 'S', 'D', 'C', 'H', 'A', 'T', 5, '_', 'H', 'T', 'T', 'P', 4, '_',
-                    'T', 'C', 'P', 5, 'L', 'O', 'C', 'A', 'L', 0, 0};
-    private static final byte[] ENCODED_TEST_SERVICE_TYPE =
-            new byte[]{5, '_', 'H', 'T', 'T', 'P', 4, '_', 'T', 'C', 'P', 5, 'L', 'O', 'C', 'A',
-                    'L', 0, 0};
-    private static final byte[] ENCODED_TEST_HOST_NAME =
-            new byte[]{7, 'A', 'N', 'D', 'R', 'O', 'I', 'D', 5, 'L', 'O', 'C', 'A', 'L', 0, 0};
-
-    private static final List<MdnsOffloadRule> EXPECTED_RULES = List.of(new MdnsOffloadRule(
-            List.of(new MdnsOffloadRule.Matcher(ENCODED_TEST_SERVICE_TYPE, TYPE_PTR),
-                    new MdnsOffloadRule.Matcher(ENCODED_FULL_TEST_SERVICE_NAME, TYPE_SRV),
-                    new MdnsOffloadRule.Matcher(ENCODED_FULL_TEST_SERVICE_NAME, TYPE_TXT),
-                    new MdnsOffloadRule.Matcher(ENCODED_TEST_HOST_NAME, TYPE_A),
-                    new MdnsOffloadRule.Matcher(ENCODED_TEST_HOST_NAME, TYPE_AAAA)),
-            TEST_RAW_PACKET));
-
-    @Test
-    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-    public void testRegisterOffloadEngineWhenApfEnabledAtStart() throws Exception {
-        doReturn(mApfFilter).when(mDependencies).maybeCreateApfFilter(any(), any(), any(), any(),
-                any(), any(), anyBoolean());
-        when(mApfFilter.shouldUseMdnsOffload()).thenReturn(true);
-        final IpClient ipc = makeIpClient(TEST_IFNAME);
-        final ProvisioningConfiguration config1 = new ProvisioningConfiguration.Builder()
-                .withoutIPv4()
-                .withoutIpReachabilityMonitor()
-                .withApfCapabilities(new ApfCapabilities(
-                        APF_VERSION_6, 4096 /* maxProgramSize */, ARPHRD_ETHER)).build();
-        ipc.startProvisioning(config1);
-        final ArgumentCaptor<OffloadEngine> captor = ArgumentCaptor.forClass(OffloadEngine.class);
-        verify(mNsdManager, timeout(TEST_TIMEOUT_MS)).registerOffloadEngine(eq(TEST_IFNAME),
-                anyLong(), anyLong(), any(), captor.capture());
-        final OffloadEngine offloadEngine = captor.getValue();
-
-        final OffloadServiceInfo info = new OffloadServiceInfo(
-                new OffloadServiceInfo.Key(TEST_SERVICE_NAME, TEST_SERVICE_TYPE),
-                Collections.emptyList(), TEST_HOST_NAME, TEST_RAW_PACKET, 10, 1 /* offloadType */);
-        offloadEngine.onOffloadServiceUpdated(info);
-
-        verify(mApfFilter, timeout(TEST_TIMEOUT_MS)).updateMdnsOffloadReplyRules(EXPECTED_RULES);
-        offloadEngine.onOffloadServiceRemoved(info);
-        verify(mApfFilter, timeout(TEST_TIMEOUT_MS)).updateMdnsOffloadReplyRules(
-                Collections.emptyList());
-        verifyShutdown(ipc);
-        verify(mNsdManager).unregisterOffloadEngine(any());
-    }
-
-
-    @Test
-    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-    public void testRegisterOffloadEngineWhenApfCapabilitiesUpdated() throws Exception {
-        doReturn(mApfFilter).when(mDependencies).maybeCreateApfFilter(any(), any(), any(), any(),
-                any(), any(), anyBoolean());
-        when(mApfFilter.shouldUseMdnsOffload()).thenReturn(true);
-        final IpClient ipc = makeIpClient(TEST_IFNAME);
-        final ProvisioningConfiguration config2 = new ProvisioningConfiguration.Builder()
-                .withoutIPv4()
-                .withoutIpReachabilityMonitor()
-                .build();
-        ipc.startProvisioning(config2);
-        HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mNsdManager, never()).registerOffloadEngine(any(), anyLong(), anyLong(), any(),
-                any());
-        ipc.updateApfCapabilities(
-                new ApfCapabilities(APF_VERSION_6, 4096 /* maxProgramSize */, ARPHRD_ETHER));
-        final ArgumentCaptor<OffloadEngine> captor = ArgumentCaptor.forClass(OffloadEngine.class);
-        verify(mNsdManager, timeout(TEST_TIMEOUT_MS)).registerOffloadEngine(eq(TEST_IFNAME),
-                anyLong(), anyLong(), any(), captor.capture());
-        final OffloadEngine offloadEngine = captor.getValue();
-        final OffloadServiceInfo info = new OffloadServiceInfo(
-                new OffloadServiceInfo.Key(TEST_SERVICE_NAME, TEST_SERVICE_TYPE),
-                Collections.emptyList(), TEST_HOST_NAME, TEST_RAW_PACKET, 10, 1 /* offloadType */);
-        offloadEngine.onOffloadServiceUpdated(info);
-        verify(mApfFilter, timeout(TEST_TIMEOUT_MS)).updateMdnsOffloadReplyRules(EXPECTED_RULES);
-        offloadEngine.onOffloadServiceRemoved(info);
-        verify(mApfFilter, timeout(TEST_TIMEOUT_MS)).updateMdnsOffloadReplyRules(
-                Collections.emptyList());
-        verifyShutdown(ipc);
-        verify(mNsdManager).unregisterOffloadEngine(any());
     }
 
     @Test

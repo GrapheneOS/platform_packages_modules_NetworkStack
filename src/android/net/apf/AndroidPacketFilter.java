@@ -15,16 +15,12 @@
  */
 package android.net.apf;
 
-import android.annotation.ChecksSdkIntAtLeast;
-import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.net.LinkProperties;
 import android.net.NattKeepalivePacketDataParcelable;
 import android.net.TcpKeepalivePacketDataParcelable;
 
 import com.android.internal.util.IndentingPrintWriter;
-
-import java.util.List;
 
 /**
  * The interface for AndroidPacketFilter
@@ -117,18 +113,4 @@ public interface AndroidPacketFilter {
     default boolean supportNdOffload() {
         return false;
     }
-
-    /**
-     * Return if the ApfFilter should use mDNS offload.
-     */
-    @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */, codename =
-            "VanillaIceCream")
-    default boolean shouldUseMdnsOffload() {
-        return false;
-    }
-
-    /**
-     * Update the mDNS offload rules.
-     */
-    default void updateMdnsOffloadReplyRules(@NonNull List<MdnsOffloadRule> rules) { }
 }
