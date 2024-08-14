@@ -22,6 +22,7 @@ import static com.android.net.module.util.ConnectivitySettingsUtils.PRIVATE_DNS_
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
+import android.net.LinkProperties;
 import android.net.shared.PrivateDnsConfig;
 import android.text.TextUtils;
 
@@ -29,6 +30,10 @@ import com.android.internal.annotations.VisibleForTesting;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * A class to perform DDR on a given network (to be implemented).
@@ -47,8 +52,13 @@ class DdrTracker {
     @NonNull
     private DnsInfo mDnsInfo;
 
+    // Stores the DoT servers discovered from strict mode hostname resolution.
+    @NonNull
+    private final List<InetAddress> mDotServers;
+
     DdrTracker() {
-        mDnsInfo = new DnsInfo(new PrivateDnsConfig(false /* useTls */));
+        mDnsInfo = new DnsInfo(new PrivateDnsConfig(false /* useTls */), new ArrayList<>());
+        mDotServers = new ArrayList<>();
     }
 
     /**
@@ -59,10 +69,40 @@ class DdrTracker {
     boolean notifyPrivateDnsSettingsChanged(@NonNull PrivateDnsConfig cfg) {
         if (arePrivateDnsSettingsEquals(cfg, mDnsInfo.cfg)) return false;
 
-        mDnsInfo = new DnsInfo(cfg);
+        mDnsInfo = new DnsInfo(cfg, mDnsInfo.dnsServers);
+        resetStrictModeHostnameResolutionResult();
         return true;
     }
 
+    /**
+     * If the unencrypted DNS server list on the network has changed (even if only the order has
+     * changed), this function updates the DnsInfo and returns true; otherwise, the DnsInfo remains
+     * unchanged and this function returns false.
+     *
+     * The reason that this method returns true even if only the order has changed is that
+     * DnsResolver returns a DNS answer to app side as soon as it receives a DNS response from
+     * a DNS server. Therefore, the DNS response from the first DNS server that supports DDR
+     * determines the DDR result.
+     */
+    boolean notifyLinkPropertiesChanged(@NonNull LinkProperties lp) {
+        final List<InetAddress> servers = lp.getDnsServers();
+
+        if (servers.equals(mDnsInfo.dnsServers)) return false;
+
+        mDnsInfo = new DnsInfo(mDnsInfo.cfg, servers);
+        return true;
+    }
+
+    void setStrictModeHostnameResolutionResult(@NonNull InetAddress[] ips) {
+        resetStrictModeHostnameResolutionResult();
+        mDotServers.addAll(Arrays.asList(ips));
+    }
+
+    void resetStrictModeHostnameResolutionResult() {
+        mDotServers.clear();
+    }
+
+    @VisibleForTesting
     @PrivateDnsMode int getPrivateDnsMode() {
         return mDnsInfo.cfg.mode;
     }
@@ -75,6 +115,11 @@ class DdrTracker {
     }
 
     @VisibleForTesting
+    @NonNull
+    List<InetAddress> getDnsServers() {
+        return mDnsInfo.dnsServers;
+    }
+
     private static boolean arePrivateDnsSettingsEquals(@NonNull PrivateDnsConfig a,
             @NonNull PrivateDnsConfig b) {
         return a.mode == b.mode && TextUtils.equals(a.hostname, b.hostname);
@@ -83,14 +128,17 @@ class DdrTracker {
     /**
      * A class to store current DNS configuration. Only the information relevant to DDR is stored.
      *   1. Private DNS setting.
-     *   2. A list of Unencrypted DNS servers (to be implemented)
+     *   2. A list of Unencrypted DNS servers.
      */
     private static class DnsInfo {
         @NonNull
         public final PrivateDnsConfig cfg;
+        @NonNull
+        public final List<InetAddress> dnsServers;
 
-        DnsInfo(@NonNull PrivateDnsConfig cfg) {
+        DnsInfo(@NonNull PrivateDnsConfig cfg, @NonNull List<InetAddress> dnsServers) {
             this.cfg = cfg;
+            this.dnsServers = dnsServers;
         }
     }
 }

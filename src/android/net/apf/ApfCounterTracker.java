@@ -216,4 +216,11 @@ public class ApfCounterTracker {
     public Map<Counter, Long> getCounters() {
         return mCounters;
     }
+
+    /**
+     * Clear all counters.
+     */
+    public void clearCounters() {
+        mCounters.clear();
+    }
 }

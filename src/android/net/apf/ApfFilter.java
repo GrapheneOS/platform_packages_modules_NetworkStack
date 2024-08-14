@@ -320,6 +320,7 @@ public class ApfFilter implements AndroidPacketFilter {
         @Override
         public void onReceive(Context context, Intent intent) {
             mHandler.post(() -> {
+                if (mIsApfShutdown) return;
                 final PowerManager powerManager = context.getSystemService(PowerManager.class);
                 if (isDeviceIdleModeChangedAction(intent)
                         || isDeviceLightIdleModeChangedAction(intent)) {
@@ -330,6 +331,8 @@ public class ApfFilter implements AndroidPacketFilter {
             });
         }
     };
+
+    private boolean mIsApfShutdown;
 
     // Our IPv4 address, if we have just one, otherwise null.
     @GuardedBy("this")
@@ -362,6 +365,18 @@ public class ApfFilter implements AndroidPacketFilter {
             NetworkQuirkMetrics networkQuirkMetrics) {
         this(handler, context, config, ifParams, ipClientCallback, networkQuirkMetrics,
                 new Dependencies(context));
+    }
+
+    private synchronized void maybeCleanUpApfRam() {
+        // Clear the APF memory to reset all counters upon connecting to the first AP
+        // in an SSID. This is limited to APFv3 devices because this large write triggers
+        // a crash on some older devices (b/78905546).
+        if (hasDataAccess(mApfVersionSupported)) {
+            byte[] zeroes = new byte[mApfRamSize];
+            if (!mIpClientCallback.installPacketFilter(zeroes)) {
+                sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
+            }
+        }
     }
 
     @VisibleForTesting
@@ -398,6 +413,8 @@ public class ApfFilter implements AndroidPacketFilter {
         mMinMetricsSessionDurationMs = config.minMetricsSessionDurationMs;
         mHasClat = config.hasClatInterface;
 
+        mIsApfShutdown = false;
+
         // Now fill the black list from the passed array
         mEthTypeBlackList = filterEthTypeBlackList(config.ethTypeBlackList);
 
@@ -413,16 +430,7 @@ public class ApfFilter implements AndroidPacketFilter {
         mHardwareAddress = mInterfaceParams.macAddr.toByteArray();
         // TODO: ApfFilter should not generate programs until IpClient sends provisioning success.
         synchronized (this) {
-            // Clear the APF memory to reset all counters upon connecting to the first AP
-            // in an SSID. This is limited to APFv3 devices because this large write triggers
-            // a crash on some older devices (b/78905546).
-            if (hasDataAccess(mApfVersionSupported)) {
-                byte[] zeroes = new byte[mApfRamSize];
-                if (!mIpClientCallback.installPacketFilter(zeroes)) {
-                    sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
-                }
-            }
-
+            maybeCleanUpApfRam();
             // Install basic filters
             installNewProgramLocked();
         }
@@ -2572,6 +2580,7 @@ public class ApfFilter implements AndroidPacketFilter {
         mRaPacketReader.stop();
         mRas.clear();
         mDependencies.removeBroadcastReceiver(mDeviceIdleReceiver);
+        mIsApfShutdown = true;
     }
 
     public synchronized void setMulticastFilter(boolean isEnabled) {
@@ -2892,6 +2901,11 @@ public class ApfFilter implements AndroidPacketFilter {
 
     /** Resume ApfFilter updates for testing purposes. */
     public void resume() {
+        maybeCleanUpApfRam();
+        // Since the resume() function and cleanup process invalidate previous counter
+        // snapshots, the ApfCounterTracker needs to be reset to maintain reliable, incremental
+        // counter tracking.
+        mApfCounterTracker.clearCounters();
         mIsRunning = true;
     }
 

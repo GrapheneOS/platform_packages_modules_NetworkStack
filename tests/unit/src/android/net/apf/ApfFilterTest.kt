@@ -2049,4 +2049,13 @@ class ApfFilterTest {
         val program = programCaptor.allValues.first()
         assertContentEquals(ByteArray(4096) { 0 }, program)
     }
+
+    @Test
+    fun testApfFilterResumeWillCleanUpTheApfMemoryRegion() {
+        val apfFilter = getApfFilter()
+        consumeInstalledProgram(ipClientCallback, installCnt = 2)
+        apfFilter.resume()
+        val program = consumeInstalledProgram(ipClientCallback, installCnt = 1)
+        assertContentEquals(ByteArray(4096) { 0 }, program)
+    }
 }

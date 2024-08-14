@@ -160,6 +160,7 @@ import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.CollectionUtils;
 import com.android.net.module.util.ConnectivityUtils;
 import com.android.net.module.util.DeviceConfigUtils;
+import com.android.net.module.util.HandlerUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.LinkPropertiesUtils;
 import com.android.net.module.util.SharedLog;
@@ -1440,7 +1441,16 @@ public class IpClient extends StateMachine {
                     pw.print("TIMEOUT: DUMPING STALE APF SNAPSHOT");
                 }
             }
-            apfFilter.dump(pw);
+            final Handler handler = getHandler();
+            if (handler == null) {
+                // This situation is unexpected. The getHandler() function should not return null
+                // unless the IpClient has stopped running. When the IpClient exits the RunningState
+                // , it should have already set apfFilter to null.
+                pw.println("ApfFilter is not null even if IpClient is not running.");
+            } else {
+                HandlerUtils.runWithScissorsForDump(handler, () -> apfFilter.dump(pw),
+                        10_000 /* ms */);
+            }
             pw.println("APF log:");
             pw.println("mApfDebug: " + mApfDebug);
             mApfLog.dump(fd, pw, args);

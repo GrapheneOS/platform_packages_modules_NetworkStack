@@ -1167,6 +1167,9 @@ public class NetworkMonitor extends StateMachine {
                     if (tst != null) {
                         tst.setLinkProperties(mLinkProperties);
                     }
+                    if (mDdrEnabled) {
+                        mDdrTracker.notifyLinkPropertiesChanged(mLinkProperties);
+                    }
                     break;
                 case EVENT_NETWORK_CAPABILITIES_CHANGED:
                     handleCapabilitiesChanged((NetworkCapabilities) message.obj,
@@ -1656,6 +1659,9 @@ public class NetworkMonitor extends StateMachine {
         public void enter() {
             mPrivateDnsReevalDelayMs = INITIAL_REEVALUATE_DELAY_MS;
             mPrivateDnsConfig = null;
+            if (mDdrEnabled) {
+                mDdrTracker.resetStrictModeHostnameResolutionResult();
+            }
             sendMessage(CMD_EVALUATE_PRIVATE_DNS);
         }
 
@@ -1743,6 +1749,9 @@ public class NetworkMonitor extends StateMachine {
                         mCleartextDnsNetwork, mPrivateDnsProviderHostname, getDnsProbeTimeout(),
                         str -> validationLog("Strict mode hostname resolution " + str));
                 mPrivateDnsConfig = new PrivateDnsConfig(mPrivateDnsProviderHostname, ips);
+                if (mDdrEnabled) {
+                    mDdrTracker.setStrictModeHostnameResolutionResult(ips);
+                }
             } catch (UnknownHostException uhe) {
                 mPrivateDnsConfig = null;
             }
@@ -1971,6 +1980,9 @@ public class NetworkMonitor extends StateMachine {
                 final InetAddress[] ips = answer.toArray(new InetAddress[0]);
                 final PrivateDnsConfig config =
                         new PrivateDnsConfig(mPrivateDnsProviderHostname, ips);
+                if (mDdrEnabled) {
+                    mDdrTracker.setStrictModeHostnameResolutionResult(ips);
+                }
                 notifyPrivateDnsConfigResolved(config);
 
                 validationLog("Strict mode hostname resolution " + elapsedNanos + "ns OK "

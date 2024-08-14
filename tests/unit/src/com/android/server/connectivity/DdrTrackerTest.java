@@ -20,11 +20,13 @@ import static android.net.ConnectivitySettingsManager.PRIVATE_DNS_MODE_OFF;
 import static android.net.ConnectivitySettingsManager.PRIVATE_DNS_MODE_OPPORTUNISTIC;
 import static android.net.ConnectivitySettingsManager.PRIVATE_DNS_MODE_PROVIDER_HOSTNAME;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import android.annotation.NonNull;
+import android.net.LinkProperties;
 import android.net.shared.PrivateDnsConfig;
 
 import org.junit.Before;
@@ -87,7 +89,6 @@ public final class DdrTrackerTest {
     public void testNotifyPrivateDnsSettingsChanged() throws Exception {
         // Tests the initial private DNS setting in DdrTracker.
         assertEquals(OFF_MODE, mDdrTracker.getPrivateDnsMode());
-
         assertEquals("", mDdrTracker.getStrictModeHostname());
         assertFalse(mDdrTracker.notifyPrivateDnsSettingsChanged(new PrivateDnsConfigBuilder()
                 .setMode(OFF_MODE).build()));
@@ -96,5 +97,28 @@ public final class DdrTrackerTest {
         testNotifyPrivateDnsSettingsChangedHelper(STRICT_MODE, "example1.com");
         testNotifyPrivateDnsSettingsChangedHelper(STRICT_MODE, "example2.com");
         testNotifyPrivateDnsSettingsChangedHelper(OFF_MODE, "");
+    }
+
+    private void testNotifyLinkPropertiesChangedHelper(InetAddress[] ips) {
+        final LinkProperties lp = new LinkProperties();
+        for (InetAddress ip : ips) {
+            assertTrue(lp.addDnsServer(ip));
+        }
+        assertTrue(mDdrTracker.notifyLinkPropertiesChanged(lp));
+        assertArrayEquals(ips, mDdrTracker.getDnsServers().toArray());
+        assertFalse(mDdrTracker.notifyLinkPropertiesChanged(lp));
+    }
+
+    @Test
+    public void testNotifyLinkPropertiesChanged() throws Exception {
+        final InetAddress ip1 = InetAddress.parseNumericAddress("1.2.3.4");
+        final InetAddress ip2 = InetAddress.parseNumericAddress("2001:db8::1");
+
+        // Tests the initial value in DdrTracker.
+        assertTrue(mDdrTracker.getDnsServers().isEmpty());
+
+        testNotifyLinkPropertiesChangedHelper(new InetAddress[] {ip1});
+        testNotifyLinkPropertiesChangedHelper(new InetAddress[] {ip1, ip2});
+        testNotifyLinkPropertiesChangedHelper(new InetAddress[] {ip2, ip1});
     }
 }
