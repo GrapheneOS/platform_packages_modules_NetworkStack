@@ -203,7 +203,7 @@ public class ApfCounterTracker {
                 value = 0;
             }
             long oldValue = mCounters.getOrDefault(counter, 0L);
-            // All counters are increamental
+            // All counters are incremental
             if (value > oldValue) {
                 mCounters.put(counter, value);
             }
