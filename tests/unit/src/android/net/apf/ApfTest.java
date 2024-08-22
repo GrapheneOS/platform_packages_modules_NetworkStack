@@ -57,12 +57,11 @@ import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -2834,11 +2833,14 @@ public class ApfTest {
     }
 
     @Test
-    public void testGenerateApfProgramException() throws Exception {
+    public void testGenerateApfProgramException() {
         final ApfConfiguration config = getDefaultConfig();
-        ApfFilter apfFilter = spy(getApfFilter(config));
+        ApfFilter apfFilter = getApfFilter(config);
+        // Simulate exception during installNewProgramLocked() by mocking
+        // mDependencies.elapsedRealtime() to throw an exception (this method doesn't throw in
+        // real-world scenarios).
+        doThrow(new IllegalStateException("test exception")).when(mDependencies).elapsedRealtime();
         synchronized (apfFilter) {
-            when(apfFilter.emitPrologueLocked()).thenThrow(new IllegalStateException("test"));
             apfFilter.installNewProgramLocked();
         }
         verify(mNetworkQuirkMetrics).setEvent(NetworkQuirkEvent.QE_APF_GENERATE_FILTER_EXCEPTION);

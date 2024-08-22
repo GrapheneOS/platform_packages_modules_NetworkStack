@@ -113,4 +113,11 @@ public interface AndroidPacketFilter {
     default boolean supportNdOffload() {
         return false;
     }
+
+    /**
+     * Return if the ApfFilter should use mDNS offload.
+     */
+    default boolean shouldUseMdnsOffload() {
+        return false;
+    }
 }
