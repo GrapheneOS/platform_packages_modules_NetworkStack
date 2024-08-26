@@ -63,8 +63,8 @@ public final class DdrTrackerTest {
             return this;
         }
         PrivateDnsConfig build() {
-            return new PrivateDnsConfig(mMode, mHostname, mIps, mDohName, mDohIps, mDohPath,
-                    mDohPort);
+            return new PrivateDnsConfig(mMode, mHostname, mIps,
+                    false /* ddrEnabled */, mDohName, mDohIps, mDohPath,  mDohPort);
         }
     }
 

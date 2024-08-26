@@ -41,6 +41,12 @@ public class PrivateDnsConfig {
     @NonNull
     public final InetAddress[] ips;
 
+    // Whether DDR discovery is enabled.
+    // If DDR is enabled, then empty dohName / dohIps indicate that DoH is disabled.
+    // If DDR is disabled, then empty dohName / dohIps indicate that DNS resolver should attempt to
+    // enable DoH based on using its hardcoded list of known providers.
+    public final boolean ddrEnabled;
+
     // These fields store the DoH information discovered from SVCB lookups.
     @NonNull
     public final String dohName;
@@ -67,8 +73,8 @@ public class PrivateDnsConfig {
      */
     public PrivateDnsConfig(boolean useTls) {
         this(useTls ? PRIVATE_DNS_MODE_OPPORTUNISTIC : PRIVATE_DNS_MODE_OFF, null /* hostname */,
-                null /* ips */, null /* dohName */, null /* dohIps */, null /* dohPath */,
-                -1 /* dohPort */);
+                null /* ips */, false /* ddrEnabled */, null /* dohName */, null /* dohIps */,
+                null /* dohPath */, -1 /* dohPort */);
     }
 
     /**
@@ -78,8 +84,8 @@ public class PrivateDnsConfig {
      */
     public PrivateDnsConfig(@Nullable String hostname, @Nullable InetAddress[] ips) {
         this(TextUtils.isEmpty(hostname) ? PRIVATE_DNS_MODE_OFF :
-                PRIVATE_DNS_MODE_PROVIDER_HOSTNAME, hostname, ips, null /* dohName */,
-                null /* dohIps */, null /* dohPath */, -1 /* dohPort */);
+                PRIVATE_DNS_MODE_PROVIDER_HOSTNAME, hostname, ips, false /* ddrEnabled */,
+                null /* dohName */, null /* dohIps */, null /* dohPath */, -1 /* dohPort */);
     }
 
     /**
@@ -88,11 +94,12 @@ public class PrivateDnsConfig {
      * and empty arrays as equivalent.
      */
     public PrivateDnsConfig(int mode, @Nullable String hostname, @Nullable InetAddress[] ips,
-            @Nullable String dohName, @Nullable InetAddress[] dohIps, @Nullable String dohPath,
-            int dohPort) {
+            boolean ddrEnabled,  @Nullable String dohName, @Nullable InetAddress[] dohIps,
+            @Nullable String dohPath, int dohPort) {
         this.mode = mode;
         this.hostname = (hostname != null) ? hostname : "";
         this.ips = (ips != null) ? ips.clone() : new InetAddress[0];
+        this.ddrEnabled = ddrEnabled;
         this.dohName = (dohName != null) ? dohName : "";
         this.dohIps = (dohIps != null) ? dohIps.clone() : new InetAddress[0];
         this.dohPath = (dohPath != null) ? dohPath : "";
@@ -103,6 +110,7 @@ public class PrivateDnsConfig {
         mode = cfg.mode;
         hostname = cfg.hostname;
         ips = cfg.ips;
+        ddrEnabled = cfg.ddrEnabled;
         dohName = cfg.dohName;
         dohIps = cfg.dohIps;
         dohPath = cfg.dohPath;
@@ -158,6 +166,7 @@ public class PrivateDnsConfig {
                 Arrays.asList(dohIps), IpConfigurationParcelableUtil::parcelAddress, String.class);
         parcel.dohPath = dohPath;
         parcel.dohPort = dohPort;
+        parcel.ddrEnabled = ddrEnabled;
         return parcel;
     }
 
@@ -187,7 +196,7 @@ public class PrivateDnsConfig {
         InetAddress[] dohIps = new InetAddress[parcel.dohIps.length];
         dohIps = fromParcelableArray(parcel.dohIps,
                 IpConfigurationParcelableUtil::unparcelAddress).toArray(dohIps);
-        return new PrivateDnsConfig(parcel.privateDnsMode, parcel.hostname, ips, parcel.dohName,
-                dohIps, parcel.dohPath, parcel.dohPort);
+        return new PrivateDnsConfig(parcel.privateDnsMode, parcel.hostname, ips,
+                parcel.ddrEnabled, parcel.dohName, dohIps, parcel.dohPath, parcel.dohPort);
     }
 }

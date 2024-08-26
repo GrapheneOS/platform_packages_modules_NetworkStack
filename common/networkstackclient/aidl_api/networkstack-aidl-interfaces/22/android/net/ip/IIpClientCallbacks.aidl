@@ -1,16 +1,16 @@
-/*
- * Copyright (C) 2018 The Android Open Source Project
+/**
+ * Copyright (c) 2019, The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
+ * See the License for the specific language governing perNmissions and
  * limitations under the License.
  */
 ///////////////////////////////////////////////////////////////////////////////
@@ -31,15 +31,24 @@
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
 
-package android.net;
-@JavaDerive(equals=true, toString=true)
-parcelable PrivateDnsConfigParcel {
-  String hostname;
-  String[] ips;
-  int privateDnsMode = (-1) /* -1 */;
-  String dohName = "";
-  String[] dohIps = {};
-  String dohPath = "";
-  int dohPort = (-1) /* -1 */;
-  boolean ddrEnabled = false;
+package android.net.ip;
+/* @hide */
+interface IIpClientCallbacks {
+  oneway void onIpClientCreated(in android.net.ip.IIpClient ipClient);
+  oneway void onPreDhcpAction();
+  oneway void onPostDhcpAction();
+  oneway void onNewDhcpResults(in android.net.DhcpResultsParcelable dhcpResults);
+  oneway void onProvisioningSuccess(in android.net.LinkProperties newLp);
+  oneway void onProvisioningFailure(in android.net.LinkProperties newLp);
+  oneway void onLinkPropertiesChange(in android.net.LinkProperties newLp);
+  oneway void onReachabilityLost(in String logMsg);
+  oneway void onQuit();
+  oneway void installPacketFilter(in byte[] filter);
+  oneway void startReadPacketFilter();
+  oneway void setFallbackMulticastFilter(boolean enabled);
+  oneway void setNeighborDiscoveryOffload(boolean enable);
+  oneway void onPreconnectionStart(in List<android.net.Layer2PacketParcelable> packets);
+  oneway void onReachabilityFailure(in android.net.networkstack.aidl.ip.ReachabilityLossInfoParcelable lossInfo);
+  oneway void setMaxDtimMultiplier(int multiplier);
+  const int DTIM_MULTIPLIER_RESET = 0;
 }

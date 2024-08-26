@@ -72,4 +72,12 @@ parcelable PrivateDnsConfigParcel {
      * The port used to reach the DoH servers.
      */
     int dohPort = -1;
+
+    /**
+     * Whether DDR discovery is enabled. If DDR is enabled, DoH servers will only be discovered
+     * using DDR. If DDR is not enabled, DoH servers will only be discovered using the list of
+     * known providers hardcoded in DnsResolver.
+     */
+    boolean ddrEnabled = false;
+
 }

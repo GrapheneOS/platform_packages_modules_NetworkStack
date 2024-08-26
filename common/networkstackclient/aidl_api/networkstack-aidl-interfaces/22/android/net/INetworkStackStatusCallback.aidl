@@ -32,14 +32,7 @@
 // later when a module using the interface is updated, e.g., Mainline modules.
 
 package android.net;
-@JavaDerive(equals=true, toString=true)
-parcelable PrivateDnsConfigParcel {
-  String hostname;
-  String[] ips;
-  int privateDnsMode = (-1) /* -1 */;
-  String dohName = "";
-  String[] dohIps = {};
-  String dohPath = "";
-  int dohPort = (-1) /* -1 */;
-  boolean ddrEnabled = false;
+/* @hide */
+interface INetworkStackStatusCallback {
+  oneway void onStatusAvailable(int statusCode);
 }
