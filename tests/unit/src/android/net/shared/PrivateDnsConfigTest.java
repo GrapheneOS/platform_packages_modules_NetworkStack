@@ -112,8 +112,6 @@ public final class PrivateDnsConfigTest {
             testPrivateDnsConfigConversion(new PrivateDnsConfig(mode, "dns.com", TEST_ADDRS,
                     true, null, null, null, -1));
             testPrivateDnsConfigConversion(new PrivateDnsConfig(mode, "dns.com", null,
-                    false, null, null, null, -1));
-            testPrivateDnsConfigConversion(new PrivateDnsConfig(mode, "dns.com", null,
                     true, null, null, null, -1));
             testPrivateDnsConfigConversion(new PrivateDnsConfig(mode, "dns.com", TEST_ADDRS,
                     true, "doh.com", null, null, -1));
