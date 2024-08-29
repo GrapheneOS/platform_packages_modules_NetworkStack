@@ -26,6 +26,7 @@ import static android.net.ip.IIpClient.PROV_IPV6_SLAAC;
 import static android.net.ip.IIpClientCallbacks.DTIM_MULTIPLIER_RESET;
 import static android.net.ip.IpClient.IpClientCommands.CMD_ADDRESSES_CLEARED;
 import static android.net.ip.IpClient.IpClientCommands.CMD_ADD_KEEPALIVE_PACKET_FILTER_TO_APF;
+import static android.net.ip.IpClient.IpClientCommands.CMD_APF_STOP_CAPTURE;
 import static android.net.ip.IpClient.IpClientCommands.CMD_COMPLETE_PRECONNECTION;
 import static android.net.ip.IpClient.IpClientCommands.CMD_CONFIRM;
 import static android.net.ip.IpClient.IpClientCommands.CMD_JUMP_RUNNING_TO_STOPPING;
@@ -597,6 +598,8 @@ public class IpClient extends StateMachine {
         static final int CMD_UPDATE_APF_CAPABILITIES = 19;
         static final int EVENT_IPV6_AUTOCONF_TIMEOUT = 20;
         static final int CMD_UPDATE_APF_DATA_SNAPSHOT = 21;
+        // Triggered by ApfShellCommand
+        static final int CMD_APF_STOP_CAPTURE = 22;
         // Internal commands to use instead of trying to call transitionTo() inside
         // a given State's enter() method. Calling transitionTo() from enter/exit
         // encounters a Log.wtf() that can cause trouble on eng builds.
@@ -788,6 +791,7 @@ public class IpClient extends StateMachine {
     private String mTcpBufferSizes;
     private ProxyInfo mHttpProxy;
     private AndroidPacketFilter mApfFilter;
+    private ConnectivityPacketTracker mPacketTracker;
     private String mL2Key; // The L2 key for this network, for writing into the memory store
     private String mCluster; // The cluster for this network, for writing into the memory store
     private int mCreatorUid; // Uid of app creating the wifi configuration
@@ -1527,8 +1531,8 @@ public class IpClient extends StateMachine {
         }
 
         final CompletableFuture<String> result = new CompletableFuture<>();
-
-        getHandler().post(() -> {
+        final Handler handler = getHandler();
+        handler.post(() -> {
             try {
                 if (mApfFilter == null) {
                     // IpClient has either stopped or the interface does not support APF.
@@ -1565,6 +1569,42 @@ public class IpClient extends StateMachine {
                         final String snapshot = mApfFilter.getDataSnapshotHexString();
                         Objects.requireNonNull(snapshot, "No data snapshot recorded.");
                         result.complete(snapshot);
+                        break;
+                    case "start-capture":
+                        if (mPacketTracker.isCapturing()) {
+                            result.complete("PacketTracker is already capturing");
+                        } else {
+                            // remove scheduled stop event if it already in the queue
+                            if (handler.hasMessages(IpClientCommands.CMD_APF_STOP_CAPTURE)) {
+                                handler.removeMessages(IpClientCommands.CMD_APF_STOP_CAPTURE);
+                            }
+
+                            mPacketTracker.setCapture(true);
+                            // capture up to 300 sec and stop capturing
+                            sendMessageDelayed(
+                                    IpClientCommands.CMD_APF_STOP_CAPTURE,
+                                    ConnectivityPacketTracker.MAX_CAPTURE_TIME_MS
+                            );
+                            result.complete("success");
+                        }
+                        break;
+                    case "matched-packet-counts":
+                        Objects.requireNonNull(optarg, "No packet pattern provided");
+                        int pktCnt = mPacketTracker.getMatchedPacketCount(optarg);
+                        result.complete(String.valueOf(pktCnt));
+                        break;
+                    case "stop-capture":
+                        if (!mPacketTracker.isCapturing()) {
+                            result.complete("PacketTracker already stop capturing");
+                        } else {
+                            // remove scheduled stop event if it already in the queue
+                            if (handler.hasMessages(IpClientCommands.CMD_APF_STOP_CAPTURE)) {
+                                handler.removeMessages(IpClientCommands.CMD_APF_STOP_CAPTURE);
+                            }
+
+                            sendMessage(IpClientCommands.CMD_APF_STOP_CAPTURE);
+                            result.complete("success");
+                        }
                         break;
                     default:
                         throw new IllegalArgumentException("Invalid apf command: " + cmd);
@@ -3152,7 +3192,6 @@ public class IpClient extends StateMachine {
     }
 
     class RunningState extends State {
-        private ConnectivityPacketTracker mPacketTracker;
         private boolean mDhcpActionInFlight;
 
         @Override
@@ -3637,7 +3676,9 @@ public class IpClient extends StateMachine {
                     mCallback.startReadPacketFilter("polling");
                     sendMessageDelayed(CMD_UPDATE_APF_DATA_SNAPSHOT, mApfCounterPollingIntervalMs);
                     break;
-
+                case CMD_APF_STOP_CAPTURE:
+                    mPacketTracker.setCapture(false);
+                    break;
                 default:
                     return NOT_HANDLED;
             }

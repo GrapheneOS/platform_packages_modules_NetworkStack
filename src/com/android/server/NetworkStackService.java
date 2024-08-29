@@ -627,6 +627,14 @@ public class NetworkStackService extends Service {
                 pw.println("        Format: <apfVersion>,<maxProgramSize>,<packetFormat>");
                 pw.println("      read");
                 pw.println("        reads and returns the current state of APF memory.");
+                pw.println("      start-capture");
+                pw.println("        start capture packets in the received buffer.");
+                pw.println("        The capture is up to 300 sec, then it will stop.");
+                pw.println("      stop-capture");
+                pw.println("        stop capture packets and clear the received buffer.");
+                pw.println("      matched-packet-counts <pkt-hex-string>");
+                pw.println("        the <pkt-hex-string> starts from ether header.");
+                pw.println("        Expect to do full packet match.");
             }
         }
 
