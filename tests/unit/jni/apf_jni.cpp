@@ -36,7 +36,7 @@ static int run_apf_interpreter(int apf_version, uint32_t* program,
                                uint32_t program_len, uint32_t ram_len,
                                const uint8_t* packet, uint32_t packet_len,
                                uint32_t filter_age) {
-  if (apf_version == 4) {
+  if (apf_version <= 4) {
     return accept_packet((uint8_t*)program, program_len, ram_len, packet, packet_len,
                          filter_age);
   } else {
