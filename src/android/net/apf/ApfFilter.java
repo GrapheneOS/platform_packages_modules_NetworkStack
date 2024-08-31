@@ -52,6 +52,7 @@ import static android.net.apf.ApfConstants.ICMP6_PREFIX_OPTION_VALID_LIFETIME_LE
 import static android.net.apf.ApfConstants.ICMP6_PREFIX_OPTION_VALID_LIFETIME_OFFSET;
 import static android.net.apf.ApfConstants.ICMP6_RA_CHECKSUM_LEN;
 import static android.net.apf.ApfConstants.ICMP6_RA_CHECKSUM_OFFSET;
+import static android.net.apf.ApfConstants.ICMP6_RA_FLAGS_EXTENSION_OPTION_TYPE;
 import static android.net.apf.ApfConstants.ICMP6_RA_OPTION_OFFSET;
 import static android.net.apf.ApfConstants.ICMP6_RA_ROUTER_LIFETIME_LEN;
 import static android.net.apf.ApfConstants.ICMP6_RA_ROUTER_LIFETIME_OFFSET;
@@ -1054,6 +1055,7 @@ public class ApfFilter implements AndroidPacketFilter {
                     case ICMP6_SOURCE_LL_ADDRESS_OPTION_TYPE:
                     case ICMP6_MTU_OPTION_TYPE:
                     case ICMP6_PREF64_OPTION_TYPE:
+                    case ICMP6_RA_FLAGS_EXTENSION_OPTION_TYPE:
                         addMatchSection(optionLength);
                         break;
                     case ICMP6_CAPTIVE_PORTAL_OPTION_TYPE: // unlikely to ever change.

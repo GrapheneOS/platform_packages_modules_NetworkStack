@@ -87,6 +87,8 @@ public final class ApfConstants {
     public static final int ICMP6_MTU_OPTION_TYPE = 5;
     // From RFC6106: Recursive DNS Server option
     public static final int ICMP6_RDNSS_OPTION_TYPE = 25;
+    // From RFC5175: RA Flags Extension option
+    public static final int ICMP6_RA_FLAGS_EXTENSION_OPTION_TYPE = 26;
     // From RFC6106: DNS Search List option
     public static final int ICMP6_DNSSL_OPTION_TYPE = 31;
     // From RFC8910: Captive-Portal option
