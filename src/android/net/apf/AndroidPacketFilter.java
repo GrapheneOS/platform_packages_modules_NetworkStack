@@ -115,9 +115,9 @@ public interface AndroidPacketFilter {
     }
 
     /**
-     * Return if the ApfFilter should use mDNS offload.
+     * Return if the ApfFilter should enable mDNS offload.
      */
-    default boolean shouldUseMdnsOffload() {
+    default boolean shouldEnableMdnsOffload() {
         return false;
     }
 }

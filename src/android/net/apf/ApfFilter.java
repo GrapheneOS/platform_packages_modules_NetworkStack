@@ -496,7 +496,7 @@ public class ApfFilter implements AndroidPacketFilter {
         mDependencies.addDeviceIdleReceiver(mDeviceIdleReceiver);
 
         mNsdManager = context.getSystemService(NsdManager.class);
-        if (shouldUseMdnsOffload()) {
+        if (shouldEnableMdnsOffload()) {
             registerOffloadEngine();
         }
     }
@@ -2643,7 +2643,7 @@ public class ApfFilter implements AndroidPacketFilter {
         mRas.clear();
         mDependencies.removeBroadcastReceiver(mDeviceIdleReceiver);
         mIsApfShutdown = true;
-        if (shouldUseMdnsOffload()) {
+        if (shouldEnableMdnsOffload()) {
             unregisterOffloadEngine();
         }
     }
@@ -2746,7 +2746,7 @@ public class ApfFilter implements AndroidPacketFilter {
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */, codename =
             "VanillaIceCream")
     @Override
-    public boolean shouldUseMdnsOffload() {
+    public boolean shouldEnableMdnsOffload() {
         return shouldUseApfV6Generator() && mShouldHandleMdnsOffload;
     }
 
