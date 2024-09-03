@@ -26,16 +26,22 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import android.annotation.NonNull;
+import android.net.DnsResolver;
 import android.net.LinkProperties;
+import android.net.Network;
 import android.net.shared.PrivateDnsConfig;
+
+import com.android.net.module.util.SharedLog;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.net.InetAddress;
+import java.util.concurrent.Executor;
 
 @RunWith(JUnit4.class)
 public final class DdrTrackerTest {
@@ -44,11 +50,22 @@ public final class DdrTrackerTest {
     private static final int STRICT_MODE = PRIVATE_DNS_MODE_PROVIDER_HOSTNAME;
 
     private DdrTracker mDdrTracker;
+    private @Mock DnsResolver mDnsResolver;
+    private @Mock Network mCleartextDnsNetwork;
+    private @Mock TestCallback mCallback;
+    private @Mock Executor mExecutor;
+    private @Mock SharedLog mValidationLogger;
+
+    // TODO(b/240259333): Fake DNS responses on mDnsResolver to test startSvcbLookup.
+    private static class TestCallback implements DdrTracker.Callback {
+        @Override
+        public void onSvcbLookupComplete(@NonNull PrivateDnsConfig result) {}
+    }
 
     private static class PrivateDnsConfigBuilder {
         private int mMode = OFF_MODE;
         private String mHostname = null;
-        private final InetAddress[] mIps = null;
+        private InetAddress[] mIps = null;
         private final String mDohName = null;
         private final InetAddress[] mDohIps = null;
         private final String mDohPath = null;
@@ -62,6 +79,10 @@ public final class DdrTrackerTest {
             mHostname = value;
             return this;
         }
+        PrivateDnsConfigBuilder setIps(InetAddress[] value) {
+            mIps = value;
+            return this;
+        }
         PrivateDnsConfig build() {
             return new PrivateDnsConfig(mMode, mHostname, mIps,
                     false /* ddrEnabled */, mDohName, mDohIps, mDohPath,  mDohPort);
@@ -71,9 +92,11 @@ public final class DdrTrackerTest {
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
-        mDdrTracker = new DdrTracker();
+        mDdrTracker = new DdrTracker(mCleartextDnsNetwork, mDnsResolver, mExecutor, mCallback,
+                mValidationLogger);
     }
 
+    // TODO: check that if DeviceConfigUtils#isFeatureSupported returns false, DDR is disabled.
     private void testNotifyPrivateDnsSettingsChangedHelper(int mode, @NonNull String dnsProvider)
             throws Exception {
         final PrivateDnsConfig cfg =
@@ -120,5 +143,37 @@ public final class DdrTrackerTest {
         testNotifyLinkPropertiesChangedHelper(new InetAddress[] {ip1});
         testNotifyLinkPropertiesChangedHelper(new InetAddress[] {ip1, ip2});
         testNotifyLinkPropertiesChangedHelper(new InetAddress[] {ip2, ip1});
+    }
+
+    private void assertPrivateDnsConfigEquals(PrivateDnsConfig a, PrivateDnsConfig b) {
+        assertEquals(a.mode, b.mode);
+        assertEquals(a.hostname, b.hostname);
+        assertArrayEquals(a.ips, b.ips);
+        assertEquals(a.dohName, b.dohName);
+        assertArrayEquals(a.dohIps, b.dohIps);
+        assertEquals(a.dohPath, b.dohPath);
+        assertEquals(a.dohPort, b.dohPort);
+    }
+
+    @Test
+    public void testSetStrictModeHostnameResolutionResult() throws Exception {
+        final String dnsProvider = "example1.com";
+        final InetAddress[] ips = new InetAddress[] {
+            InetAddress.parseNumericAddress("1.2.3.4"),
+            InetAddress.parseNumericAddress("2001:db8::1"),
+        };
+        final PrivateDnsConfigBuilder builder =
+                new PrivateDnsConfigBuilder().setMode(STRICT_MODE).setHostname(dnsProvider);
+
+        assertTrue(mDdrTracker.notifyPrivateDnsSettingsChanged(builder.build()));
+        assertPrivateDnsConfigEquals(builder.build(), mDdrTracker.getResultForReporting());
+
+        mDdrTracker.setStrictModeHostnameResolutionResult(ips);
+        assertPrivateDnsConfigEquals(builder.setIps(ips).build(),
+                mDdrTracker.getResultForReporting());
+
+        mDdrTracker.resetStrictModeHostnameResolutionResult();
+        assertPrivateDnsConfigEquals(builder.setIps(new InetAddress[0]).build(),
+                mDdrTracker.getResultForReporting());
     }
 }

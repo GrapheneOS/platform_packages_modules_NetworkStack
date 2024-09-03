@@ -104,7 +104,6 @@ import static org.mockito.Mockito.verify;
 
 import static java.lang.System.currentTimeMillis;
 import static java.util.Collections.singletonList;
-import static java.util.stream.Collectors.toList;
 
 import android.annotation.NonNull;
 import android.annotation.SuppressLint;
@@ -121,7 +120,6 @@ import android.net.DataStallReportParcelable;
 import android.net.DnsResolver;
 import android.net.INetd;
 import android.net.INetworkMonitorCallbacks;
-import android.net.InetAddresses;
 import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkAgentConfig;
@@ -388,11 +386,11 @@ public class NetworkMonitorTest {
         class DnsEntry {
             final String mHostname;
             final int mType;
-            final AddressSupplier mAddressesSupplier;
-            DnsEntry(String host, int type, AddressSupplier addr) {
+            final AnswerSupplier mAnswerSupplier;
+            DnsEntry(String host, int type, AnswerSupplier answerSupplier) {
                 mHostname = host;
                 mType = type;
-                mAddressesSupplier = addr;
+                mAnswerSupplier = answerSupplier;
             }
             // Full match or partial match that target host contains the entry hostname to support
             // random private dns probe hostname.
@@ -400,22 +398,22 @@ public class NetworkMonitorTest {
                 return hostname.endsWith(mHostname) && type == mType;
             }
         }
-        interface AddressSupplier {
-            List<InetAddress> get() throws DnsResolver.DnsException;
+        interface AnswerSupplier {
+            List<String> get() throws DnsResolver.DnsException;
         }
 
-        class InstantAddressSupplier implements AddressSupplier {
-            private final List<InetAddress> mAddresses;
-            InstantAddressSupplier(List<InetAddress> addresses) {
-                mAddresses = addresses;
+        class InstantAnswerSupplier implements AnswerSupplier {
+            private final List<String> mAnswers;
+            InstantAnswerSupplier(List<String> answers) {
+                mAnswers = answers;
             }
             @Override
-            public List<InetAddress> get() {
-                return mAddresses;
+            public List<String> get() {
+                return mAnswers;
             }
         }
 
-        private final ArrayList<DnsEntry> mAnswers = new ArrayList<DnsEntry>();
+        private final ArrayList<DnsEntry> mAnswers = new ArrayList<>();
         private boolean mNonBypassPrivateDnsWorking = true;
 
         /** Whether DNS queries on mNonBypassPrivateDnsWorking should succeed. */
@@ -431,29 +429,29 @@ public class NetworkMonitorTest {
         }
 
         /** Returns the answer for a given name and type on the given mock network. */
-        private CompletableFuture<List<InetAddress>> getAnswer(Network mockNetwork, String hostname,
+        private CompletableFuture<List<String>> getAnswer(Network mockNetwork, String hostname,
                 int type) {
             if (mockNetwork == mNetwork && !mNonBypassPrivateDnsWorking) {
                 return CompletableFuture.completedFuture(null);
             }
 
-            final AddressSupplier answerSupplier;
+            final AnswerSupplier answerSupplier;
 
             synchronized (mAnswers) {
                 answerSupplier = mAnswers.stream()
                         .filter(e -> e.matches(hostname, type))
-                        .map(answer -> answer.mAddressesSupplier).findFirst().orElse(null);
+                        .map(answer -> answer.mAnswerSupplier).findFirst().orElse(null);
             }
             if (answerSupplier == null) {
                 return CompletableFuture.completedFuture(null);
             }
 
-            if (answerSupplier instanceof InstantAddressSupplier) {
+            if (answerSupplier instanceof InstantAnswerSupplier) {
                 // Save latency waiting for a query thread if the answer is hardcoded.
                 return CompletableFuture.completedFuture(
-                        ((InstantAddressSupplier) answerSupplier).get());
+                        ((InstantAnswerSupplier) answerSupplier).get());
             }
-            final CompletableFuture<List<InetAddress>> answerFuture = new CompletableFuture<>();
+            final CompletableFuture<List<String>> answerFuture = new CompletableFuture<>();
             new Thread(() -> {
                 try {
                     answerFuture.complete(answerSupplier.get());
@@ -466,10 +464,11 @@ public class NetworkMonitorTest {
 
         /** Sets the answer for a given name and type. */
         private void setAnswer(String hostname, String[] answer, int type) {
-            setAnswer(hostname, new InstantAddressSupplier(generateAnswer(answer)), type);
+            setAnswer(hostname, new InstantAnswerSupplier(
+                    (answer == null) ? null : Arrays.asList(answer)), type);
         }
 
-        private void setAnswer(String hostname, AddressSupplier answerSupplier, int type) {
+        private void setAnswer(String hostname, AnswerSupplier answerSupplier, int type) {
             DnsEntry record = new DnsEntry(hostname, type, answerSupplier);
             synchronized (mAnswers) {
                 // Remove the existing one.
@@ -479,9 +478,8 @@ public class NetworkMonitorTest {
             }
         }
 
-        private List<InetAddress> generateAnswer(String[] answer) {
-            if (answer == null) return new ArrayList<>();
-            return Arrays.stream(answer).map(InetAddresses::parseNumericAddress).collect(toList());
+        private byte[] makeSvcbResponse(String hostname, List<String> answer) {
+            throw new UnsupportedOperationException("Not supported, update this fake");
         }
 
         /** Simulates a getAllByName call for the specified name on the specified mock network. */
@@ -489,8 +487,8 @@ public class NetworkMonitorTest {
                 throws UnknownHostException {
             final List<InetAddress> answer;
             try {
-                answer = queryAllTypes(mockNetwork, hostname).get(
-                        HANDLER_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                answer = stringsToInetAddresses(queryAllTypes(mockNetwork, hostname).get(
+                        HANDLER_TIMEOUT_MS, TimeUnit.MILLISECONDS));
             } catch (ExecutionException | InterruptedException | TimeoutException e) {
                 throw new AssertionError("No mock DNS reply within timeout", e);
             }
@@ -501,22 +499,22 @@ public class NetworkMonitorTest {
         }
 
         // Regardless of the type, depends on what the responses contained in the network.
-        private CompletableFuture<List<InetAddress>> queryAllTypes(
+        private CompletableFuture<List<String>> queryAllTypes(
                 Network mockNetwork, String hostname) {
             if (mockNetwork == mNetwork && !mNonBypassPrivateDnsWorking) {
                 return CompletableFuture.completedFuture(null);
             }
 
-            final CompletableFuture<List<InetAddress>> aFuture =
+            final CompletableFuture<List<String>> aFuture =
                     getAnswer(mockNetwork, hostname, TYPE_A)
                             .exceptionally(e -> Collections.emptyList());
-            final CompletableFuture<List<InetAddress>> aaaaFuture =
+            final CompletableFuture<List<String>> aaaaFuture =
                     getAnswer(mockNetwork, hostname, TYPE_AAAA)
                             .exceptionally(e -> Collections.emptyList());
 
-            final CompletableFuture<List<InetAddress>> combinedFuture = new CompletableFuture<>();
+            final CompletableFuture<List<String>> combinedFuture = new CompletableFuture<>();
             aFuture.thenAcceptBoth(aaaaFuture, (res1, res2) -> {
-                final List<InetAddress> answer = new ArrayList<>();
+                final List<String> answer = new ArrayList<>();
                 if (res1 != null) answer.addAll(res1);
                 if (res2 != null) answer.addAll(res2);
                 combinedFuture.complete(answer);
@@ -544,15 +542,24 @@ public class NetworkMonitorTest {
             }).when(mDnsResolver).query(any(), any(), anyInt(), anyInt(), any(), any(), any());
         }
 
+        private List<InetAddress> stringsToInetAddresses(List<String> addrs) {
+            if (addrs == null) return null;
+            final List<InetAddress> out = new ArrayList<>();
+            for (String addr : addrs) {
+                out.add(parseNumericAddress(addr));
+            }
+            return out;
+        }
+
         // Mocking queries on DnsResolver#query.
         private Answer mockQuery(InvocationOnMock invocation, int posNetwork, int posHostname,
                 int posExecutor, int posCallback, int posType) {
             String hostname = (String) invocation.getArgument(posHostname);
             Executor executor = (Executor) invocation.getArgument(posExecutor);
-            DnsResolver.Callback<List<InetAddress>> callback = invocation.getArgument(posCallback);
             Network network = invocation.getArgument(posNetwork);
+            DnsResolver.Callback callback = invocation.getArgument(posCallback);
 
-            final CompletableFuture<List<InetAddress>> answerFuture = posType != -1
+            final CompletableFuture<List<String>> answerFuture = (posType != -1)
                     ? getAnswer(network, hostname, invocation.getArgument(posType))
                     : queryAllTypes(network, hostname);
 
@@ -566,7 +573,18 @@ public class NetworkMonitorTest {
                         return;
                     }
                     if (answer != null && answer.size() > 0) {
-                        callback.onAnswer(answer, 0);
+                        final int qtype = (posType != -1)
+                                ? invocation.getArgument(posType) : TYPE_AAAA;
+                        switch (qtype) {
+                            // Assume A and AAAA queries use the List<InetAddress> callback.
+                            case TYPE_A:
+                            case TYPE_AAAA:
+                                callback.onAnswer(stringsToInetAddresses(answer), 0);
+                                break;
+                            default:
+                                throw new UnsupportedOperationException(
+                                        "Unsupported qtype: " + qtype + ", update this fake");
+                        }
                     }
                 }));
             });
@@ -2561,7 +2579,7 @@ public class NetworkMonitorTest {
         final ConditionVariable v4Queried = new ConditionVariable();
         mFakeDns.setAnswer("dns.google", () -> {
             v4Queried.open();
-            return List.of(parseNumericAddress("192.0.2.123"));
+            return List.of("192.0.2.123");
         }, TYPE_A);
         mFakeDns.setAnswer("dns.google", () -> {
             // Make sure the v6 query processing is a bit slower than the v6 one. The small delay
@@ -2570,7 +2588,7 @@ public class NetworkMonitorTest {
             // not, the test should pass.
             v4Queried.block(HANDLER_TIMEOUT_MS);
             SystemClock.sleep(10L);
-            return List.of(parseNumericAddress("2001:db8::1"), parseNumericAddress("2001:db8::2"));
+            return List.of("2001:db8::1", "2001:db8::2");
         }, TYPE_AAAA);
 
         notifyNetworkConnected(wnm, CELL_NOT_METERED_CAPABILITIES);
@@ -2601,12 +2619,12 @@ public class NetworkMonitorTest {
         mFakeDns.setAnswer("v1.google", () -> {
             queriedLatch.countDown();
             blockReplies.block(HANDLER_TIMEOUT_MS);
-            return List.of(parseNumericAddress("192.0.2.123"));
+            return List.of("192.0.2.123");
         }, TYPE_A);
         mFakeDns.setAnswer("v1.google", () -> {
             queriedLatch.countDown();
             blockReplies.block(HANDLER_TIMEOUT_MS);
-            return List.of(parseNumericAddress("2001:db8::1"));
+            return List.of("2001:db8::1");
         }, TYPE_AAAA);
 
         notifyNetworkConnected(wnm, CELL_NOT_METERED_CAPABILITIES);
@@ -2649,12 +2667,12 @@ public class NetworkMonitorTest {
         mFakeDns.setAnswer("v1.google", () -> {
             queriedLatch.countDown();
             blockReplies.block(HANDLER_TIMEOUT_MS);
-            return List.of(parseNumericAddress("192.0.2.123"));
+            return List.of("192.0.2.123");
         }, TYPE_A);
         mFakeDns.setAnswer("v1.google", () -> {
             queriedLatch.countDown();
             blockReplies.block(HANDLER_TIMEOUT_MS);
-            return List.of(parseNumericAddress("2001:db8::1"));
+            return List.of("2001:db8::1");
         }, TYPE_AAAA);
 
         notifyNetworkConnected(wnm, CELL_NOT_METERED_CAPABILITIES);
@@ -3262,11 +3280,11 @@ public class NetworkMonitorTest {
         mFakeDns.setAnswer("www.google.com", () -> {
             // Make sure the DNS probes take at least 1ms
             SystemClock.sleep(1);
-            return List.of(parseNumericAddress("2001:db8::443"));
+            return List.of("2001:db8::443");
         }, TYPE_AAAA);
         mFakeDns.setAnswer(PRIVATE_DNS_PROBE_HOST_SUFFIX, () -> {
             SystemClock.sleep(1);
-            return List.of(parseNumericAddress("2001:db8::444"));
+            return List.of("2001:db8::444");
         }, TYPE_AAAA);
         setStatus(mHttpsConnection, 204);
         setStatus(mHttpConnection, 204);

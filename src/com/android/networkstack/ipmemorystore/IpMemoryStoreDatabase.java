@@ -35,6 +35,8 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.android.internal.annotations.VisibleForTesting;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
@@ -153,12 +155,19 @@ public class IpMemoryStoreDatabase {
         // Update this whenever changing the schema.
         // DO NOT CHANGE without solid testing for downgrades, and checking onDowngrade
         // below: b/171340630
-        private static final int SCHEMA_VERSION = 4;
+        @VisibleForTesting
+        static final int SCHEMA_VERSION = 4;
         private static final String DATABASE_FILENAME = "IpMemoryStore.db";
         private static final String TRIGGER_NAME = "delete_cascade_to_private";
 
         public DbHelper(@NonNull final Context context) {
             super(context, DATABASE_FILENAME, null, SCHEMA_VERSION);
+            setIdleConnectionTimeout(IDLE_CONNECTION_TIMEOUT_MS);
+        }
+
+        @VisibleForTesting
+        DbHelper(@NonNull final Context context, int schemaVersion) {
+            super(context, DATABASE_FILENAME, null, schemaVersion);
             setIdleConnectionTimeout(IDLE_CONNECTION_TIMEOUT_MS);
         }
 
@@ -208,11 +217,6 @@ public class IpMemoryStoreDatabase {
             // Downgrades always nuke all data and recreate an empty table.
             db.execSQL(NetworkAttributesContract.DROP_TABLE);
             db.execSQL(PrivateDataContract.DROP_TABLE);
-            // TODO: add test for downgrades. Triggers should already be dropped
-            // when the table is dropped, so this may be a bug.
-            // Note that fixing this code does not affect how older versions
-            // will handle downgrades.
-            db.execSQL("DROP TRIGGER " + TRIGGER_NAME);
             onCreate(db);
         }
 
@@ -747,6 +751,19 @@ public class IpMemoryStoreDatabase {
             cursor.moveToFirst();
             return cursor == null ? 0 : cursor.getInt(0);
         }
+    }
+
+    static int storeNetworkEvent(@NonNull final SQLiteDatabase db, @NonNull final String cluster,
+            final long timestamp, final long expiry, final int eventType) {
+        // TODO: implement this.
+        return Status.SUCCESS;
+    }
+
+    static int[] retrieveNetworkEventCount(@NonNull final SQLiteDatabase db,
+            @NonNull final String cluster, @NonNull final long[] sinceTimes,
+            @NonNull final int[] eventTypes) {
+        // TODO: implement this.
+        return new int[0];
     }
 
     // Helper methods

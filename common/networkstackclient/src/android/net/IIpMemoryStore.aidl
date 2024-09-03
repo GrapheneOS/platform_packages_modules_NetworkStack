@@ -21,6 +21,7 @@ import android.net.ipmemorystore.NetworkAttributesParcelable;
 import android.net.ipmemorystore.IOnBlobRetrievedListener;
 import android.net.ipmemorystore.IOnL2KeyResponseListener;
 import android.net.ipmemorystore.IOnNetworkAttributesRetrievedListener;
+import android.net.ipmemorystore.IOnNetworkEventCountRetrievedListener;
 import android.net.ipmemorystore.IOnSameL3NetworkResponseListener;
 import android.net.ipmemorystore.IOnStatusAndCountListener;
 import android.net.ipmemorystore.IOnStatusListener;
@@ -152,4 +153,48 @@ oneway interface IIpMemoryStore {
      * @return (through the listener) A status to indicate success and the number of deleted records
      */
     void deleteCluster(String cluster, boolean needWipe, IOnStatusAndCountListener listener);
+
+    /**
+     * The network event types related to Neighbor Unreachability Detection(NUD) probe failure
+     * including probe fails due to L2 roam, low Wi-Fi RSSI checks, periodic kernel organic checks,
+     * or a neighbor's MAC address changing during a probe.
+     */
+    const int NETWORK_EVENT_NUD_FAILURE_ROAM = 0;
+    const int NETWORK_EVENT_NUD_FAILURE_CONFIRM = 1;
+    const int NETWORK_EVENT_NUD_FAILURE_ORGANIC = 2;
+    const int NETWORK_EVENT_NUD_FAILURE_MAC_ADDRESS_CHANGED = 3;
+
+    /**
+     * Store a specific network event to database for a given cluster.
+     *
+     * @param cluster The cluster representing a notion of network group (e.g., BSSIDs with the
+     *                same SSID).
+     * @param timestamp The timestamp {@link System.currentTimeMillis} when a specific network
+     *                  event occurred.
+     * @param expiry The timestamp {@link System.currentTimeMillis} when a specific network
+     *               event stored in the database expires, e.g. it might be one week from now.
+     * @param eventType One of the NETWORK_EVENT constants above.
+     * @param listener A listener that will be invoked to inform of the completion of this call.
+     * @return (through the listener) A status to indicate success or failure.
+     */
+    void storeNetworkEvent(String cluster, long timestamp, long expiry, int eventType,
+            IOnStatusListener listener);
+
+    /**
+     * Retrieve the specific network event counts for a given cluster and event type since one or
+     * more timestamps in the past.
+     *
+     * @param cluster The cluster to query.
+     * @param sinceTimes An array of timestamps in the past. The query will return an array of
+     *                   equal size. Each element in the array will contain the number of network
+     *                   events between the corresponding timestamp and the current time, e.g. query
+     *                   since the last week and/or the last day.
+     * @param eventTypes An array of network event types to query, which can be one or more of the
+     *                   above NETWORK_EVENT constants.
+     * @param listener The listener that will be invoked to return the answer.
+     * @return (through the listener) The event counts associated with the query, or an empty array
+     *                                if the query failed.
+     */
+    void retrieveNetworkEventCount(String cluster, in long[] sinceTimes, in int[] eventTypes,
+            IOnNetworkEventCountRetrievedListener listener);
 }

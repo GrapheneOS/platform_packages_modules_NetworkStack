@@ -97,8 +97,13 @@ aidl_interface {
             version: "10",
             imports: [],
         },
+        {
+            version: "11",
+            imports: [],
+        },
 
     ],
+    frozen: true,
 
 }
 
@@ -167,7 +172,7 @@ aidl_interface {
             enabled: false,
         },
     },
-    imports: ["ipmemorystore-aidl-interfaces-V10"],
+    imports: ["ipmemorystore-aidl-interfaces-V11"],
     // TODO: have tethering depend on networkstack-client and set visibility to private
     visibility: [
         "//system/tools/aidl/build",
@@ -178,43 +183,43 @@ aidl_interface {
         // Remove old networkstack aidl interface version info that is no longer used.
         {
             version: "13",
-            imports: ["ipmemorystore-aidl-interfaces-V10"],
+            imports: ["ipmemorystore-aidl-interfaces-V11"],
         },
         {
             version: "14",
-            imports: ["ipmemorystore-aidl-interfaces-V10"],
+            imports: ["ipmemorystore-aidl-interfaces-V11"],
         },
         {
             version: "15",
-            imports: ["ipmemorystore-aidl-interfaces-V10"],
+            imports: ["ipmemorystore-aidl-interfaces-V11"],
         },
         {
             version: "16",
-            imports: ["ipmemorystore-aidl-interfaces-V10"],
+            imports: ["ipmemorystore-aidl-interfaces-V11"],
         },
         {
             version: "17",
-            imports: ["ipmemorystore-aidl-interfaces-V10"],
+            imports: ["ipmemorystore-aidl-interfaces-V11"],
         },
         {
             version: "18",
-            imports: ["ipmemorystore-aidl-interfaces-V10"],
+            imports: ["ipmemorystore-aidl-interfaces-V11"],
         },
         {
             version: "19",
-            imports: ["ipmemorystore-aidl-interfaces-V10"],
+            imports: ["ipmemorystore-aidl-interfaces-V11"],
         },
         {
             version: "20",
-            imports: ["ipmemorystore-aidl-interfaces-V10"],
+            imports: ["ipmemorystore-aidl-interfaces-V11"],
         },
         {
             version: "21",
-            imports: ["ipmemorystore-aidl-interfaces-V10"],
+            imports: ["ipmemorystore-aidl-interfaces-V11"],
         },
         {
             version: "22",
-            imports: ["ipmemorystore-aidl-interfaces-V10"],
+            imports: ["ipmemorystore-aidl-interfaces-V11"],
         },
 
     ],
@@ -226,7 +231,7 @@ java_library {
     sdk_version: "system_current",
     min_sdk_version: "30",
     static_libs: [
-        "ipmemorystore-aidl-interfaces-V10-java",
+        "ipmemorystore-aidl-interfaces-V11-java",
         "networkstack-aidl-interfaces-V22-java",
     ],
     visibility: ["//packages/modules/NetworkStack:__subpackages__"],

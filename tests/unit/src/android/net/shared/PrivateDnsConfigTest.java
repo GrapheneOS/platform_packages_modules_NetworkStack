@@ -22,6 +22,8 @@ import static android.net.ConnectivitySettingsManager.PRIVATE_DNS_MODE_PROVIDER_
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import android.net.PrivateDnsConfigParcel;
 
@@ -135,5 +137,24 @@ public final class PrivateDnsConfigTest {
         ipArray[0] = InetAddress.parseNumericAddress("2001:db8::2");
         assertArrayEquals(new InetAddress[] { ip }, cfg.ips);
         assertArrayEquals(new InetAddress[] { ip }, cfg.dohIps);
+    }
+
+    @Test
+    public void testSettingsComparison() {
+        final PrivateDnsConfig off = new PrivateDnsConfig(false);
+        final PrivateDnsConfig opportunistic = new PrivateDnsConfig(true);
+        final PrivateDnsConfig strict = new PrivateDnsConfig("dns.com", null);
+
+        assertFalse(opportunistic.areSettingsSameAs(off));
+        assertFalse(opportunistic.areSettingsSameAs(strict));
+        assertTrue(opportunistic.areSettingsSameAs(new PrivateDnsConfig(
+                OPPORTUNISTIC_MODE, null, TEST_ADDRS, false, null, null, null, -1)));
+
+        assertFalse(strict.areSettingsSameAs(off));
+        assertFalse(strict.areSettingsSameAs(opportunistic));
+        assertTrue(strict.areSettingsSameAs(new PrivateDnsConfig(
+                STRICT_MODE, "dns.com", TEST_ADDRS, false, null, null, null, -1)));
+        assertFalse(strict.areSettingsSameAs(new PrivateDnsConfig(
+                STRICT_MODE, "foo.com", TEST_ADDRS, false, null, null, null, -1)));
     }
 }

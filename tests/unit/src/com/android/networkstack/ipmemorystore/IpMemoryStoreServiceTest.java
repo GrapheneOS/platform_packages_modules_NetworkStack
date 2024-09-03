@@ -16,6 +16,7 @@
 
 package com.android.networkstack.ipmemorystore;
 
+import static com.android.networkstack.ipmemorystore.IpMemoryStoreDatabase.DbHelper.SCHEMA_VERSION;
 import static com.android.networkstack.ipmemorystore.RegularMaintenanceJobService.InterruptMaintenance;
 
 import static org.junit.Assert.assertEquals;
@@ -29,6 +30,8 @@ import static org.mockito.Mockito.doReturn;
 
 import android.app.job.JobScheduler;
 import android.content.Context;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteOpenHelper;
 import android.net.ipmemorystore.Blob;
 import android.net.ipmemorystore.IOnBlobRetrievedListener;
 import android.net.ipmemorystore.IOnL2KeyResponseListener;
@@ -99,8 +102,9 @@ public class IpMemoryStoreServiceTest {
     private static final long UNIX_TIME_MS_2100_01_01 = 4102412400000L;
     private static final int MTU_NULL = -1;
     private static final String[] FAKE_KEYS;
-    private static final byte[] TEST_BLOB_DATA = new byte[] { -3, 6, 8, -9, 12,
-            -128, 0, 89, 112, 91, -34 };
+    private static final byte[] TEST_BLOB_DATA = new byte[]{-3, 6, 8, -9, 12,
+            -128, 0, 89, 112, 91, -34};
+
     static {
         FAKE_KEYS = new String[FAKE_KEY_COUNT];
         for (int i = 0; i < FAKE_KEYS.length; ++i) {
@@ -235,6 +239,7 @@ public class IpMemoryStoreServiceTest {
     private interface OnBlobRetrievedListener {
         void onBlobRetrieved(Status status, String l2Key, String name, byte[] data);
     }
+
     private IOnBlobRetrievedListener onBlobRetrieved(final OnBlobRetrievedListener functor) {
         return new IOnBlobRetrievedListener() {
             @Override
@@ -262,9 +267,10 @@ public class IpMemoryStoreServiceTest {
     }
 
     /** Helper method to make an IOnNetworkAttributesRetrievedListener */
-    private interface OnNetworkAttributesRetrievedListener  {
+    private interface OnNetworkAttributesRetrievedListener {
         void onNetworkAttributesRetrieved(Status status, String l2Key, NetworkAttributes attr);
     }
+
     private IOnNetworkAttributesRetrievedListener onNetworkAttributesRetrieved(
             final OnNetworkAttributesRetrievedListener functor) {
         return new IOnNetworkAttributesRetrievedListener() {
@@ -297,6 +303,7 @@ public class IpMemoryStoreServiceTest {
     private interface OnSameL3NetworkResponseListener {
         void onSameL3NetworkResponse(Status status, SameL3NetworkResponse answer);
     }
+
     private IOnSameL3NetworkResponseListener onSameResponse(
             final OnSameL3NetworkResponseListener functor) {
         return new IOnSameL3NetworkResponseListener() {
@@ -329,6 +336,7 @@ public class IpMemoryStoreServiceTest {
     private interface OnL2KeyResponseListener {
         void onL2KeyResponse(Status status, String key);
     }
+
     private IOnL2KeyResponseListener onL2KeyResponse(final OnL2KeyResponseListener functor) {
         return new IOnL2KeyResponseListener() {
             @Override
@@ -376,6 +384,7 @@ public class IpMemoryStoreServiceTest {
     private NetworkAttributes storeAttributes(final String l2Key, final NetworkAttributes na) {
         return storeAttributes("Did not complete storing attributes", l2Key, na);
     }
+
     private NetworkAttributes storeAttributes(final String timeoutMessage, final String l2Key,
             final NetworkAttributes na) {
         doLatched(timeoutMessage, latch -> mService.storeNetworkAttributes(l2Key, na.toParcelable(),
@@ -390,6 +399,7 @@ public class IpMemoryStoreServiceTest {
     private void storeBlobOrFail(final String l2Key, final Blob b, final byte[] data) {
         storeBlobOrFail("Did not complete storing private data", l2Key, b, data);
     }
+
     private void storeBlobOrFail(final String timeoutMessage, final String l2Key, final Blob b,
             final byte[] data) {
         b.data = data;
@@ -409,8 +419,7 @@ public class IpMemoryStoreServiceTest {
      * 2. Comment out "mDbFile.delete()" in tearDown() method.
      * 3. Run "atest IpMemoryStoreServiceTest#testGenerateDB".
      * 4. Run "adb root; adb pull /data/data/com.android.server.networkstack.tests/files/test.db
-     *    $YOUR_CODE_BASE/package/module/NetworkStack/tests/unit/res/raw/test.db".
-     *
+     * $YOUR_CODE_BASE/package/module/NetworkStack/tests/unit/res/raw/test.db".
      */
     private void generateFakeData() {
         final int fakeDataCount = 1000;
@@ -473,7 +482,7 @@ public class IpMemoryStoreServiceTest {
 
         final NetworkAttributes.Builder na2 = new NetworkAttributes.Builder();
         na.setDnsAddresses(Arrays.asList(
-                new InetAddress[] {Inet6Address.getByName("0A1C:2E40:480A::1CA6")}));
+                new InetAddress[]{Inet6Address.getByName("0A1C:2E40:480A::1CA6")}));
         final NetworkAttributes attributes2 = na2.build();
         storeAttributes("Did not complete storing attributes 2", l2Key, attributes2);
 
@@ -587,13 +596,13 @@ public class IpMemoryStoreServiceTest {
         stored.add(storeAttributes(FAKE_KEYS[0], na.build()));
 
         na.setDnsAddresses(Arrays.asList(
-                new InetAddress[] {Inet6Address.getByName("8D56:9AF1::08EE:20F1")}));
+                new InetAddress[]{Inet6Address.getByName("8D56:9AF1::08EE:20F1")}));
         na.setMtu(208);
         stored.add(storeAttributes(FAKE_KEYS[1], na.build()));
         na.setMtu(null);
         na.setAssignedV4Address((Inet4Address) Inet4Address.getByName("1.2.3.4"));
         na.setDnsAddresses(Arrays.asList(
-                new InetAddress[] {Inet6Address.getByName("0A1C:2E40:480A::1CA6")}));
+                new InetAddress[]{Inet6Address.getByName("0A1C:2E40:480A::1CA6")}));
         na.setCluster("cluster1");
         stored.add(storeAttributes(FAKE_KEYS[2], na.build()));
         na.setMtu(219);
@@ -922,13 +931,13 @@ public class IpMemoryStoreServiceTest {
 
     private final List<Pair<String, byte[]>> mByteArrayTests = List.of(
             new Pair<>("null", null),
-            new Pair<>("[]", new byte[] {}),
+            new Pair<>("[]", new byte[]{}),
             new Pair<>("[0102030405060708090A0B0C]",
-                    new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 }),
-            new Pair<>("[0F1080FF]", new byte[] { 15, 16, -128, -1 }),
+                    new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+            new Pair<>("[0F1080FF]", new byte[]{15, 16, -128, -1}),
             new Pair<>("[0102030405060708090A0B0C0D0E0F10...15161718191A1B1C]",
-                    new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-                            17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28 })
+                    new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+                            17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28})
     );
 
     @Test
@@ -975,5 +984,30 @@ public class IpMemoryStoreServiceTest {
 
         //db is null, the db size could not over the threshold.
         assertFalse(ipMemoryStoreService.isDbSizeOverThreshold());
+    }
+
+    private void doTestDowngradeAndUpgrade(int downgradeVersion) {
+        SQLiteOpenHelper dbHelper = new IpMemoryStoreDatabase.DbHelper(
+                mMockContext, downgradeVersion);
+        SQLiteDatabase db = dbHelper.getWritableDatabase();
+        assertEquals(downgradeVersion, db.getVersion());
+        db.close();
+
+        dbHelper = new IpMemoryStoreDatabase.DbHelper(mMockContext, SCHEMA_VERSION);
+        db = dbHelper.getWritableDatabase();
+        assertEquals(SCHEMA_VERSION, db.getVersion());
+        db.close();
+    }
+
+    @Test
+    public void testDowngradeClearsTablesAndriggers() {
+        final String l2Key = FAKE_KEYS[0];
+        final Blob b = new Blob();
+        storeBlobOrFail(l2Key, b, TEST_BLOB_DATA);
+        mService.shutdown();
+
+        for (int version = SCHEMA_VERSION - 1; version >= 1; version--) {
+            doTestDowngradeAndUpgrade(version);
+        }
     }
 }

@@ -276,6 +276,7 @@ public class NetworkStackUtils {
 
     /**
      * Experiment flag to enable Discovery of Designated Resolvers (DDR).
+     * This flag requires networkmonitor_async_privdns_resolution flag.
      */
     public static final String DNS_DDR_VERSION = "dns_ddr_version";
 

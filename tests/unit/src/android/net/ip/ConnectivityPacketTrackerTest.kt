@@ -28,6 +28,7 @@ import android.util.LocalLog
 import androidx.test.filters.SmallTest
 import com.android.net.module.util.HexDump
 import com.android.net.module.util.InterfaceParams
+import com.android.testutils.DevSdkIgnoreRunner
 import com.android.testutils.waitForIdle
 import java.io.FileDescriptor
 import java.io.InterruptedIOException
@@ -48,6 +49,7 @@ import org.mockito.MockitoAnnotations
  * Test for ConnectivityPacketTracker.
  */
 @SmallTest
+@DevSdkIgnoreRunner.MonitorThreadLeak
 class ConnectivityPacketTrackerTest {
     companion object {
         private const val TIMEOUT_MS: Long = 10000

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,8 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */// Blob[] is used to represent an array of byte[], as structured AIDL does not support arrays
-// of arrays.
+ */
 ///////////////////////////////////////////////////////////////////////////////
 // THIS FILE IS IMMUTABLE. DO NOT EDIT IN ANY CASE.                          //
 ///////////////////////////////////////////////////////////////////////////////
@@ -32,14 +31,8 @@
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
 
-package android.net.ipmemorystore;
+package android.net;
 /* @hide */
-@JavaDerive(toString=true)
-parcelable NetworkAttributesParcelable {
-  byte[] assignedV4Address;
-  long assignedV4AddressExpiry;
-  String cluster;
-  android.net.ipmemorystore.Blob[] dnsAddresses;
-  int mtu;
-  @nullable android.net.networkstack.aidl.quirks.IPv6ProvisioningLossQuirkParcelable ipv6ProvisioningLossQuirk;
+interface IIpMemoryStoreCallbacks {
+  oneway void onIpMemoryStoreFetched(in android.net.IIpMemoryStore ipMemoryStore);
 }
