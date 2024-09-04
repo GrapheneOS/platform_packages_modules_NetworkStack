@@ -87,6 +87,9 @@ public class IpMemoryStoreService extends IIpMemoryStore.Stub {
      * @param context the context to access storage with.
      */
     public IpMemoryStoreService(@NonNull final Context context) {
+        // Before doing anything at all, rename the legacy database if necessary.
+        IpMemoryStoreDatabase.DbHelper.maybeRenameDatabaseFile(context);
+
         // Note that constructing the service will access the disk and block
         // for some time, but it should make no difference to the clients. Because
         // the interface is one-way, clients fire and forget requests, and the callback
@@ -509,6 +512,11 @@ public class IpMemoryStoreService extends IIpMemoryStore.Stub {
         mExecutor.execute(() -> {
             try {
                 if (null == cluster) {
+                    listener.onNetworkEventCountRetrieved(
+                            makeStatus(ERROR_ILLEGAL_ARGUMENT), new int[0] /* counts */);
+                    return;
+                }
+                if (0 == sinceTimes.length) {
                     listener.onNetworkEventCountRetrieved(
                             makeStatus(ERROR_ILLEGAL_ARGUMENT), new int[0] /* counts */);
                     return;
