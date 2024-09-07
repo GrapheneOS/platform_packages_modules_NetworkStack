@@ -21,6 +21,7 @@ import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener
 import android.net.ipmemorystore.Status
 import android.net.ipmemorystore.Status.SUCCESS
 import android.util.ArrayMap
+import android.util.Pair
 import org.mockito.ArgumentCaptor
 import org.mockito.Mockito.any
 import org.mockito.Mockito.doAnswer
@@ -63,12 +64,37 @@ class IpClientSignatureTest : IpClientIntegrationTestCommon() {
     override fun getDeviceConfigProperty(name: String): String? {
         return mDeviceConfigProperties.get(name)
     }
+
     override fun getStoredNetworkAttributes(l2Key: String, timeout: Long): NetworkAttributes {
         val networkAttributesCaptor = ArgumentCaptor.forClass(NetworkAttributes::class.java)
 
         verify(mIpMemoryStore, timeout(timeout))
                 .storeNetworkAttributes(eq(l2Key), networkAttributesCaptor.capture(), any())
         return networkAttributesCaptor.value
+    }
+
+    override fun getStoredNetworkEventCount(
+            cluster: String,
+            sinceTimes: LongArray,
+            eventType: IntArray,
+            timeout: Long
+    ): IntArray {
+        val counts = IntArray(sinceTimes.size)
+        val eventTypesSet = eventType.toSet() // Convert eventType to Set for faster contains check
+
+        sinceTimes.forEachIndexed { index, sinceTime ->
+            var count = 0
+            mNetworkEvents.forEach { event ->
+                val key = event.first
+                val value = event.second
+                if (key == cluster && eventTypesSet.contains(value.second) &&
+                        sinceTime <= value.first) {
+                    count++
+                }
+            }
+            counts[index] = count
+        }
+        return counts
     }
 
     override fun assertIpMemoryNeverStoreNetworkAttributes(l2Key: String, timeout: Long) {
@@ -81,6 +107,11 @@ class IpClientSignatureTest : IpClientIntegrationTestCommon() {
             listener.onNetworkAttributesRetrieved(Status(SUCCESS), l2Key, na)
             true
         }.`when`(mIpMemoryStore).retrieveNetworkAttributes(eq(l2Key), any())
+    }
+
+    override fun storeNetworkEvent(cluster: String, now: Long, expiry: Long, eventType: Int) {
+        val event = Pair(cluster, Pair(now, eventType))
+        mNetworkEvents.add(event)
     }
 
     override fun readNudSolicitNumInSteadyStateFromResource(): Int {

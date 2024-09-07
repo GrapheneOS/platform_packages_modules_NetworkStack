@@ -29,6 +29,8 @@ import android.net.Network;
 import android.os.Handler;
 import android.os.Looper;
 
+import androidx.annotation.NonNull;
+
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
@@ -38,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -53,18 +56,21 @@ import java.util.concurrent.TimeoutException;
 public class FakeDns {
     private static final int HANDLER_TIMEOUT_MS = 1000;
 
+    @NonNull
     private final Network mNetwork;
+    @NonNull
     private final DnsResolver mDnsResolver;
     private final ArrayList<DnsEntry> mAnswers = new ArrayList<>();
     private boolean mNonBypassPrivateDnsWorking = true;
 
-    public FakeDns(Network network, DnsResolver dnsResolver) {
-        mNetwork = network;
-        mDnsResolver = dnsResolver;
+    public FakeDns(@NonNull Network network, @NonNull DnsResolver dnsResolver) {
+
+        mNetwork = Objects.requireNonNull(network);
+        mDnsResolver = Objects.requireNonNull(dnsResolver);
     }
 
     /** Data class to record the Dns entry. */
-    class DnsEntry {
+    private static class DnsEntry {
         final String mHostname;
         final int mType;
         final AnswerSupplier mAnswerSupplier;
@@ -85,7 +91,7 @@ public class FakeDns {
         List<String> get() throws DnsResolver.DnsException;
     }
 
-    class InstantAnswerSupplier implements AnswerSupplier {
+    private static class InstantAnswerSupplier implements AnswerSupplier {
         private final List<String> mAnswers;
         InstantAnswerSupplier(List<String> answers) {
             mAnswers = answers;
@@ -111,7 +117,7 @@ public class FakeDns {
     /** Returns the answer for a given name and type on the given mock network. */
     private CompletableFuture<List<String>> getAnswer(Network mockNetwork, String hostname,
             int type) {
-        if (mockNetwork == mNetwork && !mNonBypassPrivateDnsWorking) {
+        if (mNetwork.equals(mockNetwork) && !mNonBypassPrivateDnsWorking) {
             return CompletableFuture.completedFuture(null);
         }
 
@@ -176,9 +182,10 @@ public class FakeDns {
     }
 
     // Regardless of the type, depends on what the responses contained in the network.
+    @SuppressWarnings("FutureReturnValueIgnored")
     private CompletableFuture<List<String>> queryAllTypes(
             Network mockNetwork, String hostname) {
-        if (mockNetwork == mNetwork && !mNonBypassPrivateDnsWorking) {
+        if (mNetwork.equals(mockNetwork) && !mNonBypassPrivateDnsWorking) {
             return CompletableFuture.completedFuture(null);
         }
 
@@ -229,10 +236,11 @@ public class FakeDns {
     }
 
     // Mocks all the DnsResolver query methods used in this test.
+    @SuppressWarnings("FutureReturnValueIgnored")
     private Answer mockQuery(InvocationOnMock invocation, int posNetwork, int posHostname,
             int posExecutor, int posCallback, int posType) {
-        String hostname = (String) invocation.getArgument(posHostname);
-        Executor executor = (Executor) invocation.getArgument(posExecutor);
+        String hostname = invocation.getArgument(posHostname);
+        Executor executor = invocation.getArgument(posExecutor);
         Network network = invocation.getArgument(posNetwork);
         DnsResolver.Callback callback = invocation.getArgument(posCallback);
 

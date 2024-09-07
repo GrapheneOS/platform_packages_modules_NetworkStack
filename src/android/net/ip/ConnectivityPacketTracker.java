@@ -111,7 +111,6 @@ public class ConnectivityPacketTracker {
         }
     }
 
-    public static final int MAX_CAPTURE_TIME_MS = 300000;
     private static final String TAG = ConnectivityPacketTracker.class.getSimpleName();
     private static final boolean DBG = false;
     private static final String MARK_START = "--- START ---";
@@ -148,11 +147,6 @@ public class ConnectivityPacketTracker {
      * @param isCapture {@code true} to enable capture, {@code false} to disable capture
      */
     public void setCapture(boolean isCapture) {
-        // prevent configure the duplicated events
-        if (mCapturing == isCapture) {
-            return;
-        }
-
         mCapturing = isCapture;
         if (!isCapture) {
             mPacketCache.evictAll();
@@ -185,12 +179,8 @@ public class ConnectivityPacketTracker {
         mDisplayName = null;
     }
 
-    public boolean isCapturing() {
-        return mCapturing;
-    }
-
     @VisibleForTesting(visibility = PRIVATE)
-    public int getTotalCapturePacketCount() {
+    public int getCapturePacketTypeCount() {
         return mPacketCache.size();
     }
 

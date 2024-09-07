@@ -102,7 +102,7 @@ class ConnectivityPacketTrackerTest {
             010203040506000102030405080600010800060400015c857e3c74e1c0a8012200000000000000000000
         """.replace("\\s+".toRegex(), "").trim().uppercase()
         val arpPktByteArray = HexDump.hexStringToByteArray(arpPkt)
-        assertEquals(0, getTotalCapturePacketCount(packetTracker))
+        assertEquals(0, getCapturePacketTypeCount(packetTracker))
         assertEquals(0, getMatchedPacketCount(packetTracker, arpPkt))
 
         // start capture packet
@@ -113,12 +113,12 @@ class ConnectivityPacketTrackerTest {
             Thread.sleep(SLEEP_TIMEOUT_MS)
         }
 
-        assertEquals(1, getTotalCapturePacketCount(packetTracker))
+        assertEquals(1, getCapturePacketTypeCount(packetTracker))
         assertEquals(5, getMatchedPacketCount(packetTracker, arpPkt))
 
         // stop capture packet
         setCapture(packetTracker, false)
-        assertEquals(0, getTotalCapturePacketCount(packetTracker))
+        assertEquals(0, getCapturePacketTypeCount(packetTracker))
         assertEquals(0, getMatchedPacketCount(packetTracker, arpPkt))
     }
 
@@ -157,7 +157,7 @@ class ConnectivityPacketTrackerTest {
             assertEquals(1, getMatchedPacketCount(packetTracker, it))
         }
 
-        assertEquals(mDependencies.maxCapturePktSize, getTotalCapturePacketCount(packetTracker))
+        assertEquals(mDependencies.maxCapturePktSize, getCapturePacketTypeCount(packetTracker))
     }
 
     @Throws(InterruptedIOException::class, ErrnoException::class)
@@ -215,13 +215,13 @@ class ConnectivityPacketTrackerTest {
         return result.get(TIMEOUT_MS, TimeUnit.MILLISECONDS)
     }
 
-    private fun getTotalCapturePacketCount(
+    private fun getCapturePacketTypeCount(
         packetTracker: ConnectivityPacketTracker
     ): Int {
         val result = CompletableFuture<Int>()
         handler.post {
             try {
-                val totalCnt = packetTracker.totalCapturePacketCount
+                val totalCnt = packetTracker.capturePacketTypeCount
                 result.complete(totalCnt)
             } catch (e: Exception) {
                 result.completeExceptionally(e)

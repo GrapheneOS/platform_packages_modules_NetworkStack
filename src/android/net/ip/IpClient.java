@@ -16,6 +16,10 @@
 
 package android.net.ip;
 
+import static android.net.IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM;
+import static android.net.IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_CONFIRM;
+import static android.net.IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ORGANIC;
+import static android.net.IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_MAC_ADDRESS_CHANGED;
 import static android.net.RouteInfo.RTN_UNICAST;
 import static android.net.RouteInfo.RTN_UNREACHABLE;
 import static android.net.dhcp.DhcpResultsParcelableUtil.toStableParcelable;
@@ -26,7 +30,6 @@ import static android.net.ip.IIpClient.PROV_IPV6_SLAAC;
 import static android.net.ip.IIpClientCallbacks.DTIM_MULTIPLIER_RESET;
 import static android.net.ip.IpClient.IpClientCommands.CMD_ADDRESSES_CLEARED;
 import static android.net.ip.IpClient.IpClientCommands.CMD_ADD_KEEPALIVE_PACKET_FILTER_TO_APF;
-import static android.net.ip.IpClient.IpClientCommands.CMD_APF_STOP_CAPTURE;
 import static android.net.ip.IpClient.IpClientCommands.CMD_COMPLETE_PRECONNECTION;
 import static android.net.ip.IpClient.IpClientCommands.CMD_CONFIRM;
 import static android.net.ip.IpClient.IpClientCommands.CMD_JUMP_RUNNING_TO_STOPPING;
@@ -46,6 +49,9 @@ import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_TCP_BUFFER_SIZ
 import static android.net.ip.IpClient.IpClientCommands.EVENT_DHCPACTION_TIMEOUT;
 import static android.net.ip.IpClient.IpClientCommands.EVENT_IPV6_AUTOCONF_TIMEOUT;
 import static android.net.ip.IpClient.IpClientCommands.EVENT_NETLINK_LINKPROPERTIES_CHANGED;
+import static android.net.ip.IpClient.IpClientCommands.EVENT_NUD_FAILURE_QUERY_FAILURE;
+import static android.net.ip.IpClient.IpClientCommands.EVENT_NUD_FAILURE_QUERY_SUCCESS;
+import static android.net.ip.IpClient.IpClientCommands.EVENT_NUD_FAILURE_QUERY_TIMEOUT;
 import static android.net.ip.IpClient.IpClientCommands.EVENT_PRE_DHCP_ACTION_COMPLETE;
 import static android.net.ip.IpClient.IpClientCommands.EVENT_PROVISIONING_TIMEOUT;
 import static android.net.ip.IpClient.IpClientCommands.EVENT_READ_PACKET_FILTER_COMPLETE;
@@ -82,6 +88,7 @@ import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PR
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION;
+import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.createInet6AddressFromEui64;
 import static com.android.networkstack.util.NetworkStackUtils.macAddressToEui64;
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
@@ -115,6 +122,8 @@ import android.net.apf.LegacyApfFilter;
 import android.net.dhcp.DhcpClient;
 import android.net.dhcp.DhcpPacket;
 import android.net.dhcp6.Dhcp6Client;
+import android.net.ipmemorystore.OnNetworkEventCountRetrievedListener;
+import android.net.ipmemorystore.Status;
 import android.net.metrics.IpConnectivityLog;
 import android.net.metrics.IpManagerEvent;
 import android.net.networkstack.aidl.dhcp.DhcpOption;
@@ -598,8 +607,9 @@ public class IpClient extends StateMachine {
         static final int CMD_UPDATE_APF_CAPABILITIES = 19;
         static final int EVENT_IPV6_AUTOCONF_TIMEOUT = 20;
         static final int CMD_UPDATE_APF_DATA_SNAPSHOT = 21;
-        // Triggered by ApfShellCommand
-        static final int CMD_APF_STOP_CAPTURE = 22;
+        static final int EVENT_NUD_FAILURE_QUERY_TIMEOUT = 22;
+        static final int EVENT_NUD_FAILURE_QUERY_SUCCESS = 23;
+        static final int EVENT_NUD_FAILURE_QUERY_FAILURE = 24;
         // Internal commands to use instead of trying to call transitionTo() inside
         // a given State's enter() method. Calling transitionTo() from enter/exit
         // encounters a Log.wtf() that can cause trouble on eng builds.
@@ -686,6 +696,24 @@ public class IpClient extends StateMachine {
     static final String CONFIG_IPV6_AUTOCONF_TIMEOUT = "ipclient_ipv6_autoconf_timeout";
     private static final int DEFAULT_IPV6_AUTOCONF_TIMEOUT_MS = 5000;
 
+    private static final int IPMEMORYSTORE_TIMEOUT_MS = 1000;
+    @VisibleForTesting
+    static final long SIX_HOURS_IN_MS = 6 * 3600 * 1000L;
+    @VisibleForTesting
+    public static final long ONE_DAY_IN_MS = 4 * SIX_HOURS_IN_MS;
+    @VisibleForTesting
+    public static final long ONE_WEEK_IN_MS = 7 * ONE_DAY_IN_MS;
+    @VisibleForTesting
+    static final String CONFIG_NUD_FAILURE_COUNT_DAILY_THRESHOLD =
+            "nud_failure_count_daily_threshold";
+    @VisibleForTesting
+    static final int DEFAULT_NUD_FAILURE_COUNT_DAILY_THRESHOLD = 10;
+    @VisibleForTesting
+    static final String CONFIG_NUD_FAILURE_COUNT_WEEKLY_THRESHOLD =
+            "nud_failure_count_weekly_threshold";
+    @VisibleForTesting
+    static final int DEFAULT_NUD_FAILURE_COUNT_WEEKLY_THRESHOLD = 20;
+
     private static final boolean NO_CALLBACKS = false;
     private static final boolean SEND_CALLBACKS = true;
 
@@ -725,12 +753,24 @@ public class IpClient extends StateMachine {
                     "KT GiGA WiFi", "marente"
     ));
 
+    // The NUD failure event types to query. Although only NETWORK_EVENT_NUD_FAILURE_ORGANIC event
+    // is stored in the database currently, this array is still maintained to include other event
+    // types for testing and future expansion.
+    @VisibleForTesting
+    public static final int[] NETWORK_EVENT_NUD_FAILURE_TYPES = new int[] {
+            NETWORK_EVENT_NUD_FAILURE_ROAM,
+            NETWORK_EVENT_NUD_FAILURE_CONFIRM,
+            NETWORK_EVENT_NUD_FAILURE_ORGANIC,
+            NETWORK_EVENT_NUD_FAILURE_MAC_ADDRESS_CHANGED
+    };
+
     private final State mStoppedState = new StoppedState();
     private final State mStoppingState = new StoppingState();
     private final State mClearingIpAddressesState = new ClearingIpAddressesState();
     private final State mStartedState = new StartedState();
     private final State mRunningState = new RunningState();
     private final State mPreconnectingState = new PreconnectingState();
+    private final State mNudFailureQueryState = new NudFailureQueryState();
 
     private final String mTag;
     private final Context mContext;
@@ -767,6 +807,9 @@ public class IpClient extends StateMachine {
     // Polling interval to update APF data snapshot
     private final long mApfCounterPollingIntervalMs;
 
+    private final int mNudFailureCountDailyThreshold;
+    private final int mNudFailureCountWeeklyThreshold;
+
     // Experiment flag read from device config.
     private final boolean mDhcp6PrefixDelegationEnabled;
     private final boolean mUseNewApfFilter;
@@ -776,6 +819,7 @@ public class IpClient extends StateMachine {
     private final boolean mApfShouldHandleArpOffload;
     private final boolean mApfShouldHandleNdOffload;
     private final boolean mApfShouldHandleMdnsOffload;
+    private final boolean mIgnoreNudFailureEnabled;
 
     private InterfaceParams mInterfaceParams;
 
@@ -791,7 +835,6 @@ public class IpClient extends StateMachine {
     private String mTcpBufferSizes;
     private ProxyInfo mHttpProxy;
     private AndroidPacketFilter mApfFilter;
-    private ConnectivityPacketTracker mPacketTracker;
     private String mL2Key; // The L2 key for this network, for writing into the memory store
     private String mCluster; // The cluster for this network, for writing into the memory store
     private int mCreatorUid; // Uid of app creating the wifi configuration
@@ -804,6 +847,15 @@ public class IpClient extends StateMachine {
     private int mMaxDtimMultiplier = DTIM_MULTIPLIER_RESET;
     private ApfCapabilities mCurrentApfCapabilities;
     private WakeupMessage mIpv6AutoconfTimeoutAlarm = null;
+    private boolean mIgnoreNudFailure;
+    // An array of NUD failure event count associated with the query database since the timestamps
+    // in the past, and is always initialized to null in StoppedState. Currently supported array
+    // elements are as follows:
+    // element 0: failures in the past week
+    // element 1: failures in the past day
+    // element 2: failures in the past 6h
+    @Nullable
+    private int[] mNudFailureEventCounts = null;
 
     /**
      * Reading the snapshot is an asynchronous operation initiated by invoking
@@ -1032,6 +1084,14 @@ public class IpClient extends StateMachine {
         mApfShouldHandleMdnsOffload = false;
         mPopulateLinkAddressLifetime = mDependencies.isFeatureEnabled(context,
                 IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION);
+        mIgnoreNudFailureEnabled = mDependencies.isFeatureEnabled(mContext,
+                IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION);
+        mNudFailureCountDailyThreshold = mDependencies.getDeviceConfigPropertyInt(
+                CONFIG_NUD_FAILURE_COUNT_DAILY_THRESHOLD,
+                DEFAULT_NUD_FAILURE_COUNT_DAILY_THRESHOLD);
+        mNudFailureCountWeeklyThreshold = mDependencies.getDeviceConfigPropertyInt(
+                CONFIG_NUD_FAILURE_COUNT_WEEKLY_THRESHOLD,
+                DEFAULT_NUD_FAILURE_COUNT_WEEKLY_THRESHOLD);
 
         IpClientLinkObserver.Configuration config = new IpClientLinkObserver.Configuration(
                 mMinRdnssLifetimeSec, mPopulateLinkAddressLifetime);
@@ -1212,6 +1272,7 @@ public class IpClient extends StateMachine {
         addState(mStoppedState);
         addState(mStartedState);
             addState(mPreconnectingState, mStartedState);
+            addState(mNudFailureQueryState, mStartedState);
             addState(mClearingIpAddressesState, mStartedState);
             addState(mRunningState, mStartedState);
         addState(mStoppingState);
@@ -1531,8 +1592,8 @@ public class IpClient extends StateMachine {
         }
 
         final CompletableFuture<String> result = new CompletableFuture<>();
-        final Handler handler = getHandler();
-        handler.post(() -> {
+
+        getHandler().post(() -> {
             try {
                 if (mApfFilter == null) {
                     // IpClient has either stopped or the interface does not support APF.
@@ -1569,42 +1630,6 @@ public class IpClient extends StateMachine {
                         final String snapshot = mApfFilter.getDataSnapshotHexString();
                         Objects.requireNonNull(snapshot, "No data snapshot recorded.");
                         result.complete(snapshot);
-                        break;
-                    case "start-capture":
-                        if (mPacketTracker.isCapturing()) {
-                            result.complete("PacketTracker is already capturing");
-                        } else {
-                            // remove scheduled stop event if it already in the queue
-                            if (handler.hasMessages(IpClientCommands.CMD_APF_STOP_CAPTURE)) {
-                                handler.removeMessages(IpClientCommands.CMD_APF_STOP_CAPTURE);
-                            }
-
-                            mPacketTracker.setCapture(true);
-                            // capture up to 300 sec and stop capturing
-                            sendMessageDelayed(
-                                    IpClientCommands.CMD_APF_STOP_CAPTURE,
-                                    ConnectivityPacketTracker.MAX_CAPTURE_TIME_MS
-                            );
-                            result.complete("success");
-                        }
-                        break;
-                    case "matched-packet-counts":
-                        Objects.requireNonNull(optarg, "No packet pattern provided");
-                        int pktCnt = mPacketTracker.getMatchedPacketCount(optarg);
-                        result.complete(String.valueOf(pktCnt));
-                        break;
-                    case "stop-capture":
-                        if (!mPacketTracker.isCapturing()) {
-                            result.complete("PacketTracker already stop capturing");
-                        } else {
-                            // remove scheduled stop event if it already in the queue
-                            if (handler.hasMessages(IpClientCommands.CMD_APF_STOP_CAPTURE)) {
-                                handler.removeMessages(IpClientCommands.CMD_APF_STOP_CAPTURE);
-                            }
-
-                            sendMessage(IpClientCommands.CMD_APF_STOP_CAPTURE);
-                            result.complete("success");
-                        }
                         break;
                     default:
                         throw new IllegalArgumentException("Invalid apf command: " + cmd);
@@ -2516,6 +2541,39 @@ public class IpClient extends StateMachine {
         return true;
     }
 
+    // In order to avoid overflowing the database (the maximum is 10MB) in case of a NUD failure
+    // happens frequently (e.g, every 30s in a broken network), we stop writing the NUD failure
+    // event to database if the event count in past 6h has exceeded the daily threshold.
+    private boolean shouldStopWritingNudFailureEventToDatabase() {
+        // NUD failure query has not completed yet.
+        if (mNudFailureEventCounts == null) return true;
+        return mNudFailureEventCounts[2] >= mNudFailureCountDailyThreshold;
+    }
+
+    private void maybeStoreNudFailureToDatabase(final NudEventType type) {
+        if (!mIgnoreNudFailureEnabled) return;
+        final int event = IpReachabilityMonitor.nudEventTypeToNetworkEvent(type);
+        // So far only NUD failure events due to organic kernel check are stored, which can be
+        // expanded to other causes later if necessary.
+        if (event != NETWORK_EVENT_NUD_FAILURE_ORGANIC) return;
+        if (shouldStopWritingNudFailureEventToDatabase()) return;
+
+        final long now = System.currentTimeMillis();
+        final long expiry = now + ONE_WEEK_IN_MS;
+        mIpMemoryStore.storeNetworkEvent(mCluster, now, expiry, event,
+                status -> {
+                    if (!status.isSuccess()) {
+                        Log.e(TAG, "Failed to store NUD failure event");
+                    }
+                });
+        if (DBG) {
+            Log.d(TAG, "store network event " + type
+                    + " at " + now
+                    + " expire at " + expiry
+                    + " with cluster " + mCluster);
+        }
+    }
+
     private boolean startIpReachabilityMonitor() {
         try {
             mIpReachabilityMonitor = mDependencies.getIpReachabilityMonitor(
@@ -2526,6 +2584,8 @@ public class IpClient extends StateMachine {
                     new IpReachabilityMonitor.Callback() {
                         @Override
                         public void notifyLost(String logMsg, NudEventType type) {
+                            maybeStoreNudFailureToDatabase(type);
+                            if (mIgnoreNudFailure) return;
                             final int version = mCallback.getInterfaceVersion();
                             if (version >= VERSION_ADDED_REACHABILITY_FAILURE) {
                                 final int reason = nudEventTypeToInt(type);
@@ -2740,6 +2800,7 @@ public class IpClient extends StateMachine {
             mGratuitousNaTargetAddresses.clear();
             mMulticastNsSourceAddresses.clear();
             mDelegatedPrefixes.clear();
+            mNudFailureEventCounts = null;
 
             resetLinkProperties();
             if (mStartTimeMillis > 0) {
@@ -2764,7 +2825,9 @@ public class IpClient extends StateMachine {
 
                 case CMD_START:
                     mConfiguration = (android.net.shared.ProvisioningConfiguration) msg.obj;
-                    transitionTo(mClearingIpAddressesState);
+                    transitionTo(mIgnoreNudFailureEnabled
+                            ? mNudFailureQueryState
+                            : mClearingIpAddressesState);
                     break;
 
                 case EVENT_NETLINK_LINKPROPERTIES_CHANGED:
@@ -3191,7 +3254,82 @@ public class IpClient extends StateMachine {
         return mConfiguration.mIPv4ProvisioningMode != PROV_IPV4_DISABLED;
     }
 
+    private boolean shouldIgnoreNudFailure(@NonNull final int[] eventCounts) {
+        if (!mIgnoreNudFailureEnabled) return false;
+        if (eventCounts.length == 0) return false;
+
+        final int countInPastOneWeek = eventCounts[0];
+        final int countInPastOneDay = eventCounts[1];
+        return countInPastOneDay >= mNudFailureCountDailyThreshold
+                || countInPastOneWeek >= mNudFailureCountWeeklyThreshold;
+    }
+
+    class NudFailureQueryState extends State {
+        // This listener runs in a different thread (the Executor used in the IpMemoryStoreService)
+        // and it needs to be volatile to allow access by other threads than the IpClient state
+        // machine handler, which should be fine since it only accesses the mListener and calls
+        // sendMessage.
+        private volatile OnNetworkEventCountRetrievedListener mListener =
+                new OnNetworkEventCountRetrievedListener() {
+                    @Override
+                    public void onNetworkEventCountRetrieved(Status status, int[] counts) {
+                        if (mListener != this) return;
+                        if (counts.length == 0) {
+                            if (!status.isSuccess()) {
+                                Log.e(TAG, "Error retrieving NUD failure event count: " + status);
+                            }
+                            sendMessage(EVENT_NUD_FAILURE_QUERY_FAILURE);
+                            return;
+                        }
+                        sendMessage(EVENT_NUD_FAILURE_QUERY_SUCCESS, counts);
+                    }};
+
+        @Override
+        public void enter() {
+            super.enter();
+            // Set a timeout for retrieving NUD failure event counts.
+            sendMessageDelayed(EVENT_NUD_FAILURE_QUERY_TIMEOUT, IPMEMORYSTORE_TIMEOUT_MS);
+            final long now = System.currentTimeMillis();
+            final long[] sinceTimes = new long[3];
+            sinceTimes[0] = now - ONE_WEEK_IN_MS;
+            sinceTimes[1] = now - ONE_DAY_IN_MS;
+            sinceTimes[2] = now - SIX_HOURS_IN_MS;
+            mIpMemoryStore.retrieveNetworkEventCount(mCluster, sinceTimes,
+                    NETWORK_EVENT_NUD_FAILURE_TYPES, mListener);
+        }
+
+        @Override
+        public boolean processMessage(Message message) {
+            switch (message.what) {
+                case EVENT_NUD_FAILURE_QUERY_FAILURE:
+                case EVENT_NUD_FAILURE_QUERY_TIMEOUT:
+                    // TODO: log query result with metrics.
+                    transitionTo(mClearingIpAddressesState);
+                    return HANDLED;
+
+                case EVENT_NUD_FAILURE_QUERY_SUCCESS:
+                    mNudFailureEventCounts = (int[]) message.obj;
+                    mIgnoreNudFailure = shouldIgnoreNudFailure(mNudFailureEventCounts);
+                    transitionTo(mClearingIpAddressesState);
+                    return HANDLED;
+
+                default:
+                    deferMessage(message); // e.g. LP updated during this state.
+                    return HANDLED;
+            }
+        }
+
+        @Override
+        public void exit() {
+            super.exit();
+            removeMessages(EVENT_NUD_FAILURE_QUERY_FAILURE);
+            removeMessages(EVENT_NUD_FAILURE_QUERY_TIMEOUT);
+            removeMessages(EVENT_NUD_FAILURE_QUERY_SUCCESS);
+        }
+    }
+
     class RunningState extends State {
+        private ConnectivityPacketTracker mPacketTracker;
         private boolean mDhcpActionInFlight;
 
         @Override
@@ -3676,9 +3814,7 @@ public class IpClient extends StateMachine {
                     mCallback.startReadPacketFilter("polling");
                     sendMessageDelayed(CMD_UPDATE_APF_DATA_SNAPSHOT, mApfCounterPollingIntervalMs);
                     break;
-                case CMD_APF_STOP_CAPTURE:
-                    mPacketTracker.setCapture(false);
-                    break;
+
                 default:
                     return NOT_HANDLED;
             }
