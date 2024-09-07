@@ -276,8 +276,15 @@ public class NetworkStackUtils {
 
     /**
      * Experiment flag to enable Discovery of Designated Resolvers (DDR).
+     * This flag requires networkmonitor_async_privdns_resolution flag.
      */
     public static final String DNS_DDR_VERSION = "dns_ddr_version";
+
+    /**
+     * Experiment flag to ignore all NUD failures if we've seen too many NUD failure in a network.
+     */
+    public static final String IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION =
+            "ip_reachability_ignore_nud_failure_version";
 
     /**** BEGIN Feature Kill Switch Flags ****/
 

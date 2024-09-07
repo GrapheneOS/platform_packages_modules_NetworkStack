@@ -131,6 +131,13 @@ public class PrivateDnsConfig {
         return mode == PRIVATE_DNS_MODE_OPPORTUNISTIC;
     }
 
+    /**
+     * Returns whether the fields related to private DNS settings are the same.
+     */
+    public boolean areSettingsSameAs(PrivateDnsConfig other) {
+        return mode == other.mode && TextUtils.equals(hostname, other.hostname);
+    }
+
     @Override
     public String toString() {
         return PrivateDnsConfig.class.getSimpleName()

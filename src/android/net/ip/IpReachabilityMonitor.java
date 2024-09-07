@@ -30,6 +30,7 @@ import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_RO
 
 import android.content.Context;
 import android.net.ConnectivityManager;
+import android.net.IIpMemoryStore;
 import android.net.INetd;
 import android.net.LinkProperties;
 import android.net.RouteInfo;
@@ -833,6 +834,27 @@ public class IpReachabilityMonitor {
             case NUD_ORGANIC_MAC_ADDRESS_CHANGED:
                 return ReachabilityLossReason.ORGANIC;
             // For other NudEventType which won't trigger notifyLost, just ignore these events.
+            default:
+                return INVALID_REACHABILITY_LOSS_TYPE;
+        }
+    }
+
+    /**
+     * Convert the NUD critical failure event type to NETWORK_EVENT constant defined in
+     * IIpMemoryStore.
+     */
+    public static int nudEventTypeToNetworkEvent(final NudEventType type) {
+        switch (type) {
+            case NUD_POST_ROAMING_FAILED_CRITICAL:
+                return IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM;
+            case NUD_CONFIRM_FAILED_CRITICAL:
+                return IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_CONFIRM;
+            case NUD_ORGANIC_FAILED_CRITICAL:
+                return IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ORGANIC;
+            case NUD_POST_ROAMING_MAC_ADDRESS_CHANGED:
+            case NUD_CONFIRM_MAC_ADDRESS_CHANGED:
+            case NUD_ORGANIC_MAC_ADDRESS_CHANGED:
+                return IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_MAC_ADDRESS_CHANGED;
             default:
                 return INVALID_REACHABILITY_LOSS_TYPE;
         }

@@ -16,11 +16,14 @@
 
 package android.net.ip;
 
+import static android.net.util.SocketUtils.closeSocket;
 import static android.net.util.SocketUtils.makePacketSocketAddress;
 import static android.system.OsConstants.AF_PACKET;
 import static android.system.OsConstants.ETH_P_ALL;
 import static android.system.OsConstants.SOCK_NONBLOCK;
 import static android.system.OsConstants.SOCK_RAW;
+
+import static com.android.internal.annotations.VisibleForTesting.Visibility.PRIVATE;
 
 import android.net.util.ConnectivityPacketSummary;
 import android.os.Handler;
@@ -30,7 +33,12 @@ import android.system.Os;
 import android.text.TextUtils;
 import android.util.LocalLog;
 import android.util.Log;
+import android.util.LruCache;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.HexDump;
 import com.android.internal.util.TokenBucket;
 import com.android.net.module.util.InterfaceParams;
@@ -39,6 +47,8 @@ import com.android.networkstack.util.NetworkStackUtils;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Objects;
 
 
 /**
@@ -58,6 +68,49 @@ import java.io.IOException;
  * @hide
  */
 public class ConnectivityPacketTracker {
+    /**
+     * Dependencies class for testing.
+     */
+    @VisibleForTesting(visibility = PRIVATE)
+    public static class Dependencies {
+        private final LocalLog mLog;
+        public Dependencies(final LocalLog log) {
+            mLog = log;
+        }
+
+        /**
+         * Create a socket to read RAs.
+         */
+        @Nullable
+        public FileDescriptor createPacketReaderSocket(int ifIndex) {
+            FileDescriptor socket = null;
+            try {
+                socket = Os.socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, 0);
+                NetworkStackUtils.attachControlPacketFilter(socket);
+                Os.bind(socket, makePacketSocketAddress(ETH_P_ALL, ifIndex));
+            } catch (ErrnoException | IOException e) {
+                final String msg = "Failed to create packet tracking socket: ";
+                Log.e(TAG, msg, e);
+                mLog.log(msg + e);
+                closeFd(socket);
+                return null;
+            }
+            return socket;
+        }
+
+        public int getMaxCapturePktSize() {
+            return MAX_CAPTURE_PACKET_SIZE;
+        }
+
+        private void closeFd(FileDescriptor fd) {
+            try {
+                closeSocket(fd);
+            } catch (IOException e) {
+                Log.e(TAG, "failed to close socket");
+            }
+        }
+    }
+
     private static final String TAG = ConnectivityPacketTracker.class.getSimpleName();
     private static final boolean DBG = false;
     private static final String MARK_START = "--- START ---";
@@ -67,21 +120,51 @@ public class ConnectivityPacketTracker {
     // Use a TokenBucket to limit CPU usage of logging packets in steady state.
     private static final int TOKEN_FILL_RATE = 50;   // Maximum one packet every 20ms.
     private static final int MAX_BURST_LENGTH = 100; // Maximum burst 100 packets.
+    private static final int MAX_CAPTURE_PACKET_SIZE = 100; // Maximum capture packet size
 
     private final String mTag;
     private final LocalLog mLog;
     private final PacketReader mPacketListener;
     private final TokenBucket mTokenBucket = new TokenBucket(TOKEN_FILL_RATE, MAX_BURST_LENGTH);
+    // store packet hex string in uppercase as key, receive packet count as value
+    private final LruCache<String, Integer> mPacketCache;
+    private final Dependencies mDependencies;
     private long mLastRateLimitLogTimeMs = 0;
     private boolean mRunning;
+    private boolean mCapturing;
     private String mDisplayName;
 
     public ConnectivityPacketTracker(Handler h, InterfaceParams ifParams, LocalLog log) {
-        if (ifParams == null) throw new IllegalArgumentException("null InterfaceParams");
+        this(h, ifParams, log, new Dependencies(log));
+    }
 
-        mTag = TAG + "." + ifParams.name;
-        mLog = log;
-        mPacketListener = new PacketListener(h, ifParams);
+    /**
+     * Sets the capture state.
+     *
+     * <p>This method controls whether packet capture is enabled. If capture is disabled,
+     * the internal packet map is cleared.</p>
+     *
+     * @param isCapture {@code true} to enable capture, {@code false} to disable capture
+     */
+    public void setCapture(boolean isCapture) {
+        mCapturing = isCapture;
+        if (!isCapture) {
+            mPacketCache.evictAll();
+        }
+    }
+
+    /**
+     * Gets the count of matched packets for a given pattern.
+     *
+     * <p>This method searches the internal packet map for packets matching the specified pattern
+     * and returns the count of such packets.</p>
+     *
+     * @param packet The hex string pattern to match against
+     * @return The count of packets matching the pattern, or 0 if no matches are found
+     */
+    public int getMatchedPacketCount(String packet) {
+        final Integer count = mPacketCache.get(packet);
+        return (count != null) ? count : 0;
     }
 
     public void start(String displayName) {
@@ -96,6 +179,24 @@ public class ConnectivityPacketTracker {
         mDisplayName = null;
     }
 
+    @VisibleForTesting(visibility = PRIVATE)
+    public int getCapturePacketTypeCount() {
+        return mPacketCache.size();
+    }
+
+    @VisibleForTesting(visibility = PRIVATE)
+    public ConnectivityPacketTracker(
+            @NonNull Handler handler,
+            @NonNull InterfaceParams ifParams,
+            @NonNull LocalLog log,
+            @NonNull Dependencies dependencies) {
+        mTag = TAG + "." + Objects.requireNonNull(ifParams).name;
+        mLog = log;
+        mPacketListener = new PacketListener(handler, ifParams);
+        mDependencies = dependencies;
+        mPacketCache = new LruCache<>(mDependencies.getMaxCapturePktSize());
+    }
+
     private final class PacketListener extends PacketReader {
         private final InterfaceParams mInterface;
 
@@ -106,21 +207,13 @@ public class ConnectivityPacketTracker {
 
         @Override
         protected FileDescriptor createFd() {
-            FileDescriptor s = null;
-            try {
-                s = Os.socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, 0);
-                NetworkStackUtils.attachControlPacketFilter(s);
-                Os.bind(s, makePacketSocketAddress(ETH_P_ALL, mInterface.index));
-            } catch (ErrnoException | IOException e) {
-                logError("Failed to create packet tracking socket: ", e);
-                closeFd(s);
-                return null;
-            }
-            return s;
+            return mDependencies.createPacketReaderSocket(mInterface.index);
         }
 
         @Override
         protected void handlePacket(byte[] recvbuf, int length) {
+            capturePacket(recvbuf, length);
+
             if (!mTokenBucket.get()) {
                 // Rate limited. Log once every second so the user knows packets are missing.
                 final long now = SystemClock.elapsedRealtime();
@@ -170,6 +263,22 @@ public class ConnectivityPacketTracker {
 
         private void addLogEntry(String entry) {
             mLog.log(entry);
+        }
+
+        private void capturePacket(byte[] recvbuf, int length) {
+            if (!mCapturing) {
+                return;
+            }
+
+            byte[] pkt = Arrays.copyOfRange(
+                    recvbuf, 0, Math.min(recvbuf.length, length));
+            final String pktHexString = HexDump.toHexString(pkt);
+            final Integer pktCnt = mPacketCache.get(pktHexString);
+            if (pktCnt == null) {
+                mPacketCache.put(pktHexString, 1);
+            } else {
+                mPacketCache.put(pktHexString, pktCnt + 1);
+            }
         }
     }
 }

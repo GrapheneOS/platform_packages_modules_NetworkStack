@@ -65,6 +65,8 @@ import static com.android.modules.utils.build.SdkLevel.isAtLeastU;
 import static com.android.net.module.util.CollectionUtils.isEmpty;
 import static com.android.net.module.util.ConnectivityUtils.isIPv6ULA;
 import static com.android.net.module.util.DeviceConfigUtils.getResBooleanConfig;
+import static com.android.net.module.util.FeatureVersions.FEATURE_DDR_IN_CONNECTIVITY;
+import static com.android.net.module.util.FeatureVersions.FEATURE_DDR_IN_DNSRESOLVER;
 import static com.android.net.module.util.NetworkStackConstants.TEST_CAPTIVE_PORTAL_HTTPS_URL;
 import static com.android.net.module.util.NetworkStackConstants.TEST_CAPTIVE_PORTAL_HTTP_URL;
 import static com.android.net.module.util.NetworkStackConstants.TEST_URL_EXPIRATION_TIME;
@@ -682,7 +684,10 @@ public class NetworkMonitor extends StateMachine {
                 context, NetworkStackUtils.REEVALUATE_WHEN_RESUME);
         mAsyncPrivdnsResolutionEnabled = deps.isFeatureEnabled(context,
                 NetworkStackUtils.NETWORKMONITOR_ASYNC_PRIVDNS_RESOLUTION);
-        mDdrEnabled = deps.isFeatureEnabled(context, NetworkStackUtils.DNS_DDR_VERSION);
+        mDdrEnabled = mAsyncPrivdnsResolutionEnabled
+                && deps.isFeatureEnabled(context, NetworkStackUtils.DNS_DDR_VERSION)
+                && deps.isFeatureSupported(mContext, FEATURE_DDR_IN_CONNECTIVITY)
+                && deps.isFeatureSupported(mContext, FEATURE_DDR_IN_DNSRESOLVER);
         mUseHttps = getUseHttpsValidation();
         mCaptivePortalUserAgent = getCaptivePortalUserAgent();
         mCaptivePortalFallbackSpecs =
@@ -719,7 +724,16 @@ public class NetworkMonitor extends StateMachine {
         mNetworkCapabilities = new NetworkCapabilities(null);
         mNetworkAgentConfig = NetworkAgentConfigShimImpl.newInstance(null);
 
-        mDdrTracker = new DdrTracker();
+        // For DdrTracker that can safely update SVCB lookup results itself when the lookup
+        // completes. The callback is called inline from onAnswer, which is already posted to
+        // the handler. This ensures that strict mode hostname resolution (which calls
+        // onQueryDone when processing CMD_PRIVATE_DNS_PROBE_COMPLETED) and SVCB lookup (which calls
+        // DdrTracker#updateSvcbAnswerAndInvokeUserCallback by posting onAnswer to the Runnable)
+        // run in order: both of them post exactly once to the handler.
+        mDdrTracker = new DdrTracker(mCleartextDnsNetwork, mDependencies.getDnsResolver(),
+                getHandler()::post,
+                result -> notifyPrivateDnsConfigResolved(result),  // Run inline on handler.
+                mValidationLogs);
     }
 
     /**
@@ -1093,6 +1107,7 @@ public class NetworkMonitor extends StateMachine {
                     if (mDdrEnabled) {
                         mDdrTracker.notifyPrivateDnsSettingsChanged(cfg);
                     }
+
                     if (!isPrivateDnsValidationRequired() || !cfg.inStrictMode()) {
                         // No DNS resolution required.
                         //
@@ -1167,8 +1182,11 @@ public class NetworkMonitor extends StateMachine {
                     if (tst != null) {
                         tst.setLinkProperties(mLinkProperties);
                     }
-                    if (mDdrEnabled) {
-                        mDdrTracker.notifyLinkPropertiesChanged(mLinkProperties);
+                    final boolean dnsInfoUpdated = mDdrEnabled
+                            && mDdrTracker.notifyLinkPropertiesChanged(mLinkProperties);
+                    if (dnsInfoUpdated) {
+                        removeMessages(CMD_EVALUATE_PRIVATE_DNS);
+                        sendMessage(CMD_EVALUATE_PRIVATE_DNS);
                     }
                     break;
                 case EVENT_NETWORK_CAPABILITIES_CHANGED:
@@ -1653,12 +1671,12 @@ public class NetworkMonitor extends StateMachine {
 
     private class EvaluatingPrivateDnsState extends State {
         private int mPrivateDnsReevalDelayMs;
-        private PrivateDnsConfig mPrivateDnsConfig;
+        private PrivateDnsConfig mSyncOnlyPrivateDnsConfig;
 
         @Override
         public void enter() {
             mPrivateDnsReevalDelayMs = INITIAL_REEVALUATE_DELAY_MS;
-            mPrivateDnsConfig = null;
+            mSyncOnlyPrivateDnsConfig = null;
             if (mDdrEnabled) {
                 mDdrTracker.resetStrictModeHostnameResolutionResult();
             }
@@ -1669,6 +1687,10 @@ public class NetworkMonitor extends StateMachine {
         public boolean processMessage(Message msg) {
             switch (msg.what) {
                 case CMD_EVALUATE_PRIVATE_DNS: {
+                    if (mDdrEnabled) {
+                        mDdrTracker.startSvcbLookup();
+                    }
+
                     if (mAsyncPrivdnsResolutionEnabled) {
                         // Cancel any previously scheduled retry attempt
                         removeMessages(CMD_EVALUATE_PRIVATE_DNS);
@@ -1684,12 +1706,13 @@ public class NetworkMonitor extends StateMachine {
                         break;
                     }
 
+                    // Async resolution not enabled, do a blocking DNS lookup.
                     if (inStrictMode()) {
-                        if (!isStrictModeHostnameResolved(mPrivateDnsConfig)) {
+                        if (!isStrictModeHostnameResolved(mSyncOnlyPrivateDnsConfig)) {
                             resolveStrictModeHostname();
 
-                            if (isStrictModeHostnameResolved(mPrivateDnsConfig)) {
-                                notifyPrivateDnsConfigResolved(mPrivateDnsConfig);
+                            if (isStrictModeHostnameResolved(mSyncOnlyPrivateDnsConfig)) {
+                                notifyPrivateDnsConfigResolved(mSyncOnlyPrivateDnsConfig);
                             } else {
                                 handlePrivateDnsEvaluationFailure();
                                 // The private DNS probe fails-fast if the server hostname cannot
@@ -1748,12 +1771,9 @@ public class NetworkMonitor extends StateMachine {
                 final InetAddress[] ips = DnsUtils.getAllByName(mDependencies.getDnsResolver(),
                         mCleartextDnsNetwork, mPrivateDnsProviderHostname, getDnsProbeTimeout(),
                         str -> validationLog("Strict mode hostname resolution " + str));
-                mPrivateDnsConfig = new PrivateDnsConfig(mPrivateDnsProviderHostname, ips);
-                if (mDdrEnabled) {
-                    mDdrTracker.setStrictModeHostnameResolutionResult(ips);
-                }
+                mSyncOnlyPrivateDnsConfig = new PrivateDnsConfig(mPrivateDnsProviderHostname, ips);
             } catch (UnknownHostException uhe) {
-                mPrivateDnsConfig = null;
+                mSyncOnlyPrivateDnsConfig = null;
             }
         }
 
@@ -1978,14 +1998,16 @@ public class NetworkMonitor extends StateMachine {
 
             if (!answer.isEmpty()) {
                 final InetAddress[] ips = answer.toArray(new InetAddress[0]);
-                final PrivateDnsConfig config =
-                        new PrivateDnsConfig(mPrivateDnsProviderHostname, ips);
                 if (mDdrEnabled) {
                     mDdrTracker.setStrictModeHostnameResolutionResult(ips);
+                    notifyPrivateDnsConfigResolved(mDdrTracker.getResultForReporting());
+                } else {
+                    notifyPrivateDnsConfigResolved(
+                            new PrivateDnsConfig(mPrivateDnsProviderHostname, ips));
                 }
-                notifyPrivateDnsConfigResolved(config);
 
-                validationLog("Strict mode hostname resolution " + elapsedNanos + "ns OK "
+                validationLog("Strict mode hostname resolution "
+                        + TimeUnit.NANOSECONDS.toMillis(elapsedNanos) + "ms OK "
                         + answer + " for " + mPrivateDnsProviderHostname);
                 transitionTo(mProbingForPrivateDnsState);
             } else {
@@ -2048,7 +2070,7 @@ public class NetworkMonitor extends StateMachine {
 
             final String strIps = Objects.toString(answer);
             validationLog(PROBE_PRIVDNS, queryName,
-                    String.format("%dus: %s", elapsedNanos / 1000, strIps));
+                    String.format("%dms: %s", TimeUnit.NANOSECONDS.toMillis(elapsedNanos), strIps));
 
             mEvaluationState.noteProbeResult(NETWORK_VALIDATION_PROBE_PRIVDNS, success);
             if (success) {
@@ -3737,6 +3759,10 @@ public class NetworkMonitor extends StateMachine {
          */
         public boolean isFeatureNotChickenedOut(@NonNull Context context, @NonNull String name) {
             return DeviceConfigUtils.isNetworkStackFeatureNotChickenedOut(context, name);
+        }
+
+        boolean isFeatureSupported(@NonNull Context context, long feature) {
+            return DeviceConfigUtils.isFeatureSupported(context, feature);
         }
 
         /**

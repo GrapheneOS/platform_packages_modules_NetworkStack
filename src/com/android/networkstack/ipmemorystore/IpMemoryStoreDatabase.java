@@ -35,8 +35,11 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.android.internal.annotations.VisibleForTesting;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
@@ -144,6 +147,42 @@ public class IpMemoryStoreDatabase {
         public static final String DROP_TABLE = "DROP TABLE IF EXISTS " + TABLENAME;
     }
 
+    /**
+     * Contract class for the network events table.
+     */
+    public static final class NetworkEventsContract {
+        private NetworkEventsContract() {}
+
+        public static final String TABLENAME = "NetworkEvents";
+
+        public static final String COLNAME_CLUSTER = "cluster";
+        public static final String COLTYPE_CLUSTER = "TEXT NOT NULL";
+
+        public static final String COLNAME_TIMESTAMP = "timestamp";
+        public static final String COLTYPE_TIMESTAMP = "BIGINT";
+
+        public static final String COLNAME_EVENTTYPE = "eventType";
+        public static final String COLTYPE_EVENTTYPE = "INTEGER";
+
+        public static final String COLNAME_EXPIRY = "expiry";
+        // Milliseconds since the Epoch, in true Java style
+        public static final String COLTYPE_EXPIRY = "BIGINT";
+
+        public static final String CREATE_TABLE = "CREATE TABLE IF NOT EXISTS "
+                + TABLENAME           + " ("
+                + COLNAME_CLUSTER     + " " + COLTYPE_CLUSTER    + ", "
+                + COLNAME_TIMESTAMP   + " " + COLTYPE_TIMESTAMP  + ", "
+                + COLNAME_EVENTTYPE   + " " + COLTYPE_EVENTTYPE  + ", "
+                + COLNAME_EXPIRY      + " " + COLTYPE_EXPIRY     + ")";
+        public static final String INDEX_NAME = "idx_" + COLNAME_CLUSTER + "_" + COLNAME_TIMESTAMP
+                + "_" + COLNAME_EVENTTYPE;
+        public static final String CREATE_INDEX = "CREATE INDEX IF NOT EXISTS " + INDEX_NAME
+                + " ON " + TABLENAME
+                + " (" + COLNAME_CLUSTER + ", " + COLNAME_TIMESTAMP + ", " + COLNAME_EVENTTYPE
+                + ")";
+        public static final String DROP_TABLE = "DROP TABLE IF EXISTS " + TABLENAME;
+    }
+
     // To save memory when the DB is not used, close it after 30s of inactivity. This is
     // determined manually based on what feels right.
     private static final long IDLE_CONNECTION_TIMEOUT_MS = 30_000;
@@ -151,14 +190,20 @@ public class IpMemoryStoreDatabase {
     /** The SQLite DB helper */
     public static class DbHelper extends SQLiteOpenHelper {
         // Update this whenever changing the schema.
-        // DO NOT CHANGE without solid testing for downgrades, and checking onDowngrade
-        // below: b/171340630
-        private static final int SCHEMA_VERSION = 4;
-        private static final String DATABASE_FILENAME = "IpMemoryStore.db";
+        @VisibleForTesting
+        static final int SCHEMA_VERSION = 5;
+        private static final String DATABASE_FILENAME = "IpMemoryStoreV2.db";
         private static final String TRIGGER_NAME = "delete_cascade_to_private";
+        private static final String LEGACY_DATABASE_FILENAME = "IpMemoryStore.db";
 
         public DbHelper(@NonNull final Context context) {
             super(context, DATABASE_FILENAME, null, SCHEMA_VERSION);
+            setIdleConnectionTimeout(IDLE_CONNECTION_TIMEOUT_MS);
+        }
+
+        @VisibleForTesting
+        DbHelper(@NonNull final Context context, int schemaVersion) {
+            super(context, DATABASE_FILENAME, null, schemaVersion);
             setIdleConnectionTimeout(IDLE_CONNECTION_TIMEOUT_MS);
         }
 
@@ -167,6 +212,8 @@ public class IpMemoryStoreDatabase {
         public void onCreate(@NonNull final SQLiteDatabase db) {
             db.execSQL(NetworkAttributesContract.CREATE_TABLE);
             db.execSQL(PrivateDataContract.CREATE_TABLE);
+            db.execSQL(NetworkEventsContract.CREATE_TABLE);
+            db.execSQL(NetworkEventsContract.CREATE_INDEX);
             createTrigger(db);
         }
 
@@ -192,11 +239,20 @@ public class IpMemoryStoreDatabase {
                 if (oldVersion < 4) {
                     createTrigger(db);
                 }
+
+                if (oldVersion < 5) {
+                    // upgrade from version 4 to version 5, the NetworkEventsTable doesn't exist
+                    // on previous version and onCreate won't be called during upgrade, therefore,
+                    // create the table manually.
+                    db.execSQL(NetworkEventsContract.CREATE_TABLE);
+                    db.execSQL(NetworkEventsContract.CREATE_INDEX);
+                }
             } catch (SQLiteException e) {
                 Log.e(TAG, "Could not upgrade to the new version", e);
                 // create database with new version
                 db.execSQL(NetworkAttributesContract.DROP_TABLE);
                 db.execSQL(PrivateDataContract.DROP_TABLE);
+                db.execSQL(NetworkEventsContract.DROP_TABLE);
                 onCreate(db);
             }
         }
@@ -208,11 +264,7 @@ public class IpMemoryStoreDatabase {
             // Downgrades always nuke all data and recreate an empty table.
             db.execSQL(NetworkAttributesContract.DROP_TABLE);
             db.execSQL(PrivateDataContract.DROP_TABLE);
-            // TODO: add test for downgrades. Triggers should already be dropped
-            // when the table is dropped, so this may be a bug.
-            // Note that fixing this code does not affect how older versions
-            // will handle downgrades.
-            db.execSQL("DROP TRIGGER " + TRIGGER_NAME);
+            db.execSQL(NetworkEventsContract.DROP_TABLE);
             onCreate(db);
         }
 
@@ -225,6 +277,33 @@ public class IpMemoryStoreDatabase {
                     + "=" + PrivateDataContract.COLNAME_L2KEY
                     + "; END;";
             db.execSQL(createTrigger);
+        }
+
+        /**
+         * Renames the database file to prevent crashes during downgrades.
+         * <p>
+         * Previous versions (before 5) has a bug(b/171340630) that would cause a crash when
+         * onDowngrade is triggered. We cannot just bump the schema version without
+         * renaming the database filename, because only bumping the schema version still causes
+         * crash when downgrading to an older version.
+         * <p>
+         * After rename the db file, if the module is rolled back, the legacy file is not present.
+         * The code will create a new legacy database, and will trigger onCreate path. The new
+         * database will continue to exist, but the legacy code does not know about it.
+         * <p>
+         * In later stage, if the module is rolled forward again, the legacy database will overwrite
+         * the new database, the user's data will be preserved.
+         */
+        public static void maybeRenameDatabaseFile(Context context) {
+            final File legacyDb = context.getDatabasePath(LEGACY_DATABASE_FILENAME);
+            if (legacyDb.exists()) {
+                final File newDb = context.getDatabasePath(DATABASE_FILENAME);
+                final boolean result = legacyDb.renameTo(newDb);
+                if (!result) {
+                    Log.w(TAG, "failed to rename the IP Memory store database to "
+                            + DATABASE_FILENAME);
+                }
+            }
         }
     }
 
@@ -301,6 +380,22 @@ public class IpMemoryStoreDatabase {
         values.put(PrivateDataContract.COLNAME_CLIENT, clientId);
         values.put(PrivateDataContract.COLNAME_DATANAME, name);
         values.put(PrivateDataContract.COLNAME_DATA, data);
+        return values;
+    }
+
+    /**
+     * Convert a network event (including cluster, timestamp of when it happened, expiry and
+     * event type) into content values to store them in a table compliant with the ontract defined
+     * in NetworkEventsContract.
+     */
+    @NonNull
+    private static ContentValues toContentValues(@NonNull final String cluster,
+            final long timestamp, final long expiry, final int eventType) {
+        final ContentValues values = new ContentValues();
+        values.put(NetworkEventsContract.COLNAME_CLUSTER, cluster);
+        values.put(NetworkEventsContract.COLNAME_TIMESTAMP, timestamp);
+        values.put(NetworkEventsContract.COLNAME_EVENTTYPE, eventType);
+        values.put(NetworkEventsContract.COLNAME_EXPIRY, expiry);
         return values;
     }
 
@@ -455,6 +550,7 @@ public class IpMemoryStoreDatabase {
             try {
                 db.delete(NetworkAttributesContract.TABLENAME, null, null);
                 db.delete(PrivateDataContract.TABLENAME, null, null);
+                db.delete(NetworkEventsContract.TABLENAME, null, null);
                 try (Cursor cursorNetworkAttributes = db.query(
                         // table name
                         NetworkAttributesContract.TABLENAME,
@@ -480,6 +576,19 @@ public class IpMemoryStoreDatabase {
                         null, // orderBy
                         "1")) { // limit
                     if (0 != cursorPrivateData.getCount()) continue;
+                }
+                try (Cursor cursorNetworkEvents = db.query(
+                        // table name
+                        NetworkEventsContract.TABLENAME,
+                        // column name
+                        new String[] { NetworkEventsContract.COLNAME_CLUSTER },
+                        null, // selection
+                        null, // selectionArgs
+                        null, // groupBy
+                        null, // having
+                        null, // orderBy
+                        "1")) { // limit
+                    if (0 != cursorNetworkEvents.getCount()) continue;
                 }
                 db.setTransactionSuccessful();
             } catch (SQLiteException e) {
@@ -665,10 +774,15 @@ public class IpMemoryStoreDatabase {
     static int dropAllExpiredRecords(@NonNull final SQLiteDatabase db) {
         db.beginTransaction();
         try {
+            final long currentTimestamp = System.currentTimeMillis();
             // Deletes NetworkAttributes that have expired.
             db.delete(NetworkAttributesContract.TABLENAME,
                     NetworkAttributesContract.COLNAME_EXPIRYDATE + " < ?",
-                    new String[]{Long.toString(System.currentTimeMillis())});
+                    new String[]{Long.toString(currentTimestamp)});
+            // Deletes NetworkEvents that have expired.
+            db.delete(NetworkEventsContract.TABLENAME,
+                    NetworkEventsContract.COLNAME_EXPIRY + " < ?",
+                    new String[]{Long.toString(currentTimestamp)});
             db.setTransactionSuccessful();
         } catch (SQLiteException e) {
             Log.e(TAG, "Could not delete data from memory store", e);
@@ -747,6 +861,66 @@ public class IpMemoryStoreDatabase {
             cursor.moveToFirst();
             return cursor == null ? 0 : cursor.getInt(0);
         }
+    }
+
+    static int storeNetworkEvent(@NonNull final SQLiteDatabase db, @NonNull final String cluster,
+            final long timestamp, final long expiry, final int eventType) {
+        final ContentValues cv = toContentValues(cluster, timestamp, expiry, eventType);
+        db.beginTransaction();
+        try {
+            final long resultId = db.insertOrThrow(NetworkEventsContract.TABLENAME,
+                    null /* nullColumnHack */, cv);
+            if (resultId < 0) {
+                // Should not fail to insert a row to NetworkEvents table which doesn't have
+                // uniqueness constraint.
+                return Status.ERROR_STORAGE;
+            }
+            db.setTransactionSuccessful();
+            return Status.SUCCESS;
+        } catch (SQLiteException e) {
+            // No space left on disk or something
+            Log.e(TAG, "Could not write to the memory store", e);
+        } finally {
+            db.endTransaction();
+        }
+        return Status.ERROR_STORAGE;
+    }
+
+    static int[] retrieveNetworkEventCount(@NonNull final SQLiteDatabase db,
+            @NonNull final String cluster, @NonNull final long[] sinceTimes,
+            @NonNull final int[] eventTypes) {
+        final int[] counts = new int[sinceTimes.length];
+        for (int i = 0; i < counts.length; i++) {
+            final String[] selectionArgs = new String[eventTypes.length + 2];
+            selectionArgs[0] = cluster;
+            selectionArgs[1] = String.valueOf(sinceTimes[i]);
+            for (int j = 0; j < eventTypes.length; j++) {
+                selectionArgs[j + 2] = String.valueOf(eventTypes[j]);
+            }
+            final StringBuilder selectionBuilder =
+                    new StringBuilder(NetworkEventsContract.COLNAME_CLUSTER + " = ? " + "AND "
+                            + NetworkEventsContract.COLNAME_TIMESTAMP + " >= ? " + "AND "
+                            + NetworkEventsContract.COLNAME_EVENTTYPE + " IN (");
+            for (int k = 0; k < eventTypes.length; k++) {
+                selectionBuilder.append("?");
+                if (k < eventTypes.length - 1) {
+                    selectionBuilder.append(",");
+                }
+            }
+            selectionBuilder.append(")");
+            try (Cursor cursor = db.query(
+                    NetworkEventsContract.TABLENAME,
+                    new String[] {"COUNT(*)"}, // columns
+                    selectionBuilder.toString(),
+                    selectionArgs,
+                    null, // groupBy
+                    null, // having
+                    null)) { // orderBy
+                cursor.moveToFirst();
+                counts[i] = cursor.getInt(0);
+            }
+        }
+        return counts;
     }
 
     // Helper methods

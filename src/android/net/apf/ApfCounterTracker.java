@@ -59,6 +59,7 @@ public class ApfCounterTracker {
         PASSED_ARP_UNICAST_REPLY,
         PASSED_ARP_UNKNOWN,
         PASSED_DHCP,
+        PASSED_ETHER_OUR_SRC_MAC,
         PASSED_IPV4,
         PASSED_IPV4_FROM_DHCPV4_SERVER,
         PASSED_IPV4_UNICAST,

@@ -42,6 +42,7 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NON_ICMP_MULTICAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HOST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_REPLIED_NON_DAD
+import android.net.apf.ApfCounterTracker.Counter.PASSED_ETHER_OUR_SRC_MAC
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_BROADCAST_REPLY
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_REQUEST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_UNICAST_REPLY
@@ -534,6 +535,26 @@ class ApfFilterTest {
             program,
             HexDump.hexStringToByteArray(fragmentedUdpPkt),
             DROPPED_IPV4_NON_DHCP4
+        )
+    }
+
+    @Test
+    fun testLoopbackFilter() {
+        val apfConfig = getDefaultConfig()
+        val apfFilter = getApfFilter(apfConfig)
+        val program = consumeInstalledProgram(ipClientCallback, installCnt = 2)
+        // Using scapy to generate echo-ed broadcast packet:
+        //   ether = Ether(src=${ifParams.macAddr}, dst='ff:ff:ff:ff:ff:ff')
+        //   ip = IP(src='192.168.1.1', dst='255.255.255.255', proto=21)
+        //   pkt = ether/ip
+        val nonDhcpBcastPkt = """
+            ffffffffffff020304050607080045000014000100004015b92bc0a80101ffffffff
+        """.replace("\\s+".toRegex(), "").trim()
+        verifyProgramRun(
+                apfFilter.mApfVersionSupported,
+                program,
+                HexDump.hexStringToByteArray(nonDhcpBcastPkt),
+                PASSED_ETHER_OUR_SRC_MAC
         )
     }
 

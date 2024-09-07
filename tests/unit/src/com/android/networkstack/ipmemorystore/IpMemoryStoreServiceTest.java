@@ -16,6 +16,15 @@
 
 package com.android.networkstack.ipmemorystore;
 
+import static android.net.ip.IpClient.NETWORK_EVENT_NUD_FAILURE_TYPES;
+import static android.net.ip.IpClient.ONE_DAY_IN_MS;
+import static android.net.ip.IpClient.ONE_WEEK_IN_MS;
+import static android.net.IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM;
+import static android.net.IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_CONFIRM;
+import static android.net.IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ORGANIC;
+import static android.net.IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_MAC_ADDRESS_CHANGED;
+
+import static com.android.networkstack.ipmemorystore.IpMemoryStoreDatabase.DbHelper.SCHEMA_VERSION;
 import static com.android.networkstack.ipmemorystore.RegularMaintenanceJobService.InterruptMaintenance;
 
 import static org.junit.Assert.assertEquals;
@@ -29,10 +38,13 @@ import static org.mockito.Mockito.doReturn;
 
 import android.app.job.JobScheduler;
 import android.content.Context;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteOpenHelper;
 import android.net.ipmemorystore.Blob;
 import android.net.ipmemorystore.IOnBlobRetrievedListener;
 import android.net.ipmemorystore.IOnL2KeyResponseListener;
 import android.net.ipmemorystore.IOnNetworkAttributesRetrievedListener;
+import android.net.ipmemorystore.IOnNetworkEventCountRetrievedListener;
 import android.net.ipmemorystore.IOnSameL3NetworkResponseListener;
 import android.net.ipmemorystore.IOnStatusAndCountListener;
 import android.net.ipmemorystore.IOnStatusListener;
@@ -89,6 +101,13 @@ public class IpMemoryStoreServiceTest {
     private static final String TEST_CLIENT_ID = "testClientId";
     private static final String TEST_DATA_NAME = "testData";
     private static final String TEST_DATABASE_NAME = "test.db";
+    private static final String TEST_CLUSTER = "testCluster12345";
+    private static final String TEST_CLUSTER_1 = "testCluster01234";
+
+    private static final File FILES_DIR = InstrumentationRegistry.getContext().getFilesDir();
+    private static final String OLD_DB_NAME = "IpMemoryStore.db";
+    private static final File OLD_DB = new File(FILES_DIR, OLD_DB_NAME);
+    private static final File TEST_DB = new File(FILES_DIR, TEST_DATABASE_NAME);
 
     private static final int TEST_DATABASE_SIZE_THRESHOLD = 100 * 1024; //100KB
     private static final int DEFAULT_TIMEOUT_MS = 5000;
@@ -99,8 +118,8 @@ public class IpMemoryStoreServiceTest {
     private static final long UNIX_TIME_MS_2100_01_01 = 4102412400000L;
     private static final int MTU_NULL = -1;
     private static final String[] FAKE_KEYS;
-    private static final byte[] TEST_BLOB_DATA = new byte[] { -3, 6, 8, -9, 12,
-            -128, 0, 89, 112, 91, -34 };
+    private static final byte[] TEST_BLOB_DATA = new byte[]{-3, 6, 8, -9, 12,
+            -128, 0, 89, 112, 91, -34};
     static {
         FAKE_KEYS = new String[FAKE_KEY_COUNT];
         for (int i = 0; i < FAKE_KEYS.length; ++i) {
@@ -116,16 +135,14 @@ public class IpMemoryStoreServiceTest {
 
     private IpMemoryStoreService mService;
 
-    @Before
-    public void setUp() {
-        MockitoAnnotations.initMocks(this);
-        final Context context = InstrumentationRegistry.getContext();
-        final File dir = context.getFilesDir();
-        mDbFile = new File(dir, TEST_DATABASE_NAME);
+    private IpMemoryStoreService createService() {
+        mDbFile = TEST_DB;
         doReturn(mDbFile).when(mMockContext).getDatabasePath(anyString());
+        doReturn(OLD_DB).when(mMockContext).getDatabasePath(OLD_DB_NAME);
+
         doReturn(mMockJobScheduler).when(mMockContext)
                 .getSystemService(Context.JOB_SCHEDULER_SERVICE);
-        mService = new IpMemoryStoreService(mMockContext) {
+        final IpMemoryStoreService service = new IpMemoryStoreService(mMockContext) {
             @Override
             protected int getDbSizeThreshold() {
                 return TEST_DATABASE_SIZE_THRESHOLD;
@@ -139,12 +156,20 @@ public class IpMemoryStoreServiceTest {
                 return super.isDbSizeOverThreshold();
             }
         };
+        return service;
+    }
+
+    @Before
+    public void setUp() {
+        MockitoAnnotations.initMocks(this);
+        mService = createService();
     }
 
     @After
     public void tearDown() {
         mService.shutdown();
         mDbFile.delete();
+        if (OLD_DB.exists()) OLD_DB.delete();
     }
 
     private void copyTestData(final File file) throws Exception {
@@ -235,6 +260,7 @@ public class IpMemoryStoreServiceTest {
     private interface OnBlobRetrievedListener {
         void onBlobRetrieved(Status status, String l2Key, String name, byte[] data);
     }
+
     private IOnBlobRetrievedListener onBlobRetrieved(final OnBlobRetrievedListener functor) {
         return new IOnBlobRetrievedListener() {
             @Override
@@ -262,9 +288,10 @@ public class IpMemoryStoreServiceTest {
     }
 
     /** Helper method to make an IOnNetworkAttributesRetrievedListener */
-    private interface OnNetworkAttributesRetrievedListener  {
+    private interface OnNetworkAttributesRetrievedListener {
         void onNetworkAttributesRetrieved(Status status, String l2Key, NetworkAttributes attr);
     }
+
     private IOnNetworkAttributesRetrievedListener onNetworkAttributesRetrieved(
             final OnNetworkAttributesRetrievedListener functor) {
         return new IOnNetworkAttributesRetrievedListener() {
@@ -297,6 +324,7 @@ public class IpMemoryStoreServiceTest {
     private interface OnSameL3NetworkResponseListener {
         void onSameL3NetworkResponse(Status status, SameL3NetworkResponse answer);
     }
+
     private IOnSameL3NetworkResponseListener onSameResponse(
             final OnSameL3NetworkResponseListener functor) {
         return new IOnSameL3NetworkResponseListener() {
@@ -329,12 +357,44 @@ public class IpMemoryStoreServiceTest {
     private interface OnL2KeyResponseListener {
         void onL2KeyResponse(Status status, String key);
     }
+
     private IOnL2KeyResponseListener onL2KeyResponse(final OnL2KeyResponseListener functor) {
         return new IOnL2KeyResponseListener() {
             @Override
             public void onL2KeyResponse(final StatusParcelable status, final String key)
                     throws RemoteException {
                 functor.onL2KeyResponse(new Status(status), key);
+            }
+
+            @Override
+            public IBinder asBinder() {
+                return null;
+            }
+
+            @Override
+            public int getInterfaceVersion() {
+                return this.VERSION;
+            }
+
+            @Override
+            public String getInterfaceHash() {
+                return this.HASH;
+            }
+        };
+    }
+
+    /** Helper method to make an IOnNetworkEventCountRetrievedListener */
+    private interface OnNetworkEventCountRetrievedListener {
+        void onNetworkEventCountRetrieved(Status status, int[] counts);
+    }
+
+    private IOnNetworkEventCountRetrievedListener onNetworkEventCountRetrieved(
+            final OnNetworkEventCountRetrievedListener functor) {
+        return new IOnNetworkEventCountRetrievedListener() {
+            @Override
+            public void onNetworkEventCountRetrieved(final StatusParcelable status,
+                    final int[] counts) throws RemoteException {
+                functor.onNetworkEventCountRetrieved(new Status(status), counts);
             }
 
             @Override
@@ -376,6 +436,7 @@ public class IpMemoryStoreServiceTest {
     private NetworkAttributes storeAttributes(final String l2Key, final NetworkAttributes na) {
         return storeAttributes("Did not complete storing attributes", l2Key, na);
     }
+
     private NetworkAttributes storeAttributes(final String timeoutMessage, final String l2Key,
             final NetworkAttributes na) {
         doLatched(timeoutMessage, latch -> mService.storeNetworkAttributes(l2Key, na.toParcelable(),
@@ -390,6 +451,7 @@ public class IpMemoryStoreServiceTest {
     private void storeBlobOrFail(final String l2Key, final Blob b, final byte[] data) {
         storeBlobOrFail("Did not complete storing private data", l2Key, b, data);
     }
+
     private void storeBlobOrFail(final String timeoutMessage, final String l2Key, final Blob b,
             final byte[] data) {
         b.data = data;
@@ -397,6 +459,23 @@ public class IpMemoryStoreServiceTest {
                 b, onStatus(status -> {
                     assertTrue("Store status not successful : " + status.resultCode,
                             status.isSuccess());
+                    latch.countDown();
+                })));
+    }
+
+    // Helper method to store network events (NUD failure) to database.
+    private void storeNetworkEventOrFail(final String cluster, final long now,
+            final long expiry, final int eventType) {
+        storeNetworkEventOrFail("Did not complete storing a network event", cluster, now,
+                expiry, eventType);
+    }
+
+    private void storeNetworkEventOrFail(final String timeoutMessage, final String cluster,
+            final long now, final long expiry, final int eventType) {
+        doLatched(timeoutMessage, latch -> mService.storeNetworkEvent(cluster, now, expiry,
+                eventType,
+                onStatus(status -> {
+                    assertTrue("Store not successful : " + status.resultCode, status.isSuccess());
                     latch.countDown();
                 })));
     }
@@ -409,8 +488,7 @@ public class IpMemoryStoreServiceTest {
      * 2. Comment out "mDbFile.delete()" in tearDown() method.
      * 3. Run "atest IpMemoryStoreServiceTest#testGenerateDB".
      * 4. Run "adb root; adb pull /data/data/com.android.server.networkstack.tests/files/test.db
-     *    $YOUR_CODE_BASE/package/module/NetworkStack/tests/unit/res/raw/test.db".
-     *
+     * $YOUR_CODE_BASE/package/module/NetworkStack/tests/unit/res/raw/test.db".
      */
     private void generateFakeData() {
         final int fakeDataCount = 1000;
@@ -440,6 +518,22 @@ public class IpMemoryStoreServiceTest {
             assertTrue(mService.isDbSizeOverThreshold());
         } catch (final UnknownHostException e) {
             fail("Insert fake data fail");
+        }
+    }
+
+    private void generateFakeNetworkEvents() {
+        final int fakeEventCount = 1000;
+        final int expiredRecordsCount = 500;
+        final long now = System.currentTimeMillis();
+        for (int i = 0; i < fakeEventCount; i++) {
+            final long timestamp =
+                    i < expiredRecordsCount ? now - ONE_WEEK_IN_MS - i : now + i;
+            final long expiry = timestamp + ONE_WEEK_IN_MS;
+            storeNetworkEventOrFail(
+                    TEST_CLUSTER,
+                    timestamp,
+                    expiry,
+                    NETWORK_EVENT_NUD_FAILURE_TYPES[i % 4]);
         }
     }
 
@@ -473,7 +567,7 @@ public class IpMemoryStoreServiceTest {
 
         final NetworkAttributes.Builder na2 = new NetworkAttributes.Builder();
         na.setDnsAddresses(Arrays.asList(
-                new InetAddress[] {Inet6Address.getByName("0A1C:2E40:480A::1CA6")}));
+                new InetAddress[]{Inet6Address.getByName("0A1C:2E40:480A::1CA6")}));
         final NetworkAttributes attributes2 = na2.build();
         storeAttributes("Did not complete storing attributes 2", l2Key, attributes2);
 
@@ -550,22 +644,26 @@ public class IpMemoryStoreServiceTest {
                         })));
     }
 
+    private void assertPrivateDataPresent(IpMemoryStoreService service, String l2Key) {
+        doLatched("Did not complete retrieving private data", latch ->
+                service.retrieveBlob(l2Key, TEST_CLIENT_ID, TEST_DATA_NAME, onBlobRetrieved(
+                        (status, key, name, data) -> {
+                            assertTrue("Retrieve blob status not successful : " + status.resultCode,
+                                    status.isSuccess());
+                            assertEquals(l2Key, key);
+                            assertEquals(name, TEST_DATA_NAME);
+                            assertTrue(Arrays.equals(TEST_BLOB_DATA, data));
+                            latch.countDown();
+                        })));
+    }
+
     @Test
     public void testPrivateData() {
         final String l2Key = FAKE_KEYS[0];
         final Blob b = new Blob();
         storeBlobOrFail(l2Key, b, TEST_BLOB_DATA);
 
-        doLatched("Did not complete retrieving private data", latch ->
-                mService.retrieveBlob(l2Key, TEST_CLIENT_ID, TEST_DATA_NAME, onBlobRetrieved(
-                        (status, key, name, data) -> {
-                            assertTrue("Retrieve blob status not successful : " + status.resultCode,
-                                    status.isSuccess());
-                            assertEquals(l2Key, key);
-                            assertEquals(name, TEST_DATA_NAME);
-                            assertTrue(Arrays.equals(b.data, data));
-                            latch.countDown();
-                        })));
+        assertPrivateDataPresent(mService, l2Key);
 
         // Most puzzling error message ever
         doLatched("Did not complete retrieving nothing", latch ->
@@ -587,13 +685,13 @@ public class IpMemoryStoreServiceTest {
         stored.add(storeAttributes(FAKE_KEYS[0], na.build()));
 
         na.setDnsAddresses(Arrays.asList(
-                new InetAddress[] {Inet6Address.getByName("8D56:9AF1::08EE:20F1")}));
+                new InetAddress[]{Inet6Address.getByName("8D56:9AF1::08EE:20F1")}));
         na.setMtu(208);
         stored.add(storeAttributes(FAKE_KEYS[1], na.build()));
         na.setMtu(null);
         na.setAssignedV4Address((Inet4Address) Inet4Address.getByName("1.2.3.4"));
         na.setDnsAddresses(Arrays.asList(
-                new InetAddress[] {Inet6Address.getByName("0A1C:2E40:480A::1CA6")}));
+                new InetAddress[]{Inet6Address.getByName("0A1C:2E40:480A::1CA6")}));
         na.setCluster("cluster1");
         stored.add(storeAttributes(FAKE_KEYS[2], na.build()));
         na.setMtu(219);
@@ -812,6 +910,25 @@ public class IpMemoryStoreServiceTest {
     }
 
     @Test
+    public void testFullMaintenance_networkEvents() throws Exception {
+        generateFakeNetworkEvents();
+        // After inserting test data, the size of the DB should be larger than the threshold.
+        assertTrue(mService.isDbSizeOverThreshold());
+
+        final InterruptMaintenance im = new InterruptMaintenance(0/* Fake JobId */);
+        // Do full maintenance and then the db should go down in size and be under the threshold.
+        doLatched("Maintenance unexpectedly completed successfully", latch ->
+                mService.fullMaintenance(onStatus((status) -> {
+                    assertTrue("Execute full maintenance failed: "
+                            + status.resultCode, status.isSuccess());
+                    latch.countDown();
+                }), im), LONG_TIMEOUT_MS);
+
+        // If maintenance is successful, the db size shall meet the threshold.
+        assertFalse(mService.isDbSizeOverThreshold());
+    }
+
+    @Test
     public void testInterruptMaintenance() throws Exception {
         copyTestData(mDbFile);
         // After inserting test data, the size of the DB should be larger than the threshold.
@@ -922,13 +1039,13 @@ public class IpMemoryStoreServiceTest {
 
     private final List<Pair<String, byte[]>> mByteArrayTests = List.of(
             new Pair<>("null", null),
-            new Pair<>("[]", new byte[] {}),
+            new Pair<>("[]", new byte[]{}),
             new Pair<>("[0102030405060708090A0B0C]",
-                    new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 }),
-            new Pair<>("[0F1080FF]", new byte[] { 15, 16, -128, -1 }),
+                    new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}),
+            new Pair<>("[0F1080FF]", new byte[]{15, 16, -128, -1}),
             new Pair<>("[0102030405060708090A0B0C0D0E0F10...15161718191A1B1C]",
-                    new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-                            17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28 })
+                    new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+                            17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28})
     );
 
     @Test
@@ -975,5 +1092,448 @@ public class IpMemoryStoreServiceTest {
 
         //db is null, the db size could not over the threshold.
         assertFalse(ipMemoryStoreService.isDbSizeOverThreshold());
+    }
+
+    /**
+     * Setup the NetworkEvents table with multiple NUD failure events before running each testcase.
+     *    times             eventType                               cluster           timestamp
+     *     10    NETWORK_EVENT_NUD_FAILURE_ROAM                  TEST_CLUSTER       1.5 weeks ago
+     *     10    NETWORK_EVENT_NUD_FAILURE_ORGANIC               TEST_CLUSTER_1     1   weeks ago
+     *     10    NETWORK_EVENT_NUD_FAILURE_MAC_ADDRESS_CHANGED   TEST_CLUSTER       0.8 weeks ago
+     *     10    NETWORK_EVENT_NUD_FAILURE_CONFIRM               TEST_CLUSTER       0.6 weeks ago
+     *     10    NETWORK_EVENT_NUD_FAILURE_ROAM                  TEST_CLUSTER_1     0.5 weeks ago
+     *     10    NETWORK_EVENT_NUD_FAILURE_ORGANIC               TEST_CLUSTER       6   hours ago
+     */
+    private void storeNetworkEventsForNudFailures(final long now) {
+        // Insert 10 NUD failure events post roam happened 1.5 weeks ago to TEST_CLUSTER.
+        long timestamp = (long) (now - ONE_WEEK_IN_MS * 1.5);
+        long expiry = timestamp + ONE_WEEK_IN_MS;
+        for (int i = 0; i < 10; i++) {
+            storeNetworkEventOrFail(TEST_CLUSTER, timestamp, expiry,
+                    NETWORK_EVENT_NUD_FAILURE_ROAM);
+        }
+
+        // Insert 10 NUD failure events due to organic check happened 1 weeks ago to
+        // TEST_CLUSTER_1.
+        timestamp = now - ONE_WEEK_IN_MS;
+        expiry = timestamp + ONE_WEEK_IN_MS;
+        for (int i = 0; i < 10; i++) {
+            storeNetworkEventOrFail(TEST_CLUSTER_1, timestamp, expiry,
+                    NETWORK_EVENT_NUD_FAILURE_ORGANIC);
+        }
+
+        // Insert 10 NUD failure events due to mac address change happened 0.8 weeks ago to
+        // TEST_CLUSTER.
+        timestamp = (long) (now - ONE_WEEK_IN_MS * 0.8);
+        expiry = timestamp + ONE_WEEK_IN_MS;
+        for (int i = 0; i < 10; i++) {
+            storeNetworkEventOrFail(TEST_CLUSTER, timestamp, expiry,
+                    NETWORK_EVENT_NUD_FAILURE_MAC_ADDRESS_CHANGED);
+        }
+
+        // Insert 10 NUD failure events from confirm happened 0.6 weeks ago to TEST_CLUSTER.
+        timestamp = (long) (now - ONE_WEEK_IN_MS * 0.6);
+        expiry = timestamp + ONE_WEEK_IN_MS;
+        for (int i = 0; i < 10; i++) {
+            storeNetworkEventOrFail(TEST_CLUSTER, timestamp, expiry,
+                    NETWORK_EVENT_NUD_FAILURE_CONFIRM);
+        }
+
+        // Insert 10 NUD failure events from confirm happened 0.5 weeks ago to TEST_CLUSTER_1.
+        timestamp = (long) (now - ONE_WEEK_IN_MS * 0.5);
+        expiry = timestamp + ONE_WEEK_IN_MS;
+        for (int i = 0; i < 10; i++) {
+            storeNetworkEventOrFail(TEST_CLUSTER_1, timestamp, expiry,
+                    NETWORK_EVENT_NUD_FAILURE_ROAM);
+        }
+
+        // Insert 10 NUD failure events from organic check 6 hours ago to TEST_CLUSTER.
+        timestamp = now - ONE_DAY_IN_MS / 4;
+        expiry = timestamp + ONE_WEEK_IN_MS;
+        for (int i = 0; i < 10; i++) {
+            storeNetworkEventOrFail(TEST_CLUSTER, timestamp, expiry,
+                    NETWORK_EVENT_NUD_FAILURE_ORGANIC);
+        }
+    }
+
+    @Test
+    public void testNetworkEventsQuery() {
+        final long now = System.currentTimeMillis();
+        storeNetworkEventsForNudFailures(now);
+
+        // Query network event counts for NUD failures within TEST_CLUSTER.
+        final long[] sinceTimes = new long[2];
+        sinceTimes[0] = now - ONE_WEEK_IN_MS;
+        sinceTimes[1] = now - ONE_DAY_IN_MS;
+        doLatched("Did not complete retrieving network event count", latch ->
+                mService.retrieveNetworkEventCount(TEST_CLUSTER,
+                        sinceTimes,
+                        NETWORK_EVENT_NUD_FAILURE_TYPES,
+                        onNetworkEventCountRetrieved(
+                            (status, counts) -> {
+                                assertTrue("Retrieve network event counts not successful : "
+                                        + status.resultCode, status.isSuccess());
+                                assertTrue(counts.length == 2);
+                                assertEquals(30, counts[0]);
+                                assertEquals(10, counts[1]);
+                                latch.countDown();
+                            })));
+
+        doLatched("Did not complete retrieving network event count", latch ->
+                mService.retrieveNetworkEventCount(TEST_CLUSTER_1,
+                        sinceTimes,
+                        NETWORK_EVENT_NUD_FAILURE_TYPES,
+                        onNetworkEventCountRetrieved(
+                            (status, counts) -> {
+                                assertTrue("Retrieve network event counts not successful : "
+                                        + status.resultCode, status.isSuccess());
+                                assertTrue(counts.length == 2);
+                                assertEquals(20, counts[0]);
+                                assertEquals(0, counts[1]);
+                                latch.countDown();
+                            })));
+    }
+
+    private int[] eventTypes(final int... eventTypes) {
+        return eventTypes;
+    }
+
+    @Test
+    public void testNetworkEventsQuery_differentEventTypes() {
+        final long now = System.currentTimeMillis();
+        storeNetworkEventsForNudFailures(now);
+
+        final long[] sinceTimes = new long[2];
+        sinceTimes[0] = now - ONE_WEEK_IN_MS;
+        sinceTimes[1] = now - ONE_DAY_IN_MS;
+        doLatched("Did not complete retrieving network event count", latch ->
+                mService.retrieveNetworkEventCount(TEST_CLUSTER,
+                        sinceTimes,
+                        eventTypes(NETWORK_EVENT_NUD_FAILURE_ROAM,
+                                NETWORK_EVENT_NUD_FAILURE_CONFIRM),
+                        onNetworkEventCountRetrieved(
+                            (status, counts) -> {
+                                assertTrue("Retrieve network event counts not successful : "
+                                        + status.resultCode, status.isSuccess());
+                                assertTrue(counts.length == 2);
+                                assertEquals(10, counts[0]);
+                                assertEquals(0, counts[1]);
+                                latch.countDown();
+                            })));
+
+        doLatched("Did not complete retrieving network event count", latch ->
+                mService.retrieveNetworkEventCount(TEST_CLUSTER,
+                        sinceTimes,
+                        eventTypes(NETWORK_EVENT_NUD_FAILURE_ORGANIC,
+                                NETWORK_EVENT_NUD_FAILURE_MAC_ADDRESS_CHANGED),
+                        onNetworkEventCountRetrieved(
+                            (status, counts) -> {
+                                assertTrue("Retrieve network event counts not successful : "
+                                        + status.resultCode, status.isSuccess());
+                                assertTrue(counts.length == 2);
+                                assertEquals(20, counts[0]);
+                                assertEquals(10, counts[1]);
+                                latch.countDown();
+                            })));
+
+        doLatched("Did not complete retrieving network event count", latch ->
+                mService.retrieveNetworkEventCount(TEST_CLUSTER_1,
+                        sinceTimes,
+                        eventTypes(NETWORK_EVENT_NUD_FAILURE_ORGANIC,
+                                NETWORK_EVENT_NUD_FAILURE_MAC_ADDRESS_CHANGED),
+                        onNetworkEventCountRetrieved(
+                            (status, counts) -> {
+                                assertTrue("Retrieve network event counts not successful : "
+                                        + status.resultCode, status.isSuccess());
+                                assertTrue(counts.length == 2);
+                                assertEquals(10, counts[0]);
+                                assertEquals(0, counts[1]);
+                                latch.countDown();
+                            })));
+
+    }
+
+    @Test
+    public void testNetworkEventsQuery_querySinceLastOneWeek() {
+        final long now = System.currentTimeMillis();
+        storeNetworkEventsForNudFailures(now);
+
+        final long[] sinceTimes = new long[] { now - ONE_WEEK_IN_MS };
+        doLatched("Did not complete retrieving network event count", latch ->
+                mService.retrieveNetworkEventCount(TEST_CLUSTER,
+                        sinceTimes,
+                        NETWORK_EVENT_NUD_FAILURE_TYPES,
+                        onNetworkEventCountRetrieved(
+                            (status, counts) -> {
+                                assertTrue("Retrieve network event counts not successful : "
+                                        + status.resultCode, status.isSuccess());
+                                assertTrue(counts.length == 1);
+                                assertEquals(30, counts[0]);
+                                latch.countDown();
+                            })));
+
+        doLatched("Did not complete retrieving network event count", latch ->
+                mService.retrieveNetworkEventCount(TEST_CLUSTER_1,
+                        sinceTimes,
+                        NETWORK_EVENT_NUD_FAILURE_TYPES,
+                        onNetworkEventCountRetrieved(
+                            (status, counts) -> {
+                                assertTrue("Retrieve network event counts not successful : "
+                                        + status.resultCode, status.isSuccess());
+                                assertTrue(counts.length == 1);
+                                assertEquals(20, counts[0]);
+                                latch.countDown();
+                            })));
+    }
+
+    @Test
+    public void testNetworkEventsQuery_querySinceLastOneDay() {
+        final long now = System.currentTimeMillis();
+        storeNetworkEventsForNudFailures(now);
+
+        // Query network event count for NUD failures in past day within the same cluster.
+        final long[] sinceTimes = new long[] { now - ONE_DAY_IN_MS };
+        doLatched("Did not complete retrieving network event count", latch ->
+                mService.retrieveNetworkEventCount(TEST_CLUSTER,
+                        sinceTimes,
+                        NETWORK_EVENT_NUD_FAILURE_TYPES,
+                        onNetworkEventCountRetrieved(
+                            (status, counts) -> {
+                                assertTrue("Retrieve network event counts not successful : "
+                                        + status.resultCode, status.isSuccess());
+                                assertTrue(counts.length == 1);
+                                assertEquals(10, counts[0]);
+                                latch.countDown();
+                            })));
+
+        doLatched("Did not complete retrieving network event count", latch ->
+                mService.retrieveNetworkEventCount(TEST_CLUSTER_1,
+                        sinceTimes,
+                        NETWORK_EVENT_NUD_FAILURE_TYPES,
+                        onNetworkEventCountRetrieved(
+                            (status, counts) -> {
+                                assertTrue("Retrieve network event counts not successful : "
+                                        + status.resultCode, status.isSuccess());
+                                assertTrue(counts.length == 1);
+                                assertEquals(0, counts[0]);
+                                latch.countDown();
+                            })));
+    }
+
+    @Test
+    public void testNetworkEventsQuery_wrongCluster() {
+        final long now = System.currentTimeMillis();
+        storeNetworkEventsForNudFailures(now);
+
+        // Query network event count for NUD failures within the same cluster.
+        final long[] sinceTimes = new long[2];
+        sinceTimes[0] = now - ONE_WEEK_IN_MS;
+        sinceTimes[1] = now - ONE_DAY_IN_MS;
+        final int[] eventTypes = new int[] { NETWORK_EVENT_NUD_FAILURE_ROAM };
+        doLatched("Did not complete retrieving network event count", latch ->
+                mService.retrieveNetworkEventCount("wrong_cluster_to_query",
+                        sinceTimes,
+                        eventTypes,
+                        onNetworkEventCountRetrieved(
+                            (status, counts) -> {
+                                assertTrue("Retrieve network event counts not successful : "
+                                        + status.resultCode, status.isSuccess());
+                                assertTrue(counts.length == 2);
+                                assertEquals(0, counts[0]);
+                                assertEquals(0, counts[1]);
+                                latch.countDown();
+                            })));
+    }
+
+    @Test
+    public void testNetworkEventsQuery_nullCluster() {
+        final long now = System.currentTimeMillis();
+        storeNetworkEventsForNudFailures(now);
+
+        // Query network event count for NUD failures within the same cluster.
+        final long[] sinceTimes = new long[2];
+        sinceTimes[0] = now - ONE_WEEK_IN_MS;
+        sinceTimes[1] = now - ONE_DAY_IN_MS;
+        final int[] eventTypes = new int[] { NETWORK_EVENT_NUD_FAILURE_ROAM };
+        doLatched("Did not complete retrieving network event count", latch ->
+                mService.retrieveNetworkEventCount(null /* cluster */,
+                        sinceTimes,
+                        eventTypes,
+                        onNetworkEventCountRetrieved(
+                            (status, counts) -> {
+                                assertFalse("Success retrieving network event count",
+                                        status.isSuccess());
+                                assertEquals(Status.ERROR_ILLEGAL_ARGUMENT, status.resultCode);
+                                assertTrue(counts.length == 0);
+                                latch.countDown();
+                            })));
+    }
+
+    @Test
+    public void testNetworkEventsQuery_emptyQueryEventType() {
+        final long now = System.currentTimeMillis();
+        storeNetworkEventsForNudFailures(now);
+
+        // Query network event count for NUD failure within the same cluster but event type to
+        // be queried is empty, an empty counts should be returned.
+        final long[] sinceTimes = new long[2];
+        sinceTimes[0] = now - ONE_WEEK_IN_MS;
+        sinceTimes[1] = now - ONE_DAY_IN_MS;
+        final int[] eventTypes = new int[0];
+        doLatched("Did not complete retrieving network event count", latch ->
+                mService.retrieveNetworkEventCount(TEST_CLUSTER,
+                        sinceTimes,
+                        eventTypes,
+                        onNetworkEventCountRetrieved(
+                            (status, counts) -> {
+                                assertTrue("Retrieve network event counts not successful : "
+                                        + status.resultCode, status.isSuccess());
+                                assertTrue(counts.length == 2);
+                                assertEquals(0, counts[0]);
+                                assertEquals(0, counts[1]);
+                                latch.countDown();
+                            })));
+    }
+
+    @Test
+    public void testNetworkEventsQuery_emptySinceTimes() {
+        final long now = System.currentTimeMillis();
+        storeNetworkEventsForNudFailures(now);
+
+        // Query network event count for NUD failure within the same cluster but sinceTimes is
+        // empty, en empty count array will be returned and ERROR_ILLEGAL_ARGUMENT status.
+        final long[] sinceTimes = new long[0];
+        doLatched("Did not complete retrieving network event count", latch ->
+                mService.retrieveNetworkEventCount(TEST_CLUSTER,
+                        sinceTimes,
+                        NETWORK_EVENT_NUD_FAILURE_TYPES,
+                        onNetworkEventCountRetrieved(
+                            (status, counts) -> {
+                                assertFalse("Success retrieving network event count",
+                                        status.isSuccess());
+                                assertEquals(Status.ERROR_ILLEGAL_ARGUMENT, status.resultCode);
+                                assertTrue(counts.length == 0);
+                                latch.countDown();
+                            })));
+    }
+
+    @Test
+    public void testNetworkEventsQuery_wrongEventType() {
+        final long now = System.currentTimeMillis();
+        final long expiry = now + ONE_WEEK_IN_MS;
+        storeNetworkEventOrFail(TEST_CLUSTER, now, expiry, -1 /* nonexistent event type */);
+
+        // Query network event count for NUD failure within the same cluster but event type doesn't
+        // match.
+        final long[] sinceTimes = new long[2];
+        sinceTimes[0] = now - ONE_WEEK_IN_MS;
+        sinceTimes[1] = now - ONE_DAY_IN_MS;
+        doLatched("Did not complete retrieving network event count", latch ->
+                mService.retrieveNetworkEventCount(TEST_CLUSTER,
+                        sinceTimes,
+                        NETWORK_EVENT_NUD_FAILURE_TYPES,
+                        onNetworkEventCountRetrieved(
+                            (status, counts) -> {
+                                assertTrue("Retrieve network event counts not successful : "
+                                        + status.resultCode, status.isSuccess());
+                                assertTrue(counts.length == 2);
+                                assertEquals(0, counts[0]);
+                                assertEquals(0, counts[1]);
+                                latch.countDown();
+                            })));
+    }
+
+    @Test
+    public void testStoreNetworkEvent_nullCluster() {
+        final long now = System.currentTimeMillis();
+        final long expiry = now + ONE_WEEK_IN_MS;
+        doLatched("Did not complete storing a network event", latch ->
+                mService.storeNetworkEvent(null /* cluster */, now, expiry,
+                        NETWORK_EVENT_NUD_FAILURE_ROAM,
+                        onStatus(status -> {
+                            assertFalse("Success storing a network event with null cluster",
+                                    status.isSuccess());
+                            assertEquals(Status.ERROR_ILLEGAL_ARGUMENT, status.resultCode);
+                            latch.countDown();
+                        })));
+    }
+
+    @Test
+    public void testRenameDb_noExistingDb_newDbCreated() throws Exception {
+        mService.shutdown();
+        TEST_DB.delete();
+        assertFalse(TEST_DB.exists());
+
+        assertFalse(OLD_DB.exists());
+        assertFalse(TEST_DB.exists());
+
+        final IpMemoryStoreService service = createService();
+        service.shutdown();
+        assertFalse(OLD_DB.exists());
+        assertTrue(TEST_DB.exists());
+    }
+
+    @Test
+    public void testRenameDb_existingDb_becomesNewDb() throws Exception {
+        mService.shutdown();
+        TEST_DB.delete();
+        assertFalse(TEST_DB.exists());
+
+        assertFalse(OLD_DB.exists());
+        copyTestData(OLD_DB);
+        assertTrue(OLD_DB.exists());
+
+        final IpMemoryStoreService service = createService();
+        assertPrivateDataPresent(service, FAKE_KEYS[0]);
+        assertFalse(OLD_DB.exists());
+        assertTrue(TEST_DB.exists());
+
+        service.shutdown();
+    }
+
+    @Test
+    public void testRenameDb_existingDb_overwritesNewDb() throws Exception {
+        mService.shutdown();
+        // Replace the new DB with garbage. This lets us check that the data survives the rename.
+        try (FileOutputStream out = new FileOutputStream(TEST_DB, false /* append */)) {
+            out.write(new byte[]{'g', 'a', 'r', 'b', 'a', 'g', 'e'});
+        }
+        assertTrue(TEST_DB.exists());
+
+        assertFalse(OLD_DB.exists());
+        copyTestData(OLD_DB);
+        assertTrue(OLD_DB.exists());
+
+        final IpMemoryStoreService service = createService();
+        assertPrivateDataPresent(service, FAKE_KEYS[0]);
+        assertFalse(OLD_DB.exists());
+        assertTrue(TEST_DB.exists());
+
+        service.shutdown();
+    }
+
+    private void doTestDowngradeAndUpgrade(int downgradeVersion) {
+        SQLiteOpenHelper dbHelper = new IpMemoryStoreDatabase.DbHelper(
+                mMockContext, downgradeVersion);
+        SQLiteDatabase db = dbHelper.getWritableDatabase();
+        assertEquals(downgradeVersion, db.getVersion());
+        db.close();
+
+        dbHelper = new IpMemoryStoreDatabase.DbHelper(mMockContext, SCHEMA_VERSION);
+        db = dbHelper.getWritableDatabase();
+        assertEquals(SCHEMA_VERSION, db.getVersion());
+        db.close();
+    }
+
+    @Test
+    public void testDowngradeClearsTablesAndTriggers() {
+        final String l2Key = FAKE_KEYS[0];
+        final Blob b = new Blob();
+        storeBlobOrFail(l2Key, b, TEST_BLOB_DATA);
+        mService.shutdown();
+
+        for (int version = SCHEMA_VERSION - 1; version >= 1; version--) {
+            doTestDowngradeAndUpgrade(version);
+        }
     }
 }

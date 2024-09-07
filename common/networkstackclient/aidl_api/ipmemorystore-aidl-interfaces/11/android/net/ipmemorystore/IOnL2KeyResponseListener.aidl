@@ -12,8 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */// Blob[] is used to represent an array of byte[], as structured AIDL does not support arrays
-// of arrays.
+ */
 ///////////////////////////////////////////////////////////////////////////////
 // THIS FILE IS IMMUTABLE. DO NOT EDIT IN ANY CASE.                          //
 ///////////////////////////////////////////////////////////////////////////////
@@ -34,12 +33,6 @@
 
 package android.net.ipmemorystore;
 /* @hide */
-@JavaDerive(toString=true)
-parcelable NetworkAttributesParcelable {
-  byte[] assignedV4Address;
-  long assignedV4AddressExpiry;
-  String cluster;
-  android.net.ipmemorystore.Blob[] dnsAddresses;
-  int mtu;
-  @nullable android.net.networkstack.aidl.quirks.IPv6ProvisioningLossQuirkParcelable ipv6ProvisioningLossQuirk;
+interface IOnL2KeyResponseListener {
+  oneway void onL2KeyResponse(in android.net.ipmemorystore.StatusParcelable status, in String l2Key);
 }

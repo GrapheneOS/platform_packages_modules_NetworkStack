@@ -25,6 +25,7 @@ import android.net.ipmemorystore.OnBlobRetrievedListener;
 import android.net.ipmemorystore.OnDeleteStatusListener;
 import android.net.ipmemorystore.OnL2KeyResponseListener;
 import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener;
+import android.net.ipmemorystore.OnNetworkEventCountRetrievedListener;
 import android.net.ipmemorystore.OnSameL3NetworkResponseListener;
 import android.net.ipmemorystore.OnStatusListener;
 import android.net.ipmemorystore.Status;
@@ -287,6 +288,66 @@ public abstract class IpMemoryStoreClient {
                     () -> service.factoryReset()));
         } catch (ExecutionException m) {
             Log.e(TAG, "Error executing factory reset", m);
+        }
+    }
+
+    /**
+     * Retrieve the specific network event counts for a given cluster and event type since one or
+     * more timestamps in the past.
+     *
+     * @param cluster The cluster to query.
+     * @param sinceTimes An array of timestamps in the past. The query will return an array of
+     *                   equal size. Each element in the array will contain the number of network
+     *                   events between the corresponding timestamp and the current time, e.g. query
+     *                   since the last week and/or the last day.
+     * @param eventTypes An array of network event types to query, which can be one or more of the
+     *                   above NETWORK_EVENT constants.
+     * @param listener The listener that will be invoked to return the answer.
+     * returns (through the listener) The event counts associated with the query, or an empty array
+     *                                if the query failed.
+     */
+    public void retrieveNetworkEventCount(@NonNull final String cluster,
+            @NonNull final long[] sinceTimes,
+            @NonNull final int[] eventTypes,
+            @Nullable final OnNetworkEventCountRetrievedListener listener) {
+        try {
+            runWhenServiceReady(service -> ignoringRemoteException(
+                    () -> service.retrieveNetworkEventCount(cluster, sinceTimes, eventTypes,
+                            OnNetworkEventCountRetrievedListener.toAIDL(listener))));
+        } catch (ExecutionException m) {
+            ignoringRemoteException("Error retrieving network event count",
+                    () -> listener.onNetworkEventCountRetrieved(
+                            new Status(Status.ERROR_UNKNOWN),
+                            new int[0]) /* empty counts */);
+        }
+    }
+
+    /**
+     * Store a specific network event to database for a given cluster.
+     *
+     * @param cluster The cluster representing a notion of network group (e.g., BSSIDs with the
+     *                same SSID).
+     * @param timestamp The timestamp {@link System.currentTimeMillis} when a specific network
+     *                  event occurred.
+     * @param expiry The timestamp {@link System.currentTimeMillis} when a specific network
+     *               event stored in the database expires, e.g. it might be one week from now.
+     * @param eventType One of the NETWORK_EVENT constants above.
+     * @param listener A listener that will be invoked to inform of the completion of this call.
+     * returns (through the listener) A status to indicate success or failure.
+     */
+    public void storeNetworkEvent(@NonNull final String cluster,
+            final long timestamp,
+            final long expiry,
+            final int eventType,
+            @Nullable final OnStatusListener listener) {
+        try {
+            runWhenServiceReady(service -> ignoringRemoteException(
+                    () -> service.storeNetworkEvent(cluster, timestamp, expiry, eventType,
+                            OnStatusListener.toAIDL(listener))));
+        } catch (ExecutionException m) {
+            if (null == listener) return;
+            ignoringRemoteException("Error storing network event",
+                    () -> listener.onComplete(new Status(Status.ERROR_UNKNOWN)));
         }
     }
 }

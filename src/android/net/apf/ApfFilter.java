@@ -52,6 +52,7 @@ import static android.net.apf.ApfConstants.ICMP6_PREFIX_OPTION_VALID_LIFETIME_LE
 import static android.net.apf.ApfConstants.ICMP6_PREFIX_OPTION_VALID_LIFETIME_OFFSET;
 import static android.net.apf.ApfConstants.ICMP6_RA_CHECKSUM_LEN;
 import static android.net.apf.ApfConstants.ICMP6_RA_CHECKSUM_OFFSET;
+import static android.net.apf.ApfConstants.ICMP6_RA_FLAGS_EXTENSION_OPTION_TYPE;
 import static android.net.apf.ApfConstants.ICMP6_RA_OPTION_OFFSET;
 import static android.net.apf.ApfConstants.ICMP6_RA_ROUTER_LIFETIME_LEN;
 import static android.net.apf.ApfConstants.ICMP6_RA_ROUTER_LIFETIME_OFFSET;
@@ -87,6 +88,7 @@ import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HOST;
 import static android.net.apf.ApfCounterTracker.Counter.FILTER_AGE_16384THS;
 import static android.net.apf.ApfCounterTracker.Counter.FILTER_AGE_SECONDS;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_ETHER_OUR_SRC_MAC;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_DAD;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_SLLA_OPTION;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_TENTATIVE;
@@ -494,7 +496,7 @@ public class ApfFilter implements AndroidPacketFilter {
         mDependencies.addDeviceIdleReceiver(mDeviceIdleReceiver);
 
         mNsdManager = context.getSystemService(NsdManager.class);
-        if (shouldUseMdnsOffload()) {
+        if (shouldEnableMdnsOffload()) {
             registerOffloadEngine();
         }
     }
@@ -1053,6 +1055,7 @@ public class ApfFilter implements AndroidPacketFilter {
                     case ICMP6_SOURCE_LL_ADDRESS_OPTION_TYPE:
                     case ICMP6_MTU_OPTION_TYPE:
                     case ICMP6_PREF64_OPTION_TYPE:
+                    case ICMP6_RA_FLAGS_EXTENSION_OPTION_TYPE:
                         addMatchSection(optionLength);
                         break;
                     case ICMP6_CAPTIVE_PORTAL_OPTION_TYPE: // unlikely to ever change.
@@ -2325,6 +2328,8 @@ public class ApfFilter implements AndroidPacketFilter {
 
         // Here's a basic summary of what the initial program does:
         //
+        // if it is a loopback (src mac is nic's primary mac) packet
+        //    pass
         // if it's a 802.3 Frame (ethtype < 0x0600):
         //    drop or pass based on configurations
         // if it has a ether-type that belongs to the black list
@@ -2338,6 +2343,9 @@ public class ApfFilter implements AndroidPacketFilter {
         //     drop
         //   pass
         // insert IPv6 filter to drop, pass, or fall off the end for ICMPv6 packets
+
+        gen.addLoadImmediate(R0, ETHER_SRC_ADDR_OFFSET);
+        gen.addCountAndPassIfBytesAtR0Equal(mHardwareAddress, PASSED_ETHER_OUR_SRC_MAC);
 
         gen.addLoad16(R0, ETH_ETHERTYPE_OFFSET);
         if (SdkLevel.isAtLeastV()) {
@@ -2635,7 +2643,7 @@ public class ApfFilter implements AndroidPacketFilter {
         mRas.clear();
         mDependencies.removeBroadcastReceiver(mDeviceIdleReceiver);
         mIsApfShutdown = true;
-        if (shouldUseMdnsOffload()) {
+        if (shouldEnableMdnsOffload()) {
             unregisterOffloadEngine();
         }
     }
@@ -2738,7 +2746,7 @@ public class ApfFilter implements AndroidPacketFilter {
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */, codename =
             "VanillaIceCream")
     @Override
-    public boolean shouldUseMdnsOffload() {
+    public boolean shouldEnableMdnsOffload() {
         return shouldUseApfV6Generator() && mShouldHandleMdnsOffload;
     }
 
