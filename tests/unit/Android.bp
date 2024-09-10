@@ -36,9 +36,9 @@ java_defaults {
         "testables",
     ],
     libs: [
-        "android.test.runner",
-        "android.test.base",
-        "android.test.mock",
+        "android.test.runner.stubs",
+        "android.test.base.stubs",
+        "android.test.mock.stubs",
     ],
     defaults: [
         "framework-connectivity-test-defaults",

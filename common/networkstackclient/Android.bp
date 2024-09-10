@@ -260,9 +260,9 @@ java_library {
         "src/android/net/util/**/*.java",
     ],
     libs: [
-        // Since this library is sdk_version: "module_current", "framework-connectivity" is just
+        // Since this library is sdk_version: "module_current", "framework-connectivity.stubs.module_lib" is just
         // the module_current API stubs of framework-connectivity
-        "framework-connectivity",
+        "framework-connectivity.stubs.module_lib",
         "framework-annotations-lib",
     ],
     static_libs: [
