@@ -1084,33 +1084,18 @@ public class NetworkMonitorTest {
     private static CellIdentityGsm makeCellIdentityGsm(int lac, int cid, int arfcn, int bsic,
             String mccStr, String mncStr, String alphal, String alphas)
             throws ReflectiveOperationException {
-        if (ShimUtils.isAtLeastR()) {
-            return new CellIdentityGsm(lac, cid, arfcn, bsic, mccStr, mncStr, alphal, alphas,
-                    Collections.emptyList() /* additionalPlmns */);
-        } else {
-            // API <= Q does not have the additionalPlmns parameter
-            final Constructor<CellIdentityGsm> constructor = CellIdentityGsm.class.getConstructor(
-                    int.class, int.class, int.class, int.class, String.class, String.class,
-                    String.class, String.class);
-            return constructor.newInstance(lac, cid, arfcn, bsic, mccStr, mncStr, alphal, alphas);
-        }
+        // TODO: inline this call.
+        return new CellIdentityGsm(lac, cid, arfcn, bsic, mccStr, mncStr, alphal, alphas,
+                Collections.emptyList() /* additionalPlmns */);
     }
 
     private static CellIdentityLte makeCellIdentityLte(int ci, int pci, int tac, int earfcn,
             int bandwidth, String mccStr, String mncStr, String alphal, String alphas)
             throws ReflectiveOperationException {
-        if (ShimUtils.isAtLeastR()) {
-            return new CellIdentityLte(ci, pci, tac, earfcn, new int[] {} /* bands */,
-                    bandwidth, mccStr, mncStr, alphal, alphas,
-                    Collections.emptyList() /* additionalPlmns */, null /* csgInfo */);
-        } else {
-            // API <= Q does not have the additionalPlmns and csgInfo parameters
-            final Constructor<CellIdentityLte> constructor = CellIdentityLte.class.getConstructor(
-                    int.class, int.class, int.class, int.class, int.class, String.class,
-                    String.class, String.class, String.class);
-            return constructor.newInstance(ci, pci, tac, earfcn, bandwidth, mccStr, mncStr, alphal,
-                    alphas);
-        }
+        // TODO: inline this call.
+        return new CellIdentityLte(ci, pci, tac, earfcn, new int[] {} /* bands */,
+                bandwidth, mccStr, mncStr, alphal, alphas,
+                Collections.emptyList() /* additionalPlmns */, null /* csgInfo */);
     }
 
     @Test
@@ -2084,22 +2069,10 @@ public class NetworkMonitorTest {
         assertEquals(expectedUrl, redirectUrl);
     }
 
-
     @Test
-    public void testCaptivePortalLogin_beforeR() throws Exception {
-        assumeFalse(ShimUtils.isAtLeastR());
-        testCaptivePortalLogin(TEST_HTTP_URL);
-    }
-
-    @Test
-    public void testCaptivePortalLogin_AfterR() throws Exception {
-        assumeTrue(ShimUtils.isAtLeastR());
-        testCaptivePortalLogin(TEST_LOGIN_URL);
-    }
-
-    private void testCaptivePortalLogin(String expectedUrl) throws Exception {
+    public void testCaptivePortalLogin() throws Exception {
         final NetworkMonitor nm = makeMonitor(CELL_METERED_CAPABILITIES);
-        setupAndLaunchCaptivePortalApp(nm, expectedUrl);
+        setupAndLaunchCaptivePortalApp(nm, TEST_LOGIN_URL);
 
         // Have the app report that the captive portal is dismissed, and check that we revalidate.
         setStatus(mHttpsConnection, 204);
@@ -2114,20 +2087,9 @@ public class NetworkMonitorTest {
     }
 
     @Test
-    public void testCaptivePortalUseAsIs_beforeR() throws Exception {
-        assumeFalse(ShimUtils.isAtLeastR());
-        testCaptivePortalUseAsIs(TEST_HTTP_URL);
-    }
-
-    @Test
-    public void testCaptivePortalUseAsIs_AfterR() throws Exception {
-        assumeTrue(ShimUtils.isAtLeastR());
-        testCaptivePortalUseAsIs(TEST_LOGIN_URL);
-    }
-
-    private void testCaptivePortalUseAsIs(String expectedUrl) throws Exception {
+    public void testCaptivePortalUseAsIs() throws Exception {
         final NetworkMonitor nm = makeMonitor(CELL_METERED_CAPABILITIES);
-        setupAndLaunchCaptivePortalApp(nm, expectedUrl);
+        setupAndLaunchCaptivePortalApp(nm, TEST_LOGIN_URL);
 
         // The user decides this network is wanted as is, either by encountering an SSL error or
         // encountering an unknown scheme and then deciding to continue through the browser, or by
@@ -2933,28 +2895,19 @@ public class NetworkMonitorTest {
 
     @Test
     public void testDismissPortalInValidatedNetworkEnabledOsSupported() throws Exception {
-        assumeTrue(ShimUtils.isAtLeastR());
         testDismissPortalInValidatedNetworkEnabled(TEST_LOGIN_URL, TEST_LOGIN_URL);
     }
 
     @Test
     public void testDismissPortalInValidatedNetworkEnabledOsSupported_NullLocationUrl()
             throws Exception {
-        assumeTrue(ShimUtils.isAtLeastR());
         testDismissPortalInValidatedNetworkEnabled(TEST_HTTP_URL, null /* locationUrl */);
     }
 
     @Test
     public void testDismissPortalInValidatedNetworkEnabledOsSupported_InvalidLocationUrl()
             throws Exception {
-        assumeTrue(ShimUtils.isAtLeastR());
         testDismissPortalInValidatedNetworkEnabled(TEST_HTTP_URL, TEST_RELATIVE_URL);
-    }
-
-    @Test
-    public void testDismissPortalInValidatedNetworkEnabledOsNotSupported() throws Exception {
-        assumeFalse(ShimUtils.isAtLeastR());
-        testDismissPortalInValidatedNetworkEnabled(TEST_HTTP_URL, TEST_LOGIN_URL);
     }
 
     private void testDismissPortalInValidatedNetworkEnabled(String expectedUrl, String locationUrl)

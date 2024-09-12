@@ -181,8 +181,6 @@ public class InetDiagSocketIntegrationTest {
 
     @Test
     public void testGetConnectionOwnerUid() throws Exception {
-        // Skip the test for API <= Q, as b/141603906 this was only fixed in Q-QPR2
-        assumeTrue(ShimUtils.isAtLeastR());
         checkGetConnectionOwnerUid("::", null);
         checkGetConnectionOwnerUid("::", "::");
         checkGetConnectionOwnerUid("0.0.0.0", null);
@@ -196,8 +194,6 @@ public class InetDiagSocketIntegrationTest {
     /* Verify fix for b/141603906 */
     @Test
     public void testB141603906() throws Exception {
-        // Skip the test for API <= Q, as b/141603906 this was only fixed in Q-QPR2
-        assumeTrue(ShimUtils.isAtLeastR());
         final InetSocketAddress src = new InetSocketAddress(0);
         final InetSocketAddress dst = new InetSocketAddress(0);
         final int numThreads = 8;
