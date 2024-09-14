@@ -16,7 +16,6 @@
 
 package android.net.dhcp;
 
-import static com.android.modules.utils.build.SdkLevel.isAtLeastR;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ALL;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ANY;
 
@@ -25,7 +24,6 @@ import android.net.LinkAddress;
 import android.net.metrics.DhcpErrorEvent;
 import android.net.networkstack.aidl.dhcp.DhcpOption;
 import android.os.Build;
-import android.os.SystemProperties;
 import android.system.OsConstants;
 import android.text.TextUtils;
 
@@ -807,9 +805,6 @@ public abstract class DhcpPacket {
      */
     @VisibleForTesting
     public String getHostname() {
-        if (mHostName == null && !isAtLeastR()) {
-            return SystemProperties.get("net.hostname");
-        }
         return mHostName;
     }
 
