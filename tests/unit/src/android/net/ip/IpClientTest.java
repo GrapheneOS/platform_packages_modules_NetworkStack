@@ -323,7 +323,7 @@ public class IpClientTest {
                         0 /* flags */,
                         0xffffffffL /* change */);
 
-        return new RtNetlinkLinkMessage(nlmsghdr, 0 /* mtu */,  ifInfoMsg, TEST_MAC, ifaceName);
+        return RtNetlinkLinkMessage.build(nlmsghdr, ifInfoMsg, 0 /* mtu */, TEST_MAC, ifaceName);
     }
 
     private void onInterfaceAddressUpdated(final LinkAddress la, int flags) {
