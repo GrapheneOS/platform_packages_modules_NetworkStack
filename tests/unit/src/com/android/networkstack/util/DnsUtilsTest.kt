@@ -21,12 +21,12 @@ import android.net.DnsResolver.FLAG_EMPTY
 import android.net.DnsResolver.TYPE_A
 import android.net.DnsResolver.TYPE_AAAA
 import android.net.Network
-import com.android.testutils.FakeDns
 import androidx.test.filters.SmallTest
 import androidx.test.runner.AndroidJUnit4
 import com.android.networkstack.util.DnsUtils
 import com.android.networkstack.util.DnsUtils.TYPE_ADDRCONFIG
 import com.android.server.connectivity.NetworkMonitor.DnsLogFunc
+import com.android.server.connectivity.FakeDns
 import java.net.InetAddress
 import java.net.UnknownHostException
 import kotlin.test.assertFailsWith
@@ -43,7 +43,8 @@ const val SHORT_TIMEOUT_MS = 200
 @RunWith(AndroidJUnit4::class)
 @SmallTest
 class DnsUtilsTest {
-    val fakeNetwork: Network = Network(1234)
+    @Mock
+    lateinit var mockNetwork: Network
     @Mock
     lateinit var mockLogger: DnsLogFunc
     @Mock
@@ -53,7 +54,7 @@ class DnsUtilsTest {
     @Before
     fun setup() {
         MockitoAnnotations.initMocks(this)
-        fakeDns = FakeDns(mockResolver)
+        fakeDns = FakeDns(mockNetwork, mockResolver)
         fakeDns.startMocking()
     }
 
@@ -71,8 +72,13 @@ class DnsUtilsTest {
     }
 
     private fun verifyGetAllByName(name: String, expected: Array<String>, type: Int) {
-        fakeDns.setAnswer(name, expected, type)
-        DnsUtils.getAllByName(mockResolver, fakeNetwork, name, type, FLAG_EMPTY, DEFAULT_TIMEOUT_MS,
+        if (type == TYPE_ADDRCONFIG) {
+            fakeDns.setAnswer(name, expected.filter({":" in it}).toTypedArray(), TYPE_AAAA)
+            fakeDns.setAnswer(name, expected.filter({"." in it}).toTypedArray(), TYPE_A)
+        } else {
+            fakeDns.setAnswer(name, expected, type)
+        }
+        DnsUtils.getAllByName(mockResolver, mockNetwork, name, type, FLAG_EMPTY, DEFAULT_TIMEOUT_MS,
                 mockLogger).let { assertIpAddressArrayEquals(expected, it) }
     }
 
@@ -85,7 +91,7 @@ class DnsUtilsTest {
 
     private fun verifyGetAllByNameFails(name: String, type: Int) {
         assertFailsWith<UnknownHostException> {
-            DnsUtils.getAllByName(mockResolver, fakeNetwork, name, type,
+            DnsUtils.getAllByName(mockResolver, mockNetwork, name, type,
                     FLAG_EMPTY, SHORT_TIMEOUT_MS, mockLogger)
         }
     }
