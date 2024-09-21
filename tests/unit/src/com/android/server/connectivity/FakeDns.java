@@ -175,7 +175,7 @@ public class FakeDns {
             return DnsSvcbUtils.makeSvcbResponse(hostname, answer);
         } catch (IOException e) {
             throw new AssertionError("Invalid test data building SVCB response for: "
-                    + answer);
+                    + Arrays.toString(answer));
         }
     }
 
