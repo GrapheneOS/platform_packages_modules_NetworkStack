@@ -92,9 +92,9 @@ public class RawSocketUtils {
     }
 
     @RequiresPermission(NETWORK_SETTINGS)
-    private static void enforceTetheredInterface(@NonNull Context context,
+    public static void enforceTetheredInterface(@NonNull Context context,
                                                @NonNull String interfaceName)
-            throws ExecutionException, InterruptedException, TimeoutException {
+            throws ExecutionException, InterruptedException, TimeoutException, SecurityException {
         final TetheringManager tm = context.getSystemService(TetheringManager.class);
         final CompletableFuture<List<String>> tetheredInterfaces = new CompletableFuture<>();
         final TetheringManager.TetheringEventCallback callback =

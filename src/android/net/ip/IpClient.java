@@ -166,6 +166,7 @@ import com.android.internal.util.MessageUtils;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.internal.util.WakeupMessage;
+import com.android.modules.expresslog.Counter;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.CollectionUtils;
 import com.android.net.module.util.ConnectivityUtils;
@@ -2585,7 +2586,10 @@ public class IpClient extends StateMachine {
                         @Override
                         public void notifyLost(String logMsg, NudEventType type) {
                             maybeStoreNudFailureToDatabase(type);
-                            if (mIgnoreNudFailure) return;
+                            if (mIgnoreNudFailure) {
+                                Counter.logIncrement("core_networking.value_nud_failure_ignored");
+                                return;
+                            }
                             final int version = mCallback.getInterfaceVersion();
                             if (version >= VERSION_ADDED_REACHABILITY_FAILURE) {
                                 final int reason = nudEventTypeToInt(type);
@@ -3296,6 +3300,7 @@ public class IpClient extends StateMachine {
             sinceTimes[2] = now - SIX_HOURS_IN_MS;
             mIpMemoryStore.retrieveNetworkEventCount(mCluster, sinceTimes,
                     NETWORK_EVENT_NUD_FAILURE_TYPES, mListener);
+            Counter.logIncrement("core_networking.value_nud_failure_queried");
         }
 
         @Override

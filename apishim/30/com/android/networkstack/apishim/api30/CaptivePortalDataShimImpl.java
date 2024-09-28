@@ -22,12 +22,10 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.RemoteException;
 
-import androidx.annotation.ChecksSdkIntAtLeast;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
 import com.android.networkstack.apishim.common.CaptivePortalDataShim;
-import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 
 import org.json.JSONException;
@@ -37,8 +35,7 @@ import org.json.JSONObject;
  * Compatibility implementation of {@link CaptivePortalDataShim}.
  */
 @RequiresApi(Build.VERSION_CODES.R)
-public class CaptivePortalDataShimImpl
-        extends com.android.networkstack.apishim.api29.CaptivePortalDataShimImpl {
+public class CaptivePortalDataShimImpl implements CaptivePortalDataShim {
     @NonNull
     protected final CaptivePortalData mData;
 
@@ -53,16 +50,9 @@ public class CaptivePortalDataShimImpl
     /**
      * Parse a {@link CaptivePortalDataShim} from a JSON object.
      * @throws JSONException The JSON is not a representation of correct captive portal data.
-     * @throws UnsupportedApiLevelException CaptivePortalData is not available on this API level.
      */
-    @RequiresApi(Build.VERSION_CODES.Q)
     @NonNull
-    public static CaptivePortalDataShim fromJson(JSONObject obj) throws JSONException,
-            UnsupportedApiLevelException {
-        if (!isSupported()) {
-            return com.android.networkstack.apishim.api29.CaptivePortalDataShimImpl.fromJson(obj);
-        }
-
+    public static CaptivePortalDataShim fromJson(JSONObject obj) throws JSONException {
         final long refreshTimeMs = System.currentTimeMillis();
         final long secondsRemaining = getLongOrDefault(obj, "seconds-remaining", -1L);
         final long millisRemaining = secondsRemaining <= Long.MAX_VALUE / 1000
@@ -81,10 +71,8 @@ public class CaptivePortalDataShimImpl
                 .build());
     }
 
-    @RequiresApi(Build.VERSION_CODES.Q)
-    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.R)
     public static boolean isSupported() {
-        return ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q);
+        return true;
     }
 
     private static long getLongOrDefault(JSONObject o, String key, long def) throws JSONException {
@@ -120,6 +108,18 @@ public class CaptivePortalDataShimImpl
     @Override
     public Uri getVenueInfoUrl() {
         return mData.getVenueInfoUrl();
+    }
+
+    @Override
+    public CharSequence getVenueFriendlyName() {
+        // Not supported in API level 30
+        return null;
+    }
+
+    @Override
+    public int getUserPortalUrlSource() {
+        // Not supported in API level 30
+        return ConstantsShim.CAPTIVE_PORTAL_DATA_SOURCE_OTHER;
     }
 
     @Override

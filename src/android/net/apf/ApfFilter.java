@@ -93,6 +93,7 @@ import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_DAD;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_SLLA_OPTION;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_TENTATIVE;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_ADDRESS;
+import static android.net.apf.ApfCounterTracker.getCounterValue;
 import static android.net.apf.BaseApfGenerator.MemorySlot;
 import static android.net.apf.BaseApfGenerator.Register.R0;
 import static android.net.apf.BaseApfGenerator.Register.R1;
@@ -2461,6 +2462,10 @@ public class ApfFilter implements AndroidPacketFilter {
                 rasToFilter.add(ra);
             }
 
+            // Increase the counter before we generate the program.
+            // This keeps the APF_PROGRAM_ID counter in sync with the program.
+            mNumProgramUpdates++;
+
             // Step 2: Actually generate the program
             gen = emitPrologueLocked();
             for (Ra ra : rasToFilter) {
@@ -2483,7 +2488,6 @@ public class ApfFilter implements AndroidPacketFilter {
         }
         mLastInstalledProgramMinLifetime = programMinLft;
         mLastInstalledProgram = program;
-        mNumProgramUpdates++;
         mMaxProgramSize = Math.max(mMaxProgramSize, program.length);
 
         if (VDBG) {
@@ -2861,14 +2865,19 @@ public class ApfFilter implements AndroidPacketFilter {
             return;
         }
         pw.println("Program updates: " + mNumProgramUpdates);
+        int filterAgeSeconds = secondsSinceBoot() - mLastTimeInstalledProgram;
         pw.println(String.format(
                 "Last program length %d, installed %ds ago, lifetime %ds",
-                mLastInstalledProgram.length, secondsSinceBoot() - mLastTimeInstalledProgram,
+                mLastInstalledProgram.length, filterAgeSeconds,
                 mLastInstalledProgramMinLifetime));
-
-        pw.print("Denylisted Ethertypes:");
-        for (int p : mEthTypeBlackList) {
-            pw.print(String.format(" %04x", p));
+        if (SdkLevel.isAtLeastV()) {
+            pw.print("Hardcoded Allowlisted Ethertypes:");
+            pw.println(" 0800(IPv4) 0806(ARP) 86DD(IPv6) 888E(EAPOL) 88B4(WAPI)");
+        } else {
+            pw.print("Denylisted Ethertypes:");
+            for (int p : mEthTypeBlackList) {
+                pw.print(String.format(" %04x", p));
+            }
         }
         pw.println();
         pw.println("RA filters:");
@@ -2930,16 +2939,61 @@ public class ApfFilter implements AndroidPacketFilter {
         } else {
             try {
                 Counter[] counters = Counter.class.getEnumConstants();
+                long counterFilterAgeSeconds =
+                        getCounterValue(mDataSnapshot, Counter.FILTER_AGE_SECONDS);
+                long counterApfProgramId =
+                        getCounterValue(mDataSnapshot, Counter.APF_PROGRAM_ID);
                 for (Counter c : Arrays.asList(counters).subList(1, counters.length)) {
-                    long value = ApfCounterTracker.getCounterValue(mDataSnapshot, c);
-                    // Only print non-zero counters
-                    if (value != 0) {
-                        pw.println(c.toString() + ": " + value);
+                    long value = getCounterValue(mDataSnapshot, c);
+
+                    String note = "";
+                    boolean checkValueIncreases = true;
+                    switch (c) {
+                        case FILTER_AGE_SECONDS:
+                            checkValueIncreases = false;
+                            if (value != counterFilterAgeSeconds) {
+                                note = " [ERROR: impossible]";
+                            } else if (counterApfProgramId < mNumProgramUpdates) {
+                                note = " [IGNORE: obsolete program]";
+                            } else if (value > filterAgeSeconds) {
+                                long offset = value - filterAgeSeconds;
+                                note = " [ERROR: in the future by " + offset + "s]";
+                            }
+                            break;
+                        case FILTER_AGE_16384THS:
+                            if (mApfVersionSupported > BaseApfGenerator.APF_VERSION_4) {
+                                checkValueIncreases = false;
+                                if (value % 16384 == 0) {
+                                    // valid, but unlikely
+                                    note = " [INFO: zero fractional portion]";
+                                }
+                                if (value / 16384 != counterFilterAgeSeconds) {
+                                    // should not be able to happen
+                                    note = " [ERROR: mismatch with FILTER_AGE_SECONDS]";
+                                }
+                            } else if (value != 0) {
+                                note = " [UNEXPECTED: APF<=4, yet non-zero]";
+                            }
+                            break;
+                        case APF_PROGRAM_ID:
+                            if (value != counterApfProgramId) {
+                                note = " [ERROR: impossible]";
+                            } else if (value < mNumProgramUpdates) {
+                                note = " [WARNING: OBSOLETE PROGRAM]";
+                            } else if (value > mNumProgramUpdates) {
+                                note = " [ERROR: INVALID FUTURE ID]";
+                            }
+                            break;
+                        default:
+                            break;
                     }
 
-                    final Set<Counter> skipCheckCounters = Set.of(FILTER_AGE_SECONDS,
-                            FILTER_AGE_16384THS);
-                    if (!skipCheckCounters.contains(c)) {
+                    // Only print non-zero counters (or those with a note)
+                    if (value != 0 || !note.equals("")) {
+                        pw.println(c.toString() + ": " + value + note);
+                    }
+
+                    if (checkValueIncreases) {
                         // If the counter's value decreases, it may have been cleaned up or there
                         // may be a bug.
                         long oldValue = mApfCounterTracker.getCounters().getOrDefault(c, 0L);

@@ -104,7 +104,6 @@ import com.android.net.module.util.NetworkStackConstants;
 import com.android.net.module.util.PacketReader;
 import com.android.net.module.util.arp.ArpPacket;
 import com.android.networkstack.R;
-import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.apishim.SocketUtilsShimImpl;
 import com.android.networkstack.metrics.IpProvisioningMetrics;
 import com.android.networkstack.util.NetworkStackUtils;
@@ -308,9 +307,7 @@ public class DhcpClient extends StateMachine {
         final ByteArrayOutputStream params =
                 new ByteArrayOutputStream(DEFAULT_REQUESTED_PARAMS.length + numOptionalParams);
         params.write(DEFAULT_REQUESTED_PARAMS, 0, DEFAULT_REQUESTED_PARAMS.length);
-        if (isCapportApiEnabled()) {
-            params.write(DHCP_CAPTIVE_PORTAL);
-        }
+        params.write(DHCP_CAPTIVE_PORTAL);
         params.write(DHCP_IPV6_ONLY_PREFERRED);
         // Customized DHCP options to be put in PRL.
         for (DhcpOption option : mConfiguration.options) {
@@ -321,10 +318,6 @@ public class DhcpClient extends StateMachine {
             params.write(DHCP_DOMAIN_SEARCHLIST);
         }
         return params.toByteArray();
-    }
-
-    private static boolean isCapportApiEnabled() {
-        return CaptivePortalDataShimImpl.isSupported();
     }
 
     // DHCP flag that means "yes, we support unicast."
@@ -657,7 +650,6 @@ public class DhcpClient extends StateMachine {
 
     private byte[] getOptionsToSkip() {
         final ByteArrayOutputStream optionsToSkip = new ByteArrayOutputStream(2);
-        if (!isCapportApiEnabled()) optionsToSkip.write(DHCP_CAPTIVE_PORTAL);
         if (!mConfiguration.isWifiManagedProfile) {
             optionsToSkip.write(DHCP_DOMAIN_SEARCHLIST);
         }

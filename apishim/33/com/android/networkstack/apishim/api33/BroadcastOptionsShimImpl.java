@@ -31,7 +31,7 @@ import com.android.networkstack.apishim.common.BroadcastOptionsShim;
  */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 public class BroadcastOptionsShimImpl
-        extends com.android.networkstack.apishim.api29.BroadcastOptionsShimImpl {
+        extends com.android.networkstack.apishim.api30.BroadcastOptionsShimImpl {
     protected BroadcastOptionsShimImpl(@NonNull BroadcastOptions options) {
         super(options);
     }
@@ -42,7 +42,7 @@ public class BroadcastOptionsShimImpl
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     public static BroadcastOptionsShim newInstance(@NonNull BroadcastOptions options) {
         if (!isAtLeastT()) {
-            return com.android.networkstack.apishim.api29.BroadcastOptionsShimImpl.newInstance(
+            return com.android.networkstack.apishim.api30.BroadcastOptionsShimImpl.newInstance(
                     options);
         }
         return new BroadcastOptionsShimImpl(options);

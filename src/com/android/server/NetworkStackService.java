@@ -19,6 +19,7 @@ package com.android.server;
 import static android.net.dhcp.IDhcpServer.STATUS_INVALID_ARGUMENT;
 import static android.net.dhcp.IDhcpServer.STATUS_SUCCESS;
 import static android.net.dhcp.IDhcpServer.STATUS_UNKNOWN_ERROR;
+import static android.net.util.RawPacketTracker.MAX_CAPTURE_TIME_MS;
 import static android.net.util.RawSocketUtils.sendRawPacketDownStream;
 
 import static com.android.net.module.util.DeviceConfigUtils.getResBooleanConfig;
@@ -50,6 +51,8 @@ import android.net.ip.IIpClientCallbacks;
 import android.net.ip.IpClient;
 import android.net.networkstack.aidl.NetworkMonitorParameters;
 import android.net.shared.PrivateDnsConfig;
+import android.net.util.RawPacketTracker;
+import android.net.util.RawSocketUtils;
 import android.os.Build;
 import android.os.HandlerThread;
 import android.os.IBinder;
@@ -67,6 +70,7 @@ import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.IndentingPrintWriter;
 import com.android.modules.utils.BasicShellCommandHandler;
 import com.android.net.module.util.DeviceConfigUtils;
+import com.android.net.module.util.HandlerUtils;
 import com.android.net.module.util.SharedLog;
 import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
@@ -90,6 +94,8 @@ import java.util.ListIterator;
 import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Android service used to start the network stack when bound to via an intent.
@@ -99,6 +105,7 @@ import java.util.TreeSet;
 public class NetworkStackService extends Service {
     private static final String TAG = NetworkStackService.class.getSimpleName();
     private static NetworkStackConnector sConnector;
+    private static final RawPacketTracker sRawPacketTracker = new RawPacketTracker();
 
     /**
      * Create a binder connector for the system server to communicate with the network stack.
@@ -523,6 +530,8 @@ public class NetworkStackService extends Service {
         }
 
         private class ShellCmd extends BasicShellCommandHandler {
+            private static final long MAX_CAPTURE_CMD_WAITING_TIMEOUT_MS = 30_000L;
+
             @Override
             public int onCommand(String cmd) {
                 if (cmd == null) {
@@ -567,6 +576,14 @@ public class NetworkStackService extends Service {
                         }
                         return 0;
                     }
+                    case "capture":
+                        // Usage: cmd network_stack capture <cmd>
+                        HandlerUtils.runWithScissorsForDump(
+                                sRawPacketTracker.getHandler(),
+                                () -> captureShellCommand(mContext, peekRemainingArgs()),
+                                MAX_CAPTURE_CMD_WAITING_TIMEOUT_MS
+                        );
+                        return 0;
                     case "apf":
                         // Usage: cmd network_stack apf <iface> <cmd>
                         final String iface = getNextArg();
@@ -609,6 +626,18 @@ public class NetworkStackService extends Service {
                 pw.println("      to tethering downstream for security considerations.");
                 pw.println("    <packet_in_hex>: A valid hexadecimal representation of ");
                 pw.println("      a packet starting from L2 header.");
+                pw.println("  capture <cmd>");
+                pw.println("    APF utility commands for multi-devices tests.");
+                pw.println("    start <interface>");
+                pw.println("      start capture packets in the received buffer.");
+                pw.println("      The capture is up to 300 sec, then it will stop.");
+                pw.println("      <interface>: Target interface name, note that this is limited");
+                pw.println("        to tethering downstream for security considerations.");
+                pw.println("    stop <interface>");
+                pw.println("      stop capture packets and clear the received buffer.");
+                pw.println("    matched-packet-counts <interface> <pkt-hex-string>");
+                pw.println("      the <pkt-hex-string> starts from ether header.");
+                pw.println("      Expect to do full packet match.");
                 pw.println("  apf <iface> <cmd>");
                 pw.println("    APF utility commands for integration tests.");
                 pw.println("    <iface>: the network interface the provided command operates on.");
@@ -627,6 +656,73 @@ public class NetworkStackService extends Service {
                 pw.println("        Format: <apfVersion>,<maxProgramSize>,<packetFormat>");
                 pw.println("      read");
                 pw.println("        reads and returns the current state of APF memory.");
+            }
+
+            private void captureShellCommand(
+                    @NonNull Context context,
+                    @NonNull String[] args
+            ) {
+                if (args.length < 2) {
+                    throw new IllegalArgumentException("Incorrect number of arguments");
+                }
+
+                final String cmd = args[0];
+                final String ifaceName = args[1];
+                try {
+                    RawSocketUtils.enforceTetheredInterface(context, ifaceName);
+                } catch (ExecutionException
+                         | InterruptedException
+                         | TimeoutException
+                         | SecurityException e) {
+                    throw new RuntimeException(e.getMessage());
+                }
+
+                final PrintWriter pw = getOutPrintWriter();
+                switch(cmd) {
+                    case "start":
+                        // Usage : cmd network_stack capture start <interface>
+                        if (args.length != 2) {
+                            throw new IllegalArgumentException("Incorrect number of arguments");
+                        }
+
+                        sRawPacketTracker.startCapture(ifaceName, MAX_CAPTURE_TIME_MS);
+                        pw.println("success");
+                        break;
+                    case "matched-packet-counts":
+                        // Usage : cmd network_stack capture matched-packet-counts
+                        //         <interface> <packet-in-hex>
+                        // for example, there is an usage to get matched arp reply packet count
+                        // in hex string format on the wlan0 interface
+                        // cmd network_stack capture matched-packet-counts wlan0 \
+                        // "00010203040501020304050608060001080006040002010203040506c0a80101" +
+                        // "000102030405c0a80102"
+                        if (args.length != 3) {
+                            throw new IllegalArgumentException("Incorrect number of arguments");
+                        }
+
+                        final String packetInHex = args[2];
+
+                        // limit the input hex string up to 3000 (1500 bytes)
+                        if (packetInHex.length() > 3000) {
+                            throw new IllegalArgumentException("Packet Hex String over the limit");
+                        }
+
+                        final int pktCnt =
+                                sRawPacketTracker.getMatchedPacketCount(ifaceName, packetInHex);
+                        pw.println(pktCnt);
+                        break;
+                    case "stop":
+                        // Usage : cmd network_stack capture stop <interface>
+                        if (args.length != 2) {
+                            throw new IllegalArgumentException("Incorrect number of arguments");
+                        }
+
+                        sRawPacketTracker.stopCapture(ifaceName);
+                        pw.println("success");
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Invalid apf command: " + cmd);
+                }
             }
         }
 

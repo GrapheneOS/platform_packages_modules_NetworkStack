@@ -275,11 +275,13 @@ java_defaults {
     ],
     libs: [
         "error_prone_annotations",
+        "framework-annotations-lib",
         "unsupportedappusage",
     ],
     static_libs: [
         "androidx.annotation_annotation",
         "modules-utils-build_system",
+        "modules-utils-expresslog",
         "modules-utils-preconditions",
         "modules-utils-shell-command-handler",
         "modules-utils-statemachine",
