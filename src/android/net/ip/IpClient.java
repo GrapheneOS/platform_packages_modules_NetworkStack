@@ -44,7 +44,6 @@ import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_APF_CAPABILITI
 import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_APF_DATA_SNAPSHOT;
 import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_HTTP_PROXY;
 import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_L2INFORMATION;
-import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_L2KEY_CLUSTER;
 import static android.net.ip.IpClient.IpClientCommands.CMD_UPDATE_TCP_BUFFER_SIZES;
 import static android.net.ip.IpClient.IpClientCommands.EVENT_DHCPACTION_TIMEOUT;
 import static android.net.ip.IpClient.IpClientCommands.EVENT_IPV6_AUTOCONF_TIMEOUT;
@@ -134,7 +133,6 @@ import android.net.shared.Layer2Information;
 import android.net.shared.ProvisioningConfiguration;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
 import android.net.shared.ProvisioningConfiguration.ScanResultInfo.InformationElement;
-import android.os.Build;
 import android.os.ConditionVariable;
 import android.os.Handler;
 import android.os.IBinder;
@@ -152,7 +150,6 @@ import android.text.TextUtils;
 import android.text.format.DateUtils;
 import android.util.LocalLog;
 import android.util.Log;
-import android.util.Pair;
 import android.util.SparseArray;
 
 import androidx.annotation.NonNull;
@@ -601,16 +598,15 @@ public class IpClient extends StateMachine {
         static final int EVENT_READ_PACKET_FILTER_COMPLETE = 12;
         static final int CMD_ADD_KEEPALIVE_PACKET_FILTER_TO_APF = 13;
         static final int CMD_REMOVE_KEEPALIVE_PACKET_FILTER_FROM_APF = 14;
-        static final int CMD_UPDATE_L2KEY_CLUSTER = 15;
-        static final int CMD_COMPLETE_PRECONNECTION = 16;
-        static final int CMD_UPDATE_L2INFORMATION = 17;
-        static final int CMD_SET_DTIM_MULTIPLIER_AFTER_DELAY = 18;
-        static final int CMD_UPDATE_APF_CAPABILITIES = 19;
-        static final int EVENT_IPV6_AUTOCONF_TIMEOUT = 20;
-        static final int CMD_UPDATE_APF_DATA_SNAPSHOT = 21;
-        static final int EVENT_NUD_FAILURE_QUERY_TIMEOUT = 22;
-        static final int EVENT_NUD_FAILURE_QUERY_SUCCESS = 23;
-        static final int EVENT_NUD_FAILURE_QUERY_FAILURE = 24;
+        static final int CMD_COMPLETE_PRECONNECTION = 15;
+        static final int CMD_UPDATE_L2INFORMATION = 16;
+        static final int CMD_SET_DTIM_MULTIPLIER_AFTER_DELAY = 17;
+        static final int CMD_UPDATE_APF_CAPABILITIES = 18;
+        static final int EVENT_IPV6_AUTOCONF_TIMEOUT = 19;
+        static final int CMD_UPDATE_APF_DATA_SNAPSHOT = 20;
+        static final int EVENT_NUD_FAILURE_QUERY_TIMEOUT = 21;
+        static final int EVENT_NUD_FAILURE_QUERY_SUCCESS = 22;
+        static final int EVENT_NUD_FAILURE_QUERY_FAILURE = 23;
         // Internal commands to use instead of trying to call transitionTo() inside
         // a given State's enter() method. Calling transitionTo() from enter/exit
         // encounters a Log.wtf() that can cause trouble on eng builds.
@@ -633,11 +629,6 @@ public class IpClient extends StateMachine {
     // Settings and default values.
     private static final int MAX_LOG_RECORDS = 500;
     private static final int MAX_PACKET_RECORDS = 100;
-
-    @VisibleForTesting
-    static final String CONFIG_MIN_RDNSS_LIFETIME = "ipclient_min_rdnss_lifetime";
-    private static final int DEFAULT_MIN_RDNSS_LIFETIME =
-            ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q) ? 120 : 0;
 
     @VisibleForTesting
     static final String CONFIG_ACCEPT_RA_MIN_LFT = "ipclient_accept_ra_min_lft";
@@ -798,9 +789,6 @@ public class IpClient extends StateMachine {
     private final Set<IpPrefix> mDelegatedPrefixes = new HashSet<>();
     @Nullable
     private final DevicePolicyManager mDevicePolicyManager;
-
-    // Ignore nonzero RDNSS option lifetimes below this value. 0 = disabled.
-    private final int mMinRdnssLifetimeSec;
 
     // Ignore any nonzero RA section with lifetime below this value.
     private final int mAcceptRaMinLft;
@@ -1063,8 +1051,6 @@ public class IpClient extends StateMachine {
         mDhcp6PrefixDelegationEnabled = mDependencies.isFeatureEnabled(mContext,
                 IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION);
 
-        mMinRdnssLifetimeSec = mDependencies.getDeviceConfigPropertyInt(
-                CONFIG_MIN_RDNSS_LIFETIME, DEFAULT_MIN_RDNSS_LIFETIME);
         mAcceptRaMinLft = mDependencies.getDeviceConfigPropertyInt(CONFIG_ACCEPT_RA_MIN_LFT,
                 DEFAULT_ACCEPT_RA_MIN_LFT);
         mApfCounterPollingIntervalMs = mDependencies.getDeviceConfigPropertyInt(
@@ -1095,7 +1081,7 @@ public class IpClient extends StateMachine {
                 DEFAULT_NUD_FAILURE_COUNT_WEEKLY_THRESHOLD);
 
         IpClientLinkObserver.Configuration config = new IpClientLinkObserver.Configuration(
-                mMinRdnssLifetimeSec, mPopulateLinkAddressLifetime);
+                mAcceptRaMinLft, mPopulateLinkAddressLifetime);
 
         mLinkObserver = new IpClientLinkObserver(
                 mContext, getHandler(),
@@ -1205,7 +1191,8 @@ public class IpClient extends StateMachine {
         @Override
         public void setL2KeyAndGroupHint(String l2Key, String cluster) {
             enforceNetworkStackCallingPermission();
-            IpClient.this.setL2KeyAndCluster(l2Key, cluster);
+            // This method is not supported anymore. The caller should call
+            // #updateLayer2Information() instead.
         }
         @Override
         public void setTcpBufferSizes(String tcpBufferSizes) {
@@ -1396,18 +1383,6 @@ public class IpClient extends StateMachine {
      */
     public void setTcpBufferSizes(String tcpBufferSizes) {
         sendMessage(CMD_UPDATE_TCP_BUFFER_SIZES, tcpBufferSizes);
-    }
-
-    /**
-     * Set the L2 key and cluster for storing info into the memory store.
-     *
-     * This method is only supported on Q devices. For R or above releases,
-     * caller should call #updateLayer2Information() instead.
-     */
-    public void setL2KeyAndCluster(String l2Key, String cluster) {
-        if (!ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
-            sendMessage(CMD_UPDATE_L2KEY_CLUSTER, new Pair<>(l2Key, cluster));
-        }
     }
 
     /**
@@ -2748,7 +2723,7 @@ public class IpClient extends StateMachine {
         apfConfig.multicastFilter = mMulticastFiltering;
         // Get the Configuration for ApfFilter from Context
         // Resource settings were moved from ApfCapabilities APIs to NetworkStack resources in S
-        if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.R)) {
+        if (ShimUtils.isAtLeastS()) {
             final Resources res = mContext.getResources();
             apfConfig.ieee802_3Filter = res.getBoolean(R.bool.config_apfDrop802_3Frames);
             apfConfig.ethTypeBlackList = res.getIntArray(R.array.config_apfEthTypeDenyList);
@@ -2757,7 +2732,9 @@ public class IpClient extends StateMachine {
             apfConfig.ethTypeBlackList = ApfCapabilities.getApfEtherTypeBlackList();
         }
 
-        apfConfig.minRdnssLifetimeSec = mMinRdnssLifetimeSec;
+        // The RDNSS option is not processed by the kernel, so lifetime filtering
+        // can occur independent of kernel support for accept_ra_min_lft.
+        apfConfig.minRdnssLifetimeSec = mAcceptRaMinLft;
         // Check the feature flag first before reading IPv6 sysctl, which can prevent from
         // triggering a potential kernel bug about the sysctl.
         // TODO: add unit test to check if the setIpv6Sysctl() is called or not.
@@ -2847,13 +2824,6 @@ public class IpClient extends StateMachine {
                     mHttpProxy = (ProxyInfo) msg.obj;
                     handleLinkPropertiesUpdate(NO_CALLBACKS);
                     break;
-
-                case CMD_UPDATE_L2KEY_CLUSTER: {
-                    final Pair<String, String> args = (Pair<String, String>) msg.obj;
-                    mL2Key = args.first;
-                    mCluster = args.second;
-                    break;
-                }
 
                 case CMD_SET_MULTICAST_FILTER:
                     mMulticastFiltering = (boolean) msg.obj;
@@ -3211,20 +3181,6 @@ public class IpClient extends StateMachine {
                 case CMD_STOP:
                     transitionToStoppingState(DisconnectCode.forNumber(msg.arg1));
                     break;
-
-                case CMD_UPDATE_L2KEY_CLUSTER: {
-                    final Pair<String, String> args = (Pair<String, String>) msg.obj;
-                    mL2Key = args.first;
-                    mCluster = args.second;
-                    // TODO : attributes should be saved to the memory store with
-                    // these new values if they differ from the previous ones.
-                    // If the state machine is in pure StartedState, then the values to input
-                    // are not known yet and should be updated when the LinkProperties are updated.
-                    // If the state machine is in RunningState (which is a child of StartedState)
-                    // then the next NUD check should be used to store the new values to avoid
-                    // inputting current values for what may be a different L3 network.
-                    break;
-                }
 
                 case CMD_UPDATE_L2INFORMATION:
                     handleUpdateL2Information((Layer2InformationParcelable) msg.obj);

@@ -53,7 +53,6 @@ import android.net.networkstack.aidl.NetworkMonitorParameters;
 import android.net.shared.PrivateDnsConfig;
 import android.net.util.RawPacketTracker;
 import android.net.util.RawSocketUtils;
-import android.os.Build;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
@@ -74,7 +73,6 @@ import com.android.net.module.util.HandlerUtils;
 import com.android.net.module.util.SharedLog;
 import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
-import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.ipmemorystore.IpMemoryStoreService;
 import com.android.server.connectivity.NetworkMonitor;
 import com.android.server.util.PermissionUtil;
@@ -208,7 +206,6 @@ public class NetworkStackService extends Service {
         @GuardedBy("mIpClients")
         private final ArrayList<WeakReference<IpClient>> mIpClients = new ArrayList<>();
         private final IpMemoryStoreService mIpMemoryStoreService;
-        @Nullable
         private final NetworkStackNotifier mNotifier;
 
         private static final int MAX_VALIDATION_LOGS = 10;
@@ -303,15 +300,10 @@ public class NetworkStackService extends Service {
             mNetd = INetd.Stub.asInterface(
                     (IBinder) context.getSystemService(Context.NETD_SERVICE));
             mIpMemoryStoreService = mDeps.makeIpMemoryStoreService(context);
-            // NetworkStackNotifier only shows notifications relevant for API level > Q
-            if (ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
-                final HandlerThread notifierThread = new HandlerThread(
-                        NetworkStackNotifier.class.getSimpleName());
-                notifierThread.start();
-                mNotifier = mDeps.makeNotifier(context, notifierThread.getLooper());
-            } else {
-                mNotifier = null;
-            }
+            final HandlerThread notifierThread = new HandlerThread(
+                    NetworkStackNotifier.class.getSimpleName());
+            notifierThread.start();
+            mNotifier = mDeps.makeNotifier(context, notifierThread.getLooper());
 
             int netdVersion;
             String netdHash;
@@ -730,11 +722,6 @@ public class NetworkStackService extends Service {
          * Dump version information of the module and detected system version.
          */
         private void dumpVersion(@NonNull PrintWriter fout) {
-            if (!ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q)) {
-                dumpVersionNumberOnly(fout);
-                return;
-            }
-
             fout.println("LocalInterface:" + this.VERSION + ":" + this.HASH);
             synchronized (mAidlVersions) {
                 // Sort versions for deterministic order in output

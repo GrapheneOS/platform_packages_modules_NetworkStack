@@ -44,13 +44,6 @@ public final class ShimUtils {
     }
 
     /**
-     * Check whether the device supports in-development or final R networking APIs.
-     */
-    public static boolean isAtLeastR() {
-        return isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q);
-    }
-
-    /**
      * Check whether the device supports in-development or final S networking APIs.
      */
     public static boolean isAtLeastS() {

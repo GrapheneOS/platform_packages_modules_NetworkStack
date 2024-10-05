@@ -531,19 +531,20 @@ public class IpClientTest {
         final IpClient ipc = makeIpClient(iface);
         final String l2Key = TEST_L2KEY;
         final String cluster = TEST_CLUSTER;
+        final MacAddress bssid = MacAddress.fromString(TEST_BSSID);
 
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIPv4()
                 .withoutIpReachabilityMonitor()
                 .withInitialConfiguration(
                         conf(links(TEST_LOCAL_ADDRESSES), prefixes(TEST_PREFIXES), ips()))
+                .withLayer2Information(new Layer2Information(l2Key, cluster, bssid))
                 .build();
 
         ipc.startProvisioning(config);
         verify(mCb, timeout(TEST_TIMEOUT_MS).times(1)).setNeighborDiscoveryOffload(true);
         verify(mCb, timeout(TEST_TIMEOUT_MS).times(1)).setFallbackMulticastFilter(false);
         verify(mCb, never()).onProvisioningFailure(any());
-        ipc.setL2KeyAndCluster(l2Key, cluster);
 
         for (String addr : TEST_LOCAL_ADDRESSES) {
             String[] parts = addr.split("/");
