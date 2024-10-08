@@ -128,6 +128,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import android.app.AlarmManager;
@@ -6145,6 +6146,40 @@ public abstract class IpClientIntegrationTestCommon {
                 false /* expectNeighborLost */);
         verify(mIpMemoryStore, never()).storeNetworkEvent(any(), anyLong(), anyLong(),
                 eq(IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ORGANIC), any());
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION, enabled = false)
+    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION, enabled = false)
+    @Flag(name = IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION, enabled = true)
+    @SignatureRequiredTest(reason = "need to delete cluster from real db in tearDown")
+    public void testIgnoreNudFailuresStopWritingEvents() throws Exception {
+        // Add enough failures that NUD failures are ignored.
+        long when = (long) (System.currentTimeMillis() - SIX_HOURS_IN_MS * 1.1);
+        long expiry = when + ONE_WEEK_IN_MS;
+        storeNudFailureEvents(when, expiry, 10, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ORGANIC);
+
+        // Add enough recent failures to almost, but not quite reach the 6-hour threshold.
+        when = (long) (System.currentTimeMillis() - SIX_HOURS_IN_MS * 0.1);
+        expiry = when + ONE_WEEK_IN_MS;
+        storeNudFailureEvents(when, expiry, 9, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ORGANIC);
+
+        prepareIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER,
+                ROUTER_LINK_LOCAL);
+
+        // The first new failure is ignored and written to the database.
+        // The total is 10 failures in the last 6 hours.
+        sendPacketToUnreachableNeighbor(ipv6Addr(IPV6_OFF_LINK_DNS_SERVER));
+        expectAndDropMulticastNses(ROUTER_LINK_LOCAL, false /* expectNeighborLost */);
+        verify(mIpMemoryStore).storeNetworkEvent(any(), anyLong(), anyLong(),
+                eq(IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ORGANIC), any());
+
+        // The second new failure is ignored, but not written.
+        reset(mIpMemoryStore);
+        sendPacketToUnreachableNeighbor(ipv6Addr(IPV6_ON_LINK_DNS_SERVER));
+        expectAndDropMulticastNses(ipv6Addr(IPV6_ON_LINK_DNS_SERVER),
+                false /* expectNeighborLost */);
+        verifyNoMoreInteractions(mIpMemoryStore);
     }
 
     @Test
