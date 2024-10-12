@@ -128,6 +128,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import android.app.AlarmManager;
@@ -4344,21 +4345,24 @@ public abstract class IpClientIntegrationTestCommon {
         final Inet6Address dnsServerIp = ipv6Addr(dnsServer);
         final LinkProperties lp = performDualStackProvisioning(ra, dnsServerIp);
         runAsShell(MANAGE_TEST_NETWORKS, () -> createTestNetworkAgentAndRegister(lp));
+    }
 
-        // Send a UDP packet to IPv6 DNS server to trigger address resolution process for IPv6
-        // on-link DNS server or default router(if the target is default router, we should pass
-        // in an IPv6 off-link DNS server such as 2001:db8:4860:4860::64).
+    /**
+     * Send a UDP packet to dstIp to trigger address resolution for targetIp, and possibly expect a
+     * neighbor lost callback.
+     * If dstIp is on-link, then dstIp and targetIp should be the same.
+     * If dstIp is off-link, then targetIp should be the IPv6 default router.
+     * The ND cache should not have an entry for targetIp.
+     */
+    private void sendPacketToUnreachableNeighbor(Inet6Address dstIp) throws Exception {
         final Random random = new Random();
         final byte[] data = new byte[100];
         random.nextBytes(data);
-        sendUdpPacketToNetwork(mNetworkAgent.getNetwork(), dnsServerIp, 1234 /* port */, data);
+        sendUdpPacketToNetwork(mNetworkAgent.getNetwork(), dstIp, 1234 /* port */, data);
     }
 
-    private void runIpReachabilityMonitorAddressResolutionTest(final String dnsServer,
-            final Inet6Address targetIp,
-            final boolean expectNeighborLost) throws Exception {
-        prepareIpReachabilityMonitorAddressResolutionTest(dnsServer, targetIp);
-
+    private void expectAndDropMulticastNses(Inet6Address targetIp, boolean expectNeighborLost)
+            throws Exception {
         // Wait for the multicast NSes but never respond to them, that results in the on-link
         // DNS gets lost and onReachabilityLost callback will be invoked.
         final List<NeighborSolicitation> nsList = new ArrayList<NeighborSolicitation>();
@@ -4380,6 +4384,14 @@ public abstract class IpClientIntegrationTestCommon {
         } else {
             assertNeverNotifyNeighborLost();
         }
+    }
+
+    private void runIpReachabilityMonitorAddressResolutionTest(final String dnsServer,
+            final Inet6Address targetIp,
+            final boolean expectNeighborLost) throws Exception {
+        prepareIpReachabilityMonitorAddressResolutionTest(dnsServer, targetIp);
+        sendPacketToUnreachableNeighbor(ipv6Addr(dnsServer));
+        expectAndDropMulticastNses(targetIp, expectNeighborLost);
     }
 
     @Test
@@ -4472,6 +4484,7 @@ public abstract class IpClientIntegrationTestCommon {
     private void runIpReachabilityMonitorEverReachableIpv6NeighborTest(final String dnsServer,
             final Inet6Address targetIp) throws Exception {
         prepareIpReachabilityMonitorAddressResolutionTest(dnsServer, targetIp);
+        sendPacketToUnreachableNeighbor(ipv6Addr(dnsServer));
 
         // Simulate the default router/DNS was reachable by responding to multicast NS(not for DAD).
         NeighborSolicitation ns;
@@ -6174,6 +6187,40 @@ public abstract class IpClientIntegrationTestCommon {
                 false /* expectNeighborLost */);
         verify(mIpMemoryStore, never()).storeNetworkEvent(any(), anyLong(), anyLong(),
                 eq(IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ORGANIC), any());
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION, enabled = false)
+    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION, enabled = false)
+    @Flag(name = IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION, enabled = true)
+    @SignatureRequiredTest(reason = "need to delete cluster from real db in tearDown")
+    public void testIgnoreNudFailuresStopWritingEvents() throws Exception {
+        // Add enough failures that NUD failures are ignored.
+        long when = (long) (System.currentTimeMillis() - SIX_HOURS_IN_MS * 1.1);
+        long expiry = when + ONE_WEEK_IN_MS;
+        storeNudFailureEvents(when, expiry, 10, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ORGANIC);
+
+        // Add enough recent failures to almost, but not quite reach the 6-hour threshold.
+        when = (long) (System.currentTimeMillis() - SIX_HOURS_IN_MS * 0.1);
+        expiry = when + ONE_WEEK_IN_MS;
+        storeNudFailureEvents(when, expiry, 9, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ORGANIC);
+
+        prepareIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER,
+                ROUTER_LINK_LOCAL);
+
+        // The first new failure is ignored and written to the database.
+        // The total is 10 failures in the last 6 hours.
+        sendPacketToUnreachableNeighbor(ipv6Addr(IPV6_OFF_LINK_DNS_SERVER));
+        expectAndDropMulticastNses(ROUTER_LINK_LOCAL, false /* expectNeighborLost */);
+        verify(mIpMemoryStore).storeNetworkEvent(any(), anyLong(), anyLong(),
+                eq(IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ORGANIC), any());
+
+        // The second new failure is ignored, but not written.
+        reset(mIpMemoryStore);
+        sendPacketToUnreachableNeighbor(ipv6Addr(IPV6_ON_LINK_DNS_SERVER));
+        expectAndDropMulticastNses(ipv6Addr(IPV6_ON_LINK_DNS_SERVER),
+                false /* expectNeighborLost */);
+        verifyNoMoreInteractions(mIpMemoryStore);
     }
 
     @Test
