@@ -58,7 +58,7 @@ import com.android.net.module.util.structs.PrefixInformationOption
 import com.android.networkstack.util.NetworkStackUtils
 import com.android.testutils.ArpRequestFilter
 import com.android.testutils.IPv4UdpFilter
-import com.android.testutils.TapPacketReader
+import com.android.testutils.PollPacketReader
 import java.io.FileDescriptor
 import java.net.Inet4Address
 import java.net.Inet6Address
@@ -94,7 +94,7 @@ class NetworkStackUtilsIntegrationTest {
     private val readerHandler = HandlerThread(
             NetworkStackUtilsIntegrationTest::class.java.simpleName)
     private lateinit var iface: TestNetworkInterface
-    private lateinit var reader: TapPacketReader
+    private lateinit var reader: PollPacketReader
 
     @Before
     fun setUp() {
@@ -106,7 +106,7 @@ class NetworkStackUtilsIntegrationTest {
             inst.uiAutomation.dropShellPermissionIdentity()
         }
         readerHandler.start()
-        reader = TapPacketReader(readerHandler.threadHandler, iface.fileDescriptor.fileDescriptor,
+        reader = PollPacketReader(readerHandler.threadHandler, iface.fileDescriptor.fileDescriptor,
                 1500 /* maxPacketSize */)
         readerHandler.threadHandler.post { reader.start() }
     }

@@ -2355,7 +2355,7 @@ public class ApfTest {
         mCurrentTimeMs += timePassedSeconds * DateUtils.SECOND_IN_MILLIS;
         doReturn(mCurrentTimeMs).when(mDependencies).elapsedRealtime();
         synchronized (apfFilter) {
-            apfFilter.installNewProgramLocked();
+            apfFilter.installNewProgram();
         }
         byte[] program = consumeInstalledProgram(mIpClientCb, 1 /* installCnt */);
         verifyRaLifetime(program, basePacket, routerLifetime, timePassedSeconds);
@@ -2365,7 +2365,7 @@ public class ApfTest {
                 ((routerLifetime / 6) - timePassedSeconds - 1) * DateUtils.SECOND_IN_MILLIS;
         doReturn(mCurrentTimeMs).when(mDependencies).elapsedRealtime();
         synchronized (apfFilter) {
-            apfFilter.installNewProgramLocked();
+            apfFilter.installNewProgram();
         }
         program = consumeInstalledProgram(mIpClientCb, 1 /* installCnt */);
         assertDrop(program, basePacket.array());
@@ -2373,7 +2373,7 @@ public class ApfTest {
         mCurrentTimeMs += DateUtils.SECOND_IN_MILLIS;
         doReturn(mCurrentTimeMs).when(mDependencies).elapsedRealtime();
         synchronized (apfFilter) {
-            apfFilter.installNewProgramLocked();
+            apfFilter.installNewProgram();
         }
         program = consumeInstalledProgram(mIpClientCb, 1 /* installCnt */);
         assertPass(program, basePacket.array());
@@ -2810,7 +2810,7 @@ public class ApfTest {
         verify(mNetworkQuirkMetrics).statsWrite();
         reset(mNetworkQuirkMetrics);
         synchronized (apfFilter) {
-            apfFilter.installNewProgramLocked();
+            apfFilter.installNewProgram();
         }
         verify(mNetworkQuirkMetrics).setEvent(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
         verify(mNetworkQuirkMetrics).statsWrite();
@@ -2836,12 +2836,12 @@ public class ApfTest {
     public void testGenerateApfProgramException() {
         final ApfConfiguration config = getDefaultConfig();
         ApfFilter apfFilter = getApfFilter(config);
-        // Simulate exception during installNewProgramLocked() by mocking
+        // Simulate exception during installNewProgram() by mocking
         // mDependencies.elapsedRealtime() to throw an exception (this method doesn't throw in
         // real-world scenarios).
         doThrow(new IllegalStateException("test exception")).when(mDependencies).elapsedRealtime();
         synchronized (apfFilter) {
-            apfFilter.installNewProgramLocked();
+            apfFilter.installNewProgram();
         }
         verify(mNetworkQuirkMetrics).setEvent(NetworkQuirkEvent.QE_APF_GENERATE_FILTER_EXCEPTION);
         verify(mNetworkQuirkMetrics).statsWrite();
