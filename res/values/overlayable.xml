@@ -46,7 +46,8 @@
             <!-- Configuration value for DhcpResults -->
             <item type="array" name="config_default_dns_servers"/>
             <!-- Configuration for including DHCP client hostname option.
-            If this option is true, client hostname set in Settings.Global.DEVICE_NAME will be
+            If this option is true, client hostname set in Settings.Global.DEVICE_NAME
+            (default value, if config_dhcp_client_hostname_preferred_props is not set) will be
             included in DHCPDISCOVER/DHCPREQUEST, otherwise, the DHCP hostname option will not
             be sent. RFC952 and RFC1123 stipulates an valid hostname should be only comprised of
             'a-z', 'A-Z' and '-', and the length should be up to 63 octets or less (RFC1035#2.3.4),
@@ -55,6 +56,17 @@
             random number and etc.
             -->
             <item type="bool" name="config_dhcp_client_hostname"/>
+            <!-- Customized preferred properties for filling DHCP client hostname option,
+            replacing the default device name (Dependent on config_dhcp_client_hostname is true).
+            If this value is set, the DHCP hostname option will be filled in with the value of
+            the first property in the list that is not empty. Otherwise, the DHCP hostname option
+            will be filled in with the device name set in Settings.Global.DEVICE_NAME.
+            For example:
+            <item>ro.product.model</item>
+            <item>ro.product.name</item>
+            -->
+            <item type="array" name="config_dhcp_client_hostname_preferred_props"/>
+
             <!-- Customized neighbor unreachable probe parameters.
             Legal config_*_num value should be in the range of 5-15; and config_*_interval value
             should be in the range of 750-1000ms.

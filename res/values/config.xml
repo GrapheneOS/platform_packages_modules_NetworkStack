@@ -61,6 +61,10 @@
 
     <!-- Configuration for including DHCP client hostname option -->
     <bool name="config_dhcp_client_hostname">false</bool>
+    <!-- Customized preferred properties for filling DHCP client hostname option,
+    replacing the default device name (Dependent on config_dhcp_client_hostname is true).-->
+    <string-array name="config_dhcp_client_hostname_preferred_props" translatable="false">
+    </string-array>
 
     <!-- Customized neighbor unreachable probe parameters. -->
     <integer name="config_nud_steadystate_solicit_num">10</integer>

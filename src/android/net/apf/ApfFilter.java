@@ -260,7 +260,6 @@ public class ApfFilter implements AndroidPacketFilter {
     public final byte[] mHardwareAddress;
     private final RaPacketReader mRaPacketReader;
     private final Handler mHandler;
-    private long mUniqueCounter;
     private boolean mMulticastFilter;
     private boolean mInDozeMode;
     private final boolean mDrop802_3Frames;
