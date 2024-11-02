@@ -281,7 +281,7 @@ public class IpReachabilityMonitor {
                 IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION);
         mIgnoreOrganicNudFailure = dependencies.isFeatureEnabled(context,
                 IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION);
-        mIgnoreNeverReachableNeighbor = dependencies.isFeatureEnabled(context,
+        mIgnoreNeverReachableNeighbor = dependencies.isFeatureNotChickenedOut(context,
                 IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION);
         mMetricsLog = metricsLog;
         mNetd = netd;

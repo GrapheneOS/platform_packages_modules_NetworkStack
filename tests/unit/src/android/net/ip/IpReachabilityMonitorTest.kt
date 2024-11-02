@@ -290,24 +290,15 @@ class IpReachabilityMonitorTest {
         }.`when`(dependencies).makeIpNeighborMonitor(any(), any(), any())
         doReturn(mIpReachabilityMonitorMetrics)
                 .`when`(dependencies).getIpReachabilityMonitorMetrics()
-        doReturn(true).`when`(dependencies).isFeatureNotChickenedOut(
-            any(),
-            eq(IP_REACHABILITY_MCAST_RESOLICIT_VERSION)
-        )
-
-        // TODO: test with non-default flag combinations.
-        // Note: because dependencies is a mock, all features that are not specified here are
-        // neither enabled nor chickened out.
-        doReturn(true).`when`(dependencies).isFeatureNotChickenedOut(
-            any(),
-            eq(IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION)
-        )
 
         // Set flags based on test method annotations.
+        // Note: because dependencies is a mock, all features that are not specified in flag
+        // annotations are either disabled or chickened out.
         var testMethod = this::class.java.getMethod(mTestName.methodName)
         val flags = testMethod.getAnnotationsByType(Flag::class.java)
-        for (flag in flags) {
-            doReturn(flag.enabled).`when`(dependencies).isFeatureEnabled(any(), eq(flag.name))
+        for (f in flags) {
+            doReturn(f.enabled).`when`(dependencies).isFeatureEnabled(any(), eq(f.name))
+            doReturn(f.enabled).`when`(dependencies).isFeatureNotChickenedOut(any(), eq(f.name))
         }
 
         val monitorFuture = CompletableFuture<IpReachabilityMonitor>()
@@ -1032,6 +1023,8 @@ class IpReachabilityMonitorTest {
     }
 
     @Test
+    @Flag(name = IP_REACHABILITY_MCAST_RESOLICIT_VERSION, true)
+    @Flag(name = IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION, enabled = true)
     fun testNudProbeFailedMetrics_defaultIPv6GatewayMacAddrChangedAfterRoaming() {
         prepareNeighborReachableButMacAddrChangedTest(
             TEST_LINK_PROPERTIES,
@@ -1043,6 +1036,8 @@ class IpReachabilityMonitorTest {
     }
 
     @Test
+    @Flag(name = IP_REACHABILITY_MCAST_RESOLICIT_VERSION, true)
+    @Flag(name = IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION, enabled = true)
     fun testNudProbeFailedMetrics_defaultIPv4GatewayMacAddrChangedAfterRoaming() {
         prepareNeighborReachableButMacAddrChangedTest(
             TEST_LINK_PROPERTIES,
@@ -1055,6 +1050,8 @@ class IpReachabilityMonitorTest {
     }
 
     @Test
+    @Flag(name = IP_REACHABILITY_MCAST_RESOLICIT_VERSION, true)
+    @Flag(name = IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION, enabled = true)
     fun testNudProbeFailedMetrics_defaultIPv6GatewayMacAddrChangedAfterConfirm() {
         prepareNeighborReachableButMacAddrChangedTest(
             TEST_LINK_PROPERTIES,
@@ -1067,6 +1064,8 @@ class IpReachabilityMonitorTest {
     }
 
     @Test
+    @Flag(name = IP_REACHABILITY_MCAST_RESOLICIT_VERSION, true)
+    @Flag(name = IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION, enabled = true)
     fun testNudProbeFailedMetrics_defaultIPv6GatewayMacAddrChangedAfterOrganic() {
         prepareNeighborReachableButMacAddrChangedTest(
             TEST_LINK_PROPERTIES,
