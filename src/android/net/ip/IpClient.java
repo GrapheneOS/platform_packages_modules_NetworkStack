@@ -16,7 +16,6 @@
 
 package android.net.ip;
 
-import static android.content.pm.PackageManager.FEATURE_WATCH;
 import static android.net.IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM;
 import static android.net.IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_CONFIRM;
 import static android.net.IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ORGANIC;
@@ -633,6 +632,8 @@ public class IpClient extends StateMachine {
 
     @VisibleForTesting
     static final String CONFIG_ACCEPT_RA_MIN_LFT = "ipclient_accept_ra_min_lft";
+    @VisibleForTesting
+    static final int DEFAULT_ACCEPT_RA_MIN_LFT = 180;
 
     @VisibleForTesting
     static final String CONFIG_APF_COUNTER_POLLING_INTERVAL_SECS =
@@ -1059,9 +1060,8 @@ public class IpClient extends StateMachine {
         mDhcp6PrefixDelegationEnabled = mDependencies.isFeatureEnabled(mContext,
                 IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION);
 
-        final boolean isWatch = mContext.getPackageManager().hasSystemFeature(FEATURE_WATCH);
         mAcceptRaMinLft = mDependencies.getDeviceConfigPropertyInt(CONFIG_ACCEPT_RA_MIN_LFT,
-                isWatch ? 900 : 180);
+                DEFAULT_ACCEPT_RA_MIN_LFT);
         mApfCounterPollingIntervalMs = mDependencies.getDeviceConfigPropertyInt(
                 CONFIG_APF_COUNTER_POLLING_INTERVAL_SECS,
                 DEFAULT_APF_COUNTER_POLLING_INTERVAL_SECS) * DateUtils.SECOND_IN_MILLIS;

@@ -65,7 +65,6 @@ import android.annotation.SuppressLint;
 import android.app.AlarmManager;
 import android.content.ContentResolver;
 import android.content.Context;
-import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.net.ConnectivityManager;
 import android.net.INetd;
@@ -192,7 +191,6 @@ public class IpClientTest {
     @Mock private PrintWriter mWriter;
     @Mock private IpClientNetlinkMonitor mNetlinkMonitor;
     @Mock private AndroidPacketFilter mApfFilter;
-    @Mock private PackageManager mPackageManager;
 
     private InterfaceParams mIfParams;
     private INetlinkMessageProcessor mNetlinkMessageProcessor;
@@ -218,8 +216,6 @@ public class IpClientTest {
         when(mDependencies.makeIpClientNetlinkMonitor(
                 any(), any(), any(), anyInt(), any())).thenReturn(mNetlinkMonitor);
         when(mNetlinkMonitor.start()).thenReturn(true);
-        when(mContext.getPackageManager()).thenReturn(mPackageManager);
-        when(mPackageManager.hasSystemFeature(eq(PackageManager.FEATURE_WATCH))).thenReturn(false);
 
         mIfParams = null;
     }
