@@ -284,21 +284,56 @@ static jobjectArray com_android_server_ApfTest_disassembleApf(
     return disassembleOutput;
 }
 
+static jobjectArray com_android_server_ApfTest_getAllTransmittedPackets(JNIEnv* env,
+                                                                        jclass) {
+    jclass arrayListClass = env->FindClass("java/util/ArrayList");
+    jmethodID arrayListConstructor = env->GetMethodID(arrayListClass, "<init>", "()V");
+    jobject arrayList = env->NewObject(arrayListClass, arrayListConstructor);
+
+    jmethodID addMethod = env->GetMethodID(arrayListClass, "add", "(Ljava/lang/Object;)Z");
+    packet_buffer *ptr = head;
+    while (ptr) {
+        jbyteArray jdata = env->NewByteArray((jint) ptr->len);
+        if (jdata == NULL) {
+            return static_cast<jobjectArray>(arrayList);
+        }
+
+        env->SetByteArrayRegion(jdata, 0, (jint) ptr->len,
+                                reinterpret_cast<jbyte*>(ptr->data));
+        env->CallBooleanMethod(arrayList, addMethod, jdata);
+        env->DeleteLocalRef(jdata);
+
+        ptr = ptr->next;
+    }
+
+    env->DeleteLocalRef(arrayListClass);
+    return static_cast<jobjectArray>(arrayList);
+}
+
+// TODO: this should be removed after getAllTransmittedPackets supported
 jbyteArray com_android_server_ApfTest_getTransmittedPacket(JNIEnv* env,
                                                            jclass) {
-    jbyteArray jdata = env->NewByteArray((jint) apf_test_tx_packet_len);
+    if (tail == NULL) { return NULL; }
+    jbyteArray jdata = env->NewByteArray((jint) tail->len);
     if (jdata == NULL) { return NULL; }
-    if (apf_test_tx_packet_len == 0) { return jdata; }
+    if (tail->len == 0) { return jdata; }
 
-    env->SetByteArrayRegion(jdata, 0, (jint) apf_test_tx_packet_len,
-                            reinterpret_cast<jbyte*>(apf_test_buffer));
-
+    env->SetByteArrayRegion(jdata, 0, (jint) tail->len,
+                            reinterpret_cast<jbyte*>(tail->data));
     return jdata;
 }
 
 void com_android_server_ApfTest_resetTransmittedPacketMemory(JNIEnv, jclass) {
-    apf_test_tx_packet_len = 0;
-    memset(apf_test_buffer, 0xff, sizeof(apf_test_buffer));
+    packet_buffer* current = head;
+    packet_buffer* tmp = NULL;
+    while (current) {
+        tmp = current->next;
+        free(current);
+        current = tmp;
+    }
+
+    head = NULL;
+    tail = NULL;
 }
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void*) {
@@ -321,6 +356,8 @@ extern "C" jint JNI_OnLoad(JavaVM* vm, void*) {
               (void*)com_android_server_ApfTest_disassembleApf },
             { "getTransmittedPacket", "()[B",
               (void*)com_android_server_ApfTest_getTransmittedPacket },
+            { "getAllTransmittedPackets", "()Ljava/util/List;",
+                    (void*)com_android_server_ApfTest_getAllTransmittedPackets },
             { "resetTransmittedPacketMemory", "()V",
               (void*)com_android_server_ApfTest_resetTransmittedPacketMemory },
     };
