@@ -310,19 +310,6 @@ static jobjectArray com_android_server_ApfTest_getAllTransmittedPackets(JNIEnv* 
     return static_cast<jobjectArray>(arrayList);
 }
 
-// TODO: this should be removed after getAllTransmittedPackets supported
-jbyteArray com_android_server_ApfTest_getTransmittedPacket(JNIEnv* env,
-                                                           jclass) {
-    if (tail == NULL) { return NULL; }
-    jbyteArray jdata = env->NewByteArray((jint) tail->len);
-    if (jdata == NULL) { return NULL; }
-    if (tail->len == 0) { return jdata; }
-
-    env->SetByteArrayRegion(jdata, 0, (jint) tail->len,
-                            reinterpret_cast<jbyte*>(tail->data));
-    return jdata;
-}
-
 void com_android_server_ApfTest_resetTransmittedPacketMemory(JNIEnv, jclass) {
     packet_buffer* current = head;
     packet_buffer* tmp = NULL;
@@ -354,8 +341,6 @@ extern "C" jint JNI_OnLoad(JavaVM* vm, void*) {
                     (void*)com_android_server_ApfTest_dropsAllPackets },
             { "disassembleApf", "([B)[Ljava/lang/String;",
               (void*)com_android_server_ApfTest_disassembleApf },
-            { "getTransmittedPacket", "()[B",
-              (void*)com_android_server_ApfTest_getTransmittedPacket },
             { "getAllTransmittedPackets", "()Ljava/util/List;",
                     (void*)com_android_server_ApfTest_getAllTransmittedPackets },
             { "resetTransmittedPacketMemory", "()V",

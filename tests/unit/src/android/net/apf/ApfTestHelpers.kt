@@ -330,5 +330,14 @@ class ApfTestHelpers private constructor() {
             clearInvocations<Any>(ipClientCb)
             return programCaptor.value
         }
+
+        fun consumeTransmittedPackets(
+            expectCnt: Int
+        ): List<ByteArray> {
+            val transmittedPackets = ApfJniUtils.getAllTransmittedPackets()
+            assertEquals(expectCnt, transmittedPackets.size)
+            ApfJniUtils.resetTransmittedPacketMemory()
+            return transmittedPackets
+        }
     }
 }

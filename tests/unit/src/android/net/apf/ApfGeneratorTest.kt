@@ -29,6 +29,7 @@ import android.net.apf.ApfTestHelpers.Companion.PASS
 import android.net.apf.ApfTestHelpers.Companion.assertDrop
 import android.net.apf.ApfTestHelpers.Companion.assertPass
 import android.net.apf.ApfTestHelpers.Companion.assertVerdict
+import android.net.apf.ApfTestHelpers.Companion.consumeTransmittedPackets
 import android.net.apf.ApfTestHelpers.Companion.decodeCountersIntoMap
 import android.net.apf.ApfTestHelpers.Companion.verifyProgramRun
 import android.net.apf.BaseApfGenerator.APF_VERSION_2
@@ -52,6 +53,7 @@ import java.nio.ByteBuffer
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -74,6 +76,11 @@ class ApfGeneratorTest {
     private val clampSize = 2048
 
     private val testPacket = byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)
+
+    @After
+    fun tearDown() {
+        ApfJniUtils.resetTransmittedPacketMemory()
+    }
 
     @Test
     fun testDataInstructionMustComeFirst() {
@@ -806,12 +813,13 @@ class ApfGeneratorTest {
                 .addTransmitWithoutChecksum()
                 .generate()
         assertPass(APF_VERSION_6, program, ByteArray(MIN_PKT_SIZE))
+        val transmitPackets = consumeTransmittedPackets(1)
         assertContentEquals(
                 byteArrayOf(
                         0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0xff.toByte(),
                         0xff.toByte(), 0xff.toByte(), 0xfe.toByte(), 0xff.toByte(), 0xfe.toByte(),
                         0xfd.toByte(), 0xfc.toByte(), 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07),
-                ApfJniUtils.getTransmittedPacket()
+                transmitPackets[0]
         )
     }
 
@@ -836,9 +844,10 @@ class ApfGeneratorTest {
                 .addTransmitWithoutChecksum()
                 .generate()
         assertPass(APF_VERSION_6, program, testPacket)
+        val transmitPackets = consumeTransmittedPackets(1)
         assertContentEquals(
                 byteArrayOf(33, 34, 35, 1, 2, 3, 4, 33, 34, 35, 1, 2, 3, 4),
-                ApfJniUtils.getTransmittedPacket()
+                transmitPackets[0]
         )
     }
 
@@ -863,7 +872,8 @@ class ApfGeneratorTest {
                 "32: transmit    ip_ofs=255"
         ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
         assertPass(APF_VERSION_6, program, testPacket)
-        val transmitPkt = HexDump.toHexString(ApfJniUtils.getTransmittedPacket())
+        val transmitPackets = consumeTransmittedPackets(1)
+        val transmitPkt = HexDump.toHexString(transmitPackets[0])
         assertEquals("112233445566223344778899112233445566", transmitPkt)
     }
 
@@ -1337,7 +1347,8 @@ class ApfGeneratorTest {
                 )
                 .generate()
         assertPass(APF_VERSION_6, program, testPacket)
-        val txBuf = ByteBuffer.wrap(ApfJniUtils.getTransmittedPacket())
+        val transmitPackets = consumeTransmittedPackets(1)
+        val txBuf = ByteBuffer.wrap(transmitPackets[0])
         Struct.parse(EthernetHeader::class.java, txBuf)
         val ipv4Hdr = Struct.parse(Ipv4Header::class.java, txBuf)
         val udpHdr = Struct.parse(UdpHeader::class.java, txBuf)
