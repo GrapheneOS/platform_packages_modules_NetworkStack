@@ -63,11 +63,6 @@ public class ApfJniUtils {
     public static native String[] disassembleApf(byte[] program);
 
     /**
-     * Get the transmitted packet.
-     */
-    public static native byte[] getTransmittedPacket();
-
-    /**
      * Get all transmitted packets.
      */
     public static native List<byte[]> getAllTransmittedPackets();

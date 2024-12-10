@@ -350,6 +350,10 @@ public class ApfFilter implements AndroidPacketFilter {
     // Our tentative IPv6 addresses
     private Set<Inet6Address> mIPv6TentativeAddresses = new ArraySet<>();
 
+    // Our joined IPv4 multicast addresses
+    @VisibleForTesting
+    public Set<Inet4Address> mIPv4MulticastAddresses = new ArraySet<>();
+
     // Whether CLAT is enabled.
     private boolean mHasClat;
 
@@ -602,6 +606,14 @@ public class ApfFilter implements AndroidPacketFilter {
          */
         public int getNdTrafficClass(@NonNull String ifname) {
             return ProcfsParsingUtils.getNdTrafficClass(ifname);
+        }
+
+        /**
+         * Loads the existing IPv4 multicast addresses from the file
+         * `/proc/net/igmp`.
+         */
+        public List<Inet4Address> getIPv4MulticastAddresses(@NonNull String ifname) {
+            return ProcfsParsingUtils.getIPv4MulticastAddresses(ifname);
         }
     }
 
@@ -2678,6 +2690,17 @@ public class ApfFilter implements AndroidPacketFilter {
         }
         mHasClat = add;
         installNewProgram();
+    }
+
+    @Override
+    public void updateIPv4MulticastAddrs() {
+        final Set<Inet4Address> mcastAddrs =
+                new ArraySet<>(mDependencies.getIPv4MulticastAddresses(mInterfaceParams.name));
+
+        if (!mIPv4MulticastAddresses.equals(mcastAddrs)) {
+            mIPv4MulticastAddresses = mcastAddrs;
+            installNewProgram();
+        }
     }
 
     @Override

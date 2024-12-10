@@ -208,7 +208,6 @@ import org.mockito.Spy;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Constructor;
 import java.net.HttpURLConnection;
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -2519,9 +2518,9 @@ public class NetworkMonitorTest {
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1))
                 .notifyPrivateDnsConfigResolved(any());
 
-        // Change the mode to opportunistic mode. Verify the callback.
+        // Change the mode to opportunistic mode. Verify the callback is fired a second time.
         wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig(true));
-        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(1)).notifyPrivateDnsConfigResolved(
+        verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS).times(2)).notifyPrivateDnsConfigResolved(
                 matchPrivateDnsConfigParcelWithDohOnly("some.doh.name" /* dohName */,
                         new String[0] /* dohIps */, "/dns-query{?dns}" /* dohPath */,
                         443 /* dohPort */));

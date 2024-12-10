@@ -18,9 +18,11 @@ package com.android.networkstack.util
 import android.net.MacAddress
 import android.net.apf.ProcfsParsingUtils
 import androidx.test.filters.SmallTest
-import com.android.internal.util.HexDump
+import com.android.net.module.util.HexDump
+import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
+import java.nio.ByteOrder
 import kotlin.test.assertEquals
 import org.junit.Test
 
@@ -133,6 +135,151 @@ class ProcfsParsingUtilsTest {
         assertEquals(
             expectedResult,
             ProcfsParsingUtils.parseIPv6MulticastAddresses(inputString, "wlan0")
+        )
+    }
+
+    @Test
+    fun testParseIpv4MulticastAddressLittleEndian() {
+        val order = ByteOrder.LITTLE_ENDIAN
+
+        // the format refer to net/ipv4/igmp.c#igmp_mc_seq_show
+        val inputString = listOf(
+            "Idx\tDevice    : Count Querier\tGroup    Users Timer\tReporter",
+            "1\tlo        :     1      V3",
+            "\t\t\t\t010000E0     1 0:00000000\t\t0",
+            "2\tdummy0    :     1      V3",
+            "\t\t\t\t010000E0     1 0:00000000\t\t0",
+            "47\twlan0     :     1      V3",
+            "\t\t\t\t020000EF     1 0:00000000\t\t0",
+            "\t\t\t\t010000EF     1 0:00000000\t\t0",
+            "\t\t\t\t010000E0     1 0:00000000\t\t0",
+            "51\tv4-wlan0  :     1      V3",
+            "\t\t\t\t010000E0     1 0:00000000\t\t0"
+        )
+
+        val expectedResult = listOf(
+            InetAddress.getByAddress(
+                HexDump.hexStringToByteArray("EF000002")
+            ) as Inet4Address,
+            InetAddress.getByAddress(
+                HexDump.hexStringToByteArray("EF000001")
+            ) as Inet4Address,
+            InetAddress.getByAddress(
+                HexDump.hexStringToByteArray("E0000001")
+            ) as Inet4Address,
+        )
+
+        assertEquals(
+            expectedResult,
+            ProcfsParsingUtils.parseIPv4MulticastAddresses(
+                inputString, "wlan0", order)
+        )
+
+        assertEquals(
+            emptyList<Inet4Address>(),
+            ProcfsParsingUtils.parseIPv4MulticastAddresses(
+                inputString, "eth0", order)
+        )
+
+        assertEquals(
+            emptyList<Inet4Address>(),
+            ProcfsParsingUtils.parseIPv4MulticastAddresses(
+                emptyList<String>(), "eth0", order)
+        )
+    }
+
+    @Test
+    fun testParseIpv4MulticastAddressBigEndian() {
+        val order = ByteOrder.BIG_ENDIAN
+
+        // the format refer to net/ipv4/igmp.c#igmp_mc_seq_show
+        val inputString = listOf(
+            "Idx\tDevice    : Count Querier\tGroup    Users Timer\tReporter",
+            "1\tlo        :     1      V3",
+            "\t\t\t\tE0000001     1 0:00000000\t\t0",
+            "2\tdummy0    :     1      V3",
+            "\t\t\t\tE0000001     1 0:00000000\t\t0",
+            "47\twlan0     :     1      V3",
+            "\t\t\t\tEF000002     1 0:00000000\t\t0",
+            "\t\t\t\tEF000001     1 0:00000000\t\t0",
+            "\t\t\t\tE0000001     1 0:00000000\t\t0",
+            "51\tv4-wlan0  :     1      V3",
+            "\t\t\t\tE0000001     1 0:00000000\t\t0"
+        )
+
+        val expectedResult = listOf(
+            InetAddress.getByAddress(
+                HexDump.hexStringToByteArray("EF000002")
+            ) as Inet4Address,
+            InetAddress.getByAddress(
+                HexDump.hexStringToByteArray("EF000001")
+            ) as Inet4Address,
+            InetAddress.getByAddress(
+                HexDump.hexStringToByteArray("E0000001")
+            ) as Inet4Address,
+        )
+
+        assertEquals(
+            expectedResult,
+            ProcfsParsingUtils.parseIPv4MulticastAddresses(
+                inputString, "wlan0", order)
+        )
+
+        assertEquals(
+            emptyList<Inet4Address>(),
+            ProcfsParsingUtils.parseIPv4MulticastAddresses(
+                inputString, "eth0", order)
+        )
+
+        assertEquals(
+            emptyList<Inet4Address>(),
+            ProcfsParsingUtils.parseIPv4MulticastAddresses(
+                emptyList<String>(), "eth0", order)
+        )
+    }
+
+    @Test
+    fun testParseIpv4MulticastAddressError() {
+        val order = ByteOrder.LITTLE_ENDIAN
+
+        // the format refer to net/ipv4/igmp.c#igmp_mc_seq_show
+        // wlan0 addresses contain invalid char 'X'
+        val inputString = listOf(
+            "Idx\tDevice    : Count Querier\tGroup    Users Timer\tReporter",
+            "1\tlo        :     1      V3",
+            "\t\t\t\t010000E0     1 0:00000000\t\t0",
+            "2\tdummy0    :     1      V3",
+            "\t\t\t\t010000E0     1 0:00000000\t\t0",
+            "47\twlan0     :     1      V3",
+            "\t\t\t\t02XXXXEF     1 0:00000000\t\t0",
+            "\t\t\t\t01XXXXEF     1 0:00000000\t\t0",
+            "\t\t\t\t01XXXXE0     1 0:00000000\t\t0",
+            "51\tv4-wlan0  :     1      V3",
+            "\t\t\t\t010000E0     1 0:00000000\t\t0"
+        )
+
+        val expectedResult = listOf(
+            InetAddress.getByAddress(
+                HexDump.hexStringToByteArray("E0000001")
+            ) as Inet4Address
+        )
+
+        assertEquals(
+            expectedResult,
+            ProcfsParsingUtils.parseIPv4MulticastAddresses(
+                inputString, "wlan0", order)
+        )
+
+        assertEquals(
+            emptyList<Inet4Address>(),
+            ProcfsParsingUtils.parseIPv4MulticastAddresses(
+                inputString, "eth0", order)
+        )
+
+        assertEquals(
+            emptyList<Inet4Address>(),
+            ProcfsParsingUtils.parseIPv4MulticastAddresses(
+                emptyList<String>(), "eth0", order)
         )
     }
 }

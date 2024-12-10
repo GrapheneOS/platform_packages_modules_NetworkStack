@@ -120,4 +120,9 @@ public interface AndroidPacketFilter {
     default boolean shouldEnableMdnsOffload() {
         return false;
     }
+
+    /**
+     * Update the multicast addresses that will be used by APF.
+     */
+    default void updateIPv4MulticastAddrs() {}
 }

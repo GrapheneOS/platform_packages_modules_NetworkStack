@@ -20,6 +20,7 @@ import static android.system.OsConstants.AF_INET6;
 import static android.system.OsConstants.AF_UNSPEC;
 import static android.system.OsConstants.IFF_LOOPBACK;
 
+import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ND_OPTION_PIO;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
 import static com.android.net.module.util.NetworkStackConstants.INFINITE_LEASE;
 import static com.android.net.module.util.netlink.NetlinkConstants.IFF_LOWER_UP;
@@ -55,12 +56,14 @@ import com.android.net.module.util.netlink.NetlinkConstants;
 import com.android.net.module.util.netlink.NetlinkMessage;
 import com.android.net.module.util.netlink.RtNetlinkAddressMessage;
 import com.android.net.module.util.netlink.RtNetlinkLinkMessage;
+import com.android.net.module.util.netlink.RtNetlinkPrefixMessage;
 import com.android.net.module.util.netlink.RtNetlinkRouteMessage;
 import com.android.net.module.util.netlink.StructIfacacheInfo;
 import com.android.net.module.util.netlink.StructIfaddrMsg;
 import com.android.net.module.util.netlink.StructIfinfoMsg;
 import com.android.net.module.util.netlink.StructNdOptPref64;
 import com.android.net.module.util.netlink.StructNdOptRdnss;
+import com.android.net.module.util.netlink.StructPrefixMsg;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
 
@@ -131,6 +134,13 @@ public class IpClientLinkObserver {
          *            False: clat interface was removed.
          */
         void onClatInterfaceStateUpdate(boolean add);
+
+        /**
+         * Called when the prefix information was updated via RTM_NEWPREFIX netlink message.
+         *
+         * @param info prefix information.
+         */
+        void onNewPrefix(PrefixInfo info);
     }
 
     /** Configuration parameters for IpClientLinkObserver. */
@@ -141,6 +151,21 @@ public class IpClientLinkObserver {
         public Configuration(int minRdnssLifetime, boolean populateLinkAddressLifetime) {
             this.minRdnssLifetime = minRdnssLifetime;
             this.populateLinkAddressLifetime = populateLinkAddressLifetime;
+        }
+    }
+
+    /** Prefix information received from RTM_NEWPREFIX netlink message. */
+    public static class PrefixInfo {
+        public final IpPrefix prefix;
+        public short flags;
+        public long preferred;
+        public long valid;
+
+        public PrefixInfo(@NonNull final IpPrefix prefix, short flags, long preferred, long valid) {
+            this.prefix = prefix;
+            this.flags = flags;
+            this.preferred = preferred;
+            this.valid = valid;
         }
     }
 
@@ -389,7 +414,8 @@ public class IpClientLinkObserver {
                             | NetlinkConstants.RTMGRP_LINK
                             | NetlinkConstants.RTMGRP_IPV4_IFADDR
                             | NetlinkConstants.RTMGRP_IPV6_IFADDR
-                            | NetlinkConstants.RTMGRP_IPV6_ROUTE),
+                            | NetlinkConstants.RTMGRP_IPV6_ROUTE
+                            | NetlinkConstants.RTMGRP_IPV6_PREFIX),
                     sockRcvbufSize);
             mHandler = h;
             mNetlinkMessageProcessor = p;
@@ -630,6 +656,18 @@ public class IpClientLinkObserver {
         }
     }
 
+    private void processRtNetlinkPrefixMessage(RtNetlinkPrefixMessage msg) {
+        final StructPrefixMsg prefixmsg = msg.getPrefixMsg();
+        if (prefixmsg.prefix_family != AF_INET6) return;
+        if (prefixmsg.prefix_ifindex != mIfindex) return;
+        if (prefixmsg.prefix_type != ICMPV6_ND_OPTION_PIO) return;
+        final PrefixInfo info = new PrefixInfo(msg.getPrefix(),
+                prefixmsg.prefix_flags,
+                msg.getPreferredLifetime(),
+                msg.getValidLifetime());
+        mCallback.onNewPrefix(info);
+    }
+
     private void processNetlinkMessage(NetlinkMessage nlMsg, long whenMs) {
         if (nlMsg instanceof NduseroptMessage) {
             processNduseroptMessage((NduseroptMessage) nlMsg, whenMs);
@@ -639,6 +677,8 @@ public class IpClientLinkObserver {
             processRtNetlinkAddressMessage((RtNetlinkAddressMessage) nlMsg);
         } else if (nlMsg instanceof RtNetlinkRouteMessage) {
             processRtNetlinkRouteMessage((RtNetlinkRouteMessage) nlMsg);
+        } else if (nlMsg instanceof RtNetlinkPrefixMessage) {
+            processRtNetlinkPrefixMessage((RtNetlinkPrefixMessage) nlMsg);
         } else {
             Log.e(mTag, "Unknown netlink message: " + nlMsg);
         }

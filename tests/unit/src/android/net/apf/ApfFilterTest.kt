@@ -98,6 +98,7 @@ import com.android.testutils.DevSdkIgnoreRunner
 import com.android.testutils.quitResources
 import com.android.testutils.waitForIdle
 import java.io.FileDescriptor
+import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
 import kotlin.test.assertContentEquals
@@ -2139,5 +2140,30 @@ class ApfFilterTest {
         apfFilter.resume()
         val program = consumeInstalledProgram(ipClientCallback, installCnt = 1)
         assertContentEquals(ByteArray(4096) { 0 }, program)
+    }
+
+    @Test
+    fun testApfIPv4MulticastAddrsUpdate() {
+        val apfFilter = getApfFilter()
+        // mock IPv4 multicast address from /proc/net/igmp
+        val mcastAddrs = mutableListOf(
+            InetAddress.getByName("224.0.0.1") as Inet4Address
+        )
+        consumeInstalledProgram(ipClientCallback, installCnt = 2)
+
+        doReturn(mcastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())
+        apfFilter.updateIPv4MulticastAddrs()
+        consumeInstalledProgram(ipClientCallback, installCnt = 1)
+        assertEquals(mcastAddrs.toSet(), apfFilter.mIPv4MulticastAddresses)
+
+        val addr = InetAddress.getByName("239.0.0.1") as Inet4Address
+        mcastAddrs.add(addr)
+        doReturn(mcastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())
+        apfFilter.updateIPv4MulticastAddrs()
+        consumeInstalledProgram(ipClientCallback, installCnt = 1)
+        assertEquals(mcastAddrs.toSet(), apfFilter.mIPv4MulticastAddresses)
+
+        apfFilter.updateIPv4MulticastAddrs()
+        verify(ipClientCallback, never()).installPacketFilter(any())
     }
 }

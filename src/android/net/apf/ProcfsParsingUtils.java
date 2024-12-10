@@ -15,18 +15,23 @@
  */
 package android.net.apf;
 
+import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ALL_HOST_MULTICAST;
+
 import android.annotation.NonNull;
 import android.net.MacAddress;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
-import com.android.internal.util.HexDump;
+import com.android.net.module.util.HexDump;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -39,6 +44,7 @@ public final class ProcfsParsingUtils {
     private static final String IPV6_CONF_PATH = "/proc/sys/net/ipv6/conf/";
     private static final String IPV6_ANYCAST_PATH = "/proc/net/anycast6";
     private static final String ETHER_MCAST_PATH = "/proc/net/dev_mcast";
+    private static final String IPV4_MCAST_PATH = "/proc/net/igmp";
     private static final String IPV6_MCAST_PATH = "/proc/net/igmp6";
 
     private ProcfsParsingUtils() {
@@ -172,6 +178,75 @@ public final class ProcfsParsingUtils {
 
         return addresses;
     }
+
+    /**
+     * Parses IPv4 multicast addresses associated with a specific interface from a list of strings.
+     *
+     * @param lines A list of strings, each containing interface and IPv4 address information.
+     * @param ifname The name of the network interface for which to extract multicast addresses.
+     * @param endian The byte order of the address, almost always use native order.
+     * @return A list of Inet4Address objects representing the parsed IPv4 multicast addresses.
+     *         If an error occurs during parsing,
+     *         a list contains IPv4 all host (224.0.0.1) is returned.
+     */
+    @VisibleForTesting
+    public static List<Inet4Address> parseIPv4MulticastAddresses(
+            @NonNull List<String> lines, @NonNull String ifname, @NonNull ByteOrder endian) {
+        final List<Inet4Address> ipAddresses = new ArrayList<>();
+
+        try {
+            String name = "";
+            // parse output similar to `ip maddr` command (iproute2/ip/ipmaddr.c#read_igmp())
+            for (String line : lines) {
+                final String[] parts = line.trim().split("\\s+");
+                if (!line.startsWith("\t")) {
+                    name = parts[1];
+                    if (name.endsWith(":")) {
+                        name = name.substring(0, name.length() - 1);
+                    }
+                    continue;
+                }
+
+                if (!name.equals(ifname)) {
+                    continue;
+                }
+
+                final String hexIp = parts[0];
+                final byte[] ipArray = HexDump.hexStringToByteArray(hexIp);
+                final byte[] convertArray =
+                    (endian == ByteOrder.LITTLE_ENDIAN)
+                        ? convertIPv4BytesToBigEndian(ipArray) : ipArray;
+                final Inet4Address ipv4Address =
+                        (Inet4Address) InetAddress.getByAddress(convertArray);
+
+                ipAddresses.add(ipv4Address);
+            }
+        } catch (UnknownHostException | IllegalArgumentException e) {
+            Log.wtf(TAG, "failed to convert to Inet4Address.", e);
+            // always return IPv4 all host address (224.0.0.1) if any error during parsing.
+            // this aligns with kernel behavior, it will join 224.0.0.1 when the interface is up.
+            ipAddresses.clear();
+            ipAddresses.add(IPV4_ADDR_ALL_HOST_MULTICAST);
+        }
+
+        return ipAddresses;
+    }
+
+    /**
+     * Converts an IPv4 address from little-endian byte order to big-endian byte order.
+     *
+     * @param bytes The IPv4 address in little-endian byte order.
+     * @return The IPv4 address in big-endian byte order.
+     */
+    private static byte[] convertIPv4BytesToBigEndian(byte[] bytes) {
+        final ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        buffer.order(ByteOrder.LITTLE_ENDIAN);
+        final ByteBuffer bigEndianBuffer = ByteBuffer.allocate(4);
+        bigEndianBuffer.order(ByteOrder.BIG_ENDIAN);
+        bigEndianBuffer.putInt(buffer.getInt());
+        return bigEndianBuffer.array();
+    }
+
     /**
      * Returns the traffic class for the specified interface.
      * The function loads the existing traffic class from the file
@@ -227,5 +302,20 @@ public final class ProcfsParsingUtils {
     public static List<Inet6Address> getIpv6MulticastAddresses(@NonNull String ifname) {
         final List<String> lines = readFile(IPV6_MCAST_PATH);
         return parseIPv6MulticastAddresses(lines, ifname);
+    }
+
+    /**
+     * The function loads the existing IPv4 multicast addresses from the file `/proc/net/igmp6`.
+     * If the file does not exist or the interface is not found, the function returns empty list.
+     *
+     * @param ifname The name of the network interface to query.
+     * @return A list of Inet4Address objects representing the IPv4 multicast addresses
+     *         found for the interface.
+     *         If the file cannot be read or there are no addresses, an empty list is returned.
+     */
+    public static List<Inet4Address> getIPv4MulticastAddresses(@NonNull String ifname) {
+        final List<String> lines = readFile(IPV4_MCAST_PATH);
+        // follow the same pattern as NetlinkMonitor#handlePacket() for device's endian order
+        return parseIPv4MulticastAddresses(lines, ifname, ByteOrder.nativeOrder());
     }
 }
