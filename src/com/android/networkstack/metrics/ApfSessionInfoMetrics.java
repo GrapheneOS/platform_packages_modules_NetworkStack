@@ -48,10 +48,8 @@ import static android.net.apf.ApfCounterTracker.Counter.DROPPED_MDNS;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_RA;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_BROADCAST_REPLY;
-import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_NON_IPV4;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_REQUEST;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_UNICAST_REPLY;
-import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_UNKNOWN;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_DHCP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_FROM_DHCPV4_SERVER;
@@ -141,12 +139,8 @@ public class ApfSessionInfoMetrics {
                 // The counter sequence should be keep the same in ApfCounterTracker.java
                 Map.entry(PASSED_ARP, CN_PASSED_ARP),
                 Map.entry(PASSED_ARP_BROADCAST_REPLY, CN_PASSED_ARP_BROADCAST_REPLY),
-                // deprecated in ApfFilter, PASSED_ARP_NON_IPV4 ==> DROPPED_ARP_NON_IPV4
-                Map.entry(PASSED_ARP_NON_IPV4, CN_UNKNOWN),
                 Map.entry(PASSED_ARP_REQUEST, CN_PASSED_ARP_REQUEST),
                 Map.entry(PASSED_ARP_UNICAST_REPLY, CN_PASSED_ARP_UNICAST_REPLY),
-                // deprecated in ApfFilter, PASSED_ARP_UNKNOWN  ==> DROPPED_ARP_UNKNOWN
-                Map.entry(PASSED_ARP_UNKNOWN, CN_UNKNOWN),
                 Map.entry(PASSED_DHCP, CN_PASSED_DHCP),
                 Map.entry(PASSED_IPV4, CN_PASSED_IPV4),
                 Map.entry(PASSED_IPV4_FROM_DHCPV4_SERVER, CN_PASSED_IPV4_FROM_DHCPV4_SERVER),

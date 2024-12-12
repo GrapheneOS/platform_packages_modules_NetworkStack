@@ -62,6 +62,7 @@ import com.android.testutils.PollPacketReader
 import java.io.FileDescriptor
 import java.net.Inet4Address
 import java.net.Inet6Address
+import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.Arrays
 import kotlin.reflect.KClass
@@ -345,6 +346,30 @@ class NetworkStackUtilsIntegrationTest {
     @Test
     fun testGenericDhcpResponseWithMfBitDropped() {
         doTestDhcpResponseWithMfBitDropped(true)
+    }
+
+    @Test
+    fun testConvertIpv4AddressToEthernetMulticast() {
+        var mcastAddrs = listOf(
+            // ipv4 multicast address, multicast ethernet address
+            Pair(
+                InetAddress.getByName("224.0.0.1") as Inet4Address,
+                MacAddress.fromString("01:00:5e:00:00:01")
+            ),
+            Pair(
+                InetAddress.getByName("239.128.1.1") as Inet4Address,
+                MacAddress.fromString("01:00:5e:00:01:01")
+            ),
+            Pair(
+                InetAddress.getByName("239.255.255.255") as Inet4Address,
+                MacAddress.fromString("01:00:5e:7f:ff:ff")
+            )
+        )
+
+        for ((addr, expectAddr) in mcastAddrs) {
+            val ether = NetworkStackUtils.ipv4MulticastToEthernetMulticast(addr)
+            assertEquals(expectAddr, ether)
+        }
     }
 }
 

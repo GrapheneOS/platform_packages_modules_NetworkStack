@@ -102,8 +102,6 @@ public class ApfSessionInfoMetricsTest {
         verifyCounterName(Counter.PASSED_IPV6_ICMP, CounterName.CN_PASSED_IPV6_ICMP);
         verifyCounterName(Counter.PASSED_IPV6_UNICAST_NON_ICMP,
                 CounterName.CN_PASSED_IPV6_UNICAST_NON_ICMP);
-        verifyCounterName(Counter.PASSED_ARP_NON_IPV4, CounterName.CN_UNKNOWN);
-        verifyCounterName(Counter.PASSED_ARP_UNKNOWN, CounterName.CN_UNKNOWN);
         verifyCounterName(Counter.PASSED_ARP_UNICAST_REPLY,
                 CounterName.CN_PASSED_ARP_UNICAST_REPLY);
         verifyCounterName(Counter.PASSED_NON_IP_UNICAST, CounterName.CN_PASSED_NON_IP_UNICAST);

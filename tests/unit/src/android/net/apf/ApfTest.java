@@ -57,7 +57,6 @@ import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
@@ -2829,21 +2828,6 @@ public class ApfTest {
         // The generated program size will be 529, which is larger than 512
         consumeInstalledProgram(mIpClientCb, 1 /* installCnt */);
         verify(mNetworkQuirkMetrics).setEvent(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
-        verify(mNetworkQuirkMetrics).statsWrite();
-    }
-
-    @Test
-    public void testGenerateApfProgramException() {
-        final ApfConfiguration config = getDefaultConfig();
-        ApfFilter apfFilter = getApfFilter(config);
-        // Simulate exception during installNewProgram() by mocking
-        // mDependencies.elapsedRealtime() to throw an exception (this method doesn't throw in
-        // real-world scenarios).
-        doThrow(new IllegalStateException("test exception")).when(mDependencies).elapsedRealtime();
-        synchronized (apfFilter) {
-            apfFilter.installNewProgram();
-        }
-        verify(mNetworkQuirkMetrics).setEvent(NetworkQuirkEvent.QE_APF_GENERATE_FILTER_EXCEPTION);
         verify(mNetworkQuirkMetrics).statsWrite();
     }
 
