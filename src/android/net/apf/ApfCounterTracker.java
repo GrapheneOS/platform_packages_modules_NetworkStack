@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Common counter class for {@code ApfFilter} and {@code LegacyApfFilter}.
+ * Counter class for {@code ApfFilter}.
  *
  * @hide
  */

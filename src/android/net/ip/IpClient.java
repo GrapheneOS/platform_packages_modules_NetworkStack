@@ -120,7 +120,6 @@ import android.net.Uri;
 import android.net.apf.AndroidPacketFilter;
 import android.net.apf.ApfCapabilities;
 import android.net.apf.ApfFilter;
-import android.net.apf.LegacyApfFilter;
 import android.net.dhcp.DhcpClient;
 import android.net.dhcp.DhcpPacket;
 import android.net.dhcp6.Dhcp6Client;
@@ -805,7 +804,6 @@ public class IpClient extends StateMachine {
 
     // Experiment flag read from device config.
     private final boolean mDhcp6PrefixDelegationEnabled;
-    private final boolean mUseNewApfFilter;
     private final boolean mIsAcceptRaMinLftEnabled;
     private final boolean mEnableApfPollingCounters;
     private final boolean mPopulateLinkAddressLifetime;
@@ -986,15 +984,9 @@ public class IpClient extends StateMachine {
          */
         public AndroidPacketFilter maybeCreateApfFilter(Handler handler, Context context,
                 ApfFilter.ApfConfiguration config, InterfaceParams ifParams,
-                IpClientCallbacksWrapper cb, NetworkQuirkMetrics networkQuirkMetrics,
-                boolean useNewApfFilter) {
-            if (useNewApfFilter) {
-                return ApfFilter.maybeCreate(handler, context, config, ifParams, cb,
-                        networkQuirkMetrics);
-            } else {
-                return LegacyApfFilter.maybeCreate(context, config, ifParams, cb,
-                        networkQuirkMetrics);
-            }
+                IpClientCallbacksWrapper cb, NetworkQuirkMetrics networkQuirkMetrics) {
+            return ApfFilter.maybeCreate(handler, context, config, ifParams, cb,
+                    networkQuirkMetrics);
         }
 
         /**
@@ -1070,8 +1062,6 @@ public class IpClient extends StateMachine {
         mApfCounterPollingIntervalMs = mDependencies.getDeviceConfigPropertyInt(
                 CONFIG_APF_COUNTER_POLLING_INTERVAL_SECS,
                 DEFAULT_APF_COUNTER_POLLING_INTERVAL_SECS) * DateUtils.SECOND_IN_MILLIS;
-        mUseNewApfFilter = SdkLevel.isAtLeastV() || mDependencies.isFeatureNotChickenedOut(context,
-                APF_NEW_RA_FILTER_VERSION);
         mEnableApfPollingCounters = mDependencies.isFeatureEnabled(context,
                 APF_POLLING_COUNTERS_VERSION);
         mIsAcceptRaMinLftEnabled =
@@ -2643,7 +2633,7 @@ public class IpClient extends StateMachine {
         setIpv6Sysctl(ACCEPT_RA, 2);
         setIpv6Sysctl(ACCEPT_RA_DEFRTR, 1);
         maybeRestoreDadTransmits();
-        if (mUseNewApfFilter && mIsAcceptRaMinLftEnabled
+        if (mIsAcceptRaMinLftEnabled
                 && mDependencies.hasIpv6Sysctl(mInterfaceName, ACCEPT_RA_MIN_LFT)) {
             setIpv6Sysctl(ACCEPT_RA_MIN_LFT, 0 /* sysctl default */);
         }
@@ -2774,7 +2764,7 @@ public class IpClient extends StateMachine {
         // Check the feature flag first before reading IPv6 sysctl, which can prevent from
         // triggering a potential kernel bug about the sysctl.
         // TODO: add unit test to check if the setIpv6Sysctl() is called or not.
-        if (mIsAcceptRaMinLftEnabled && mUseNewApfFilter
+        if (mIsAcceptRaMinLftEnabled
                 && mDependencies.hasIpv6Sysctl(mInterfaceName, ACCEPT_RA_MIN_LFT)) {
             setIpv6Sysctl(ACCEPT_RA_MIN_LFT, mAcceptRaMinLft);
             final Integer acceptRaMinLft = getIpv6Sysctl(ACCEPT_RA_MIN_LFT);
@@ -2788,7 +2778,7 @@ public class IpClient extends StateMachine {
         apfConfig.minMetricsSessionDurationMs = mApfCounterPollingIntervalMs;
         apfConfig.hasClatInterface = mHasSeenClatInterface;
         return mDependencies.maybeCreateApfFilter(getHandler(), mContext, apfConfig,
-                mInterfaceParams, mCallback, mNetworkQuirkMetrics, mUseNewApfFilter);
+                mInterfaceParams, mCallback, mNetworkQuirkMetrics);
     }
 
     private boolean handleUpdateApfCapabilities(@NonNull final ApfCapabilities apfCapabilities) {

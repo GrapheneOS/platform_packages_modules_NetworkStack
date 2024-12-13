@@ -15,6 +15,8 @@
  */
 package android.net.apf;
 
+import static com.android.net.module.util.NetworkStackConstants.IPV4_HEADER_MIN_LEN;
+
 /**
  * The class which declares constants used in ApfFilter and unit tests.
  */
@@ -59,6 +61,10 @@ public final class ApfConstants {
     // The IPv6 solicited nodes multicast address prefix ff02::1:ffXX:X/104
     public static final byte[] IPV6_SOLICITED_NODES_PREFIX =
             { (byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, (byte) 0xff};
+
+    public static final int ICMP4_TYPE_OFFSET = ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN;
+    public static final int ICMP4_CHECKSUM_OFFSET = ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + 2;
+    public static final int ICMP4_CONTENT_OFFSET = ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + 4;
 
     public static final int ICMP6_TYPE_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN;
     public static final int ICMP6_CODE_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN + 1;

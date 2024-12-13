@@ -138,7 +138,8 @@ public class ApfSessionInfoMetricsTest {
         verifyCounterName(Counter.DROPPED_IPV4_NATT_KEEPALIVE,
                 CounterName.CN_DROPPED_IPV4_NATT_KEEPALIVE);
         verifyCounterName(Counter.DROPPED_MDNS, CounterName.CN_DROPPED_MDNS);
-        verifyCounterName(Counter.DROPPED_IPV4_TCP_PORT7_UNICAST, CounterName.CN_UNKNOWN);
+        verifyCounterName(Counter.DROPPED_IPV4_TCP_PORT7_UNICAST,
+                CounterName.CN_DROPPED_IPV4_TCP_PORT7_UNICAST);
         verifyCounterName(Counter.DROPPED_ARP_NON_IPV4, CounterName.CN_DROPPED_ARP_NON_IPV4);
         verifyCounterName(Counter.DROPPED_ARP_UNKNOWN, CounterName.CN_DROPPED_ARP_UNKNOWN);
         verifyCounterName(Counter.PASSED_ARP_BROADCAST_REPLY,

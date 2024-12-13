@@ -239,8 +239,7 @@ message ApfCounterList {
 /**
  * Logs APF session information event.
  * Logged from:
- * packages/modules/NetworkStack/src/android/net/apf/ApfFilter.java or
- * packages/modules/NetworkStack/src/android/net/apf/LegacyApfFilter.java
+ * packages/modules/NetworkStack/src/android/net/apf/ApfFilter.java
  */
 message ApfSessionInfoReported {
     // The version of APF, where version = -1 equals APF disable.

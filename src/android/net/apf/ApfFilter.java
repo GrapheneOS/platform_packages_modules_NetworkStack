@@ -1333,7 +1333,7 @@ public class ApfFilter implements AndroidPacketFilter {
 
         NattKeepaliveResponse(final NattKeepalivePacketDataParcelable sentKeepalivePacket) {
             mPacket = new NattKeepaliveResponseData(sentKeepalivePacket);
-            mSrcDstAddr = concatArrays(mPacket.srcAddress, mPacket.dstAddress);
+            mSrcDstAddr = CollectionUtils.concatArrays(mPacket.srcAddress, mPacket.dstAddress);
             mPortFingerprint = generatePortFingerprint(mPacket.srcPort, mPacket.dstPort);
         }
 
@@ -1457,7 +1457,8 @@ public class ApfFilter implements AndroidPacketFilter {
             this(new TcpKeepaliveAckData(sentKeepalivePacket));
         }
         TcpKeepaliveAckV4(final TcpKeepaliveAckData packet) {
-            super(packet, concatArrays(packet.srcAddress, packet.dstAddress) /* srcDstAddr */);
+            super(packet, CollectionUtils.concatArrays(packet.srcAddress,
+                    packet.dstAddress) /* srcDstAddr */);
         }
 
         @Override
@@ -1499,7 +1500,8 @@ public class ApfFilter implements AndroidPacketFilter {
             this(new TcpKeepaliveAckData(sentKeepalivePacket));
         }
         TcpKeepaliveAckV6(final TcpKeepaliveAckData packet) {
-            super(packet, concatArrays(packet.srcAddress, packet.dstAddress) /* srcDstAddr */);
+            super(packet, CollectionUtils.concatArrays(packet.srcAddress,
+                    packet.dstAddress) /* srcDstAddr */);
         }
 
         @Override
@@ -3031,20 +3033,6 @@ public class ApfFilter implements AndroidPacketFilter {
                 + (uint8(bytes[1]) << 16)
                 + (uint8(bytes[2]) << 8)
                 + (uint8(bytes[3]));
-    }
-
-    private static byte[] concatArrays(final byte[]... arr) {
-        int size = 0;
-        for (byte[] a : arr) {
-            size += a.length;
-        }
-        final byte[] result = new byte[size];
-        int offset = 0;
-        for (byte[] a : arr) {
-            System.arraycopy(a, 0, result, offset, a.length);
-            offset += a.length;
-        }
-        return result;
     }
 
     private void sendNetworkQuirkMetrics(final NetworkQuirkEvent event) {

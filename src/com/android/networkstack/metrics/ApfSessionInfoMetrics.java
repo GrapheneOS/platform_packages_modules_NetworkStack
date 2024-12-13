@@ -83,6 +83,7 @@ import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_L2_BROADCAS
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_MULTICAST;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_NATT_KEEPALIVE;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_NON_DHCP4;
+import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_TCP_PORT7_UNICAST;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_KEEPALIVE_ACK;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_MULTICAST;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_MULTICAST_NA;
@@ -176,8 +177,7 @@ public class ApfSessionInfoMetrics {
                 Map.entry(DROPPED_IPV6_KEEPALIVE_ACK, CN_DROPPED_IPV6_KEEPALIVE_ACK),
                 Map.entry(DROPPED_IPV4_NATT_KEEPALIVE, CN_DROPPED_IPV4_NATT_KEEPALIVE),
                 Map.entry(DROPPED_MDNS, CN_DROPPED_MDNS),
-                // TODO: Not supported yet in the metrics backend.
-                Map.entry(DROPPED_IPV4_TCP_PORT7_UNICAST, CN_UNKNOWN),
+                Map.entry(DROPPED_IPV4_TCP_PORT7_UNICAST, CN_DROPPED_IPV4_TCP_PORT7_UNICAST),
                 Map.entry(DROPPED_ARP_NON_IPV4, CN_DROPPED_ARP_NON_IPV4),
                 Map.entry(DROPPED_ARP_OTHER_HOST, CN_DROPPED_ARP_OTHER_HOST),
                 Map.entry(DROPPED_ARP_REPLY_SPA_NO_HOST, CN_DROPPED_ARP_REPLY_SPA_NO_HOST),
