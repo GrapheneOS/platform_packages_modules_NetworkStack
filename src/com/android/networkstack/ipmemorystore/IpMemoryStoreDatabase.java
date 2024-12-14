@@ -714,6 +714,10 @@ public class IpMemoryStoreDatabase {
     /**
      * Delete a single entry by key.
      *
+     * The NetworkAttributes table is indexed by a L2 key although it also has a cluster column,
+     * so this API only targets the NetworkAttributes table. For deleting the entries by cluster,
+     * see {@link deleteCluster}.
+     *
      * If |needWipe| is true, the data will be wiped from disk immediately. Otherwise, it will
      * only be marked deleted, and overwritten by subsequent writes or reclaimed during the next
      * maintenance window.
@@ -724,11 +728,21 @@ public class IpMemoryStoreDatabase {
     static StatusAndCount delete(@NonNull final SQLiteDatabase db, @NonNull final String l2key,
             final boolean needWipe) {
         return deleteEntriesWithColumn(db,
-                NetworkAttributesContract.COLNAME_L2KEY, l2key, needWipe);
+                NetworkAttributesContract.TABLENAME,     // table
+                NetworkAttributesContract.COLNAME_L2KEY, // column
+                l2key,                                   // value
+                needWipe);
     }
 
     /**
-     * Delete all entries that have a particular cluster value.
+     * Delete all entries that have a particular cluster value in NetworkAttributes and
+     * NetworkEvents tables.
+     *
+     * So far the cluster column exists in both the NetworkAttributes and NetworkEvents
+     * tables, and this API is only called when WiFi attempts to remove a network, see
+     * {@link WifiHealthMonitor.OnNetworkUpdateListener#onNetworkRemoved} and
+     * {@link WifiNetworkSuggestionManager#remove}. It makes more sense to delete the
+     * cluster column from both tables when this API is called.
      *
      * If |needWipe| is true, the data will be wiped from disk immediately. Otherwise, it will
      * only be marked deleted, and overwritten by subsequent writes or reclaimed during the next
@@ -739,17 +753,39 @@ public class IpMemoryStoreDatabase {
      */
     static StatusAndCount deleteCluster(@NonNull final SQLiteDatabase db,
             @NonNull final String cluster, final boolean needWipe) {
-        return deleteEntriesWithColumn(db,
-                NetworkAttributesContract.COLNAME_CLUSTER, cluster, needWipe);
+        // Delete all entries that have cluster value from NetworkAttributes table.
+        final StatusAndCount naDeleteResult = deleteEntriesWithColumn(db,
+                NetworkAttributesContract.TABLENAME,       // table
+                NetworkAttributesContract.COLNAME_CLUSTER, // column
+                cluster,                                   // value
+                needWipe);
+        // And then delete all entries that have cluster value from NetworkEvents table.
+        final StatusAndCount neDeleteResult = deleteEntriesWithColumn(db,
+                NetworkEventsContract.TABLENAME,           // table
+                NetworkEventsContract.COLNAME_CLUSTER,     // column
+                cluster,                                   // value
+                needWipe);
+        int status = Status.ERROR_GENERIC;
+        if (naDeleteResult.status == Status.SUCCESS && neDeleteResult.status == Status.SUCCESS) {
+            status = Status.SUCCESS;
+        } else if (naDeleteResult.status != Status.SUCCESS) {
+            // If deleteCluster fails on both tables, return the status code on deleting the entries
+            // from the NetworkAttributes table, keep consistent with previous behavior.
+            status = naDeleteResult.status;
+        } else {
+            status = neDeleteResult.status;
+        }
+        return new StatusAndCount(status, naDeleteResult.count + neDeleteResult.count);
     }
 
     // Delete all entries where the given column has the given value.
     private static StatusAndCount deleteEntriesWithColumn(@NonNull final SQLiteDatabase db,
-            @NonNull final String column, @NonNull final String value, final boolean needWipe) {
+            @NonNull final String table, @NonNull final String column, @NonNull final String value,
+            final boolean needWipe) {
         db.beginTransaction();
         int deleted = 0;
         try {
-            deleted = db.delete(NetworkAttributesContract.TABLENAME,
+            deleted = db.delete(table,
                     column + "= ?", new String[] { value });
             db.setTransactionSuccessful();
         } catch (SQLiteException e) {

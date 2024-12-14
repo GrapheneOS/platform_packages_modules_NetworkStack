@@ -693,7 +693,7 @@ public class IpClient extends StateMachine {
 
     private static final int IPMEMORYSTORE_TIMEOUT_MS = 1000;
     @VisibleForTesting
-    static final long SIX_HOURS_IN_MS = 6 * 3600 * 1000L;
+    public static final long SIX_HOURS_IN_MS = 6 * 3600 * 1000L;
     @VisibleForTesting
     public static final long ONE_DAY_IN_MS = 4 * SIX_HOURS_IN_MS;
     @VisibleForTesting

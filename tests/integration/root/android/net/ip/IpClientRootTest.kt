@@ -164,6 +164,7 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
         // Delete the IpMemoryStore entry corresponding to TEST_L2KEY, make sure each test starts
         // from a clean state.
         mStore.delete(TEST_L2KEY, true) { _, _ -> latch.countDown() }
+        mStore.deleteCluster(TEST_CLUSTER, true) { _, _ -> latch.countDown() }
         assertTrue(latch.await(TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS))
     }
 
