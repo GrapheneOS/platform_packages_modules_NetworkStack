@@ -86,8 +86,6 @@ import static android.net.apf.ApfConstants.TCP_UDP_DESTINATION_PORT_OFFSET;
 import static android.net.apf.ApfConstants.TCP_UDP_SOURCE_PORT_OFFSET;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HOST;
-import static android.net.apf.ApfCounterTracker.Counter.FILTER_AGE_16384THS;
-import static android.net.apf.ApfCounterTracker.Counter.FILTER_AGE_SECONDS;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_ETHER_OUR_SRC_MAC;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_DAD;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_SLLA_OPTION;
@@ -202,7 +200,7 @@ import java.util.Set;
  *
  * @hide
  */
-public class ApfFilter implements AndroidPacketFilter {
+public class ApfFilter {
 
     // Helper class for specifying functional filter parameters.
     public static class ApfConfiguration {
@@ -556,7 +554,7 @@ public class ApfFilter implements AndroidPacketFilter {
          * This method is designed to be overridden in test classes to collect created ApfFilter
          * instances.
          */
-        public void onApfFilterCreated(@NonNull AndroidPacketFilter apfFilter) {
+        public void onApfFilterCreated(@NonNull ApfFilter apfFilter) {
         }
 
         /**
@@ -617,7 +615,6 @@ public class ApfFilter implements AndroidPacketFilter {
         }
     }
 
-    @Override
     public String setDataSnapshot(byte[] data) {
         mDataSnapshot = data;
         if (mIsRunning) {
@@ -2685,7 +2682,6 @@ public class ApfFilter implements AndroidPacketFilter {
         installNewProgram();
     }
 
-    @Override
     public void updateClatInterfaceState(boolean add) {
         if (mHasClat == add) {
             return;
@@ -2694,7 +2690,6 @@ public class ApfFilter implements AndroidPacketFilter {
         installNewProgram();
     }
 
-    @Override
     public void updateIPv4MulticastAddrs() {
         final Set<Inet4Address> mcastAddrs =
                 new ArraySet<>(mDependencies.getIPv4MulticastAddresses(mInterfaceParams.name));
@@ -2705,14 +2700,12 @@ public class ApfFilter implements AndroidPacketFilter {
         }
     }
 
-    @Override
     public boolean supportNdOffload() {
         return shouldUseApfV6Generator() && mShouldHandleNdOffload;
     }
 
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */, codename =
             "VanillaIceCream")
-    @Override
     public boolean shouldEnableMdnsOffload() {
         return shouldUseApfV6Generator() && mShouldHandleMdnsOffload;
     }
@@ -2773,6 +2766,14 @@ public class ApfFilter implements AndroidPacketFilter {
         log("Removing keepalive packet(" + slot + ")");
         mKeepalivePackets.remove(slot);
         installNewProgram();
+    }
+
+    /**
+     * Determines whether the APF interpreter advertises support for the data buffer access
+     * opcodes LDDW (LoaD Data Word) and STDW (STore Data Word).
+     */
+    public boolean hasDataAccess(int apfVersionSupported) {
+        return apfVersionSupported > 2;
     }
 
     public void dump(IndentingPrintWriter pw) {

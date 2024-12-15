@@ -178,7 +178,7 @@ public class ApfTest {
     @Mock private IpClientRaInfoMetrics mIpClientRaInfoMetrics;
     @Mock private IpClient.IpClientCallbacksWrapper mIpClientCb;
     @GuardedBy("mApfFilterCreated")
-    private final ArrayList<AndroidPacketFilter> mApfFilterCreated = new ArrayList<>();
+    private final ArrayList<ApfFilter> mApfFilterCreated = new ArrayList<>();
     private FileDescriptor mWriteSocket;
     private HandlerThread mHandlerThread;
     private Handler mHandler;
@@ -211,7 +211,7 @@ public class ApfTest {
     private void shutdownApfFilters() throws Exception {
         ConcurrentUtils.quitResources(THREAD_QUIT_MAX_RETRY_COUNT, () -> {
             synchronized (mApfFilterCreated) {
-                final ArrayList<AndroidPacketFilter> ret =
+                final ArrayList<ApfFilter> ret =
                         new ArrayList<>(mApfFilterCreated);
                 mApfFilterCreated.clear();
                 return ret;

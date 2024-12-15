@@ -20,7 +20,7 @@ import android.net.apf.ApfCounterTracker.Counter.CORRUPT_DNS_PACKET
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_NOT_ALLOWED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETH_BROADCAST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ALLOCATE_FAILURE
-import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP
+import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_REQUEST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_TRANSMIT_FAILURE
 import android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS
 import android.net.apf.ApfTestHelpers.Companion.DROP
@@ -249,67 +249,67 @@ class ApfGeneratorTest {
         assertFailsWith<IllegalArgumentException> {
             gen.addJumpIfBytesAtR0NotEqual(ByteArray(2048) { 1 }, DROP_LABEL)
         }
-        assertFailsWith<IllegalArgumentException> { gen.addCountAndDrop(PASSED_ARP) }
+        assertFailsWith<IllegalArgumentException> { gen.addCountAndDrop(PASSED_ARP_REQUEST) }
         assertFailsWith<IllegalArgumentException> { gen.addCountAndPass(DROPPED_ETH_BROADCAST) }
         assertFailsWith<IllegalArgumentException> {
-            gen.addCountAndDropIfR0Equals(3, PASSED_ARP)
+            gen.addCountAndDropIfR0Equals(3, PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             gen.addCountAndPassIfR0Equals(3, DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
-            gen.addCountAndDropIfR0NotEquals(3, PASSED_ARP)
+            gen.addCountAndDropIfR0NotEquals(3, PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             gen.addCountAndPassIfR0NotEquals(3, DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
-            gen.addCountAndDropIfR0LessThan(3, PASSED_ARP)
+            gen.addCountAndDropIfR0LessThan(3, PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             gen.addCountAndPassIfR0LessThan(3, DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
-            gen.addCountAndDropIfR0GreaterThan(3, PASSED_ARP)
+            gen.addCountAndDropIfR0GreaterThan(3, PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             gen.addCountAndPassIfR0GreaterThan(3, DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
-            gen.addCountAndDropIfBytesAtR0NotEqual(byteArrayOf(1), PASSED_ARP)
+            gen.addCountAndDropIfBytesAtR0NotEqual(byteArrayOf(1), PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
-            gen.addCountAndDropIfBytesAtR0Equal(byteArrayOf(1), PASSED_ARP)
+            gen.addCountAndDropIfBytesAtR0Equal(byteArrayOf(1), PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             gen.addCountAndPassIfBytesAtR0Equal(byteArrayOf(1), DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
-            gen.addCountAndDropIfR0AnyBitsSet(3, PASSED_ARP)
+            gen.addCountAndDropIfR0AnyBitsSet(3, PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             gen.addCountAndPassIfR0AnyBitsSet(3, DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
-            gen.addCountAndDropIfR0IsOneOf(setOf(3), PASSED_ARP)
+            gen.addCountAndDropIfR0IsOneOf(setOf(3), PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             gen.addCountAndPassIfR0IsOneOf(setOf(3), DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
-            gen.addCountAndDropIfR0IsNoneOf(setOf(3), PASSED_ARP)
+            gen.addCountAndDropIfR0IsNoneOf(setOf(3), PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             gen.addCountAndPassIfR0IsNoneOf(setOf(3), DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
-            gen.addCountAndDropIfBytesAtR0EqualsAnyOf(listOf(byteArrayOf(1)), PASSED_ARP)
+            gen.addCountAndDropIfBytesAtR0EqualsAnyOf(listOf(byteArrayOf(1)), PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             gen.addCountAndPassIfBytesAtR0EqualsAnyOf(listOf(byteArrayOf(1)), DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
-            gen.addCountAndDropIfBytesAtR0EqualsNoneOf(listOf(byteArrayOf(1)), PASSED_ARP)
+            gen.addCountAndDropIfBytesAtR0EqualsNoneOf(listOf(byteArrayOf(1)), PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             gen.addCountAndPassIfBytesAtR0EqualsNoneOf(
@@ -343,61 +343,61 @@ class ApfGeneratorTest {
         }
 
         val v4gen = ApfV4Generator(APF_VERSION_3, ramSize, clampSize)
-        assertFailsWith<IllegalArgumentException> { v4gen.addCountAndDrop(PASSED_ARP) }
+        assertFailsWith<IllegalArgumentException> { v4gen.addCountAndDrop(PASSED_ARP_REQUEST) }
         assertFailsWith<IllegalArgumentException> { v4gen.addCountAndPass(DROPPED_ETH_BROADCAST) }
         assertFailsWith<IllegalArgumentException> {
-            v4gen.addCountAndDropIfR0Equals(3, PASSED_ARP)
+            v4gen.addCountAndDropIfR0Equals(3, PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             v4gen.addCountAndPassIfR0Equals(3, DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
-            v4gen.addCountAndDropIfR0NotEquals(3, PASSED_ARP)
+            v4gen.addCountAndDropIfR0NotEquals(3, PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             v4gen.addCountAndPassIfR0NotEquals(3, DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
-            v4gen.addCountAndDropIfBytesAtR0Equal(byteArrayOf(1), PASSED_ARP)
+            v4gen.addCountAndDropIfBytesAtR0Equal(byteArrayOf(1), PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             v4gen.addCountAndPassIfBytesAtR0Equal(byteArrayOf(1), DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
-            v4gen.addCountAndDropIfR0LessThan(3, PASSED_ARP)
+            v4gen.addCountAndDropIfR0LessThan(3, PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             v4gen.addCountAndPassIfR0LessThan(3, DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
-            v4gen.addCountAndDropIfR0GreaterThan(3, PASSED_ARP)
+            v4gen.addCountAndDropIfR0GreaterThan(3, PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             v4gen.addCountAndPassIfR0GreaterThan(3, DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
-            v4gen.addCountAndDropIfBytesAtR0NotEqual(byteArrayOf(1), PASSED_ARP)
+            v4gen.addCountAndDropIfBytesAtR0NotEqual(byteArrayOf(1), PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
-            v4gen.addCountAndDropIfR0AnyBitsSet(3, PASSED_ARP)
+            v4gen.addCountAndDropIfR0AnyBitsSet(3, PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             v4gen.addCountAndPassIfR0AnyBitsSet(3, DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
-            v4gen.addCountAndDropIfR0IsOneOf(setOf(3), PASSED_ARP)
+            v4gen.addCountAndDropIfR0IsOneOf(setOf(3), PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             v4gen.addCountAndPassIfR0IsOneOf(setOf(3), DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
-            v4gen.addCountAndDropIfR0IsNoneOf(setOf(3), PASSED_ARP)
+            v4gen.addCountAndDropIfR0IsNoneOf(setOf(3), PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             v4gen.addCountAndPassIfR0IsNoneOf(setOf(3), DROPPED_ETH_BROADCAST)
         }
         assertFailsWith<IllegalArgumentException> {
-            v4gen.addCountAndDropIfBytesAtR0EqualsAnyOf(listOf(byteArrayOf(1)), PASSED_ARP)
+            v4gen.addCountAndDropIfBytesAtR0EqualsAnyOf(listOf(byteArrayOf(1)), PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             v4gen.addCountAndPassIfBytesAtR0EqualsAnyOf(
@@ -406,7 +406,7 @@ class ApfGeneratorTest {
             )
         }
         assertFailsWith<IllegalArgumentException> {
-            v4gen.addCountAndDropIfBytesAtR0EqualsNoneOf(listOf(byteArrayOf(1)), PASSED_ARP)
+            v4gen.addCountAndDropIfBytesAtR0EqualsNoneOf(listOf(byteArrayOf(1)), PASSED_ARP_REQUEST)
         }
         assertFailsWith<IllegalArgumentException> {
             v4gen.addCountAndPassIfBytesAtR0EqualsNoneOf(
@@ -492,18 +492,18 @@ class ApfGeneratorTest {
         )
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
-        gen.addCountAndPass(PASSED_ARP)
+        gen.addCountAndPass(PASSED_ARP_REQUEST)
         program = gen.generate().skipDataAndDebug()
         // encoding COUNT(PASS) opcode: opcode=0, imm_len=size_of(imm), R=0, imm=counterNumber
         assertContentEquals(
                 byteArrayOf(
                         encodeInstruction(opcode = 0, immLength = 1, register = 0),
-                        PASSED_ARP.value().toByte()
+                        PASSED_ARP_REQUEST.value().toByte()
                 ),
                 program
         )
         assertContentEquals(
-                listOf("0: pass        counter=10"),
+                listOf("0: pass        counter=11"),
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 
@@ -519,7 +519,7 @@ class ApfGeneratorTest {
                 program
         )
         assertContentEquals(
-                listOf("0: drop        counter=47"),
+                listOf("0: drop        counter=42"),
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 
@@ -568,14 +568,14 @@ class ApfGeneratorTest {
                 byteArrayOf(
                         encodeInstruction(opcode = 14, immLength = 2, register = 1), 1, 0
                 ) + largeByteArray + byteArrayOf(
-                        encodeInstruction(opcode = 21, immLength = 1, register = 0), 48, 5, -7
+                        encodeInstruction(opcode = 21, immLength = 1, register = 0), 48, 6, 21
                 ),
                 program
         )
         assertContentEquals(
                 listOf(
                         "0: data        256, " + "01".repeat(256),
-                        "259: debugbuf    size=1529"
+                        "259: debugbuf    size=1557"
                 ),
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
@@ -863,7 +863,7 @@ class ApfGeneratorTest {
                 .generate()
         assertContentEquals(listOf(
                 "0: data        9, 112233445566778899",
-                "12: debugbuf    size=1756",
+                "12: debugbuf    size=1784",
                 "16: allocate    18",
                 "20: datacopy    src=3, len=6",
                 "23: datacopy    src=4, len=3",
@@ -891,9 +891,9 @@ class ApfGeneratorTest {
         verifyProgramRun(APF_VERSION_6, program, testPacket, DROPPED_ETH_BROADCAST)
 
         program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
-                .addCountAndPass(Counter.PASSED_ARP)
+                .addCountAndPass(Counter.PASSED_ARP_REQUEST)
                 .generate()
-        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP_REQUEST)
     }
 
     @Test
@@ -913,14 +913,14 @@ class ApfGeneratorTest {
             getGenerator: () -> ApfV4GeneratorBase<*>
     ) {
         val program = getGenerator()
-                .addIncrementCounter(PASSED_ARP, 2)
+                .addIncrementCounter(PASSED_ARP_REQUEST, 2)
                 .addPass()
                 .generate()
         var dataRegion = ByteArray(Counter.totalSize()) { 0 }
         assertVerdict(APF_VERSION_6, PASS, program, testPacket, dataRegion)
         var counterMap = decodeCountersIntoMap(dataRegion)
         var expectedMap = getInitialMap()
-        expectedMap[PASSED_ARP] = 2
+        expectedMap[PASSED_ARP_REQUEST] = 2
         assertEquals(expectedMap, counterMap)
     }
 
@@ -960,11 +960,17 @@ class ApfGeneratorTest {
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
-                .addCountAndPassIfR0Equals(123, Counter.PASSED_ARP)
+                .addCountAndPassIfR0Equals(123, Counter.PASSED_ARP_REQUEST)
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            testPacket,
+            PASSED_ARP_REQUEST,
+            incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -982,11 +988,16 @@ class ApfGeneratorTest {
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
-                .addCountAndPassIfR0NotEquals(124, Counter.PASSED_ARP)
+                .addCountAndPassIfR0NotEquals(124, Counter.PASSED_ARP_REQUEST)
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
+        verifyProgramRun(
+            APF_VERSION_6,
+            program, testPacket,
+            PASSED_ARP_REQUEST,
+            incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1004,11 +1015,16 @@ class ApfGeneratorTest {
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
-                .addCountAndPassIfR0LessThan(124, Counter.PASSED_ARP)
+                .addCountAndPassIfR0LessThan(124, Counter.PASSED_ARP_REQUEST)
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
+        verifyProgramRun(
+            APF_VERSION_6,
+            program, testPacket,
+            PASSED_ARP_REQUEST,
+            incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1026,11 +1042,17 @@ class ApfGeneratorTest {
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
-                .addCountAndPassIfR0GreaterThan(122, Counter.PASSED_ARP)
+                .addCountAndPassIfR0GreaterThan(122, Counter.PASSED_ARP_REQUEST)
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            testPacket,
+            PASSED_ARP_REQUEST,
+            incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 1)
@@ -1050,11 +1072,17 @@ class ApfGeneratorTest {
         program = getGenerator()
                 .addLoadImmediate(R0, 1)
                 .addCountAndPassIfBytesAtR0NotEqual(
-                        byteArrayOf(5, 5), PASSED_ARP)
+                        byteArrayOf(5, 5), PASSED_ARP_REQUEST)
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            testPacket,
+            PASSED_ARP_REQUEST,
+            incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 1)
@@ -1072,11 +1100,17 @@ class ApfGeneratorTest {
 
         program = getGenerator()
                 .addLoadImmediate(R0, 1)
-                .addCountAndPassIfR0AnyBitsSet(0xffff, PASSED_ARP)
+                .addCountAndPassIfR0AnyBitsSet(0xffff, PASSED_ARP_REQUEST)
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            testPacket,
+            PASSED_ARP_REQUEST,
+            incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1094,11 +1128,17 @@ class ApfGeneratorTest {
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
-                .addCountAndPassIfR0IsOneOf(setOf(123), PASSED_ARP)
+                .addCountAndPassIfR0IsOneOf(setOf(123), PASSED_ARP_REQUEST)
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            testPacket,
+            PASSED_ARP_REQUEST,
+            incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1116,11 +1156,17 @@ class ApfGeneratorTest {
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
-                .addCountAndPassIfR0IsNoneOf(setOf(124), PASSED_ARP)
+                .addCountAndPassIfR0IsNoneOf(setOf(124), PASSED_ARP_REQUEST)
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            testPacket,
+            PASSED_ARP_REQUEST,
+            incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1138,11 +1184,17 @@ class ApfGeneratorTest {
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
-                .addCountAndPassIfR0IsOneOf(setOf(123, 124), PASSED_ARP)
+                .addCountAndPassIfR0IsOneOf(setOf(123, 124), PASSED_ARP_REQUEST)
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            testPacket,
+            PASSED_ARP_REQUEST,
+            incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
@@ -1160,11 +1212,17 @@ class ApfGeneratorTest {
 
         program = getGenerator()
                 .addLoadImmediate(R0, 123)
-                .addCountAndPassIfR0IsNoneOf(setOf(122, 124), PASSED_ARP)
+                .addCountAndPassIfR0IsNoneOf(setOf(122, 124), PASSED_ARP_REQUEST)
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            testPacket,
+            PASSED_ARP_REQUEST,
+            incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 0)
@@ -1187,12 +1245,18 @@ class ApfGeneratorTest {
                 .addLoadImmediate(R0, 0)
                 .addCountAndPassIfBytesAtR0EqualsAnyOf(
                         listOf(byteArrayOf(1, 2), byteArrayOf(3, 4)),
-                        PASSED_ARP
+                        PASSED_ARP_REQUEST
                 )
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            testPacket,
+            PASSED_ARP_REQUEST,
+            incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 0)
@@ -1215,12 +1279,18 @@ class ApfGeneratorTest {
                 .addLoadImmediate(R0, 0)
                 .addCountAndPassIfBytesAtR0EqualsNoneOf(
                         listOf(byteArrayOf(1, 3), byteArrayOf(3, 4)),
-                        PASSED_ARP
+                        PASSED_ARP_REQUEST
                 )
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            testPacket,
+            PASSED_ARP_REQUEST,
+            incTotal = incTotal
+        )
 
         program = getGenerator()
                 .addLoadImmediate(R0, 1)
@@ -1240,11 +1310,17 @@ class ApfGeneratorTest {
         program = getGenerator()
                 .addLoadImmediate(R0, 1)
                 .addCountAndPassIfBytesAtR0Equal(
-                        byteArrayOf(2, 3), PASSED_ARP)
+                        byteArrayOf(2, 3), PASSED_ARP_REQUEST)
                 .addPass()
                 .addCountTrampoline()
                 .generate()
-        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = incTotal)
+        verifyProgramRun(
+            APF_VERSION_6,
+            program,
+            testPacket,
+            PASSED_ARP_REQUEST,
+            incTotal = incTotal
+        )
     }
 
     @Test
@@ -1262,10 +1338,10 @@ class ApfGeneratorTest {
         )
 
         program = ApfV4Generator(APF_VERSION_3, ramSize, clampSize)
-                .addCountAndPass(Counter.PASSED_ARP)
+                .addCountAndPass(Counter.PASSED_ARP_REQUEST)
                 .addCountTrampoline()
                 .generate()
-        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP, incTotal = false)
+        verifyProgramRun(APF_VERSION_6, program, testPacket, PASSED_ARP_REQUEST, incTotal = false)
     }
 
     @Test
@@ -1279,7 +1355,7 @@ class ApfGeneratorTest {
         assertContentEquals(ByteArray(Counter.totalSize()) { 0 }, dataRegion)
 
         program = ApfV4Generator(APF_VERSION_2, ramSize, clampSize)
-                .addCountAndPass(PASSED_ARP)
+                .addCountAndPass(PASSED_ARP_REQUEST)
                 .addCountTrampoline()
                 .generate()
         dataRegion = ByteArray(Counter.totalSize()) { 0 }

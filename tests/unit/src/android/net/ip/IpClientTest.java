@@ -75,8 +75,8 @@ import android.net.LinkProperties;
 import android.net.MacAddress;
 import android.net.NetworkStackIpMemoryStore;
 import android.net.RouteInfo;
-import android.net.apf.AndroidPacketFilter;
 import android.net.apf.ApfCapabilities;
+import android.net.apf.ApfFilter;
 import android.net.apf.ApfFilter.ApfConfiguration;
 import android.net.ip.IpClientLinkObserver.IpClientNetlinkMonitor;
 import android.net.ip.IpClientLinkObserver.IpClientNetlinkMonitor.INetlinkMessageProcessor;
@@ -190,7 +190,7 @@ public class IpClientTest {
     @Mock private FileDescriptor mFd;
     @Mock private PrintWriter mWriter;
     @Mock private IpClientNetlinkMonitor mNetlinkMonitor;
-    @Mock private AndroidPacketFilter mApfFilter;
+    @Mock private ApfFilter mApfFilter;
 
     private InterfaceParams mIfParams;
     private INetlinkMessageProcessor mNetlinkMessageProcessor;

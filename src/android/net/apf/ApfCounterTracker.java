@@ -49,15 +49,10 @@ public class ApfCounterTracker {
         FILTER_AGE_16384THS,
         APF_VERSION,
         APF_PROGRAM_ID,
-        // TODO: removing PASSED_ARP after remove LegacyApfFilter.java
         // The counter sequence should keep the same as ApfSessionInfoMetrics.java
-        PASSED_ARP,  // see also MIN_PASS_COUNTER below.
-        PASSED_ARP_BROADCAST_REPLY,
-        // TODO: removing PASSED_ARP_NON_IPV4 after remove LegacyApfFilter.java
-        PASSED_ARP_NON_IPV4,
+        PASSED_ARP_BROADCAST_REPLY,  // see also MIN_PASS_COUNTER below.
         PASSED_ARP_REQUEST,
         PASSED_ARP_UNICAST_REPLY,
-        PASSED_ARP_UNKNOWN,
         PASSED_DHCP,
         PASSED_ETHER_OUR_SRC_MAC,
         PASSED_IPV4,
@@ -71,7 +66,6 @@ public class ApfCounterTracker {
         PASSED_IPV6_NS_TENTATIVE,
         PASSED_IPV6_UNICAST_NON_ICMP,
         PASSED_NON_IP_UNICAST,
-        PASSED_MDNS,
         PASSED_MLD,  // see also MAX_PASS_COUNTER below
         DROPPED_ETH_BROADCAST,  // see also MIN_DROP_COUNTER below
         DROPPED_RA,
@@ -82,7 +76,6 @@ public class ApfCounterTracker {
         DROPPED_IPV4_NON_DHCP4,
         DROPPED_IPV6_ROUTER_SOLICITATION,
         DROPPED_IPV6_MULTICAST_NA,
-        DROPPED_IPV6_MULTICAST,
         DROPPED_IPV6_MULTICAST_PING,
         DROPPED_IPV6_NON_ICMP_MULTICAST,
         DROPPED_IPV6_NS_INVALID,
@@ -91,14 +84,12 @@ public class ApfCounterTracker {
         DROPPED_802_3_FRAME,
         DROPPED_ETHERTYPE_NOT_ALLOWED,
         DROPPED_IPV4_KEEPALIVE_ACK,
-        DROPPED_IPV6_KEEPALIVE_ACK,
         DROPPED_IPV4_NATT_KEEPALIVE,
         DROPPED_MDNS,
         DROPPED_IPV4_TCP_PORT7_UNICAST,
         DROPPED_ARP_NON_IPV4,
         DROPPED_ARP_OTHER_HOST,
         DROPPED_ARP_REPLY_SPA_NO_HOST,
-        DROPPED_ARP_REQUEST_ANYHOST,
         DROPPED_ARP_REQUEST_REPLIED,
         DROPPED_ARP_UNKNOWN,
         DROPPED_ARP_V6_ONLY,
@@ -147,7 +138,7 @@ public class ApfCounterTracker {
 
     public static final Counter MIN_DROP_COUNTER = Counter.DROPPED_ETH_BROADCAST;
     public static final Counter MAX_DROP_COUNTER = Counter.DROPPED_GARP_REPLY;
-    public static final Counter MIN_PASS_COUNTER = Counter.PASSED_ARP;
+    public static final Counter MIN_PASS_COUNTER = Counter.PASSED_ARP_BROADCAST_REPLY;
     public static final Counter MAX_PASS_COUNTER = Counter.PASSED_MLD;
 
     private static final String TAG = ApfCounterTracker.class.getSimpleName();

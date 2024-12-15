@@ -83,7 +83,6 @@ import static com.android.networkstack.apishim.ConstantsShim.IFA_F_MANAGETEMPADD
 import static com.android.networkstack.apishim.ConstantsShim.IFA_F_NOPREFIXROUTE;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_ARP_OFFLOAD;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_ND_OFFLOAD;
-import static com.android.networkstack.util.NetworkStackUtils.APF_NEW_RA_FILTER_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.APF_POLLING_COUNTERS_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION;
@@ -117,7 +116,6 @@ import android.net.ProxyInfo;
 import android.net.RouteInfo;
 import android.net.TcpKeepalivePacketDataParcelable;
 import android.net.Uri;
-import android.net.apf.AndroidPacketFilter;
 import android.net.apf.ApfCapabilities;
 import android.net.apf.ApfFilter;
 import android.net.dhcp.DhcpClient;
@@ -826,7 +824,7 @@ public class IpClient extends StateMachine {
     private DhcpResults mDhcpResults;
     private String mTcpBufferSizes;
     private ProxyInfo mHttpProxy;
-    private AndroidPacketFilter mApfFilter;
+    private ApfFilter mApfFilter;
     private String mL2Key; // The L2 key for this network, for writing into the memory store
     private String mCluster; // The cluster for this network, for writing into the memory store
     private int mCreatorUid; // Uid of app creating the wifi configuration
@@ -982,7 +980,7 @@ public class IpClient extends StateMachine {
          * APF programs.
          * @see ApfFilter#maybeCreate
          */
-        public AndroidPacketFilter maybeCreateApfFilter(Handler handler, Context context,
+        public ApfFilter maybeCreateApfFilter(Handler handler, Context context,
                 ApfFilter.ApfConfiguration config, InterfaceParams ifParams,
                 IpClientCallbacksWrapper cb, NetworkQuirkMetrics networkQuirkMetrics) {
             return ApfFilter.maybeCreate(handler, context, config, ifParams, cb,
@@ -1480,7 +1478,7 @@ public class IpClient extends StateMachine {
         }
 
         // Thread-unsafe access to mApfFilter but just used for debugging.
-        final AndroidPacketFilter apfFilter = mApfFilter;
+        final ApfFilter apfFilter = mApfFilter;
         final android.net.shared.ProvisioningConfiguration provisioningConfig = mConfiguration;
         final ApfCapabilities apfCapabilities = mCurrentApfCapabilities;
 
@@ -2724,7 +2722,7 @@ public class IpClient extends StateMachine {
     }
 
     @Nullable
-    private AndroidPacketFilter maybeCreateApfFilter(final ApfCapabilities apfCaps) {
+    private ApfFilter maybeCreateApfFilter(final ApfCapabilities apfCaps) {
         ApfFilter.ApfConfiguration apfConfig = new ApfFilter.ApfConfiguration();
         if (apfCaps == null) {
             return null;

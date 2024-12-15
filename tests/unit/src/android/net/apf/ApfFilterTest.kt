@@ -42,11 +42,11 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NON_ICMP_MULTICAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HOST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_REPLIED_NON_DAD
-import android.net.apf.ApfCounterTracker.Counter.PASSED_ETHER_OUR_SRC_MAC
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_BROADCAST_REPLY
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_REQUEST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_UNICAST_REPLY
 import android.net.apf.ApfCounterTracker.Counter.PASSED_DHCP
+import android.net.apf.ApfCounterTracker.Counter.PASSED_ETHER_OUR_SRC_MAC
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_FROM_DHCPV4_SERVER
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_UNICAST
@@ -150,7 +150,7 @@ class ApfFilterTest {
     @Mock private lateinit var nsdManager: NsdManager
 
     @GuardedBy("mApfFilterCreated")
-    private val mApfFilterCreated = ArrayList<AndroidPacketFilter>()
+    private val mApfFilterCreated = ArrayList<ApfFilter>()
     private val loInterfaceParams = InterfaceParams.getByName("lo")
     private val ifParams =
         InterfaceParams(
@@ -237,7 +237,7 @@ class ApfFilterTest {
                 mApfFilterCreated.clear()
                 return@quitResources ret
             }
-        }, { apf: AndroidPacketFilter ->
+        }, { apf: ApfFilter ->
             handler.post { apf.shutdown() }
         })
 
