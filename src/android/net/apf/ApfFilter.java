@@ -2794,6 +2794,12 @@ public class ApfFilter {
         pw.decreaseIndent();
         try {
             pw.println("IPv4 address: " + InetAddress.getByAddress(mIPv4Address).getHostAddress());
+            pw.println("IPv4 multicast addresses: ");
+            pw.increaseIndent();
+            for (Inet4Address addr: mIPv4MulticastAddresses) {
+                pw.println(addr.getHostAddress());
+            }
+            pw.decreaseIndent();
             pw.println("IPv6 non-tentative addresses: ");
             pw.increaseIndent();
             for (Inet6Address addr : mIPv6NonTentativeAddresses) {
