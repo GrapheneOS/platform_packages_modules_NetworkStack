@@ -352,7 +352,6 @@ public class IpClientTest {
         mNetlinkMessageProcessor.processNetlinkMessage(msg, TEST_UNUSED_REAL_TIME /* whenMs */);
     }
 
-
     @Test
     public void testNullInterfaceNameMostDefinitelyThrows() throws Exception {
         setTestInterfaceParams(null);
@@ -976,6 +975,44 @@ public class IpClientTest {
         verify(mDependencies, never()).maybeCreateApfFilter(any(), any(), any(), any(), any(),
                 any());
         verifyShutdown(ipc);
+    }
+
+    @Test
+    public void testApfUpdateCapabilities_raceBetweenStopAndStartIpClient() throws Exception {
+        final IpClient ipc = makeIpClient(TEST_IFNAME);
+        ProvisioningConfiguration.Builder config = new ProvisioningConfiguration.Builder()
+                .withoutIPv4()
+                .withoutIpReachabilityMonitor()
+                .withInitialConfiguration(
+                        conf(links(TEST_LOCAL_ADDRESSES), prefixes(TEST_PREFIXES), ips()))
+                .withApfCapabilities(new ApfCapabilities(4 /* version */,
+                    4096 /* maxProgramSize */, ARPHRD_ETHER));
+        ipc.startProvisioning(config.build());
+
+        // Verify that APF filter can be created successfully.
+        ArgumentCaptor<ApfConfiguration> configCaptor = ArgumentCaptor.forClass(
+                ApfConfiguration.class);
+        verify(mDependencies, timeout(TEST_TIMEOUT_MS)).maybeCreateApfFilter(
+                any(), any(), configCaptor.capture(), any(), any(), any());
+        ApfConfiguration apfConfig = configCaptor.getValue();
+        assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, apfConfig.apfVersionSupported);
+        assertEquals(4096, apfConfig.apfRamSize);
+
+        clearInvocations(mDependencies);
+
+        // Simulate stopping IpClient and restarting provisioning immediately, verify IpClient
+        // can still create APF filter successfully, make sure the race of mApfCapabilities
+        // initialization has been fixed.
+        ipc.stop();
+        // Update the maxProgramSize to differentiate with above APF config.
+        config.withApfCapabilities(new ApfCapabilities(4 /* version */,
+                2048 /* maxProgramSize */, ARPHRD_ETHER));
+        ipc.startProvisioning(config.build());
+        verify(mDependencies, timeout(TEST_TIMEOUT_MS)).maybeCreateApfFilter(
+                any(), any(), configCaptor.capture(), any(), any(), any());
+        apfConfig = configCaptor.getValue();
+        assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, apfConfig.apfVersionSupported);
+        assertEquals(2048, apfConfig.apfRamSize);
     }
 
     @Test

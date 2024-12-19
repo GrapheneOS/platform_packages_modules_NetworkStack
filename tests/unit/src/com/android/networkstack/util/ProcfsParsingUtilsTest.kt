@@ -40,6 +40,34 @@ class ProcfsParsingUtilsTest {
     }
 
     @Test
+    fun testParseDefaultTtl() {
+        assertEquals(
+            128,
+            ProcfsParsingUtils.parseDefaultTtl(listOf("128"))
+        )
+
+        assertEquals(
+            64,
+            ProcfsParsingUtils.parseDefaultTtl(listOf())
+        )
+
+        assertEquals(
+            1,
+            ProcfsParsingUtils.parseDefaultTtl(listOf("0"))
+        )
+
+        assertEquals(
+            255,
+            ProcfsParsingUtils.parseDefaultTtl(listOf("256"))
+        )
+
+        assertEquals(
+            64,
+            ProcfsParsingUtils.parseDefaultTtl(listOf("ABC"))
+        )
+    }
+
+    @Test
     fun testParseAnycast6Address() {
         val inputString = listOf(
             "41 eth0  2a0034e2abc1334591a733387s2e322e 2",

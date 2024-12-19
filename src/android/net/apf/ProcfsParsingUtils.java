@@ -46,6 +46,7 @@ public final class ProcfsParsingUtils {
     private static final String ETHER_MCAST_PATH = "/proc/net/dev_mcast";
     private static final String IPV4_MCAST_PATH = "/proc/net/igmp";
     private static final String IPV6_MCAST_PATH = "/proc/net/igmp6";
+    private static final String IPV4_DEFAULT_TTL_PATH = "/proc/sys/net/ipv4/ip_default_ttl";
 
     private ProcfsParsingUtils() {
     }
@@ -88,6 +89,23 @@ public final class ProcfsParsingUtils {
         }
 
         return Integer.parseInt(lines.get(0));
+    }
+
+    /**
+     * Parses the default TTL value from the procfs file lines.
+     */
+    @VisibleForTesting
+    public static int parseDefaultTtl(final List<String> lines) {
+        if (lines.size() != 1) {
+            return 64;  // default ttl value as per rfc1700
+        }
+        try {
+            // ttl must be in the range [1, 255]
+            return Math.max(1, Math.min(255, Integer.parseInt(lines.get(0))));
+        } catch (NumberFormatException e) {
+            Log.e(TAG, "failed to parse default ttl.", e);
+            return 64; // default ttl value as per rfc1700
+        }
     }
 
     /**
@@ -245,6 +263,21 @@ public final class ProcfsParsingUtils {
         bigEndianBuffer.order(ByteOrder.BIG_ENDIAN);
         bigEndianBuffer.putInt(buffer.getInt());
         return bigEndianBuffer.array();
+    }
+
+    /**
+     * Returns the default TTL value for IPv4 packets.
+     */
+    private static int getIpv4DefaultTtl() {
+        return parseDefaultTtl(readFile(IPV4_DEFAULT_TTL_PATH));
+    }
+
+    /**
+     * Returns the default HopLimit value for IPv6 packets.
+     */
+    private static int getIpv6DefaultHopLimit(@NonNull String ifname) {
+        final String hopLimitPath = IPV6_CONF_PATH + ifname + "/hop_limit";
+        return parseDefaultTtl(readFile(hopLimitPath));
     }
 
     /**

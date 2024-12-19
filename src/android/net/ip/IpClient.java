@@ -1052,8 +1052,8 @@ public class IpClient extends StateMachine {
         mNetd = deps.getNetd(mContext);
         mInterfaceCtrl = new InterfaceController(mInterfaceName, mNetd, mLog);
 
-        mDhcp6PrefixDelegationEnabled = mDependencies.isFeatureEnabled(mContext,
-                IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION);
+        mDhcp6PrefixDelegationEnabled = mDependencies.isFeatureNotChickenedOut(
+                mContext, IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION);
 
         mAcceptRaMinLft = mDependencies.getDeviceConfigPropertyInt(CONFIG_ACCEPT_RA_MIN_LFT,
                 DEFAULT_ACCEPT_RA_MIN_LFT);
@@ -1337,15 +1337,6 @@ public class IpClient extends StateMachine {
         if (!req.isValid()) {
             doImmediateProvisioningFailure(IpManagerEvent.ERROR_INVALID_PROVISIONING);
             return;
-        }
-
-        mCurrentBssid = getInitialBssid(req.mLayer2Info, req.mScanResultInfo,
-                ShimUtils.isAtLeastS());
-        mCurrentApfCapabilities = req.mApfCapabilities;
-        mCreatorUid = req.mCreatorUid;
-        if (req.mLayer2Info != null) {
-            mL2Key = req.mLayer2Info.mL2Key;
-            mCluster = req.mLayer2Info.mCluster;
         }
         sendMessage(CMD_START, new android.net.shared.ProvisioningConfiguration(req));
     }
@@ -2797,6 +2788,17 @@ public class IpClient extends StateMachine {
         return apfCapabilities != null;
     }
 
+    private void handleProvisioningConfiguration(@NonNull final ProvisioningConfiguration config) {
+        mCurrentBssid = getInitialBssid(config.mLayer2Info, config.mScanResultInfo,
+                ShimUtils.isAtLeastS());
+        mCurrentApfCapabilities = config.mApfCapabilities;
+        mCreatorUid = config.mCreatorUid;
+        if (config.mLayer2Info != null) {
+            mL2Key = config.mLayer2Info.mL2Key;
+            mCluster = config.mLayer2Info.mCluster;
+        }
+    }
+
     class StoppedState extends State {
         @Override
         public void enter() {
@@ -2831,6 +2833,7 @@ public class IpClient extends StateMachine {
 
                 case CMD_START:
                     mConfiguration = (android.net.shared.ProvisioningConfiguration) msg.obj;
+                    handleProvisioningConfiguration(mConfiguration);
                     transitionTo(mIgnoreNudFailureEnabled
                             ? mNudFailureQueryState
                             : mClearingIpAddressesState);
