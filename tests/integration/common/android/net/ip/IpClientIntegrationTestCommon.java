@@ -427,7 +427,6 @@ public abstract class IpClientIntegrationTestCommon {
     private static final int DHCP_HEADER_OFFSET = ETH_HEADER_LEN + IPV4_HEADER_LEN
             + UDP_HEADER_LEN;
     private static final int DHCP_MESSAGE_OP_CODE_OFFSET = DHCP_HEADER_OFFSET + 0;
-    private static final int DHCP_TRANSACTION_ID_OFFSET = DHCP_HEADER_OFFSET + 4;
     private static final int DHCP_OPTION_MAGIC_COOKIE_OFFSET = DHCP_HEADER_OFFSET + 236;
 
     // DHCPv6 header
@@ -465,16 +464,12 @@ public abstract class IpClientIntegrationTestCommon {
     private static final String TEST_HOST_NAME = "AOSP on Crosshatch";
     private static final String TEST_HOST_NAME_TRANSLITERATION = "AOSP-on-Crosshatch";
     private static final String TEST_CAPTIVE_PORTAL_URL = "https://example.com/capportapi";
-    private static final byte[] TEST_HOTSPOT_OUI = new byte[] {
-            (byte) 0x00, (byte) 0x17, (byte) 0xF2
-    };
     private static final byte LEGACY_TEST_VENDOR_SPECIFIC_IE_TYPE = 0x11;
     private static final byte TEST_VENDOR_SPECIFIC_IE_TYPE = 0x21;
     private static final int TEST_VENDOR_SPECIFIC_IE_ID = 0xdd;
 
     private static final String TEST_DEFAULT_SSID = "test_ssid";
     private static final String TEST_DEFAULT_BSSID = "00:11:22:33:44:55";
-    private static final String TEST_DHCP_ROAM_SSID = "0001docomo";
     private static final String TEST_DHCP_ROAM_BSSID = "00:4e:35:17:98:55";
     private static final String TEST_DHCP_ROAM_L2KEY = "roaming_l2key";
     private static final String TEST_DHCP_ROAM_CLUSTER = "roaming_cluster";
@@ -1052,15 +1047,6 @@ public abstract class IpClientIntegrationTestCommon {
 
     private OnAlarmListener expectAlarmSet(InOrder inOrder, String tagMatch, int afterSeconds) {
         return expectAlarmSet(inOrder, tagMatch, (long) afterSeconds, mIpc.getHandler());
-    }
-
-    private boolean packetContainsExpectedField(final byte[] packet, final int offset,
-            final byte[] expected) {
-        if (packet.length < offset + expected.length) return false;
-        for (int i = 0; i < expected.length; ++i) {
-            if (packet[offset + i] != expected[i]) return false;
-        }
-        return true;
     }
 
     private boolean isDhcpPacket(final byte[] packet) {
@@ -1671,7 +1657,6 @@ public abstract class IpClientIntegrationTestCommon {
             verify(mCb, never()).onProvisioningFailure(any());
             assertIpMemoryNeverStoreNetworkAttributes();
         } else if (isDhcpIpConflictDetectEnabled) {
-            int arpPacketCount = 0;
             final List<ArpPacket> packetList = new ArrayList<ArpPacket>();
             // Total sent ARP packets should be 5 (3 ARP Probes + 2 ARP Announcements)
             ArpPacket packet;
@@ -3115,7 +3100,6 @@ public abstract class IpClientIntegrationTestCommon {
 
     private LinkProperties performDualStackProvisioning(final ByteBuffer ra,
             final InetAddress dnsServer) throws Exception {
-        final InOrder inOrder = inOrder(mCb);
         final CompletableFuture<LinkProperties> lpFuture = new CompletableFuture<>();
 
         // Start IPv4 provisioning first and wait IPv4 provisioning to succeed, and then start
@@ -4908,7 +4892,6 @@ public abstract class IpClientIntegrationTestCommon {
     @Test
     @IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
     public void testMaxDtimMultiplier_IPv6LinkLocalOnlyMode() throws Exception {
-        final InOrder inOrder = inOrder(mCb);
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIPv4()
                 .withIpv6LinkLocalOnly()
