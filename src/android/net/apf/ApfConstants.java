@@ -17,8 +17,14 @@ package android.net.apf;
 
 import static com.android.net.module.util.NetworkStackConstants.ETHER_HEADER_LEN;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_HEADER_MIN_LEN;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_IGMP_TYPE_V1_REPORT;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_IGMP_TYPE_V2_JOIN_REPORT;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_IGMP_TYPE_V2_LEAVE_REPORT;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_IGMP_TYPE_V3_REPORT;
 
 import android.net.InetAddresses;
+
+import java.util.Set;
 
 /**
  * The class which declares constants used in ApfFilter and unit tests.
@@ -49,6 +55,11 @@ public final class ApfConstants {
     // The IPv4 all multicast routers destination 224.0.0.22
     public static final byte[] IPV4_ALL_IGMPV3_MULTICAST_ROUTERS_ADDRESS =
             InetAddresses.parseNumericAddress("224.0.0.22").getAddress();
+    public static final Set<Long> IGMP_TYPE_REPORTS = Set.of(
+            (long) IPV4_IGMP_TYPE_V1_REPORT,
+            (long) IPV4_IGMP_TYPE_V2_JOIN_REPORT,
+            (long) IPV4_IGMP_TYPE_V2_LEAVE_REPORT,
+            (long) IPV4_IGMP_TYPE_V3_REPORT);
     public static final int IPV4_ROUTER_ALERT_OPTION_LEN = 4;
     public static final int IGMP_CHECKSUM_OFFSET =
             ETHER_HEADER_LEN + IPV4_HEADER_MIN_LEN + IPV4_ROUTER_ALERT_OPTION_LEN + 2;

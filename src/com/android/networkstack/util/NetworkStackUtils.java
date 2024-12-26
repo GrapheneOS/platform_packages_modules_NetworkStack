@@ -452,6 +452,16 @@ public class NetworkStackUtils {
         addArpEntry(ethAddr.toByteArray(), ipv4Addr.getAddress(), ifname, fd);
     }
 
+    /**
+     * Attaches a socket filter that accepts egress IGMPv2/IGMPv3 reports to the given socket.
+     *
+     * This filter doesn't include IGMPv1 report since device will not send out IGMPv1 report
+     * when the device leaves a multicast address group.
+     *
+     * @param fd the socket's {@link FileDescriptor}.
+     */
+    public static native void attachEgressIgmpReportFilter(FileDescriptor fd) throws ErrnoException;
+
     private static native void addArpEntry(byte[] ethAddr, byte[] netAddr, String ifname,
             FileDescriptor fd) throws IOException;
 
