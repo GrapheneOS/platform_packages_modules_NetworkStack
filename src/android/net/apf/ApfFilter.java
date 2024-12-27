@@ -101,6 +101,7 @@ import static android.net.util.SocketUtils.makePacketSocketAddress;
 import static android.os.PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED;
 import static android.os.PowerManager.ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED;
 import static android.system.OsConstants.AF_PACKET;
+import static android.system.OsConstants.ETH_P_ALL;
 import static android.system.OsConstants.ETH_P_ARP;
 import static android.system.OsConstants.ETH_P_IP;
 import static android.system.OsConstants.ETH_P_IPV6;
@@ -143,6 +144,7 @@ import android.net.NattKeepalivePacketDataParcelable;
 import android.net.TcpKeepalivePacketDataParcelable;
 import android.net.apf.ApfCounterTracker.Counter;
 import android.net.apf.BaseApfGenerator.IllegalInstructionException;
+import android.net.ip.IgmpReportMonitor;
 import android.net.ip.IpClient.IpClientCallbacksWrapper;
 import android.net.nsd.NsdManager;
 import android.net.nsd.OffloadEngine;
@@ -217,6 +219,7 @@ public class ApfFilter {
         public boolean shouldHandleArpOffload;
         public boolean shouldHandleNdOffload;
         public boolean shouldHandleMdnsOffload;
+        public boolean shouldHandleIgmpOffload;
     }
 
 
@@ -284,11 +287,14 @@ public class ApfFilter {
     private final boolean mShouldHandleArpOffload;
     private final boolean mShouldHandleNdOffload;
     private final boolean mShouldHandleMdnsOffload;
+    private final boolean mShouldHandleIgmpOffload;
 
     private final NetworkQuirkMetrics mNetworkQuirkMetrics;
     private final IpClientRaInfoMetrics mIpClientRaInfoMetrics;
     private final ApfSessionInfoMetrics mApfSessionInfoMetrics;
     private final NsdManager mNsdManager;
+    private final IgmpReportMonitor mIgmpReportMonitor;
+
     @VisibleForTesting
     final List<OffloadServiceInfo> mOffloadServiceInfos = new ArrayList<>();
     private OffloadEngine mOffloadEngine;
@@ -442,6 +448,7 @@ public class ApfFilter {
         mShouldHandleArpOffload = config.shouldHandleArpOffload;
         mShouldHandleNdOffload = config.shouldHandleNdOffload;
         mShouldHandleMdnsOffload = config.shouldHandleMdnsOffload;
+        mShouldHandleIgmpOffload = config.shouldHandleIgmpOffload;
         mDependencies = dependencies;
         mNetworkQuirkMetrics = networkQuirkMetrics;
         mIpClientRaInfoMetrics = dependencies.getIpClientRaInfoMetrics();
@@ -476,6 +483,17 @@ public class ApfFilter {
             Log.wtf(TAG, "Failed to start RaPacketReader");
         }
 
+        mIgmpReportMonitor = new IgmpReportMonitor(
+            mHandler,
+            mInterfaceParams,
+            this::updateIPv4MulticastAddrs,
+            mDependencies.createEgressIgmpReportsReaderSocket(ifParams.index)
+        );
+
+        if (shouldEnableIgmpOffload()) {
+            mIgmpReportMonitor.start();
+        }
+
         // Listen for doze-mode transition changes to enable/disable the IPv6 multicast filter.
         mDependencies.addDeviceIdleReceiver(mDeviceIdleReceiver);
 
@@ -483,6 +501,9 @@ public class ApfFilter {
         if (shouldEnableMdnsOffload()) {
             registerOffloadEngine();
         }
+
+        mIPv4MulticastAddresses =
+                new ArraySet<>(mDependencies.getIPv4MulticastAddresses(mInterfaceParams.name));
     }
 
     /**
@@ -510,6 +531,24 @@ public class ApfFilter {
                 Log.wtf(TAG, "Error starting filter", e);
                 return null;
             }
+            return socket;
+        }
+
+        /**
+         * Create a socket to read egress IGMPv2/v3 reports.
+         */
+        @Nullable
+        public FileDescriptor createEgressIgmpReportsReaderSocket(int ifIndex) {
+            FileDescriptor socket;
+            try {
+                socket = Os.socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, 0);
+                NetworkStackUtils.attachEgressIgmpReportFilter(socket);
+                Os.bind(socket, makePacketSocketAddress(ETH_P_ALL, ifIndex));
+            } catch (SocketException | ErrnoException e) {
+                Log.wtf(TAG, "Error starting filter", e);
+                return null;
+            }
+
             return socket;
         }
 
@@ -2604,6 +2643,10 @@ public class ApfFilter {
         if (shouldEnableMdnsOffload()) {
             unregisterOffloadEngine();
         }
+
+        if (shouldEnableIgmpOffload()) {
+            mIgmpReportMonitor.stop();
+        }
     }
 
     public void setMulticastFilter(boolean isEnabled) {
@@ -2706,8 +2749,12 @@ public class ApfFilter {
 
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */, codename =
             "VanillaIceCream")
-    public boolean shouldEnableMdnsOffload() {
+    private boolean shouldEnableMdnsOffload() {
         return shouldUseApfV6Generator() && mShouldHandleMdnsOffload;
+    }
+
+    private boolean shouldEnableIgmpOffload() {
+        return shouldUseApfV6Generator() && mShouldHandleIgmpOffload;
     }
 
     private boolean shouldUseApfV6Generator() {

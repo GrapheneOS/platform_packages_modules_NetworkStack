@@ -994,7 +994,8 @@ class ApfGeneratorTest {
                 .generate()
         verifyProgramRun(
             APF_VERSION_6,
-            program, testPacket,
+            program,
+            testPacket,
             PASSED_ARP_REQUEST,
             incTotal = incTotal
         )
@@ -1021,7 +1022,8 @@ class ApfGeneratorTest {
                 .generate()
         verifyProgramRun(
             APF_VERSION_6,
-            program, testPacket,
+            program,
+            testPacket,
             PASSED_ARP_REQUEST,
             incTotal = incTotal
         )

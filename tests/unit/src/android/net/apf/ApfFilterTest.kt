@@ -133,6 +133,7 @@ import org.mockito.invocation.InvocationOnMock
 class ApfFilterTest {
     companion object {
         private const val THREAD_QUIT_MAX_RETRY_COUNT = 3
+        private const val NO_CALLBACK_TIMEOUT_MS: Long = 500
         private const val TAG = "ApfFilterTest"
     }
 
@@ -206,6 +207,7 @@ class ApfFilterTest {
     }
     private val handler by lazy { Handler(handlerThread.looper) }
     private var writerSocket = FileDescriptor()
+    private var igmpWriteSocket = FileDescriptor()
 
     @Before
     fun setUp() {
@@ -227,6 +229,9 @@ class ApfFilterTest {
         val readSocket = FileDescriptor()
         Os.socketpair(AF_UNIX, SOCK_STREAM, 0, writerSocket, readSocket)
         doReturn(readSocket).`when`(dependencies).createPacketReaderSocket(anyInt())
+        val igmpReadSocket = FileDescriptor()
+        Os.socketpair(AF_UNIX, SOCK_STREAM, 0, igmpWriteSocket, igmpReadSocket)
+        doReturn(igmpReadSocket).`when`(dependencies).createEgressIgmpReportsReaderSocket(anyInt())
         doReturn(nsdManager).`when`(context).getSystemService(NsdManager::class.java)
     }
 
@@ -253,6 +258,7 @@ class ApfFilterTest {
     @After
     fun tearDown() {
         IoUtils.closeQuietly(writerSocket)
+        IoUtils.closeQuietly(igmpWriteSocket)
         shutdownApfFilters()
         handler.waitForIdle(TIMEOUT_MS)
         Mockito.framework().clearInlineMocks()
@@ -2122,6 +2128,35 @@ class ApfFilterTest {
         // add the same IPv6 addresses, expect to have no apf program update
         apfFilter.setLinkProperties(lp)
         verify(ipClientCallback, never()).installPacketFilter(any())
+    }
+
+    // The APFv6 code path is only turned on in V+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testApfProgramUpdateWithMulticastAddressChange() {
+        val mcastAddrs = mutableListOf(
+            InetAddress.getByName("224.0.0.1") as Inet4Address
+        )
+        doReturn(mcastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())
+        val apfConfig = getDefaultConfig()
+        apfConfig.shouldHandleIgmpOffload = true
+        val apfFilter = getApfFilter(apfConfig)
+        consumeInstalledProgram(ipClientCallback, installCnt = 2)
+        val addr = InetAddress.getByName("239.0.0.1") as Inet4Address
+        mcastAddrs.add(addr)
+        doReturn(mcastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())
+        val testPacket = HexDump.hexStringToByteArray("000000")
+        Os.write(igmpWriteSocket, testPacket, 0, testPacket.size)
+        consumeInstalledProgram(ipClientCallback, installCnt = 1)
+
+        Os.write(igmpWriteSocket, testPacket, 0, testPacket.size)
+        Thread.sleep(NO_CALLBACK_TIMEOUT_MS)
+        verify(ipClientCallback, never()).installPacketFilter(any())
+
+        mcastAddrs.remove(addr)
+        doReturn(mcastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())
+        Os.write(igmpWriteSocket, testPacket, 0, testPacket.size)
+        consumeInstalledProgram(ipClientCallback, installCnt = 1)
     }
 
     @Test
