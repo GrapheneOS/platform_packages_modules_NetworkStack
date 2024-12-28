@@ -268,14 +268,14 @@ public final class ProcfsParsingUtils {
     /**
      * Returns the default TTL value for IPv4 packets.
      */
-    private static int getIpv4DefaultTtl() {
+    public static int getIpv4DefaultTtl() {
         return parseDefaultTtl(readFile(IPV4_DEFAULT_TTL_PATH));
     }
 
     /**
      * Returns the default HopLimit value for IPv6 packets.
      */
-    private static int getIpv6DefaultHopLimit(@NonNull String ifname) {
+    public static int getIpv6DefaultHopLimit(@NonNull String ifname) {
         final String hopLimitPath = IPV6_CONF_PATH + ifname + "/hop_limit";
         return parseDefaultTtl(readFile(hopLimitPath));
     }

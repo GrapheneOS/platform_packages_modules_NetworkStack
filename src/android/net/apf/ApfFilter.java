@@ -126,6 +126,7 @@ import static com.android.net.module.util.NetworkStackConstants.ICMPV6_NEIGHBOR_
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_NEIGHBOR_SOLICITATION;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_SOLICITATION;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ALL_HOST_MULTICAST;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_LEN;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_LEN;
 
@@ -357,6 +358,10 @@ public class ApfFilter {
     // Our joined IPv4 multicast addresses
     @VisibleForTesting
     public Set<Inet4Address> mIPv4MulticastAddresses = new ArraySet<>();
+
+    // Our joined IPv4 multicast address exclude all all host multicast (224.0.0.1)
+    @VisibleForTesting
+    final Set<Inet4Address> mIPv4McastAddrsExcludeAllHost = new ArraySet<>();
 
     // Whether CLAT is enabled.
     private boolean mHasClat;
@@ -2738,7 +2743,12 @@ public class ApfFilter {
                 new ArraySet<>(mDependencies.getIPv4MulticastAddresses(mInterfaceParams.name));
 
         if (!mIPv4MulticastAddresses.equals(mcastAddrs)) {
-            mIPv4MulticastAddresses = mcastAddrs;
+            mIPv4MulticastAddresses.clear();
+            mIPv4MulticastAddresses.addAll(mcastAddrs);
+
+            mIPv4McastAddrsExcludeAllHost.clear();
+            mIPv4McastAddrsExcludeAllHost.addAll(mcastAddrs);
+            mIPv4McastAddrsExcludeAllHost.remove(IPV4_ADDR_ALL_HOST_MULTICAST);
             installNewProgram();
         }
     }

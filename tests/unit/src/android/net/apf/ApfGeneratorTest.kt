@@ -519,7 +519,7 @@ class ApfGeneratorTest {
                 program
         )
         assertContentEquals(
-                listOf("0: drop        counter=42"),
+                listOf("0: drop        counter=44"),
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
 
@@ -568,14 +568,14 @@ class ApfGeneratorTest {
                 byteArrayOf(
                         encodeInstruction(opcode = 14, immLength = 2, register = 1), 1, 0
                 ) + largeByteArray + byteArrayOf(
-                        encodeInstruction(opcode = 21, immLength = 1, register = 0), 48, 6, 21
+                        encodeInstruction(opcode = 21, immLength = 1, register = 0), 48, 6, 13
                 ),
                 program
         )
         assertContentEquals(
                 listOf(
                         "0: data        256, " + "01".repeat(256),
-                        "259: debugbuf    size=1557"
+                        "259: debugbuf    size=1549"
                 ),
                 ApfJniUtils.disassembleApf(program).map { it.trim() }
         )
@@ -863,7 +863,7 @@ class ApfGeneratorTest {
                 .generate()
         assertContentEquals(listOf(
                 "0: data        9, 112233445566778899",
-                "12: debugbuf    size=1784",
+                "12: debugbuf    size=1776",
                 "16: allocate    18",
                 "20: datacopy    src=3, len=6",
                 "23: datacopy    src=4, len=3",
