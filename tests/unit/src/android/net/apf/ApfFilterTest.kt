@@ -2179,21 +2179,21 @@ class ApfFilterTest {
 
     @Test
     fun testApfIPv4MulticastAddrsUpdate() {
-        val apfFilter = getApfFilter()
         // mock IPv4 multicast address from /proc/net/igmp
         val mcastAddrs = mutableListOf(
-            InetAddress.getByName("224.0.0.1") as Inet4Address
+            InetAddress.getByName("224.0.0.1") as Inet4Address,
+            InetAddress.getByName("239.0.0.1") as Inet4Address
         )
-        val mcastAddrsExcludeAllHost = mutableListOf<Inet4Address>()
-        consumeInstalledProgram(ipClientCallback, installCnt = 2)
-
+        val mcastAddrsExcludeAllHost = mutableListOf(
+            InetAddress.getByName("239.0.0.1") as Inet4Address
+        )
         doReturn(mcastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())
-        apfFilter.updateIPv4MulticastAddrs()
-        consumeInstalledProgram(ipClientCallback, installCnt = 1)
+        val apfFilter = getApfFilter()
+        consumeInstalledProgram(ipClientCallback, installCnt = 2)
         assertEquals(mcastAddrs.toSet(), apfFilter.mIPv4MulticastAddresses)
         assertEquals(mcastAddrsExcludeAllHost.toSet(), apfFilter.mIPv4McastAddrsExcludeAllHost)
 
-        val addr = InetAddress.getByName("239.0.0.1") as Inet4Address
+        val addr = InetAddress.getByName("239.0.0.2") as Inet4Address
         mcastAddrs.add(addr)
         mcastAddrsExcludeAllHost.add(addr)
         doReturn(mcastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())

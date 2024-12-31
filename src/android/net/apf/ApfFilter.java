@@ -357,7 +357,7 @@ public class ApfFilter {
 
     // Our joined IPv4 multicast addresses
     @VisibleForTesting
-    public Set<Inet4Address> mIPv4MulticastAddresses = new ArraySet<>();
+    final Set<Inet4Address> mIPv4MulticastAddresses = new ArraySet<>();
 
     // Our joined IPv4 multicast address exclude all all host multicast (224.0.0.1)
     @VisibleForTesting
@@ -507,8 +507,10 @@ public class ApfFilter {
             registerOffloadEngine();
         }
 
-        mIPv4MulticastAddresses =
-                new ArraySet<>(mDependencies.getIPv4MulticastAddresses(mInterfaceParams.name));
+        mIPv4MulticastAddresses.addAll(
+                mDependencies.getIPv4MulticastAddresses(mInterfaceParams.name));
+        mIPv4McastAddrsExcludeAllHost.addAll(mIPv4MulticastAddresses);
+        mIPv4McastAddrsExcludeAllHost.remove((IPV4_ADDR_ALL_HOST_MULTICAST));
     }
 
     /**

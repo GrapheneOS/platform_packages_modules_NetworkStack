@@ -135,6 +135,7 @@ public final class ApfConstants {
     // NOTE: this must be added to the IPv4 header length in MemorySlot.IPV4_HEADER_SIZE
     public static final int TCP_UDP_SOURCE_PORT_OFFSET = ETH_HEADER_LEN;
     public static final int TCP_UDP_DESTINATION_PORT_OFFSET = ETH_HEADER_LEN + 2;
+    public static final int IGMP_MAX_RESP_TIME_OFFSET = ETHER_HEADER_LEN + 1;
     public static final int IGMP_MULTICAST_ADDRESS_OFFSET = ETH_HEADER_LEN + 4;
     public static final int UDP_HEADER_LEN = 8;
 
