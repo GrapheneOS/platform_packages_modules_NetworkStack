@@ -1,3 +1,6 @@
+# Keep JNI registered methods
+-keepclasseswithmembers,includedescriptorclasses class * { native <methods>; }
+
 -keepclassmembers class com.android.networkstack.android.net.ip.IpClient$IpClientCommands {
     static final int CMD_*;
     static final int EVENT_*;
@@ -6,10 +9,6 @@
 -keepclassmembers class com.android.networkstack.android.net.dhcp.DhcpClient {
     static final int CMD_*;
     static final int EVENT_*;
-}
-
--keepclassmembers class com.android.networkstack.util.NetworkStackUtils {
-    native <methods>;
 }
 
 -keepclassmembers public class * extends com.android.networkstack.com.android.net.module.util.Struct {

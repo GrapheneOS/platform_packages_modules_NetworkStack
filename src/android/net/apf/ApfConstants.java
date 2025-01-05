@@ -21,6 +21,8 @@ import static com.android.net.module.util.NetworkStackConstants.IPV4_IGMP_TYPE_V
 import static com.android.net.module.util.NetworkStackConstants.IPV4_IGMP_TYPE_V2_JOIN_REPORT;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_IGMP_TYPE_V2_LEAVE_REPORT;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_IGMP_TYPE_V3_REPORT;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_OPTION_LEN_ROUTER_ALERT;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_OPTION_TYPE_ROUTER_ALERT;
 
 import android.net.InetAddresses;
 
@@ -60,9 +62,18 @@ public final class ApfConstants {
             (long) IPV4_IGMP_TYPE_V2_JOIN_REPORT,
             (long) IPV4_IGMP_TYPE_V2_LEAVE_REPORT,
             (long) IPV4_IGMP_TYPE_V3_REPORT);
+    public static final byte[] IPV4_ROUTER_ALERT_OPTION = {
+            (byte) IPV4_OPTION_TYPE_ROUTER_ALERT,   // option type
+            (byte) IPV4_OPTION_LEN_ROUTER_ALERT,    // option length
+            0,  0   // option value
+    };
     public static final int IPV4_ROUTER_ALERT_OPTION_LEN = 4;
     public static final int IGMP_CHECKSUM_OFFSET =
             ETHER_HEADER_LEN + IPV4_HEADER_MIN_LEN + IPV4_ROUTER_ALERT_OPTION_LEN + 2;
+
+    // IGMPv3 group record types
+    // From include/uapi/linux/igmp.h
+    public static final int IGMPV3_MODE_IS_EXCLUDE = 2;
 
     // Traffic class and Flow label are not byte aligned. Luckily we
     // don't care about either value so we'll consider bytes 1-3 of the
