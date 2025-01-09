@@ -155,6 +155,24 @@ public final class ApfConstants {
     public static final int DHCP_SERVER_PORT = 67;
     public static final int DHCP_CLIENT_PORT = 68;
 
+    public static final int DNS_HEADER_LEN = 12;
+    public static final int IPV4_UDP_DESTINATION_PORT_OFFSET =
+            ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + 2;
+    public static final int IPV4_UDP_DESTINATION_CHECKSUM_OFFSET =
+            ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + 6;
+    public static final int IPV4_UDP_PAYLOAD_OFFSET =
+            ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + UDP_HEADER_LEN;
+    public static final int IPV4_DNS_QDCOUNT_OFFSET =
+            ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + UDP_HEADER_LEN + 4;
+    public static final int IPV6_UDP_DESTINATION_PORT_OFFSET =
+            ETH_HEADER_LEN + IPV6_HEADER_LEN + 2;
+    public static final int IPV6_UDP_DESTINATION_CHECKSUM_OFFSET =
+            ETH_HEADER_LEN + IPV6_HEADER_LEN + 6;
+    public static final int IPv6_UDP_PAYLOAD_OFFSET =
+            ETH_HEADER_LEN + IPV6_HEADER_LEN + UDP_HEADER_LEN;
+    public static final int IPV6_DNS_QDCOUNT_OFFSET =
+            ETH_HEADER_LEN + IPV6_HEADER_LEN + UDP_HEADER_LEN + 4;
+
     public static final int ARP_HEADER_OFFSET = ETH_HEADER_LEN;
     public static final byte[] ARP_IPV4_HEADER = {
             0, 1, // Hardware type: Ethernet (1)
@@ -185,16 +203,15 @@ public final class ApfConstants {
             { (byte) 0x01, 0, (byte) 0x5e, 0, 0, (byte) 0x16};
     public static final int MDNS_PORT = 5353;
 
+    public static final long MDNS_IPV4_ADDR_IN_LONG = 0xE00000FBL;
+    public static final byte[] MDNS_IPV4_ADDR = InetAddresses.parseNumericAddress(
+            "224.0.0.251").getAddress();
+    public static final byte[] MDNS_IPV6_ADDR = InetAddresses.parseNumericAddress(
+            "FF02::FB").getAddress();
     public static final int ECHO_PORT = 7;
-    public static final int DNS_HEADER_LEN = 12;
-    public static final int DNS_QDCOUNT_OFFSET = 4;
     // NOTE: this must be added to the IPv4 header length in MemorySlot.IPV4_HEADER_SIZE, or the
     // IPv6 header length.
     public static final int DHCP_CLIENT_MAC_OFFSET = ETH_HEADER_LEN + UDP_HEADER_LEN + 28;
-    public static final int MDNS_QDCOUNT_OFFSET =
-            ETH_HEADER_LEN + UDP_HEADER_LEN + DNS_QDCOUNT_OFFSET;
-    public static final int MDNS_QNAME_OFFSET =
-            ETH_HEADER_LEN + UDP_HEADER_LEN + DNS_HEADER_LEN;
 
     /**
      * Fixed byte sequence representing the following part of the ARP reply header:

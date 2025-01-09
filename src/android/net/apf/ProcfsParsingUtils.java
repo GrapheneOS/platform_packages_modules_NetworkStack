@@ -239,7 +239,7 @@ public final class ProcfsParsingUtils {
 
                 ipAddresses.add(ipv4Address);
             }
-        } catch (UnknownHostException | IllegalArgumentException e) {
+        } catch (Exception e) {
             Log.wtf(TAG, "failed to convert to Inet4Address.", e);
             // always return IPv4 all host address (224.0.0.1) if any error during parsing.
             // this aligns with kernel behavior, it will join 224.0.0.1 when the interface is up.
