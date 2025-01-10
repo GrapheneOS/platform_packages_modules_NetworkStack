@@ -26,6 +26,8 @@ import static com.android.net.module.util.NetworkStackConstants.IPV4_OPTION_TYPE
 
 import android.net.InetAddresses;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Set;
 
 /**
@@ -70,6 +72,22 @@ public final class ApfConstants {
     public static final int IPV4_ROUTER_ALERT_OPTION_LEN = 4;
     public static final int IGMP_CHECKSUM_OFFSET =
             ETHER_HEADER_LEN + IPV4_HEADER_MIN_LEN + IPV4_ROUTER_ALERT_OPTION_LEN + 2;
+    public static final byte[] IGMPV2_REPORT_FROM_IPV4_OPTION_TO_IGMP_CHECKSUM = {
+            // option type
+            (byte) IPV4_OPTION_TYPE_ROUTER_ALERT,
+            // option length
+            (byte) IPV4_OPTION_LEN_ROUTER_ALERT,
+            // option value
+            0,  0,
+            // IGMP type
+            // Indicating an IGMPv2 Membership Report (Join Group)
+            (byte) IPV4_IGMP_TYPE_V2_JOIN_REPORT,
+            // max response time
+            // Typically used in IGMP queries,but is not significant in IGMPv2 reports.
+            0,
+            // checksum, calculate later
+            0, 0
+    };
 
     // IGMPv3 group record types
     // From include/uapi/linux/igmp.h
@@ -96,9 +114,11 @@ public final class ApfConstants {
     public static final byte[] IPV6_SOLICITED_NODES_PREFIX =
             { (byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, (byte) 0xff};
 
-    public static final int ICMP4_TYPE_OFFSET = ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN;
-    public static final int ICMP4_CHECKSUM_OFFSET = ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + 2;
-    public static final int ICMP4_CONTENT_OFFSET = ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + 4;
+    public static final int ICMP4_TYPE_NO_OPTIONS_OFFSET = ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN;
+    public static final int ICMP4_CHECKSUM_NO_OPTIONS_OFFSET =
+            ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + 2;
+    public static final int ICMP4_CONTENT_NO_OPTIONS_OFFSET =
+            ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + 4;
 
     public static final int ICMP6_TYPE_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN;
     public static final int ICMP6_CODE_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN + 1;
@@ -156,13 +176,13 @@ public final class ApfConstants {
     public static final int DHCP_CLIENT_PORT = 68;
 
     public static final int DNS_HEADER_LEN = 12;
-    public static final int IPV4_UDP_DESTINATION_PORT_OFFSET =
+    public static final int IPV4_UDP_DESTINATION_PORT_NO_OPTIONS_OFFSET =
             ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + 2;
-    public static final int IPV4_UDP_DESTINATION_CHECKSUM_OFFSET =
+    public static final int IPV4_UDP_DESTINATION_CHECKSUM_NO_OPTIONS_OFFSET =
             ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + 6;
-    public static final int IPV4_UDP_PAYLOAD_OFFSET =
+    public static final int IPV4_UDP_PAYLOAD_NO_OPTIONS_OFFSET =
             ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + UDP_HEADER_LEN;
-    public static final int IPV4_DNS_QDCOUNT_OFFSET =
+    public static final int IPV4_DNS_QDCOUNT_NO_OPTIONS_OFFSET =
             ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + UDP_HEADER_LEN + 4;
     public static final int IPV6_UDP_DESTINATION_PORT_OFFSET =
             ETH_HEADER_LEN + IPV6_HEADER_LEN + 2;
@@ -202,6 +222,8 @@ public final class ApfConstants {
     public static final byte[] ETH_MULTICAST_IGMP_V3_ALL_MULTICAST_ROUTERS_ADDRESS =
             { (byte) 0x01, 0, (byte) 0x5e, 0, 0, (byte) 0x16};
     public static final int MDNS_PORT = 5353;
+    public static final byte[] MDNS_PORT_IN_BYTES = ByteBuffer.allocate(2).order(
+            ByteOrder.BIG_ENDIAN).putShort((short) MDNS_PORT).array();
 
     public static final long MDNS_IPV4_ADDR_IN_LONG = 0xE00000FBL;
     public static final byte[] MDNS_IPV4_ADDR = InetAddresses.parseNumericAddress(

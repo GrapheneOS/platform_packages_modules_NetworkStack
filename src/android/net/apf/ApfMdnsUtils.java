@@ -83,7 +83,8 @@ public class ApfMdnsUtils {
             }
             List<MdnsOffloadRule.Matcher> matcherGroup = new ArrayList<>();
             final OffloadServiceInfo.Key key = info.getKey();
-            final String[] serviceTypeLabels = key.getServiceType().split("\\.", 0);
+            final String[] serviceTypeLabels = CollectionUtils.appendArray(String.class,
+                    key.getServiceType().split("\\.", 0), "local");
             final String[] fullQualifiedName = CollectionUtils.prependArray(String.class,
                     serviceTypeLabels, key.getServiceName());
             final byte[] replyPayload = info.getOffloadPayload();

@@ -49,7 +49,7 @@ class ApfMdnsUtilsTest {
 
     private val testServiceName1 = "NsdChat"
     private val testServiceName2 = "NsdCall"
-    private val testServiceType = "_http._tcp.local"
+    private val testServiceType = "_http._tcp"
     private val testSubType = "tsub"
     private val testHostName = "Android.local"
     private val testRawPacket1 = byteArrayOf(1, 2, 3, 4, 5)
