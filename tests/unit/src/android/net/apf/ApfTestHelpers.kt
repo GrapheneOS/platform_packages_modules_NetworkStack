@@ -20,7 +20,6 @@ import android.net.apf.ApfCounterTracker.Counter.APF_PROGRAM_ID
 import android.net.apf.ApfCounterTracker.Counter.APF_VERSION
 import android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS
 import android.net.apf.BaseApfGenerator.APF_VERSION_6
-import android.net.ip.IpClient
 import com.android.net.module.util.HexDump
 import kotlin.test.assertEquals
 import org.mockito.ArgumentCaptor
@@ -316,18 +315,18 @@ class ApfTestHelpers private constructor() {
 
         @JvmStatic
         fun consumeInstalledProgram(
-            ipClientCb: IpClient.IpClientCallbacksWrapper,
+            apfController: ApfFilter.IApfController,
             installCnt: Int
         ): ByteArray {
             val programCaptor = ArgumentCaptor.forClass(
                 ByteArray::class.java
             )
 
-            verify(ipClientCb, timeout(TIMEOUT_MS).times(installCnt)).installPacketFilter(
+            verify(apfController, timeout(TIMEOUT_MS).times(installCnt)).installPacketFilter(
                 programCaptor.capture()
             )
 
-            clearInvocations<Any>(ipClientCb)
+            clearInvocations<Any>(apfController)
             return programCaptor.value
         }
 

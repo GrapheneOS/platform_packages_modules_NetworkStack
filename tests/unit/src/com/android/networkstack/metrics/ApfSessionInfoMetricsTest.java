@@ -119,8 +119,6 @@ public class ApfSessionInfoMetricsTest {
                 CounterName.CN_DROPPED_IPV6_ROUTER_SOLICITATION);
         verifyCounterName(Counter.DROPPED_IPV6_MULTICAST_NA,
                 CounterName.CN_DROPPED_IPV6_MULTICAST_NA);
-        verifyCounterName(Counter.DROPPED_IPV6_MULTICAST_PING,
-                CounterName.CN_DROPPED_IPV6_MULTICAST_PING);
         verifyCounterName(Counter.DROPPED_IPV6_NON_ICMP_MULTICAST,
                 CounterName.CN_DROPPED_IPV6_NON_ICMP_MULTICAST);
         verifyCounterName(Counter.DROPPED_802_3_FRAME, CounterName.CN_DROPPED_802_3_FRAME);

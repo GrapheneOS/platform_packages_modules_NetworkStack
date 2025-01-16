@@ -35,7 +35,6 @@ import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NATT_KEEPAL
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_TCP_PORT7_UNICAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST_NA;
-import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST_PING;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NON_ICMP_MULTICAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HOST;
@@ -79,7 +78,6 @@ import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_NATT_KEEPAL
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_NON_DHCP4;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_TCP_PORT7_UNICAST;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_MULTICAST_NA;
-import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_MULTICAST_PING;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_NON_ICMP_MULTICAST;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_NS_INVALID;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_NS_OTHER_HOST;
@@ -153,7 +151,6 @@ public class ApfSessionInfoMetrics {
                 Map.entry(DROPPED_IPV4_NON_DHCP4, CN_DROPPED_IPV4_NON_DHCP4),
                 Map.entry(DROPPED_IPV6_ROUTER_SOLICITATION, CN_DROPPED_IPV6_ROUTER_SOLICITATION),
                 Map.entry(DROPPED_IPV6_MULTICAST_NA, CN_DROPPED_IPV6_MULTICAST_NA),
-                Map.entry(DROPPED_IPV6_MULTICAST_PING, CN_DROPPED_IPV6_MULTICAST_PING),
                 Map.entry(DROPPED_IPV6_NON_ICMP_MULTICAST, CN_DROPPED_IPV6_NON_ICMP_MULTICAST),
                 Map.entry(DROPPED_IPV6_NS_INVALID, CN_DROPPED_IPV6_NS_INVALID),
                 Map.entry(DROPPED_IPV6_NS_OTHER_HOST, CN_DROPPED_IPV6_NS_OTHER_HOST),

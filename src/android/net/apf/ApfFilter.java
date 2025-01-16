@@ -146,7 +146,6 @@ import android.net.TcpKeepalivePacketDataParcelable;
 import android.net.apf.ApfCounterTracker.Counter;
 import android.net.apf.BaseApfGenerator.IllegalInstructionException;
 import android.net.ip.IgmpReportMonitor;
-import android.net.ip.IpClient.IpClientCallbacksWrapper;
 import android.net.nsd.NsdManager;
 import android.net.nsd.OffloadEngine;
 import android.net.nsd.OffloadServiceInfo;
@@ -205,6 +204,22 @@ import java.util.Set;
  */
 public class ApfFilter {
 
+    /**
+     * Defines the communication API between the ApfFilter and the APF interpreter
+     * residing within the Wi-Fi/Ethernet firmware.
+     */
+    public interface IApfController {
+        /**
+         * Install the APF program to firmware.
+         */
+        boolean installPacketFilter(@NonNull byte[] filter);
+
+        /**
+         * Read the APF RAM from firmware.
+         */
+        void readPacketFilterRam(@NonNull String event);
+    }
+
     // Helper class for specifying functional filter parameters.
     public static class ApfConfiguration {
         public int apfVersionSupported;
@@ -251,7 +266,7 @@ public class ApfFilter {
     private final int mApfRamSize;
     private final int mMaximumApfProgramSize;
     private final int mInstallableProgramSizeClamp;
-    private final IpClientCallbacksWrapper mIpClientCallback;
+    private final IApfController mApfController;
     private final InterfaceParams mInterfaceParams;
     private final TokenBucket mTokenBucket;
 
@@ -408,9 +423,9 @@ public class ApfFilter {
     }
 
     public ApfFilter(Handler handler, Context context, ApfConfiguration config,
-            InterfaceParams ifParams, IpClientCallbacksWrapper ipClientCallback,
+            InterfaceParams ifParams, IApfController apfController,
             NetworkQuirkMetrics networkQuirkMetrics) {
-        this(handler, context, config, ifParams, ipClientCallback, networkQuirkMetrics,
+        this(handler, context, config, ifParams, apfController, networkQuirkMetrics,
                 new Dependencies(context));
     }
 
@@ -420,7 +435,7 @@ public class ApfFilter {
         // a crash on some older devices (b/78905546).
         if (hasDataAccess(mApfVersionSupported)) {
             byte[] zeroes = new byte[mApfRamSize];
-            if (!mIpClientCallback.installPacketFilter(zeroes)) {
+            if (!mApfController.installPacketFilter(zeroes)) {
                 sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
             }
         }
@@ -428,7 +443,7 @@ public class ApfFilter {
 
     @VisibleForTesting
     public ApfFilter(Handler handler, Context context, ApfConfiguration config,
-            InterfaceParams ifParams, IpClientCallbacksWrapper ipClientCallback,
+            InterfaceParams ifParams, IApfController apfController,
             NetworkQuirkMetrics networkQuirkMetrics, Dependencies dependencies) {
         mHandler = handler;
         mApfVersionSupported = config.apfVersionSupported;
@@ -444,7 +459,7 @@ public class ApfFilter {
             maximumApfProgramSize = mInstallableProgramSizeClamp;
         }
         mMaximumApfProgramSize = maximumApfProgramSize;
-        mIpClientCallback = ipClientCallback;
+        mApfController = apfController;
         mInterfaceParams = ifParams;
         mMulticastFilter = config.multicastFilter;
         mDrop802_3Frames = config.ieee802_3Filter;
@@ -659,6 +674,10 @@ public class ApfFilter {
         public List<Inet4Address> getIPv4MulticastAddresses(@NonNull String ifname) {
             return ProcfsParsingUtils.getIPv4MulticastAddresses(ifname);
         }
+    }
+
+    public IApfController getApfController() {
+        return mApfController;
     }
 
     public String setDataSnapshot(byte[] data) {
@@ -2482,7 +2501,7 @@ public class ApfFilter {
             return;
         }
         if (mIsRunning) {
-            if (!mIpClientCallback.installPacketFilter(program)) {
+            if (!mApfController.installPacketFilter(program)) {
                 sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
             }
         }
@@ -2595,7 +2614,7 @@ public class ApfFilter {
      * filtering using APF programs.
      */
     public static ApfFilter maybeCreate(Handler handler, Context context, ApfConfiguration config,
-            InterfaceParams ifParams, IpClientCallbacksWrapper ipClientCallback,
+            InterfaceParams ifParams, IApfController apfController,
             NetworkQuirkMetrics networkQuirkMetrics) {
         if (context == null || config == null || ifParams == null) return null;
         if (!ApfV4Generator.supportsVersion(config.apfVersionSupported)) {
@@ -2606,7 +2625,7 @@ public class ApfFilter {
             return null;
         }
 
-        return new ApfFilter(handler, context, config, ifParams, ipClientCallback,
+        return new ApfFilter(handler, context, config, ifParams, apfController,
                 networkQuirkMetrics);
     }
 

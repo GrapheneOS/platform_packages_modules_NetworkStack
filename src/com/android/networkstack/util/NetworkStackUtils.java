@@ -275,6 +275,12 @@ public class NetworkStackUtils {
             "ipclient_dhcpv6_pd_preferred_flag_version";
 
     /**
+     * Experiment flag to replace INetd usage with netlink in IpClient.
+     */
+    public static final String IPCLIENT_REPLACE_NETD_WITH_NETLINK_VERSION =
+            "ipclient_replace_netd_with_netlink_version";
+
+    /**
      * Experiment flag to enable Discovery of Designated Resolvers (DDR).
      * This flag requires networkmonitor_async_privdns_resolution flag.
      */
