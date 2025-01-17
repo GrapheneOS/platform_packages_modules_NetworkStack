@@ -214,7 +214,7 @@ public class IpClientTest {
         when(mDependencies.getDeviceConfigPropertyInt(eq(CONFIG_SOCKET_RECV_BUFSIZE), anyInt()))
                 .thenReturn(SOCKET_RECV_BUFSIZE);
         when(mDependencies.makeIpClientNetlinkMonitor(
-                any(), any(), any(), anyInt(), any())).thenReturn(mNetlinkMonitor);
+                any(), any(), any(), anyInt(), anyBoolean(), any())).thenReturn(mNetlinkMonitor);
         when(mNetlinkMonitor.start()).thenReturn(true);
 
         mIfParams = null;
@@ -236,7 +236,7 @@ public class IpClientTest {
         final ArgumentCaptor<INetlinkMessageProcessor> processorCaptor =
                 ArgumentCaptor.forClass(INetlinkMessageProcessor.class);
         verify(mDependencies).makeIpClientNetlinkMonitor(any(), any(), any(), anyInt(),
-                processorCaptor.capture());
+                anyBoolean(), processorCaptor.capture());
         mNetlinkMessageProcessor = processorCaptor.getValue();
         reset(mNetd);
         // Verify IpClient doesn't call onLinkPropertiesChange() when it starts.

@@ -147,10 +147,13 @@ public class IpClientLinkObserver {
     public static class Configuration {
         public final int minRdnssLifetime;
         public final boolean populateLinkAddressLifetime;
+        public final boolean isDhcp6PdPreferredFlagEnabled;
 
-        public Configuration(int minRdnssLifetime, boolean populateLinkAddressLifetime) {
+        public Configuration(int minRdnssLifetime, boolean populateLinkAddressLifetime,
+                boolean isDhcp6PdPreferredFlagEnabled) {
             this.minRdnssLifetime = minRdnssLifetime;
             this.populateLinkAddressLifetime = populateLinkAddressLifetime;
+            this.isDhcp6PdPreferredFlagEnabled = isDhcp6PdPreferredFlagEnabled;
         }
     }
 
@@ -225,6 +228,7 @@ public class IpClientLinkObserver {
         mDependencies = deps;
         mNetlinkMonitor = deps.makeIpClientNetlinkMonitor(h, log, mTag,
                 getSocketReceiveBufferSize(),
+                config.isDhcp6PdPreferredFlagEnabled,
                 (nlMsg, whenMs) -> processNetlinkMessage(nlMsg, whenMs));
         mShim = NetworkInformationShimImpl.newInstance();
         mExpirePref64Alarm = new IpClientObserverAlarmListener();
@@ -406,16 +410,19 @@ public class IpClientLinkObserver {
 
         private final Handler mHandler;
         private final INetlinkMessageProcessor mNetlinkMessageProcessor;
+        private static final int NETLINK_MONITOR_BIND_GROUPS =
+                NetlinkConstants.RTMGRP_ND_USEROPT
+                        | NetlinkConstants.RTMGRP_LINK
+                        | NetlinkConstants.RTMGRP_IPV4_IFADDR
+                        | NetlinkConstants.RTMGRP_IPV6_IFADDR
+                        | NetlinkConstants.RTMGRP_IPV6_ROUTE;
 
         IpClientNetlinkMonitor(Handler h, SharedLog log, String tag, int sockRcvbufSize,
-                INetlinkMessageProcessor p) {
+                boolean isDhcp6PdPreferredFlagEnabled, INetlinkMessageProcessor p) {
             super(h, log, tag, OsConstants.NETLINK_ROUTE,
-                    (NetlinkConstants.RTMGRP_ND_USEROPT
-                            | NetlinkConstants.RTMGRP_LINK
-                            | NetlinkConstants.RTMGRP_IPV4_IFADDR
-                            | NetlinkConstants.RTMGRP_IPV6_IFADDR
-                            | NetlinkConstants.RTMGRP_IPV6_ROUTE
-                            | NetlinkConstants.RTMGRP_IPV6_PREFIX),
+                    isDhcp6PdPreferredFlagEnabled
+                            ? NETLINK_MONITOR_BIND_GROUPS | NetlinkConstants.RTMGRP_IPV6_PREFIX
+                            : NETLINK_MONITOR_BIND_GROUPS,
                     sockRcvbufSize);
             mHandler = h;
             mNetlinkMessageProcessor = p;
