@@ -37,6 +37,7 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_L2_BROADCAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_MULTICAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NATT_KEEPALIVE
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_PING_REQUEST_REPLIED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_TCP_PORT7_UNICAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST_NA
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NON_ICMP_MULTICAST
@@ -2041,7 +2042,8 @@ class ApfFilterTest {
 
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
-    fun testIpv4EchoRequestPassed() {
+    fun testIpv4EchoRequestReplied() {
+        doReturn(64).`when`(dependencies).ipv4DefaultTtl
         val (apfFilter, program) = getApfWithIpv4PingOffloadEnabled()
         // Using scapy to generate IPv4 echo request packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="02:03:04:05:06:07")
@@ -2057,7 +2059,45 @@ class ApfFilterTest {
             apfFilter.mApfVersionSupported,
             program,
             HexDump.hexStringToByteArray(ipv4EchoRequestPkt),
-            PASSED_IPV4
+            DROPPED_IPV4_PING_REQUEST_REPLIED
+        )
+
+        val transmitPkt = consumeTransmittedPackets(1)[0]
+
+        // ###[ Ethernet ]###
+        //   dst       = 01:02:03:04:05:06
+        //   src       = 02:03:04:05:06:07
+        //   type      = IPv4
+        // ###[ IP ]###
+        //      version   = 4
+        //      ihl       = 5
+        //      tos       = 0x0
+        //      len       = 33
+        //      id        = 1
+        //      flags     =
+        //      frag      = 0
+        //      ttl       = 64
+        //      proto     = icmp
+        //      chksum    = 0x66d9
+        //      src       = 10.0.0.1
+        //      dst       = 10.0.0.2
+        //      \options   \
+        // ###[ ICMP ]###
+        //         type      = echo-reply
+        //         code      = 0
+        //         chksum    = 0xbbb1
+        //         id        = 0x1
+        //         seq       = 0x7b
+        //         unused    = b''
+        // ###[ Raw ]###
+        //            load      = b'hello'
+        val expectedReply = """
+            01020304050602030405060708004500002100010000400166D90A0000010A0
+            000020000BBB10001007B68656C6C6F
+        """.replace("\\s+".toRegex(), "").trim()
+        assertContentEquals(
+            HexDump.hexStringToByteArray(expectedReply),
+            transmitPkt
         )
     }
 

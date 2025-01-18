@@ -36,6 +36,8 @@ import static android.net.apf.ApfConstants.ETH_MULTICAST_MDNS_V6_MAC_ADDRESS;
 import static android.net.apf.ApfConstants.ETH_TYPE_MAX;
 import static android.net.apf.ApfConstants.ETH_TYPE_MIN;
 import static android.net.apf.ApfConstants.FIXED_ARP_REPLY_HEADER;
+import static android.net.apf.ApfConstants.ICMP4_CHECKSUM_NO_OPTIONS_OFFSET;
+import static android.net.apf.ApfConstants.ICMP4_CONTENT_NO_OPTIONS_OFFSET;
 import static android.net.apf.ApfConstants.ICMP4_TYPE_NO_OPTIONS_OFFSET;
 import static android.net.apf.ApfConstants.ICMP6_4_BYTE_LIFETIME_LEN;
 import static android.net.apf.ApfConstants.ICMP6_4_BYTE_LIFETIME_OFFSET;
@@ -69,6 +71,7 @@ import static android.net.apf.ApfConstants.IPV4_FRAGMENT_MORE_FRAGS_MASK;
 import static android.net.apf.ApfConstants.IPV4_FRAGMENT_OFFSET_MASK;
 import static android.net.apf.ApfConstants.IPV4_FRAGMENT_OFFSET_OFFSET;
 import static android.net.apf.ApfConstants.IPV4_PROTOCOL_OFFSET;
+import static android.net.apf.ApfConstants.IPV4_SRC_ADDR_OFFSET;
 import static android.net.apf.ApfConstants.IPV4_TOTAL_LENGTH_OFFSET;
 import static android.net.apf.ApfConstants.IPV6_ALL_NODES_ADDRESS;
 import static android.net.apf.ApfConstants.IPV6_DEST_ADDR_OFFSET;
@@ -86,6 +89,7 @@ import static android.net.apf.ApfConstants.TCP_HEADER_SIZE_OFFSET;
 import static android.net.apf.ApfConstants.TCP_UDP_DESTINATION_PORT_OFFSET;
 import static android.net.apf.ApfConstants.TCP_UDP_SOURCE_PORT_OFFSET;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_ICMP_INVALID;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_PING_REQUEST_REPLIED;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HOST;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_ETHER_OUR_SRC_MAC;
@@ -108,6 +112,7 @@ import static android.system.OsConstants.ETH_P_ARP;
 import static android.system.OsConstants.ETH_P_IP;
 import static android.system.OsConstants.ETH_P_IPV6;
 import static android.system.OsConstants.ICMP_ECHO;
+import static android.system.OsConstants.ICMP_ECHOREPLY;
 import static android.system.OsConstants.IFA_F_TENTATIVE;
 import static android.system.OsConstants.IPPROTO_ICMP;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
@@ -675,6 +680,13 @@ public class ApfFilter {
          */
         public int getNdTrafficClass(@NonNull String ifname) {
             return ProcfsParsingUtils.getNdTrafficClass(ifname);
+        }
+
+        /**
+         * Returns the default TTL value for IPv4 packets from '/proc/sys/net/ipv4/ip_default_ttl'.
+         */
+        public int getIpv4DefaultTtl() {
+            return ProcfsParsingUtils.getIpv4DefaultTtl();
         }
 
         /**
@@ -1779,7 +1791,35 @@ public class ApfFilter {
         gen.addLoad8(R0, ICMP4_TYPE_NO_OPTIONS_OFFSET)
                 .addJumpIfR0NotEquals(ICMP_ECHO, skipIpv4PingFilter);
 
-        // TODO: add the logic to reply the packet.
+        final int defaultTtl = mDependencies.getIpv4DefaultTtl();
+        // Construct the ICMP echo reply packet.
+        gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE)
+                .addAllocateR0()
+                .addPacketCopy(ETHER_SRC_ADDR_OFFSET, ETHER_ADDR_LEN) // Dst MAC address
+                .addDataCopy(mHardwareAddress) // Src MAC address
+                // Reuse the following fields from the input packet:
+                // 2 bytes: EtherType
+                // 4 bytes: version, IHL, TOS, total length
+                // 4 bytes: identification, flags, fragment offset
+                .addPacketCopy(ETH_ETHERTYPE_OFFSET, 10)
+                // Ttl: default ttl, Protocol: IPPROTO_ICMP, checksum: 0
+                .addWrite32((defaultTtl << 24) | (IPPROTO_ICMP << 16))
+                .addWrite32(mIPv4Address) // Src ip
+                .addPacketCopy(IPV4_SRC_ADDR_OFFSET, IPV4_ADDR_LEN) // Dst ip
+                .addWrite32((ICMP_ECHOREPLY << 24)) // Type: echo reply, code: 0, checksum: 0
+                // Copy identifier, sequence number and ping payload
+                .addSub(ICMP4_CONTENT_NO_OPTIONS_OFFSET)
+                .addLoadImmediate(R1, ICMP4_CONTENT_NO_OPTIONS_OFFSET)
+                .addSwap() // Swaps R0 and R1, so they're the offset and length.
+                .addPacketCopyFromR0LenR1()
+                .addTransmitL4(
+                        ETHER_HEADER_LEN, // ip_ofs
+                        ICMP4_CHECKSUM_NO_OPTIONS_OFFSET, // csum_ofs
+                        ICMP4_TYPE_NO_OPTIONS_OFFSET, // csum_start
+                        0, // partial_sum
+                        false // udp
+                )
+                .addCountAndDrop(DROPPED_IPV4_PING_REQUEST_REPLIED);
 
         gen.defineLabel(skipIpv4PingFilter);
     }
@@ -1801,6 +1841,7 @@ public class ApfFilter {
         //     pass
         //   else
         //     drop
+        //
         // if filtering multicast (i.e. multicast lock not held):
         //   if it's DHCP destined to our MAC:
         //     pass
@@ -1810,8 +1851,13 @@ public class ApfFilter {
         //     drop
         //   if it's IPv4 broadcast:
         //     drop
+        //
         // if keepalive ack
         //   drop
+        //
+        // (APFv6+ specific logic) if it's unicast IPv4 ICMP echo request to our host:
+        //    transmit echo reply and drop
+        //
         // pass
 
         if (mHasClat) {
