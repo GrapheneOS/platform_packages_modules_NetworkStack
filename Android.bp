@@ -64,7 +64,7 @@ java_defaults {
     ],
     apex_available: [
         "com.android.tethering",
-        "//apex_available:platform", // For InProcessNetworkStack
+        "//apex_available:platform",
     ],
     min_sdk_version: "30",
 }
@@ -266,8 +266,7 @@ java_library {
     ],
 }
 
-// Common defaults for android libraries containing network stack code, used to compile variants of
-// the network stack in the system process and in the network_stack process
+// Common defaults for android libraries containing network stack code
 java_defaults {
     name: "NetworkStackAndroidLibraryDefaults",
     srcs: [
@@ -437,29 +436,6 @@ java_defaults {
         ignore_warnings: false,
         proguard_flags_files: ["proguard.flags"],
     },
-}
-
-// Non-updatable network stack running in the system server process for devices not using the module
-android_app {
-    name: "InProcessNetworkStack",
-    defaults: [
-        "NetworkStackAppDefaults",
-        "NetworkStackReleaseApiLevel",
-        "ConnectivityNextEnableDefaults",
-    ],
-    static_libs: ["NetworkStackApiCurrentLib"],
-    certificate: "platform",
-    manifest: "AndroidManifest_InProcess.xml",
-    // InProcessNetworkStack is a replacement for NetworkStack
-    overrides: [
-        "NetworkStack",
-        "NetworkStackNext",
-    ],
-    // The InProcessNetworkStack goes together with the PlatformCaptivePortalLogin, which replaces
-    // the default CaptivePortalLogin.
-    required: [
-        "PlatformCaptivePortalLogin",
-    ],
 }
 
 // Pre-merge the AndroidManifest for NetworkStackNext, so that its manifest can be merged on top

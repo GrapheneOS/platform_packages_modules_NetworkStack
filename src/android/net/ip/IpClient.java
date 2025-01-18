@@ -811,6 +811,7 @@ public class IpClient extends StateMachine {
     private final boolean mApfShouldHandleNdOffload;
     private final boolean mApfShouldHandleMdnsOffload;
     private final boolean mApfShouldHandleIgmpOffload;
+    private final boolean mApfShouldHandleIpv4PingOffload;
     private final boolean mIgnoreNudFailureEnabled;
     private final boolean mDhcp6PdPreferredFlagEnabled;
     private final boolean mReplaceNetdWithNetlinkEnabled;
@@ -1091,6 +1092,8 @@ public class IpClient extends StateMachine {
         mApfShouldHandleMdnsOffload = false;
         // TODO: turn on APF IGMP offload.
         mApfShouldHandleIgmpOffload = false;
+        // TODO: turn on Ping4 offload.
+        mApfShouldHandleIpv4PingOffload = false;
         mPopulateLinkAddressLifetime = mDependencies.isFeatureEnabled(context,
                 IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION);
         mIgnoreNudFailureEnabled = mDependencies.isFeatureEnabled(mContext,
@@ -2792,6 +2795,7 @@ public class IpClient extends StateMachine {
         apfConfig.shouldHandleNdOffload = mApfShouldHandleNdOffload;
         apfConfig.shouldHandleMdnsOffload = mApfShouldHandleMdnsOffload;
         apfConfig.shouldHandleIgmpOffload = mApfShouldHandleIgmpOffload;
+        apfConfig.shouldHandleIpv4PingOffload = mApfShouldHandleIpv4PingOffload;
         apfConfig.minMetricsSessionDurationMs = mApfCounterPollingIntervalMs;
         apfConfig.hasClatInterface = mHasSeenClatInterface;
         return mDependencies.maybeCreateApfFilter(getHandler(), mContext, apfConfig,

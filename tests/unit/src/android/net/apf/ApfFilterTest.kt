@@ -31,6 +31,7 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_NOT_ALLOWED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_GARP_REPLY
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_BROADCAST_ADDR
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_BROADCAST_NET
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_ICMP_INVALID
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_KEEPALIVE_ACK
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_L2_BROADCAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_MULTICAST
@@ -2023,6 +2024,150 @@ class ApfFilterTest {
                 PASSED_IPV6_ICMP
             )
         }
+    }
+
+    private fun getApfWithIpv4PingOffloadEnabled(): Pair<ApfFilter, ByteArray> {
+        val apfConfig = getDefaultConfig()
+        apfConfig.shouldHandleIpv4PingOffload = true
+        val apfFilter = getApfFilter(apfConfig)
+        consumeInstalledProgram(apfController, installCnt = 2)
+        val linkAddress = LinkAddress(InetAddress.getByAddress(hostIpv4Address), 24)
+        val lp = LinkProperties()
+        lp.addLinkAddress(linkAddress)
+        apfFilter.setLinkProperties(lp)
+        val program = consumeInstalledProgram(apfController, installCnt = 1)
+        return Pair(apfFilter, program)
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testIpv4EchoRequestPassed() {
+        val (apfFilter, program) = getApfWithIpv4PingOffloadEnabled()
+        // Using scapy to generate IPv4 echo request packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="02:03:04:05:06:07")
+        // ip = IP(src="10.0.0.2", dst="10.0.0.1")
+        // icmp = ICMP(id=1, seq=123)
+        // pkt = eth/ip/icmp/b"hello"
+        val ipv4EchoRequestPkt = """
+            02030405060701020304050608004500002100010000400166d90a0000020a0
+            000010800b3b10001007b68656c6c6f
+        """.replace("\\s+".toRegex(), "").trim()
+
+        verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(ipv4EchoRequestPkt),
+            PASSED_IPV4
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testCorruptedIpv4IcmpPacketDropped() {
+        val (apfFilter, program) = getApfWithIpv4PingOffloadEnabled()
+        // Using scapy to generate corrupted icmp packet
+        // eth = Ether(src="01:02:03:04:05:06", dst="02:03:04:05:06:07")
+        // ip = IP(proto=1, src="10.0.0.2", dst="10.0.0.1")
+        // pkt = eth/ip/b"hello"
+        val ipv4EchoRequestPkt = """
+            02030405060701020304050608004500001900010000400166e10a0000020a0
+            0000168656c6c6f
+        """.replace("\\s+".toRegex(), "").trim()
+
+        verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(ipv4EchoRequestPkt),
+            DROPPED_IPV4_ICMP_INVALID
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testIpv4EchoRequestWithOptionPassed() {
+        val (apfFilter, program) = getApfWithIpv4PingOffloadEnabled()
+        // Using scapy to generate IPv4 echo request packet with option:
+        // eth = Ether(src="01:02:03:04:05:06", dst="02:03:04:05:06:07")
+        // ip = IP(src="10.0.0.2", dst="10.0.0.1", options=IPOption(b'\x94\x04\x00\x00'))
+        // icmp = ICMP(id=1, seq=123)
+        // pkt = eth/ip/icmp/b"hello"
+        val ipv4EchoRequestPkt = """
+            020304050607010203040506080046000025000100004001d1d00a0000020a0
+            00001940400000800b3b10001007b68656c6c6f
+        """.replace("\\s+".toRegex(), "").trim()
+
+        verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(ipv4EchoRequestPkt),
+            PASSED_IPV4
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testIpv4EchoRequestToOtherHostPassed() {
+        val (apfFilter, program) = getApfWithIpv4PingOffloadEnabled()
+        // Using scapy to generate IPv4 echo request packet to other host:
+        // eth = Ether(src="01:02:03:04:05:06", dst="02:03:04:05:06:07")
+        // ip = IP(src="10.0.0.2", dst="10.0.0.111")
+        // icmp = ICMP(id=1, seq=123)
+        // pkt = eth/ip/icmp/b"hello"
+        val ipv4EchoRequestPkt = """
+            020304050607010203040506080045000021000100004001666b0a0000020a0
+            0006f0800b3b10001007b68656c6c6f
+        """.replace("\\s+".toRegex(), "").trim()
+
+        verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(ipv4EchoRequestPkt),
+            PASSED_IPV4
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testBroadcastIpv4EchoRequestPassed() {
+        val (apfFilter, program) = getApfWithIpv4PingOffloadEnabled()
+        // Using scapy to generate broadcast IPv4 echo request packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="ff:ff:ff:ff:ff:ff")
+        // ip = IP(src="10.0.0.2", dst="10.0.0.255")
+        // icmp = ICMP(id=1, seq=123)
+        // pkt = eth/ip/icmp/b"hello"
+        val ipv4EchoRequestPkt = """
+            ffffffffffff01020304050608004500002100010000400165db0a0000020a0
+            000ff0800b3b10001007b68656c6c6f
+        """.replace("\\s+".toRegex(), "").trim()
+
+        verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(ipv4EchoRequestPkt),
+            PASSED_IPV4
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testIpv4EchoReplyPassed() {
+        val (apfFilter, program) = getApfWithIpv4PingOffloadEnabled()
+        // Using scapy to generate IPv4 echo reply packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="02:03:04:05:06:07")
+        // ip = IP(src="10.0.0.2", dst="10.0.0.1")
+        // icmp = ICMP(type=0, id=1, seq=123)
+        // pkt = eth/ip/icmp/b"hello"
+        val ipv4EchoReplyPkt = """
+            02030405060701020304050608004500002100010000400166d90a0000020a0
+            000010000bbb10001007b68656c6c6f
+        """.replace("\\s+".toRegex(), "").trim()
+
+        verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(ipv4EchoReplyPkt),
+            PASSED_IPV4
+        )
     }
 
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)

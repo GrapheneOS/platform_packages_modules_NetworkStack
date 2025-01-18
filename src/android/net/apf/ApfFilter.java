@@ -36,6 +36,7 @@ import static android.net.apf.ApfConstants.ETH_MULTICAST_MDNS_V6_MAC_ADDRESS;
 import static android.net.apf.ApfConstants.ETH_TYPE_MAX;
 import static android.net.apf.ApfConstants.ETH_TYPE_MIN;
 import static android.net.apf.ApfConstants.FIXED_ARP_REPLY_HEADER;
+import static android.net.apf.ApfConstants.ICMP4_TYPE_NO_OPTIONS_OFFSET;
 import static android.net.apf.ApfConstants.ICMP6_4_BYTE_LIFETIME_LEN;
 import static android.net.apf.ApfConstants.ICMP6_4_BYTE_LIFETIME_OFFSET;
 import static android.net.apf.ApfConstants.ICMP6_CAPTIVE_PORTAL_OPTION_TYPE;
@@ -84,6 +85,7 @@ import static android.net.apf.ApfConstants.MDNS_PORT;
 import static android.net.apf.ApfConstants.TCP_HEADER_SIZE_OFFSET;
 import static android.net.apf.ApfConstants.TCP_UDP_DESTINATION_PORT_OFFSET;
 import static android.net.apf.ApfConstants.TCP_UDP_SOURCE_PORT_OFFSET;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_ICMP_INVALID;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HOST;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_ETHER_OUR_SRC_MAC;
@@ -105,7 +107,9 @@ import static android.system.OsConstants.ETH_P_ALL;
 import static android.system.OsConstants.ETH_P_ARP;
 import static android.system.OsConstants.ETH_P_IP;
 import static android.system.OsConstants.ETH_P_IPV6;
+import static android.system.OsConstants.ICMP_ECHO;
 import static android.system.OsConstants.IFA_F_TENTATIVE;
+import static android.system.OsConstants.IPPROTO_ICMP;
 import static android.system.OsConstants.IPPROTO_ICMPV6;
 import static android.system.OsConstants.IPPROTO_TCP;
 import static android.system.OsConstants.IPPROTO_UDP;
@@ -115,8 +119,10 @@ import static android.system.OsConstants.SOCK_RAW;
 
 import static com.android.net.module.util.NetworkStackConstants.ETHER_ADDR_LEN;
 import static com.android.net.module.util.NetworkStackConstants.ETHER_BROADCAST;
+import static com.android.net.module.util.NetworkStackConstants.ETHER_DST_ADDR_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.ETHER_HEADER_LEN;
 import static com.android.net.module.util.NetworkStackConstants.ETHER_SRC_ADDR_OFFSET;
+import static com.android.net.module.util.NetworkStackConstants.ICMP_HEADER_LEN;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ECHO_REQUEST_TYPE;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_NA_HEADER_LEN;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ND_OPTION_SLLA;
@@ -128,6 +134,7 @@ import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_AD
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_SOLICITATION;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ALL_HOST_MULTICAST;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_LEN;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_HEADER_MIN_LEN;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_LEN;
 
 import android.annotation.ChecksSdkIntAtLeast;
@@ -236,6 +243,7 @@ public class ApfFilter {
         public boolean shouldHandleNdOffload;
         public boolean shouldHandleMdnsOffload;
         public boolean shouldHandleIgmpOffload;
+        public boolean shouldHandleIpv4PingOffload;
     }
 
 
@@ -304,6 +312,7 @@ public class ApfFilter {
     private final boolean mShouldHandleNdOffload;
     private final boolean mShouldHandleMdnsOffload;
     private final boolean mShouldHandleIgmpOffload;
+    private final boolean mShouldHandleIpv4PingOffload;
 
     private final NetworkQuirkMetrics mNetworkQuirkMetrics;
     private final IpClientRaInfoMetrics mIpClientRaInfoMetrics;
@@ -469,6 +478,7 @@ public class ApfFilter {
         mShouldHandleNdOffload = config.shouldHandleNdOffload;
         mShouldHandleMdnsOffload = config.shouldHandleMdnsOffload;
         mShouldHandleIgmpOffload = config.shouldHandleIgmpOffload;
+        mShouldHandleIpv4PingOffload = config.shouldHandleIpv4PingOffload;
         mDependencies = dependencies;
         mNetworkQuirkMetrics = networkQuirkMetrics;
         mIpClientRaInfoMetrics = dependencies.getIpClientRaInfoMetrics();
@@ -1729,6 +1739,52 @@ public class ApfFilter {
     }
 
     /**
+     * Generate filter code to reply and drop unicast ICMPv4 echo request.
+     * <p>
+     * On entry, we know it is IPv4 ethertype, but don't know anything else.
+     * R0/R1 have nothing useful in them, and can be clobbered.
+     */
+    private void generateUnicastIpv4PingOffload(ApfV6GeneratorBase<?> gen)
+            throws IllegalInstructionException {
+
+        final String skipIpv4PingFilter = gen.getUniqueLabel();
+        // Check 1) it's not a fragment. 2) it's ICMP.
+        // If condition not match then skip the ping filter logic
+        gen.addLoad32(R0, IPV4_FRAGMENT_OFFSET_OFFSET);
+        gen.addAnd((IPV4_FRAGMENT_MORE_FRAGS_MASK | IPV4_FRAGMENT_OFFSET_MASK) << 16 | 0xFF);
+        gen.addJumpIfR0NotEquals(IPPROTO_ICMP, skipIpv4PingFilter);
+
+        // Only offload unicast Ipv4 ping request for now.
+        // While we could potentially support offloading multicast and broadcast ping requests in
+        // the future, such packets will likely be dropped by multicast filters.
+        // Since the device may have packet forwarding enabled, APF needs to pass any received
+        // unicast IPv4 ping not destined for the device's IP address to the kernel.
+        gen.addLoadImmediate(R0, ETHER_DST_ADDR_OFFSET)
+                .addJumpIfBytesAtR0NotEqual(mHardwareAddress, skipIpv4PingFilter)
+                .addLoadImmediate(R0, IPV4_DEST_ADDR_OFFSET)
+                .addJumpIfBytesAtR0NotEqual(mIPv4Address, skipIpv4PingFilter);
+
+        // Ignore ping packets with IPv4 options (header size != 20) as they are rare.
+        // Pass them to the kernel to save bytecode space.
+        gen.addLoadFromMemory(R0, MemorySlot.IPV4_HEADER_SIZE)
+                .addJumpIfR0NotEquals(IPV4_HEADER_MIN_LEN, skipIpv4PingFilter);
+
+        // We need to check if the packet is sufficiently large to be a valid ICMP packet.
+        gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE)
+                .addCountAndDropIfR0LessThan(
+                        ETHER_HEADER_LEN + IPV4_HEADER_MIN_LEN + ICMP_HEADER_LEN,
+                        DROPPED_IPV4_ICMP_INVALID);
+
+        // If it is not a ICMP echo request, then skip.
+        gen.addLoad8(R0, ICMP4_TYPE_NO_OPTIONS_OFFSET)
+                .addJumpIfR0NotEquals(ICMP_ECHO, skipIpv4PingFilter);
+
+        // TODO: add the logic to reply the packet.
+
+        gen.defineLabel(skipIpv4PingFilter);
+    }
+
+    /**
      * Generate filter code to process IPv4 packets. Execution of this code ends in either the
      * DROP_LABEL or PASS_LABEL and does not fall off the end.
      * Preconditions:
@@ -1835,6 +1891,10 @@ public class ApfFilter {
             gen.addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET);
             gen.addCountAndPassIfBytesAtR0NotEqual(ETHER_BROADCAST, Counter.PASSED_IPV4_UNICAST);
             gen.addCountAndDrop(Counter.DROPPED_IPV4_L2_BROADCAST);
+        }
+
+        if (shouldEnableIpv4PingOffload()) {
+            generateUnicastIpv4PingOffload(tryToConvertToApfV6Generator(gen));
         }
 
         // Otherwise, pass
@@ -1959,7 +2019,7 @@ public class ApfFilter {
         );
     }
 
-    private void generateNsFilter(ApfV6Generator v6Gen)
+    private void generateNsFilter(ApfV6GeneratorBase<?> v6Gen)
             throws IllegalInstructionException {
         final List<byte[]> allIPv6Addrs = getIpv6Addresses(
                 true /* includeNonTentative */,
@@ -2786,6 +2846,10 @@ public class ApfFilter {
 
     private boolean shouldEnableIgmpOffload() {
         return shouldUseApfV6Generator() && mShouldHandleIgmpOffload;
+    }
+
+    private boolean shouldEnableIpv4PingOffload() {
+        return shouldUseApfV6Generator() && mShouldHandleIpv4PingOffload && mIPv4Address != null;
     }
 
     private boolean shouldUseApfV6Generator() {

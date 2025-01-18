@@ -70,7 +70,7 @@ public final class ApfConstants {
             0,  0   // option value
     };
     public static final int IPV4_ROUTER_ALERT_OPTION_LEN = 4;
-    public static final int IGMP_CHECKSUM_OFFSET =
+    public static final int IGMP_CHECKSUM_WITH_ROUTER_ALERT_OFFSET =
             ETHER_HEADER_LEN + IPV4_HEADER_MIN_LEN + IPV4_ROUTER_ALERT_OPTION_LEN + 2;
     public static final byte[] IGMPV2_REPORT_FROM_IPV4_OPTION_TO_IGMP_CHECKSUM = {
             // option type

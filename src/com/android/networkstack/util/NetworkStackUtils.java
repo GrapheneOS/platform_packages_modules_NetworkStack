@@ -16,6 +16,9 @@
 
 package com.android.networkstack.util;
 
+import static android.os.Build.VERSION.CODENAME;
+import static android.os.Build.VERSION.SDK_INT;
+
 import android.content.Context;
 import android.net.IpPrefix;
 import android.net.LinkAddress;
@@ -23,6 +26,7 @@ import android.net.MacAddress;
 import android.system.ErrnoException;
 import android.util.Log;
 
+import androidx.annotation.ChecksSdkIntAtLeast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
@@ -428,6 +432,23 @@ public class NetworkStackUtils {
             Log.e(TAG, "Invalid IPv6 address " + HexDump.toHexString(address), e);
             return null;
         }
+    }
+
+    /** Checks if the device is running on a release version of Android Baklava or newer */
+    @ChecksSdkIntAtLeast(api = 36 /* BUILD_VERSION_CODES.Baklava */)
+    public static boolean isAtLeast25Q2() {
+        return SDK_INT >= 36 || (SDK_INT == 35 && isAtLeastPreReleaseCodename("Baklava"));
+    }
+
+    private static boolean isAtLeastPreReleaseCodename(@NonNull String codename) {
+        // Special case "REL", which means the build is not a pre-release build.
+        if ("REL".equals(CODENAME)) {
+            return false;
+        }
+
+        // Otherwise lexically compare them. Return true if the build codename is equal to or
+        // greater than the requested codename.
+        return CODENAME.compareTo(codename) >= 0;
     }
 
     /**
