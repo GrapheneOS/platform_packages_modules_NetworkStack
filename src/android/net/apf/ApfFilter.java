@@ -88,15 +88,55 @@ import static android.net.apf.ApfConstants.MDNS_PORT;
 import static android.net.apf.ApfConstants.TCP_HEADER_SIZE_OFFSET;
 import static android.net.apf.ApfConstants.TCP_UDP_DESTINATION_PORT_OFFSET;
 import static android.net.apf.ApfConstants.TCP_UDP_SOURCE_PORT_OFFSET;
+import static android.net.apf.ApfCounterTracker.Counter.APF_PROGRAM_ID;
+import static android.net.apf.ApfCounterTracker.Counter.APF_VERSION;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_802_3_FRAME;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_NON_IPV4;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_OTHER_HOST;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REPLY_SPA_NO_HOST;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REQUEST_REPLIED;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_UNKNOWN;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_V6_ONLY;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_NOT_ALLOWED;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ETH_BROADCAST;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_GARP_REPLY;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_BROADCAST_ADDR;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_BROADCAST_NET;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_ICMP_INVALID;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_KEEPALIVE_ACK;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_L2_BROADCAST;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_MULTICAST;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NATT_KEEPALIVE;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_PING_REQUEST_REPLIED;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_TCP_PORT7_UNICAST;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST_NA;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NON_ICMP_MULTICAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HOST;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_REPLIED_NON_DAD;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ROUTER_SOLICITATION;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_RA;
+import static android.net.apf.ApfCounterTracker.Counter.FILTER_AGE_16384THS;
+import static android.net.apf.ApfCounterTracker.Counter.FILTER_AGE_SECONDS;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_BROADCAST_REPLY;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_REQUEST;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_UNICAST_REPLY;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_DHCP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_ETHER_OUR_SRC_MAC;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_FROM_DHCPV4_SERVER;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_UNICAST;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NON_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_DAD;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_SLLA_OPTION;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_TENTATIVE;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_ADDRESS;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_UNICAST_NON_ICMP;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_MLD;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_NON_IP_UNICAST;
+import static android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS;
 import static android.net.apf.ApfCounterTracker.getCounterValue;
 import static android.net.apf.BaseApfGenerator.MemorySlot;
 import static android.net.apf.BaseApfGenerator.Register.R0;
@@ -1372,7 +1412,7 @@ public class ApfFilter {
                     }
                 }
             }
-            gen.addCountAndDrop(Counter.DROPPED_RA);
+            gen.addCountAndDrop(DROPPED_RA);
             gen.defineLabel(nextFilterLabel);
         }
     }
@@ -1455,7 +1495,7 @@ public class ApfFilter {
             gen.addAdd(UDP_HEADER_LEN);
             gen.addJumpIfBytesAtR0NotEqual(mPayload, nextFilterLabel);
 
-            gen.addCountAndDrop(Counter.DROPPED_IPV4_NATT_KEEPALIVE);
+            gen.addCountAndDrop(DROPPED_IPV4_NATT_KEEPALIVE);
             gen.defineLabel(nextFilterLabel);
         }
 
@@ -1574,7 +1614,7 @@ public class ApfFilter {
             gen.addAddR1ToR0();
             gen.addJumpIfBytesAtR0NotEqual(mPortSeqAckFingerprint, nextFilterLabel);
 
-            gen.addCountAndDrop(Counter.DROPPED_IPV4_KEEPALIVE_ACK);
+            gen.addCountAndDrop(DROPPED_IPV4_KEEPALIVE_ACK);
             gen.defineLabel(nextFilterLabel);
         }
     }
@@ -1677,45 +1717,44 @@ public class ApfFilter {
 
         // For IPv6 only network, drop all ARP packet.
         if (mHasClat) {
-            gen.addCountAndDrop(Counter.DROPPED_ARP_V6_ONLY);
+            gen.addCountAndDrop(DROPPED_ARP_V6_ONLY);
             return;
         }
 
         // Drop if not ARP IPv4.
         gen.addLoadImmediate(R0, ARP_HEADER_OFFSET);
-        gen.addCountAndDropIfBytesAtR0NotEqual(ARP_IPV4_HEADER, Counter.DROPPED_ARP_NON_IPV4);
+        gen.addCountAndDropIfBytesAtR0NotEqual(ARP_IPV4_HEADER, DROPPED_ARP_NON_IPV4);
 
         final String checkArpRequest = gen.getUniqueLabel();
 
         gen.addLoad16(R0, ARP_OPCODE_OFFSET);
         gen.addJumpIfR0Equals(ARP_OPCODE_REQUEST, checkArpRequest); // Skip to arp request check.
         // Drop if unknown ARP opcode.
-        gen.addCountAndDropIfR0NotEquals(ARP_OPCODE_REPLY, Counter.DROPPED_ARP_UNKNOWN);
+        gen.addCountAndDropIfR0NotEquals(ARP_OPCODE_REPLY, DROPPED_ARP_UNKNOWN);
 
         /*----------  Handle ARP Replies. ----------*/
 
         // Drop if ARP reply source IP is 0.0.0.0
         gen.addLoad32(R0, ARP_SOURCE_IP_ADDRESS_OFFSET);
-        gen.addCountAndDropIfR0Equals(IPV4_ANY_HOST_ADDRESS, Counter.DROPPED_ARP_REPLY_SPA_NO_HOST);
+        gen.addCountAndDropIfR0Equals(IPV4_ANY_HOST_ADDRESS, DROPPED_ARP_REPLY_SPA_NO_HOST);
 
         // Pass if non-broadcast reply.
         // This also accepts multicast arp, but we assume those don't exist.
         gen.addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET);
-        gen.addCountAndPassIfBytesAtR0NotEqual(ETHER_BROADCAST, Counter.PASSED_ARP_UNICAST_REPLY);
+        gen.addCountAndPassIfBytesAtR0NotEqual(ETHER_BROADCAST, PASSED_ARP_UNICAST_REPLY);
 
         // It is a broadcast reply.
         if (mIPv4Address == null) {
             // When there is no IPv4 address, drop GARP replies (b/29404209).
             gen.addLoad32(R0, ARP_TARGET_IP_ADDRESS_OFFSET);
-            gen.addCountAndDropIfR0Equals(IPV4_ANY_HOST_ADDRESS, Counter.DROPPED_GARP_REPLY);
+            gen.addCountAndDropIfR0Equals(IPV4_ANY_HOST_ADDRESS, DROPPED_GARP_REPLY);
         } else {
             // When there is an IPv4 address, drop broadcast replies with a different target IPv4
             // address.
             gen.addLoad32(R0, ARP_TARGET_IP_ADDRESS_OFFSET);
-            gen.addCountAndDropIfR0NotEquals(bytesToBEInt(mIPv4Address),
-                    Counter.DROPPED_ARP_OTHER_HOST);
+            gen.addCountAndDropIfR0NotEquals(bytesToBEInt(mIPv4Address), DROPPED_ARP_OTHER_HOST);
         }
-        gen.addCountAndPass(Counter.PASSED_ARP_BROADCAST_REPLY);
+        gen.addCountAndPass(PASSED_ARP_BROADCAST_REPLY);
 
         /*----------  Handle ARP Requests. ----------*/
 
@@ -1724,8 +1763,7 @@ public class ApfFilter {
             // When there is an IPv4 address, drop unicast/broadcast requests with a different
             // target IPv4 address.
             gen.addLoad32(R0, ARP_TARGET_IP_ADDRESS_OFFSET);
-            gen.addCountAndDropIfR0NotEquals(bytesToBEInt(mIPv4Address),
-                    Counter.DROPPED_ARP_OTHER_HOST);
+            gen.addCountAndDropIfR0NotEquals(bytesToBEInt(mIPv4Address), DROPPED_ARP_OTHER_HOST);
 
             ApfV6Generator v6Gen = tryToConvertToApfV6Generator(gen);
             if (v6Gen != null && mShouldHandleArpOffload) {
@@ -1742,12 +1780,12 @@ public class ApfFilter {
                         .addAdd(18)
                         .addStoreToMemory(MemorySlot.TX_BUFFER_OUTPUT_POINTER, R0)
                         .addTransmitWithoutChecksum()
-                        .addCountAndDrop(Counter.DROPPED_ARP_REQUEST_REPLIED);
+                        .addCountAndDrop(DROPPED_ARP_REQUEST_REPLIED);
             }
         }
         // If we're not clat, and we don't have an ipv4 address, allow all ARP request to avoid
         // racing against DHCP.
-        gen.addCountAndPass(Counter.PASSED_ARP_REQUEST);
+        gen.addCountAndPass(PASSED_ARP_REQUEST);
     }
 
     /**
@@ -1872,13 +1910,13 @@ public class ApfFilter {
             // We want the more flag bit and offset to be 0 (ie. not a fragment),
             // so after this masking we end up with just the ip protocol (hopefully UDP).
             gen.addAnd((IPV4_FRAGMENT_MORE_FRAGS_MASK | IPV4_FRAGMENT_OFFSET_MASK) << 16 | 0xFF);
-            gen.addCountAndDropIfR0NotEquals(IPPROTO_UDP, Counter.DROPPED_IPV4_NON_DHCP4);
+            gen.addCountAndDropIfR0NotEquals(IPPROTO_UDP, DROPPED_IPV4_NON_DHCP4);
             // Check it's addressed to DHCP client port.
             gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
             gen.addLoad32Indexed(R0, TCP_UDP_SOURCE_PORT_OFFSET);
             gen.addCountAndDropIfR0NotEquals(DHCP_SERVER_PORT << 16 | DHCP_CLIENT_PORT,
-                    Counter.DROPPED_IPV4_NON_DHCP4);
-            gen.addCountAndPass(Counter.PASSED_IPV4_FROM_DHCPV4_SERVER);
+                    DROPPED_IPV4_NON_DHCP4);
+            gen.addCountAndPass(PASSED_IPV4_FROM_DHCPV4_SERVER);
             return;
         }
 
@@ -1901,7 +1939,7 @@ public class ApfFilter {
             // NOTE: Relies on R1 containing IPv4 header offset.
             gen.addAddR1ToR0();
             gen.addJumpIfBytesAtR0NotEqual(mHardwareAddress, skipDhcpv4Filter);
-            gen.addCountAndPass(Counter.PASSED_DHCP);
+            gen.addCountAndPass(PASSED_DHCP);
 
             // Drop all multicasts/broadcasts.
             gen.defineLabel(skipDhcpv4Filter);
@@ -1909,15 +1947,14 @@ public class ApfFilter {
             // If IPv4 destination address is in multicast range, drop.
             gen.addLoad8(R0, IPV4_DEST_ADDR_OFFSET);
             gen.addAnd(0xf0);
-            gen.addCountAndDropIfR0Equals(0xe0, Counter.DROPPED_IPV4_MULTICAST);
+            gen.addCountAndDropIfR0Equals(0xe0, DROPPED_IPV4_MULTICAST);
 
             // If IPv4 broadcast packet, drop regardless of L2 (b/30231088).
             gen.addLoad32(R0, IPV4_DEST_ADDR_OFFSET);
-            gen.addCountAndDropIfR0Equals(IPV4_BROADCAST_ADDRESS,
-                    Counter.DROPPED_IPV4_BROADCAST_ADDR);
+            gen.addCountAndDropIfR0Equals(IPV4_BROADCAST_ADDRESS, DROPPED_IPV4_BROADCAST_ADDR);
             if (mIPv4Address != null && mIPv4PrefixLength < 31) {
                 int broadcastAddr = ipv4BroadcastAddress(mIPv4Address, mIPv4PrefixLength);
-                gen.addCountAndDropIfR0Equals(broadcastAddr, Counter.DROPPED_IPV4_BROADCAST_NET);
+                gen.addCountAndDropIfR0Equals(broadcastAddr, DROPPED_IPV4_BROADCAST_NET);
             }
         }
 
@@ -1935,8 +1972,8 @@ public class ApfFilter {
             // If L2 broadcast packet, drop.
             // TODO: can we invert this condition to fall through to the common pass case below?
             gen.addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET);
-            gen.addCountAndPassIfBytesAtR0NotEqual(ETHER_BROADCAST, Counter.PASSED_IPV4_UNICAST);
-            gen.addCountAndDrop(Counter.DROPPED_IPV4_L2_BROADCAST);
+            gen.addCountAndPassIfBytesAtR0NotEqual(ETHER_BROADCAST, PASSED_IPV4_UNICAST);
+            gen.addCountAndDrop(DROPPED_IPV4_L2_BROADCAST);
         }
 
         if (shouldEnableIpv4PingOffload()) {
@@ -1944,7 +1981,7 @@ public class ApfFilter {
         }
 
         // Otherwise, pass
-        gen.addCountAndPass(Counter.PASSED_IPV4);
+        gen.addCountAndPass(PASSED_IPV4);
     }
 
     private void generateKeepaliveFilters(ApfV4GeneratorBase<?> gen, Class<?> filterType, int proto,
@@ -2166,7 +2203,7 @@ public class ApfFilter {
         v6Gen.addLoad8(R0, ICMP6_NS_OPTION_TYPE_OFFSET + 2)
                 .addCountAndDropIfR0AnyBitsSet(1, DROPPED_IPV6_NS_INVALID);
         generateNonDadNaTransmit(v6Gen);
-        v6Gen.addCountAndDrop(Counter.DROPPED_IPV6_NS_REPLIED_NON_DAD);
+        v6Gen.addCountAndDrop(DROPPED_IPV6_NS_REPLIED_NON_DAD);
     }
 
     /**
@@ -2226,7 +2263,7 @@ public class ApfFilter {
 
         // MLD packets set the router-alert hop-by-hop option.
         // TODO: be smarter about not blindly passing every packet with HBH options.
-        gen.addCountAndPassIfR0Equals(IPPROTO_HOPOPTS, Counter.PASSED_MLD);
+        gen.addCountAndPassIfR0Equals(IPPROTO_HOPOPTS, PASSED_MLD);
 
         // Drop multicast if the multicast filter is enabled.
         if (mMulticastFilter) {
@@ -2250,16 +2287,16 @@ public class ApfFilter {
             // Drop all other packets sent to ff00::/8 (multicast prefix).
             gen.defineLabel(dropAllIPv6MulticastsLabel);
             gen.addLoad8(R0, IPV6_DEST_ADDR_OFFSET);
-            gen.addCountAndDropIfR0Equals(0xff, Counter.DROPPED_IPV6_NON_ICMP_MULTICAST);
+            gen.addCountAndDropIfR0Equals(0xff, DROPPED_IPV6_NON_ICMP_MULTICAST);
             // If any keepalive filter matches, drop
             generateV6KeepaliveFilters(gen);
             // Not multicast. Pass.
-            gen.addCountAndPass(Counter.PASSED_IPV6_UNICAST_NON_ICMP);
+            gen.addCountAndPass(PASSED_IPV6_UNICAST_NON_ICMP);
             gen.defineLabel(skipIPv6MulticastFilterLabel);
         } else {
             generateV6KeepaliveFilters(gen);
             // If not ICMPv6, pass.
-            gen.addCountAndPassIfR0NotEquals(IPPROTO_ICMPV6, Counter.PASSED_IPV6_NON_ICMP);
+            gen.addCountAndPassIfR0NotEquals(IPPROTO_ICMPV6, PASSED_IPV6_NON_ICMP);
         }
 
         // If we got this far, the packet is ICMPv6.  Drop some specific types.
@@ -2278,8 +2315,7 @@ public class ApfFilter {
         // Add unsolicited multicast neighbor announcements filter
         String skipUnsolicitedMulticastNALabel = gen.getUniqueLabel();
         // Drop all router solicitations (b/32833400)
-        gen.addCountAndDropIfR0Equals(ICMPV6_ROUTER_SOLICITATION,
-                Counter.DROPPED_IPV6_ROUTER_SOLICITATION);
+        gen.addCountAndDropIfR0Equals(ICMPV6_ROUTER_SOLICITATION, DROPPED_IPV6_ROUTER_SOLICITATION);
         // If not neighbor announcements, skip filter.
         gen.addJumpIfR0NotEquals(ICMPV6_NEIGHBOR_ADVERTISEMENT, skipUnsolicitedMulticastNALabel);
         // Drop all multicast NA to ff02::/120.
@@ -2289,7 +2325,7 @@ public class ApfFilter {
         gen.addLoadImmediate(R0, IPV6_DEST_ADDR_OFFSET);
         gen.addJumpIfBytesAtR0NotEqual(unsolicitedNaDropPrefix, skipUnsolicitedMulticastNALabel);
 
-        gen.addCountAndDrop(Counter.DROPPED_IPV6_MULTICAST_NA);
+        gen.addCountAndDrop(DROPPED_IPV6_MULTICAST_NA);
         gen.defineLabel(skipUnsolicitedMulticastNALabel);
     }
 
@@ -2390,7 +2426,7 @@ public class ApfFilter {
         gen.addJumpIfR0NotEquals(ECHO_PORT, skipPort7V4Filter);
 
         // Drop it.
-        gen.addCountAndDrop(Counter.DROPPED_IPV4_TCP_PORT7_UNICAST);
+        gen.addCountAndDrop(DROPPED_IPV4_TCP_PORT7_UNICAST);
 
         // Skip label.
         gen.defineLabel(skipPort7V4Filter);
@@ -2438,23 +2474,23 @@ public class ApfFilter {
                 // Increment TOTAL_PACKETS.
                 // Only needed in APFv4.
                 // In APFv6, the interpreter will increase the counter on packet receive.
-                gen.addIncrementCounter(Counter.TOTAL_PACKETS);
+                gen.addIncrementCounter(TOTAL_PACKETS);
             }
 
             gen.addLoadFromMemory(R0, MemorySlot.FILTER_AGE_SECONDS);
-            gen.addStoreCounter(Counter.FILTER_AGE_SECONDS, R0);
+            gen.addStoreCounter(FILTER_AGE_SECONDS, R0);
 
             // requires a new enough APFv5+ interpreter, otherwise will be 0
             gen.addLoadFromMemory(R0, MemorySlot.FILTER_AGE_16384THS);
-            gen.addStoreCounter(Counter.FILTER_AGE_16384THS, R0);
+            gen.addStoreCounter(FILTER_AGE_16384THS, R0);
 
             // requires a new enough APFv5+ interpreter, otherwise will be 0
             gen.addLoadFromMemory(R0, MemorySlot.APF_VERSION);
-            gen.addStoreCounter(Counter.APF_VERSION, R0);
+            gen.addStoreCounter(APF_VERSION, R0);
 
             // store this program's sequential id, for later comparison
             gen.addLoadImmediate(R0, mNumProgramUpdates);
-            gen.addStoreCounter(Counter.APF_PROGRAM_ID, R0);
+            gen.addStoreCounter(APF_PROGRAM_ID, R0);
         }
 
         // Here's a basic summary of what the initial program does:
@@ -2482,11 +2518,11 @@ public class ApfFilter {
         if (SdkLevel.isAtLeastV()) {
             // IPv4, ARP, IPv6, EAPOL, WAPI
             gen.addCountAndDropIfR0IsNoneOf(Set.of(0x0800L, 0x0806L, 0x86DDL, 0x888EL, 0x88B4L),
-                    Counter.DROPPED_ETHERTYPE_NOT_ALLOWED);
+                    DROPPED_ETHERTYPE_NOT_ALLOWED);
         } else  {
             if (mDrop802_3Frames) {
                 // drop 802.3 frames (ethtype < 0x0600)
-                gen.addCountAndDropIfR0LessThan(ETH_TYPE_MIN, Counter.DROPPED_802_3_FRAME);
+                gen.addCountAndDropIfR0LessThan(ETH_TYPE_MIN, DROPPED_802_3_FRAME);
             }
             // Handle ether-type black list
             if (mEthTypeBlackList.length > 0) {
@@ -2494,8 +2530,7 @@ public class ApfFilter {
                 for (int p : mEthTypeBlackList) {
                     deniedEtherTypes.add((long) p);
                 }
-                gen.addCountAndDropIfR0IsOneOf(deniedEtherTypes,
-                        Counter.DROPPED_ETHERTYPE_NOT_ALLOWED);
+                gen.addCountAndDropIfR0IsOneOf(deniedEtherTypes, DROPPED_ETHERTYPE_NOT_ALLOWED);
             }
         }
 
@@ -2524,8 +2559,8 @@ public class ApfFilter {
 
         // Drop non-IP non-ARP broadcasts, pass the rest
         gen.addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET);
-        gen.addCountAndPassIfBytesAtR0NotEqual(ETHER_BROADCAST, Counter.PASSED_NON_IP_UNICAST);
-        gen.addCountAndDrop(Counter.DROPPED_ETH_BROADCAST);
+        gen.addCountAndPassIfBytesAtR0NotEqual(ETHER_BROADCAST, PASSED_NON_IP_UNICAST);
+        gen.addCountAndDrop(DROPPED_ETH_BROADCAST);
 
         // Add IPv6 filters:
         gen.defineLabel(ipv6FilterLabel);
@@ -2542,7 +2577,7 @@ public class ApfFilter {
     private void emitEpilogue(ApfV4GeneratorBase<?> gen) throws IllegalInstructionException {
         // Execution will reach here if none of the filters match, which will pass the packet to
         // the application processor.
-        gen.addCountAndPass(Counter.PASSED_IPV6_ICMP);
+        gen.addCountAndPass(PASSED_IPV6_ICMP);
 
         // TODO: merge the addCountTrampoline() into generate() method
         gen.addCountTrampoline();
@@ -3098,9 +3133,9 @@ public class ApfFilter {
             try {
                 Counter[] counters = Counter.class.getEnumConstants();
                 long counterFilterAgeSeconds =
-                        getCounterValue(mDataSnapshot, Counter.FILTER_AGE_SECONDS);
+                        getCounterValue(mDataSnapshot, FILTER_AGE_SECONDS);
                 long counterApfProgramId =
-                        getCounterValue(mDataSnapshot, Counter.APF_PROGRAM_ID);
+                        getCounterValue(mDataSnapshot, APF_PROGRAM_ID);
                 for (Counter c : Arrays.asList(counters).subList(1, counters.length)) {
                     long value = getCounterValue(mDataSnapshot, c);
 
