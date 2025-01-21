@@ -20,7 +20,6 @@ package android.net.ip;
 import android.os.Handler;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.PacketReader;
@@ -56,13 +55,12 @@ public class IgmpReportMonitor {
      * @param ifParams The {@link InterfaceParams} for the interface to listen on.
      * @param callback The {@link Callback} to notify the multicast address changes.
      * @param fd The {@link FileDescriptor} to use for the {@link PacketReader}.
-     *        It can be null, in which case FdEventsReader#handleInput() will handle the case.
      */
     public IgmpReportMonitor(
             @NonNull Handler handler,
             @NonNull InterfaceParams ifParams,
             @NonNull Callback callback,
-            @Nullable FileDescriptor fd) {
+            @NonNull FileDescriptor fd) {
         mPacketListener = new PacketListener(handler, ifParams, callback, fd);
     }
 
