@@ -296,6 +296,18 @@ public class NetworkStackUtils {
     public static final String IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION =
             "ip_reachability_ignore_nud_failure_version";
 
+    /**
+     * Experiment flag to enable the feature of handle IPv4 ping offload in Apf.
+     */
+    public static final String APF_HANDLE_PING4_OFFLOAD_VERSION =
+            "apf_handle_ping_offload_version";
+
+    /**
+     * Experiment flag to enable the feature of handle IGMP offload in Apf.
+     */
+    public static final String APF_HANDLE_IGMP_OFFLOAD_VERSION =
+            "apf_handle_igmp_offload_version";
+
     /**** BEGIN Feature Kill Switch Flags ****/
 
     /**

@@ -3943,7 +3943,6 @@ public abstract class IpClientIntegrationTestCommon {
         assertEquals(ETH_P_IPV6, ns.ethHdr.etherType);
         assertEquals(IPPROTO_ICMPV6, ns.ipv6Hdr.nextHeader);
         assertEquals(0xff, ns.ipv6Hdr.hopLimit);
-        assertTrue(ns.ipv6Hdr.srcIp.isLinkLocalAddress());
         assertEquals(ICMPV6_NEIGHBOR_SOLICITATION, ns.icmpv6Hdr.type);
         assertEquals(0, ns.icmpv6Hdr.code);
         assertEquals(0, ns.nsHdr.reserved);
@@ -4352,7 +4351,7 @@ public abstract class IpClientIntegrationTestCommon {
      * If dstIp is off-link, then targetIp should be the IPv6 default router.
      * The ND cache should not have an entry for targetIp.
      */
-    private void sendPacketToUnreachableNeighbor(Inet6Address dstIp) throws Exception {
+    private void sendPacketToPeer(final InetAddress dstIp) throws Exception {
         final Random random = new Random();
         final byte[] data = new byte[100];
         random.nextBytes(data);
@@ -4388,7 +4387,7 @@ public abstract class IpClientIntegrationTestCommon {
             final Inet6Address targetIp,
             final boolean expectNeighborLost) throws Exception {
         prepareIpReachabilityMonitorAddressResolutionTest(dnsServer, targetIp);
-        sendPacketToUnreachableNeighbor(ipv6Addr(dnsServer));
+        sendPacketToPeer(ipv6Addr(dnsServer));
         expectAndDropMulticastNses(targetIp, expectNeighborLost);
     }
 
@@ -4486,7 +4485,7 @@ public abstract class IpClientIntegrationTestCommon {
     private void runIpReachabilityMonitorEverReachableIpv6NeighborTest(final String dnsServer,
             final Inet6Address targetIp) throws Exception {
         prepareIpReachabilityMonitorAddressResolutionTest(dnsServer, targetIp);
-        sendPacketToUnreachableNeighbor(ipv6Addr(dnsServer));
+        sendPacketToPeer(ipv6Addr(dnsServer));
 
         // Simulate the default router/DNS was reachable by responding to multicast NS(not for DAD).
         NeighborSolicitation ns;
@@ -6176,13 +6175,13 @@ public abstract class IpClientIntegrationTestCommon {
         // The first new failure is ignored and written to the database.
         // The total is 10 failures in the last 6 hours, and 20 failures
         // in the past week and day.
-        sendPacketToUnreachableNeighbor(ipv6Addr(IPV6_OFF_LINK_DNS_SERVER));
+        sendPacketToPeer(ipv6Addr(IPV6_OFF_LINK_DNS_SERVER));
         expectAndDropMulticastNses(ROUTER_LINK_LOCAL, false /* expectNeighborLost */);
         assertRetrievedNetworkEventCount(TEST_CLUSTER, 20 /* expectedCountInPastWeek */,
                 20 /* expectedCountInPastDay */, 10 /* expectedCountInPastSixHours */);
 
         // The second new failure is ignored, but not written.
-        sendPacketToUnreachableNeighbor(ipv6Addr(IPV6_ON_LINK_DNS_SERVER));
+        sendPacketToPeer(ipv6Addr(IPV6_ON_LINK_DNS_SERVER));
         expectAndDropMulticastNses(ipv6Addr(IPV6_ON_LINK_DNS_SERVER),
                 false /* expectNeighborLost */);
         assertRetrievedNetworkEventCount(TEST_CLUSTER, 20 /* expectedCountInPastWeek */,

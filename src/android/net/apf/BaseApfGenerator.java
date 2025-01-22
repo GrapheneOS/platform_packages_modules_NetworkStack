@@ -22,8 +22,6 @@ import static android.net.apf.BaseApfGenerator.Register.R0;
 
 import android.annotation.NonNull;
 
-import com.android.net.module.util.ByteUtils;
-import com.android.net.module.util.CollectionUtils;
 import com.android.net.module.util.HexDump;
 
 import java.util.ArrayList;
@@ -484,12 +482,47 @@ public abstract class BaseApfGenerator {
             return this;
         }
 
+        private int findMatchInDataBytes(@NonNull byte[] content, int fromIndex, int toIndex) {
+            final int subArrayLength = toIndex - fromIndex;
+            for (int i = 0; i < mBytesImm.length - subArrayLength + 1; i++) {
+                boolean found = true;
+                for (int j = 0; j < subArrayLength; j++) {
+                    if (mBytesImm[i + j] != content[fromIndex + j]) {
+                        found = false;
+                        break;
+                    }
+                }
+                if (found) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        private static byte[] concat(byte[] prefix, byte[] suffix, int suffixFrom, int suffixTo) {
+            final byte[] newArray = new byte[prefix.length + suffixTo - suffixFrom];
+            System.arraycopy(prefix, 0, newArray, 0, prefix.length);
+            System.arraycopy(suffix, suffixFrom, newArray, prefix.length, suffixTo - suffixFrom);
+            return newArray;
+        }
+
         /**
-         * Attempts to match {@code content} with existing data bytes. If not exist, then
-         * append the {@code content} to the data bytes.
-         * Returns the start offset of the content from the beginning of the program.
+         * Manages and updates the data region.
+         * <p>
+         * Searches for the specified subarray within the existing data region. If the subarray
+         * is not found, it is appended to the data region. The subarray is defined as the
+         * portion of the {@code content} starting at {@code fromIndex} (inclusive)
+         * and ending at {@code toIndex} (exclusive).
+         * <p>
+         * @return The starting position of the subarray within the data region.
          */
-        int maybeUpdateBytesImm(byte[] content) throws IllegalInstructionException {
+        int maybeUpdateBytesImm(byte[] content, int fromIndex, int toIndex)
+                throws IllegalInstructionException {
+            if (fromIndex >= toIndex || fromIndex < 0 || toIndex > content.length) {
+                throw new IllegalArgumentException(
+                        String.format("fromIndex: %d, toIndex: %d, content length: %d", fromIndex,
+                                toIndex, content.length));
+            }
             if (mOpcode != Opcodes.JMP || mBytesImm == null) {
                 throw new IllegalInstructionException(String.format(
                         "maybeUpdateBytesImm() is only valid for jump data instruction, mOpcode "
@@ -500,10 +533,10 @@ public abstract class BaseApfGenerator {
                 throw new IllegalInstructionException(
                         "mImmSizeOverride must be 2, mImmSizeOverride: " + mImmSizeOverride);
             }
-            int offsetInDataBytes = CollectionUtils.indexOfSubArray(mBytesImm, content);
+            int offsetInDataBytes = findMatchInDataBytes(content, fromIndex, toIndex);
             if (offsetInDataBytes == -1) {
                 offsetInDataBytes = mBytesImm.length;
-                mBytesImm = ByteUtils.concat(mBytesImm, content);
+                mBytesImm = concat(mBytesImm, content, fromIndex, toIndex);
                 // Update the length immediate (first imm) value. Due to mValue within
                 // IntImmediate being final, we must remove and re-add the value to apply changes.
                 mIntImms.remove(0);

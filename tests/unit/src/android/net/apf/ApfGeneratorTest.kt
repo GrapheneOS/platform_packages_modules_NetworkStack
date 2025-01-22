@@ -878,6 +878,65 @@ class ApfGeneratorTest {
     }
 
     @Test
+    fun testCopyLargeContentToTxBufferWithCompression() {
+        val program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
+            .addAllocate(300)
+            // Chunked into 255 and 35 bytes.
+            // 255 bytes appended to data region.
+            // 35 bytes compressed by reusing the duplicated chunk from the data region.
+            .addDataCopy(ByteArray(290) { 1 })
+            // Appended to the data region.
+            .addDataCopy(ByteArray(5) { 2 })
+            // Compressed by reusing the duplicated chunk from the data region.
+            .addDataCopy(ByteArray(3) { 1 } + ByteArray(2) { 2 })
+            .addTransmitWithoutChecksum()
+            .generate()
+
+        val byteHexString = "01".repeat(255) + "02".repeat(5)
+        assertContentEquals(listOf(
+            "0: data        260, $byteHexString",
+            "263: debugbuf    size=1508",
+            "267: allocate    300",
+            "271: datacopy    src=3, len=255",
+            "274: datacopy    src=3, len=35",
+            "277: datacopy    src=258, len=5",
+            "281: datacopy    src=255, len=5",
+            "284: transmit    ip_ofs=255"
+        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+        assertPass(APF_VERSION_6, program, testPacket)
+        val transmitPackets = consumeTransmittedPackets(1)
+        val transmitPkt = HexDump.toHexString(transmitPackets[0])
+        assertEquals(
+            "01".repeat(290) + "02".repeat(5) + "01".repeat(3) + "02".repeat(2),
+            transmitPkt
+        )
+    }
+
+    @Test
+    fun testCopyLargeContentToTxBufferWithoutCompression() {
+        val program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
+            .addAllocate(300)
+            // Chunked into 255 and 45 bytes and then appended to the data region.
+            .addDataCopy(ByteArray(255) { 3 } + ByteArray(45) { 4 })
+            .addTransmitWithoutChecksum()
+            .generate()
+
+        val byteHexString = "03".repeat(255) + "04".repeat(45)
+        assertContentEquals(listOf(
+            "0: data        300, $byteHexString",
+            "303: debugbuf    size=1474",
+            "307: allocate    300",
+            "311: datacopy    src=3, len=255",
+            "314: datacopy    src=258, len=45",
+            "318: transmit    ip_ofs=255"
+        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+        assertPass(APF_VERSION_6, program, testPacket)
+        val transmitPackets = consumeTransmittedPackets(1)
+        val transmitPkt = HexDump.toHexString(transmitPackets[0])
+        assertEquals( "03".repeat(255) + "04".repeat(45), transmitPkt)
+    }
+
+    @Test
     fun testPassDrop() {
         var program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
                 .addDrop()

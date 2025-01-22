@@ -31,6 +31,7 @@ import static android.net.apf.ApfConstants.ECHO_PORT;
 import static android.net.apf.ApfConstants.ETH_DEST_ADDR_OFFSET;
 import static android.net.apf.ApfConstants.ETH_ETHERTYPE_OFFSET;
 import static android.net.apf.ApfConstants.ETH_HEADER_LEN;
+import static android.net.apf.ApfConstants.ETH_MULTICAST_IGMP_V3_ALL_MULTICAST_ROUTERS_ADDRESS;
 import static android.net.apf.ApfConstants.ETH_TYPE_MAX;
 import static android.net.apf.ApfConstants.ETH_TYPE_MIN;
 import static android.net.apf.ApfConstants.FIXED_ARP_REPLY_HEADER;
@@ -61,15 +62,26 @@ import static android.net.apf.ApfConstants.ICMP6_RDNSS_OPTION_TYPE;
 import static android.net.apf.ApfConstants.ICMP6_ROUTE_INFO_OPTION_TYPE;
 import static android.net.apf.ApfConstants.ICMP6_SOURCE_LL_ADDRESS_OPTION_TYPE;
 import static android.net.apf.ApfConstants.ICMP6_TYPE_OFFSET;
+import static android.net.apf.ApfConstants.IGMPV2_REPORT_FROM_IPV4_OPTION_TO_IGMP_CHECKSUM;
+import static android.net.apf.ApfConstants.IGMPV3_MODE_IS_EXCLUDE;
+import static android.net.apf.ApfConstants.IGMP_CHECKSUM_WITH_ROUTER_ALERT_OFFSET;
+import static android.net.apf.ApfConstants.IGMP_MAX_RESP_TIME_OFFSET;
+import static android.net.apf.ApfConstants.IGMP_MULTICAST_ADDRESS_OFFSET;
+import static android.net.apf.ApfConstants.IGMP_TYPE_REPORTS;
 import static android.net.apf.ApfConstants.IPPROTO_HOPOPTS;
+import static android.net.apf.ApfConstants.IPV4_ALL_HOSTS_ADDRESS_IN_LONG;
+import static android.net.apf.ApfConstants.IPV4_ALL_IGMPV3_MULTICAST_ROUTERS_ADDRESS;
 import static android.net.apf.ApfConstants.IPV4_ANY_HOST_ADDRESS;
 import static android.net.apf.ApfConstants.IPV4_BROADCAST_ADDRESS;
 import static android.net.apf.ApfConstants.IPV4_DEST_ADDR_OFFSET;
 import static android.net.apf.ApfConstants.IPV4_FRAGMENT_MORE_FRAGS_MASK;
 import static android.net.apf.ApfConstants.IPV4_FRAGMENT_OFFSET_MASK;
 import static android.net.apf.ApfConstants.IPV4_FRAGMENT_OFFSET_OFFSET;
+import static android.net.apf.ApfConstants.IPV4_IGMP_TYPE_QUERY;
 import static android.net.apf.ApfConstants.IPV4_PROTOCOL_OFFSET;
 import static android.net.apf.ApfConstants.IPV4_SRC_ADDR_OFFSET;
+import static android.net.apf.ApfConstants.IPV4_ROUTER_ALERT_OPTION;
+import static android.net.apf.ApfConstants.IPV4_ROUTER_ALERT_OPTION_LEN;
 import static android.net.apf.ApfConstants.IPV4_TOTAL_LENGTH_OFFSET;
 import static android.net.apf.ApfConstants.IPV6_ALL_NODES_ADDRESS;
 import static android.net.apf.ApfConstants.IPV6_DEST_ADDR_OFFSET;
@@ -99,6 +111,8 @@ import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ETH_BROADCAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_GARP_REPLY;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_BROADCAST_ADDR;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_BROADCAST_NET;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IGMP_INVALID;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IGMP_REPORT;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_ICMP_INVALID;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_KEEPALIVE_ACK;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_L2_BROADCAST;
@@ -177,6 +191,11 @@ import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_SO
 import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ALL_HOST_MULTICAST;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_LEN;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_HEADER_MIN_LEN;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_FLAG_DF;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_IGMP_GROUP_RECORD_SIZE;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_IGMP_MIN_SIZE;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_IGMP_TYPE_V3_REPORT;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_PROTOCOL_IGMP;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_LEN;
 
 import android.annotation.ChecksSdkIntAtLeast;
@@ -555,7 +574,7 @@ public class ApfFilter {
             Log.wtf(TAG, "Failed to start RaPacketReader");
         }
 
-        if (shouldEnableIgmpOffload()) {
+        if (shouldMonitorIgmpReports()) {
             final FileDescriptor socketFd = mDependencies.createEgressIgmpReportsReaderSocket(
                     ifParams.index);
             if (socketFd != null) {
@@ -1882,6 +1901,27 @@ public class ApfFilter {
         //   else
         //     drop
         //
+        // (APFv6+ specific logic)
+        // if it's IGMP:
+        //   if payload length is invalid (less than 8 or equal to 9, 10, 11):
+        //     drop
+        //   if the packet is an IGMP report:
+        //     drop
+        //   if the packet is not an IGMP query:
+        //     drop
+        //   if the group_addr is not 0.0.0.0, then it is group specific query:
+        //     pass
+        //   ===== handle IGMPv1/v2/v3 general query =====
+        //   if the IPv4 dst addr is not 224.0.0.1:
+        //     drop
+        //   if the packet length >= 12, then it is IGMPv3:
+        //     transmit IGMPv3 report and drop
+        //   else if the packet length == 8, then it is either IGMPv1 or IGMPv2:
+        //     if the max_res_code == 0, then it is IGMPv1:
+        //       pass
+        //     else it is IGMPv2:
+        //       transmit IGMPv2 reports (one report per group) and drop
+        //
         // if filtering multicast (i.e. multicast lock not held):
         //   if it's DHCP destined to our MAC:
         //     pass
@@ -1920,6 +1960,10 @@ public class ApfFilter {
                     DROPPED_IPV4_NON_DHCP4);
             gen.addCountAndPass(PASSED_IPV4_FROM_DHCPV4_SERVER);
             return;
+        }
+
+        if (shouldEnableIgmpOffload()) {
+            generateIgmpFilter((ApfV6GeneratorBase<?>) gen);
         }
 
         if (mMulticastFilter) {
@@ -1969,6 +2013,10 @@ public class ApfFilter {
         // If TCP unicast on port 7, drop
         generateV4TcpPort7Filter(gen);
 
+        if (shouldEnableIpv4PingOffload()) {
+            generateUnicastIpv4PingOffload((ApfV6GeneratorBase<?>) gen);
+        }
+
         if (mMulticastFilter) {
             // Otherwise, this is an IPv4 unicast, pass
             // If L2 broadcast packet, drop.
@@ -1976,10 +2024,6 @@ public class ApfFilter {
             gen.addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET);
             gen.addCountAndPassIfBytesAtR0NotEqual(ETHER_BROADCAST, PASSED_IPV4_UNICAST);
             gen.addCountAndDrop(DROPPED_IPV4_L2_BROADCAST);
-        }
-
-        if (shouldEnableIpv4PingOffload()) {
-            generateUnicastIpv4PingOffload(tryToConvertToApfV6Generator(gen));
         }
 
         // Otherwise, pass
@@ -2329,6 +2373,262 @@ public class ApfFilter {
 
         gen.addCountAndDrop(DROPPED_IPV6_MULTICAST_NA);
         gen.defineLabel(skipUnsolicitedMulticastNALabel);
+    }
+
+    /**
+     * Creates the portion of an IGMP packet from the Ethernet source MAC address to the IPv4
+     * Type of Service field.
+     */
+    private byte[] createIgmpPktFromEthSrcToIPv4Tos() {
+        return CollectionUtils.concatArrays(
+                mHardwareAddress,
+                new byte[] {
+                        // etherType: IPv4
+                        (byte) 0x08, 0x00,
+                        // version, IHL
+                        (byte) 0x46,
+                        // Tos: 0xC0 (ref: net/ipv4/igmp.c#igmp_send_report())
+                        (byte) 0xc0}
+        );
+    }
+
+    /**
+     * Creates the portion of an IGMP packet from the IPv4 Identification field to the IPv4
+     * Source Address.
+     */
+    private byte[] createIgmpPktFromIPv4IdToSrc() {
+        final byte[] ipIdToSrc = new byte[] {
+                // identification
+                0, 0,
+                // fragment flag
+                (byte) (IPV4_FLAG_DF >> 8), 0,
+                // TTL
+                (byte) 1,
+                // protocol
+                (byte) IPV4_PROTOCOL_IGMP,
+                // router alert option is { 0x94, 0x04, 0x00, 0x00 }, so we precalculate IPv4
+                // checksum as 0x9404 + 0x0000 = 0x9404
+                (byte) 0x94, (byte) 0x04
+        };
+        return CollectionUtils.concatArrays(
+                ipIdToSrc,
+                mIPv4Address
+        );
+    }
+
+    /**
+     * Creates IGMPv3 Membership Report packet payload (rfc3376#section-7.3.2).
+     */
+    private byte[] createIgmpV3ReportPayload() {
+        final int groupNum = mIPv4McastAddrsExcludeAllHost.size();
+        final byte[] igmpHeader = new byte[] {
+                // IGMP type
+                (byte) IPV4_IGMP_TYPE_V3_REPORT,
+                // reserved
+                0,
+                // checksum, calculate later
+                0, 0,
+                // reserved
+                0, 0,
+                // num group records
+                (byte) ((groupNum >> 8) & 0xff), (byte) (groupNum & 0xff)
+        };
+        final byte[] groupRecordHeader = new byte[] {
+                // record type
+                (byte) IGMPV3_MODE_IS_EXCLUDE,
+                // aux data len,
+                0,
+                // num src
+                0, 0
+        };
+        final byte[] payload =
+                new byte[igmpHeader.length + groupNum * (groupRecordHeader.length + IPV4_ADDR_LEN)];
+        int offset = 0;
+
+        System.arraycopy(igmpHeader, 0, payload, offset, igmpHeader.length);
+        offset += igmpHeader.length;
+        for (Inet4Address mcastAddr: mIPv4McastAddrsExcludeAllHost) {
+            System.arraycopy(groupRecordHeader, 0, payload, offset, groupRecordHeader.length);
+            offset += groupRecordHeader.length;
+            System.arraycopy(mcastAddr.getAddress(), 0, payload, offset, IPV4_ADDR_LEN);
+            offset += IPV4_ADDR_LEN;
+        }
+
+        return payload;
+    }
+
+    /**
+     * Generate transmit code to send IGMPv3 report in response to general query packets.
+     */
+    private void generateIgmpV3ReportTransmit(ApfV6GeneratorBase<?> gen,
+            byte[] igmpPktFromEthSrcToIpTos, byte[] igmpPktFromIpIdToSrc)
+            throws IllegalInstructionException {
+        final int ipv4TotalLen = IPV4_HEADER_MIN_LEN
+                + IPV4_ROUTER_ALERT_OPTION_LEN
+                + IPV4_IGMP_MIN_SIZE
+                + (mIPv4McastAddrsExcludeAllHost.size() * IPV4_IGMP_GROUP_RECORD_SIZE);
+        final byte[] encodedIPv4TotalLen = {
+                (byte) ((ipv4TotalLen >> 8) & 0xff), (byte) (ipv4TotalLen & 0xff),
+        };
+        final byte[] packet = CollectionUtils.concatArrays(
+                ETH_MULTICAST_IGMP_V3_ALL_MULTICAST_ROUTERS_ADDRESS,
+                igmpPktFromEthSrcToIpTos,
+                encodedIPv4TotalLen,
+                igmpPktFromIpIdToSrc,
+                IPV4_ALL_IGMPV3_MULTICAST_ROUTERS_ADDRESS,
+                IPV4_ROUTER_ALERT_OPTION,
+                createIgmpV3ReportPayload()
+        );
+
+        gen.addAllocate(ETHER_HEADER_LEN + ipv4TotalLen)
+                .addDataCopy(packet)
+                .addTransmitL4(
+                        // ip_ofs
+                        ETHER_HEADER_LEN,
+                        // csum_ofs
+                        IGMP_CHECKSUM_WITH_ROUTER_ALERT_OFFSET,
+                        // csum_start
+                        ETHER_HEADER_LEN + IPV4_HEADER_MIN_LEN + IPV4_ROUTER_ALERT_OPTION_LEN,
+                        // partial_sum
+                        0,
+                        // udp
+                        false
+                )
+                .addCountAndDrop(Counter.DROPPED_IGMP_V3_GENERAL_QUERY_REPLIED);
+    }
+
+    /**
+     * Generate transmit code to send IGMPv2 report in response to general query packets.
+     */
+    private void generateIgmpV2ReportTransmit(ApfV6GeneratorBase<?> gen,
+            byte[] igmpPktFromEthSrcToIpTos, byte[] igmpPktFromIpIdToSrc)
+            throws IllegalInstructionException {
+        final int ipv4TotalLen =
+                IPV4_HEADER_MIN_LEN + IPV4_ROUTER_ALERT_OPTION_LEN + IPV4_IGMP_MIN_SIZE;
+
+        // Reuse IGMPv3 packet chunks when creating the IGMPv2 report listed below:
+        //   - from Ethernet source to IPv4 Tos: 10 bytes
+        //   - from IPv4 identification to source address: 12 bytes
+        //   - multicast group addresses: 4 bytes * number of addresses
+        for (Inet4Address mcastAddr: mIPv4McastAddrsExcludeAllHost) {
+            final MacAddress mcastEther =
+                    NetworkStackUtils.ipv4MulticastToEthernetMulticast(mcastAddr);
+            gen.addAllocate(ETHER_HEADER_LEN + ipv4TotalLen)
+                    .addDataCopy(mcastEther.toByteArray())
+                    .addDataCopy(igmpPktFromEthSrcToIpTos)
+                    .addWriteU16(ipv4TotalLen)
+                    .addDataCopy(igmpPktFromIpIdToSrc)
+                    .addDataCopy(mcastAddr.getAddress())
+                    .addDataCopy(IGMPV2_REPORT_FROM_IPV4_OPTION_TO_IGMP_CHECKSUM)
+                    .addDataCopy(mcastAddr.getAddress())
+                    .addTransmitL4(
+                            // ip_ofs
+                            ETHER_HEADER_LEN,
+                            // csum_ofs
+                            IGMP_CHECKSUM_WITH_ROUTER_ALERT_OFFSET,
+                            // csum_start
+                            ETHER_HEADER_LEN + IPV4_HEADER_MIN_LEN + IPV4_ROUTER_ALERT_OPTION_LEN,
+                            // partial_sum
+                            0,
+                            // udp
+                            false
+                    );
+        }
+
+        gen.addCountAndDrop(Counter.DROPPED_IGMP_V2_GENERAL_QUERY_REPLIED);
+    }
+
+    /**
+     * Generates filter code to handle IGMP packets.
+     * <p>
+     * On entry, this filter know it is processing an IPv4 packet. It will then process all IGMP
+     * packets, either passing or dropping them. Non-IGMP packets are skipped.
+     */
+    private void generateIgmpFilter(ApfV6GeneratorBase<?> v6Gen)
+            throws IllegalInstructionException {
+        final String skipIgmpFilter = v6Gen.getUniqueLabel();
+        final String checkIgmpV1orV2 = v6Gen.getUniqueLabel();
+
+        // Check 1) it's not a fragment. 2) it's IGMP.
+        // Load 16 bit frag flags/offset field, 8 bit ttl, 8 bit protocol.
+        v6Gen.addLoad32(R0, IPV4_FRAGMENT_OFFSET_OFFSET)
+        // Mask out all but the reserved and don't fragment bits, plus the TTL field.
+        // Because:
+        //   IPV4_FRAGMENT_OFFSET_MASK = 0x1fff
+        //   IPV4_FRAGMENT_MORE_FRAGS_MASK = 0x2000
+        // hence this constant ends up being 0x3FFF00FF.
+        // We want the more flag bit and offset to be 0 (ie. not a fragment),
+        // so after this masking we end up with just the ip protocol (hopefully IGMP).
+                .addAnd((IPV4_FRAGMENT_MORE_FRAGS_MASK | IPV4_FRAGMENT_OFFSET_MASK) << 16 | 0xFF)
+                .addJumpIfR0NotEquals(IPV4_PROTOCOL_IGMP, skipIgmpFilter);
+
+        // Calculate the IPv4 payload length: (total length - IPv4 header length).
+        // Memory slot 0 is occupied temporarily to store the length.
+        v6Gen.addLoad16(R0, IPV4_TOTAL_LENGTH_OFFSET)
+                .addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE)
+                .addNeg(R1)
+                .addAddR1ToR0()
+                .addStoreToMemory(MemorySlot.SLOT_0, R0);
+
+        // If payload length is less than 8 or equal to 9, 10, 11, it's invalid IGMP packet: drop.
+        v6Gen.addCountAndDropIfR0LessThan(IPV4_IGMP_MIN_SIZE, DROPPED_IGMP_INVALID)
+                .addCountAndDropIfR0IsOneOf(Set.of(9L, 10L, 11L), DROPPED_IGMP_INVALID);
+
+        // If it's an IGMPv1/IGMPv2/IGMPv3 report: drop.
+        // A host normally cancels its own pending report if it observes
+        // an identical report from another host on the network (host suppression).
+        // While dropping reports here technically disrupts this host's suppression behavior,
+        // it is acceptable since other devices on the network will perform the suppression.
+        // If the IGMP type is not one of the reports, it's either a query(type=0x11) or an
+        // invalid packet.
+        v6Gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE)
+                .addLoad8Indexed(R0, ETHER_HEADER_LEN)
+                .addCountAndDropIfR0IsOneOf(IGMP_TYPE_REPORTS, DROPPED_IGMP_REPORT)
+                .addCountAndDropIfR0NotEquals(IPV4_IGMP_TYPE_QUERY, DROPPED_IGMP_INVALID);
+
+        // If group address is not 0.0.0.0, it's an IGMPv2/v3 group specific query: pass.
+        // rfc3376#section-6.1 mentions group specific queries are sent when a router receives a
+        // State-Change record indicating a system is leaving a group. Therefore, since the
+        // router only sends group-specific queries after receiving a leave message, it is not
+        // sent out periodically.
+        // Increased APF bytecode size for offloading these queries may not yield significant
+        // power benefits. In this case, letting the kernel handle group-specific queries is
+        // acceptable.
+        v6Gen.addLoad32Indexed(R0, IGMP_MULTICAST_ADDRESS_OFFSET)
+                .addCountAndPassIfR0NotEquals(0 /* 0.0.0.0 */, PASSED_IPV4);
+
+        // If we reach here, we know it is an IGMPv1/IGMPv2/IGMPv3 general query.
+
+        // The general query IPv4 destination address must be 224.0.0.1.
+        v6Gen.addLoad32(R0, IPV4_DEST_ADDR_OFFSET)
+                .addCountAndDropIfR0NotEquals(IPV4_ALL_HOSTS_ADDRESS_IN_LONG,
+                        DROPPED_IGMP_INVALID);
+
+        // Check payload length, since invalid length already checked,
+        // it should be 8 (IGMPv1 or IGMPv2) or >=12 (IGMPv3)
+        v6Gen.addLoadFromMemory(R0, MemorySlot.SLOT_0)
+                .addJumpIfR0Equals(IPV4_IGMP_MIN_SIZE, checkIgmpV1orV2);
+
+        // ===== IGMPv3 general query =====
+        // To optimize for bytecode size, the IGMPv3 report is constructed first.
+        // Its packet structure is then reused as a template when creating the IGMPv2 report.
+        final byte[] igmpPktFromEthSrcToIpTos = createIgmpPktFromEthSrcToIPv4Tos();
+        final byte[] igmpPktFromIpIdToSrc = createIgmpPktFromIPv4IdToSrc();
+        generateIgmpV3ReportTransmit(v6Gen, igmpPktFromEthSrcToIpTos, igmpPktFromIpIdToSrc);
+
+        // ===== IGMPv1 or IGMPv2 general query =====
+        v6Gen.defineLabel(checkIgmpV1orV2);
+        // Based on rfc3376#section-7.1 If max resp time is 0, it's IGMPv1: pass.
+        // We don't expect many networks are still using IGMPv1, pass it to the kernel to save
+        // bytecode size.
+        // (Note: R1 is still IPV4_HEADER_SIZE)
+        v6Gen.addLoad8Indexed(R0, IGMP_MAX_RESP_TIME_OFFSET)
+                .addCountAndPassIfR0Equals(0, PASSED_IPV4); // IGMPv1
+
+        // Drop and transmit IGMPv2 reports
+        generateIgmpV2ReportTransmit(v6Gen, igmpPktFromEthSrcToIpTos, igmpPktFromIpIdToSrc);
+
+        v6Gen.defineLabel(skipIgmpFilter);
     }
 
     /**
@@ -2738,7 +3038,7 @@ public class ApfFilter {
             unregisterOffloadEngine();
         }
 
-        if (shouldEnableIgmpOffload() && mIgmpReportMonitor != null) {
+        if (shouldMonitorIgmpReports() && mIgmpReportMonitor != null) {
             mIgmpReportMonitor.stop();
         }
     }
@@ -2852,8 +3152,17 @@ public class ApfFilter {
         return shouldUseApfV6Generator() && mShouldHandleMdnsOffload;
     }
 
-    private boolean shouldEnableIgmpOffload() {
+    private boolean shouldMonitorIgmpReports() {
         return shouldUseApfV6Generator() && mShouldHandleIgmpOffload;
+    }
+
+    private boolean shouldEnableIgmpOffload() {
+        // Since the all-hosts multicast address (224.0.0.1) is always present for IPv4
+        // multicast, and IGMP packets are not needed for this address, IGMP offloading is only
+        // necessary if there are additional joined multicast addresses
+        // (mIPv4MulticastAddresses.size() > 1).
+        return shouldMonitorIgmpReports() && mIPv4MulticastAddresses.size() > 1
+                && mIPv4Address != null;
     }
 
     private boolean shouldEnableIpv4PingOffload() {
@@ -2927,7 +3236,6 @@ public class ApfFilter {
     }
 
     public void dump(IndentingPrintWriter pw) {
-        // TODO: use HandlerUtils.runWithScissors() to dump APF on the handler thread.
         pw.println(String.format(
                 "Capabilities: { apfVersionSupported: %d, maximumApfProgramSize: %d }",
                 mApfVersionSupported, mApfRamSize));

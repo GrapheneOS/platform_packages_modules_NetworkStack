@@ -59,6 +59,8 @@ public final class ApfConstants {
     // The IPv4 all multicast routers destination 224.0.0.22
     public static final byte[] IPV4_ALL_IGMPV3_MULTICAST_ROUTERS_ADDRESS =
             InetAddresses.parseNumericAddress("224.0.0.22").getAddress();
+    public static long IPV4_ALL_HOSTS_ADDRESS_IN_LONG = 0xe0000001L; // 224.0.0.1
+    public static final int IPV4_IGMP_TYPE_QUERY = 0x11;
     public static final Set<Long> IGMP_TYPE_REPORTS = Set.of(
             (long) IPV4_IGMP_TYPE_V1_REPORT,
             (long) IPV4_IGMP_TYPE_V2_JOIN_REPORT,
