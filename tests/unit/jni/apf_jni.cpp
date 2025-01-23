@@ -30,7 +30,7 @@
 #include "v7/test_buf_allocator.h"
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
-#define LOG_TAG "NetworkStackUtils-JNI"
+#define LOG_TAG "ApfJniUtils"
 
 static int run_apf_interpreter(int apf_version, uint32_t* program,
                                uint32_t program_len, uint32_t ram_len,

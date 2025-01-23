@@ -24,7 +24,7 @@ public class ApfJniUtils {
 
     static {
         // Load up native shared library containing APF interpreter exposed via JNI.
-        System.loadLibrary("networkstacktestsjni");
+        System.loadLibrary("apfjni");
     }
 
     /**

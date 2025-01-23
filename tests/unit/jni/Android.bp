@@ -20,7 +20,7 @@ package {
 }
 
 cc_library_shared {
-    name: "libnetworkstacktestsjni",
+    name: "libapfjni",
     srcs: [
         "**/*.cpp",
     ],

@@ -68,7 +68,7 @@ public class NetworkStackUtils {
     public static final String CAPTIVE_PORTAL_OTHER_HTTP_URLS = "captive_portal_other_http_urls";
 
     /**
-     * A comma separated list of URLs used for network validation. in addition to the HTTPS url
+     * A comma separated list of URLs used for network validation in addition to the HTTPS url
      * associated with the CAPTIVE_PORTAL_HTTPS_URL settings.
      */
     public static final String CAPTIVE_PORTAL_OTHER_HTTPS_URLS = "captive_portal_other_https_urls";
