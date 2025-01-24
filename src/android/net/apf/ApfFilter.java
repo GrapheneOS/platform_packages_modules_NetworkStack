@@ -152,8 +152,6 @@ import static android.net.apf.ApfCounterTracker.getCounterValue;
 import static android.net.apf.BaseApfGenerator.MemorySlot;
 import static android.net.apf.BaseApfGenerator.Register.R0;
 import static android.net.apf.BaseApfGenerator.Register.R1;
-import static android.net.nsd.OffloadEngine.OFFLOAD_CAPABILITY_BYPASS_MULTICAST_LOCK;
-import static android.net.nsd.OffloadEngine.OFFLOAD_TYPE_REPLY;
 import static android.net.util.SocketUtils.makePacketSocketAddress;
 import static android.os.PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED;
 import static android.os.PowerManager.ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED;
@@ -201,7 +199,6 @@ import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_LEN;
 import android.annotation.ChecksSdkIntAtLeast;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
-import android.annotation.RequiresApi;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -215,9 +212,6 @@ import android.net.apf.ApfCounterTracker.Counter;
 import android.net.apf.BaseApfGenerator.IllegalInstructionException;
 import android.net.ip.IgmpReportMonitor;
 import android.net.nsd.NsdManager;
-import android.net.nsd.OffloadEngine;
-import android.net.nsd.OffloadServiceInfo;
-import android.os.Build;
 import android.os.Handler;
 import android.os.PowerManager;
 import android.os.SystemClock;
@@ -380,10 +374,8 @@ public class ApfFilter {
     private final ApfSessionInfoMetrics mApfSessionInfoMetrics;
     private final NsdManager mNsdManager;
     private final IgmpReportMonitor mIgmpReportMonitor;
-
-    @VisibleForTesting
-    final List<OffloadServiceInfo> mOffloadServiceInfos = new ArrayList<>();
-    private OffloadEngine mOffloadEngine;
+    private final ApfMdnsOffloadEngine mApfMdnsOffloadEngine;
+    private final List<MdnsOffloadRule> mOffloadRules = new ArrayList<>();
 
     private static boolean isDeviceIdleModeChangedAction(Intent intent) {
         return ACTION_DEVICE_IDLE_MODE_CHANGED.equals(intent.getAction());
@@ -457,40 +449,6 @@ public class ApfFilter {
     private volatile boolean mIsRunning = true;
 
     private final Dependencies mDependencies;
-
-    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
-    private void registerOffloadEngine() {
-        if (mOffloadEngine != null) {
-            Log.wtf(TAG,
-                    "registerOffloadEngine called twice without calling unregisterOffloadEngine");
-            return;
-        }
-        mOffloadEngine = new OffloadEngine() {
-            @Override
-            public void onOffloadServiceUpdated(@NonNull OffloadServiceInfo info) {
-                mOffloadServiceInfos.removeIf(i -> i.getKey().equals(info.getKey()));
-                mOffloadServiceInfos.add(info);
-            }
-
-            @Override
-            public void onOffloadServiceRemoved(@NonNull OffloadServiceInfo info) {
-                mOffloadServiceInfos.removeIf(i -> i.getKey().equals(info.getKey()));
-            }
-        };
-        mNsdManager.registerOffloadEngine(mInterfaceParams.name,
-                OFFLOAD_TYPE_REPLY,
-                OFFLOAD_CAPABILITY_BYPASS_MULTICAST_LOCK,
-                mHandler::post, mOffloadEngine);
-    }
-
-    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
-    private void unregisterOffloadEngine() {
-        if (mOffloadEngine != null) {
-            mNsdManager.unregisterOffloadEngine(mOffloadEngine);
-            mOffloadServiceInfos.clear();
-            mOffloadEngine = null;
-        }
-    }
 
     public ApfFilter(Handler handler, Context context, ApfConfiguration config,
             InterfaceParams ifParams, IApfController apfController,
@@ -596,8 +554,17 @@ public class ApfFilter {
         mDependencies.addDeviceIdleReceiver(mDeviceIdleReceiver);
 
         mNsdManager = context.getSystemService(NsdManager.class);
-        if (shouldEnableMdnsOffload()) {
-            registerOffloadEngine();
+        if (shouldRegisterOffloadEngine()) {
+            mApfMdnsOffloadEngine = new ApfMdnsOffloadEngine(mInterfaceParams.name, mHandler,
+                    mNsdManager,
+                    allRules -> {
+                        mOffloadRules.clear();
+                        mOffloadRules.addAll(allRules);
+                        installNewProgram();
+                    });
+            mApfMdnsOffloadEngine.registerOffloadEngine();
+        } else {
+            mApfMdnsOffloadEngine = null;
         }
 
         mIPv4MulticastAddresses.addAll(
@@ -2264,12 +2231,15 @@ public class ApfFilter {
         //
         // if there is a hop-by-hop option present (e.g. MLD query)
         //   pass
+        //
         // if we're dropping multicast
         //   if it's not ICMPv6 or it's ICMPv6 but we're in doze mode:
         //     if it's multicast:
         //       drop
         //     pass
-        // (APFv6+ specific logic) if it's ICMPv6 NS:
+        //
+        // (APFv6+ specific logic)
+        // if it's ICMPv6 NS:
         //   if there are no IPv6 addresses (including link local address) on the interface:
         //     pass
         //   if MAC dst is none of known {unicast, multicast, broadcast} MAC addresses
@@ -2298,10 +2268,13 @@ public class ApfFilter {
         //   if multicast MAC in SLLA option:
         //     drop
         //   transmit NA and drop
+        //
         // if it's ICMPv6 RS to any:
         //   drop
+        //
         // if it's ICMPv6 NA to anything in ff02::/120
         //   drop
+        //
         // if keepalive ack
         //   drop
 
@@ -3034,8 +3007,8 @@ public class ApfFilter {
         mRas.clear();
         mDependencies.removeBroadcastReceiver(mDeviceIdleReceiver);
         mIsApfShutdown = true;
-        if (shouldEnableMdnsOffload()) {
-            unregisterOffloadEngine();
+        if (SdkLevel.isAtLeastV() && mApfMdnsOffloadEngine != null) {
+            mApfMdnsOffloadEngine.unregisterOffloadEngine();
         }
 
         if (shouldMonitorIgmpReports() && mIgmpReportMonitor != null) {
@@ -3148,7 +3121,7 @@ public class ApfFilter {
 
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */, codename =
             "VanillaIceCream")
-    private boolean shouldEnableMdnsOffload() {
+    private boolean shouldRegisterOffloadEngine() {
         return shouldUseApfV6Generator() && mShouldHandleMdnsOffload;
     }
 

@@ -3982,15 +3982,17 @@ public abstract class IpClientIntegrationTestCommon {
         return ns;
     }
 
-    private List<NeighborSolicitation> waitForMultipleNeighborSolicitations() throws Exception {
+    private List<NeighborSolicitation> waitForMultipleNeighborSolicitations(int expectedNsCount)
+            throws Exception {
         NeighborSolicitation ns;
         final List<NeighborSolicitation> nsList = new ArrayList<NeighborSolicitation>();
         while ((ns = getNextNeighborSolicitation()) != null) {
-            // Filter out the multicast NSes used for duplicate address detetction, the target
+            // Filter out the multicast NSes used for duplicate address detection, the target
             // address is the global IPv6 address inside these NSes, and multicast NSes sent from
             // device's GUAs to force first-hop router to update the neighbor cache entry.
             if (ns.ipv6Hdr.srcIp.isLinkLocalAddress() && ns.nsHdr.target.isLinkLocalAddress()) {
                 nsList.add(ns);
+                if (nsList.size() == expectedNsCount) break;
             }
         }
         assertFalse(nsList.isEmpty());
@@ -4075,9 +4077,9 @@ public abstract class IpClientIntegrationTestCommon {
     private void runIpReachabilityMonitorProbeFailedTest() throws Exception {
         prepareIpReachabilityMonitorTest();
 
-        final List<NeighborSolicitation> nsList = waitForMultipleNeighborSolicitations();
         final int expectedNudSolicitNum = readNudSolicitNumPostRoamingFromResource();
-        assertEquals(expectedNudSolicitNum, nsList.size());
+        final List<NeighborSolicitation> nsList =
+                waitForMultipleNeighborSolicitations(expectedNudSolicitNum);
         for (NeighborSolicitation ns : nsList) {
             assertUnicastNeighborSolicitation(ns, ROUTER_MAC /* dstMac */,
                     ROUTER_LINK_LOCAL /* dstIp */, ROUTER_LINK_LOCAL /* targetIp */);
@@ -4121,10 +4123,10 @@ public abstract class IpClientIntegrationTestCommon {
     private void runIpReachabilityMonitorMcastResolicitProbeFailedTest() throws Exception {
         prepareIpReachabilityMonitorTest(true /* isMulticastResolicitEnabled */);
 
-        final List<NeighborSolicitation> nsList = waitForMultipleNeighborSolicitations();
         final int expectedNudSolicitNum = readNudSolicitNumPostRoamingFromResource();
         int expectedSize = expectedNudSolicitNum + NUD_MCAST_RESOLICIT_NUM;
-        assertEquals(expectedSize, nsList.size());
+        final List<NeighborSolicitation> nsList =
+                waitForMultipleNeighborSolicitations(expectedSize);
         for (NeighborSolicitation ns : nsList.subList(0, expectedNudSolicitNum)) {
             assertUnicastNeighborSolicitation(ns, ROUTER_MAC /* dstMac */,
                     ROUTER_LINK_LOCAL /* dstIp */, ROUTER_LINK_LOCAL /* targetIp */);

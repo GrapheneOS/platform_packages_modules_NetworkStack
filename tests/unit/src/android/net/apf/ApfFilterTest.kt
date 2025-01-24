@@ -101,6 +101,7 @@ import com.android.testutils.DevSdkIgnoreRule
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo
 import com.android.testutils.DevSdkIgnoreRunner
 import com.android.testutils.quitResources
+import com.android.testutils.visibleOnHandlerThread
 import com.android.testutils.waitForIdle
 import java.io.FileDescriptor
 import java.net.Inet4Address
@@ -2913,59 +2914,34 @@ class ApfFilterTest {
 
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
-    fun testRegisterOffloadEngine() {
+    fun testOffloadServiceInfoUpdateTriggersProgramInstall() {
         val apfConfig = getDefaultConfig()
         apfConfig.shouldHandleMdnsOffload = true
         val apfFilter = getApfFilter(apfConfig)
+        consumeInstalledProgram(apfController, installCnt = 2)
         val captor = ArgumentCaptor.forClass(OffloadEngine::class.java)
         verify(nsdManager).registerOffloadEngine(
-                eq(ifParams.name),
-                anyLong(),
-                anyLong(),
-                any(),
-                captor.capture()
+            eq(ifParams.name),
+            anyLong(),
+            anyLong(),
+            any(),
+            captor.capture()
         )
         val offloadEngine = captor.value
-        val info1 = OffloadServiceInfo(
-                OffloadServiceInfo.Key("TestServiceName", "_advertisertest._tcp"),
-                listOf(),
-                "Android_test.local",
-                byteArrayOf(0x01, 0x02, 0x03, 0x04),
-                0,
-                OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
+        val info = OffloadServiceInfo(
+            OffloadServiceInfo.Key("gambit", "_googlecast._tcp"),
+            listOf(),
+            "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
+            ByteArray(5) { 0x01 },
+            0,
+            OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
         )
-        val info2 = OffloadServiceInfo(
-                OffloadServiceInfo.Key("TestServiceName2", "_advertisertest._tcp"),
-                listOf(),
-                "Android_test.local",
-                byteArrayOf(0x01, 0x02, 0x03, 0x04),
-                0,
-                OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
-        )
-        val updatedInfo1 = OffloadServiceInfo(
-                OffloadServiceInfo.Key("TestServiceName", "_advertisertest._tcp"),
-                listOf(),
-                "Android_test.local",
-                byteArrayOf(),
-                0,
-                OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
-        )
-        handler.post { offloadEngine.onOffloadServiceUpdated(info1) }
-        handlerThread.waitForIdle(TIMEOUT_MS)
-        assertContentEquals(listOf(info1), apfFilter.mOffloadServiceInfos)
-        handler.post { offloadEngine.onOffloadServiceUpdated(info2) }
-        handlerThread.waitForIdle(TIMEOUT_MS)
-        assertContentEquals(listOf(info1, info2), apfFilter.mOffloadServiceInfos)
-        handler.post { offloadEngine.onOffloadServiceUpdated(updatedInfo1) }
-        handlerThread.waitForIdle(TIMEOUT_MS)
-        assertContentEquals(listOf(info2, updatedInfo1), apfFilter.mOffloadServiceInfos)
-        handler.post { offloadEngine.onOffloadServiceRemoved(updatedInfo1) }
-        handlerThread.waitForIdle(TIMEOUT_MS)
-        assertContentEquals(listOf(info2), apfFilter.mOffloadServiceInfos)
+        visibleOnHandlerThread(handler) { offloadEngine.onOffloadServiceUpdated(info) }
 
-        handler.post { apfFilter.shutdown() }
-        handlerThread.waitForIdle(TIMEOUT_MS)
-        verify(nsdManager).unregisterOffloadEngine(any())
+        verify(apfController).installPacketFilter(any())
+
+        visibleOnHandlerThread(handler) { apfFilter.shutdown() }
+        verify(nsdManager).unregisterOffloadEngine(eq(offloadEngine))
     }
 
     @Test
