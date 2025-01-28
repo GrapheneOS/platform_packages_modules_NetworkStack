@@ -445,6 +445,7 @@ public abstract class IpClientIntegrationTestCommon {
     private static final String IPV4_TEST_SUBNET_PREFIX = "192.168.1.0/24";
     private static final String IPV4_ANY_ADDRESS_PREFIX = "0.0.0.0/0";
     private static final String HOSTNAME = "testhostname";
+    private static final String TEST_IPV6_PREFIX = "2001:db8:1::/64";
     private static final String IPV6_OFF_LINK_DNS_SERVER = "2001:4860:4860::64";
     private static final String IPV6_ON_LINK_DNS_SERVER = "2001:db8:1::64";
     private static final int TEST_DEFAULT_MTU = 1500;
@@ -2099,7 +2100,7 @@ public abstract class IpClientIntegrationTestCommon {
 
     private void sendRouterAdvertisement(boolean waitForRs, short lifetime, int valid,
             int preferred) throws Exception {
-        final ByteBuffer pio = buildPioOption(valid, preferred, "2001:db8:1::/64");
+        final ByteBuffer pio = buildPioOption(valid, preferred, TEST_IPV6_PREFIX);
         final ByteBuffer rdnss = buildRdnssOption(3600, IPV6_OFF_LINK_DNS_SERVER);
         sendRouterAdvertisement(waitForRs, lifetime, pio, rdnss);
     }
@@ -2152,6 +2153,18 @@ public abstract class IpClientIntegrationTestCommon {
         return buildRaPacket((short) 1800, options);
     }
 
+    private static ByteBuffer buildRaPacket(final String prefix, final String dnsServer,
+            int validLifetime, int preferredLifetime, int dnsLifetime, boolean shouldIncludeSlla)
+            throws Exception {
+        final ByteBuffer pio = buildPioOption(validLifetime, preferredLifetime, prefix);
+        final ByteBuffer rdnss = buildRdnssOption(dnsLifetime, dnsServer);
+        final List<ByteBuffer> options = new ArrayList<ByteBuffer>();
+        options.add(pio);
+        options.add(rdnss);
+        if (shouldIncludeSlla) options.add(buildSllaOption());
+        return buildRaPacket(options.toArray(new ByteBuffer[options.size()]));
+    }
+
     private void disableIpv6ProvisioningDelays() throws Exception {
         // Speed up the test by disabling DAD and removing router_solicitation_delay.
         // We don't need to restore the default value because the interface is removed in tearDown.
@@ -2184,11 +2197,9 @@ public abstract class IpClientIntegrationTestCommon {
 
     private LinkProperties doIpv6OnlyProvisioning() throws Exception {
         final InOrder inOrder = inOrder(mCb);
-        final ByteBuffer pio = buildPioOption(3600, 1800, "2001:db8:1::/64");
-        final ByteBuffer rdnss = buildRdnssOption(3600, IPV6_OFF_LINK_DNS_SERVER);
-        final ByteBuffer slla = buildSllaOption();
-        final ByteBuffer ra = buildRaPacket(pio, rdnss, slla);
-
+        final ByteBuffer ra = buildRaPacket(TEST_IPV6_PREFIX, IPV6_OFF_LINK_DNS_SERVER,
+                3600 /* validLifetime */, 1800 /* preferredLifetime */, 3600 /* dnsLifetime */,
+                true /* shouldIncludeSlla */);
         return doIpv6OnlyProvisioning(inOrder, ra);
     }
 
@@ -2281,12 +2292,10 @@ public abstract class IpClientIntegrationTestCommon {
                 .build();
         startIpClientProvisioning(config);
 
-        final ByteBuffer pio = buildPioOption(600, 300, "2001:db8:1::/64");
-        // put an IPv6 link-local DNS server
-        final ByteBuffer rdnss = buildRdnssOption(600, ROUTER_LINK_LOCAL.getHostAddress());
-        // put SLLA option to avoid address resolution for "fe80::1"
-        final ByteBuffer slla = buildSllaOption();
-        final ByteBuffer ra = buildRaPacket(pio, rdnss, slla);
+        final ByteBuffer ra = buildRaPacket(TEST_IPV6_PREFIX,
+                ROUTER_LINK_LOCAL.getHostAddress() /* an IPv6 link-local DNS server */,
+                600 /* validLifetime */, 300 /* preferredLifetime */, 600 /* dnsLifetime */,
+                true /* shouldIncludeSlla */);
 
         waitForRouterSolicitation();
         mPacketReader.sendResponse(ra);
@@ -3090,10 +3099,9 @@ public abstract class IpClientIntegrationTestCommon {
 
     private LinkProperties performDualStackProvisioning() throws Exception {
         final Inet6Address dnsServer = ipv6Addr(IPV6_OFF_LINK_DNS_SERVER);
-        final ByteBuffer pio = buildPioOption(3600, 1800, "2001:db8:1::/64");
-        final ByteBuffer rdnss = buildRdnssOption(3600, IPV6_OFF_LINK_DNS_SERVER);
-        final ByteBuffer slla = buildSllaOption();
-        final ByteBuffer ra = buildRaPacket(pio, rdnss, slla);
+        final ByteBuffer ra = buildRaPacket(TEST_IPV6_PREFIX, IPV6_OFF_LINK_DNS_SERVER,
+                3600 /* validLifetime */, 1800 /* preferredLifetime */, 3600 /* dnsLifetime */,
+                true /* shouldIncludeSlla */);
 
         return performDualStackProvisioning(ra, dnsServer);
     }
@@ -4332,15 +4340,11 @@ public abstract class IpClientIntegrationTestCommon {
         startIpClientProvisioning(config);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(true);
 
-        final List<ByteBuffer> options = new ArrayList<ByteBuffer>();
-        options.add(buildPioOption(3600, 1800, "2001:db8:1::/64")); // PIO
-        options.add(buildRdnssOption(3600, dnsServer));             // RDNSS
         // If target IP of address resolution is default router's IPv6 link-local address,
         // then we should not take SLLA option in RA.
-        if (!targetIp.equals(ROUTER_LINK_LOCAL)) {
-            options.add(buildSllaOption());                         // SLLA
-        }
-        final ByteBuffer ra = buildRaPacket(options.toArray(new ByteBuffer[options.size()]));
+        final ByteBuffer ra = buildRaPacket(TEST_IPV6_PREFIX, dnsServer,
+                3600 /* validLifetime */, 1800 /* preferredLifetime */, 3600 /* dnsLifetime */,
+                !targetIp.equals(ROUTER_LINK_LOCAL) /* shouldIncludeSlla */);
         final Inet6Address dnsServerIp = ipv6Addr(dnsServer);
         final LinkProperties lp = performDualStackProvisioning(ra, dnsServerIp);
         runAsShell(MANAGE_TEST_NETWORKS, () -> createTestNetworkAgentAndRegister(lp));
