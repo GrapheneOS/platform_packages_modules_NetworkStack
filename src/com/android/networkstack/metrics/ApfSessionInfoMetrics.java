@@ -26,13 +26,19 @@ import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_V6_ONLY;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_NOT_ALLOWED;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ETH_BROADCAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_GARP_REPLY;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IGMP_INVALID;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IGMP_REPORT;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IGMP_V2_GENERAL_QUERY_REPLIED;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IGMP_V3_GENERAL_QUERY_REPLIED;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_BROADCAST_ADDR;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_BROADCAST_NET;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_ICMP_INVALID;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_KEEPALIVE_ACK;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_L2_BROADCAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_MULTICAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NATT_KEEPALIVE;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_PING_REQUEST_REPLIED;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_TCP_PORT7_UNICAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST_NA;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NON_ICMP_MULTICAST;
@@ -69,13 +75,19 @@ import static android.stats.connectivity.CounterName.CN_DROPPED_ARP_V6_ONLY;
 import static android.stats.connectivity.CounterName.CN_DROPPED_ETHERTYPE_NOT_ALLOWED;
 import static android.stats.connectivity.CounterName.CN_DROPPED_ETH_BROADCAST;
 import static android.stats.connectivity.CounterName.CN_DROPPED_GARP_REPLY;
+import static android.stats.connectivity.CounterName.CN_DROPPED_IGMP_INVALID;
+import static android.stats.connectivity.CounterName.CN_DROPPED_IGMP_REPORT;
+import static android.stats.connectivity.CounterName.CN_DROPPED_IGMP_V2_GENERAL_QUERY_REPLIED;
+import static android.stats.connectivity.CounterName.CN_DROPPED_IGMP_V3_GENERAL_QUERY_REPLIED;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_BROADCAST_ADDR;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_BROADCAST_NET;
+import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_ICMP_INVALID;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_KEEPALIVE_ACK;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_L2_BROADCAST;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_MULTICAST;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_NATT_KEEPALIVE;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_NON_DHCP4;
+import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_PING_REQUEST_REPLIED;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV4_TCP_PORT7_UNICAST;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_MULTICAST_NA;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_NON_ICMP_MULTICAST;
@@ -167,7 +179,16 @@ public class ApfSessionInfoMetrics {
                 Map.entry(DROPPED_ARP_REQUEST_REPLIED, CN_DROPPED_ARP_REQUEST_REPLIED),
                 Map.entry(DROPPED_ARP_UNKNOWN, CN_DROPPED_ARP_UNKNOWN),
                 Map.entry(DROPPED_ARP_V6_ONLY, CN_DROPPED_ARP_V6_ONLY),
-                Map.entry(DROPPED_GARP_REPLY, CN_DROPPED_GARP_REPLY)
+                Map.entry(DROPPED_GARP_REPLY, CN_DROPPED_GARP_REPLY),
+                Map.entry(DROPPED_IPV4_ICMP_INVALID, CN_DROPPED_IPV4_ICMP_INVALID),
+                Map.entry(DROPPED_IPV4_PING_REQUEST_REPLIED, CN_DROPPED_IPV4_PING_REQUEST_REPLIED),
+                Map.entry(DROPPED_IGMP_INVALID, CN_DROPPED_IGMP_INVALID),
+                Map.entry(DROPPED_IGMP_V3_GENERAL_QUERY_REPLIED,
+                        CN_DROPPED_IGMP_V3_GENERAL_QUERY_REPLIED),
+                Map.entry(DROPPED_IGMP_V2_GENERAL_QUERY_REPLIED,
+                        CN_DROPPED_IGMP_V2_GENERAL_QUERY_REPLIED),
+                Map.entry(DROPPED_IGMP_REPORT, CN_DROPPED_IGMP_REPORT)
+
             )
     );
     private final ApfSessionInfoReported.Builder mStatsBuilder =

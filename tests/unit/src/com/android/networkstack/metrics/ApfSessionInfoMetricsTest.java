@@ -157,5 +157,15 @@ public class ApfSessionInfoMetricsTest {
         verifyCounterName(Counter.DROPPED_ARP_REQUEST_REPLIED,
                 CounterName.CN_DROPPED_ARP_REQUEST_REPLIED);
         verifyCounterName(Counter.DROPPED_ARP_V6_ONLY, CounterName.CN_DROPPED_ARP_V6_ONLY);
+        verifyCounterName(Counter.DROPPED_IPV4_ICMP_INVALID,
+                CounterName.CN_DROPPED_IPV4_ICMP_INVALID);
+        verifyCounterName(Counter.DROPPED_IPV4_PING_REQUEST_REPLIED,
+                CounterName.CN_DROPPED_IPV4_PING_REQUEST_REPLIED);
+        verifyCounterName(Counter.DROPPED_IGMP_INVALID, CounterName.CN_DROPPED_IGMP_INVALID);
+        verifyCounterName(Counter.DROPPED_IGMP_V3_GENERAL_QUERY_REPLIED,
+                CounterName.CN_DROPPED_IGMP_V3_GENERAL_QUERY_REPLIED);
+        verifyCounterName(Counter.DROPPED_IGMP_V2_GENERAL_QUERY_REPLIED,
+                CounterName.CN_DROPPED_IGMP_V2_GENERAL_QUERY_REPLIED);
+        verifyCounterName(Counter.DROPPED_IGMP_REPORT, CounterName.CN_DROPPED_IGMP_REPORT);
     }
 }

@@ -1020,7 +1020,7 @@ public class IpClientTest {
     public void testVendorNdOffloadDisabledWhenApfV6Supported() throws Exception {
         when(mDependencies.maybeCreateApfFilter(any(), any(), any(), any(), any(),
                 any())).thenReturn(mApfFilter);
-        when(mApfFilter.supportNdOffload()).thenReturn(true);
+        when(mApfFilter.enableNdOffload()).thenReturn(true);
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIPv4()
@@ -1046,7 +1046,7 @@ public class IpClientTest {
     public void testVendorNdOffloadEnabledWhenApfV6NotSupported() throws Exception {
         when(mDependencies.maybeCreateApfFilter(any(), any(), any(), any(), any(),
                 any())).thenReturn(mApfFilter);
-        when(mApfFilter.supportNdOffload()).thenReturn(false);
+        when(mApfFilter.enableNdOffload()).thenReturn(false);
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIPv4()
@@ -1070,7 +1070,7 @@ public class IpClientTest {
     public void testVendorNdOffloadDisabledWhenApfCapabilitiesUpdated() throws Exception {
         when(mDependencies.maybeCreateApfFilter(any(), any(), any(), any(), any(),
                 any())).thenReturn(mApfFilter);
-        when(mApfFilter.supportNdOffload()).thenReturn(true);
+        when(mApfFilter.enableNdOffload()).thenReturn(true);
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIPv4()

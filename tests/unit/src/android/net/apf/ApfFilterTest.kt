@@ -281,8 +281,8 @@ class ApfFilterTest {
         config.multicastFilter = false
         config.ieee802_3Filter = false
         config.ethTypeBlackList = IntArray(0)
-        config.shouldHandleArpOffload = true
-        config.shouldHandleNdOffload = true
+        config.handleArpOffload = true
+        config.handleNdOffload = true
         return config
     }
 
@@ -313,7 +313,7 @@ class ApfFilterTest {
             InetAddress.getByName("239.0.0.3") as Inet4Address
         )
         val apfConfig = getDefaultConfig()
-        apfConfig.shouldHandleIgmpOffload = true
+        apfConfig.handleIgmpOffload = true
 
         // mock IPv4 multicast address from /proc/net/igmp
         doReturn(mcastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())
@@ -2037,7 +2037,7 @@ class ApfFilterTest {
     @Test
     fun testArpOffloadDisabled() {
         val apfConfig = getDefaultConfig()
-        apfConfig.shouldHandleArpOffload = false
+        apfConfig.handleArpOffload = false
         val apfFilter = getApfFilter(apfConfig)
         consumeInstalledProgram(apfController, installCnt = 2)
         val linkAddress = LinkAddress(InetAddress.getByAddress(hostIpv4Address), 24)
@@ -2675,7 +2675,7 @@ class ApfFilterTest {
     @Test
     fun testNdOffloadDisabled() {
         val apfConfig = getDefaultConfig()
-        apfConfig.shouldHandleNdOffload = false
+        apfConfig.handleNdOffload = false
         val apfFilter = getApfFilter(apfConfig)
         val lp = LinkProperties()
         for (addr in hostIpv6Addresses) {
@@ -2731,7 +2731,7 @@ class ApfFilterTest {
     ): Pair<ApfFilter, ByteArray> {
         val apfConfig = getDefaultConfig()
         apfConfig.multicastFilter = enableMultiCastFilter
-        apfConfig.shouldHandleIpv4PingOffload = true
+        apfConfig.handleIpv4PingOffload = true
         val apfFilter = getApfFilter(apfConfig)
         consumeInstalledProgram(apfController, installCnt = 2)
         val linkAddress = LinkAddress(InetAddress.getByAddress(hostIpv4Address), 24)
@@ -2916,7 +2916,7 @@ class ApfFilterTest {
     @Test
     fun testOffloadServiceInfoUpdateTriggersProgramInstall() {
         val apfConfig = getDefaultConfig()
-        apfConfig.shouldHandleMdnsOffload = true
+        apfConfig.handleMdnsOffload = true
         val apfFilter = getApfFilter(apfConfig)
         consumeInstalledProgram(apfController, installCnt = 2)
         val captor = ArgumentCaptor.forClass(OffloadEngine::class.java)
@@ -3000,7 +3000,7 @@ class ApfFilterTest {
         )
         doReturn(mcastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())
         val apfConfig = getDefaultConfig()
-        apfConfig.shouldHandleIgmpOffload = true
+        apfConfig.handleIgmpOffload = true
         val apfFilter = getApfFilter(apfConfig)
         consumeInstalledProgram(apfController, installCnt = 2)
         val addr = InetAddress.getByName("239.0.0.1") as Inet4Address

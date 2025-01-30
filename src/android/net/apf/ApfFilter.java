@@ -294,11 +294,11 @@ public class ApfFilter {
         public int acceptRaMinLft;
         public long minMetricsSessionDurationMs;
         public boolean hasClatInterface;
-        public boolean shouldHandleArpOffload;
-        public boolean shouldHandleNdOffload;
-        public boolean shouldHandleMdnsOffload;
-        public boolean shouldHandleIgmpOffload;
-        public boolean shouldHandleIpv4PingOffload;
+        public boolean handleArpOffload;
+        public boolean handleNdOffload;
+        public boolean handleMdnsOffload;
+        public boolean handleIgmpOffload;
+        public boolean handleIpv4PingOffload;
     }
 
 
@@ -363,11 +363,11 @@ public class ApfFilter {
     // Tracks the value of /proc/sys/ipv6/conf/$iface/accept_ra_min_lft which affects router, RIO,
     // and PIO valid lifetimes.
     private final int mAcceptRaMinLft;
-    private final boolean mShouldHandleArpOffload;
-    private final boolean mShouldHandleNdOffload;
-    private final boolean mShouldHandleMdnsOffload;
-    private final boolean mShouldHandleIgmpOffload;
-    private final boolean mShouldHandleIpv4PingOffload;
+    private final boolean mHandleArpOffload;
+    private final boolean mHandleNdOffload;
+    private final boolean mHandleMdnsOffload;
+    private final boolean mHandleIgmpOffload;
+    private final boolean mHandleIpv4PingOffload;
 
     private final NetworkQuirkMetrics mNetworkQuirkMetrics;
     private final IpClientRaInfoMetrics mIpClientRaInfoMetrics;
@@ -493,11 +493,11 @@ public class ApfFilter {
         mDrop802_3Frames = config.ieee802_3Filter;
         mMinRdnssLifetimeSec = config.minRdnssLifetimeSec;
         mAcceptRaMinLft = config.acceptRaMinLft;
-        mShouldHandleArpOffload = config.shouldHandleArpOffload;
-        mShouldHandleNdOffload = config.shouldHandleNdOffload;
-        mShouldHandleMdnsOffload = config.shouldHandleMdnsOffload;
-        mShouldHandleIgmpOffload = config.shouldHandleIgmpOffload;
-        mShouldHandleIpv4PingOffload = config.shouldHandleIpv4PingOffload;
+        mHandleArpOffload = config.handleArpOffload;
+        mHandleNdOffload = config.handleNdOffload;
+        mHandleMdnsOffload = config.handleMdnsOffload;
+        mHandleIgmpOffload = config.handleIgmpOffload;
+        mHandleIpv4PingOffload = config.handleIpv4PingOffload;
         mDependencies = dependencies;
         mNetworkQuirkMetrics = networkQuirkMetrics;
         mIpClientRaInfoMetrics = dependencies.getIpClientRaInfoMetrics();
@@ -532,7 +532,7 @@ public class ApfFilter {
             Log.wtf(TAG, "Failed to start RaPacketReader");
         }
 
-        if (shouldMonitorIgmpReports()) {
+        if (enableIgmpReportsMonitor()) {
             final FileDescriptor socketFd = mDependencies.createEgressIgmpReportsReaderSocket(
                     ifParams.index);
             if (socketFd != null) {
@@ -554,7 +554,7 @@ public class ApfFilter {
         mDependencies.addDeviceIdleReceiver(mDeviceIdleReceiver);
 
         mNsdManager = context.getSystemService(NsdManager.class);
-        if (shouldRegisterOffloadEngine()) {
+        if (enableOffloadEngineRegistration()) {
             mApfMdnsOffloadEngine = new ApfMdnsOffloadEngine(mInterfaceParams.name, mHandler,
                     mNsdManager,
                     allRules -> {
@@ -1754,7 +1754,7 @@ public class ApfFilter {
             gen.addCountAndDropIfR0NotEquals(bytesToBEInt(mIPv4Address), DROPPED_ARP_OTHER_HOST);
 
             ApfV6Generator v6Gen = tryToConvertToApfV6Generator(gen);
-            if (v6Gen != null && mShouldHandleArpOffload) {
+            if (v6Gen != null && mHandleArpOffload) {
                 // Ethernet requires that all packets be at least 60 bytes long
                 v6Gen.addAllocate(60)
                         .addPacketCopy(ETHER_SRC_ADDR_OFFSET, ETHER_ADDR_LEN)
@@ -1929,7 +1929,7 @@ public class ApfFilter {
             return;
         }
 
-        if (shouldEnableIgmpOffload()) {
+        if (enableIgmpOffload()) {
             generateIgmpFilter((ApfV6GeneratorBase<?>) gen);
         }
 
@@ -1980,7 +1980,7 @@ public class ApfFilter {
         // If TCP unicast on port 7, drop
         generateV4TcpPort7Filter(gen);
 
-        if (shouldEnableIpv4PingOffload()) {
+        if (enableIpv4PingOffload()) {
             generateUnicastIpv4PingOffload((ApfV6GeneratorBase<?>) gen);
         }
 
@@ -2322,7 +2322,7 @@ public class ApfFilter {
         // Not ICMPv6 NS -> skip.
         gen.addLoad8(R0, ICMP6_TYPE_OFFSET); // warning: also used further below.
         final ApfV6Generator v6Gen = tryToConvertToApfV6Generator(gen);
-        if (v6Gen != null && mShouldHandleNdOffload) {
+        if (v6Gen != null && mHandleNdOffload) {
             final String skipNsPacketFilter = v6Gen.getUniqueLabel();
             v6Gen.addJumpIfR0NotEquals(ICMPV6_NEIGHBOR_SOLICITATION, skipNsPacketFilter);
             generateNsFilter(v6Gen);
@@ -2663,7 +2663,7 @@ public class ApfFilter {
     private ApfV4GeneratorBase<?> emitPrologue() throws IllegalInstructionException {
         // This is guaranteed to succeed because of the check in maybeCreate.
         ApfV4GeneratorBase<?> gen;
-        if (shouldUseApfV6Generator()) {
+        if (useApfV6Generator()) {
             gen = new ApfV6Generator(mApfVersionSupported, mApfRamSize,
                     mInstallableProgramSizeClamp);
         } else {
@@ -3011,7 +3011,7 @@ public class ApfFilter {
             mApfMdnsOffloadEngine.unregisterOffloadEngine();
         }
 
-        if (shouldMonitorIgmpReports() && mIgmpReportMonitor != null) {
+        if (enableIgmpReportsMonitor() && mIgmpReportMonitor != null) {
             mIgmpReportMonitor.stop();
         }
     }
@@ -3115,34 +3115,37 @@ public class ApfFilter {
         }
     }
 
-    public boolean supportNdOffload() {
-        return shouldUseApfV6Generator() && mShouldHandleNdOffload;
+    @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
+    public boolean enableNdOffload() {
+        return mHandleNdOffload && useApfV6Generator();
     }
 
-    @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */, codename =
-            "VanillaIceCream")
-    private boolean shouldRegisterOffloadEngine() {
-        return shouldUseApfV6Generator() && mShouldHandleMdnsOffload;
+    @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
+    private boolean enableOffloadEngineRegistration() {
+        return mHandleMdnsOffload && useApfV6Generator();
     }
 
-    private boolean shouldMonitorIgmpReports() {
-        return shouldUseApfV6Generator() && mShouldHandleIgmpOffload;
+    private boolean enableIgmpReportsMonitor() {
+        return mHandleIgmpOffload && useApfV6Generator();
     }
 
-    private boolean shouldEnableIgmpOffload() {
+    @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
+    private boolean enableIgmpOffload() {
         // Since the all-hosts multicast address (224.0.0.1) is always present for IPv4
         // multicast, and IGMP packets are not needed for this address, IGMP offloading is only
         // necessary if there are additional joined multicast addresses
         // (mIPv4MulticastAddresses.size() > 1).
-        return shouldMonitorIgmpReports() && mIPv4MulticastAddresses.size() > 1
+        return enableIgmpReportsMonitor() && mIPv4MulticastAddresses.size() > 1
                 && mIPv4Address != null;
     }
 
-    private boolean shouldEnableIpv4PingOffload() {
-        return shouldUseApfV6Generator() && mShouldHandleIpv4PingOffload && mIPv4Address != null;
+    @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
+    private boolean enableIpv4PingOffload() {
+        return mHandleIpv4PingOffload && useApfV6Generator() && mIPv4Address != null;
     }
 
-    private boolean shouldUseApfV6Generator() {
+    @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
+    private boolean useApfV6Generator() {
         return SdkLevel.isAtLeastV() && ApfV6Generator.supportsVersion(mApfVersionSupported);
     }
 

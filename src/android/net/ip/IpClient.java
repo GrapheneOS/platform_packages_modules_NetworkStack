@@ -810,11 +810,11 @@ public class IpClient extends StateMachine {
     private final boolean mIsAcceptRaMinLftEnabled;
     private final boolean mEnableApfPollingCounters;
     private final boolean mPopulateLinkAddressLifetime;
-    private final boolean mApfShouldHandleArpOffload;
-    private final boolean mApfShouldHandleNdOffload;
-    private final boolean mApfShouldHandleMdnsOffload;
-    private final boolean mApfShouldHandleIgmpOffload;
-    private final boolean mApfShouldHandleIpv4PingOffload;
+    private final boolean mApfHandleArpOffload;
+    private final boolean mApfHandleNdOffload;
+    private final boolean mApfHandleMdnsOffload;
+    private final boolean mApfHandleIgmpOffload;
+    private final boolean mApfHandleIpv4PingOffload;
     private final boolean mIgnoreNudFailureEnabled;
     private final boolean mDhcp6PdPreferredFlagEnabled;
     private final boolean mReplaceNetdWithNetlinkEnabled;
@@ -1087,16 +1087,16 @@ public class IpClient extends StateMachine {
         mIsAcceptRaMinLftEnabled =
                 SdkLevel.isAtLeastV() || mDependencies.isFeatureEnabled(context,
                         IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION);
-        mApfShouldHandleArpOffload = mDependencies.isFeatureNotChickenedOut(
+        mApfHandleArpOffload = mDependencies.isFeatureNotChickenedOut(
                 mContext, APF_HANDLE_ARP_OFFLOAD);
-        mApfShouldHandleNdOffload = mDependencies.isFeatureNotChickenedOut(
+        mApfHandleNdOffload = mDependencies.isFeatureNotChickenedOut(
                 mContext, APF_HANDLE_ND_OFFLOAD);
         // TODO: turn on APF mDNS offload.
-        mApfShouldHandleMdnsOffload = false;
-        mApfShouldHandleIgmpOffload =
+        mApfHandleMdnsOffload = false;
+        mApfHandleIgmpOffload =
                 isAtLeast25Q2() || mDependencies.isFeatureEnabled(context,
                         APF_HANDLE_IGMP_OFFLOAD_VERSION);
-        mApfShouldHandleIpv4PingOffload =
+        mApfHandleIpv4PingOffload =
                 isAtLeast25Q2() || mDependencies.isFeatureEnabled(context,
                         APF_HANDLE_PING4_OFFLOAD_VERSION);
         mPopulateLinkAddressLifetime = mDependencies.isFeatureEnabled(context,
@@ -1149,7 +1149,7 @@ public class IpClient extends StateMachine {
                             // If Apf is not supported or Apf doesn't support ND offload, then
                             // configure the vendor ND offload feature based on the Clat
                             // interface state.
-                            if (mApfFilter == null || !mApfFilter.supportNdOffload()) {
+                            if (mApfFilter == null || !mApfFilter.enableNdOffload()) {
                                 // Clat interface information is spliced into LinkProperties by
                                 // ConnectivityService, so it cannot be added to the LinkProperties
                                 // here as those propagate back to ConnectivityService.
@@ -2796,11 +2796,11 @@ public class IpClient extends StateMachine {
         } else {
             apfConfig.acceptRaMinLft = 0;
         }
-        apfConfig.shouldHandleArpOffload = mApfShouldHandleArpOffload;
-        apfConfig.shouldHandleNdOffload = mApfShouldHandleNdOffload;
-        apfConfig.shouldHandleMdnsOffload = mApfShouldHandleMdnsOffload;
-        apfConfig.shouldHandleIgmpOffload = mApfShouldHandleIgmpOffload;
-        apfConfig.shouldHandleIpv4PingOffload = mApfShouldHandleIpv4PingOffload;
+        apfConfig.handleArpOffload = mApfHandleArpOffload;
+        apfConfig.handleNdOffload = mApfHandleNdOffload;
+        apfConfig.handleMdnsOffload = mApfHandleMdnsOffload;
+        apfConfig.handleIgmpOffload = mApfHandleIgmpOffload;
+        apfConfig.handleIpv4PingOffload = mApfHandleIpv4PingOffload;
         apfConfig.minMetricsSessionDurationMs = mApfCounterPollingIntervalMs;
         apfConfig.hasClatInterface = mHasSeenClatInterface;
         return mDependencies.maybeCreateApfFilter(getHandler(), mContext, apfConfig,
@@ -3369,7 +3369,7 @@ public class IpClient extends StateMachine {
             mHasSeenClatInterface = false;
             mApfFilter = maybeCreateApfFilter(mCurrentApfCapabilities);
             // If Apf supports ND offload, then turn off the vendor ND offload feature.
-            if (mApfFilter != null && mApfFilter.supportNdOffload()) {
+            if (mApfFilter != null && mApfFilter.enableNdOffload()) {
                 mCallback.setNeighborDiscoveryOffload(false);
             }
             // TODO: investigate the effects of any multicast filtering racing/interfering with the
@@ -3830,7 +3830,7 @@ public class IpClient extends StateMachine {
                     if (handleUpdateApfCapabilities(apfCapabilities)) {
                         mApfFilter = maybeCreateApfFilter(apfCapabilities);
                         // If Apf supports ND offload, then turn off the vendor ND offload feature.
-                        if (mApfFilter != null && mApfFilter.supportNdOffload()) {
+                        if (mApfFilter != null && mApfFilter.enableNdOffload()) {
                             mCallback.setNeighborDiscoveryOffload(false);
                         }
                     }
