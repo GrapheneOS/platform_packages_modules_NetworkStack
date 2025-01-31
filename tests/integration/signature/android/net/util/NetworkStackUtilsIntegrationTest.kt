@@ -20,6 +20,8 @@ import android.Manifest.permission.MANAGE_TEST_NETWORKS
 import android.content.Context
 import android.net.InetAddresses.parseNumericAddress
 import android.net.IpPrefix
+import android.net.LinkAddress
+import android.net.LinkProperties
 import android.net.MacAddress
 import android.net.TestNetworkInterface
 import android.net.TestNetworkManager
@@ -32,7 +34,10 @@ import android.system.OsConstants.AF_INET
 import android.system.OsConstants.AF_PACKET
 import android.system.OsConstants.ETH_P_ALL
 import android.system.OsConstants.ETH_P_IPV6
+import android.system.OsConstants.IFA_F_DEPRECATED
+import android.system.OsConstants.IFA_F_TENTATIVE
 import android.system.OsConstants.IPPROTO_UDP
+import android.system.OsConstants.RT_SCOPE_LINK
 import android.system.OsConstants.SOCK_CLOEXEC
 import android.system.OsConstants.SOCK_DGRAM
 import android.system.OsConstants.SOCK_NONBLOCK
@@ -97,7 +102,8 @@ class NetworkStackUtilsIntegrationTest {
     private val SOLICITED_NODE_MULTICAST_PREFIX = "FF02:0:0:0:0:1:FF00::/104"
 
     private val readerHandler = HandlerThread(
-            NetworkStackUtilsIntegrationTest::class.java.simpleName)
+            NetworkStackUtilsIntegrationTest::class.java.simpleName
+    )
     private lateinit var iface: TestNetworkInterface
     private lateinit var reader: PollPacketReader
 
@@ -127,8 +133,12 @@ class NetworkStackUtilsIntegrationTest {
         val socket = Os.socket(AF_INET, SOCK_DGRAM or SOCK_NONBLOCK, IPPROTO_UDP)
         SocketUtils.bindSocketToInterface(socket, iface.interfaceName)
 
-        NetworkStackUtils.addArpEntry(TEST_TARGET_IPV4_ADDR, TEST_TARGET_MAC, iface.interfaceName,
-                socket)
+        NetworkStackUtils.addArpEntry(
+            TEST_TARGET_IPV4_ADDR,
+            TEST_TARGET_MAC,
+            iface.interfaceName,
+            socket
+        )
 
         // Fake DHCP packet: would not be usable as a DHCP offer (most IPv4 addresses are all-zero,
         // no gateway or DNS servers, etc).
@@ -146,8 +156,15 @@ class NetworkStackUtilsIntegrationTest {
         // Not using .array as per errorprone "ByteBufferBackingArray" recommendation
         val originalPacket = buffer.readAsArray()
 
-        Os.sendto(socket, originalPacket, 0 /* bytesOffset */, originalPacket.size /* bytesCount */,
-                0 /* flags */, TEST_TARGET_IPV4_ADDR, DhcpPacket.DHCP_CLIENT.toInt() /* port */)
+        Os.sendto(
+            socket,
+            originalPacket,
+            0 /* bytesOffset */,
+            originalPacket.size /* bytesCount */,
+            0 /* flags */,
+            TEST_TARGET_IPV4_ADDR,
+            DhcpPacket.DHCP_CLIENT.toInt() /* port */
+        )
 
         // Verify the packet was sent to the mac address specified in the ARP entry
         // Also accept ARP requests, but expect that none is sent before the UDP packet
@@ -159,7 +176,9 @@ class NetworkStackUtilsIntegrationTest {
         assertEquals(TEST_TARGET_MAC, sentTargetAddr, "Destination ethernet address does not match")
 
         val sentDhcpPacket = sentPacket.copyOfRange(
-                ETHER_HEADER_LEN + IPV4_HEADER_MIN_LEN + UDP_HEADER_LEN, sentPacket.size)
+            ETHER_HEADER_LEN + IPV4_HEADER_MIN_LEN + UDP_HEADER_LEN,
+            sentPacket.size
+        )
 
         assertArrayEquals("Sent packet != original packet", originalPacket, sentDhcpPacket)
     }
@@ -170,12 +189,20 @@ class NetworkStackUtilsIntegrationTest {
                 ?: fail("Could not obtain interface params for ${iface.interfaceName}")
         val socketAddr = SocketUtils.makePacketSocketAddress(ETH_P_IPV6, ifParams.index)
         Os.bind(socket, socketAddr)
-        Os.setsockoptTimeval(socket, SOL_SOCKET, SO_RCVTIMEO,
-                StructTimeval.fromMillis(TEST_TIMEOUT_MS))
+        Os.setsockoptTimeval(
+            socket,
+            SOL_SOCKET,
+            SO_RCVTIMEO,
+            StructTimeval.fromMillis(TEST_TIMEOUT_MS)
+        )
 
         // Verify that before setting any filter, the socket receives pings
-        val echo = Ipv6Utils.buildEchoRequestPacket(TEST_SRC_MAC, TEST_TARGET_MAC, TEST_INET6ADDR_1,
-                TEST_INET6ADDR_2)
+        val echo = Ipv6Utils.buildEchoRequestPacket(
+            TEST_SRC_MAC,
+            TEST_TARGET_MAC,
+            TEST_INET6ADDR_1,
+            TEST_INET6ADDR_2
+        )
         reader.sendResponse(echo)
         echo.rewind()
         assertNextPacketEquals(socket, echo.readAsArray(), "ICMPv6 echo")
@@ -188,8 +215,12 @@ class NetworkStackUtilsIntegrationTest {
         // Send another echo, then an RA. After setting the filter expect only the RA.
         echo.rewind()
         reader.sendResponse(echo)
-        val pio = PrefixInformationOption.build(IpPrefix("2001:db8:1::/64"),
-                0.toByte() /* flags */, 3600 /* validLifetime */, 1800 /* preferredLifetime */)
+        val pio = PrefixInformationOption.build(
+            IpPrefix("2001:db8:1::/64"),
+            0.toByte() /* flags */,
+            3600 /* validLifetime */,
+            1800 /* preferredLifetime */
+        )
         val ra = Ipv6Utils.buildRaPacket(TEST_SRC_MAC, TEST_TARGET_MAC,
                 TEST_INET6ADDR_1 /* routerAddr */, IPV6_ADDR_ALL_NODES_MULTICAST,
                 0.toByte() /* flags */, 1800 /* lifetime */, 0 /* reachableTime */,
@@ -218,8 +249,12 @@ class NetworkStackUtilsIntegrationTest {
         val socketAddr = SocketUtils.makePacketSocketAddress(ETH_P_ALL, ifParams.index)
         NetworkStackUtils.attachEgressIgmpReportFilter(socket)
         Os.bind(socket, socketAddr)
-        Os.setsockoptTimeval(socket, SOL_SOCKET, SO_RCVTIMEO,
-            StructTimeval.fromMillis(TEST_TIMEOUT_MS))
+        Os.setsockoptTimeval(
+            socket,
+            SOL_SOCKET,
+            SO_RCVTIMEO,
+            StructTimeval.fromMillis(TEST_TIMEOUT_MS)
+        )
 
         val sendSocket = Os.socket(AF_PACKET, SOCK_RAW or SOCK_CLOEXEC, 0)
         Os.bind(sendSocket, socketAddr)
@@ -265,12 +300,22 @@ class NetworkStackUtilsIntegrationTest {
 
         // shorten the socket timeout to prevent waiting too long in the test
         Os.setsockoptTimeval(socket, SOL_SOCKET, SO_RCVTIMEO, StructTimeval.fromMillis(100))
-        val dhcpNak = DhcpPacket.buildNakPacket(DhcpPacket.ENCAP_L2, 42,
-            TEST_TARGET_IPV4_ADDR, /*relayIp=*/ IPV4_ADDR_ANY, TEST_TARGET_MAC.toByteArray(),
-            /*broadcast=*/ false, "NAK").readAsArray()
+        val dhcpNak = DhcpPacket.buildNakPacket(
+            DhcpPacket.ENCAP_L2,
+            42,
+            TEST_TARGET_IPV4_ADDR, /*relayIp=*/
+            IPV4_ADDR_ANY,
+            TEST_TARGET_MAC.toByteArray(),
+            /*broadcast=*/
+            false,
+            "NAK"
+        ).readAsArray()
         Os.write(sendSocket, dhcpNak, 0, dhcpNak.size)
-        assertSocketReadErrno("DHCP Packet should not been received",
-            socket, OsConstants.EAGAIN)
+        assertSocketReadErrno(
+            "DHCP Packet should not been received",
+            socket,
+            OsConstants.EAGAIN
+        )
 
         // Using scapy to generate IGMPv2 general query packet:
         //   ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:01')
@@ -283,8 +328,11 @@ class NetworkStackUtilsIntegrationTest {
         """.replace("\\s+".toRegex(), "").trim()
         val igmpv2Gq = HexDump.hexStringToByteArray(igmpv2GqHexStr)
         Os.write(sendSocket, igmpv2Gq, 0, igmpv2Gq.size)
-        assertSocketReadErrno("IGMPv2 General Query Packet should not been received",
-            socket, OsConstants.EAGAIN)
+        assertSocketReadErrno(
+            "IGMPv2 General Query Packet should not been received",
+            socket,
+            OsConstants.EAGAIN
+        )
 
         // Using scapy to generate IGMPv1 general query packet:
         //   ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:01')
@@ -297,8 +345,11 @@ class NetworkStackUtilsIntegrationTest {
         """.replace("\\s+".toRegex(), "").trim()
         val igmpv1Gq = HexDump.hexStringToByteArray(igmpv1GqHexStr)
         Os.write(sendSocket, igmpv1Gq, 0, igmpv1Gq.size)
-        assertSocketReadErrno("IGMPv1 General Query Packet should not been received",
-            socket, OsConstants.EAGAIN)
+        assertSocketReadErrno(
+            "IGMPv1 General Query Packet should not been received",
+            socket,
+            OsConstants.EAGAIN
+        )
     }
 
     @Test
@@ -309,8 +360,12 @@ class NetworkStackUtilsIntegrationTest {
         val socketAddr = SocketUtils.makePacketSocketAddress(ETH_P_ALL, ifParams.index)
         NetworkStackUtils.attachEgressIgmpReportFilter(socket)
         Os.bind(socket, socketAddr)
-        Os.setsockoptTimeval(socket, SOL_SOCKET, SO_RCVTIMEO,
-            StructTimeval.fromMillis(TEST_TIMEOUT_MS))
+        Os.setsockoptTimeval(
+            socket,
+            SOL_SOCKET,
+            SO_RCVTIMEO,
+            StructTimeval.fromMillis(TEST_TIMEOUT_MS)
+        )
 
         val multicastSock = MulticastSocket()
         val mcastAddr = InetSocketAddress(InetAddress.getByName("239.0.0.1") as Inet4Address, 5000)
@@ -353,8 +408,11 @@ class NetworkStackUtilsIntegrationTest {
         val readPacket = Os.read(socket, buffer, 0 /* byteOffset */, buffer.size)
         assertTrue(readPacket > 0, "$descr not received")
         assertEquals(expected.size, readPacket, "Received packet size does not match for $descr")
-        assertArrayEquals("Received packet != expected $descr",
-                expected, buffer.copyOfRange(0, readPacket))
+        assertArrayEquals(
+            "Received packet != expected $descr",
+            expected,
+            buffer.copyOfRange(0, readPacket)
+        )
     }
 
     private fun assertSolicitedNodeMulticastAddress(
@@ -366,8 +424,10 @@ class NetworkStackUtilsIntegrationTest {
         assertTrue(prefix.contains(expected))
         assertTrue(expected.isMulticastAddress())
         // check the last 3 bytes of address
-        assertArrayEquals(Arrays.copyOfRange(expected.getAddress(), 13, 15),
-                Arrays.copyOfRange(unicast.getAddress(), 13, 15))
+        assertArrayEquals(
+            Arrays.copyOfRange(expected.getAddress(), 13, 15),
+            Arrays.copyOfRange(unicast.getAddress(), 13, 15)
+        )
     }
 
     @Test
@@ -386,8 +446,15 @@ class NetworkStackUtilsIntegrationTest {
     fun testConvertMacAddressToEui64() {
         // MAC address with universal/local bit set (the first byte: 0xBA)
         var expected = byteArrayOf(
-                0xB8.toByte(), 0x98.toByte(), 0x76.toByte(), 0xFF.toByte(),
-                0xFE.toByte(), 0x54.toByte(), 0x32.toByte(), 0x10.toByte())
+            0xB8.toByte(),
+            0x98.toByte(),
+            0x76.toByte(),
+            0xFF.toByte(),
+            0xFE.toByte(),
+            0x54.toByte(),
+            0x32.toByte(),
+            0x10.toByte()
+        )
         val srcEui64 = NetworkStackUtils.macAddressToEui64(TEST_SRC_MAC)
         assertArrayEquals(expected, srcEui64)
 
@@ -431,8 +498,10 @@ class NetworkStackUtilsIntegrationTest {
     private fun assertNextPacketOnSocket(fd: FileDescriptor, expectedPacket: ByteBuffer) {
         val received = ByteBuffer.allocate(TEST_MTU)
         val len = Os.read(fd, received)
-        assertEquals(toHexString(expectedPacket, expectedPacket.limit()),
-            toHexString(received, len))
+        assertEquals(
+            toHexString(expectedPacket, expectedPacket.limit()),
+            toHexString(received, len)
+        )
     }
 
     private fun setMfBit(packet: ByteBuffer, set: Boolean) {
@@ -461,15 +530,25 @@ class NetworkStackUtilsIntegrationTest {
             }
             val addr = SocketUtils.makePacketSocketAddress(OsConstants.ETH_P_IP, ifindex)
             Os.bind(packetSock, addr)
-            val packet = DhcpPacket.buildNakPacket(DhcpPacket.ENCAP_L2, 42,
-                TEST_TARGET_IPV4_ADDR, /*relayIp=*/ IPV4_ADDR_ANY, TEST_TARGET_MAC.toByteArray(),
-                /*broadcast=*/ false, "NAK")
+            val packet = DhcpPacket.buildNakPacket(
+                DhcpPacket.ENCAP_L2,
+                42,
+                TEST_TARGET_IPV4_ADDR, /*relayIp=*/
+                IPV4_ADDR_ANY,
+                TEST_TARGET_MAC.toByteArray(),
+                /*broadcast=*/
+                false,
+                "NAK"
+            )
             setMfBit(packet, true)
             reader.sendResponse(packet)
 
             // Packet with MF bit set is not received.
-            assertSocketReadErrno("Packet with MF bit should have been dropped",
-                packetSock, OsConstants.EAGAIN)
+            assertSocketReadErrno(
+                "Packet with MF bit should have been dropped",
+                packetSock,
+                OsConstants.EAGAIN
+            )
 
             // Identical packet, except with MF bit cleared, should be received.
             setMfBit(packet, false)
@@ -512,6 +591,25 @@ class NetworkStackUtilsIntegrationTest {
             val ether = NetworkStackUtils.ipv4MulticastToEthernetMulticast(addr)
             assertEquals(expectAddr, ether)
         }
+    }
+
+    @Test
+    fun testSelectPreferredIPv6LinkLocalAddress() {
+        val addr1 = LinkAddress("fe80::1/64", IFA_F_TENTATIVE, RT_SCOPE_LINK)
+        val addr2 = LinkAddress("fe80::2/64", 0 /* flags */, RT_SCOPE_LINK)
+        val addr3 = LinkAddress("fe80::3/64", IFA_F_DEPRECATED, RT_SCOPE_LINK)
+
+        val lp1 = LinkProperties()
+        lp1.setLinkAddresses(listOf(addr1, addr2, addr3))
+        assertEquals(addr2.address, NetworkStackUtils.selectPreferredIPv6LinkLocalAddress(lp1))
+
+        val lp2 = LinkProperties()
+        lp2.setLinkAddresses(listOf(addr1, addr3))
+        assertEquals(addr3.address, NetworkStackUtils.selectPreferredIPv6LinkLocalAddress(lp2))
+
+       val lp3 = LinkProperties()
+        lp3.setLinkAddresses(listOf(addr1))
+        assertNull(NetworkStackUtils.selectPreferredIPv6LinkLocalAddress(lp3))
     }
 }
 

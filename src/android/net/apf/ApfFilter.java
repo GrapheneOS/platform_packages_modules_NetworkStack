@@ -1788,9 +1788,7 @@ public class ApfFilter {
         final String skipIpv4PingFilter = gen.getUniqueLabel();
         // Check 1) it's not a fragment. 2) it's ICMP.
         // If condition not match then skip the ping filter logic
-        gen.addLoad32(R0, IPV4_FRAGMENT_OFFSET_OFFSET);
-        gen.addAnd((IPV4_FRAGMENT_MORE_FRAGS_MASK | IPV4_FRAGMENT_OFFSET_MASK) << 16 | 0xFF);
-        gen.addJumpIfR0NotEquals(IPPROTO_ICMP, skipIpv4PingFilter);
+        gen.addJumpIfNotUnfragmentedIPv4Protocol(IPPROTO_ICMP, skipIpv4PingFilter);
 
         // Only offload unicast Ipv4 ping request for now.
         // While we could potentially support offloading multicast and broadcast ping requests in
@@ -1938,11 +1936,7 @@ public class ApfFilter {
 
             // Pass DHCP addressed to us.
             // Check 1) it's not a fragment. 2) it's UDP.
-            // Load 16 bit frag flags/offset field, 8 bit ttl, 8 bit protocol
-            gen.addLoad32(R0, IPV4_FRAGMENT_OFFSET_OFFSET);
-            // see above for explanation of this constant
-            gen.addAnd((IPV4_FRAGMENT_MORE_FRAGS_MASK | IPV4_FRAGMENT_OFFSET_MASK) << 16 | 0xFF);
-            gen.addJumpIfR0NotEquals(IPPROTO_UDP, skipDhcpv4Filter);
+            gen.addJumpIfNotUnfragmentedIPv4Protocol(IPPROTO_UDP, skipDhcpv4Filter);
             // Check it's addressed to DHCP client port.
             gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
             gen.addLoad16Indexed(R0, TCP_UDP_DESTINATION_PORT_OFFSET);
@@ -2523,17 +2517,7 @@ public class ApfFilter {
         final String checkIgmpV1orV2 = v6Gen.getUniqueLabel();
 
         // Check 1) it's not a fragment. 2) it's IGMP.
-        // Load 16 bit frag flags/offset field, 8 bit ttl, 8 bit protocol.
-        v6Gen.addLoad32(R0, IPV4_FRAGMENT_OFFSET_OFFSET)
-        // Mask out all but the reserved and don't fragment bits, plus the TTL field.
-        // Because:
-        //   IPV4_FRAGMENT_OFFSET_MASK = 0x1fff
-        //   IPV4_FRAGMENT_MORE_FRAGS_MASK = 0x2000
-        // hence this constant ends up being 0x3FFF00FF.
-        // We want the more flag bit and offset to be 0 (ie. not a fragment),
-        // so after this masking we end up with just the ip protocol (hopefully IGMP).
-                .addAnd((IPV4_FRAGMENT_MORE_FRAGS_MASK | IPV4_FRAGMENT_OFFSET_MASK) << 16 | 0xFF)
-                .addJumpIfR0NotEquals(IPV4_PROTOCOL_IGMP, skipIgmpFilter);
+        v6Gen.addJumpIfNotUnfragmentedIPv4Protocol(IPV4_PROTOCOL_IGMP, skipIgmpFilter);
 
         // Calculate the IPv4 payload length: (total length - IPv4 header length).
         // Memory slot 0 is occupied temporarily to store the length.

@@ -3978,7 +3978,11 @@ public class IpClient extends StateMachine {
         return coll.stream().map(Object::toString).collect(Collectors.joining(delimiter));
     }
 
-    static <T> T find(Iterable<T> coll, Predicate<T> fn) {
+    /**
+     * Find a specific element which satisfies the predicate in a collection.
+     */
+    @VisibleForTesting
+    public static <T> T find(Iterable<T> coll, Predicate<T> fn) {
         for (T t: coll) {
             if (fn.test(t)) {
                 return t;

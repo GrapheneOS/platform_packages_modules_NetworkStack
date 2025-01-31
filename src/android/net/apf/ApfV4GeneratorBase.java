@@ -16,6 +16,9 @@
 
 package android.net.apf;
 
+import static android.net.apf.ApfConstants.IPV4_FRAGMENT_MORE_FRAGS_MASK;
+import static android.net.apf.ApfConstants.IPV4_FRAGMENT_OFFSET_MASK;
+import static android.net.apf.ApfConstants.IPV4_FRAGMENT_OFFSET_OFFSET;
 import static android.net.apf.BaseApfGenerator.Rbit.Rbit0;
 import static android.net.apf.BaseApfGenerator.Register.R0;
 import static android.net.apf.BaseApfGenerator.Register.R1;
@@ -570,6 +573,24 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
     public final Type addStoreToMemory(MemorySlot slot, Register r)
             throws IllegalInstructionException {
         return append(new Instruction(ExtendedOpcodes.STM, slot.value, r));
+    }
+
+    /**
+     * Add instructions to the end of the program to check whether the packet is an unfragmented
+     * IPv4 packet with the specified protocol, and jump to the target if it is not.
+     * WARNING: this helper method will modify R0
+     */
+    public Type addJumpIfNotUnfragmentedIPv4Protocol(long protocol, @NonNull String tgt) {
+        // Mask out all but the reserved and don't fragment bits, plus the TTL field.
+        // Because:
+        //   IPV4_FRAGMENT_OFFSET_MASK = 0x1fff
+        //   IPV4_FRAGMENT_MORE_FRAGS_MASK = 0x2000
+        // hence this constant ends up being 0x3FFF00FF.
+        // We want the more flag bit and offset to be 0 (ie. not a fragment),
+        // so after this masking we end up with just the ip protocol.
+        return addLoad32(R0, IPV4_FRAGMENT_OFFSET_OFFSET)
+                .addAnd((IPV4_FRAGMENT_MORE_FRAGS_MASK | IPV4_FRAGMENT_OFFSET_MASK) << 16 | 0xFF)
+                .addJumpIfR0NotEquals(protocol, tgt);
     }
 
     /**

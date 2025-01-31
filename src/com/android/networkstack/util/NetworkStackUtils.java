@@ -18,10 +18,13 @@ package com.android.networkstack.util;
 
 import static android.os.Build.VERSION.CODENAME;
 import static android.os.Build.VERSION.SDK_INT;
+import static android.system.OsConstants.IFA_F_DEPRECATED;
+import static android.system.OsConstants.IFA_F_TENTATIVE;
 
 import android.content.Context;
 import android.net.IpPrefix;
 import android.net.LinkAddress;
+import android.net.LinkProperties;
 import android.net.MacAddress;
 import android.system.ErrnoException;
 import android.util.Log;
@@ -461,6 +464,41 @@ public class NetworkStackUtils {
         // Otherwise lexically compare them. Return true if the build codename is equal to or
         // greater than the requested codename.
         return CODENAME.compareTo(codename) >= 0;
+    }
+
+    /**
+     * Select the preferred IPv6 link-local address based on the rules defined in rfc3484,
+     * Section 5.
+     * <p>
+     * The address selection criteria are as follows:
+     * 1. Select a non-tentative, non-deprecated address, if available.
+     * 2. If no such address exists, select any non-tentative address.
+     */
+    public static Inet6Address selectPreferredIPv6LinkLocalAddress(@NonNull LinkProperties lp) {
+        Inet6Address preferredAddress = null;
+        for (LinkAddress linkAddress : lp.getLinkAddresses()) {
+            final InetAddress inetAddress = linkAddress.getAddress();
+            final int flags = linkAddress.getFlags();
+
+            if (!(inetAddress instanceof Inet6Address)) {
+                continue;
+            }
+
+            if (!inetAddress.isLinkLocalAddress()) {
+                continue;
+            }
+
+            if ((flags & IFA_F_TENTATIVE) != 0) {
+                continue;
+            }
+
+            preferredAddress = (Inet6Address) inetAddress;
+            if ((flags & IFA_F_DEPRECATED) == 0L) {
+                return preferredAddress;
+            }
+        }
+
+        return preferredAddress;
     }
 
     /**

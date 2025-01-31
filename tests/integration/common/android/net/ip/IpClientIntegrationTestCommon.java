@@ -4862,12 +4862,25 @@ public abstract class IpClientIntegrationTestCommon {
         LinkProperties lp = doIpv6OnlyProvisioning();
         assertNotNull(lp);
         assertEquals(3, lp.getLinkAddresses().size()); // IPv6 privacy, stable privacy, link-local
-        for (LinkAddress la : lp.getLinkAddresses()) {
-            final Inet6Address address = (Inet6Address) la.getAddress();
-            if (address.isLinkLocalAddress()) continue;
-            // Remove IPv6 GUAs from interface.
-            mNetd.interfaceDelAddress(mIfaceName, address.getHostAddress(), la.getPrefixLength());
-        }
+
+        final LinkAddress privacyAddress =
+                IpClient.find(lp.getLinkAddresses(), this::isPrivacyAddress);
+        final LinkAddress stableAddress =
+                IpClient.find(lp.getLinkAddresses(), this::isStablePrivacyAddress);
+        assertNotNull(privacyAddress);
+        assertNotNull(stableAddress);
+
+        // Delete the temporary privacy address before deleting the stable privacy address.
+        // Otherwise, deleting the stable privacy address will also delete the associated
+        // temporary privacy address. If this happens first, then deleting the non-existent
+        // temporary privacy address will throw an EADDRNOTAVAIL error.
+        // TODO: send RTM_DELADDR instead of Netd API.
+        mNetd.interfaceDelAddress(mIfaceName,
+                ((Inet6Address) privacyAddress.getAddress()).getHostAddress(),
+                privacyAddress.getPrefixLength());
+        mNetd.interfaceDelAddress(mIfaceName,
+                ((Inet6Address) stableAddress.getAddress()).getHostAddress(),
+                stableAddress.getPrefixLength());
 
         final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningFailure(captor.capture());
