@@ -227,7 +227,7 @@ public final class ApfConstants {
     public static final byte[] MDNS_PORT_IN_BYTES = ByteBuffer.allocate(2).order(
             ByteOrder.BIG_ENDIAN).putShort((short) MDNS_PORT).array();
 
-    public static final long MDNS_IPV4_ADDR_IN_LONG = 0xE00000FBL;
+    public static final long MDNS_IPV4_ADDR_IN_LONG = 0xE00000FBL; // 224.0.0.251
     public static final byte[] MDNS_IPV4_ADDR = InetAddresses.parseNumericAddress(
             "224.0.0.251").getAddress();
     public static final byte[] MDNS_IPV6_ADDR = InetAddresses.parseNumericAddress(
