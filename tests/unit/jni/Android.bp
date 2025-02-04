@@ -19,8 +19,8 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-cc_library_shared {
-    name: "libapfjni",
+cc_defaults {
+    name: "libapfjni_defaults",
     srcs: [
         "**/*.cpp",
     ],
@@ -38,10 +38,32 @@ cc_library_shared {
     ],
     static_libs: [
         "libapf",
-        "libapf_v7",
         "libapfdisassembler",
         "libpcap",
+        "libapfbuf",
     ],
     sdk_version: "30",
     stl: "c++_static",
+}
+
+cc_library_shared {
+    name: "libapfjniv6",
+    defaults: ["libapfjni_defaults"],
+    cflags: [
+        "-DAPF_INTERPRETER_V6",
+    ],
+    static_libs: [
+        "libapf_v6",
+    ],
+}
+
+cc_library_shared {
+    name: "libapfjniv7",
+    defaults: ["libapfjni_defaults"],
+    cflags: [
+        "-DAPF_INTERPRETER_V7",
+    ],
+    static_libs: [
+        "libapf_v7",
+    ],
 }

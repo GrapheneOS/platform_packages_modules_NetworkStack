@@ -24,7 +24,8 @@ public class ApfJniUtils {
 
     static {
         // Load up native shared library containing APF interpreter exposed via JNI.
-        System.loadLibrary("apfjni");
+        // TODO: use constructor to load the different version
+        System.loadLibrary("apfjniv7");
     }
 
     /**
