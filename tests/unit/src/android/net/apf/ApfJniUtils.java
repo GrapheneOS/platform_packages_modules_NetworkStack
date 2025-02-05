@@ -22,7 +22,7 @@ import java.util.List;
  */
 public class ApfJniUtils {
 
-    static {
+    public ApfJniUtils() {
         // Load up native shared library containing APF interpreter exposed via JNI.
         // TODO: use constructor to load the different version
         System.loadLibrary("apfjniv7");
@@ -32,14 +32,14 @@ public class ApfJniUtils {
      * Call the APF interpreter to run {@code program} on {@code packet} with persistent memory
      * segment {@data} pretending the filter was installed {@code filter_age} seconds ago.
      */
-    public static native int apfSimulate(int apfVersion, byte[] program, byte[] packet,
+    public native int apfSimulate(int apfVersion, byte[] program, byte[] packet,
             byte[] data, int filterAge);
 
     /**
      * Compile a tcpdump human-readable filter (e.g. "icmp" or "tcp port 54") into a BPF
      * prorgam and return a human-readable dump of the BPF program identical to "tcpdump -d".
      */
-    public static native String compileToBpf(String filter);
+    public native String compileToBpf(String filter);
 
     /**
      * Open packet capture file {@code pcap_filename} and filter the packets using tcpdump
@@ -47,7 +47,7 @@ public class ApfJniUtils {
      * at the same time using APF program {@code apf_program}.  Return {@code true} if
      * both APF and BPF programs filter out exactly the same packets.
      */
-    public static native boolean compareBpfApf(int apfVersion, String filter,
+    public native boolean compareBpfApf(int apfVersion, String filter,
             String pcapFilename, byte[] apfProgram);
 
     /**
@@ -55,21 +55,21 @@ public class ApfJniUtils {
      * checks whether all the packets are dropped and populates data[] {@code data} with
      * the APF counters.
      */
-    public static native boolean dropsAllPackets(int apfVersion, byte[] program, byte[] data,
+    public native boolean dropsAllPackets(int apfVersion, byte[] program, byte[] data,
             String pcapFilename);
 
     /**
      * Disassemble the Apf program into human-readable text.
      */
-    public static native String[] disassembleApf(byte[] program);
+    public native String[] disassembleApf(byte[] program);
 
     /**
      * Get all transmitted packets.
      */
-    public static native List<byte[]> getAllTransmittedPackets();
+    public native List<byte[]> getAllTransmittedPackets();
 
     /**
      * Reset the memory region that stored the transmitted packet.
      */
-    public static native void resetTransmittedPacketMemory();
+    public native void resetTransmittedPacketMemory();
 }

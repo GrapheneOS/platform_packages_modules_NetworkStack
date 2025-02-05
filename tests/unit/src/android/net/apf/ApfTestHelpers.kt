@@ -36,6 +36,7 @@ class ApfTestHelpers private constructor() {
         // Interpreter will just accept packets without link layer headers, so pad fake packet to at
         // least the minimum packet size.
         const val MIN_PKT_SIZE: Int = 15
+        private val apfJniUtils = ApfJniUtils()
         private fun label(code: Int): String {
             return when (code) {
                 PASS -> "PASS"
@@ -70,7 +71,7 @@ class ApfTestHelpers private constructor() {
             assertReturnCodesEqual(
                 msg,
                 expected,
-                ApfJniUtils.apfSimulate(apfVersion, program, packet, null, filterAge)
+                apfJniUtils.apfSimulate(apfVersion, program, packet, null, filterAge)
             )
         }
 
@@ -105,7 +106,7 @@ class ApfTestHelpers private constructor() {
             assertReturnCodesEqual(
                 msg,
                 expected,
-                ApfJniUtils.apfSimulate(apfVersion, program, packet, data, filterAge)
+                apfJniUtils.apfSimulate(apfVersion, program, packet, data, filterAge)
             )
         }
 
@@ -138,7 +139,7 @@ class ApfTestHelpers private constructor() {
             assertReturnCodesEqual(
                 msg,
                 expected,
-                ApfJniUtils.apfSimulate(apfVersion, program, packet, null, filterAge)
+                apfJniUtils.apfSimulate(apfVersion, program, packet, null, filterAge)
             )
         }
 
@@ -250,7 +251,7 @@ class ApfTestHelpers private constructor() {
         ) {
             assertReturnCodesEqual(
                 expected,
-                ApfJniUtils.apfSimulate(apfVersion, program, packet, data, 0)
+                apfJniUtils.apfSimulate(apfVersion, program, packet, data, 0)
             )
 
             if (ignoreInterpreterVersion) {
@@ -333,10 +334,47 @@ class ApfTestHelpers private constructor() {
         fun consumeTransmittedPackets(
             expectCnt: Int
         ): List<ByteArray> {
-            val transmittedPackets = ApfJniUtils.getAllTransmittedPackets()
+            val transmittedPackets = apfJniUtils.getAllTransmittedPackets()
             assertEquals(expectCnt, transmittedPackets.size)
-            ApfJniUtils.resetTransmittedPacketMemory()
+            resetTransmittedPacketMemory()
             return transmittedPackets
+        }
+
+        fun resetTransmittedPacketMemory() {
+            apfJniUtils.resetTransmittedPacketMemory()
+        }
+
+        fun disassembleApf(program: ByteArray): Array<String> {
+            return apfJniUtils.disassembleApf(program)
+        }
+
+        fun getAllTransmittedPackets(): List<ByteArray> {
+            return apfJniUtils.allTransmittedPackets
+        }
+
+        @JvmStatic
+        fun compareBpfApf(
+            apfVersion: Int,
+            filter: String,
+            pcapFilename: String,
+            apfProgram: ByteArray
+        ): Boolean {
+            return apfJniUtils.compareBpfApf(apfVersion, filter, pcapFilename, apfProgram)
+        }
+
+        @JvmStatic
+        fun compileToBpf(filter: String): String {
+            return apfJniUtils.compileToBpf(filter)
+        }
+
+        @JvmStatic
+        fun dropsAllPackets(
+            apfVersion: Int,
+            program: ByteArray,
+            data: ByteArray,
+            pcapFilename: String
+        ): Boolean {
+            return apfJniUtils.dropsAllPackets(apfVersion, program, data, pcapFilename)
         }
     }
 }

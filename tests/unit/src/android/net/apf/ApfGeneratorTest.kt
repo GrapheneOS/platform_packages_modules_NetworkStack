@@ -79,7 +79,7 @@ class ApfGeneratorTest {
 
     @After
     fun tearDown() {
-        ApfJniUtils.resetTransmittedPacketMemory()
+        ApfTestHelpers.resetTransmittedPacketMemory()
     }
 
     @Test
@@ -442,7 +442,7 @@ class ApfGeneratorTest {
         )
         assertContentEquals(
                 listOf("0: pass"),
-                ApfJniUtils.disassembleApf(program).map { it.trim() }
+                ApfTestHelpers.disassembleApf(program).map { it.trim() }
         )
 
         var gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
@@ -455,7 +455,7 @@ class ApfGeneratorTest {
         )
         assertContentEquals(
                 listOf("0: drop"),
-                ApfJniUtils.disassembleApf(program).map { it.trim() }
+                ApfTestHelpers.disassembleApf(program).map { it.trim() }
         )
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
@@ -471,7 +471,7 @@ class ApfGeneratorTest {
         )
         assertContentEquals(
                 listOf("0: pass        counter=129"),
-                ApfJniUtils.disassembleApf(program).map { it.trim() }
+                ApfTestHelpers.disassembleApf(program).map { it.trim() }
         )
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
@@ -488,7 +488,7 @@ class ApfGeneratorTest {
         )
         assertContentEquals(
                 listOf("0: drop        counter=1000"),
-                ApfJniUtils.disassembleApf(program).map { it.trim() }
+                ApfTestHelpers.disassembleApf(program).map { it.trim() }
         )
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
@@ -504,7 +504,7 @@ class ApfGeneratorTest {
         )
         assertContentEquals(
                 listOf("0: pass        counter=11"),
-                ApfJniUtils.disassembleApf(program).map { it.trim() }
+                ApfTestHelpers.disassembleApf(program).map { it.trim() }
         )
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
@@ -520,7 +520,7 @@ class ApfGeneratorTest {
         )
         assertContentEquals(
                 listOf("0: drop        counter=46"),
-                ApfJniUtils.disassembleApf(program).map { it.trim() }
+                ApfTestHelpers.disassembleApf(program).map { it.trim() }
         )
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
@@ -543,7 +543,7 @@ class ApfGeneratorTest {
         assertContentEquals(listOf(
                 "0: allocate    r0",
                 "2: allocate    1500"
-        ), ApfJniUtils.disassembleApf(program).map { it.trim() })
+        ), ApfTestHelpers.disassembleApf(program).map { it.trim() })
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addTransmitWithoutChecksum()
@@ -559,7 +559,7 @@ class ApfGeneratorTest {
         assertContentEquals(listOf(
                 "0: transmit    ip_ofs=255",
                 "4: transmitudp ip_ofs=30, csum_ofs=40, csum_start=50, partial_csum=0x0100",
-        ), ApfJniUtils.disassembleApf(program).map { it.trim() })
+        ), ApfTestHelpers.disassembleApf(program).map { it.trim() })
 
         val largeByteArray = ByteArray(256) { 0x01 }
         gen = ApfV6Generator(largeByteArray, APF_VERSION_6, ramSize, clampSize)
@@ -577,7 +577,7 @@ class ApfGeneratorTest {
                         "0: data        256, " + "01".repeat(256),
                         "259: debugbuf    size=1533"
                 ),
-                ApfJniUtils.disassembleApf(program).map { it.trim() }
+                ApfTestHelpers.disassembleApf(program).map { it.trim() }
         )
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
@@ -619,7 +619,7 @@ class ApfGeneratorTest {
                 "25: write       0x80000000",
                 "30: write       0xfffffffe",
                 "35: write       0xfffefdfc"
-        ), ApfJniUtils.disassembleApf(program).map { it.trim() })
+        ), ApfTestHelpers.disassembleApf(program).map { it.trim() })
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addWriteU8(R0)
@@ -644,7 +644,7 @@ class ApfGeneratorTest {
                 "6: ewrite1     r1",
                 "8: ewrite2     r1",
                 "10: ewrite4     r1"
-        ), ApfJniUtils.disassembleApf(program).map { it.trim() })
+        ), ApfTestHelpers.disassembleApf(program).map { it.trim() })
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addDataCopy(0, 10)
@@ -661,7 +661,7 @@ class ApfGeneratorTest {
                 "0: datacopy    src=0, len=10",
                 "2: datacopy    src=1, len=5",
                 "5: pktcopy     src=1000, len=255"
-        ), ApfJniUtils.disassembleApf(program).map { it.trim() })
+        ), ApfTestHelpers.disassembleApf(program).map { it.trim() })
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addDataCopyFromR0(5)
@@ -680,7 +680,7 @@ class ApfGeneratorTest {
                 "3: epktcopy     src=r0, len=5",
                 "6: edatacopy    src=r0, len=r1",
                 "8: epktcopy     src=r0, len=r1"
-        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+        ), ApfTestHelpers.disassembleApf(program).map{ it.trim() })
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addJumpIfBytesAtR0Equal(byteArrayOf('a'.code.toByte()), ApfV4Generator.DROP_LABEL)
@@ -693,7 +693,7 @@ class ApfGeneratorTest {
         ), program)
         assertContentEquals(listOf(
                 "0: jbseq       r0, 0x1, DROP, 61"
-        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+        ), ApfTestHelpers.disassembleApf(program).map{ it.trim() })
 
         val qnames = byteArrayOf(1, 'A'.code.toByte(), 1, 'B'.code.toByte(), 0, 0)
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
@@ -708,7 +708,7 @@ class ApfGeneratorTest {
         assertContentEquals(listOf(
                 "0: jdnsqne     r0, DROP, 12, (1)A(1)B(0)(0)",
                 "10: jdnsqeq     r0, DROP, 12, (1)A(1)B(0)(0)"
-        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+        ), ApfTestHelpers.disassembleApf(program).map{ it.trim() })
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addJumpIfPktAtR0DoesNotContainDnsQSafe(qnames, 0x0c, ApfV4Generator.DROP_LABEL)
@@ -722,7 +722,7 @@ class ApfGeneratorTest {
         assertContentEquals(listOf(
                 "0: jdnsqnesafe r0, DROP, 12, (1)A(1)B(0)(0)",
                 "10: jdnsqeqsafe r0, DROP, 12, (1)A(1)B(0)(0)"
-        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+        ), ApfTestHelpers.disassembleApf(program).map{ it.trim() })
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addJumpIfPktAtR0DoesNotContainDnsA(qnames, ApfV4Generator.DROP_LABEL)
@@ -736,7 +736,7 @@ class ApfGeneratorTest {
         assertContentEquals(listOf(
                 "0: jdnsane     r0, DROP, (1)A(1)B(0)(0)",
                 "9: jdnsaeq     r0, DROP, (1)A(1)B(0)(0)"
-        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+        ), ApfTestHelpers.disassembleApf(program).map{ it.trim() })
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addJumpIfPktAtR0DoesNotContainDnsASafe(qnames, ApfV4Generator.DROP_LABEL)
@@ -750,7 +750,7 @@ class ApfGeneratorTest {
         assertContentEquals(listOf(
                 "0: jdnsanesafe r0, DROP, (1)A(1)B(0)(0)",
                 "9: jdnsaeqsafe r0, DROP, (1)A(1)B(0)(0)"
-        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+        ), ApfTestHelpers.disassembleApf(program).map{ it.trim() })
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addJumpIfOneOf(R1, List(32) { (it + 1).toLong() }.toSet(), DROP_LABEL)
@@ -773,7 +773,7 @@ class ApfGeneratorTest {
         assertContentEquals(listOf(
                 "0: joneof      r0, DROP, { 0, 128, 256, 65536 }",
                 "20: jnoneof     r1, DROP, { 0, 128, 256, 65536 }"
-        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+        ), ApfTestHelpers.disassembleApf(program).map{ it.trim() })
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
         gen.addJumpIfBytesAtR0EqualsAnyOf(listOf(byteArrayOf(1, 2), byteArrayOf(3, 4)), DROP_LABEL)
@@ -792,7 +792,7 @@ class ApfGeneratorTest {
                 "0: jbseq       r0, 0x2, DROP, { 0102, 0304 }",
                 "9: jbsne       r0, 0x2, DROP, { 0102, 0304 }",
                 "18: jbsne       r0, 0x2, DROP, 0101"
-        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+        ), ApfTestHelpers.disassembleApf(program).map{ it.trim() })
     }
 
     @Test
@@ -870,7 +870,7 @@ class ApfGeneratorTest {
                 "26: datacopy    src=9, len=3",
                 "29: datacopy    src=3, len=6",
                 "32: transmit    ip_ofs=255"
-        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+        ), ApfTestHelpers.disassembleApf(program).map{ it.trim() })
         assertPass(APF_VERSION_6, program, testPacket)
         val transmitPackets = consumeTransmittedPackets(1)
         val transmitPkt = HexDump.toHexString(transmitPackets[0])
@@ -902,7 +902,7 @@ class ApfGeneratorTest {
             "277: datacopy    src=258, len=5",
             "281: datacopy    src=255, len=5",
             "284: transmit    ip_ofs=255"
-        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+        ), ApfTestHelpers.disassembleApf(program).map{ it.trim() })
         assertPass(APF_VERSION_6, program, testPacket)
         val transmitPackets = consumeTransmittedPackets(1)
         val transmitPkt = HexDump.toHexString(transmitPackets[0])
@@ -929,7 +929,7 @@ class ApfGeneratorTest {
             "311: datacopy    src=3, len=255",
             "314: datacopy    src=258, len=45",
             "318: transmit    ip_ofs=255"
-        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+        ), ApfTestHelpers.disassembleApf(program).map{ it.trim() })
         assertPass(APF_VERSION_6, program, testPacket)
         val transmitPackets = consumeTransmittedPackets(1)
         val transmitPkt = HexDump.toHexString(transmitPackets[0])

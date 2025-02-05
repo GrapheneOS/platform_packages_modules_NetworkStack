@@ -31,9 +31,6 @@ import static android.net.apf.BaseApfGenerator.MemorySlot;
 import static android.net.apf.BaseApfGenerator.PASS_LABEL;
 import static android.net.apf.BaseApfGenerator.Register.R0;
 import static android.net.apf.BaseApfGenerator.Register.R1;
-import static android.net.apf.ApfJniUtils.compareBpfApf;
-import static android.net.apf.ApfJniUtils.compileToBpf;
-import static android.net.apf.ApfJniUtils.dropsAllPackets;
 import static android.os.PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED;
 import static android.os.PowerManager.ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED;
 import static android.system.OsConstants.AF_UNIX;
@@ -1005,9 +1002,11 @@ public class ApfTest {
                 "tcp[tcpflags] & (tcp-ack|tcp-fin) != 0 and (ip[2:2] > 57 or icmp)" };
         String pcap_filename = stageFile(R.raw.apf);
         for (String tcpdump_filter : tcpdump_filters) {
-            byte[] apf_program = Bpf2Apf.convert(compileToBpf(tcpdump_filter));
+            byte[] apf_program = Bpf2Apf.convert(
+                ApfTestHelpers.compileToBpf(tcpdump_filter));
             assertTrue("Failed to match for filter: " + tcpdump_filter,
-                    compareBpfApf(mApfVersion, tcpdump_filter, pcap_filename, apf_program));
+                    ApfTestHelpers.compareBpfApf(
+                        mApfVersion, tcpdump_filter, pcap_filename, apf_program));
         }
     }
 
@@ -1049,7 +1048,8 @@ public class ApfTest {
         byte[] data = new byte[Counter.totalSize()];
         final boolean result;
 
-        result = dropsAllPackets(mApfVersion, program, data, pcapFilename);
+        result = ApfTestHelpers.dropsAllPackets(
+            mApfVersion, program, data, pcapFilename);
         Log.i(TAG, "testApfFilterPcapFile(): Data counters: " + HexDump.toHexString(data, false));
 
         assertTrue("Failed to drop all packets by filter. \nAPF counters:" +
