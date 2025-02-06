@@ -16,6 +16,7 @@
 
 package android.net.ip;
 
+import static android.content.pm.PackageManager.FEATURE_LEANBACK;
 import static android.net.IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM;
 import static android.net.IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_CONFIRM;
 import static android.net.IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ORGANIC;
@@ -1091,8 +1092,9 @@ public class IpClient extends StateMachine {
                 mContext, APF_HANDLE_ARP_OFFLOAD);
         mApfHandleNdOffload = mDependencies.isFeatureNotChickenedOut(
                 mContext, APF_HANDLE_ND_OFFLOAD);
-        // TODO: turn on APF mDNS offload.
-        mApfHandleMdnsOffload = false;
+        // TODO: turn on APF mDNS offload on handhelds.
+        mApfHandleMdnsOffload = isAtLeast25Q2() && context.getPackageManager().hasSystemFeature(
+                FEATURE_LEANBACK);
         mApfHandleIgmpOffload =
                 isAtLeast25Q2() || mDependencies.isFeatureEnabled(context,
                         APF_HANDLE_IGMP_OFFLOAD_VERSION);

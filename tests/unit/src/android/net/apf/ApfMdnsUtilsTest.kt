@@ -32,7 +32,6 @@ import com.android.testutils.DevSdkIgnoreRunner
 import java.io.IOException
 import kotlin.test.assertContentEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -91,17 +90,10 @@ class ApfMdnsUtilsTest {
             0, 0).map { it.toByte() }.toByteArray()
 
     @Test
-    fun testExtractOffloadReplyRule_noPriorityReturnsEmptySet() {
-        val info = createOffloadServiceInfo(Int.MAX_VALUE)
-        val rules = extractOffloadReplyRule(listOf(info))
-        assertTrue(rules.isEmpty())
-    }
-
-    @Test
-    fun testExtractOffloadReplyRule_extractRulesWithValidPriority() {
+    fun testExtractOffloadReplyRule_extractRules() {
         val info1 = createOffloadServiceInfo(10)
         val info2 = createOffloadServiceInfo(
-                11,
+                Integer.MAX_VALUE,
                 testServiceName2,
                 listOf("a", "b", "c", "d"),
                 testRawPacket2
