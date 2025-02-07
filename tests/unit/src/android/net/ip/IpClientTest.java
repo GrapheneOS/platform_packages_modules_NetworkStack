@@ -935,6 +935,28 @@ public class IpClientTest {
     }
 
     @Test
+    public void testForceApfV2OnLowRam() throws Exception {
+        final IpClient ipc = makeIpClient(TEST_IFNAME);
+        ProvisioningConfiguration.Builder config = new ProvisioningConfiguration.Builder()
+                .withoutIPv4()
+                .withoutIpReachabilityMonitor()
+                .withInitialConfiguration(
+                        conf(links(TEST_LOCAL_ADDRESSES), prefixes(TEST_PREFIXES), ips()))
+                .withApfCapabilities(
+                        new ApfCapabilities(3 /* version */, 512 /* maxProgramSize */,
+                                ARPHRD_ETHER));
+        ipc.startProvisioning(config.build());
+        final ArgumentCaptor<ApfConfiguration> configCaptor = ArgumentCaptor.forClass(
+                ApfConfiguration.class);
+        verify(mDependencies, timeout(TEST_TIMEOUT_MS)).maybeCreateApfFilter(
+                any(), any(), configCaptor.capture(), any(), any(), any());
+
+        final ApfConfiguration apfConfig = configCaptor.getValue();
+        assertEquals(2, apfConfig.apfVersionSupported);
+        verifyShutdown(ipc);
+    }
+
+    @Test
     public void testDumpApfFilter_withNoException() throws Exception {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,

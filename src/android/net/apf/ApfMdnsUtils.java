@@ -132,7 +132,9 @@ public class ApfMdnsUtils {
             addMatcherIfNotExist(allMatchers, matcherGroup,
                     new MdnsOffloadRule.Matcher(encodedHostName, TYPE_AAAA));
             if (!matcherGroup.isEmpty()) {
-                rules.add(new MdnsOffloadRule(matcherGroup, tooManySubtypes ? null : replyPayload));
+                rules.add(new MdnsOffloadRule(
+                        key.getServiceName() + "." + key.getServiceType(),
+                        matcherGroup, tooManySubtypes ? null : replyPayload));
             }
         }
         return rules;

@@ -41,10 +41,15 @@ public class MdnsOffloadRule {
     @NonNull
     public final List<Matcher> mMatchers;
 
+    @NonNull
+    public final String mFullServiceName;
+
     /**
      * Construct an mDNS offload rule.
      */
-    public MdnsOffloadRule(@NonNull List<Matcher> matchers, @Nullable byte[] offloadPayload) {
+    public MdnsOffloadRule(@NonNull String fullServiceName, @NonNull List<Matcher> matchers,
+            @Nullable byte[] offloadPayload) {
+        mFullServiceName = fullServiceName;
         mMatchers = matchers;
         mOffloadPayload = offloadPayload;
     }

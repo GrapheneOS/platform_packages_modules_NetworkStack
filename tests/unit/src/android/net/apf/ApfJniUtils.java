@@ -22,10 +22,15 @@ import java.util.List;
  */
 public class ApfJniUtils {
 
-    public ApfJniUtils() {
+    public ApfJniUtils(int apfInterpreterVersion) {
         // Load up native shared library containing APF interpreter exposed via JNI.
-        // TODO: use constructor to load the different version
-        System.loadLibrary("apfjniv7");
+        if (apfInterpreterVersion == 6) {
+            System.loadLibrary("apfjniv6");
+        } else if (apfInterpreterVersion == 7) {
+            System.loadLibrary("apfjniv7");
+        } else {
+            throw new IllegalArgumentException("apfInterpreterVersion must be 6 or 7");
+        }
     }
 
     /**

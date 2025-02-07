@@ -152,7 +152,6 @@ import static android.net.apf.ApfConstants.MDNS_IPV6_ADDR;
 import static android.net.apf.ApfConstants.MDNS_PORT;
 import static android.net.apf.ApfConstants.UDP_HEADER_LEN;
 import static android.net.apf.ApfConstants.MDNS_PORT_IN_BYTES;
-import static android.net.apf.ApfCounterTracker.Counter.DROPPED_MDNS_INVALID;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_ETHER_OUR_SRC_MAC;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_FROM_DHCPV4_SERVER;
@@ -295,7 +294,7 @@ public class ApfFilter {
         /**
          * Install the APF program to firmware.
          */
-        boolean installPacketFilter(@NonNull byte[] filter);
+        boolean installPacketFilter(@NonNull byte[] filter, @NonNull String filterConfig);
 
         /**
          * Read the APF RAM from firmware.
@@ -1775,7 +1774,7 @@ public class ApfFilter {
             gen.addCountAndDropIfR0NotEquals(bytesToBEInt(mIPv4Address), DROPPED_ARP_OTHER_HOST);
 
             ApfV6Generator v6Gen = tryToConvertToApfV6Generator(gen);
-            if (v6Gen != null && mHandleArpOffload) {
+            if (enableArpOffload()) {
                 // Ethernet requires that all packets be at least 60 bytes long
                 v6Gen.addAllocate(60)
                         .addPacketCopy(ETHER_SRC_ADDR_OFFSET, ETHER_ADDR_LEN)
@@ -1883,12 +1882,13 @@ public class ApfFilter {
             throws IllegalInstructionException {
         final String skipMdnsFilter = gen.getUniqueLabel();
 
+        // If the packet is too short to be a valid IPv4 mDNS packet, the filter is skipped.
         // For APF performance reasons, we check udp destination port before confirming it is
         // non-fragmented IPv4 udp packet. We proceed only if the destination port is 5353 (mDNS).
         // Otherwise, skip filtering.
         gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE)
                 .addJumpIfR0LessThan(
-                        ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + UDP_HEADER_LEN,
+                        ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + UDP_HEADER_LEN + DNS_HEADER_LEN,
                         skipMdnsFilter)
                 .addLoad16(R0, IPV4_UDP_DESTINATION_PORT_NO_OPTIONS_OFFSET)
                 .addJumpIfR0NotEquals(MDNS_PORT, skipMdnsFilter);
@@ -1917,13 +1917,6 @@ public class ApfFilter {
         // by NsdService.
         gen.addLoad32(R0, IPV4_DEST_ADDR_OFFSET)
                 .addJumpIfR0NotEquals(MDNS_IPV4_ADDR_IN_LONG, skipMdnsFilter);
-
-        // Drop the packet if the IPv4 mDNS packet size is too small.
-        gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE)
-                .addCountAndDropIfR0LessThan(
-                        ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + UDP_HEADER_LEN + DNS_HEADER_LEN,
-                        DROPPED_MDNS_INVALID
-                );
 
         // We now know that the packet is an mDNS packet,
         // i.e., a non-fragmented IPv4 UDP packet destined for port 5353 with the expected
@@ -2347,12 +2340,13 @@ public class ApfFilter {
             String labelCheckMdnsQueryPayload) throws IllegalInstructionException {
         final String skipMdnsFilter = gen.getUniqueLabel();
 
+        // If the packet is too short to be a valid IPv6 mDNS packet, the filter is skipped.
         // For APF performance reasons, we check udp destination port before confirming it is IPv6
         // udp packet. We proceed only if the destination port is 5353 (mDNS). Otherwise, skip
         // filtering.
         gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE)
                 .addJumpIfR0LessThan(
-                        ETH_HEADER_LEN + IPV6_HEADER_LEN + UDP_HEADER_LEN,
+                        ETH_HEADER_LEN + IPV6_HEADER_LEN + UDP_HEADER_LEN + DNS_HEADER_LEN,
                         skipMdnsFilter)
                 .addLoad16(R0, IPV6_UDP_DESTINATION_PORT_OFFSET)
                 .addJumpIfR0NotEquals(MDNS_PORT, skipMdnsFilter);
@@ -2378,12 +2372,6 @@ public class ApfFilter {
         // by NsdService.
         gen.addLoadImmediate(R0, IPV6_DEST_ADDR_OFFSET)
                 .addJumpIfBytesAtR0NotEqual(MDNS_IPV6_ADDR, skipMdnsFilter);
-
-        // Drop the packet if the IPv6 mDNS packet size is too small.
-        gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE)
-                .addCountAndDropIfR0LessThan(
-                        ETH_HEADER_LEN + IPV6_HEADER_LEN + UDP_HEADER_LEN + DNS_HEADER_LEN,
-                        DROPPED_MDNS_INVALID);
 
         // We now know that the packet is an mDNS packet,
         // i.e., an IPv6 UDP packet destined for port 5353 with the expected destination MAC and IP
@@ -3157,8 +3145,43 @@ public class ApfFilter {
         gen.addCountTrampoline();
     }
 
+    private String getApfConfigMessage() {
+        final StringBuilder sb = new StringBuilder();
+        sb.append("{ ");
+        sb.append("mcast: ");
+        sb.append(mMulticastFilter ? "DROP" : "ALLOW");
+        sb.append(", ");
+        sb.append("offloads: ");
+        sb.append("[ ");
+        if (enableArpOffload()) {
+            sb.append("ARP, ");
+        }
+        if (enableNdOffload()) {
+            sb.append("ND, ");
+        }
+        if (enableIgmpOffload()) {
+            sb.append("IGMP, ");
+        }
+        if (enableIpv4PingOffload()) {
+            sb.append("Ping4, ");
+        }
+        if (enableMdns4Offload()) {
+            sb.append("Mdns4, ");
+        }
+        if (enableMdns6Offload()) {
+            sb.append("Mdns6, ");
+        }
+        sb.append("] ");
+        sb.append("RAs: ");
+        sb.append(mRas.size());
+        sb.append(" mDNSs: ");
+        sb.append(mOffloadRules.size());
+        sb.append(" }");
+        return sb.toString();
+    }
+
     private void installPacketFilter(byte[] program) {
-        if (!mApfController.installPacketFilter(program)) {
+        if (!mApfController.installPacketFilter(program, getApfConfigMessage())) {
             sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
         }
     }
@@ -3497,6 +3520,11 @@ public class ApfFilter {
     }
 
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
+    private boolean enableArpOffload() {
+        return mHandleArpOffload && useApfV6Generator();
+    }
+
+    @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
     public boolean enableNdOffload() {
         return mHandleNdOffload && useApfV6Generator();
     }
@@ -3677,6 +3705,15 @@ public class ApfFilter {
                 pw.print(String.format(" %04x", p));
             }
         }
+        pw.println();
+        pw.println("Mdns filters:");
+        pw.increaseIndent();
+        for (MdnsOffloadRule rule : mOffloadRules) {
+            pw.println(
+                    String.format("offloaded service: %s, payloadSize: %d", rule.mFullServiceName,
+                            rule.mOffloadPayload == null ? 0 : rule.mOffloadPayload.length));
+        }
+        pw.decreaseIndent();
         pw.println();
         pw.println("RA filters:");
         pw.increaseIndent();

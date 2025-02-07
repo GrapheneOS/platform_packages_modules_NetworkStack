@@ -101,6 +101,7 @@ class ApfMdnsUtilsTest {
         val rules = extractOffloadReplyRule(listOf(info2, info1))
         val expectedResult = listOf(
                 MdnsOffloadRule(
+                        "${info1.key.serviceName}.${info1.key.serviceType}",
                         listOf(
                                 MdnsOffloadRule.Matcher(encodedServiceType, TYPE_PTR),
                                 MdnsOffloadRule.Matcher(encodedServiceTypeWithSub1, TYPE_PTR),
@@ -113,6 +114,7 @@ class ApfMdnsUtilsTest {
                         testRawPacket1,
                 ),
                 MdnsOffloadRule(
+                        "${info2.key.serviceName}.${info2.key.serviceType}",
                         listOf(
                                 MdnsOffloadRule.Matcher(encodedServiceTypeWithWildCard, TYPE_PTR),
                                 MdnsOffloadRule.Matcher(encodedFullServiceName2, TYPE_SRV),
