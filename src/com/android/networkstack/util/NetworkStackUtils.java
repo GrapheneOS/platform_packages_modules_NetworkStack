@@ -16,6 +16,7 @@
 
 package com.android.networkstack.util;
 
+import static android.net.apf.ApfConstants.IPV6_SOLICITED_NODES_PREFIX;
 import static android.os.Build.VERSION.CODENAME;
 import static android.os.Build.VERSION.SDK_INT;
 import static android.system.OsConstants.IFA_F_DEPRECATED;
@@ -398,6 +399,24 @@ public class NetworkStackUtils {
             Log.e(TAG, "Invalid host IP address " + addr.getHostAddress(), e);
             return null;
         }
+    }
+
+    /**
+     * Checks if the given IPv6 address is a solicited-node multicast address.
+     *
+     * <p>Solicited-node multicast addresses are used for Neighbor Discovery in IPv6.
+     * They have a specific prefix (FF02::1:FFxx:xxxx) where the last 64 bits are derived
+     * from the interface's link-layer address. This function only checks if the address
+     * has the correct prefix; it does *not* verify the lower 64 bits.
+     */
+    public static boolean isIPv6AddressSolicitedNodeMulticast(@NonNull final Inet6Address addr) {
+        for (int i = 0; i < IPV6_SOLICITED_NODES_PREFIX.length; i++) {
+            if (addr.getAddress()[i] != IPV6_SOLICITED_NODES_PREFIX[i]) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
