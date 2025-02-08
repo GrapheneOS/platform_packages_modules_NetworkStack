@@ -165,6 +165,74 @@ static void network_stack_units_attachEgressIgmpReportFilter(
     }
 }
 
+// fd is a "socket(AF_PACKET, SOCK_RAW, ETH_P_ALL)"
+static void network_stack_units_attachEgressMulticastReportFilter(
+        JNIEnv *env, jclass clazz, jobject javaFd) {
+    static sock_filter filter_code[] = {
+        // Check if skb->pkt_type is PACKET_OUTGOING
+        BPF_LOAD_SKB_PKTTYPE,
+        BPF2_REJECT_IF_NOT_EQUAL(PACKET_OUTGOING),
+
+        // If IPv4: (otherwise jump to the 'IPv6 ...' below)
+        // Check if skb->protocol is ETH_P_IP
+        BPF_LOAD_SKB_PROTOCOL,
+        // Jump over instructions after this and before IPv6 handling section
+        BPF_JUMP_IF_NOT_EQUAL(ETH_P_IP, 15),
+
+        // Check the protocol is IGMP.
+        BPF_LOAD_IPV4_U8(protocol),
+        BPF2_REJECT_IF_NOT_EQUAL(IPPROTO_IGMP),
+
+        // Check this is not a fragment.
+        BPF_LOAD_IPV4_BE16(frag_off),
+        BPF2_REJECT_IF_ANY_MASKED_BITS_SET(IP_MF | IP_OFFMASK),
+
+        // Get the IP header length.
+        BPF_LOADX_NET_RELATIVE_IPV4_HLEN,
+
+        // Check if IGMPv2/IGMPv3 join/leave message.
+        BPF_LOAD_NETX_RELATIVE_IGMP_TYPE,
+        BPF2_ACCEPT_IF_EQUAL(IGMPV2_HOST_MEMBERSHIP_REPORT),
+        BPF2_ACCEPT_IF_EQUAL(IGMP_HOST_LEAVE_MESSAGE),
+        BPF2_ACCEPT_IF_EQUAL(IGMPV3_HOST_MEMBERSHIP_REPORT),
+        BPF_REJECT,
+
+        // IPv6 ...
+        // Check if skb->protocol is ETH_P_IPV6
+        BPF2_REJECT_IF_NOT_EQUAL(ETH_P_IPV6),
+
+        BPF_LOADX_CONSTANT_IPV6_HLEN,
+
+        // Check IPv6 Next Header is HOPOPTS
+        BPF_LOAD_IPV6_U8(nexthdr),
+        BPF2_REJECT_IF_NOT_EQUAL(IPPROTO_HOPOPTS),
+
+        // Check if HOPOPTS is ICMPv6
+        BPF_LOAD_NETX_RELATIVE_V6EXTHDR_NEXTHDR,
+        BPF2_REJECT_IF_NOT_EQUAL(IPPROTO_ICMPV6),
+
+        // Skip the IPv6 extension header
+        BPF3_LOAD_NETX_RELATIVE_V6EXTHDR_LEN,
+        BPF2_ADD_A_TO_X,
+
+        // Check if MLDv1/MLDv2 report message
+        BPF_LOAD_NETX_RELATIVE_MLD_TYPE,
+        BPF2_ACCEPT_IF_EQUAL(MLD_LISTENER_REPORT),
+        BPF2_ACCEPT_IF_EQUAL(MLD_LISTENER_DONE),
+        BPF2_ACCEPT_IF_EQUAL(MLDV2_LISTENER_REPORT),
+        BPF_REJECT
+    };
+    static const sock_fprog filter = {
+            sizeof(filter_code) / sizeof(filter_code[0]),
+            filter_code,
+    };
+
+    int fd = netjniutils::GetNativeFileDescriptor(env, javaFd);
+    if (setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &filter, sizeof(filter)) != 0) {
+        jniThrowErrnoException(env, "setsockopt(SO_ATTACH_FILTER)", errno);
+    }
+}
+
 // fd is a "socket(AF_PACKET, SOCK_RAW, ETH_P_IPV6)"
 // which guarantees packets already have skb->protocol == htons(ETH_P_IPV6)
 static void network_stack_utils_attachRaFilter(JNIEnv *env, jclass clazz, jobject javaFd) {
@@ -272,6 +340,7 @@ static const JNINativeMethod gNetworkStackUtilsMethods[] = {
     { "attachDhcpFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_attachDhcpFilter },
     { "attachRaFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_attachRaFilter },
     { "attachEgressIgmpReportFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_units_attachEgressIgmpReportFilter },
+    { "attachEgressMulticastReportFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_units_attachEgressMulticastReportFilter },
     { "attachControlPacketFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_attachControlPacketFilter },
 };
 
