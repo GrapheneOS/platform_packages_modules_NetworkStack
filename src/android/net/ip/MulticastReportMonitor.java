@@ -27,9 +27,9 @@ import com.android.net.module.util.PacketReader;
 import java.io.FileDescriptor;
 
 /**
- * Monitor IGMP report packets and notify listeners the multicast address changes.
+ * Monitor IGMP/MLD report packets and notify listeners the multicast address changes.
  *
- * <p>This class uses a {@link PacketReader} to listen for IGMP report packets on a given
+ * <p>This class uses a {@link PacketReader} to listen for IGMP/MLD report packets on a given
  * interface. When a packet is received, it notifies the provided {@link Callback} of the change
  * in the multicast address.
  *
@@ -37,7 +37,7 @@ import java.io.FileDescriptor;
  * {@link InterfaceParams}, {@link Callback}, and {@link FileDescriptor}. Then, call {@link #start()}
  * to start listening for packets. To stop listening, call {@link #stop()}.
  */
-public class IgmpReportMonitor {
+public class MulticastReportMonitor {
     public interface Callback {
         /**
          * Notifies the system or other components about a change in the multicast address.
@@ -45,18 +45,18 @@ public class IgmpReportMonitor {
         void notifyMulticastAddrChange();
     }
 
-    private static final String TAG = IgmpReportMonitor.class.getSimpleName();
+    private static final String TAG = MulticastReportMonitor.class.getSimpleName();
     private final PacketReader mPacketListener;
 
     /**
-     * Creates a new {@link IgmpReportMonitor}.
+     * Creates a new {@link MulticastReportMonitor}.
      *
      * @param handler The {@link Handler} to use for the {@link PacketReader}.
      * @param ifParams The {@link InterfaceParams} for the interface to listen on.
      * @param callback The {@link Callback} to notify the multicast address changes.
      * @param fd The {@link FileDescriptor} to use for the {@link PacketReader}.
      */
-    public IgmpReportMonitor(
+    public MulticastReportMonitor(
             @NonNull Handler handler,
             @NonNull InterfaceParams ifParams,
             @NonNull Callback callback,

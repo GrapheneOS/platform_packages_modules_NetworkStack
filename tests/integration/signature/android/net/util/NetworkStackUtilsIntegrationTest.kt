@@ -669,12 +669,15 @@ class NetworkStackUtilsIntegrationTest {
     fun testConvertIpv6AddressToSolicitedNodeMulticast() {
         val addr1 = NetworkStackUtils.ipv6AddressToSolicitedNodeMulticast(TEST_INET6ADDR_1)
         assertSolicitedNodeMulticastAddress(addr1, TEST_INET6ADDR_1)
+        assertTrue(NetworkStackUtils.isIPv6AddressSolicitedNodeMulticast(addr1!!))
 
         val addr2 = NetworkStackUtils.ipv6AddressToSolicitedNodeMulticast(TEST_INET6ADDR_2)
         assertSolicitedNodeMulticastAddress(addr2, TEST_INET6ADDR_2)
+        assertTrue(NetworkStackUtils.isIPv6AddressSolicitedNodeMulticast(addr2!!))
 
         val addr3 = NetworkStackUtils.ipv6AddressToSolicitedNodeMulticast(TEST_INET6ADDR_3)
         assertSolicitedNodeMulticastAddress(addr3, TEST_INET6ADDR_3)
+        assertTrue(NetworkStackUtils.isIPv6AddressSolicitedNodeMulticast(addr3!!))
     }
 
     @Test

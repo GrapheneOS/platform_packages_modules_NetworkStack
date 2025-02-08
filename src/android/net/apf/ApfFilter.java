@@ -230,7 +230,7 @@ import android.net.NattKeepalivePacketDataParcelable;
 import android.net.TcpKeepalivePacketDataParcelable;
 import android.net.apf.ApfCounterTracker.Counter;
 import android.net.apf.BaseApfGenerator.IllegalInstructionException;
-import android.net.ip.IgmpReportMonitor;
+import android.net.ip.MulticastReportMonitor;
 import android.net.nsd.NsdManager;
 import android.os.Handler;
 import android.os.PowerManager;
@@ -393,7 +393,7 @@ public class ApfFilter {
     private final IpClientRaInfoMetrics mIpClientRaInfoMetrics;
     private final ApfSessionInfoMetrics mApfSessionInfoMetrics;
     private final NsdManager mNsdManager;
-    private final IgmpReportMonitor mIgmpReportMonitor;
+    private final MulticastReportMonitor mMulticastReportMonitor;
     private final ApfMdnsOffloadEngine mApfMdnsOffloadEngine;
     private final List<MdnsOffloadRule> mOffloadRules = new ArrayList<>();
 
@@ -556,18 +556,18 @@ public class ApfFilter {
             final FileDescriptor socketFd = mDependencies.createEgressIgmpReportsReaderSocket(
                     ifParams.index);
             if (socketFd != null) {
-                mIgmpReportMonitor = new IgmpReportMonitor(
+                mMulticastReportMonitor = new MulticastReportMonitor(
                         mHandler,
                         mInterfaceParams,
                         this::updateIPv4MulticastAddrs,
                         socketFd
                 );
-                mIgmpReportMonitor.start();
+                mMulticastReportMonitor.start();
             } else {
-                mIgmpReportMonitor = null;
+                mMulticastReportMonitor = null;
             }
         } else {
-            mIgmpReportMonitor = null;
+            mMulticastReportMonitor = null;
         }
 
         // Listen for doze-mode transition changes to enable/disable the IPv6 multicast filter.
@@ -3414,8 +3414,8 @@ public class ApfFilter {
             mApfMdnsOffloadEngine.unregisterOffloadEngine();
         }
 
-        if (enableIgmpReportsMonitor() && mIgmpReportMonitor != null) {
-            mIgmpReportMonitor.stop();
+        if (enableIgmpReportsMonitor() && mMulticastReportMonitor != null) {
+            mMulticastReportMonitor.stop();
         }
     }
 

@@ -16,7 +16,7 @@
 package android.net.ip
 
 import android.net.MacAddress
-import android.net.ip.IgmpReportMonitor.Callback
+import android.net.ip.MulticastReportMonitor.Callback
 import android.os.Handler
 import android.os.HandlerThread
 import android.system.Os
@@ -41,11 +41,11 @@ import org.mockito.Mockito.verify
 import org.mockito.MockitoAnnotations
 
 /**
- * Test for IgmpReportMonitor.
+ * Test for MulticastReportMonitor.
  */
 @SmallTest
 @DevSdkIgnoreRunner.MonitorThreadLeak
-class IgmpReportMonitorTest {
+class MulticastReportMonitorTest {
     companion object {
         private const val TIMEOUT_MS: Long = 1000
         private const val SLEEP_TIMEOUT_MS: Long = 100
@@ -66,7 +66,7 @@ class IgmpReportMonitorTest {
     }
     private val handler by lazy { Handler(handlerThread.looper) }
     private var writeSocket = FileDescriptor()
-    private lateinit var igmpReportMonitor: IgmpReportMonitor
+    private lateinit var mMulticastReportMonitor: MulticastReportMonitor
 
     @Mock private lateinit var callback: Callback
 
@@ -75,9 +75,9 @@ class IgmpReportMonitorTest {
         MockitoAnnotations.initMocks(this)
         val readSocket = FileDescriptor()
         Os.socketpair(AF_UNIX, SOCK_STREAM or SOCK_NONBLOCK, 0, writeSocket, readSocket)
-        igmpReportMonitor = IgmpReportMonitor(handler, ifParams, callback, readSocket)
+        mMulticastReportMonitor = MulticastReportMonitor(handler, ifParams, callback, readSocket)
         visibleOnHandlerThread(handler) {
-            igmpReportMonitor.start()
+            mMulticastReportMonitor.start()
         }
     }
 
@@ -91,7 +91,7 @@ class IgmpReportMonitorTest {
     }
 
     @Test
-    fun testIgmpReportMonitorCallback() {
+    fun testMulticastReportMonitorCallback() {
         val matchedPacket = HexDump.hexStringToByteArray("000000")
         val pktCnt = 2
         for (i in 0..<pktCnt) {
