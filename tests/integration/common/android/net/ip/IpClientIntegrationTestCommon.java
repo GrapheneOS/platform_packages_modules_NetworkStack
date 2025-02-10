@@ -6393,17 +6393,18 @@ public abstract class IpClientIntegrationTestCommon {
             throws Exception {
         long when = (long) (System.currentTimeMillis() - SIX_HOURS_IN_MS * 0.9);
         long expiry = when + ONE_WEEK_IN_MS;
-        storeNudFailureEvents(when, expiry, 10, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ORGANIC);
+        storeNudFailureEvents(when, expiry, 8, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ORGANIC);
 
         runIpReachabilityMonitorAddressResolutionTest(IPV6_OFF_LINK_DNS_SERVER,
                 ROUTER_LINK_LOCAL /* targetIp */,
                 true /* expectNeighborLost */);
 
-        // Given that total NUD failure event counts in the past 6 hours has been up to the
-        // threshold, the new NUD failure event will not be written to db, then the retrieved
-        // event count should still be 10.
-        assertRetrievedNetworkEventCount(TEST_CLUSTER, 10 /* expectedCountInPastWeek */,
-                10 /* expectedCountInPastDay */, 10 /* expectedCountInPastSixHours */);
+        // Although the total NUD failure events count in the past 6 hours hasn't been up to the
+        // threshold, however, the experiment flag is disabled, therefore, the new NUD failure
+        // event will not be written to db, then the retrieved event count should still be 8 rather
+        // than 9.
+        assertRetrievedNetworkEventCount(TEST_CLUSTER, 8 /* expectedCountInPastWeek */,
+                8 /* expectedCountInPastDay */, 8 /* expectedCountInPastSixHours */);
     }
 
     @Test
