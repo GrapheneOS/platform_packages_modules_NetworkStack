@@ -260,97 +260,12 @@ class NetworkStackUtilsIntegrationTest {
         val sendSocket = Os.socket(AF_PACKET, SOCK_RAW or SOCK_CLOEXEC, 0)
         Os.bind(sendSocket, socketAddr)
 
-        // Using scapy to generate IGMPv2 membership report:
-        // ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:01')
-        // ip = IP(src='10.0.0.1', dst='239.0.0.1', id=0, flags='DF', tos=0xc0, options=[IPOption_Router_Alert()])
-        // igmp = IGMP(type=0x16, mrcode=0, gaddr='239.0.0.1')
-        // pkt = ether/ip/igmp
-        val igmpv2ReportHexStr = """
-        01005e000001020304050607080046c00020000040000102eb150a000001ef000001940400001600fafd
-        ef000001
-        """.replace("\\s+".toRegex(), "").trim()
-        val igmpv2Report = HexDump.hexStringToByteArray(igmpv2ReportHexStr)
-        Os.write(sendSocket, igmpv2Report, 0, igmpv2Report.size)
-        assertNextPacketEquals(socket, igmpv2Report, "IGMPv2 report")
-
-        // Using scapy to generate IGMPv2 membership leave report:
-        // ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:01')
-        // ip = IP(src='10.0.0.1', dst='239.0.0.1', id=0, flags='DF', tos=0xc0, options=[IPOption_Router_Alert()])
-        // igmp = IGMP(type=0x17, mrcode=0, gaddr='239.0.0.1')
-        // pkt = ether/ip/igmp
-        val igmpv2LeaveHexStr = """
-        01005e000001020304050607080046c00020000040000102eb150a000001ef000001940400001700f9fd
-        ef000001
-        """.replace("\\s+".toRegex(), "").trim()
-        val igmpv2Leave = HexDump.hexStringToByteArray(igmpv2LeaveHexStr)
-        Os.write(sendSocket, igmpv2Leave, 0, igmpv2Leave.size)
-        assertNextPacketEquals(socket, igmpv2Leave, "IGMPv2 leave")
-
-        // Using scapy to generate IGMPv3 membership report:
-        // ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:16')
-        // ip = IP(src='10.0.0.1', dst='224.0.0.22', id=0, flags='DF', options=[IPOption_Router_Alert()])
-        // igmp = IGMPv3(type=0x22)/IGMPv3mr(records=[IGMPv3gr(rtype=2, maddr='239.0.0.1')])
-        // pkt = ether/ip/igmp
-        val igmpv3ReportHexStr = """
-        01005e000016020304050607080046c00028000040000102f9f80a000001e0000016940400002200ecfc
-        0000000102000000ef000001
-        """.replace("\\s+".toRegex(), "").trim()
-        val igmpv3Report = HexDump.hexStringToByteArray(igmpv3ReportHexStr)
-        Os.write(sendSocket, igmpv3Report, 0, igmpv3Report.size)
-        assertNextPacketEquals(socket, igmpv3Report, "IGMPv3 report")
+        testExpectedPacketsReceived(sendSocket, socket)
 
         // shorten the socket timeout to prevent waiting too long in the test
         Os.setsockoptTimeval(socket, SOL_SOCKET, SO_RCVTIMEO, StructTimeval.fromMillis(100))
-        val dhcpNak = DhcpPacket.buildNakPacket(
-            DhcpPacket.ENCAP_L2,
-            42,
-            TEST_TARGET_IPV4_ADDR, /*relayIp=*/
-            IPV4_ADDR_ANY,
-            TEST_TARGET_MAC.toByteArray(),
-            /*broadcast=*/
-            false,
-            "NAK"
-        ).readAsArray()
-        Os.write(sendSocket, dhcpNak, 0, dhcpNak.size)
-        assertSocketReadErrno(
-            "DHCP Packet should not been received",
-            socket,
-            OsConstants.EAGAIN
-        )
 
-        // Using scapy to generate IGMPv2 general query packet:
-        //   ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:01')
-        //   ip = IP(src='10.0.0.1', dst='239.0.0.1', id=0, flags='DF', tos=0xc0, options=[IPOption_Router_Alert()])
-        //   igmp = IGMP(type=0x11)
-        //   pkt = ether/ip/igmp
-        val igmpv2GqHexStr = """
-        01005e000001020304050607080046c00020000040000102eb150a000001ef000001940400001114eeeb
-        00000000
-        """.replace("\\s+".toRegex(), "").trim()
-        val igmpv2Gq = HexDump.hexStringToByteArray(igmpv2GqHexStr)
-        Os.write(sendSocket, igmpv2Gq, 0, igmpv2Gq.size)
-        assertSocketReadErrno(
-            "IGMPv2 General Query Packet should not been received",
-            socket,
-            OsConstants.EAGAIN
-        )
-
-        // Using scapy to generate IGMPv1 general query packet:
-        //   ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:01')
-        //   ip = IP(src='10.0.0.1', dst='239.0.0.1', id=0, flags='DF', tos=0xc0, options=[IPOption_Router_Alert()])
-        //   igmp = IGMP(type=0x11, mrcode=0)
-        //   pkt = ether/ip/igmp
-        val igmpv1GqHexStr = """
-        01005e000001020304050607080046c00020000040000102eb150a000001ef000001940400001100eeff
-        00000000
-        """.replace("\\s+".toRegex(), "").trim()
-        val igmpv1Gq = HexDump.hexStringToByteArray(igmpv1GqHexStr)
-        Os.write(sendSocket, igmpv1Gq, 0, igmpv1Gq.size)
-        assertSocketReadErrno(
-            "IGMPv1 General Query Packet should not been received",
-            socket,
-            OsConstants.EAGAIN
-        )
+        testExpectedPacketsNotReceived(sendSocket, socket)
     }
 
     @Test
@@ -422,45 +337,7 @@ class NetworkStackUtilsIntegrationTest {
         val sendSocket = Os.socket(AF_PACKET, SOCK_RAW or SOCK_CLOEXEC, 0)
         Os.bind(sendSocket, socketAddr)
 
-        // TODO: refactor to private function
-        // Using scapy to generate IGMPv2 membership report:
-        // ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:01')
-        // ip = IP(src='10.0.0.1', dst='239.0.0.1', id=0, flags='DF', tos=0xc0, options=[IPOption_Router_Alert()])
-        // igmp = IGMP(type=0x16, mrcode=0, gaddr='239.0.0.1')
-        // pkt = ether/ip/igmp
-        val igmpv2ReportHexStr = """
-            01005e000001020304050607080046c00020000040000102eb150a000001ef000001940400001600fafd
-            ef000001
-        """.replace("\\s+".toRegex(), "").trim()
-        val igmpv2Report = HexDump.hexStringToByteArray(igmpv2ReportHexStr)
-        Os.write(sendSocket, igmpv2Report, 0, igmpv2Report.size)
-        assertUntilPacketEquals(socket, igmpv2Report, "IGMPv2 report")
-
-        // Using scapy to generate IGMPv2 membership leave report:
-        // ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:01')
-        // ip = IP(src='10.0.0.1', dst='239.0.0.1', id=0, flags='DF', tos=0xc0, options=[IPOption_Router_Alert()])
-        // igmp = IGMP(type=0x17, mrcode=0, gaddr='239.0.0.1')
-        // pkt = ether/ip/igmp
-        val igmpv2LeaveHexStr = """
-            01005e000001020304050607080046c00020000040000102eb150a000001ef000001940400001700f9fd
-            ef000001
-        """.replace("\\s+".toRegex(), "").trim()
-        val igmpv2Leave = HexDump.hexStringToByteArray(igmpv2LeaveHexStr)
-        Os.write(sendSocket, igmpv2Leave, 0, igmpv2Leave.size)
-        assertUntilPacketEquals(socket, igmpv2Leave, "IGMPv2 leave")
-
-        // Using scapy to generate IGMPv3 membership report:
-        // ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:16')
-        // ip = IP(src='10.0.0.1', dst='224.0.0.22', id=0, flags='DF', options=[IPOption_Router_Alert()])
-        // igmp = IGMPv3(type=0x22)/IGMPv3mr(records=[IGMPv3gr(rtype=2, maddr='239.0.0.1')])
-        // pkt = ether/ip/igmp
-        val igmpv3ReportHexStr = """
-            01005e000016020304050607080046c00028000040000102f9f80a000001e0000016940400002200ecfc
-            0000000102000000ef000001
-        """.replace("\\s+".toRegex(), "").trim()
-        val igmpv3Report = HexDump.hexStringToByteArray(igmpv3ReportHexStr)
-        Os.write(sendSocket, igmpv3Report, 0, igmpv3Report.size)
-        assertUntilPacketEquals(socket, igmpv3Report, "IGMPv3 report")
+        testExpectedPacketsReceived(sendSocket, socket)
 
         // Using scapy to generate MLDv1 membership report:
         // ether = Ether(src='02:03:04:05:06:07', dst='33:33:33:11:11:11')
@@ -505,59 +382,10 @@ class NetworkStackUtilsIntegrationTest {
         Os.write(sendSocket, mldv2Report, 0, mldv2Report.size)
         assertUntilPacketEquals(socket, mldv2Report, "MLDv2 report")
 
-        // TODO: refactor to private function
         // shorten the socket timeout to prevent waiting too long in the test
         Os.setsockoptTimeval(socket, SOL_SOCKET, SO_RCVTIMEO, StructTimeval.fromMillis(100))
-        val dhcpNak = DhcpPacket.buildNakPacket(
-            DhcpPacket.ENCAP_L2,
-            42,
-            TEST_TARGET_IPV4_ADDR, /*relayIp=*/
-            IPV4_ADDR_ANY,
-            TEST_TARGET_MAC.toByteArray(),
-            /*broadcast=*/
-            false,
-            "NAK"
-        ).readAsArray()
-        Os.write(sendSocket, dhcpNak, 0, dhcpNak.size)
-        assertUntilSocketReadErrno(
-            "DHCP Packet should not been received",
-            socket,
-            OsConstants.EAGAIN
-        )
 
-        // Using scapy to generate IGMPv2 general query packet:
-        //   ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:01')
-        //   ip = IP(src='10.0.0.1', dst='239.0.0.1', id=0, flags='DF', tos=0xc0, options=[IPOption_Router_Alert()])
-        //   igmp = IGMP(type=0x11)
-        //   pkt = ether/ip/igmp
-        val igmpv2GqHexStr = """
-            01005e000001020304050607080046c00020000040000102eb150a000001ef000001940400001114eeeb
-            00000000
-        """.replace("\\s+".toRegex(), "").trim()
-        val igmpv2Gq = HexDump.hexStringToByteArray(igmpv2GqHexStr)
-        Os.write(sendSocket, igmpv2Gq, 0, igmpv2Gq.size)
-        assertUntilSocketReadErrno(
-            "IGMPv2 General Query Packet should not been received",
-            socket,
-            OsConstants.EAGAIN
-        )
-
-        // Using scapy to generate IGMPv1 general query packet:
-        //   ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:01')
-        //   ip = IP(src='10.0.0.1', dst='239.0.0.1', id=0, flags='DF', tos=0xc0, options=[IPOption_Router_Alert()])
-        //   igmp = IGMP(type=0x11, mrcode=0)
-        //   pkt = ether/ip/igmp
-        val igmpv1GqHexStr = """
-            01005e000001020304050607080046c00020000040000102eb150a000001ef000001940400001100eeff
-            00000000
-        """.replace("\\s+".toRegex(), "").trim()
-        val igmpv1Gq = HexDump.hexStringToByteArray(igmpv1GqHexStr)
-        Os.write(sendSocket, igmpv1Gq, 0, igmpv1Gq.size)
-        assertUntilSocketReadErrno(
-            "IGMPv1 General Query Packet should not been received",
-            socket,
-            OsConstants.EAGAIN
-        )
+        testExpectedPacketsNotReceived(sendSocket, socket)
 
         // Using scapy to generate MLDv1 general query packet:
         //   ether = Ether(src='02:03:04:05:06:07', dst='33:33:33:00:00:01')
@@ -593,6 +421,106 @@ class NetworkStackUtilsIntegrationTest {
         assertUntilSocketReadErrno(
             "MLDv2 General Query Packet should not been received",
             socket,
+            OsConstants.EAGAIN
+        )
+    }
+
+    private fun testExpectedPacketsReceived(
+        sendSocket: FileDescriptor,
+        recvSocket: FileDescriptor
+    ) {
+        // Using scapy to generate IGMPv2 membership report:
+        // ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:01')
+        // ip = IP(src='10.0.0.1', dst='239.0.0.1', id=0, flags='DF', tos=0xc0, options=[IPOption_Router_Alert()])
+        // igmp = IGMP(type=0x16, mrcode=0, gaddr='239.0.0.1')
+        // pkt = ether/ip/igmp
+        val igmpv2ReportHexStr = """
+            01005e000001020304050607080046c00020000040000102eb150a000001ef000001940400001600fafd
+            ef000001
+        """.replace("\\s+".toRegex(), "").trim()
+        val igmpv2Report = HexDump.hexStringToByteArray(igmpv2ReportHexStr)
+        Os.write(sendSocket, igmpv2Report, 0, igmpv2Report.size)
+        assertUntilPacketEquals(recvSocket, igmpv2Report, "IGMPv2 report")
+
+        // Using scapy to generate IGMPv2 membership leave report:
+        // ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:01')
+        // ip = IP(src='10.0.0.1', dst='239.0.0.1', id=0, flags='DF', tos=0xc0, options=[IPOption_Router_Alert()])
+        // igmp = IGMP(type=0x17, mrcode=0, gaddr='239.0.0.1')
+        // pkt = ether/ip/igmp
+        val igmpv2LeaveHexStr = """
+            01005e000001020304050607080046c00020000040000102eb150a000001ef000001940400001700f9fd
+            ef000001
+        """.replace("\\s+".toRegex(), "").trim()
+        val igmpv2Leave = HexDump.hexStringToByteArray(igmpv2LeaveHexStr)
+        Os.write(sendSocket, igmpv2Leave, 0, igmpv2Leave.size)
+        assertUntilPacketEquals(recvSocket, igmpv2Leave, "IGMPv2 leave")
+
+        // Using scapy to generate IGMPv3 membership report:
+        // ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:16')
+        // ip = IP(src='10.0.0.1', dst='224.0.0.22', id=0, flags='DF', options=[IPOption_Router_Alert()])
+        // igmp = IGMPv3(type=0x22)/IGMPv3mr(records=[IGMPv3gr(rtype=2, maddr='239.0.0.1')])
+        // pkt = ether/ip/igmp
+        val igmpv3ReportHexStr = """
+            01005e000016020304050607080046c00028000040000102f9f80a000001e0000016940400002200ecfc
+            0000000102000000ef000001
+        """.replace("\\s+".toRegex(), "").trim()
+        val igmpv3Report = HexDump.hexStringToByteArray(igmpv3ReportHexStr)
+        Os.write(sendSocket, igmpv3Report, 0, igmpv3Report.size)
+        assertUntilPacketEquals(recvSocket, igmpv3Report, "IGMPv3 report")
+    }
+
+    private fun testExpectedPacketsNotReceived(
+        sendSocket: FileDescriptor,
+        recvSocket: FileDescriptor
+    ) {
+        val dhcpNak = DhcpPacket.buildNakPacket(
+            DhcpPacket.ENCAP_L2,
+            42,
+            TEST_TARGET_IPV4_ADDR, /*relayIp=*/
+            IPV4_ADDR_ANY,
+            TEST_TARGET_MAC.toByteArray(),
+            /*broadcast=*/
+            false,
+            "NAK"
+        ).readAsArray()
+        Os.write(sendSocket, dhcpNak, 0, dhcpNak.size)
+        assertUntilSocketReadErrno(
+            "DHCP Packet should not been received",
+            recvSocket,
+            OsConstants.EAGAIN
+        )
+
+        // Using scapy to generate IGMPv2 general query packet:
+        //   ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:01')
+        //   ip = IP(src='10.0.0.1', dst='239.0.0.1', id=0, flags='DF', tos=0xc0, options=[IPOption_Router_Alert()])
+        //   igmp = IGMP(type=0x11)
+        //   pkt = ether/ip/igmp
+        val igmpv2GqHexStr = """
+            01005e000001020304050607080046c00020000040000102eb150a000001ef000001940400001114eeeb
+            00000000
+        """.replace("\\s+".toRegex(), "").trim()
+        val igmpv2Gq = HexDump.hexStringToByteArray(igmpv2GqHexStr)
+        Os.write(sendSocket, igmpv2Gq, 0, igmpv2Gq.size)
+        assertUntilSocketReadErrno(
+            "IGMPv2 General Query Packet should not been received",
+            recvSocket,
+            OsConstants.EAGAIN
+        )
+
+        // Using scapy to generate IGMPv1 general query packet:
+        //   ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:01')
+        //   ip = IP(src='10.0.0.1', dst='239.0.0.1', id=0, flags='DF', tos=0xc0, options=[IPOption_Router_Alert()])
+        //   igmp = IGMP(type=0x11, mrcode=0)
+        //   pkt = ether/ip/igmp
+        val igmpv1GqHexStr = """
+            01005e000001020304050607080046c00020000040000102eb150a000001ef000001940400001100eeff
+            00000000
+        """.replace("\\s+".toRegex(), "").trim()
+        val igmpv1Gq = HexDump.hexStringToByteArray(igmpv1GqHexStr)
+        Os.write(sendSocket, igmpv1Gq, 0, igmpv1Gq.size)
+        assertUntilSocketReadErrno(
+            "IGMPv1 General Query Packet should not been received",
+            recvSocket,
             OsConstants.EAGAIN
         )
     }
