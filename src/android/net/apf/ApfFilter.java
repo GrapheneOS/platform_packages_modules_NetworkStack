@@ -3654,7 +3654,9 @@ public class ApfFilter {
 
         pw.println("IPv4 multicast addresses: ");
         pw.increaseIndent();
-        for (Inet4Address addr: mIPv4MulticastAddresses) {
+        final List<Inet4Address> ipv4McastAddrs =
+                ProcfsParsingUtils.getIPv4MulticastAddresses(mInterfaceParams.name);
+        for (Inet4Address addr: ipv4McastAddrs) {
             pw.println(addr.getHostAddress());
         }
         pw.decreaseIndent();
