@@ -3650,41 +3650,42 @@ public class ApfFilter {
         pw.decreaseIndent();
         try {
             pw.println("IPv4 address: " + InetAddress.getByAddress(mIPv4Address).getHostAddress());
-            pw.println("IPv4 multicast addresses: ");
-            pw.increaseIndent();
-            for (Inet4Address addr: mIPv4MulticastAddresses) {
-                pw.println(addr.getHostAddress());
-            }
-            pw.decreaseIndent();
-            pw.println("IPv6 non-tentative addresses: ");
-            pw.increaseIndent();
-            for (Inet6Address addr : mIPv6NonTentativeAddresses) {
-                pw.println(addr.getHostAddress());
-            }
-            pw.decreaseIndent();
-            pw.println("IPv6 tentative addresses: ");
-            pw.increaseIndent();
-            for (Inet6Address addr : mIPv6TentativeAddresses) {
-                pw.println(addr.getHostAddress());
-            }
-            pw.decreaseIndent();
-            pw.println("IPv6 anycast addresses:");
-            pw.increaseIndent();
-            final List<Inet6Address> anycastAddrs =
-                    ProcfsParsingUtils.getAnycast6Addresses(mInterfaceParams.name);
-            for (Inet6Address addr : anycastAddrs) {
-                pw.println(addr.getHostAddress());
-            }
-            pw.decreaseIndent();
-            pw.println("IPv6 multicast addresses:");
-            pw.increaseIndent();
-            final List<Inet6Address> multicastAddrs =
-                    ProcfsParsingUtils.getIpv6MulticastAddresses(mInterfaceParams.name);
-            for (Inet6Address addr : multicastAddrs) {
-                pw.println(addr.getHostAddress());
-            }
-            pw.decreaseIndent();
         } catch (UnknownHostException|NullPointerException e) {}
+
+        pw.println("IPv4 multicast addresses: ");
+        pw.increaseIndent();
+        for (Inet4Address addr: mIPv4MulticastAddresses) {
+            pw.println(addr.getHostAddress());
+        }
+        pw.decreaseIndent();
+        pw.println("IPv6 non-tentative addresses: ");
+        pw.increaseIndent();
+        for (Inet6Address addr : mIPv6NonTentativeAddresses) {
+            pw.println(addr.getHostAddress());
+        }
+        pw.decreaseIndent();
+        pw.println("IPv6 tentative addresses: ");
+        pw.increaseIndent();
+        for (Inet6Address addr : mIPv6TentativeAddresses) {
+            pw.println(addr.getHostAddress());
+        }
+        pw.decreaseIndent();
+        pw.println("IPv6 anycast addresses:");
+        pw.increaseIndent();
+        final List<Inet6Address> anycastAddrs =
+                ProcfsParsingUtils.getAnycast6Addresses(mInterfaceParams.name);
+        for (Inet6Address addr : anycastAddrs) {
+            pw.println(addr.getHostAddress());
+        }
+        pw.decreaseIndent();
+        pw.println("IPv6 multicast addresses:");
+        pw.increaseIndent();
+        final List<Inet6Address> multicastAddrs =
+                ProcfsParsingUtils.getIpv6MulticastAddresses(mInterfaceParams.name);
+        for (Inet6Address addr : multicastAddrs) {
+            pw.println(addr.getHostAddress());
+        }
+        pw.decreaseIndent();
 
         if (mLastTimeInstalledProgram == 0) {
             pw.println("No program installed.");
