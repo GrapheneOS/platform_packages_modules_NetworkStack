@@ -22,6 +22,7 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETH_BROADCAST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ALLOCATE_FAILURE
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_REQUEST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_TRANSMIT_FAILURE
+import android.net.apf.ApfCounterTracker.Counter.RESERVED_OOB
 import android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS
 import android.net.apf.ApfTestHelpers.Companion.DROP
 import android.net.apf.ApfTestHelpers.Companion.MIN_PKT_SIZE
@@ -533,8 +534,9 @@ class ApfGeneratorTest {
                 ),
                 program
         )
+        val expectedCounterValue = DROPPED_ETHERTYPE_NOT_ALLOWED.value() - RESERVED_OOB.value()
         assertContentEquals(
-                listOf("0: drop        counter=46"),
+                listOf("0: drop        counter=$expectedCounterValue"),
                 apfTestHelpers.disassembleApf(program).map { it.trim() }
         )
 
