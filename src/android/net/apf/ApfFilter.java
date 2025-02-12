@@ -1680,13 +1680,6 @@ public class ApfFilter {
     // The maximum number of distinct RAs
     private int mMaxDistinctRas = 0;
 
-    private ApfV6Generator tryToConvertToApfV6Generator(ApfV4GeneratorBase<?> gen) {
-        if (gen instanceof ApfV6Generator) {
-            return (ApfV6Generator) gen;
-        }
-        return null;
-    }
-
     /**
      * Generate filter code to process ARP packets. Execution of this code ends in either the
      * DROP_LABEL or PASS_LABEL and does not fall off the end.
@@ -1773,8 +1766,8 @@ public class ApfFilter {
             gen.addLoad32(R0, ARP_TARGET_IP_ADDRESS_OFFSET);
             gen.addCountAndDropIfR0NotEquals(bytesToBEInt(mIPv4Address), DROPPED_ARP_OTHER_HOST);
 
-            ApfV6Generator v6Gen = tryToConvertToApfV6Generator(gen);
             if (enableArpOffload()) {
+                ApfV6GeneratorBase<?> v6Gen = (ApfV6GeneratorBase<?>) gen;
                 // Ethernet requires that all packets be at least 60 bytes long
                 v6Gen.addAllocate(60)
                         .addPacketCopy(ETHER_SRC_ADDR_OFFSET, ETHER_ADDR_LEN)
@@ -2519,14 +2512,13 @@ public class ApfFilter {
         // If we got this far, the packet is ICMPv6.  Drop some specific types.
         // Not ICMPv6 NS -> skip.
         gen.addLoad8(R0, ICMP6_TYPE_OFFSET); // warning: also used further below.
-        final ApfV6Generator v6Gen = tryToConvertToApfV6Generator(gen);
-        if (v6Gen != null && mHandleNdOffload) {
-            final String skipNsPacketFilter = v6Gen.getUniqueLabel();
-            v6Gen.addJumpIfR0NotEquals(ICMPV6_NEIGHBOR_SOLICITATION, skipNsPacketFilter);
-            generateNsFilter(v6Gen);
+        if (enableNdOffload()) {
+            final String skipNsPacketFilter = gen.getUniqueLabel();
+            gen.addJumpIfR0NotEquals(ICMPV6_NEIGHBOR_SOLICITATION, skipNsPacketFilter);
+            generateNsFilter((ApfV6GeneratorBase<?>) gen);
             // End of NS filter. generateNsFilter() method is terminal, so NS packet will be
             // either dropped or passed inside generateNsFilter().
-            v6Gen.defineLabel(skipNsPacketFilter);
+            gen.defineLabel(skipNsPacketFilter);
         }
 
         // Add unsolicited multicast neighbor announcements filter
