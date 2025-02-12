@@ -488,6 +488,11 @@ class ApfFilterTest {
         return naPacket
     }
 
+    private fun updateIPv4MulticastAddrs(apfFilter: ApfFilter, mcastAddrs: List<Inet4Address>) {
+        doReturn(mcastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())
+        apfFilter.updateIPv4MulticastAddrs()
+    }
+
     @Test
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     fun testV4EtherTypeAllowListFilter() {
@@ -4066,13 +4071,12 @@ class ApfFilterTest {
         val addr = InetAddress.getByName("239.0.0.2") as Inet4Address
         mcastAddrs.add(addr)
         mcastAddrsExcludeAllHost.add(addr)
-        doReturn(mcastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())
-        apfFilter.updateIPv4MulticastAddrs()
+        updateIPv4MulticastAddrs(apfFilter, mcastAddrs)
         apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
         assertEquals(mcastAddrs.toSet(), apfFilter.mIPv4MulticastAddresses)
         assertEquals(mcastAddrsExcludeAllHost.toSet(), apfFilter.mIPv4McastAddrsExcludeAllHost)
 
-        apfFilter.updateIPv4MulticastAddrs()
+        updateIPv4MulticastAddrs(apfFilter, mcastAddrs)
         verify(apfController, never()).installPacketFilter(any(), any())
     }
 
