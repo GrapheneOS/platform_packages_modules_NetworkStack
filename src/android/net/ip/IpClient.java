@@ -2688,11 +2688,18 @@ public class IpClient extends StateMachine {
 
         if (params.defaultMtu == mInterfaceParams.defaultMtu) return;
 
-        try {
-            mNetd.interfaceSetMtu(mInterfaceName, mInterfaceParams.defaultMtu);
-        } catch (RemoteException | ServiceSpecificException e) {
-            logError("Couldn't reset MTU on " + mInterfaceName + " from "
-                    + params.defaultMtu + " to " + mInterfaceParams.defaultMtu, e);
+        if (mReplaceNetdWithNetlinkEnabled) {
+            if (!NetlinkUtils.setInterfaceMtu(mInterfaceName, mInterfaceParams.defaultMtu)) {
+                logError("Couldn't reset MTU on " + mInterfaceName + " from "
+                        + params.defaultMtu + " to " + mInterfaceParams.defaultMtu);
+            }
+        } else {
+            try {
+                mNetd.interfaceSetMtu(mInterfaceName, mInterfaceParams.defaultMtu);
+            } catch (RemoteException | ServiceSpecificException e) {
+                logError("Couldn't reset MTU on " + mInterfaceName + " from "
+                        + params.defaultMtu + " to " + mInterfaceParams.defaultMtu, e);
+            }
         }
     }
 
