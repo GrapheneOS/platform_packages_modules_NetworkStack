@@ -22,6 +22,7 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETH_BROADCAST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ALLOCATE_FAILURE
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_REQUEST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_TRANSMIT_FAILURE
+import android.net.apf.ApfCounterTracker.Counter.RESERVED_OOB
 import android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS
 import android.net.apf.ApfTestHelpers.Companion.DROP
 import android.net.apf.ApfTestHelpers.Companion.MIN_PKT_SIZE
@@ -533,8 +534,9 @@ class ApfGeneratorTest {
                 ),
                 program
         )
+        val expectedCounterValue = DROPPED_ETHERTYPE_NOT_ALLOWED.value() - RESERVED_OOB.value()
         assertContentEquals(
-                listOf("0: drop        counter=46"),
+                listOf("0: drop        counter=$expectedCounterValue"),
                 apfTestHelpers.disassembleApf(program).map { it.trim() }
         )
 
@@ -579,7 +581,7 @@ class ApfGeneratorTest {
         val largeByteArray = ByteArray(256) { 0x01 }
         gen = ApfV6Generator(largeByteArray, APF_VERSION_6, ramSize, clampSize)
         program = gen.generate()
-        val debugBufferSize = 1289 + Counter.totalSize()
+        val debugBufferSize = ramSize - program.size - Counter.totalSize()
         assertContentEquals(
                 byteArrayOf(
                         encodeInstruction(opcode = 14, immLength = 2, register = 1), 1, 0
@@ -880,7 +882,7 @@ class ApfGeneratorTest {
                 .generate()
         assertContentEquals(listOf(
                 "0: data        9, 112233445566778899",
-                "12: debugbuf    size=${1516 + Counter.totalSize()}",
+                "12: debugbuf    size=${ramSize - program.size - Counter.totalSize()}",
                 "16: allocate    18",
                 "20: datacopy    src=3, len=6",
                 "23: datacopy    src=4, len=3",
@@ -912,7 +914,7 @@ class ApfGeneratorTest {
         val byteHexString = "01".repeat(255) + "02".repeat(5)
         assertContentEquals(listOf(
             "0: data        260, $byteHexString",
-            "263: debugbuf    size=${1264 + Counter.totalSize()}",
+            "263: debugbuf    size=${ramSize - program.size - Counter.totalSize()}",
             "267: allocate    300",
             "271: datacopy    src=3, len=255",
             "274: datacopy    src=3, len=35",
@@ -941,7 +943,7 @@ class ApfGeneratorTest {
         val byteHexString = "03".repeat(255) + "04".repeat(45)
         assertContentEquals(listOf(
             "0: data        300, $byteHexString",
-            "303: debugbuf    size=${1230 + Counter.totalSize()}",
+            "303: debugbuf    size=${ramSize - program.size - Counter.totalSize()}",
             "307: allocate    300",
             "311: datacopy    src=3, len=255",
             "314: datacopy    src=258, len=45",
