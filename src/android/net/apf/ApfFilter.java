@@ -2920,51 +2920,56 @@ public class ApfFilter {
 
             gen.defineLabel(ruleMatch);
 
-            if (enableMdns4 && enableMdns6) {
-                gen.addLoad16(R0, ETH_ETHERTYPE_OFFSET)
-                        .addJumpIfR0NotEquals(ETH_P_IP, offloadIPv6Mdns);
-            }
+            // If there is no offload payload, pass the packet to let NsdService handle it.
+            if (rule.mOffloadPayload == null) {
+                gen.addCountAndPass(PASSED_MDNS);
+            } else {
+                if (enableMdns4 && enableMdns6) {
+                    gen.addLoad16(R0, ETH_ETHERTYPE_OFFSET)
+                            .addJumpIfR0NotEquals(ETH_P_IP, offloadIPv6Mdns);
+                }
 
-            if (enableMdns4) {
-                final int udpLength = UDP_HEADER_LEN + rule.mOffloadPayload.length;
-                final int ipv4TotalLength = IPV4_HEADER_MIN_LEN + udpLength;
-                final int pktLength = ETH_HEADER_LEN + ipv4TotalLength;
+                if (enableMdns4) {
+                    final int udpLength = UDP_HEADER_LEN + rule.mOffloadPayload.length;
+                    final int ipv4TotalLength = IPV4_HEADER_MIN_LEN + udpLength;
+                    final int pktLength = ETH_HEADER_LEN + ipv4TotalLength;
 
-                gen.addAllocate(pktLength)
-                        .addDataCopy(mdns4EthDstToTos)
-                        .addWriteU16(ipv4TotalLength)
-                        .addDataCopy(mdns4IdToUdpDport)
-                        .addWrite32(udpLength << 16) // udp length and checksum
-                        .addDataCopy(rule.mOffloadPayload)
-                        .addTransmitL4(
-                                ETH_HEADER_LEN, // ip_ofs
-                                IPV4_UDP_DESTINATION_CHECKSUM_NO_OPTIONS_OFFSET, // csum_ofs
-                                IPV4_SRC_ADDR_OFFSET, // csum_start
-                                IPPROTO_UDP + udpLength, // partial_sum
-                                true // udp
-                        ).addCountAndDrop(Counter.DROPPED_MDNS_REPLIED);
-            }
+                    gen.addAllocate(pktLength)
+                            .addDataCopy(mdns4EthDstToTos)
+                            .addWriteU16(ipv4TotalLength)
+                            .addDataCopy(mdns4IdToUdpDport)
+                            .addWrite32(udpLength << 16) // udp length and checksum
+                            .addDataCopy(rule.mOffloadPayload)
+                            .addTransmitL4(
+                                    ETH_HEADER_LEN, // ip_ofs
+                                    IPV4_UDP_DESTINATION_CHECKSUM_NO_OPTIONS_OFFSET, // csum_ofs
+                                    IPV4_SRC_ADDR_OFFSET, // csum_start
+                                    IPPROTO_UDP + udpLength, // partial_sum
+                                    true // udp
+                            ).addCountAndDrop(Counter.DROPPED_MDNS_REPLIED);
+                }
 
-            if (enableMdns4 && enableMdns6) {
-                gen.defineLabel(offloadIPv6Mdns);
-            }
+                if (enableMdns4 && enableMdns6) {
+                    gen.defineLabel(offloadIPv6Mdns);
+                }
 
-            if (enableMdns6) {
-                final int udpLength = UDP_HEADER_LEN + rule.mOffloadPayload.length;
-                final int pktLength = ETH_HEADER_LEN + IPV6_HEADER_LEN + udpLength;
-                gen.addAllocate(pktLength)
-                        .addDataCopy(mdns6EthDstToFlowLabel)
-                        .addWriteU16(udpLength) // payload length
-                        .addDataCopy(mdns6NextHdrToUdpDport)
-                        .addWrite32(udpLength << 16) //  udp length and checksum
-                        .addDataCopy(rule.mOffloadPayload)
-                        .addTransmitL4(
+                if (enableMdns6) {
+                    final int udpLength = UDP_HEADER_LEN + rule.mOffloadPayload.length;
+                    final int pktLength = ETH_HEADER_LEN + IPV6_HEADER_LEN + udpLength;
+                    gen.addAllocate(pktLength)
+                            .addDataCopy(mdns6EthDstToFlowLabel)
+                            .addWriteU16(udpLength) // payload length
+                            .addDataCopy(mdns6NextHdrToUdpDport)
+                            .addWrite32(udpLength << 16) //  udp length and checksum
+                            .addDataCopy(rule.mOffloadPayload)
+                            .addTransmitL4(
                                     ETH_HEADER_LEN, // ip_ofs
                                     IPV6_UDP_DESTINATION_CHECKSUM_OFFSET, // csum_ofs
                                     IPV6_SRC_ADDR_OFFSET, // csum_start
                                     IPPROTO_UDP + udpLength, // partial_sum
                                     true // udp
-                        ).addCountAndDrop(Counter.DROPPED_MDNS_REPLIED);
+                            ).addCountAndDrop(Counter.DROPPED_MDNS_REPLIED);
+                }
             }
 
             gen.defineLabel(ruleNotMatch);
