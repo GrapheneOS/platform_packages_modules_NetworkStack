@@ -44,6 +44,7 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NATT_KEEPALIVE
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_PING_REQUEST_REPLIED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_TCP_PORT7_UNICAST
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ICMP6_ECHO_REQUEST_INVALID
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST_NA
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NON_ICMP_MULTICAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID
@@ -2799,6 +2800,112 @@ class ApfFilterTest {
                 PASSED_IPV6_ICMP
             )
         }
+    }
+
+    private fun getApfWithIpv6PingOffloadEnabled(
+        enableMultiCastFilter: Boolean = true
+    ): Pair<ApfFilter, ByteArray> {
+        val apfConfig = getDefaultConfig()
+        apfConfig.multicastFilter = enableMultiCastFilter
+        apfConfig.handleIpv6PingOffload = true
+        val apfFilter = getApfFilter(apfConfig)
+        apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
+        val lp = LinkProperties()
+        lp.addLinkAddress(LinkAddress(hostLinkLocalIpv6Address, 64))
+        apfFilter.setLinkProperties(lp)
+        val program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
+        return Pair(apfFilter, program)
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testIpv6EchoRequestPassed() {
+        val (apfFilter, program) = getApfWithIpv6PingOffloadEnabled()
+        // Using scapy to generate IPv6 echo request packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="02:03:04:05:06:07")
+        // ip = IPv6(src="fe80::1", dst="fe80::03")
+        // icmp = ICMPv6EchoRequest(id=1, seq=123)
+        // pkt = eth/ip/icmp/b"hello"
+        val ipv6EchoRequestPkt = """
+            02030405060701020304050686dd60000000000d3a40fe80000000000000000
+            0000000000001fe80000000000000000000000000000380003e640001007b68
+            656c6c6f
+        """.replace("\\s+".toRegex(), "").trim()
+
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(ipv6EchoRequestPkt),
+            PASSED_IPV6_ICMP
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testCorruptedIpv6IcmpPacketDropped() {
+        val (apfFilter, program) = getApfWithIpv6PingOffloadEnabled()
+        // Using scapy to generate corrupted IPv6 ping packet
+        // eth = Ether(src="01:02:03:04:05:06", dst="02:03:04:05:06:07")
+        // ip = IPv6(src="fe80::1", dst="ff02::fb")
+        // icmp = ICMPv6EchoRequest(id=1, seq=123)
+        // pkt = eth/ip/icmp
+        // (drop the last byte in the packet)
+        val ipv6EchoRequestPkt = """
+            02030405060701020304050686dd6000000000083a40fe80000000000000000
+            0000000000001fe8000000000000000000000000000038000823b000100
+        """.replace("\\s+".toRegex(), "").trim()
+
+         apfTestHelpers.verifyProgramRun(
+             apfFilter.mApfVersionSupported,
+             program,
+             HexDump.hexStringToByteArray(ipv6EchoRequestPkt),
+             DROPPED_IPV6_ICMP6_ECHO_REQUEST_INVALID
+         )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testIpv6EchoRequestToOtherHostPassed() {
+        val (apfFilter, program) = getApfWithIpv4PingOffloadEnabled()
+        // Using scapy to generate IPv6 echo request packet to other host:
+        // eth = Ether(src="01:02:03:04:05:06", dst="02:03:04:05:06:07")
+        // ip = IPv6(src="fe80::1", dst="fe80::02")
+        // icmp = ICMPv6EchoRequest(id=1, seq=123)
+        // pkt = eth/ip/icmp/b"hello"
+        val ipv6EchoRequestPkt = """
+            02030405060701020304050686dd60000000000d3a40fe80000000000000000
+            0000000000001fe80000000000000000000000000000280003e650001007b68
+            656c6c6f
+        """.replace("\\s+".toRegex(), "").trim()
+
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(ipv6EchoRequestPkt),
+            PASSED_IPV6_ICMP
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testIpv6EchoReplyPassed() {
+        val (apfFilter, program) = getApfWithIpv4PingOffloadEnabled()
+        // Using scapy to generate IPv6 echo reply packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="02:03:04:05:06:07")
+        // ip = IPv6(src="fe80::1", dst="fe80::03")
+        // icmp = ICMPv6EchoReply(id=1, seq=123)
+        // pkt = eth/ip/icmp
+        val ipv6EchoReplyPkt = """
+            02030405060701020304050686dd6000000000083a40fe80000000000000000
+            0000000000001fe8000000000000000000000000000038100813b0001007b
+        """.replace("\\s+".toRegex(), "").trim()
+
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(ipv6EchoReplyPkt),
+            PASSED_IPV6_ICMP
+        )
     }
 
     private fun getApfWithIpv4PingOffloadEnabled(
