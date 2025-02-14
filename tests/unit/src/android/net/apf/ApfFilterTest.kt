@@ -45,6 +45,7 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_PING_REQUEST_REPLIED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_TCP_PORT7_UNICAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ICMP6_ECHO_REQUEST_INVALID
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ICMP6_ECHO_REQUEST_REPLIED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST_NA
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NON_ICMP_MULTICAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID
@@ -2819,7 +2820,8 @@ class ApfFilterTest {
 
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
-    fun testIpv6EchoRequestPassed() {
+    fun testIpv6EchoRequestReplied() {
+        doReturn(64).`when`(dependencies).getIpv6DefaultHopLimit(ifParams.name)
         val (apfFilter, program) = getApfWithIpv6PingOffloadEnabled()
         // Using scapy to generate IPv6 echo request packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="02:03:04:05:06:07")
@@ -2836,7 +2838,38 @@ class ApfFilterTest {
             apfFilter.mApfVersionSupported,
             program,
             HexDump.hexStringToByteArray(ipv6EchoRequestPkt),
-            PASSED_IPV6_ICMP
+            DROPPED_IPV6_ICMP6_ECHO_REQUEST_REPLIED
+        )
+        val transmitPkt = apfTestHelpers.consumeTransmittedPackets(1)[0]
+
+        // ###[ Ethernet ]###
+        //  dst       = 01:02:03:04:05:06
+        //  src       = 02:03:04:05:06:07
+        //  type      = IPv6
+        // ###[ IPv6 ]###
+        //      version   = 6
+        //      tc        = 0
+        //      fl        = 0
+        //      plen      = 13
+        //      nh        = ICMPv6
+        //      hlim      = 64
+        //      src       = fe80::3
+        //      dst       = fe80::1
+        // ###[ ICMPv6 Echo Reply ]###
+        //         type      = Echo Reply
+        //         code      = 0
+        //         cksum     = 0x3d64
+        //         id        = 0x1
+        //         seq       = 0x7b
+        //         data      = b'hello'
+        val expectedReply = """
+            01020304050602030405060786DD60000000000D3A40FE80000000000000000
+            0000000000003FE80000000000000000000000000000181003D640001007B68
+            656C6C6F
+        """.replace("\\s+".toRegex(), "").trim()
+        assertContentEquals(
+            HexDump.hexStringToByteArray(expectedReply),
+            transmitPkt
         )
     }
 

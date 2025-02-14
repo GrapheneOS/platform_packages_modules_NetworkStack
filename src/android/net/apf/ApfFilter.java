@@ -46,6 +46,7 @@ import static android.net.apf.ApfConstants.ICMP6_4_BYTE_LIFETIME_OFFSET;
 import static android.net.apf.ApfConstants.ICMP6_CAPTIVE_PORTAL_OPTION_TYPE;
 import static android.net.apf.ApfConstants.ICMP6_CHECKSUM_OFFSET;
 import static android.net.apf.ApfConstants.ICMP6_CODE_OFFSET;
+import static android.net.apf.ApfConstants.ICMP6_CONTENT_OFFSET;
 import static android.net.apf.ApfConstants.ICMP6_DNSSL_OPTION_TYPE;
 import static android.net.apf.ApfConstants.ICMP6_ECHO_REQUEST_HEADER_LEN;
 import static android.net.apf.ApfConstants.ICMP6_MTU_OPTION_TYPE;
@@ -133,6 +134,7 @@ import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_PING_REQUEST_REPLIED;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_TCP_PORT7_UNICAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ICMP6_ECHO_REQUEST_INVALID;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ICMP6_ECHO_REQUEST_REPLIED;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST_NA;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NON_ICMP_MULTICAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID;
@@ -181,6 +183,7 @@ import static android.system.OsConstants.ETH_P_ALL;
 import static android.system.OsConstants.ETH_P_ARP;
 import static android.system.OsConstants.ETH_P_IP;
 import static android.system.OsConstants.ETH_P_IPV6;
+import static android.system.OsConstants.ICMP6_ECHO_REPLY;
 import static android.system.OsConstants.ICMP_ECHO;
 import static android.system.OsConstants.ICMP_ECHOREPLY;
 import static android.system.OsConstants.IFA_F_TENTATIVE;
@@ -742,6 +745,13 @@ public class ApfFilter {
          */
         public int getIpv4DefaultTtl() {
             return ProcfsParsingUtils.getIpv4DefaultTtl();
+        }
+
+        /**
+         * Returns the default HopLimit value for IPv6 packets.
+         */
+        public int getIpv6DefaultHopLimit(@NonNull String ifname) {
+            return ProcfsParsingUtils.getIpv6DefaultHopLimit(ifname);
         }
 
         /**
@@ -2426,8 +2436,39 @@ public class ApfFilter {
                         ETHER_HEADER_LEN + IPV6_HEADER_LEN + ICMP6_ECHO_REQUEST_HEADER_LEN,
                         DROPPED_IPV6_ICMP6_ECHO_REQUEST_INVALID);
 
-        // TODO: implement IPv6 ping reply
-        gen.addCountAndPass(PASSED_IPV6_ICMP);
+        int hopLimit = mDependencies.getIpv6DefaultHopLimit(mInterfaceParams.name);
+        // Construct the ICMPv6 echo reply packet.
+        gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE)
+                .addAllocateR0()
+                // Eth header
+                .addPacketCopy(ETHER_SRC_ADDR_OFFSET, ETHER_ADDR_LEN) // Dst MAC address
+                .addDataCopy(mHardwareAddress) // Src MAC address
+                // Reuse the following fields from input packet
+                //  2 byte: ethertype
+                //  4 bytes: version, traffic class, flowlabel
+                //  2 bytes: payload length
+                //  1 byte: next header
+                .addPacketCopy(ETH_ETHERTYPE_OFFSET, 9)
+                .addWriteU8(hopLimit)
+                .addPacketCopy(IPV6_DEST_ADDR_OFFSET, IPV6_ADDR_LEN) // Src ip
+                .addPacketCopy(IPV6_SRC_ADDR_OFFSET, IPV6_ADDR_LEN) // Dst ip
+                .addWriteU16((ICMP6_ECHO_REPLY << 8) | 0) // Type: echo reply, code: 0
+                // Checksum: initialized to the IPv6 payload length as a partial checksum. The final
+                // checksum will be calculated by the interpreter.
+                .addPacketCopy(IPV6_PAYLOAD_LEN_OFFSET, 2)
+                // Copy identifier, sequence number and ping payload
+                .addSub(ICMP6_CONTENT_OFFSET)
+                .addLoadImmediate(R1, ICMP6_CONTENT_OFFSET)
+                .addSwap() // Swaps R0 and R1, so they're the offset and length.
+                .addPacketCopyFromR0LenR1()
+                .addTransmitL4(
+                        ETHER_HEADER_LEN, // ip_ofs
+                        ICMP6_CHECKSUM_OFFSET, // csum_ofs
+                        IPV6_SRC_ADDR_OFFSET, // csum_start
+                        IPPROTO_ICMPV6, // partial_sum
+                        false // udp
+                )
+                .addCountAndDrop(DROPPED_IPV6_ICMP6_ECHO_REQUEST_REPLIED);
 
         gen.defineLabel(skipPing6Offload);
     }
@@ -2501,7 +2542,7 @@ public class ApfFilter {
         //   transmit NA and drop
         //
         // (APFv6+ specific logic) if it's unicast ICMPv6 echo request to our host:
-        //    pass
+        //    transmit echo reply and drop
         //
         // if it's ICMPv6 RS to any:
         //   drop
