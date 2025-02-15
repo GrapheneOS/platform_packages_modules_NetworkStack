@@ -351,8 +351,6 @@ public abstract class BaseApfGenerator {
         private int mTargetLabelSize;
         private int mImmSizeOverride = -1;
         private String mTargetLabel;
-        // When mOpcode == Opcodes.LABEL:
-        private String mLabel;
         public byte[] mBytesImm;
         // Offset in bytes from the beginning of this program.
         // Set by {@link BaseApfGenerator#generate}.
@@ -461,7 +459,6 @@ public abstract class BaseApfGenerator {
             if (mOpcode != Opcodes.LABEL) {
                 throw new IllegalStateException("adding label to non-label instruction");
             }
-            mLabel = label;
             mLabels.put(label, this);
             return this;
         }
