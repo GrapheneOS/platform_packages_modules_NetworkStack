@@ -46,7 +46,9 @@ import static android.net.apf.ApfConstants.ICMP6_4_BYTE_LIFETIME_OFFSET;
 import static android.net.apf.ApfConstants.ICMP6_CAPTIVE_PORTAL_OPTION_TYPE;
 import static android.net.apf.ApfConstants.ICMP6_CHECKSUM_OFFSET;
 import static android.net.apf.ApfConstants.ICMP6_CODE_OFFSET;
+import static android.net.apf.ApfConstants.ICMP6_CONTENT_OFFSET;
 import static android.net.apf.ApfConstants.ICMP6_DNSSL_OPTION_TYPE;
+import static android.net.apf.ApfConstants.ICMP6_ECHO_REQUEST_HEADER_LEN;
 import static android.net.apf.ApfConstants.ICMP6_MTU_OPTION_TYPE;
 import static android.net.apf.ApfConstants.ICMP6_NS_OPTION_TYPE_OFFSET;
 import static android.net.apf.ApfConstants.ICMP6_NS_TARGET_IP_OFFSET;
@@ -131,6 +133,8 @@ import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NATT_KEEPAL
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_NON_DHCP4;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_PING_REQUEST_REPLIED;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_TCP_PORT7_UNICAST;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ICMP6_ECHO_REQUEST_INVALID;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ICMP6_ECHO_REQUEST_REPLIED;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST_NA;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NON_ICMP_MULTICAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID;
@@ -179,6 +183,7 @@ import static android.system.OsConstants.ETH_P_ALL;
 import static android.system.OsConstants.ETH_P_ARP;
 import static android.system.OsConstants.ETH_P_IP;
 import static android.system.OsConstants.ETH_P_IPV6;
+import static android.system.OsConstants.ICMP6_ECHO_REPLY;
 import static android.system.OsConstants.ICMP_ECHO;
 import static android.system.OsConstants.ICMP_ECHOREPLY;
 import static android.system.OsConstants.IFA_F_TENTATIVE;
@@ -319,6 +324,7 @@ public class ApfFilter {
         public boolean handleMdnsOffload;
         public boolean handleIgmpOffload;
         public boolean handleIpv4PingOffload;
+        public boolean handleIpv6PingOffload;
     }
 
 
@@ -388,6 +394,7 @@ public class ApfFilter {
     private final boolean mHandleMdnsOffload;
     private final boolean mHandleIgmpOffload;
     private final boolean mHandleIpv4PingOffload;
+    private final boolean mHandleIpv6PingOffload;
 
     private final NetworkQuirkMetrics mNetworkQuirkMetrics;
     private final IpClientRaInfoMetrics mIpClientRaInfoMetrics;
@@ -518,6 +525,7 @@ public class ApfFilter {
         mHandleMdnsOffload = config.handleMdnsOffload;
         mHandleIgmpOffload = config.handleIgmpOffload;
         mHandleIpv4PingOffload = config.handleIpv4PingOffload;
+        mHandleIpv6PingOffload = config.handleIpv6PingOffload;
         mDependencies = dependencies;
         mNetworkQuirkMetrics = networkQuirkMetrics;
         mIpClientRaInfoMetrics = dependencies.getIpClientRaInfoMetrics();
@@ -737,6 +745,13 @@ public class ApfFilter {
          */
         public int getIpv4DefaultTtl() {
             return ProcfsParsingUtils.getIpv4DefaultTtl();
+        }
+
+        /**
+         * Returns the default HopLimit value for IPv6 packets.
+         */
+        public int getIpv6DefaultHopLimit(@NonNull String ifname) {
+            return ProcfsParsingUtils.getIpv6DefaultHopLimit(ifname);
         }
 
         /**
@@ -2389,6 +2404,76 @@ public class ApfFilter {
     }
 
     /**
+     * Generate filter code to reply and drop unicast ICMPv6 echo request.
+     * <p>
+     * On entry, we know it is ICMPv6 packet, but don't know anything else.
+     * R0 contains the u8 ICMPv6 type.
+     * R1 contains nothing useful in it, and can be clobbered.
+     */
+    private void generateUnicastIpv6PingOffload(ApfV6GeneratorBase<?> gen)
+            throws IllegalInstructionException {
+
+        final String skipPing6Offload = gen.getUniqueLabel();
+        gen.addJumpIfR0NotEquals(ICMPV6_ECHO_REQUEST_TYPE, skipPing6Offload);
+
+        // Only offload unicast ping6.
+        // While we could potentially support offloading multicast and broadcast ping6 requests in
+        // the future, such packets will likely be dropped by the multicast filter.
+        // Since the device may have packet forwarding enabled, APF needs to pass any received
+        // unicast ping6 not destined for the device's IP address to the kernel.
+        final List<byte[]> nonTentativeIPv6Addrs = getIpv6Addresses(
+                true /* includeNonTentative */,
+                false /* includeTentative */,
+                false /* includeAnycast */);
+        gen.addLoadImmediate(R0, ETHER_DST_ADDR_OFFSET)
+                .addJumpIfBytesAtR0NotEqual(mHardwareAddress, skipPing6Offload)
+                .addLoadImmediate(R0, IPV6_DEST_ADDR_OFFSET)
+                .addJumpIfBytesAtR0EqualNoneOf(nonTentativeIPv6Addrs, skipPing6Offload);
+
+        // We need to check if the packet is sufficiently large to be a valid ICMPv6 echo packet.
+        gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE)
+                .addCountAndDropIfR0LessThan(
+                        ETHER_HEADER_LEN + IPV6_HEADER_LEN + ICMP6_ECHO_REQUEST_HEADER_LEN,
+                        DROPPED_IPV6_ICMP6_ECHO_REQUEST_INVALID);
+
+        int hopLimit = mDependencies.getIpv6DefaultHopLimit(mInterfaceParams.name);
+        // Construct the ICMPv6 echo reply packet.
+        gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE)
+                .addAllocateR0()
+                // Eth header
+                .addPacketCopy(ETHER_SRC_ADDR_OFFSET, ETHER_ADDR_LEN) // Dst MAC address
+                .addDataCopy(mHardwareAddress) // Src MAC address
+                // Reuse the following fields from input packet
+                //  2 byte: ethertype
+                //  4 bytes: version, traffic class, flowlabel
+                //  2 bytes: payload length
+                //  1 byte: next header
+                .addPacketCopy(ETH_ETHERTYPE_OFFSET, 9)
+                .addWriteU8(hopLimit)
+                .addPacketCopy(IPV6_DEST_ADDR_OFFSET, IPV6_ADDR_LEN) // Src ip
+                .addPacketCopy(IPV6_SRC_ADDR_OFFSET, IPV6_ADDR_LEN) // Dst ip
+                .addWriteU16((ICMP6_ECHO_REPLY << 8) | 0) // Type: echo reply, code: 0
+                // Checksum: initialized to the IPv6 payload length as a partial checksum. The final
+                // checksum will be calculated by the interpreter.
+                .addPacketCopy(IPV6_PAYLOAD_LEN_OFFSET, 2)
+                // Copy identifier, sequence number and ping payload
+                .addSub(ICMP6_CONTENT_OFFSET)
+                .addLoadImmediate(R1, ICMP6_CONTENT_OFFSET)
+                .addSwap() // Swaps R0 and R1, so they're the offset and length.
+                .addPacketCopyFromR0LenR1()
+                .addTransmitL4(
+                        ETHER_HEADER_LEN, // ip_ofs
+                        ICMP6_CHECKSUM_OFFSET, // csum_ofs
+                        IPV6_SRC_ADDR_OFFSET, // csum_start
+                        IPPROTO_ICMPV6, // partial_sum
+                        false // udp
+                )
+                .addCountAndDrop(DROPPED_IPV6_ICMP6_ECHO_REQUEST_REPLIED);
+
+        gen.defineLabel(skipPing6Offload);
+    }
+
+    /**
      * Generate filter code to process IPv6 packets. Execution of this code ends in either the
      * DROP_LABEL or PASS_LABEL, or falls off the end for ICMPv6 packets.
      * Preconditions:
@@ -2456,6 +2541,9 @@ public class ApfFilter {
         //     drop
         //   transmit NA and drop
         //
+        // (APFv6+ specific logic) if it's unicast ICMPv6 echo request to our host:
+        //    transmit echo reply and drop
+        //
         // if it's ICMPv6 RS to any:
         //   drop
         //
@@ -2519,6 +2607,10 @@ public class ApfFilter {
             // End of NS filter. generateNsFilter() method is terminal, so NS packet will be
             // either dropped or passed inside generateNsFilter().
             gen.defineLabel(skipNsPacketFilter);
+        }
+
+        if (enableIpv6PingOffload()) {
+            generateUnicastIpv6PingOffload((ApfV6GeneratorBase<?>) gen);
         }
 
         // Add unsolicited multicast neighbor announcements filter
@@ -2920,51 +3012,56 @@ public class ApfFilter {
 
             gen.defineLabel(ruleMatch);
 
-            if (enableMdns4 && enableMdns6) {
-                gen.addLoad16(R0, ETH_ETHERTYPE_OFFSET)
-                        .addJumpIfR0NotEquals(ETH_P_IP, offloadIPv6Mdns);
-            }
+            // If there is no offload payload, pass the packet to let NsdService handle it.
+            if (rule.mOffloadPayload == null) {
+                gen.addCountAndPass(PASSED_MDNS);
+            } else {
+                if (enableMdns4 && enableMdns6) {
+                    gen.addLoad16(R0, ETH_ETHERTYPE_OFFSET)
+                            .addJumpIfR0NotEquals(ETH_P_IP, offloadIPv6Mdns);
+                }
 
-            if (enableMdns4) {
-                final int udpLength = UDP_HEADER_LEN + rule.mOffloadPayload.length;
-                final int ipv4TotalLength = IPV4_HEADER_MIN_LEN + udpLength;
-                final int pktLength = ETH_HEADER_LEN + ipv4TotalLength;
+                if (enableMdns4) {
+                    final int udpLength = UDP_HEADER_LEN + rule.mOffloadPayload.length;
+                    final int ipv4TotalLength = IPV4_HEADER_MIN_LEN + udpLength;
+                    final int pktLength = ETH_HEADER_LEN + ipv4TotalLength;
 
-                gen.addAllocate(pktLength)
-                        .addDataCopy(mdns4EthDstToTos)
-                        .addWriteU16(ipv4TotalLength)
-                        .addDataCopy(mdns4IdToUdpDport)
-                        .addWrite32(udpLength << 16) // udp length and checksum
-                        .addDataCopy(rule.mOffloadPayload)
-                        .addTransmitL4(
-                                ETH_HEADER_LEN, // ip_ofs
-                                IPV4_UDP_DESTINATION_CHECKSUM_NO_OPTIONS_OFFSET, // csum_ofs
-                                IPV4_SRC_ADDR_OFFSET, // csum_start
-                                IPPROTO_UDP + udpLength, // partial_sum
-                                true // udp
-                        ).addCountAndDrop(Counter.DROPPED_MDNS_REPLIED);
-            }
+                    gen.addAllocate(pktLength)
+                            .addDataCopy(mdns4EthDstToTos)
+                            .addWriteU16(ipv4TotalLength)
+                            .addDataCopy(mdns4IdToUdpDport)
+                            .addWrite32(udpLength << 16) // udp length and checksum
+                            .addDataCopy(rule.mOffloadPayload)
+                            .addTransmitL4(
+                                    ETH_HEADER_LEN, // ip_ofs
+                                    IPV4_UDP_DESTINATION_CHECKSUM_NO_OPTIONS_OFFSET, // csum_ofs
+                                    IPV4_SRC_ADDR_OFFSET, // csum_start
+                                    IPPROTO_UDP + udpLength, // partial_sum
+                                    true // udp
+                            ).addCountAndDrop(Counter.DROPPED_MDNS_REPLIED);
+                }
 
-            if (enableMdns4 && enableMdns6) {
-                gen.defineLabel(offloadIPv6Mdns);
-            }
+                if (enableMdns4 && enableMdns6) {
+                    gen.defineLabel(offloadIPv6Mdns);
+                }
 
-            if (enableMdns6) {
-                final int udpLength = UDP_HEADER_LEN + rule.mOffloadPayload.length;
-                final int pktLength = ETH_HEADER_LEN + IPV6_HEADER_LEN + udpLength;
-                gen.addAllocate(pktLength)
-                        .addDataCopy(mdns6EthDstToFlowLabel)
-                        .addWriteU16(udpLength) // payload length
-                        .addDataCopy(mdns6NextHdrToUdpDport)
-                        .addWrite32(udpLength << 16) //  udp length and checksum
-                        .addDataCopy(rule.mOffloadPayload)
-                        .addTransmitL4(
+                if (enableMdns6) {
+                    final int udpLength = UDP_HEADER_LEN + rule.mOffloadPayload.length;
+                    final int pktLength = ETH_HEADER_LEN + IPV6_HEADER_LEN + udpLength;
+                    gen.addAllocate(pktLength)
+                            .addDataCopy(mdns6EthDstToFlowLabel)
+                            .addWriteU16(udpLength) // payload length
+                            .addDataCopy(mdns6NextHdrToUdpDport)
+                            .addWrite32(udpLength << 16) //  udp length and checksum
+                            .addDataCopy(rule.mOffloadPayload)
+                            .addTransmitL4(
                                     ETH_HEADER_LEN, // ip_ofs
                                     IPV6_UDP_DESTINATION_CHECKSUM_OFFSET, // csum_ofs
                                     IPV6_SRC_ADDR_OFFSET, // csum_start
                                     IPPROTO_UDP + udpLength, // partial_sum
                                     true // udp
-                        ).addCountAndDrop(Counter.DROPPED_MDNS_REPLIED);
+                            ).addCountAndDrop(Counter.DROPPED_MDNS_REPLIED);
+                }
             }
 
             gen.defineLabel(ruleNotMatch);
@@ -3556,6 +3653,12 @@ public class ApfFilter {
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
     private boolean enableIpv4PingOffload() {
         return mHandleIpv4PingOffload && useApfV6Generator() && mIPv4Address != null;
+    }
+
+    @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
+    private boolean enableIpv6PingOffload() {
+        return mHandleIpv6PingOffload && useApfV6Generator()
+                && !mIPv6NonTentativeAddresses.isEmpty();
     }
 
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)

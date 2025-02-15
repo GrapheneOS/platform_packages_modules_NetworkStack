@@ -122,9 +122,11 @@ public final class ApfConstants {
     public static final int ICMP4_CONTENT_NO_OPTIONS_OFFSET =
             ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + 4;
 
+    public static final int ICMP6_ECHO_REQUEST_HEADER_LEN = 8;
     public static final int ICMP6_TYPE_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN;
     public static final int ICMP6_CODE_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN + 1;
     public static final int ICMP6_CHECKSUM_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN + 2;
+    public static final int ICMP6_CONTENT_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN + 4;
     public static final int ICMP6_NS_TARGET_IP_OFFSET = ICMP6_TYPE_OFFSET + 8;
     public static final int ICMP6_NS_OPTION_TYPE_OFFSET = ICMP6_NS_TARGET_IP_OFFSET + 16;
     // From RFC4861:
