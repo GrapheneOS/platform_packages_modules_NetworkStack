@@ -787,6 +787,8 @@ public abstract class BaseApfGenerator {
      */
     abstract void updateExceptionBufferSize(int programSize) throws IllegalInstructionException;
 
+    private int mTotalSize;
+
     /**
      * Generate the bytecode for the APF program.
      * @return the bytecode.
@@ -800,7 +802,6 @@ public abstract class BaseApfGenerator {
             throw new IllegalStateException("Can only generate() once!");
         }
         mGenerated = true;
-        int total_size;
         boolean shrunk;
         // Shrink the immediate value fields of instructions.
         // As we shrink the instructions some branch offset
@@ -810,10 +811,10 @@ public abstract class BaseApfGenerator {
         // Limit iterations to avoid O(n^2) behavior.
         int iterations_remaining = 10;
         do {
-            total_size = updateInstructionOffsets();
+            mTotalSize = updateInstructionOffsets();
             // Update drop and pass label offsets.
-            mDropLabel.offset = total_size + 1;
-            mPassLabel.offset = total_size;
+            mDropLabel.offset = mTotalSize + 1;
+            mPassLabel.offset = mTotalSize;
             // Limit run-time in aberant circumstances.
             if (iterations_remaining-- == 0) break;
             // Attempt to shrink instructions.
@@ -825,8 +826,8 @@ public abstract class BaseApfGenerator {
             }
         } while (shrunk);
         // Generate bytecode for instructions.
-        byte[] bytecode = new byte[total_size];
-        updateExceptionBufferSize(total_size);
+        byte[] bytecode = new byte[mTotalSize];
+        updateExceptionBufferSize(mTotalSize);
         for (Instruction instruction : mInstructions) {
             instruction.generate(bytecode);
         }
