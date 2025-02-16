@@ -279,12 +279,12 @@ class ApfStandaloneTest {
     }
 
     private fun generateApfV4Program(isDeviceIdle: Boolean): ByteArray {
-        val countAndPassLabel = "countAndPass"
-        val countAndDropLabel = "countAndDrop"
-        val endOfDhcpFilter = "endOfDhcpFilter"
-        val endOfRsFilter = "endOfRsFiler"
-        val endOfPingFilter = "endOfPingFilter"
         val gen = ApfV4Generator(APF_VERSION_4, ramSize, clampSize)
+        val countAndPassLabel = gen.uniqueLabel
+        val countAndDropLabel = gen.uniqueLabel
+        val endOfDhcpFilter = gen.uniqueLabel
+        val endOfRsFilter = gen.uniqueLabel
+        val endOfPingFilter = gen.uniqueLabel
 
         maybeSetupCounter(gen, Counter.TOTAL_PACKETS)
         gen.addLoadData(R0, 0)
