@@ -37,16 +37,16 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
      * Jump to this label to terminate the program, increment the counter and indicate the packet
      * should be passed to the AP.
      */
-    private static final String COUNT_AND_PASS_LABEL = "__COUNT_AND_PASS__";
+    private final int mCountAndDropLabelV4;
 
     /**
      * Jump to this label to terminate the program, increment counter, and indicate the packet
      * should be dropped.
      */
-    private static final String COUNT_AND_DROP_LABEL = "__COUNT_AND_DROP__";
+    private final int mCountAndPassLabelV4;
 
-    public final String mCountAndDropLabel;
-    public final String mCountAndPassLabel;
+    public final int mCountAndDropLabel;
+    public final int mCountAndPassLabel;
 
     /**
      * Returns true if we support the specified {@code version}, otherwise false.
@@ -65,8 +65,10 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
             throws IllegalInstructionException {
         // make sure mVersion is not greater than 4 when using this class
         super(version > 4 ? 4 : version, ramSize, clampSize, disableCounterRangeCheck);
-        mCountAndDropLabel = version > 2 ? COUNT_AND_DROP_LABEL : DROP_LABEL;
-        mCountAndPassLabel = version > 2 ? COUNT_AND_PASS_LABEL : PASS_LABEL;
+        mCountAndDropLabelV4 = getUniqueLabel();
+        mCountAndPassLabelV4 = getUniqueLabel();
+        mCountAndDropLabel = version > 2 ? mCountAndDropLabelV4 : DROP_LABEL;
+        mCountAndPassLabel = version > 2 ? mCountAndPassLabelV4 : PASS_LABEL;
     }
 
     /**
@@ -236,7 +238,7 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
         if (values.isEmpty()) {
             throw new IllegalArgumentException("values cannot be empty");
         }
-        String tgt = getUniqueLabel();
+        int tgt = getUniqueLabel();
         for (Long v : values) {
             addJumpIfR0Equals(v, tgt);
         }
@@ -251,7 +253,7 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
         if (values.isEmpty()) {
             throw new IllegalArgumentException("values cannot be empty");
         }
-        String tgt = getUniqueLabel();
+        int tgt = getUniqueLabel();
         for (Long v : values) {
             addJumpIfR0Equals(v, tgt);
         }
@@ -265,10 +267,10 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
             throws IllegalInstructionException {
         final List<byte[]> deduplicatedList = validateDeduplicateBytesList(bytesList);
         maybeAddLoadCounterOffset(R1, cnt);
-        String matchLabel = getUniqueLabel();
-        String allNoMatchLabel = getUniqueLabel();
+        int matchLabel = getUniqueLabel();
+        int allNoMatchLabel = getUniqueLabel();
         for (byte[] v : deduplicatedList) {
-            String notMatchLabel = getUniqueLabel();
+            int notMatchLabel = getUniqueLabel();
             addJumpIfBytesAtR0NotEqual(v, notMatchLabel);
             addJump(matchLabel);
             defineLabel(notMatchLabel);
@@ -367,12 +369,12 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
     @Override
     public ApfV4Generator addCountTrampoline() throws IllegalInstructionException {
         if (mVersion <= 2) return self();
-        return defineLabel(COUNT_AND_PASS_LABEL)
+        return defineLabel(mCountAndPassLabelV4)
                 .addLoadData(R0, 0)  // R0 = *(R1 + 0)
                 .addAdd(1)           // R0++
                 .addStoreData(R0, 0) // *(R1 + 0) = R0
                 .addJump(PASS_LABEL)
-                .defineLabel(COUNT_AND_DROP_LABEL)
+                .defineLabel(mCountAndDropLabelV4)
                 .addLoadData(R0, 0)  // R0 = *(R1 + 0)
                 .addAdd(1)           // R0++
                 .addStoreData(R0, 0) // *(R1 + 0) = R0
