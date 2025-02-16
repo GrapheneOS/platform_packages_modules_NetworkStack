@@ -350,7 +350,10 @@ public abstract class BaseApfGenerator {
         // When mOpcode is a jump:
         private int mTargetLabelSize;
         private int mImmSizeOverride = -1;
-        private String mTargetLabel;
+        // mTargetLabel == -1 indicates it is uninitialized. mTargetLabel < -1 indicates a label
+        // within the program used for offset calculation. mTargetLabel >= 0 indicates a pass/drop
+        // label, its offset is mTargetLabel + program size.
+        private int mTargetLabel = -1;
         public byte[] mBytesImm;
         // Offset in bytes from the beginning of this program.
         // Set by {@link BaseApfGenerator#generate}.
@@ -452,7 +455,7 @@ public abstract class BaseApfGenerator {
             return this;
         }
 
-        Instruction setLabel(String label) throws IllegalInstructionException {
+        Instruction setLabel(int label) throws IllegalInstructionException {
             if (mLabels.containsKey(label)) {
                 throw new IllegalInstructionException("duplicate label " + label);
             }
@@ -463,7 +466,7 @@ public abstract class BaseApfGenerator {
             return this;
         }
 
-        Instruction setTargetLabel(String label) {
+        Instruction setTargetLabel(int label) {
             mTargetLabel = label;
             mTargetLabelSize = 4; // May shrink later on in generate().
             return this;
@@ -572,7 +575,7 @@ public abstract class BaseApfGenerator {
             for (IntImmediate imm : mIntImms) {
                 size += imm.getEncodingSize(indeterminateSize);
             }
-            if (mTargetLabel != null) {
+            if (mTargetLabel != -1) {
                 size += indeterminateSize;
             }
             if (mBytesImm != null) {
@@ -587,7 +590,7 @@ public abstract class BaseApfGenerator {
          * @return {@code true} if shrunk.
          */
         boolean shrink() throws IllegalInstructionException {
-            if (mTargetLabel == null) {
+            if (mTargetLabel == -1) {
                 return false;
             }
             int oldTargetLabelSize = mTargetLabelSize;
@@ -647,7 +650,7 @@ public abstract class BaseApfGenerator {
                 writingOffset = mIntImms.get(startOffset++).writeValue(bytecode, writingOffset,
                         indeterminateSize);
             }
-            if (mTargetLabel != null) {
+            if (mTargetLabel != -1) {
                 writingOffset = writeValue(calculateTargetLabelOffset(), bytecode, writingOffset,
                         indeterminateSize);
             }
@@ -696,20 +699,18 @@ public abstract class BaseApfGenerator {
         }
 
         private int calculateTargetLabelOffset() throws IllegalInstructionException {
-            Instruction targetLabelInstruction;
-            if (mTargetLabel == DROP_LABEL) {
-                targetLabelInstruction = mDropLabel;
-            } else if (mTargetLabel == PASS_LABEL) {
-                targetLabelInstruction = mPassLabel;
+            int targetOffset;
+            if (mTargetLabel >= 0) {
+                targetOffset = mTotalSize + mTargetLabel;
             } else {
-                targetLabelInstruction = mLabels.get(mTargetLabel);
+                final Instruction targetLabelInstruction = mLabels.get(mTargetLabel);
+                if (targetLabelInstruction == null) {
+                    throw new IllegalInstructionException("label not found: " + mTargetLabel);
+                }
+                targetOffset = targetLabelInstruction.offset;
             }
-            if (targetLabelInstruction == null) {
-                throw new IllegalInstructionException("label not found: " + mTargetLabel);
-            }
-            // Calculate distance from end of this instruction to instruction.offset.
-            final int targetLabelOffset = targetLabelInstruction.offset - (offset + size());
-            return targetLabelOffset;
+            // Calculate distance from end of this instruction to targetOffset.
+            return targetOffset - (offset + size());
         }
     }
 
@@ -812,9 +813,6 @@ public abstract class BaseApfGenerator {
         int iterations_remaining = 10;
         do {
             mTotalSize = updateInstructionOffsets();
-            // Update drop and pass label offsets.
-            mDropLabel.offset = mTotalSize + 1;
-            mPassLabel.offset = mTotalSize;
             // Limit run-time in aberant circumstances.
             if (iterations_remaining-- == 0) break;
             // Attempt to shrink instructions.
@@ -885,21 +883,21 @@ public abstract class BaseApfGenerator {
     /**
      * Return a unique label string.
      */
-    public String getUniqueLabel() {
-        return "LABEL_" + mLabelCount++;
+    public int getUniqueLabel() {
+        return -(2 + mLabelCount++);
     }
 
     /**
      * Jump to this label to terminate the program and indicate the packet
      * should be dropped.
      */
-    public static final String DROP_LABEL = "__DROP__";
+    public static final int DROP_LABEL = 1;
 
     /**
      * Jump to this label to terminate the program and indicate the packet
      * should be passed to the AP.
      */
-    public static final String PASS_LABEL = "__PASS__";
+    public static final int PASS_LABEL = 0;
 
     /**
      * Number of memory slots available for access via APF stores to memory and loads from memory.
@@ -984,9 +982,7 @@ public abstract class BaseApfGenerator {
 
 
     final ArrayList<Instruction> mInstructions = new ArrayList<Instruction>();
-    private final HashMap<String, Instruction> mLabels = new HashMap<String, Instruction>();
-    private final Instruction mDropLabel = new Instruction(Opcodes.LABEL);
-    private final Instruction mPassLabel = new Instruction(Opcodes.LABEL);
+    private final HashMap<Integer, Instruction> mLabels = new HashMap<>();
     public final int mVersion;
     public final int mRamSize;
     public final int mClampSize;
