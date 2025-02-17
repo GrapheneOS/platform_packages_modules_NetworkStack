@@ -48,6 +48,7 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ICMP6_ECHO_REQUEST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ICMP6_ECHO_REQUEST_REPLIED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MLD_INVALID
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MLD_REPORT
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MLD_V1_GENERAL_QUERY_REPLIED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MLD_V2_GENERAL_QUERY_REPLIED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST_NA
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NON_ICMP_MULTICAST
@@ -1555,7 +1556,7 @@ class ApfFilterTest {
 
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
-    fun testMldV1GeneralQueryPassed() {
+    fun testMldV1GeneralQueryReplied() {
         val apfFilter = getMldApfFilter()
         val program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 3)
         // Using scapy to generate MLDv1 general query
@@ -1573,8 +1574,117 @@ class ApfFilterTest {
             apfFilter.mApfVersionSupported,
             program,
             HexDump.hexStringToByteArray(pkt),
-            PASSED_MLD
+            DROPPED_IPV6_MLD_V1_GENERAL_QUERY_REPLIED
         )
+
+        val mldV1ReportPkts = setOf(
+            //  ###[ Ethernet ]###
+            //    dst       = 33:33:11:11:11:11
+            //    src       = 02:03:04:05:06:07
+            //    type      = IPv6
+            //  ###[ IPv6 ]###
+            //       version   = 6
+            //       tc        = 0
+            //       fl        = 0
+            //       plen      = None
+            //       nh        = Hop-by-Hop Option Header
+            //       hlim      = 1
+            //       src       = fe80::3
+            //       dst       = ff12::1:1111:1111
+            //  ###[ IPv6 Extension Header - Hop-by-Hop Options Header ]###
+            //          nh        = ICMPv6
+            //          len       = None
+            //          autopad   = On
+            //          \options   \
+            //           |###[ Router Alert ]###
+            //           |  otype     = Router Alert [00: skip, 0: Don't change en-route]
+            //           |  optlen    = 2
+            //           |  value     = None
+            //  ###[ MLD - Multicast Listener Report ]###
+            //             type      = MLD Report
+            //             code      = 0
+            //             cksum     = None
+            //             mrd       = 0
+            //             reserved  = 0
+            //             mladdr    = ff12::1:1111:1111
+            """
+            33331111111102030405060786dd6000000000200001fe800000000000000000000000000003ff120000
+            0000000000000001111111113a0005020000010083003bbd00000000ff12000000000000000000011111
+            1111
+            """.replace("\\s+".toRegex(), "").trim().uppercase(),
+            //  ###[ Ethernet ]###
+            //    dst       = 33:33:22:22:22:22
+            //    src       = 02:03:04:05:06:07
+            //    type      = IPv6
+            //  ###[ IPv6 ]###
+            //       version   = 6
+            //       tc        = 0
+            //       fl        = 0
+            //       plen      = None
+            //       nh        = Hop-by-Hop Option Header
+            //       hlim      = 1
+            //       src       = fe80::3
+            //       dst       = ff12::1:2222:2222
+            //  ###[ IPv6 Extension Header - Hop-by-Hop Options Header ]###
+            //          nh        = ICMPv6
+            //          len       = None
+            //          autopad   = On
+            //          \options   \
+            //           |###[ Router Alert ]###
+            //           |  otype     = Router Alert [00: skip, 0: Don't change en-route]
+            //           |  optlen    = 2
+            //           |  value     = None
+            //  ###[ MLD - Multicast Listener Report ]###
+            //             type      = MLD Report
+            //             code      = 0
+            //             cksum     = None
+            //             mrd       = 0
+            //             reserved  = 0
+            //             mladdr    = ff12::1:2222:2222
+            """
+            33332222222202030405060786dd6000000000200001fe800000000000000000000000000003ff120000
+            0000000000000001222222223a000502000001008300f77800000000ff12000000000000000000012222
+            2222
+            """.replace("\\s+".toRegex(), "").trim().uppercase(),
+            //  ###[ Ethernet ]###
+            //    dst       = 33:33:33:33:33:33
+            //    src       = 02:03:04:05:06:07
+            //    type      = IPv6
+            //  ###[ IPv6 ]###
+            //       version   = 6
+            //       tc        = 0
+            //       fl        = 0
+            //       plen      = None
+            //       nh        = Hop-by-Hop Option Header
+            //       hlim      = 1
+            //       src       = fe80::3
+            //       dst       = ff12::1:3333:3333
+            //  ###[ IPv6 Extension Header - Hop-by-Hop Options Header ]###
+            //          nh        = ICMPv6
+            //          len       = None
+            //          autopad   = On
+            //          \options   \
+            //           |###[ Router Alert ]###
+            //           |  otype     = Router Alert [00: skip, 0: Don't change en-route]
+            //           |  optlen    = 2
+            //           |  value     = None
+            //  ###[ MLD - Multicast Listener Report ]###
+            //             type      = MLD Report
+            //             code      = 0
+            //             cksum     = None
+            //             mrd       = 0
+            //             reserved  = 0
+            //             mladdr    = ff12::1:3333:3333
+            """
+            33333333333302030405060786dd6000000000200001fe800000000000000000000000000003ff120000
+            0000000000000001333333333a000502000001008300b33400000000ff12000000000000000000013333
+            3333
+            """.replace("\\s+".toRegex(), "").trim().uppercase()
+        )
+
+        val transmitPackets = apfTestHelpers.getAllTransmittedPackets()
+            .map { HexDump.toHexString(it).uppercase() }.toSet()
+        assertEquals(mldV1ReportPkts, transmitPackets)
     }
 
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)

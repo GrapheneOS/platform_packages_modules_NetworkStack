@@ -146,6 +146,7 @@ public final class ApfConstants {
     public static final int IPV6_MLD_TYPE_V1_REPORT = 131;
     public static final int IPV6_MLD_TYPE_V1_DONE = 132;
     public static final int IPV6_MLD_TYPE_V2_REPORT = 143;
+    public static final int IPV6_MLD_V1_MESSAGE_SIZE = 24;
     public static final int IPV6_MLD_V2_MULTICAST_ADDRESS_RECORD_SIZE = 20;
     // kernel reference: net/ipv6/mcast.c#igmp6_send()
     public static final byte[] IPV6_MLD_HOPOPTS = {
