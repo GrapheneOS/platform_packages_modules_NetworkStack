@@ -35,6 +35,7 @@ import static android.net.apf.ApfConstants.ETH_HEADER_LEN;
 import static android.net.apf.ApfConstants.ETH_MULTICAST_IGMP_V3_ALL_MULTICAST_ROUTERS_ADDRESS;
 import static android.net.apf.ApfConstants.ETH_MULTICAST_MDNS_V4_MAC_ADDRESS;
 import static android.net.apf.ApfConstants.ETH_MULTICAST_MDNS_V6_MAC_ADDRESS;
+import static android.net.apf.ApfConstants.ETH_MULTICAST_MLD_V2_ALL_MULTICAST_ROUTERS_ADDRESS;
 import static android.net.apf.ApfConstants.ETH_TYPE_MAX;
 import static android.net.apf.ApfConstants.ETH_TYPE_MIN;
 import static android.net.apf.ApfConstants.FIXED_ARP_REPLY_HEADER;
@@ -100,12 +101,17 @@ import static android.net.apf.ApfConstants.IPV6_FLOW_LABEL_LEN;
 import static android.net.apf.ApfConstants.IPV6_FLOW_LABEL_OFFSET;
 import static android.net.apf.ApfConstants.IPV6_HEADER_LEN;
 import static android.net.apf.ApfConstants.IPV6_HOP_LIMIT_OFFSET;
+import static android.net.apf.ApfConstants.IPV6_MLD_CHECKSUM_OFFSET;
 import static android.net.apf.ApfConstants.IPV6_MLD_HOPOPTS;
+import static android.net.apf.ApfConstants.IPV6_MLD_MESSAGE_MIN_SIZE;
 import static android.net.apf.ApfConstants.IPV6_MLD_MIN_SIZE;
 import static android.net.apf.ApfConstants.IPV6_MLD_MULTICAST_ADDR_OFFSET;
 import static android.net.apf.ApfConstants.IPV6_MLD_TYPE_OFFSET;
 import static android.net.apf.ApfConstants.IPV6_MLD_TYPE_QUERY;
 import static android.net.apf.ApfConstants.IPV6_MLD_TYPE_REPORTS;
+import static android.net.apf.ApfConstants.IPV6_MLD_TYPE_V2_REPORT;
+import static android.net.apf.ApfConstants.IPV6_MLD_V2_ALL_ROUTERS_MULTICAST_ADDRESS;
+import static android.net.apf.ApfConstants.IPV6_MLD_V2_MULTICAST_ADDRESS_RECORD_SIZE;
 import static android.net.apf.ApfConstants.IPV6_NEXT_HEADER_OFFSET;
 import static android.net.apf.ApfConstants.IPV6_PAYLOAD_LEN_OFFSET;
 import static android.net.apf.ApfConstants.IPV6_SOLICITED_NODES_PREFIX;
@@ -113,6 +119,7 @@ import static android.net.apf.ApfConstants.IPV6_SRC_ADDR_OFFSET;
 import static android.net.apf.ApfConstants.IPV6_UDP_DESTINATION_CHECKSUM_OFFSET;
 import static android.net.apf.ApfConstants.IPV6_UDP_DESTINATION_PORT_OFFSET;
 import static android.net.apf.ApfConstants.IPV6_UNSPECIFIED_ADDRESS;
+import static android.net.apf.ApfConstants.MLD2_MODE_IS_EXCLUDE;
 import static android.net.apf.ApfConstants.TCP_HEADER_SIZE_OFFSET;
 import static android.net.apf.ApfConstants.TCP_UDP_DESTINATION_PORT_OFFSET;
 import static android.net.apf.ApfConstants.TCP_UDP_SOURCE_PORT_OFFSET;
@@ -144,6 +151,7 @@ import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ICMP6_ECHO_
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ICMP6_ECHO_REQUEST_REPLIED;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MLD_INVALID;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MLD_REPORT;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MLD_V2_GENERAL_QUERY_REPLIED;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST_NA;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NON_ICMP_MULTICAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID;
@@ -2564,7 +2572,7 @@ public class ApfFilter {
         //     if the IPv6 dst addr is not ff02::1:
         //       drop
         //     if it is an MLDv2 general query (payload length is not 24):
-        //       pass
+        //       transmit MLDv2 report and drop
         //     else it is an MLDv1 general query:
         //       pass
         //   else
@@ -2960,6 +2968,124 @@ public class ApfFilter {
     }
 
     /**
+     * Creates MLDv2 Listener Report packet payload (rfc3810#section-5.2).
+     */
+    private byte[] createMldV2ReportPayload() {
+        final int mcastAddrsNum = mIPv6McastAddrsExcludeAllHost.size();
+        final byte[] mldHeader = new byte[] {
+            // MLD type
+            (byte) IPV6_MLD_TYPE_V2_REPORT,
+            // code
+            0,
+            // hop-by-hop option is { 0x3a, 0x00, 0x05, 0x02, 0x00, 0x00, 0x01, 0x00 }
+            // so we precalculate MLD checksum as follows:
+            // 0xffff - (0x3a00 + 0x0502 + 0x0000 + 0x0100) = 0xbffd
+            (byte) 0xbf, (byte) 0xfd,
+            // reserved
+            0, 0,
+            // num of multicast address records
+            (byte) ((mcastAddrsNum >> 8) & 0xff), (byte) (mcastAddrsNum & 0xff)
+        };
+
+        final byte[] mcastRecordHeader = new byte[] {
+            // record type
+            (byte) MLD2_MODE_IS_EXCLUDE,
+            // aux data len,
+            0,
+            // num src
+            0, 0
+        };
+
+        final byte[] payload =
+                new byte[
+                    mldHeader.length + mcastAddrsNum * IPV6_MLD_V2_MULTICAST_ADDRESS_RECORD_SIZE
+                ];
+        int offset = 0;
+
+        System.arraycopy(mldHeader, 0, payload, offset, mldHeader.length);
+        offset += mldHeader.length;
+        for (Inet6Address mcastAddr: mIPv6McastAddrsExcludeAllHost) {
+            System.arraycopy(mcastRecordHeader, 0, payload, offset, mcastRecordHeader.length);
+            offset += mcastRecordHeader.length;
+            System.arraycopy(mcastAddr.getAddress(), 0, payload, offset, IPV6_ADDR_LEN);
+            offset += IPV6_ADDR_LEN;
+        }
+
+        return payload;
+    }
+
+    /**
+     * Creates the portion of an MLD packet from the Ethernet source MAC address to the IPv6
+     * VTF field.
+     */
+    private byte[] createMldPktFromEthSrcToIPv6Vtf() {
+        return CollectionUtils.concatArrays(
+            mHardwareAddress,
+            new byte[] {
+                // etherType: IPv6
+                (byte) 0x86, (byte) 0xdd,
+                // version, traffic class, flow label
+                // 0x60000000 (ref: net/ipv6/mcast.c#ip6_mc_hdr())
+                (byte) 0x60, 0, 0, 0}
+        );
+    }
+
+    /**
+     * Creates the portion of an MLD packet from the IPv6 Next Header to the IPv6 Source Address.
+     */
+    private byte[] createMldPktFromIPv6NextHdrToSrc() {
+        final byte[] ipv6FromNextHdrToHoplimit = new byte[] {
+            // Next header: HOPOPTS
+            0,
+            // Hop limit
+            (byte) 1
+        };
+        return CollectionUtils.concatArrays(
+            ipv6FromNextHdrToHoplimit,
+            mIPv6LinkLocalAddress.getAddress()
+        );
+    }
+
+    /**
+     * Generate transmit code to send MLDv2 report in response to general query packets.
+     */
+    private void generateMldV2ReportTransmit(ApfV6GeneratorBase<?> gen,
+            byte[] mldPktFromEthSrcToIpv6Vtf, byte[] mldPktFromIpv6NextHdrToSrc)
+            throws IllegalInstructionException {
+        final int mcastAddrsNum = mIPv6McastAddrsExcludeAllHost.size();
+        final int ipv6PayloadLength = IPV6_MLD_HOPOPTS.length
+                + IPV6_MLD_MESSAGE_MIN_SIZE
+                + (mcastAddrsNum * IPV6_MLD_V2_MULTICAST_ADDRESS_RECORD_SIZE);
+        final byte[] encodedIPv6PayloadLength = {
+            (byte) ((ipv6PayloadLength >> 8) & 0xff), (byte) (ipv6PayloadLength & 0xff),
+        };
+        final byte[] packet = CollectionUtils.concatArrays(
+            ETH_MULTICAST_MLD_V2_ALL_MULTICAST_ROUTERS_ADDRESS,
+            mldPktFromEthSrcToIpv6Vtf,
+            encodedIPv6PayloadLength,
+            mldPktFromIpv6NextHdrToSrc,
+            IPV6_MLD_V2_ALL_ROUTERS_MULTICAST_ADDRESS,
+            IPV6_MLD_HOPOPTS,
+            createMldV2ReportPayload()
+        );
+
+        gen.addAllocate(ETHER_HEADER_LEN + IPV6_HEADER_LEN + ipv6PayloadLength)
+            .addDataCopy(packet)
+            .addTransmitL4(
+                // ip_ofs
+                ETHER_HEADER_LEN,
+                // csum_ofs
+                IPV6_MLD_CHECKSUM_OFFSET,
+                // csum_start
+                IPV6_SRC_ADDR_OFFSET,
+                // partial_sum
+                IPPROTO_ICMPV6 + (ipv6PayloadLength - IPV6_MLD_HOPOPTS.length),
+                // udp
+                false
+            ).addCountAndDrop(DROPPED_IPV6_MLD_V2_GENERAL_QUERY_REPLIED);
+    }
+
+    /**
      * Generates filter code to handle MLD packets.
      * <p>
      * On entry, this filter know it is processing an IPv6 packet. It will then process all MLD
@@ -3031,8 +3157,11 @@ public class ApfFilter {
                 .addJumpIfR0Equals(IPV6_MLD_MIN_SIZE, checkMldv1);
 
         // ===== MLDv2 general query =====
-        // TODO: implement MLDv2 general query offload
-        gen.addCountAndPass(PASSED_MLD);  // MLDv2
+        // To optimize for bytecode size, the MLDv2 report is constructed first.
+        // Its packet structure is then reused as a template when creating the IGMPv1 report.
+        final byte[] mldPktFromEthSrcToIPv6Vtf = createMldPktFromEthSrcToIPv6Vtf();
+        final byte[] mldPktFromIPv6NextHdrToSrc = createMldPktFromIPv6NextHdrToSrc();
+        generateMldV2ReportTransmit(gen, mldPktFromEthSrcToIPv6Vtf, mldPktFromIPv6NextHdrToSrc);
 
         gen.defineLabel(checkMldv1);
         // ===== MLDv1 general query =====

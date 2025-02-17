@@ -48,6 +48,7 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ICMP6_ECHO_REQUEST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ICMP6_ECHO_REQUEST_REPLIED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MLD_INVALID
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MLD_REPORT
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MLD_V2_GENERAL_QUERY_REPLIED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_MULTICAST_NA
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NON_ICMP_MULTICAST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID
@@ -1578,7 +1579,7 @@ class ApfFilterTest {
 
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
-    fun testMldV2GeneralQueryPassed() {
+    fun testMldV2GeneralQueryReplied() {
         val apfFilter = getMldApfFilter()
         val program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 3)
         // Using scapy to generate MLDv2 general query
@@ -1596,7 +1597,69 @@ class ApfFilterTest {
             apfFilter.mApfVersionSupported,
             program,
             HexDump.hexStringToByteArray(pkt),
-            PASSED_MLD
+            DROPPED_IPV6_MLD_V2_GENERAL_QUERY_REPLIED
+        )
+
+        val transmittedMldV2Reports = apfTestHelpers.consumeTransmittedPackets(1)
+        //  ###[ Ethernet ]###
+        //    dst       = 33:33:00:00:00:16
+        //    src       = 02:03:04:05:06:07
+        //    type      = IPv6
+        //  ###[ IPv6 ]###
+        //       version   = 6
+        //       tc        = 0
+        //       fl        = 0
+        //       plen      = None
+        //       nh        = Hop-by-Hop Option Header
+        //       hlim      = 1
+        //       src       = fe80::3
+        //       dst       = ff02::16
+        //  ###[ IPv6 Extension Header - Hop-by-Hop Options Header ]###
+        //          nh        = ICMPv6
+        //          len       = None
+        //          autopad   = On
+        //          \options   \
+        //           |###[ Router Alert ]###
+        //           |  otype     = Router Alert [00: skip, 0: Don't change en-route]
+        //           |  optlen    = 2
+        //           |  value     = None
+        //  ###[ MLDv2 - Multicast Listener Report ]###
+        //             type      = MLD Report Version 2
+        //             res       = 0
+        //             cksum     = None
+        //             reserved  = 0
+        //             records_number= None
+        //             \records   \
+        //              |###[ ICMPv6 MLDv2 - Multicast Address Record ]###
+        //              |  rtype     = 2
+        //              |  auxdata_len= None
+        //              |  sources_number= None
+        //              |  dst       = ff12::1:1111:1111
+        //              |  sources   = [  ]
+        //              |  auxdata   = b''
+        //              |###[ ICMPv6 MLDv2 - Multicast Address Record ]###
+        //              |  rtype     = 2
+        //              |  auxdata_len= None
+        //              |  sources_number= None
+        //              |  dst       = ff12::1:2222:2222
+        //              |  sources   = [  ]
+        //              |  auxdata   = b''
+        //              |###[ ICMPv6 MLDv2 - Multicast Address Record ]###
+        //              |  rtype     = 2
+        //              |  auxdata_len= None
+        //              |  sources_number= None
+        //              |  dst       = ff12::1:3333:3333
+        //              |  sources   = [  ]
+        //              |  auxdata   = b''
+        val mldV2ReportPkt = """
+            33330000001602030405060786dd60000000004c0001fe800000000000000000000000000003ff020000
+            0000000000000000000000163a000502000001008f00a2d80000000302000000ff120000000000000000
+            00011111111102000000ff12000000000000000000012222222202000000ff1200000000000000000001
+            33333333
+        """.replace("\\s+".toRegex(), "").trim()
+        assertContentEquals(
+            HexDump.hexStringToByteArray(mldV2ReportPkt),
+            transmittedMldV2Reports[0]
         )
     }
 
