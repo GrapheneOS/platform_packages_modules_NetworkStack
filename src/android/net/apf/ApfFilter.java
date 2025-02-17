@@ -219,7 +219,9 @@ import static com.android.net.module.util.NetworkStackConstants.IPV4_IGMP_GROUP_
 import static com.android.net.module.util.NetworkStackConstants.IPV4_IGMP_MIN_SIZE;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_IGMP_TYPE_V3_REPORT;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_PROTOCOL_IGMP;
+import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_NODES_MULTICAST;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_LEN;
+import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_NODE_LOCAL_ALL_NODES_MULTICAST;
 
 import android.annotation.ChecksSdkIntAtLeast;
 import android.annotation.NonNull;
@@ -323,6 +325,7 @@ public class ApfFilter {
         public boolean handleNdOffload;
         public boolean handleMdnsOffload;
         public boolean handleIgmpOffload;
+        public boolean handleMldOffload;
         public boolean handleIpv4PingOffload;
         public boolean handleIpv6PingOffload;
     }
@@ -393,6 +396,7 @@ public class ApfFilter {
     private final boolean mHandleNdOffload;
     private final boolean mHandleMdnsOffload;
     private final boolean mHandleIgmpOffload;
+    private final boolean mHandleMldOffload;
     private final boolean mHandleIpv4PingOffload;
     private final boolean mHandleIpv6PingOffload;
 
@@ -470,6 +474,14 @@ public class ApfFilter {
     @VisibleForTesting
     final Set<Inet4Address> mIPv4McastAddrsExcludeAllHost = new ArraySet<>();
 
+    // Our joined IPv6 multicast addresses
+    @VisibleForTesting
+    final Set<Inet6Address> mIPv6MulticastAddresses = new ArraySet<>();
+
+    // Our joined IPv6 multicast address exclude ff02::1, ff01::1
+    @VisibleForTesting
+    final Set<Inet6Address> mIPv6McastAddrsExcludeAllHost = new ArraySet<>();
+
     // Whether CLAT is enabled.
     private boolean mHasClat;
 
@@ -524,6 +536,7 @@ public class ApfFilter {
         mHandleNdOffload = config.handleNdOffload;
         mHandleMdnsOffload = config.handleMdnsOffload;
         mHandleIgmpOffload = config.handleIgmpOffload;
+        mHandleMldOffload = config.handleMldOffload;
         mHandleIpv4PingOffload = config.handleIpv4PingOffload;
         mHandleIpv6PingOffload = config.handleIpv6PingOffload;
         mDependencies = dependencies;
@@ -560,22 +573,9 @@ public class ApfFilter {
             Log.wtf(TAG, "Failed to start RaPacketReader");
         }
 
-        if (enableIgmpReportsMonitor()) {
-            final FileDescriptor socketFd = mDependencies.createEgressIgmpReportsReaderSocket(
-                    ifParams.index);
-            if (socketFd != null) {
-                mMulticastReportMonitor = new MulticastReportMonitor(
-                        mHandler,
-                        mInterfaceParams,
-                        this::updateIPv4MulticastAddrs,
-                        socketFd
-                );
-                mMulticastReportMonitor.start();
-            } else {
-                mMulticastReportMonitor = null;
-            }
-        } else {
-            mMulticastReportMonitor = null;
+        mMulticastReportMonitor = createMulticastReportMonitor();
+        if (mMulticastReportMonitor != null) {
+            mMulticastReportMonitor.start();
         }
 
         // Listen for doze-mode transition changes to enable/disable the IPv6 multicast filter.
@@ -599,6 +599,12 @@ public class ApfFilter {
                 mDependencies.getIPv4MulticastAddresses(mInterfaceParams.name));
         mIPv4McastAddrsExcludeAllHost.addAll(mIPv4MulticastAddresses);
         mIPv4McastAddrsExcludeAllHost.remove((IPV4_ADDR_ALL_HOST_MULTICAST));
+
+        mIPv6MulticastAddresses.addAll(
+                mDependencies.getIPv6MulticastAddresses(mInterfaceParams.name));
+        mIPv6McastAddrsExcludeAllHost.addAll(mIPv6MulticastAddresses);
+        mIPv6McastAddrsExcludeAllHost.remove(IPV6_ADDR_ALL_NODES_MULTICAST);
+        mIPv6McastAddrsExcludeAllHost.remove(IPV6_ADDR_NODE_LOCAL_ALL_NODES_MULTICAST);
     }
 
     /**
@@ -638,6 +644,24 @@ public class ApfFilter {
             try {
                 socket = Os.socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, 0);
                 NetworkStackUtils.attachEgressIgmpReportFilter(socket);
+                Os.bind(socket, makePacketSocketAddress(ETH_P_ALL, ifIndex));
+            } catch (SocketException | ErrnoException e) {
+                Log.wtf(TAG, "Error starting filter", e);
+                return null;
+            }
+
+            return socket;
+        }
+
+        /**
+         * Create a socket to read egress IGMPv2/v3, MLDv1/v2 reports.
+         */
+        @Nullable
+        public FileDescriptor createEgressMulticastReportsReaderSocket(int ifIndex) {
+            FileDescriptor socket;
+            try {
+                socket = Os.socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, 0);
+                NetworkStackUtils.attachEgressMulticastReportFilter(socket);
                 Os.bind(socket, makePacketSocketAddress(ETH_P_ALL, ifIndex));
             } catch (SocketException | ErrnoException e) {
                 Log.wtf(TAG, "Error starting filter", e);
@@ -761,6 +785,13 @@ public class ApfFilter {
         public List<Inet4Address> getIPv4MulticastAddresses(@NonNull String ifname) {
             return ProcfsParsingUtils.getIPv4MulticastAddresses(ifname);
         }
+
+        /**
+         * Loads the existing IPv6 multicast addresses from the file `/proc/net/igmp6`.
+         */
+        public List<Inet6Address> getIPv6MulticastAddresses(@NonNull String ifname) {
+            return ProcfsParsingUtils.getIpv6MulticastAddresses(ifname);
+        }
     }
 
     public IApfController getApfController() {
@@ -773,6 +804,26 @@ public class ApfFilter {
             mApfCounterTracker.updateCountersFromData(data);
         }
         return mApfCounterTracker.getCounters().toString();
+    }
+
+    private MulticastReportMonitor createMulticastReportMonitor() {
+        FileDescriptor socketFd = null;
+
+        // Check if MLD report monitor is enabled first, it includes the IGMP report monitor.
+        if (enableMldReportsMonitor()) {
+            socketFd =
+                mDependencies.createEgressMulticastReportsReaderSocket(mInterfaceParams.index);
+        } else if (enableIgmpReportsMonitor()) {
+            socketFd =
+                mDependencies.createEgressIgmpReportsReaderSocket(mInterfaceParams.index);
+        }
+
+        return socketFd != null ? new MulticastReportMonitor(
+                mHandler,
+                mInterfaceParams,
+                this::updateMulticastAddrs,
+                socketFd
+        ) : null;
     }
 
     private void log(String s) {
@@ -3503,7 +3554,7 @@ public class ApfFilter {
             mApfMdnsOffloadEngine.unregisterOffloadEngine();
         }
 
-        if (enableIgmpReportsMonitor() && mMulticastReportMonitor != null) {
+        if (mMulticastReportMonitor != null) {
             mMulticastReportMonitor.stop();
         }
     }
@@ -3593,7 +3644,24 @@ public class ApfFilter {
         installNewProgram();
     }
 
-    public void updateIPv4MulticastAddrs() {
+    private boolean updateIPv6MulticastAddrs() {
+        final Set<Inet6Address> mcastAddrs =
+                new ArraySet<>(mDependencies.getIPv6MulticastAddresses(mInterfaceParams.name));
+
+        if (!mIPv6MulticastAddresses.equals(mcastAddrs)) {
+            mIPv6MulticastAddresses.clear();
+            mIPv6MulticastAddresses.addAll(mcastAddrs);
+
+            mIPv6McastAddrsExcludeAllHost.clear();
+            mIPv6McastAddrsExcludeAllHost.addAll(mIPv6MulticastAddresses);
+            mIPv6McastAddrsExcludeAllHost.remove(IPV6_ADDR_ALL_NODES_MULTICAST);
+            mIPv6McastAddrsExcludeAllHost.remove(IPV6_ADDR_NODE_LOCAL_ALL_NODES_MULTICAST);
+            return true;
+        }
+        return false;
+    }
+
+    private boolean updateIPv4MulticastAddrs() {
         final Set<Inet4Address> mcastAddrs =
                 new ArraySet<>(mDependencies.getIPv4MulticastAddresses(mInterfaceParams.name));
 
@@ -3604,6 +3672,18 @@ public class ApfFilter {
             mIPv4McastAddrsExcludeAllHost.clear();
             mIPv4McastAddrsExcludeAllHost.addAll(mcastAddrs);
             mIPv4McastAddrsExcludeAllHost.remove(IPV4_ADDR_ALL_HOST_MULTICAST);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Updates IPv4/IPv6 multicast addresses.
+     */
+    public void updateMulticastAddrs() {
+        boolean ipv6MulticastUpdated = updateIPv6MulticastAddrs();
+        boolean ipv4MulticastUpdated = updateIPv4MulticastAddrs();
+        if (ipv6MulticastUpdated || ipv4MulticastUpdated) {
             installNewProgram();
         }
     }
@@ -3659,6 +3739,11 @@ public class ApfFilter {
     private boolean enableIpv6PingOffload() {
         return mHandleIpv6PingOffload && useApfV6Generator()
                 && !mIPv6NonTentativeAddresses.isEmpty();
+    }
+
+    @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
+    private boolean enableMldReportsMonitor() {
+        return mHandleMldOffload && useApfV6Generator();
     }
 
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
