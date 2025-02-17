@@ -15,6 +15,8 @@
  */
 package android.net.apf;
 
+import static android.system.OsConstants.IPPROTO_ICMPV6;
+
 import static com.android.net.module.util.NetworkStackConstants.ETHER_HEADER_LEN;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_HEADER_MIN_LEN;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_IGMP_TYPE_V1_REPORT;
@@ -115,6 +117,48 @@ public final class ApfConstants {
     // The IPv6 solicited nodes multicast address prefix ff02::1:ffXX:X/104
     public static final byte[] IPV6_SOLICITED_NODES_PREFIX =
             { (byte) 0xff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, (byte) 0xff};
+
+    /**
+     * IPv6 Router Alert Option constants.
+     *
+     * See also:
+     *     - https://tools.ietf.org/html/rfc2711
+     */
+    public static final int IPV6_ROUTER_ALERT_OPTION_TYPE = 5;
+    public static final int IPV6_ROUTER_ALERT_OPTION_LEN = 2;
+
+    /**
+     * IPv6 MLD constants.
+     *
+     * See also:
+     *     - https://tools.ietf.org/html/rfc2710
+     *     - https://tools.ietf.org/html/rfc3810
+     */
+    public static final int IPV6_MLD_MIN_SIZE = 24;
+    public static final int IPV6_MLD_TYPE_QUERY = 130;
+    public static final int IPV6_MLD_TYPE_V1_REPORT = 131;
+    public static final int IPV6_MLD_TYPE_V1_DONE = 132;
+    public static final int IPV6_MLD_TYPE_V2_REPORT = 143;
+    // kernel reference: net/ipv6/mcast.c#igmp6_send()
+    public static final byte[] IPV6_MLD_HOPOPTS = {
+            (byte) IPPROTO_ICMPV6,   // next header type
+            0,  // next header length
+            (byte) IPV6_ROUTER_ALERT_OPTION_TYPE, // Router Alert option type
+            (byte) IPV6_ROUTER_ALERT_OPTION_LEN,  // Router Alert option length
+            0,  0,  // Router Alert option value
+            (byte) 0x01, (byte) 0x00  // PadN type and length
+    };
+
+    public static final Set<Long> IPV6_MLD_TYPE_REPORTS = Set.of(
+            (long) IPV6_MLD_TYPE_V1_REPORT,
+            (long) IPV6_MLD_TYPE_V1_DONE,
+            (long) IPV6_MLD_TYPE_V2_REPORT
+    );
+    public static final int IPV6_EXT_HEADER_OFFSET = ETH_HEADER_LEN + IPV6_HEADER_LEN;
+    public static final int IPV6_MLD_TYPE_OFFSET =
+            IPV6_EXT_HEADER_OFFSET + IPV6_MLD_HOPOPTS.length;
+    public static final int IPV6_MLD_MULTICAST_ADDR_OFFSET =
+            IPV6_EXT_HEADER_OFFSET + IPV6_MLD_HOPOPTS.length + 8;
 
     public static final int ICMP4_TYPE_NO_OPTIONS_OFFSET = ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN;
     public static final int ICMP4_CHECKSUM_NO_OPTIONS_OFFSET =
