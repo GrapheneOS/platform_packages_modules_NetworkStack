@@ -130,8 +130,10 @@ public final class ApfConstants {
      * See also:
      *     - https://tools.ietf.org/html/rfc2711
      */
-    public static final int IPV6_ROUTER_ALERT_OPTION_TYPE = 5;
-    public static final int IPV6_ROUTER_ALERT_OPTION_LEN = 2;
+    public static final int IPV6_HBH_ROUTER_ALERT_OPTION_TYPE = 5;
+    public static final int IPV6_HBH_ROUTER_ALERT_OPTION_LEN = 2;
+
+    public static final int IPV6_HBH_PADN_OPTION_TYPE = 1;
 
     /**
      * IPv6 MLD constants.
@@ -141,7 +143,7 @@ public final class ApfConstants {
      *     - https://tools.ietf.org/html/rfc3810
      */
     public static final int IPV6_MLD_MESSAGE_MIN_SIZE = 8;
-    public static final int IPV6_MLD_MIN_SIZE = 24;
+    public static final int IPV6_MLD_MIN_SIZE = 24; // including icmp header
     public static final int IPV6_MLD_TYPE_QUERY = 130;
     public static final int IPV6_MLD_TYPE_V1_REPORT = 131;
     public static final int IPV6_MLD_TYPE_V1_DONE = 132;
@@ -152,10 +154,10 @@ public final class ApfConstants {
     public static final byte[] IPV6_MLD_HOPOPTS = {
             (byte) IPPROTO_ICMPV6,   // next header type
             0,  // next header length
-            (byte) IPV6_ROUTER_ALERT_OPTION_TYPE, // Router Alert option type
-            (byte) IPV6_ROUTER_ALERT_OPTION_LEN,  // Router Alert option length
+            (byte) IPV6_HBH_ROUTER_ALERT_OPTION_TYPE, // Router Alert option type
+            (byte) IPV6_HBH_ROUTER_ALERT_OPTION_LEN,  // Router Alert option length
             0,  0,  // Router Alert option value
-            (byte) 0x01, (byte) 0x00  // PadN type and length
+            (byte) IPV6_HBH_PADN_OPTION_TYPE, (byte) 0x00  // PadN type and length
     };
 
     public static final Set<Long> IPV6_MLD_TYPE_REPORTS = Set.of(

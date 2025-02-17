@@ -2579,7 +2579,7 @@ public class ApfFilter {
         //     else it is an MLDv1 general query:
         //       transmit MLDv1 reports (one report per multicast group) and drop
         //   else
-        //     pass
+        //     pass (on APFv2+)
         //
         // (APFv6+ specific logic)
         // if it's mDNS:
@@ -3155,7 +3155,7 @@ public class ApfFilter {
     /**
      * Generates filter code to handle MLD packets.
      * <p>
-     * On entry, this filter know it is processing an IPv6 packet. It will then process all MLD
+     * On entry, this filter knows it is processing an IPv6 packet. It will then process all MLD
      * packets, either passing or dropping them. Non-MLD packets are skipped.
      * R0 contains the u8 IPv6 next header.
      */
