@@ -3612,6 +3612,9 @@ public class ApfFilter {
         if (enableIgmpOffload()) {
             sb.append("IGMP, ");
         }
+        if (enableMldOffload()) {
+            sb.append("MLD, ");
+        }
         if (enableIpv4PingOffload()) {
             sb.append("Ping4, ");
         }
