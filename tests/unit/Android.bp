@@ -116,6 +116,6 @@ java_defaults {
     jni_libs: [
         "libnativehelper_compat_libc++",
         "libapfjniv6",
-        "libapfjniv7",
+        "libapfjninext",
     ],
 }

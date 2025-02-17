@@ -27,10 +27,10 @@
 #include "disassembler.h"
 #include "nativehelper/scoped_primitive_array.h"
 
-#include "v7/test_buf_allocator.h"
+#include "next/test_buf_allocator.h"
 
-#ifdef APF_INTERPRETER_V7
-#include "v7/apf_interpreter.h"
+#ifdef APF_INTERPRETER_NEXT
+#include "next/apf_interpreter.h"
 #endif
 
 #ifdef APF_INTERPRETER_V6
