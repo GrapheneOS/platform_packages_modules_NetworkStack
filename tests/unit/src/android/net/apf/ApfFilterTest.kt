@@ -4587,17 +4587,17 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testMdnsOffloadFailOpenForTooManySubtype() {
-        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(mcFilter = false)
+        val (apfFilter, program) = getApfWithMdnsOffloadEnabled()
         // Using scapy to generate packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
         // ip = IP(src="10.0.0.3", dst="224.0.0.251")
         // udp = UDP(dport=5353, sport=5353)
-        // dns = DNS(qd=DNSQR(qname="_testsubtype._tcp", qtype="PTR"))
+        // dns = DNS(qd=DNSQR(qname="_testsubtype._tcp.local", qtype="PTR"))
         // pkt = eth/ip/udp/dns
         val typePtrQuery = """
-            01005e0000fb01020304050608004500003f0001000040118faf0a000003e00
-            000fb14e914e9002b714a0000010000010000000000000c5f74657374737562
-            74797065045f74637000000c0001
+            01005e0000fb0102030405060800450000450001000040118fa90a000003e00
+            000fb14e914e900319b020000010000010000000000000c5f74657374737562
+            74797065045f746370056c6f63616c00000c0001
         """.replace("\\s+".toRegex(), "").trim()
         apfTestHelpers.verifyProgramRun(
             apfFilter.mApfVersionSupported,
@@ -4610,12 +4610,12 @@ class ApfFilterTest {
         // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
         // ip = IP(src="10.0.0.3", dst="224.0.0.251")
         // udp = UDP(dport=5353, sport=5353)
-        // dns = DNS(qd=DNSQR(qname="sub1._testsubtype._tcp", qtype="PTR"))
+        // dns = DNS(qd=DNSQR(qname="sub1._sub._testsubtype._tcp.local", qtype="PTR"))
         // pkt = eth/ip/udp/dns
         val subTypePtrQuery = """
-            01005e0000fb0102030405060800450000440001000040118faa0a000003e00
-            000fb14e914e90030c26e00000100000100000000000004737562310c5f7465
-            737473756274797065045f74637000000c0001
+            01005e0000fb01020304050608004500004f0001000040118f9f0a000003e00
+            000fb14e914e9003b1b3f0000010000010000000000000473756231045f7375
+            620c5f7465737473756274797065045f746370056c6f63616c00000c0001
         """.replace("\\s+".toRegex(), "").trim()
         apfTestHelpers.verifyProgramRun(
             apfFilter.mApfVersionSupported,
