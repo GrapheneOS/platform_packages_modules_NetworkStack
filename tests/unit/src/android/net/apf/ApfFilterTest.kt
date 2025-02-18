@@ -94,6 +94,8 @@ import com.android.net.module.util.NetworkStackConstants.ARP_REQUEST
 import com.android.net.module.util.NetworkStackConstants.ETHER_HEADER_LEN
 import com.android.net.module.util.NetworkStackConstants.ICMPV6_NA_HEADER_LEN
 import com.android.net.module.util.NetworkStackConstants.ICMPV6_NS_HEADER_LEN
+import com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_NODES_MULTICAST
+import com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_NODE_LOCAL_ALL_NODES_MULTICAST
 import com.android.net.module.util.NetworkStackConstants.IPV6_HEADER_LEN
 import com.android.net.module.util.arp.ArpPacket
 import com.android.networkstack.metrics.NetworkQuirkMetrics
@@ -126,6 +128,7 @@ import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mock
 import org.mockito.Mockito
+import org.mockito.Mockito.clearInvocations
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.doReturn
 import org.mockito.Mockito.never
@@ -283,7 +286,7 @@ class ApfFilterTest {
     }
     private val handler by lazy { Handler(handlerThread.looper) }
     private var writerSocket = FileDescriptor()
-    private var igmpWriteSocket = FileDescriptor()
+    private var mcastWriteSocket = FileDescriptor()
     private lateinit var apfTestHelpers: ApfTestHelpers
 
     @Before
@@ -307,9 +310,12 @@ class ApfFilterTest {
         val readSocket = FileDescriptor()
         Os.socketpair(AF_UNIX, SOCK_STREAM, 0, writerSocket, readSocket)
         doReturn(readSocket).`when`(dependencies).createPacketReaderSocket(anyInt())
-        val igmpReadSocket = FileDescriptor()
-        Os.socketpair(AF_UNIX, SOCK_STREAM, 0, igmpWriteSocket, igmpReadSocket)
-        doReturn(igmpReadSocket).`when`(dependencies).createEgressIgmpReportsReaderSocket(anyInt())
+        val mcastReadSocket = FileDescriptor()
+        Os.socketpair(AF_UNIX, SOCK_STREAM, 0, mcastWriteSocket, mcastReadSocket)
+        doReturn(mcastReadSocket)
+                .`when`(dependencies).createEgressIgmpReportsReaderSocket(anyInt())
+        doReturn(mcastReadSocket)
+                .`when`(dependencies).createEgressMulticastReportsReaderSocket(anyInt())
         doReturn(nsdManager).`when`(context).getSystemService(NsdManager::class.java)
     }
 
@@ -336,7 +342,7 @@ class ApfFilterTest {
     @After
     fun tearDown() {
         IoUtils.closeQuietly(writerSocket)
-        IoUtils.closeQuietly(igmpWriteSocket)
+        IoUtils.closeQuietly(mcastWriteSocket)
         shutdownApfFilters()
         handler.waitForIdle(TIMEOUT_MS)
         Mockito.framework().clearInlineMocks()
@@ -492,7 +498,12 @@ class ApfFilterTest {
 
     private fun updateIPv4MulticastAddrs(apfFilter: ApfFilter, mcastAddrs: List<Inet4Address>) {
         doReturn(mcastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())
-        apfFilter.updateIPv4MulticastAddrs()
+        apfFilter.updateMulticastAddrs()
+    }
+
+    private fun updateIPv6MulticastAddrs(apfFilter: ApfFilter, mcastAddrs: List<Inet6Address>) {
+        doReturn(mcastAddrs).`when`(dependencies).getIPv6MulticastAddresses(any())
+        apfFilter.updateMulticastAddrs()
     }
 
     @Test
@@ -4210,16 +4221,54 @@ class ApfFilterTest {
         mcastAddrs.add(addr)
         doReturn(mcastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())
         val testPacket = HexDump.hexStringToByteArray("000000")
-        Os.write(igmpWriteSocket, testPacket, 0, testPacket.size)
+        Os.write(mcastWriteSocket, testPacket, 0, testPacket.size)
         apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
 
-        Os.write(igmpWriteSocket, testPacket, 0, testPacket.size)
+        Os.write(mcastWriteSocket, testPacket, 0, testPacket.size)
         Thread.sleep(NO_CALLBACK_TIMEOUT_MS)
         verify(apfController, never()).installPacketFilter(any(), any())
 
         mcastAddrs.remove(addr)
         doReturn(mcastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())
-        Os.write(igmpWriteSocket, testPacket, 0, testPacket.size)
+        Os.write(mcastWriteSocket, testPacket, 0, testPacket.size)
+        apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testApfProgramUpdateWithIPv6MulticastAddressChange() {
+        val mcastAddrs = mutableListOf(
+            IPV6_ADDR_ALL_NODES_MULTICAST,
+            IPV6_ADDR_NODE_LOCAL_ALL_NODES_MULTICAST
+        )
+        doReturn(mcastAddrs).`when`(dependencies).getIPv6MulticastAddresses(any())
+        val apfConfig = getDefaultConfig()
+        apfConfig.handleMldOffload = true
+        val apfFilter = getApfFilter(apfConfig)
+        val ipv6LinkAddress = LinkAddress(hostLinkLocalIpv6Address, 64)
+        val lp = LinkProperties()
+        lp.addLinkAddress(ipv6LinkAddress)
+        apfFilter.setLinkProperties(lp)
+        apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 3)
+        val addr = InetAddress.getByName("ff0e::1") as Inet6Address
+        mcastAddrs.add(addr)
+        updateIPv6MulticastAddrs(apfFilter, mcastAddrs)
+        val testPacket = HexDump.hexStringToByteArray("000000")
+        Os.write(mcastWriteSocket, testPacket, 0, testPacket.size)
+        apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
+
+        var solicitedNodeMcastAddr = InetAddress.getByName("ff02::1:ff12:3456") as Inet6Address
+        mcastAddrs.add(solicitedNodeMcastAddr)
+        Os.write(mcastWriteSocket, testPacket, 0, testPacket.size)
+        apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
+
+        Os.write(mcastWriteSocket, testPacket, 0, testPacket.size)
+        Thread.sleep(NO_CALLBACK_TIMEOUT_MS)
+        verify(apfController, never()).installPacketFilter(any(), any())
+
+        mcastAddrs.remove(addr)
+        updateIPv6MulticastAddrs(apfFilter, mcastAddrs)
+        Os.write(mcastWriteSocket, testPacket, 0, testPacket.size)
         apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
     }
 
@@ -4280,5 +4329,36 @@ class ApfFilterTest {
             ByteArray(apfConfig.apfRamSize - ApfCounterTracker.Counter.totalSize()) { 0 },
             program
         )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testCreateEgressReportReaderSocket() {
+        var apfFilter = getApfFilter()
+        verify(dependencies, never()).createEgressIgmpReportsReaderSocket(anyInt())
+        verify(dependencies, never()).createEgressMulticastReportsReaderSocket(anyInt())
+        clearInvocations(dependencies)
+
+        val apfConfig = getDefaultConfig()
+        apfConfig.handleMldOffload = true
+        apfFilter = getApfFilter(apfConfig)
+
+        verify(dependencies, never()).createEgressIgmpReportsReaderSocket(anyInt())
+        verify(dependencies, times(1)).createEgressMulticastReportsReaderSocket(anyInt())
+        clearInvocations(dependencies)
+
+        apfConfig.handleIgmpOffload = true
+        apfConfig.handleMldOffload = false
+        apfFilter = getApfFilter(apfConfig)
+
+        verify(dependencies, never()).createEgressMulticastReportsReaderSocket(anyInt())
+        verify(dependencies, times(1)).createEgressIgmpReportsReaderSocket(anyInt())
+        clearInvocations(dependencies)
+
+        apfConfig.handleIgmpOffload = true
+        apfConfig.handleMldOffload = true
+        apfFilter = getApfFilter(apfConfig)
+        verify(dependencies, never()).createEgressIgmpReportsReaderSocket(anyInt())
+        verify(dependencies, times(1)).createEgressMulticastReportsReaderSocket(anyInt())
     }
 }

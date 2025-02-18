@@ -816,6 +816,7 @@ public class IpClient extends StateMachine {
     private final boolean mApfHandleNdOffload;
     private final boolean mApfHandleMdnsOffload;
     private final boolean mApfHandleIgmpOffload;
+    private final boolean mApfHandleMldOffload;
     private final boolean mApfHandleIpv4PingOffload;
     private final boolean mApfHandleIpv6PingOffload;
     private final boolean mIgnoreNudFailureEnabled;
@@ -1100,6 +1101,8 @@ public class IpClient extends StateMachine {
         mApfHandleIgmpOffload =
                 isAtLeast25Q2() || mDependencies.isFeatureEnabled(context,
                         APF_HANDLE_IGMP_OFFLOAD_VERSION);
+        // TODO: turn on APF MLD offload
+        mApfHandleMldOffload = false;
         mApfHandleIpv4PingOffload =
                 isAtLeast25Q2() || mDependencies.isFeatureEnabled(context,
                         APF_HANDLE_PING4_OFFLOAD_VERSION);
@@ -2818,6 +2821,7 @@ public class IpClient extends StateMachine {
         apfConfig.handleNdOffload = mApfHandleNdOffload;
         apfConfig.handleMdnsOffload = mApfHandleMdnsOffload;
         apfConfig.handleIgmpOffload = mApfHandleIgmpOffload;
+        apfConfig.handleMldOffload = mApfHandleMldOffload;
         apfConfig.handleIpv4PingOffload = mApfHandleIpv4PingOffload;
         apfConfig.handleIpv6PingOffload = mApfHandleIpv6PingOffload;
         apfConfig.minMetricsSessionDurationMs = mApfCounterPollingIntervalMs;
