@@ -1427,7 +1427,7 @@ public class ApfFilter {
         // Jump to the next filter if packet doesn't match this RA.
         void generateFilter(ApfV4GeneratorBase<?> gen, int timeSeconds)
                 throws IllegalInstructionException {
-            int nextFilterLabel = gen.getUniqueLabel();
+            short nextFilterLabel = gen.getUniqueLabel();
             // Skip if packet is not the right size
             gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE);
             gen.addJumpIfR0NotEquals(mPacket.capacity(), nextFilterLabel);
@@ -1492,7 +1492,7 @@ public class ApfFilter {
                         gen.addJumpIfR0Equals(0, nextFilterLabel);
                         gen.addJumpIfR0GreaterThan(section.lifetime, nextFilterLabel);
                     } else {
-                        final int continueLabel = gen.getUniqueLabel();
+                        final short continueLabel = gen.getUniqueLabel();
                         // Case 4a) otherwise
                         //
                         // if lft == 0                  -> PASS
@@ -1569,7 +1569,7 @@ public class ApfFilter {
 
         @Override
         void generateFilter(ApfV4GeneratorBase<?> gen) throws IllegalInstructionException {
-            final int nextFilterLabel = gen.getUniqueLabel();
+            final short nextFilterLabel = gen.getUniqueLabel();
 
             gen.addLoadImmediate(R0, ETH_HEADER_LEN + IPV4_SRC_ADDR_OFFSET);
             gen.addJumpIfBytesAtR0NotEqual(mSrcDstAddr, nextFilterLabel);
@@ -1685,7 +1685,7 @@ public class ApfFilter {
 
         @Override
         void generateFilter(ApfV4GeneratorBase<?> gen) throws IllegalInstructionException {
-            final int nextFilterLabel = gen.getUniqueLabel();
+            final short nextFilterLabel = gen.getUniqueLabel();
 
             gen.addLoadImmediate(R0, ETH_HEADER_LEN + IPV4_SRC_ADDR_OFFSET);
             gen.addJumpIfBytesAtR0NotEqual(mSrcDstAddr, nextFilterLabel);
@@ -1814,7 +1814,7 @@ public class ApfFilter {
         gen.addLoadImmediate(R0, ARP_HEADER_OFFSET);
         gen.addCountAndDropIfBytesAtR0NotEqual(ARP_IPV4_HEADER, DROPPED_ARP_NON_IPV4);
 
-        final int checkArpRequest = gen.getUniqueLabel();
+        final short checkArpRequest = gen.getUniqueLabel();
 
         gen.addLoad16(R0, ARP_OPCODE_OFFSET);
         gen.addJumpIfR0Equals(ARP_OPCODE_REQUEST, checkArpRequest); // Skip to arp request check.
@@ -1886,7 +1886,7 @@ public class ApfFilter {
     private void generateUnicastIpv4PingOffload(ApfV6GeneratorBase<?> gen)
             throws IllegalInstructionException {
 
-        final int skipIpv4PingFilter = gen.getUniqueLabel();
+        final short skipIpv4PingFilter = gen.getUniqueLabel();
         // Check 1) it's not a fragment. 2) it's ICMP.
         // If condition not match then skip the ping filter logic
         gen.addJumpIfNotUnfragmentedIPv4Protocol(IPPROTO_ICMP, skipIpv4PingFilter);
@@ -1959,9 +1959,9 @@ public class ApfFilter {
      * @param labelCheckMdnsQueryPayload the label to jump to for checking the mDNS query payload
      */
     private void generateIPv4MdnsFilter(ApfV6GeneratorBase<?> gen,
-            int labelCheckMdnsQueryPayload)
+            short labelCheckMdnsQueryPayload)
             throws IllegalInstructionException {
-        final int skipMdnsFilter = gen.getUniqueLabel();
+        final short skipMdnsFilter = gen.getUniqueLabel();
 
         // If the packet is too short to be a valid IPv4 mDNS packet, the filter is skipped.
         // For APF performance reasons, we check udp destination port before confirming it is
@@ -2030,7 +2030,7 @@ public class ApfFilter {
      * @param gen the APF generator to generate the filter code
      * @param labelCheckMdnsQueryPayload the label to jump to for checking the mDNS query payload
      */
-    private void generateIPv4Filter(ApfV4GeneratorBase<?> gen, int labelCheckMdnsQueryPayload)
+    private void generateIPv4Filter(ApfV4GeneratorBase<?> gen, short labelCheckMdnsQueryPayload)
             throws IllegalInstructionException {
         // Here's a basic summary of what the IPv4 filter program does:
         //
@@ -2127,7 +2127,7 @@ public class ApfFilter {
         }
 
         if (mMulticastFilter) {
-            final int skipDhcpv4Filter = gen.getUniqueLabel();
+            final short skipDhcpv4Filter = gen.getUniqueLabel();
 
             // Pass DHCP addressed to us.
             // Check 1) it's not a fragment. 2) it's UDP.
@@ -2187,7 +2187,7 @@ public class ApfFilter {
     }
 
     private void generateKeepaliveFilters(ApfV4GeneratorBase<?> gen, Class<?> filterType, int proto,
-            int offset, int label) throws IllegalInstructionException {
+            int offset, short label) throws IllegalInstructionException {
         final boolean haveKeepaliveResponses = CollectionUtils.any(mKeepalivePackets,
                 filterType::isInstance);
 
@@ -2326,8 +2326,8 @@ public class ApfFilter {
 
         // Dst IPv6 address check:
         final List<byte[]> allSuffixes = getSolicitedNodeMcastAddressSuffix(allIPv6Addrs);
-        final int notIpV6SolicitedNodeMcast = v6Gen.getUniqueLabel();
-        final int endOfIpV6DstCheck = v6Gen.getUniqueLabel();
+        final short notIpV6SolicitedNodeMcast = v6Gen.getUniqueLabel();
+        final short endOfIpV6DstCheck = v6Gen.getUniqueLabel();
         v6Gen.addLoadImmediate(R0, IPV6_DEST_ADDR_OFFSET)
                 .addJumpIfBytesAtR0NotEqual(IPV6_SOLICITED_NODES_PREFIX, notIpV6SolicitedNodeMcast)
                 .addAdd(13)
@@ -2418,8 +2418,8 @@ public class ApfFilter {
      * @param labelCheckMdnsQueryPayload the label to jump to for checking the mDNS query payload
      */
     private void generateIPv6MdnsFilter(ApfV6GeneratorBase<?> gen,
-            int labelCheckMdnsQueryPayload) throws IllegalInstructionException {
-        final int skipMdnsFilter = gen.getUniqueLabel();
+            short labelCheckMdnsQueryPayload) throws IllegalInstructionException {
+        final short skipMdnsFilter = gen.getUniqueLabel();
 
         // If the packet is too short to be a valid IPv6 mDNS packet, the filter is skipped.
         // For APF performance reasons, we check udp destination port before confirming it is IPv6
@@ -2486,7 +2486,7 @@ public class ApfFilter {
     private void generateUnicastIpv6PingOffload(ApfV6GeneratorBase<?> gen)
             throws IllegalInstructionException {
 
-        final int skipPing6Offload = gen.getUniqueLabel();
+        final short skipPing6Offload = gen.getUniqueLabel();
         gen.addJumpIfR0NotEquals(ICMPV6_ECHO_REQUEST_TYPE, skipPing6Offload);
 
         // Only offload unicast ping6.
@@ -2555,7 +2555,7 @@ public class ApfFilter {
      * @param gen the APF generator to generate the filter code
      * @param labelCheckMdnsQueryPayload the label to jump to for checking the mDNS query payload
      */
-    private void generateIPv6Filter(ApfV4GeneratorBase<?> gen, int labelCheckMdnsQueryPayload)
+    private void generateIPv6Filter(ApfV4GeneratorBase<?> gen, short labelCheckMdnsQueryPayload)
             throws IllegalInstructionException {
         // Here's a basic summary of what the IPv6 filter program does:
         //
@@ -2659,8 +2659,8 @@ public class ApfFilter {
 
         // Drop multicast if the multicast filter is enabled.
         if (mMulticastFilter) {
-            final int skipIPv6MulticastFilterLabel = gen.getUniqueLabel();
-            final int dropAllIPv6MulticastsLabel = gen.getUniqueLabel();
+            final short skipIPv6MulticastFilterLabel = gen.getUniqueLabel();
+            final short dropAllIPv6MulticastsLabel = gen.getUniqueLabel();
 
             // While in doze mode, drop ICMPv6 multicast pings, let the others pass.
             // While awake, let all ICMPv6 multicasts through.
@@ -2695,7 +2695,7 @@ public class ApfFilter {
         // Not ICMPv6 NS -> skip.
         gen.addLoad8(R0, ICMP6_TYPE_OFFSET); // warning: also used further below.
         if (enableNdOffload()) {
-            final int skipNsPacketFilter = gen.getUniqueLabel();
+            final short skipNsPacketFilter = gen.getUniqueLabel();
             gen.addJumpIfR0NotEquals(ICMPV6_NEIGHBOR_SOLICITATION, skipNsPacketFilter);
             generateNsFilter((ApfV6GeneratorBase<?>) gen);
             // End of NS filter. generateNsFilter() method is terminal, so NS packet will be
@@ -2708,7 +2708,7 @@ public class ApfFilter {
         }
 
         // Add unsolicited multicast neighbor announcements filter
-        int skipUnsolicitedMulticastNALabel = gen.getUniqueLabel();
+        short skipUnsolicitedMulticastNALabel = gen.getUniqueLabel();
         // Drop all router solicitations (b/32833400)
         gen.addCountAndDropIfR0Equals(ICMPV6_ROUTER_SOLICITATION, DROPPED_IPV6_ROUTER_SOLICITATION);
         // If not neighbor announcements, skip filter.
@@ -2895,8 +2895,8 @@ public class ApfFilter {
      */
     private void generateIgmpFilter(ApfV6GeneratorBase<?> v6Gen)
             throws IllegalInstructionException {
-        final int skipIgmpFilter = v6Gen.getUniqueLabel();
-        final int checkIgmpV1orV2 = v6Gen.getUniqueLabel();
+        final short skipIgmpFilter = v6Gen.getUniqueLabel();
+        final short checkIgmpV1orV2 = v6Gen.getUniqueLabel();
 
         // Check 1) it's not a fragment. 2) it's IGMP.
         v6Gen.addJumpIfNotUnfragmentedIPv4Protocol(IPV4_PROTOCOL_IGMP, skipIgmpFilter);
@@ -3161,8 +3161,8 @@ public class ApfFilter {
      */
     private void generateMldFilter(ApfV6GeneratorBase<?> gen)
             throws IllegalInstructionException {
-        final int skipMldFilter = gen.getUniqueLabel();
-        final int checkMldv1 = gen.getUniqueLabel();
+        final short skipMldFilter = gen.getUniqueLabel();
+        final short checkMldv1 = gen.getUniqueLabel();
 
         // If next header is not hop-by-hop, then skip
         gen.addJumpIfR0NotEquals(IPPROTO_HOPOPTS, skipMldFilter);
@@ -3245,7 +3245,7 @@ public class ApfFilter {
      */
     private void generateV4TcpPort7Filter(ApfV4GeneratorBase<?> gen)
             throws IllegalInstructionException {
-        final int skipPort7V4Filter = gen.getUniqueLabel();
+        final short skipPort7V4Filter = gen.getUniqueLabel();
 
         // Check it's TCP.
         gen.addLoad8(R0, IPV4_PROTOCOL_OFFSET);
@@ -3361,9 +3361,9 @@ public class ApfFilter {
         final byte[] mdns6NextHdrToUdpDport = createMdns6PktFromIPv6NextHdrToUdpDport(enableMdns6);
 
         for (MdnsOffloadRule rule : mOffloadRules) {
-            final int ruleNotMatch = gen.getUniqueLabel();
-            final int ruleMatch = gen.getUniqueLabel();
-            final int offloadIPv6Mdns = gen.getUniqueLabel();
+            final short ruleNotMatch = gen.getUniqueLabel();
+            final short ruleMatch = gen.getUniqueLabel();
+            final short offloadIPv6Mdns = gen.getUniqueLabel();
 
             for (MdnsOffloadRule.Matcher matcher : rule.mMatchers) {
                 gen.addJumpIfPktAtR0ContainDnsQ(matcher.mQnames, matcher.mQtype, ruleMatch);
@@ -3471,7 +3471,7 @@ public class ApfFilter {
                     mInstallableProgramSizeClamp);
         }
 
-        final int labelCheckMdnsQueryPayload = gen.getUniqueLabel();
+        final short labelCheckMdnsQueryPayload = gen.getUniqueLabel();
 
         if (hasDataAccess(mApfVersionSupported)) {
             if (gen instanceof ApfV4Generator) {
@@ -3539,7 +3539,7 @@ public class ApfFilter {
         }
 
         // Add ARP filters:
-        int skipArpFiltersLabel = gen.getUniqueLabel();
+        short skipArpFiltersLabel = gen.getUniqueLabel();
         gen.addJumpIfR0NotEquals(ETH_P_ARP, skipArpFiltersLabel);
         generateArpFilter(gen);
         gen.defineLabel(skipArpFiltersLabel);
@@ -3547,7 +3547,7 @@ public class ApfFilter {
         gen.addLoad16(R0, ETH_ETHERTYPE_OFFSET);
 
         // Add IPv4 filters:
-        int skipIPv4FiltersLabel = gen.getUniqueLabel();
+        short skipIPv4FiltersLabel = gen.getUniqueLabel();
         gen.addJumpIfR0NotEquals(ETH_P_IP, skipIPv4FiltersLabel);
         generateIPv4Filter(gen, labelCheckMdnsQueryPayload);
         gen.defineLabel(skipIPv4FiltersLabel);
@@ -3556,7 +3556,7 @@ public class ApfFilter {
         // NOTE: Relies on R0 containing ethertype. This is safe because if we got here, we did
         // not execute the IPv4 filter, since this filter do not fall through, but either drop or
         // pass.
-        int ipv6FilterLabel = gen.getUniqueLabel();
+        short ipv6FilterLabel = gen.getUniqueLabel();
         gen.addJumpIfR0Equals(ETH_P_IPV6, ipv6FilterLabel);
 
         // Drop non-IP non-ARP broadcasts, pass the rest
@@ -3570,7 +3570,7 @@ public class ApfFilter {
 
         // Add mDNS query payload check.
         if (enableMdns4Offload() || enableMdns6Offload()) {
-            final int skipMdnsQueryPayloadCheck = gen.getUniqueLabel();
+            final short skipMdnsQueryPayloadCheck = gen.getUniqueLabel();
             gen.addJump(skipMdnsQueryPayloadCheck);
             gen.defineLabel(labelCheckMdnsQueryPayload);
             generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen);
