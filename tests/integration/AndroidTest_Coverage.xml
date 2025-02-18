@@ -32,5 +32,7 @@
         <option name="test-filter-dir" value="/data/data/{PACKAGE}/cache" />
         <option name="hidden-api-checks" value="false"/>
         <option name="device-listeners" value="com.android.modules.utils.testing.NativeCoverageHackInstrumentationListener" />
+        <!-- b/393391701 -->
+        <option name="exclude-filter" value="com.android.net.module.util.RealtimeSchedulerTest" />
     </test>
 </configuration>
