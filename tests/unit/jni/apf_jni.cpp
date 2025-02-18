@@ -23,7 +23,7 @@
 #include <string>
 #include <vector>
 
-#include "apf_interpreter.h"
+#include "v4/apf_interpreter.h"
 #include "disassembler.h"
 #include "nativehelper/scoped_primitive_array.h"
 
