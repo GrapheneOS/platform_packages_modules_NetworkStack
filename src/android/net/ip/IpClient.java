@@ -1101,13 +1101,11 @@ public class IpClient extends StateMachine {
         mApfHandleIgmpOffload =
                 isAtLeast25Q2() || mDependencies.isFeatureEnabled(context,
                         APF_HANDLE_IGMP_OFFLOAD_VERSION);
-        // TODO: turn on APF MLD offload
-        mApfHandleMldOffload = false;
+        mApfHandleMldOffload = isAtLeast25Q2();
         mApfHandleIpv4PingOffload =
                 isAtLeast25Q2() || mDependencies.isFeatureEnabled(context,
                         APF_HANDLE_PING4_OFFLOAD_VERSION);
-        // TODO: turn on IPv6 ping offload.
-        mApfHandleIpv6PingOffload = false;
+        mApfHandleIpv6PingOffload = isAtLeast25Q2();
         mPopulateLinkAddressLifetime = mDependencies.isFeatureEnabled(context,
                 IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION);
         mIgnoreNudFailureEnabled = mDependencies.isFeatureEnabled(mContext,
@@ -2821,9 +2819,11 @@ public class IpClient extends StateMachine {
         apfConfig.handleNdOffload = mApfHandleNdOffload;
         apfConfig.handleMdnsOffload = mApfHandleMdnsOffload;
         apfConfig.handleIgmpOffload = mApfHandleIgmpOffload;
-        apfConfig.handleMldOffload = mApfHandleMldOffload;
+        // TODO: Turn on MLD offload on devices with 2048 ~ 3999 bytes of APF RAM.
+        apfConfig.handleMldOffload = mApfHandleMldOffload && apfConfig.apfRamSize >= 4000;
         apfConfig.handleIpv4PingOffload = mApfHandleIpv4PingOffload;
-        apfConfig.handleIpv6PingOffload = mApfHandleIpv6PingOffload;
+        // TODO: Turn on Ping6 offload on devices with 2048 ~ 3999 bytes of APF RAM.
+        apfConfig.handleIpv6PingOffload = mApfHandleIpv6PingOffload && apfConfig.apfRamSize >= 4000;
         apfConfig.minMetricsSessionDurationMs = mApfCounterPollingIntervalMs;
         apfConfig.hasClatInterface = mHasSeenClatInterface;
         return mDependencies.maybeCreateApfFilter(getHandler(), mContext, apfConfig,
