@@ -17,8 +17,6 @@ package android.net.apf;
 
 import com.android.internal.annotations.VisibleForTesting;
 
-import java.util.Objects;
-
 /**
  * APFv6 assembler/generator. A tool for generating an APFv6 program.
  *
@@ -47,9 +45,6 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
     public ApfV6Generator(byte[] bytes, int version, int ramSize, int clampSize)
             throws IllegalInstructionException {
-        super(version, ramSize, clampSize);
-        Objects.requireNonNull(bytes);
-        addData(bytes);
-        addExceptionBuffer(0);
+        super(bytes, version, ramSize, clampSize);
     }
 }

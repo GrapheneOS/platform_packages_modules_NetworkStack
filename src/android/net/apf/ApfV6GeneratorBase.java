@@ -46,9 +46,12 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
      * the requested version is unsupported.
      *
      */
-    public ApfV6GeneratorBase(int version, int ramSize, int clampSize)
+    public ApfV6GeneratorBase(byte[] bytes, int version, int ramSize, int clampSize)
             throws IllegalInstructionException {
         super(version, ramSize, clampSize, false);
+        Objects.requireNonNull(bytes);
+        addData(bytes);
+        addExceptionBuffer(0);
     }
 
     @Override
