@@ -40,12 +40,6 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
         this(new byte[0], version, ramSize, clampSize);
     }
 
-    @Override
-    void updateExceptionBufferSize(int programSize) throws IllegalInstructionException {
-        mInstructions.get(1).updateExceptionBufferSize(
-                mRamSize - ApfCounterTracker.Counter.totalSize() - programSize);
-    }
-
     /**
      * Creates an ApfV6Generator instance which emits instructions APFv6.
      * Initializes the data region with {@code bytes}.

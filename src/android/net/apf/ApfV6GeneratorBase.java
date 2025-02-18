@@ -51,6 +51,12 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
         super(version, ramSize, clampSize, false);
     }
 
+    @Override
+    void updateExceptionBufferSize(int programSize) throws IllegalInstructionException {
+        mInstructions.get(1).updateExceptionBufferSize(
+                mRamSize - ApfCounterTracker.Counter.totalSize() - programSize);
+    }
+
     /**
      * Add an instruction to the end of the program to increment the counter value and
      * immediately return PASS.
