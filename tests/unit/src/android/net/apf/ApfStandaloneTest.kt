@@ -300,7 +300,7 @@ class ApfStandaloneTest {
         gen.addStoreData(R0, 0)
 
         // ethtype filter
-        gen.addLoad16(R0, ETHER_TYPE_OFFSET)
+        gen.addLoad16intoR0(ETHER_TYPE_OFFSET)
         maybeSetupCounter(gen, Counter.DROPPED_ETHERTYPE_DENYLISTED)
         for (p in etherTypeDenyList) {
             gen.addJumpIfR0Equals(p.toLong(), countAndDropLabel)
@@ -309,7 +309,7 @@ class ApfStandaloneTest {
         // dhcp request filters
 
         // Check IPv4
-        gen.addLoad16(R0, ETHER_TYPE_OFFSET)
+        gen.addLoad16intoR0(ETHER_TYPE_OFFSET)
         gen.addJumpIfR0NotEquals(ETH_P_IP.toLong(), endOfDhcpFilter)
 
         // Pass DHCP addressed to us.
@@ -335,7 +335,7 @@ class ApfStandaloneTest {
         // rs filters
 
         // check IPv6
-        gen.addLoad16(R0, ETHER_TYPE_OFFSET)
+        gen.addLoad16intoR0(ETHER_TYPE_OFFSET)
         gen.addJumpIfR0NotEquals(OsConstants.ETH_P_IPV6.toLong(), endOfRsFilter)
         // check ICMP6 packet
         gen.addLoad8intoR0(IPV6_NEXT_HEADER_OFFSET)
@@ -353,7 +353,7 @@ class ApfStandaloneTest {
             // ping filter
 
             // Check IPv4
-            gen.addLoad16(R0, ETHER_TYPE_OFFSET)
+            gen.addLoad16intoR0(ETHER_TYPE_OFFSET)
             gen.addJumpIfR0NotEquals(ETH_P_IP.toLong(), endOfPingFilter)
             // Check it's ICMP.
             gen.addLoad8intoR0(IPV4_PROTOCOL_OFFSET)
