@@ -4138,7 +4138,7 @@ public class ApfFilter {
                 mApfVersionSupported, mApfRamSize));
         pw.println("InstallableProgramSizeClamp: " + mInstallableProgramSizeClamp);
         pw.println("Filter update status: " + (mIsRunning ? "RUNNING" : "PAUSED"));
-        pw.println("Multicast: " + (mMulticastFilter ? "DROP" : "ALLOW"));
+        pw.println("ApfConfig: " + getApfConfigMessage());
         pw.println("Minimum RDNSS lifetime: " + mMinRdnssLifetimeSec);
         pw.println("Interface MAC address: " + MacAddress.fromBytes(mHardwareAddress));
         pw.println("Multicast MAC addresses: ");
