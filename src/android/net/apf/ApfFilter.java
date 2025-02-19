@@ -1704,8 +1704,7 @@ public class ApfFilter {
             // Load IPv4 total length
             gen.addSwap();
             gen.addLoad16intoR0(IPV4_TOTAL_LENGTH_OFFSET);
-            gen.addSwap();
-            gen.addNeg(R0);
+            gen.addNeg(R1);
             gen.addAddR1ToR0();
             gen.addJumpIfR0NotEquals(0, nextFilterLabel);
             // Add IPv4 header length
