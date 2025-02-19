@@ -4149,6 +4149,15 @@ public class ApfFilter {
             pw.println(MacAddress.fromBytes(addr));
         }
         pw.decreaseIndent();
+        if (SdkLevel.isAtLeastV()) {
+            pw.print("Hardcoded Allowlisted Ethertypes:");
+            pw.println(" 0800(IPv4) 0806(ARP) 86DD(IPv6) 888E(EAPOL) 88B4(WAPI)");
+        } else {
+            pw.print("Denylisted Ethertypes:");
+            for (int p : mEthTypeBlackList) {
+                pw.print(String.format(" %04x", p));
+            }
+        }
         try {
             pw.println("IPv4 address: " + InetAddress.getByAddress(mIPv4Address).getHostAddress());
         } catch (UnknownHostException|NullPointerException e) {}
@@ -4200,15 +4209,6 @@ public class ApfFilter {
                 "Last program length %d, installed %ds ago, lifetime %ds",
                 mLastInstalledProgram.length, filterAgeSeconds,
                 mLastInstalledProgramMinLifetime));
-        if (SdkLevel.isAtLeastV()) {
-            pw.print("Hardcoded Allowlisted Ethertypes:");
-            pw.println(" 0800(IPv4) 0806(ARP) 86DD(IPv6) 888E(EAPOL) 88B4(WAPI)");
-        } else {
-            pw.print("Denylisted Ethertypes:");
-            for (int p : mEthTypeBlackList) {
-                pw.print(String.format(" %04x", p));
-            }
-        }
         pw.println();
         pw.println("Mdns filters:");
         pw.increaseIndent();
