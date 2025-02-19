@@ -27,7 +27,7 @@ public class ApfJniUtils {
         if (apfInterpreterVersion == 6) {
             System.loadLibrary("apfjniv6");
         } else if (apfInterpreterVersion == 7) {
-            System.loadLibrary("apfjniv7");
+            System.loadLibrary("apfjninext");
         } else {
             throw new IllegalArgumentException("apfInterpreterVersion must be 6 or 7");
         }

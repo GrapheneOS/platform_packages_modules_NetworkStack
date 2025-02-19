@@ -353,7 +353,7 @@ public abstract class BaseApfGenerator {
         // mTargetLabel == -1 indicates it is uninitialized. mTargetLabel < -1 indicates a label
         // within the program used for offset calculation. mTargetLabel >= 0 indicates a pass/drop
         // label, its offset is mTargetLabel + program size.
-        private int mTargetLabel = -1;
+        private short mTargetLabel = -1;
         public byte[] mBytesImm;
         // Offset in bytes from the beginning of this program.
         // Set by {@link BaseApfGenerator#generate}.
@@ -455,7 +455,7 @@ public abstract class BaseApfGenerator {
             return this;
         }
 
-        Instruction setLabel(int label) throws IllegalInstructionException {
+        Instruction setLabel(short label) throws IllegalInstructionException {
             if (mLabels.containsKey(label)) {
                 throw new IllegalInstructionException("duplicate label " + label);
             }
@@ -466,7 +466,7 @@ public abstract class BaseApfGenerator {
             return this;
         }
 
-        Instruction setTargetLabel(int label) {
+        Instruction setTargetLabel(short label) {
             mTargetLabel = label;
             mTargetLabelSize = 4; // May shrink later on in generate().
             return this;
@@ -878,26 +878,30 @@ public abstract class BaseApfGenerator {
         }
     }
 
-    private int mLabelCount = 0;
+    private short mLabelCount = 0;
 
     /**
      * Return a unique label string.
      */
-    public int getUniqueLabel() {
-        return -(2 + mLabelCount++);
+    public short getUniqueLabel() {
+        final short nextLabel = (short) -(2 + mLabelCount++);
+        if (nextLabel == Short.MIN_VALUE) {
+            throw new IllegalStateException("Running out of unique labels");
+        }
+        return nextLabel;
     }
 
     /**
      * Jump to this label to terminate the program and indicate the packet
      * should be dropped.
      */
-    public static final int DROP_LABEL = 1;
+    public static final short DROP_LABEL = 1;
 
     /**
      * Jump to this label to terminate the program and indicate the packet
      * should be passed to the AP.
      */
-    public static final int PASS_LABEL = 0;
+    public static final short PASS_LABEL = 0;
 
     /**
      * Number of memory slots available for access via APF stores to memory and loads from memory.
@@ -982,7 +986,7 @@ public abstract class BaseApfGenerator {
 
 
     final ArrayList<Instruction> mInstructions = new ArrayList<Instruction>();
-    private final HashMap<Integer, Instruction> mLabels = new HashMap<>();
+    private final HashMap<Short, Instruction> mLabels = new HashMap<>();
     public final int mVersion;
     public final int mRamSize;
     public final int mClampSize;

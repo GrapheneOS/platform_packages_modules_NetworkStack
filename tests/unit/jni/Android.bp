@@ -58,12 +58,12 @@ cc_library_shared {
 }
 
 cc_library_shared {
-    name: "libapfjniv7",
+    name: "libapfjninext",
     defaults: ["libapfjni_defaults"],
     cflags: [
-        "-DAPF_INTERPRETER_V7",
+        "-DAPF_INTERPRETER_NEXT",
     ],
     static_libs: [
-        "libapf_v7",
+        "libapf_next",
     ],
 }
