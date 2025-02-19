@@ -4160,7 +4160,9 @@ public class ApfFilter {
         }
         try {
             pw.println("IPv4 address: " + InetAddress.getByAddress(mIPv4Address).getHostAddress());
-        } catch (UnknownHostException|NullPointerException e) {}
+        } catch (UnknownHostException | NullPointerException e) {
+            pw.println("IPv4 address: None");
+        }
 
         pw.println("IPv4 multicast addresses: ");
         pw.increaseIndent();
