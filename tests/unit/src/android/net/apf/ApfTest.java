@@ -572,7 +572,7 @@ public class ApfTest {
         // Test half-word indexed load.
         gen = new ApfV4Generator(APF_VERSION_2, mRamSize, mClampSize);
         gen.addLoadImmediate(R1, 1);
-        gen.addLoad16Indexed(R0, 0);
+        gen.addLoad16R1IndexedIntoR0(0);
         gen.addJumpIfR0Equals((45 << 8) | 67, DROP_LABEL);
         assertDrop(gen, new byte[]{123,45,67,0,0,0,0,0,0,0,0,0,0,0,0}, 0);
 
@@ -2911,7 +2911,7 @@ public class ApfTest {
         gen.addLoad16(R0, 20);
         gen.addJumpIfR0AnyBitsSet(0x1fff, (short) -159);
         gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-        gen.addLoad16Indexed(R0, 16);
+        gen.addLoad16R1IndexedIntoR0(16);
         gen.addJumpIfR0NotEquals(0x44, (short) -159);
         gen.addLoadImmediate(R0, 50);
         gen.addAddR1ToR0();
@@ -3065,7 +3065,7 @@ public class ApfTest {
         gen.addLoad16(R0, 20);
         gen.addJumpIfR0AnyBitsSet(0x1fff, (short) -151);
         gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-        gen.addLoad16Indexed(R0, 16);
+        gen.addLoad16R1IndexedIntoR0(16);
         gen.addJumpIfR0NotEquals(0x44, (short) -151);
         gen.addLoadImmediate(R0, 50);
         gen.addAddR1ToR0();
@@ -3179,7 +3179,7 @@ public class ApfTest {
         gen.addLoad16(R0, 20);
         gen.addJumpIfR0AnyBitsSet(0x1fff, (short) -157);
         gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-        gen.addLoad16Indexed(R0, 16);
+        gen.addLoad16R1IndexedIntoR0(16);
         gen.addJumpIfR0NotEquals(0x44, (short) -157);
         gen.addLoadImmediate(R0, 50);
         gen.addAddR1ToR0();
@@ -3294,7 +3294,7 @@ public class ApfTest {
         gen.addLoad16(R0, 20);
         gen.addJumpIfR0AnyBitsSet(0x1fff, (short) -165);
         gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-        gen.addLoad16Indexed(R0, 16);
+        gen.addLoad16R1IndexedIntoR0(16);
         gen.addJumpIfR0NotEquals(0x44, (short) -165);
         gen.addLoadImmediate(R0, 50);
         gen.addAddR1ToR0();
@@ -3314,7 +3314,7 @@ public class ApfTest {
         gen.addLoad16(R0, 20);
         gen.addJumpIfR0AnyBitsSet(0x1fff, (short) -225);
         gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-        gen.addLoad16Indexed(R0, 16);
+        gen.addLoad16R1IndexedIntoR0(16);
         gen.addJumpIfR0NotEquals(0x7, (short) -225);
         gen.addCountAndDrop(getCounterEnumFromOffset(-148));
 

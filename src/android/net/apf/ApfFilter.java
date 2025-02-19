@@ -2134,7 +2134,7 @@ public class ApfFilter {
             gen.addJumpIfNotUnfragmentedIPv4Protocol(IPPROTO_UDP, skipDhcpv4Filter);
             // Check it's addressed to DHCP client port.
             gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-            gen.addLoad16Indexed(R0, TCP_UDP_DESTINATION_PORT_OFFSET);
+            gen.addLoad16R1IndexedIntoR0(TCP_UDP_DESTINATION_PORT_OFFSET);
             gen.addJumpIfR0NotEquals(DHCP_CLIENT_PORT, skipDhcpv4Filter);
             // Check it's DHCP to our MAC address.
             gen.addLoadImmediate(R0, DHCP_CLIENT_MAC_OFFSET);
@@ -3257,7 +3257,7 @@ public class ApfFilter {
 
         // Check it's destination port 7.
         gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-        gen.addLoad16Indexed(R0, TCP_UDP_DESTINATION_PORT_OFFSET);
+        gen.addLoad16R1IndexedIntoR0(TCP_UDP_DESTINATION_PORT_OFFSET);
         gen.addJumpIfR0NotEquals(ECHO_PORT, skipPort7V4Filter);
 
         // Drop it.

@@ -324,7 +324,7 @@ class ApfStandaloneTest {
         gen.addJumpIfR0NotEquals(OsConstants.IPPROTO_UDP.toLong(), endOfDhcpFilter)
         // Check it's addressed to DHCP client port.
         gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE)
-        gen.addLoad16Indexed(R0, TCP_UDP_DESTINATION_PORT_OFFSET)
+        gen.addLoad16R1IndexedIntoR0(TCP_UDP_DESTINATION_PORT_OFFSET)
         gen.addJumpIfR0NotEquals(DHCP_SERVER_PORT.toLong(), endOfDhcpFilter)
         // drop dhcp the discovery and request
         maybeSetupCounter(gen, Counter.DROPPED_DHCP_REQUEST_DISCOVERY)
