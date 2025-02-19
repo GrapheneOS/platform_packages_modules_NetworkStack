@@ -579,7 +579,7 @@ public class ApfTest {
         // Test word indexed load.
         gen = new ApfV4Generator(APF_VERSION_2, mRamSize, mClampSize);
         gen.addLoadImmediate(R1, 1);
-        gen.addLoad32Indexed(R0, 0);
+        gen.addLoad32R1IndexedIntoR0(0);
         gen.addJumpIfR0Equals((45 << 24) | (67 << 16) | (89 << 8) | 12, DROP_LABEL);
         assertDrop(gen, new byte[]{123,45,67,89,12,0,0,0,0,0,0,0,0,0,0}, 0);
 

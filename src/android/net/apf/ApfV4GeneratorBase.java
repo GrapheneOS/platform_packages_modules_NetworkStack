@@ -153,8 +153,8 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      * {@code register}. The offset of the loaded 32-bits from the beginning of the packet is
      * the sum of {@code offset} and the value in register R1.
      */
-    public final Type addLoad32Indexed(Register r, int ofs) {
-        return append(new Instruction(Opcodes.LDWX, r).addTwosCompUnsigned(ofs));
+    public final Type addLoad32R1IndexedIntoR0(int ofs) {
+        return append(new Instruction(Opcodes.LDWX, R0).addTwosCompUnsigned(ofs));
     }
 
     /**

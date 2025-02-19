@@ -2111,7 +2111,7 @@ public class ApfFilter {
             gen.addCountAndDropIfR0NotEquals(IPPROTO_UDP, DROPPED_IPV4_NON_DHCP4);
             // Check it's addressed to DHCP client port.
             gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-            gen.addLoad32Indexed(R0, TCP_UDP_SOURCE_PORT_OFFSET);
+            gen.addLoad32R1IndexedIntoR0(TCP_UDP_SOURCE_PORT_OFFSET);
             gen.addCountAndDropIfR0NotEquals(DHCP_SERVER_PORT << 16 | DHCP_CLIENT_PORT,
                     DROPPED_IPV4_NON_DHCP4);
             gen.addCountAndPass(PASSED_IPV4_FROM_DHCPV4_SERVER);
@@ -2933,7 +2933,7 @@ public class ApfFilter {
         // Increased APF bytecode size for offloading these queries may not yield significant
         // power benefits. In this case, letting the kernel handle group-specific queries is
         // acceptable.
-        v6Gen.addLoad32Indexed(R0, IGMP_MULTICAST_ADDRESS_OFFSET)
+        v6Gen.addLoad32R1IndexedIntoR0(IGMP_MULTICAST_ADDRESS_OFFSET)
                 .addCountAndPassIfR0NotEquals(0 /* 0.0.0.0 */, PASSED_IPV4);
 
         // If we reach here, we know it is an IGMPv1/IGMPv2/IGMPv3 general query.
