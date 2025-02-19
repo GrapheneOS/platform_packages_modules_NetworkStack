@@ -1446,7 +1446,7 @@ public class ApfFilter {
                     switch (section.length) {
                         // length asserted to be either 2 or 4 on PacketSection construction
                         case 2: gen.addLoad16(R0, section.start); break;
-                        case 4: gen.addLoad32(R0, section.start); break;
+                        case 4: gen.addLoad32intoR0(section.start); break;
                     }
 
                     // WARNING: keep this in sync with matches()!
@@ -1824,7 +1824,7 @@ public class ApfFilter {
         /*----------  Handle ARP Replies. ----------*/
 
         // Drop if ARP reply source IP is 0.0.0.0
-        gen.addLoad32(R0, ARP_SOURCE_IP_ADDRESS_OFFSET);
+        gen.addLoad32intoR0(ARP_SOURCE_IP_ADDRESS_OFFSET);
         gen.addCountAndDropIfR0Equals(IPV4_ANY_HOST_ADDRESS, DROPPED_ARP_REPLY_SPA_NO_HOST);
 
         // Pass if non-broadcast reply.
@@ -1835,12 +1835,12 @@ public class ApfFilter {
         // It is a broadcast reply.
         if (mIPv4Address == null) {
             // When there is no IPv4 address, drop GARP replies (b/29404209).
-            gen.addLoad32(R0, ARP_TARGET_IP_ADDRESS_OFFSET);
+            gen.addLoad32intoR0(ARP_TARGET_IP_ADDRESS_OFFSET);
             gen.addCountAndDropIfR0Equals(IPV4_ANY_HOST_ADDRESS, DROPPED_GARP_REPLY);
         } else {
             // When there is an IPv4 address, drop broadcast replies with a different target IPv4
             // address.
-            gen.addLoad32(R0, ARP_TARGET_IP_ADDRESS_OFFSET);
+            gen.addLoad32intoR0(ARP_TARGET_IP_ADDRESS_OFFSET);
             gen.addCountAndDropIfR0NotEquals(bytesToBEInt(mIPv4Address), DROPPED_ARP_OTHER_HOST);
         }
         gen.addCountAndPass(PASSED_ARP_BROADCAST_REPLY);
@@ -1851,7 +1851,7 @@ public class ApfFilter {
         if (mIPv4Address != null) {
             // When there is an IPv4 address, drop unicast/broadcast requests with a different
             // target IPv4 address.
-            gen.addLoad32(R0, ARP_TARGET_IP_ADDRESS_OFFSET);
+            gen.addLoad32intoR0(ARP_TARGET_IP_ADDRESS_OFFSET);
             gen.addCountAndDropIfR0NotEquals(bytesToBEInt(mIPv4Address), DROPPED_ARP_OTHER_HOST);
 
             if (enableArpOffload()) {
@@ -1996,7 +1996,7 @@ public class ApfFilter {
         // Some devices can use unicast queries for mDNS to improve performance and reliability.
         // These packets are not currently offloaded and will be passed by APF and handled
         // by NsdService.
-        gen.addLoad32(R0, IPV4_DEST_ADDR_OFFSET)
+        gen.addLoad32intoR0(IPV4_DEST_ADDR_OFFSET)
                 .addJumpIfR0NotEquals(MDNS_IPV4_ADDR_IN_LONG, skipMdnsFilter);
 
         // We now know that the packet is an mDNS packet,
@@ -2099,7 +2099,7 @@ public class ApfFilter {
         if (mHasClat) {
             // Check 1) it's not a fragment. 2) it's UDP.
             // Load 16 bit frag flags/offset field, 8 bit ttl, 8 bit protocol
-            gen.addLoad32(R0, IPV4_FRAGMENT_OFFSET_OFFSET);
+            gen.addLoad32intoR0(IPV4_FRAGMENT_OFFSET_OFFSET);
             // Mask out the reserved and don't fragment bits, plus the TTL field.
             // Because:
             //   IPV4_FRAGMENT_OFFSET_MASK = 0x1fff
@@ -2152,7 +2152,7 @@ public class ApfFilter {
             gen.addCountAndDropIfR0Equals(0xe0, DROPPED_IPV4_MULTICAST);
 
             // If IPv4 broadcast packet, drop regardless of L2 (b/30231088).
-            gen.addLoad32(R0, IPV4_DEST_ADDR_OFFSET);
+            gen.addLoad32intoR0(IPV4_DEST_ADDR_OFFSET);
             gen.addCountAndDropIfR0Equals(IPV4_BROADCAST_ADDRESS, DROPPED_IPV4_BROADCAST_ADDR);
             if (mIPv4Address != null && mIPv4PrefixLength < 31) {
                 int broadcastAddr = ipv4BroadcastAddress(mIPv4Address, mIPv4PrefixLength);
@@ -2939,7 +2939,7 @@ public class ApfFilter {
         // If we reach here, we know it is an IGMPv1/IGMPv2/IGMPv3 general query.
 
         // The general query IPv4 destination address must be 224.0.0.1.
-        v6Gen.addLoad32(R0, IPV4_DEST_ADDR_OFFSET)
+        v6Gen.addLoad32intoR0(IPV4_DEST_ADDR_OFFSET)
                 .addCountAndDropIfR0NotEquals(IPV4_ALL_HOSTS_ADDRESS_IN_LONG,
                         DROPPED_IGMP_INVALID);
 

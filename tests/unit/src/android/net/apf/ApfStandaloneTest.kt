@@ -314,10 +314,10 @@ class ApfStandaloneTest {
 
         // Pass DHCP addressed to us.
         // Check src is IP is 0.0.0.0
-        gen.addLoad32(R0, IPV4_SRC_ADDR_OFFSET)
+        gen.addLoad32intoR0(IPV4_SRC_ADDR_OFFSET)
         gen.addJumpIfR0NotEquals(0, endOfDhcpFilter)
         // Check dst ip is 255.255.255.255
-        gen.addLoad32(R0, IPV4_DEST_ADDR_OFFSET)
+        gen.addLoad32intoR0(IPV4_DEST_ADDR_OFFSET)
         gen.addJumpIfR0NotEquals(IPV4_BROADCAST_ADDRESS.toLong(), endOfDhcpFilter)
         // Check it's UDP.
         gen.addLoad8intoR0(IPV4_PROTOCOL_OFFSET)

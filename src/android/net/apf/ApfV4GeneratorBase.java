@@ -126,8 +126,8 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      * Add an instruction to the end of the program to load 32-bits at offset {@code offset}
      * bytes from the beginning of the packet into {@code register}.
      */
-    public final Type addLoad32(Register r, int ofs) {
-        return append(new Instruction(Opcodes.LDW, r).addPacketOffset(ofs));
+    public final Type addLoad32intoR0(int ofs) {
+        return append(new Instruction(Opcodes.LDW, R0).addPacketOffset(ofs));
     }
 
     /**
@@ -588,7 +588,7 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
         // hence this constant ends up being 0x3FFF00FF.
         // We want the more flag bit and offset to be 0 (ie. not a fragment),
         // so after this masking we end up with just the ip protocol.
-        return addLoad32(R0, IPV4_FRAGMENT_OFFSET_OFFSET)
+        return addLoad32intoR0(IPV4_FRAGMENT_OFFSET_OFFSET)
                 .addAnd((IPV4_FRAGMENT_MORE_FRAGS_MASK | IPV4_FRAGMENT_OFFSET_MASK) << 16 | 0xFF)
                 .addJumpIfR0NotEquals(protocol, tgt);
     }

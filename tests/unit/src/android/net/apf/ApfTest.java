@@ -551,7 +551,7 @@ public class ApfTest {
 
         // Test word load.
         gen = new ApfV4Generator(APF_VERSION_2, mRamSize, mClampSize);
-        gen.addLoad32(R0, 1);
+        gen.addLoad32intoR0(1);
         gen.addJumpIfR0Equals((45 << 24) | (67 << 16) | (89 << 8) | 12, DROP_LABEL);
         assertDrop(gen, new byte[]{123,45,67,89,12,0,0,0,0,0,0,0,0,0,0}, 0);
 
@@ -2889,7 +2889,7 @@ public class ApfTest {
         gen.addJumpIfR0Equals(0x1, (short) -102);
         gen.addLoadImmediate(R1, -40);
         gen.addJumpIfR0NotEquals(0x2, (short) -498);
-        gen.addLoad32(R0, 28);
+        gen.addLoad32intoR0(28);
         gen.addLoadImmediate(R1, -116);
         gen.addJumpIfR0Equals(0x0, (short) -504);
         gen.addLoadImmediate(R0, 0);
@@ -2897,7 +2897,7 @@ public class ApfTest {
         gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("ffffffffffff"), (short) -498);
 
         gen.defineLabel((short) -102);
-        gen.addLoad32(R0, 38);
+        gen.addLoad32intoR0(38);
         gen.addLoadImmediate(R1, -64);
         gen.addJumpIfR0Equals(0x0, (short) -504);
         gen.addLoadImmediate(R1, -8);
@@ -2925,7 +2925,7 @@ public class ApfTest {
         gen.addLoadImmediate(R1, -84);
         gen.addJumpIfR0Equals(0xe0, (short) -504);
         gen.addLoadImmediate(R1, -76);
-        gen.addLoad32(R0, 30);
+        gen.addLoad32intoR0(30);
         gen.addJumpIfR0Equals(0xffffffff, (short) -504);
         gen.addLoadImmediate(R1, -24);
         gen.addLoadImmediate(R0, 0);
@@ -2979,15 +2979,15 @@ public class ApfTest {
         gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("0000000000000000"), (short) -496);
         gen.addLoadImmediate(R0, 78);
         gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("19050000"), (short) -496);
-        gen.addLoad32(R0, 82);
+        gen.addLoad32intoR0(82);
         gen.addJumpIfR0LessThan(0x254, (short) -496);
         gen.addLoadImmediate(R0, 86);
         gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("2001486048600000000000000000646420014860486000000000000000000064"), (short) -496);
         gen.addLoadImmediate(R0, 118);
         gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("030440c0"), (short) -496);
-        gen.addLoad32(R0, 122);
+        gen.addLoad32intoR0(122);
         gen.addJumpIfR0LessThan(0x254, (short) -496);
-        gen.addLoad32(R0, 126);
+        gen.addLoad32intoR0(126);
         gen.addJumpIfR0LessThan(0x254, (short) -496);
         gen.addLoadImmediate(R0, 130);
         gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("00000000"), (short) -496);
@@ -3043,7 +3043,7 @@ public class ApfTest {
         gen.addJumpIfR0Equals(0x1, (short) -94);
         gen.addLoadImmediate(R1, -40);
         gen.addJumpIfR0NotEquals(0x2, (short) -277);
-        gen.addLoad32(R0, 28);
+        gen.addLoad32intoR0(28);
         gen.addLoadImmediate(R1, -116);
         gen.addJumpIfR0Equals(0x0, (short) -283);
         gen.addLoadImmediate(R0, 0);
@@ -3079,7 +3079,7 @@ public class ApfTest {
         gen.addLoadImmediate(R1, -84);
         gen.addJumpIfR0Equals(0xe0, (short) -283);
         gen.addLoadImmediate(R1, -76);
-        gen.addLoad32(R0, 30);
+        gen.addLoad32intoR0(30);
         gen.addJumpIfR0Equals(0xffffffff, (short) -283);
         gen.addLoadImmediate(R1, -80);
         gen.addJumpIfR0Equals(0xc0a801ff, (short) -283);
@@ -3161,7 +3161,7 @@ public class ApfTest {
         gen.addLoad16(R0, 20);
         gen.addJumpIfR0Equals(0x1, (short) -100);
         gen.addCountAndPassIfR0NotEquals(0x2, getCounterEnumFromOffset(-40));
-        gen.addLoad32(R0, 28);
+        gen.addLoad32intoR0(28);
         gen.addCountAndDropIfR0Equals(0x0, getCounterEnumFromOffset(-116));
         gen.addLoadImmediate(R0, 0);
         gen.addCountAndPassIfBytesAtR0NotEqual(hexStringToByteArray("ffffffffffff"), getCounterEnumFromOffset(-44));
@@ -3191,7 +3191,7 @@ public class ApfTest {
         gen.addAnd(240);
         gen.addCountAndDropIfR0Equals(0xe0, getCounterEnumFromOffset(-84));
         gen.addLoadImmediate(R1, -76);
-        gen.addLoad32(R0, 30);
+        gen.addLoad32intoR0(30);
         gen.addJumpIfR0Equals(0xffffffff, gen.mCountAndDropLabel);
         gen.addCountAndDropIfR0Equals(0xc0a801ff, getCounterEnumFromOffset(-80));
         gen.addLoad8intoR0(23);
@@ -3276,7 +3276,7 @@ public class ApfTest {
         gen.addLoad16(R0, 20);
         gen.addJumpIfR0Equals(0x1, (short) -104);
         gen.addCountAndDropIfR0NotEquals(0x2, getCounterEnumFromOffset(-156));
-        gen.addLoad32(R0, 28);
+        gen.addLoad32intoR0(28);
         gen.addCountAndDropIfR0Equals(0x0, getCounterEnumFromOffset(-128));
         gen.addLoadImmediate(R0, 0);
         gen.addCountAndPassIfBytesAtR0NotEqual(hexStringToByteArray("ffffffffffff"), getCounterEnumFromOffset(-56));
@@ -3306,7 +3306,7 @@ public class ApfTest {
         gen.addAnd(240);
         gen.addCountAndDropIfR0Equals(0xe0, getCounterEnumFromOffset(-96));
         gen.addLoadImmediate(R1, -88);
-        gen.addLoad32(R0, 30);
+        gen.addLoad32intoR0(30);
         gen.addJumpIfR0Equals(0xffffffff, gen.mCountAndDropLabel);
         gen.addCountAndDropIfR0Equals(0xc0a801ff, getCounterEnumFromOffset(-92));
         gen.addLoad8intoR0(23);
@@ -3370,19 +3370,19 @@ public class ApfTest {
         gen.defineLabel((short) -421);
         gen.addLoadImmediate(R0, 62);
         gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("0000000000000000010128c68e23672c05010000000005dc030440c0"), (short) -574);
-        gen.addLoad32(R0, 90);
+        gen.addLoad32intoR0(90);
         gen.addJumpIfR0Equals(0x0, (short) -574);
         gen.addJumpIfR0LessThan(0xb4, (short) -480);
         gen.addJumpIfR0LessThan(0x55555555, (short) -574);
         gen.addJumpIfR0GreaterThan(0xffffffffL, (short) -574);
 
         gen.defineLabel((short) -480);
-        gen.addLoad32(R0, 94);
+        gen.addLoad32intoR0(94);
         gen.addJumpIfR0LessThan(0x55555555, (short) -574);
         gen.addJumpIfR0GreaterThan(0xffffffffL, (short) -574);
         gen.addLoadImmediate(R0, 98);
         gen.addJumpIfBytesAtR0NotEqual(hexStringToByteArray("000000002401fa000480f000000000000000000019030000"), (short) -574);
-        gen.addLoad32(R0, 122);
+        gen.addLoad32intoR0(122);
         gen.addJumpIfR0Equals(0x0, (short) -574);
         gen.addJumpIfR0LessThan(0x78, (short) -547);
         gen.addJumpIfR0LessThan(0x91e, (short) -574);
