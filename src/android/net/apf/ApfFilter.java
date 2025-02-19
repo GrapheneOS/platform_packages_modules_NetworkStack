@@ -3620,6 +3620,9 @@ public class ApfFilter {
         if (enableIpv4PingOffload()) {
             sb.append("Ping4, ");
         }
+        if (enableIpv6PingOffload()) {
+            sb.append("Ping6, ");
+        }
         if (enableMdns4Offload()) {
             sb.append("Mdns4, ");
         }
