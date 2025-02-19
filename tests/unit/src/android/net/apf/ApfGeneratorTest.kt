@@ -1803,7 +1803,7 @@ class ApfGeneratorTest {
     @Test
     fun testDebugBuffer() {
         val program = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
-                .addLoad8(R0, 255)
+                .addLoad8intoR0(255)
                 .generate()
         val dataRegion = ByteArray(ramSize - program.size) { 0 }
 

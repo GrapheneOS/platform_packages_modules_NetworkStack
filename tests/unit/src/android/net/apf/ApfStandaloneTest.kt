@@ -320,7 +320,7 @@ class ApfStandaloneTest {
         gen.addLoad32(R0, IPV4_DEST_ADDR_OFFSET)
         gen.addJumpIfR0NotEquals(IPV4_BROADCAST_ADDRESS.toLong(), endOfDhcpFilter)
         // Check it's UDP.
-        gen.addLoad8(R0, IPV4_PROTOCOL_OFFSET)
+        gen.addLoad8intoR0(IPV4_PROTOCOL_OFFSET)
         gen.addJumpIfR0NotEquals(OsConstants.IPPROTO_UDP.toLong(), endOfDhcpFilter)
         // Check it's addressed to DHCP client port.
         gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE)
@@ -338,10 +338,10 @@ class ApfStandaloneTest {
         gen.addLoad16(R0, ETHER_TYPE_OFFSET)
         gen.addJumpIfR0NotEquals(OsConstants.ETH_P_IPV6.toLong(), endOfRsFilter)
         // check ICMP6 packet
-        gen.addLoad8(R0, IPV6_NEXT_HEADER_OFFSET)
+        gen.addLoad8intoR0(IPV6_NEXT_HEADER_OFFSET)
         gen.addJumpIfR0NotEquals(IPPROTO_ICMPV6.toLong(), endOfRsFilter)
         // check type it is RS
-        gen.addLoad8(R0, ICMP6_TYPE_OFFSET)
+        gen.addLoad8intoR0(ICMP6_TYPE_OFFSET)
         gen.addJumpIfR0NotEquals(ICMPV6_ROUTER_SOLICITATION.toLong(), endOfRsFilter)
         // drop rs packet
         maybeSetupCounter(gen, Counter.DROPPED_RS)
@@ -356,7 +356,7 @@ class ApfStandaloneTest {
             gen.addLoad16(R0, ETHER_TYPE_OFFSET)
             gen.addJumpIfR0NotEquals(ETH_P_IP.toLong(), endOfPingFilter)
             // Check it's ICMP.
-            gen.addLoad8(R0, IPV4_PROTOCOL_OFFSET)
+            gen.addLoad8intoR0(IPV4_PROTOCOL_OFFSET)
             gen.addJumpIfR0NotEquals(OsConstants.IPPROTO_ICMP.toLong(), endOfPingFilter)
             // Check if it is echo request
             gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE)

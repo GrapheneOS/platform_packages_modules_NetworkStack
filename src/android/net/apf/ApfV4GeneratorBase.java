@@ -110,8 +110,8 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      * Add an instruction to the end of the program to load the byte at offset {@code offset}
      * bytes from the beginning of the packet into {@code register}.
      */
-    public final Type addLoad8(Register r, int ofs) {
-        return append(new Instruction(Opcodes.LDB, r).addPacketOffset(ofs));
+    public final Type addLoad8intoR0(int ofs) {
+        return append(new Instruction(Opcodes.LDB, R0).addPacketOffset(ofs));
     }
 
     /**

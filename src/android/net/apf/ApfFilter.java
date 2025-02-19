@@ -1913,7 +1913,7 @@ public class ApfFilter {
                         DROPPED_IPV4_ICMP_INVALID);
 
         // If it is not a ICMP echo request, then skip.
-        gen.addLoad8(R0, ICMP4_TYPE_NO_OPTIONS_OFFSET)
+        gen.addLoad8intoR0(ICMP4_TYPE_NO_OPTIONS_OFFSET)
                 .addJumpIfR0NotEquals(ICMP_ECHO, skipIpv4PingFilter);
 
         final int defaultTtl = mDependencies.getIpv4DefaultTtl();
@@ -2147,7 +2147,7 @@ public class ApfFilter {
             gen.defineLabel(skipDhcpv4Filter);
 
             // If IPv4 destination address is in multicast range, drop.
-            gen.addLoad8(R0, IPV4_DEST_ADDR_OFFSET);
+            gen.addLoad8intoR0(IPV4_DEST_ADDR_OFFSET);
             gen.addAnd(0xf0);
             gen.addCountAndDropIfR0Equals(0xe0, DROPPED_IPV4_MULTICAST);
 
@@ -2195,7 +2195,7 @@ public class ApfFilter {
         if (!haveKeepaliveResponses) return;
 
         // If not the right proto, skip keepalive filters
-        gen.addLoad8(R0, offset);
+        gen.addLoad8intoR0(offset);
         gen.addJumpIfR0NotEquals(proto, label);
 
         // Drop Keepalive responses
@@ -2338,7 +2338,7 @@ public class ApfFilter {
                 .defineLabel(endOfIpV6DstCheck);
 
         // Hop limit not 255, NS requires hop limit to be 255 -> drop
-        v6Gen.addLoad8(R0, IPV6_HOP_LIMIT_OFFSET)
+        v6Gen.addLoad8intoR0(IPV6_HOP_LIMIT_OFFSET)
                 .addCountAndDropIfR0NotEquals(255, DROPPED_IPV6_NS_INVALID);
 
         // payload length < 24 (8 bytes ICMP6 header + 16 bytes target address) -> drop
@@ -2346,7 +2346,7 @@ public class ApfFilter {
                 .addCountAndDropIfR0LessThan(24, DROPPED_IPV6_NS_INVALID);
 
         // ICMPv6 code not 0 -> drop
-        v6Gen.addLoad8(R0, ICMP6_CODE_OFFSET)
+        v6Gen.addLoad8intoR0(ICMP6_CODE_OFFSET)
                 .addCountAndDropIfR0NotEquals(0, DROPPED_IPV6_NS_INVALID);
 
         // target address (ICMPv6 NS payload)
@@ -2392,17 +2392,17 @@ public class ApfFilter {
         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
         // |     Type      |    Length     |Link-Layer Addr  |
         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-        v6Gen.addLoad8(R0, ICMP6_NS_OPTION_TYPE_OFFSET)
+        v6Gen.addLoad8intoR0(ICMP6_NS_OPTION_TYPE_OFFSET)
                 .addCountAndPassIfR0NotEquals(ICMPV6_ND_OPTION_SLLA,
                         PASSED_IPV6_NS_NO_SLLA_OPTION);
 
         // Src IPv6 address check:
         // if multicast address (FF::/8) or loopback address (00::/8) -> drop
-        v6Gen.addLoad8(R0, IPV6_SRC_ADDR_OFFSET)
+        v6Gen.addLoad8intoR0(IPV6_SRC_ADDR_OFFSET)
                 .addCountAndDropIfR0IsOneOf(Set.of(0L, 0xffL), DROPPED_IPV6_NS_INVALID);
 
         // if multicast MAC in SLLA option -> drop
-        v6Gen.addLoad8(R0, ICMP6_NS_OPTION_TYPE_OFFSET + 2)
+        v6Gen.addLoad8intoR0(ICMP6_NS_OPTION_TYPE_OFFSET + 2)
                 .addCountAndDropIfR0AnyBitsSet(1, DROPPED_IPV6_NS_INVALID);
         generateNonDadNaTransmit(v6Gen);
         v6Gen.addCountAndDrop(DROPPED_IPV6_NS_REPLIED_NON_DAD);
@@ -2443,7 +2443,7 @@ public class ApfFilter {
                 );
 
         // Skip filtering if the packet is not an IPv6 UDP packet.
-        gen.addLoad8(R0, IPV6_NEXT_HEADER_OFFSET)
+        gen.addLoad8intoR0(IPV6_NEXT_HEADER_OFFSET)
                 .addJumpIfR0NotEquals(IPPROTO_UDP, skipMdnsFilter);
 
         // Skip filtering if the IPv6 destination address is not ff02::fb (the mDNS multicast
@@ -2645,7 +2645,7 @@ public class ApfFilter {
         // if keepalive ack
         //   drop
 
-        gen.addLoad8(R0, IPV6_NEXT_HEADER_OFFSET);
+        gen.addLoad8intoR0(IPV6_NEXT_HEADER_OFFSET);
 
         if (enableMldOffload()) {
             generateMldFilter((ApfV6GeneratorBase<?>) gen);
@@ -2670,7 +2670,7 @@ public class ApfFilter {
 
                 // ICMPv6 but not ECHO? -> Skip the multicast filter.
                 // (ICMPv6 ECHO requests will go through the multicast filter below).
-                gen.addLoad8(R0, ICMP6_TYPE_OFFSET);
+                gen.addLoad8intoR0(ICMP6_TYPE_OFFSET);
                 gen.addJumpIfR0NotEquals(ICMPV6_ECHO_REQUEST_TYPE, skipIPv6MulticastFilterLabel);
             } else {
                 gen.addJumpIfR0Equals(IPPROTO_ICMPV6, skipIPv6MulticastFilterLabel);
@@ -2678,7 +2678,7 @@ public class ApfFilter {
 
             // Drop all other packets sent to ff00::/8 (multicast prefix).
             gen.defineLabel(dropAllIPv6MulticastsLabel);
-            gen.addLoad8(R0, IPV6_DEST_ADDR_OFFSET);
+            gen.addLoad8intoR0(IPV6_DEST_ADDR_OFFSET);
             gen.addCountAndDropIfR0Equals(0xff, DROPPED_IPV6_NON_ICMP_MULTICAST);
             // If any keepalive filter matches, drop
             generateV6KeepaliveFilters(gen);
@@ -2693,7 +2693,7 @@ public class ApfFilter {
 
         // If we got this far, the packet is ICMPv6.  Drop some specific types.
         // Not ICMPv6 NS -> skip.
-        gen.addLoad8(R0, ICMP6_TYPE_OFFSET); // warning: also used further below.
+        gen.addLoad8intoR0(ICMP6_TYPE_OFFSET); // warning: also used further below.
         if (enableNdOffload()) {
             final short skipNsPacketFilter = gen.getUniqueLabel();
             gen.addJumpIfR0NotEquals(ICMPV6_NEIGHBOR_SOLICITATION, skipNsPacketFilter);
@@ -3182,7 +3182,7 @@ public class ApfFilter {
 
         // If the packet is an MLDv1 report or done, or an MLDv2 report, then drop it.
         // Else if the packet is not an MLD query packet, then skip.
-        gen.addLoad8(R0, IPV6_MLD_TYPE_OFFSET)
+        gen.addLoad8intoR0(IPV6_MLD_TYPE_OFFSET)
                 .addCountAndDropIfR0IsOneOf(IPV6_MLD_TYPE_REPORTS, DROPPED_IPV6_MLD_REPORT)
                 .addJumpIfR0NotEquals(IPV6_MLD_TYPE_QUERY, skipMldFilter);
 
@@ -3204,7 +3204,7 @@ public class ApfFilter {
                 .addCountAndDropIfR0NotEquals(0xfe80, DROPPED_IPV6_MLD_INVALID);
 
         // If hop limit is not 1, then drop.
-        gen.addLoad8(R0, IPV6_HOP_LIMIT_OFFSET)
+        gen.addLoad8intoR0(IPV6_HOP_LIMIT_OFFSET)
                 .addCountAndDropIfR0NotEquals(1, DROPPED_IPV6_MLD_INVALID);
 
         // If the multicast address is not "::", it is an MLD2 multicast-address-specific query,
@@ -3248,7 +3248,7 @@ public class ApfFilter {
         final short skipPort7V4Filter = gen.getUniqueLabel();
 
         // Check it's TCP.
-        gen.addLoad8(R0, IPV4_PROTOCOL_OFFSET);
+        gen.addLoad8intoR0(IPV4_PROTOCOL_OFFSET);
         gen.addJumpIfR0NotEquals(IPPROTO_TCP, skipPort7V4Filter);
 
         // Check it's not a fragment or is the initial fragment.
