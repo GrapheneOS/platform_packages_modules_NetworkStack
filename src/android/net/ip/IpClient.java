@@ -83,10 +83,14 @@ import static com.android.net.module.util.NetworkStackConstants.VENDOR_SPECIFIC_
 import static com.android.networkstack.apishim.ConstantsShim.IFA_F_MANAGETEMPADDR;
 import static com.android.networkstack.apishim.ConstantsShim.IFA_F_NOPREFIXROUTE;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_ARP_OFFLOAD;
+import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_IGMP_OFFLOAD;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_IGMP_OFFLOAD_VERSION;
+import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_MLD_OFFLOAD;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_MLD_OFFLOAD_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_ND_OFFLOAD;
+import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_PING4_OFFLOAD;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_PING4_OFFLOAD_VERSION;
+import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_PING6_OFFLOAD;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_PING6_OFFLOAD_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.APF_POLLING_COUNTERS_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION;
@@ -1101,17 +1105,25 @@ public class IpClient extends StateMachine {
         mApfHandleMdnsOffload = isAtLeast25Q2() && context.getPackageManager().hasSystemFeature(
                 FEATURE_LEANBACK);
         mApfHandleIgmpOffload =
-                isAtLeast25Q2() || mDependencies.isFeatureEnabled(context,
-                        APF_HANDLE_IGMP_OFFLOAD_VERSION);
+                mDependencies.isFeatureNotChickenedOut(mContext, APF_HANDLE_IGMP_OFFLOAD)
+                    && (isAtLeast25Q2()
+                        || mDependencies.isFeatureEnabled(context, APF_HANDLE_IGMP_OFFLOAD_VERSION)
+                    );
         mApfHandleMldOffload =
-                isAtLeast25Q2() || mDependencies.isFeatureEnabled(context,
-                        APF_HANDLE_MLD_OFFLOAD_VERSION);
+                mDependencies.isFeatureNotChickenedOut(mContext, APF_HANDLE_MLD_OFFLOAD)
+                    && (isAtLeast25Q2()
+                        || mDependencies.isFeatureEnabled(context, APF_HANDLE_MLD_OFFLOAD_VERSION)
+                    );
         mApfHandleIpv4PingOffload =
-                isAtLeast25Q2() || mDependencies.isFeatureEnabled(context,
-                        APF_HANDLE_PING4_OFFLOAD_VERSION);
+                mDependencies.isFeatureNotChickenedOut(mContext, APF_HANDLE_PING4_OFFLOAD)
+                    && (isAtLeast25Q2()
+                        || mDependencies.isFeatureEnabled(context, APF_HANDLE_PING4_OFFLOAD_VERSION)
+                    );
         mApfHandleIpv6PingOffload =
-                isAtLeast25Q2() || mDependencies.isFeatureEnabled(context,
-                        APF_HANDLE_PING6_OFFLOAD_VERSION);
+                mDependencies.isFeatureNotChickenedOut(mContext, APF_HANDLE_PING6_OFFLOAD)
+                    && (isAtLeast25Q2()
+                        || mDependencies.isFeatureEnabled(context, APF_HANDLE_PING6_OFFLOAD_VERSION)
+                );
         mPopulateLinkAddressLifetime = mDependencies.isFeatureEnabled(context,
                 IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION);
         mIgnoreNudFailureEnabled = mDependencies.isFeatureEnabled(mContext,
