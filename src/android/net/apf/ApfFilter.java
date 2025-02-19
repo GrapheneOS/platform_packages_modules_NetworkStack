@@ -1695,7 +1695,7 @@ public class ApfFilter {
             // Load the IP header size into R1
             gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
             // Load the TCP header size into R0 (it's indexed by R1)
-            gen.addLoad8Indexed(R0, ETH_HEADER_LEN + TCP_HEADER_SIZE_OFFSET);
+            gen.addLoad8R1IndexedIntoR0(ETH_HEADER_LEN + TCP_HEADER_SIZE_OFFSET);
             // Size offset is in the top nibble, but it must be multiplied by 4, and the two
             // top bits of the low nibble are guaranteed to be zeroes. Right-shift R0 by 2.
             gen.addRightShift(2);
@@ -2921,7 +2921,7 @@ public class ApfFilter {
         // If the IGMP type is not one of the reports, it's either a query(type=0x11) or an
         // invalid packet.
         v6Gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE)
-                .addLoad8Indexed(R0, ETHER_HEADER_LEN)
+                .addLoad8R1IndexedIntoR0(ETHER_HEADER_LEN)
                 .addCountAndDropIfR0IsOneOf(IGMP_TYPE_REPORTS, DROPPED_IGMP_REPORT)
                 .addCountAndDropIfR0NotEquals(IPV4_IGMP_TYPE_QUERY, DROPPED_IGMP_INVALID);
 
@@ -2961,7 +2961,7 @@ public class ApfFilter {
         // We don't expect many networks are still using IGMPv1, pass it to the kernel to save
         // bytecode size.
         // (Note: R1 is still IPV4_HEADER_SIZE)
-        v6Gen.addLoad8Indexed(R0, IGMP_MAX_RESP_TIME_OFFSET)
+        v6Gen.addLoad8R1IndexedIntoR0(IGMP_MAX_RESP_TIME_OFFSET)
                 .addCountAndPassIfR0Equals(0, PASSED_IPV4); // IGMPv1
 
         // Drop and transmit IGMPv2 reports

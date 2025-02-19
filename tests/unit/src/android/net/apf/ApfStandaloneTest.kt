@@ -360,7 +360,7 @@ class ApfStandaloneTest {
             gen.addJumpIfR0NotEquals(OsConstants.IPPROTO_ICMP.toLong(), endOfPingFilter)
             // Check if it is echo request
             gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE)
-            gen.addLoad8Indexed(R0, ETH_HEADER_LEN)
+            gen.addLoad8R1IndexedIntoR0(ETH_HEADER_LEN)
             gen.addJumpIfR0NotEquals(8, endOfPingFilter)
             // drop ping request
             maybeSetupCounter(gen, Counter.DROPPED_ICMP4_ECHO_REQUEST)

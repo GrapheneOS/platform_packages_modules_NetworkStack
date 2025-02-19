@@ -558,14 +558,14 @@ public class ApfTest {
         // Test byte indexed load.
         gen = new ApfV4Generator(APF_VERSION_2, mRamSize, mClampSize);
         gen.addLoadImmediate(R1, 1);
-        gen.addLoad8Indexed(R0, 0);
+        gen.addLoad8R1IndexedIntoR0(0);
         gen.addJumpIfR0Equals(45, DROP_LABEL);
         assertDrop(gen, new byte[]{123,45,0,0,0,0,0,0,0,0,0,0,0,0,0}, 0);
 
         // Test out of bounds indexed load.
         gen = new ApfV4Generator(APF_VERSION_2, mRamSize, mClampSize);
         gen.addLoadImmediate(R1, 8);
-        gen.addLoad8Indexed(R0, 8);
+        gen.addLoad8R1IndexedIntoR0(8);
         gen.addJumpIfR0Equals(0, DROP_LABEL);
         assertPass(gen, new byte[]{123,45,0,0,0,0,0,0,0,0,0,0,0,0,0}, 0);
 

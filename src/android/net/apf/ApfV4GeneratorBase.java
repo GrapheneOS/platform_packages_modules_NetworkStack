@@ -135,8 +135,8 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      * {@code register}. The offset of the loaded byte from the beginning of the packet is
      * the sum of {@code offset} and the value in register R1.
      */
-    public final Type addLoad8Indexed(Register r, int ofs) {
-        return append(new Instruction(Opcodes.LDBX, r).addTwosCompUnsigned(ofs));
+    public final Type addLoad8R1IndexedIntoR0(int ofs) {
+        return append(new Instruction(Opcodes.LDBX, R0).addTwosCompUnsigned(ofs));
     }
 
     /**
