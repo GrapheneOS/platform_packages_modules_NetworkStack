@@ -307,6 +307,12 @@ public class NetworkStackUtils {
             "apf_handle_ping_offload_version";
 
     /**
+     * Experiment flag to enable the feature of handle IPv6 ping offload in Apf.
+     */
+    public static final String APF_HANDLE_PING6_OFFLOAD_VERSION =
+            "apf_handle_ping6_offload_version";
+
+    /**
      * Experiment flag to enable the feature of handle IGMP offload in Apf.
      */
     public static final String APF_HANDLE_IGMP_OFFLOAD_VERSION =
