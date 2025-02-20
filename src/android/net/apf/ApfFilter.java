@@ -1696,9 +1696,11 @@ public class ApfFilter {
             gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
             // Load the TCP header size into R0 (it's indexed by R1)
             gen.addLoad8R1IndexedIntoR0(ETH_HEADER_LEN + TCP_HEADER_SIZE_OFFSET);
-            // Size offset is in the top nibble, but it must be multiplied by 4, and the two
-            // top bits of the low nibble are guaranteed to be zeroes. Right-shift R0 by 2.
+            // Size offset is in the top nibble, bottom nibble is reserved,
+            // but not necessarily zero.  Thus we need to >> 4 then << 2,
+            // achieve this by >> 2 and masking with 0b00111100.
             gen.addRightShift(2);
+            gen.addAnd(0x3C);
             // R0 += R1 -> R0 contains TCP + IP headers length
             gen.addAddR1ToR0();
             // Load IPv4 total length
