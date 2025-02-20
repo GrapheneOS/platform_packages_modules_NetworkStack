@@ -110,24 +110,24 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      * Add an instruction to the end of the program to load the byte at offset {@code offset}
      * bytes from the beginning of the packet into {@code register}.
      */
-    public final Type addLoad8(Register r, int ofs) {
-        return append(new Instruction(Opcodes.LDB, r).addPacketOffset(ofs));
+    public final Type addLoad8intoR0(int ofs) {
+        return append(new Instruction(Opcodes.LDB, R0).addPacketOffset(ofs));
     }
 
     /**
      * Add an instruction to the end of the program to load 16-bits at offset {@code offset}
      * bytes from the beginning of the packet into {@code register}.
      */
-    public final Type addLoad16(Register r, int ofs) {
-        return append(new Instruction(Opcodes.LDH, r).addPacketOffset(ofs));
+    public final Type addLoad16intoR0(int ofs) {
+        return append(new Instruction(Opcodes.LDH, R0).addPacketOffset(ofs));
     }
 
     /**
      * Add an instruction to the end of the program to load 32-bits at offset {@code offset}
      * bytes from the beginning of the packet into {@code register}.
      */
-    public final Type addLoad32(Register r, int ofs) {
-        return append(new Instruction(Opcodes.LDW, r).addPacketOffset(ofs));
+    public final Type addLoad32intoR0(int ofs) {
+        return append(new Instruction(Opcodes.LDW, R0).addPacketOffset(ofs));
     }
 
     /**
@@ -135,8 +135,8 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      * {@code register}. The offset of the loaded byte from the beginning of the packet is
      * the sum of {@code offset} and the value in register R1.
      */
-    public final Type addLoad8Indexed(Register r, int ofs) {
-        return append(new Instruction(Opcodes.LDBX, r).addTwosCompUnsigned(ofs));
+    public final Type addLoad8R1IndexedIntoR0(int ofs) {
+        return append(new Instruction(Opcodes.LDBX, R0).addTwosCompUnsigned(ofs));
     }
 
     /**
@@ -144,8 +144,8 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      * {@code register}. The offset of the loaded 16-bits from the beginning of the packet is
      * the sum of {@code offset} and the value in register R1.
      */
-    public final Type addLoad16Indexed(Register r, int ofs) {
-        return append(new Instruction(Opcodes.LDHX, r).addTwosCompUnsigned(ofs));
+    public final Type addLoad16R1IndexedIntoR0(int ofs) {
+        return append(new Instruction(Opcodes.LDHX, R0).addTwosCompUnsigned(ofs));
     }
 
     /**
@@ -153,8 +153,8 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      * {@code register}. The offset of the loaded 32-bits from the beginning of the packet is
      * the sum of {@code offset} and the value in register R1.
      */
-    public final Type addLoad32Indexed(Register r, int ofs) {
-        return append(new Instruction(Opcodes.LDWX, r).addTwosCompUnsigned(ofs));
+    public final Type addLoad32R1IndexedIntoR0(int ofs) {
+        return append(new Instruction(Opcodes.LDWX, R0).addTwosCompUnsigned(ofs));
     }
 
     /**
@@ -588,7 +588,7 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
         // hence this constant ends up being 0x3FFF00FF.
         // We want the more flag bit and offset to be 0 (ie. not a fragment),
         // so after this masking we end up with just the ip protocol.
-        return addLoad32(R0, IPV4_FRAGMENT_OFFSET_OFFSET)
+        return addLoad32intoR0(IPV4_FRAGMENT_OFFSET_OFFSET)
                 .addAnd((IPV4_FRAGMENT_MORE_FRAGS_MASK | IPV4_FRAGMENT_OFFSET_MASK) << 16 | 0xFF)
                 .addJumpIfR0NotEquals(protocol, tgt);
     }

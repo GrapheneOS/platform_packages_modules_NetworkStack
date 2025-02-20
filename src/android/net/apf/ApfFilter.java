@@ -1445,8 +1445,8 @@ public class ApfFilter {
                 } else {
                     switch (section.length) {
                         // length asserted to be either 2 or 4 on PacketSection construction
-                        case 2: gen.addLoad16(R0, section.start); break;
-                        case 4: gen.addLoad32(R0, section.start); break;
+                        case 2: gen.addLoad16intoR0(section.start); break;
+                        case 4: gen.addLoad32intoR0(section.start); break;
                     }
 
                     // WARNING: keep this in sync with matches()!
@@ -1579,7 +1579,7 @@ public class ApfFilter {
             gen.addLoadFromMemory(R0, MemorySlot.IPV4_HEADER_SIZE);
             gen.addAdd(UDP_HEADER_LEN);
             gen.addSwap();
-            gen.addLoad16(R0, IPV4_TOTAL_LENGTH_OFFSET);
+            gen.addLoad16intoR0(IPV4_TOTAL_LENGTH_OFFSET);
             gen.addNeg(R1);
             gen.addAddR1ToR0();
             gen.addJumpIfR0NotEquals(1, nextFilterLabel);
@@ -1695,14 +1695,16 @@ public class ApfFilter {
             // Load the IP header size into R1
             gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
             // Load the TCP header size into R0 (it's indexed by R1)
-            gen.addLoad8Indexed(R0, ETH_HEADER_LEN + TCP_HEADER_SIZE_OFFSET);
+            gen.addLoad8R1IndexedIntoR0(ETH_HEADER_LEN + TCP_HEADER_SIZE_OFFSET);
             // Size offset is in the top nibble, but it must be multiplied by 4, and the two
             // top bits of the low nibble are guaranteed to be zeroes. Right-shift R0 by 2.
             gen.addRightShift(2);
             // R0 += R1 -> R0 contains TCP + IP headers length
             gen.addAddR1ToR0();
             // Load IPv4 total length
-            gen.addLoad16(R1, IPV4_TOTAL_LENGTH_OFFSET);
+            gen.addSwap();
+            gen.addLoad16intoR0(IPV4_TOTAL_LENGTH_OFFSET);
+            gen.addSwap();
             gen.addNeg(R0);
             gen.addAddR1ToR0();
             gen.addJumpIfR0NotEquals(0, nextFilterLabel);
@@ -1816,7 +1818,7 @@ public class ApfFilter {
 
         final short checkArpRequest = gen.getUniqueLabel();
 
-        gen.addLoad16(R0, ARP_OPCODE_OFFSET);
+        gen.addLoad16intoR0(ARP_OPCODE_OFFSET);
         gen.addJumpIfR0Equals(ARP_OPCODE_REQUEST, checkArpRequest); // Skip to arp request check.
         // Drop if unknown ARP opcode.
         gen.addCountAndDropIfR0NotEquals(ARP_OPCODE_REPLY, DROPPED_ARP_UNKNOWN);
@@ -1824,7 +1826,7 @@ public class ApfFilter {
         /*----------  Handle ARP Replies. ----------*/
 
         // Drop if ARP reply source IP is 0.0.0.0
-        gen.addLoad32(R0, ARP_SOURCE_IP_ADDRESS_OFFSET);
+        gen.addLoad32intoR0(ARP_SOURCE_IP_ADDRESS_OFFSET);
         gen.addCountAndDropIfR0Equals(IPV4_ANY_HOST_ADDRESS, DROPPED_ARP_REPLY_SPA_NO_HOST);
 
         // Pass if non-broadcast reply.
@@ -1835,12 +1837,12 @@ public class ApfFilter {
         // It is a broadcast reply.
         if (mIPv4Address == null) {
             // When there is no IPv4 address, drop GARP replies (b/29404209).
-            gen.addLoad32(R0, ARP_TARGET_IP_ADDRESS_OFFSET);
+            gen.addLoad32intoR0(ARP_TARGET_IP_ADDRESS_OFFSET);
             gen.addCountAndDropIfR0Equals(IPV4_ANY_HOST_ADDRESS, DROPPED_GARP_REPLY);
         } else {
             // When there is an IPv4 address, drop broadcast replies with a different target IPv4
             // address.
-            gen.addLoad32(R0, ARP_TARGET_IP_ADDRESS_OFFSET);
+            gen.addLoad32intoR0(ARP_TARGET_IP_ADDRESS_OFFSET);
             gen.addCountAndDropIfR0NotEquals(bytesToBEInt(mIPv4Address), DROPPED_ARP_OTHER_HOST);
         }
         gen.addCountAndPass(PASSED_ARP_BROADCAST_REPLY);
@@ -1851,7 +1853,7 @@ public class ApfFilter {
         if (mIPv4Address != null) {
             // When there is an IPv4 address, drop unicast/broadcast requests with a different
             // target IPv4 address.
-            gen.addLoad32(R0, ARP_TARGET_IP_ADDRESS_OFFSET);
+            gen.addLoad32intoR0(ARP_TARGET_IP_ADDRESS_OFFSET);
             gen.addCountAndDropIfR0NotEquals(bytesToBEInt(mIPv4Address), DROPPED_ARP_OTHER_HOST);
 
             if (enableArpOffload()) {
@@ -1913,7 +1915,7 @@ public class ApfFilter {
                         DROPPED_IPV4_ICMP_INVALID);
 
         // If it is not a ICMP echo request, then skip.
-        gen.addLoad8(R0, ICMP4_TYPE_NO_OPTIONS_OFFSET)
+        gen.addLoad8intoR0(ICMP4_TYPE_NO_OPTIONS_OFFSET)
                 .addJumpIfR0NotEquals(ICMP_ECHO, skipIpv4PingFilter);
 
         final int defaultTtl = mDependencies.getIpv4DefaultTtl();
@@ -1971,7 +1973,7 @@ public class ApfFilter {
                 .addJumpIfR0LessThan(
                         ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + UDP_HEADER_LEN + DNS_HEADER_LEN,
                         skipMdnsFilter)
-                .addLoad16(R0, IPV4_UDP_DESTINATION_PORT_NO_OPTIONS_OFFSET)
+                .addLoad16intoR0(IPV4_UDP_DESTINATION_PORT_NO_OPTIONS_OFFSET)
                 .addJumpIfR0NotEquals(MDNS_PORT, skipMdnsFilter);
 
         // If the destination MAC address is not 01:00:5e:00:00:fb (the mDNS multicast MAC
@@ -1996,7 +1998,7 @@ public class ApfFilter {
         // Some devices can use unicast queries for mDNS to improve performance and reliability.
         // These packets are not currently offloaded and will be passed by APF and handled
         // by NsdService.
-        gen.addLoad32(R0, IPV4_DEST_ADDR_OFFSET)
+        gen.addLoad32intoR0(IPV4_DEST_ADDR_OFFSET)
                 .addJumpIfR0NotEquals(MDNS_IPV4_ADDR_IN_LONG, skipMdnsFilter);
 
         // We now know that the packet is an mDNS packet,
@@ -2005,7 +2007,7 @@ public class ApfFilter {
 
         // If the packet contains questions, check the query payload. Otherwise, check the
         // reply payload.
-        gen.addLoad16(R0, IPV4_DNS_QDCOUNT_NO_OPTIONS_OFFSET)
+        gen.addLoad16intoR0(IPV4_DNS_QDCOUNT_NO_OPTIONS_OFFSET)
                 // Set the UDP payload offset in R1 before potentially jumping to the payload
                 // check logic.
                 .addLoadImmediate(R1, IPV4_UDP_PAYLOAD_NO_OPTIONS_OFFSET)
@@ -2099,7 +2101,7 @@ public class ApfFilter {
         if (mHasClat) {
             // Check 1) it's not a fragment. 2) it's UDP.
             // Load 16 bit frag flags/offset field, 8 bit ttl, 8 bit protocol
-            gen.addLoad32(R0, IPV4_FRAGMENT_OFFSET_OFFSET);
+            gen.addLoad32intoR0(IPV4_FRAGMENT_OFFSET_OFFSET);
             // Mask out the reserved and don't fragment bits, plus the TTL field.
             // Because:
             //   IPV4_FRAGMENT_OFFSET_MASK = 0x1fff
@@ -2111,7 +2113,7 @@ public class ApfFilter {
             gen.addCountAndDropIfR0NotEquals(IPPROTO_UDP, DROPPED_IPV4_NON_DHCP4);
             // Check it's addressed to DHCP client port.
             gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-            gen.addLoad32Indexed(R0, TCP_UDP_SOURCE_PORT_OFFSET);
+            gen.addLoad32R1IndexedIntoR0(TCP_UDP_SOURCE_PORT_OFFSET);
             gen.addCountAndDropIfR0NotEquals(DHCP_SERVER_PORT << 16 | DHCP_CLIENT_PORT,
                     DROPPED_IPV4_NON_DHCP4);
             gen.addCountAndPass(PASSED_IPV4_FROM_DHCPV4_SERVER);
@@ -2134,7 +2136,7 @@ public class ApfFilter {
             gen.addJumpIfNotUnfragmentedIPv4Protocol(IPPROTO_UDP, skipDhcpv4Filter);
             // Check it's addressed to DHCP client port.
             gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-            gen.addLoad16Indexed(R0, TCP_UDP_DESTINATION_PORT_OFFSET);
+            gen.addLoad16R1IndexedIntoR0(TCP_UDP_DESTINATION_PORT_OFFSET);
             gen.addJumpIfR0NotEquals(DHCP_CLIENT_PORT, skipDhcpv4Filter);
             // Check it's DHCP to our MAC address.
             gen.addLoadImmediate(R0, DHCP_CLIENT_MAC_OFFSET);
@@ -2147,12 +2149,12 @@ public class ApfFilter {
             gen.defineLabel(skipDhcpv4Filter);
 
             // If IPv4 destination address is in multicast range, drop.
-            gen.addLoad8(R0, IPV4_DEST_ADDR_OFFSET);
+            gen.addLoad8intoR0(IPV4_DEST_ADDR_OFFSET);
             gen.addAnd(0xf0);
             gen.addCountAndDropIfR0Equals(0xe0, DROPPED_IPV4_MULTICAST);
 
             // If IPv4 broadcast packet, drop regardless of L2 (b/30231088).
-            gen.addLoad32(R0, IPV4_DEST_ADDR_OFFSET);
+            gen.addLoad32intoR0(IPV4_DEST_ADDR_OFFSET);
             gen.addCountAndDropIfR0Equals(IPV4_BROADCAST_ADDRESS, DROPPED_IPV4_BROADCAST_ADDR);
             if (mIPv4Address != null && mIPv4PrefixLength < 31) {
                 int broadcastAddr = ipv4BroadcastAddress(mIPv4Address, mIPv4PrefixLength);
@@ -2195,7 +2197,7 @@ public class ApfFilter {
         if (!haveKeepaliveResponses) return;
 
         // If not the right proto, skip keepalive filters
-        gen.addLoad8(R0, offset);
+        gen.addLoad8intoR0(offset);
         gen.addJumpIfR0NotEquals(proto, label);
 
         // Drop Keepalive responses
@@ -2338,15 +2340,15 @@ public class ApfFilter {
                 .defineLabel(endOfIpV6DstCheck);
 
         // Hop limit not 255, NS requires hop limit to be 255 -> drop
-        v6Gen.addLoad8(R0, IPV6_HOP_LIMIT_OFFSET)
+        v6Gen.addLoad8intoR0(IPV6_HOP_LIMIT_OFFSET)
                 .addCountAndDropIfR0NotEquals(255, DROPPED_IPV6_NS_INVALID);
 
         // payload length < 24 (8 bytes ICMP6 header + 16 bytes target address) -> drop
-        v6Gen.addLoad16(R0, IPV6_PAYLOAD_LEN_OFFSET)
+        v6Gen.addLoad16intoR0(IPV6_PAYLOAD_LEN_OFFSET)
                 .addCountAndDropIfR0LessThan(24, DROPPED_IPV6_NS_INVALID);
 
         // ICMPv6 code not 0 -> drop
-        v6Gen.addLoad8(R0, ICMP6_CODE_OFFSET)
+        v6Gen.addLoad8intoR0(ICMP6_CODE_OFFSET)
                 .addCountAndDropIfR0NotEquals(0, DROPPED_IPV6_NS_INVALID);
 
         // target address (ICMPv6 NS payload)
@@ -2383,7 +2385,7 @@ public class ApfFilter {
         // For option-less NUD packets or NUD/Address resolution packets where
         // the first option is not SLLA, pass them to the kernel for handling.
         // if payload len < 32 -> pass
-        v6Gen.addLoad16(R0, IPV6_PAYLOAD_LEN_OFFSET)
+        v6Gen.addLoad16intoR0(IPV6_PAYLOAD_LEN_OFFSET)
                 .addCountAndPassIfR0LessThan(32, PASSED_IPV6_NS_NO_SLLA_OPTION);
 
         // if the first option is not SLLA -> pass
@@ -2392,17 +2394,17 @@ public class ApfFilter {
         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
         // |     Type      |    Length     |Link-Layer Addr  |
         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-        v6Gen.addLoad8(R0, ICMP6_NS_OPTION_TYPE_OFFSET)
+        v6Gen.addLoad8intoR0(ICMP6_NS_OPTION_TYPE_OFFSET)
                 .addCountAndPassIfR0NotEquals(ICMPV6_ND_OPTION_SLLA,
                         PASSED_IPV6_NS_NO_SLLA_OPTION);
 
         // Src IPv6 address check:
         // if multicast address (FF::/8) or loopback address (00::/8) -> drop
-        v6Gen.addLoad8(R0, IPV6_SRC_ADDR_OFFSET)
+        v6Gen.addLoad8intoR0(IPV6_SRC_ADDR_OFFSET)
                 .addCountAndDropIfR0IsOneOf(Set.of(0L, 0xffL), DROPPED_IPV6_NS_INVALID);
 
         // if multicast MAC in SLLA option -> drop
-        v6Gen.addLoad8(R0, ICMP6_NS_OPTION_TYPE_OFFSET + 2)
+        v6Gen.addLoad8intoR0(ICMP6_NS_OPTION_TYPE_OFFSET + 2)
                 .addCountAndDropIfR0AnyBitsSet(1, DROPPED_IPV6_NS_INVALID);
         generateNonDadNaTransmit(v6Gen);
         v6Gen.addCountAndDrop(DROPPED_IPV6_NS_REPLIED_NON_DAD);
@@ -2429,7 +2431,7 @@ public class ApfFilter {
                 .addJumpIfR0LessThan(
                         ETH_HEADER_LEN + IPV6_HEADER_LEN + UDP_HEADER_LEN + DNS_HEADER_LEN,
                         skipMdnsFilter)
-                .addLoad16(R0, IPV6_UDP_DESTINATION_PORT_OFFSET)
+                .addLoad16intoR0(IPV6_UDP_DESTINATION_PORT_OFFSET)
                 .addJumpIfR0NotEquals(MDNS_PORT, skipMdnsFilter);
 
         // If the destination MAC address is not 33:33:00:00:00:fb (the mDNS multicast MAC
@@ -2443,7 +2445,7 @@ public class ApfFilter {
                 );
 
         // Skip filtering if the packet is not an IPv6 UDP packet.
-        gen.addLoad8(R0, IPV6_NEXT_HEADER_OFFSET)
+        gen.addLoad8intoR0(IPV6_NEXT_HEADER_OFFSET)
                 .addJumpIfR0NotEquals(IPPROTO_UDP, skipMdnsFilter);
 
         // Skip filtering if the IPv6 destination address is not ff02::fb (the mDNS multicast
@@ -2460,7 +2462,7 @@ public class ApfFilter {
 
         // If the packet contains questions, check the query payload. Otherwise, check the
         // reply payload.
-        gen.addLoad16(R0, IPV6_DNS_QDCOUNT_OFFSET)
+        gen.addLoad16intoR0(IPV6_DNS_QDCOUNT_OFFSET)
                 // Set the UDP payload offset in R1 before potentially jumping to the payload
                 // check logic.
                 .addLoadImmediate(R1, IPv6_UDP_PAYLOAD_OFFSET)
@@ -2645,7 +2647,7 @@ public class ApfFilter {
         // if keepalive ack
         //   drop
 
-        gen.addLoad8(R0, IPV6_NEXT_HEADER_OFFSET);
+        gen.addLoad8intoR0(IPV6_NEXT_HEADER_OFFSET);
 
         if (enableMldOffload()) {
             generateMldFilter((ApfV6GeneratorBase<?>) gen);
@@ -2670,7 +2672,7 @@ public class ApfFilter {
 
                 // ICMPv6 but not ECHO? -> Skip the multicast filter.
                 // (ICMPv6 ECHO requests will go through the multicast filter below).
-                gen.addLoad8(R0, ICMP6_TYPE_OFFSET);
+                gen.addLoad8intoR0(ICMP6_TYPE_OFFSET);
                 gen.addJumpIfR0NotEquals(ICMPV6_ECHO_REQUEST_TYPE, skipIPv6MulticastFilterLabel);
             } else {
                 gen.addJumpIfR0Equals(IPPROTO_ICMPV6, skipIPv6MulticastFilterLabel);
@@ -2678,7 +2680,7 @@ public class ApfFilter {
 
             // Drop all other packets sent to ff00::/8 (multicast prefix).
             gen.defineLabel(dropAllIPv6MulticastsLabel);
-            gen.addLoad8(R0, IPV6_DEST_ADDR_OFFSET);
+            gen.addLoad8intoR0(IPV6_DEST_ADDR_OFFSET);
             gen.addCountAndDropIfR0Equals(0xff, DROPPED_IPV6_NON_ICMP_MULTICAST);
             // If any keepalive filter matches, drop
             generateV6KeepaliveFilters(gen);
@@ -2693,7 +2695,7 @@ public class ApfFilter {
 
         // If we got this far, the packet is ICMPv6.  Drop some specific types.
         // Not ICMPv6 NS -> skip.
-        gen.addLoad8(R0, ICMP6_TYPE_OFFSET); // warning: also used further below.
+        gen.addLoad8intoR0(ICMP6_TYPE_OFFSET); // warning: also used further below.
         if (enableNdOffload()) {
             final short skipNsPacketFilter = gen.getUniqueLabel();
             gen.addJumpIfR0NotEquals(ICMPV6_NEIGHBOR_SOLICITATION, skipNsPacketFilter);
@@ -2903,7 +2905,7 @@ public class ApfFilter {
 
         // Calculate the IPv4 payload length: (total length - IPv4 header length).
         // Memory slot 0 is occupied temporarily to store the length.
-        v6Gen.addLoad16(R0, IPV4_TOTAL_LENGTH_OFFSET)
+        v6Gen.addLoad16intoR0(IPV4_TOTAL_LENGTH_OFFSET)
                 .addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE)
                 .addNeg(R1)
                 .addAddR1ToR0()
@@ -2921,7 +2923,7 @@ public class ApfFilter {
         // If the IGMP type is not one of the reports, it's either a query(type=0x11) or an
         // invalid packet.
         v6Gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE)
-                .addLoad8Indexed(R0, ETHER_HEADER_LEN)
+                .addLoad8R1IndexedIntoR0(ETHER_HEADER_LEN)
                 .addCountAndDropIfR0IsOneOf(IGMP_TYPE_REPORTS, DROPPED_IGMP_REPORT)
                 .addCountAndDropIfR0NotEquals(IPV4_IGMP_TYPE_QUERY, DROPPED_IGMP_INVALID);
 
@@ -2933,13 +2935,13 @@ public class ApfFilter {
         // Increased APF bytecode size for offloading these queries may not yield significant
         // power benefits. In this case, letting the kernel handle group-specific queries is
         // acceptable.
-        v6Gen.addLoad32Indexed(R0, IGMP_MULTICAST_ADDRESS_OFFSET)
+        v6Gen.addLoad32R1IndexedIntoR0(IGMP_MULTICAST_ADDRESS_OFFSET)
                 .addCountAndPassIfR0NotEquals(0 /* 0.0.0.0 */, PASSED_IPV4);
 
         // If we reach here, we know it is an IGMPv1/IGMPv2/IGMPv3 general query.
 
         // The general query IPv4 destination address must be 224.0.0.1.
-        v6Gen.addLoad32(R0, IPV4_DEST_ADDR_OFFSET)
+        v6Gen.addLoad32intoR0(IPV4_DEST_ADDR_OFFSET)
                 .addCountAndDropIfR0NotEquals(IPV4_ALL_HOSTS_ADDRESS_IN_LONG,
                         DROPPED_IGMP_INVALID);
 
@@ -2961,7 +2963,7 @@ public class ApfFilter {
         // We don't expect many networks are still using IGMPv1, pass it to the kernel to save
         // bytecode size.
         // (Note: R1 is still IPV4_HEADER_SIZE)
-        v6Gen.addLoad8Indexed(R0, IGMP_MAX_RESP_TIME_OFFSET)
+        v6Gen.addLoad8R1IndexedIntoR0(IGMP_MAX_RESP_TIME_OFFSET)
                 .addCountAndPassIfR0Equals(0, PASSED_IPV4); // IGMPv1
 
         // Drop and transmit IGMPv2 reports
@@ -3182,7 +3184,7 @@ public class ApfFilter {
 
         // If the packet is an MLDv1 report or done, or an MLDv2 report, then drop it.
         // Else if the packet is not an MLD query packet, then skip.
-        gen.addLoad8(R0, IPV6_MLD_TYPE_OFFSET)
+        gen.addLoad8intoR0(IPV6_MLD_TYPE_OFFSET)
                 .addCountAndDropIfR0IsOneOf(IPV6_MLD_TYPE_REPORTS, DROPPED_IPV6_MLD_REPORT)
                 .addJumpIfR0NotEquals(IPV6_MLD_TYPE_QUERY, skipMldFilter);
 
@@ -3200,11 +3202,11 @@ public class ApfFilter {
         // has not yet acquired a valid link-local address.
         // Its OK to not check :: here since we also drop MLD reports.
         // If the source address is a not a link-local address, then drop.
-        gen.addLoad16(R0, IPV6_SRC_ADDR_OFFSET)
+        gen.addLoad16intoR0(IPV6_SRC_ADDR_OFFSET)
                 .addCountAndDropIfR0NotEquals(0xfe80, DROPPED_IPV6_MLD_INVALID);
 
         // If hop limit is not 1, then drop.
-        gen.addLoad8(R0, IPV6_HOP_LIMIT_OFFSET)
+        gen.addLoad8intoR0(IPV6_HOP_LIMIT_OFFSET)
                 .addCountAndDropIfR0NotEquals(1, DROPPED_IPV6_MLD_INVALID);
 
         // If the multicast address is not "::", it is an MLD2 multicast-address-specific query,
@@ -3248,16 +3250,16 @@ public class ApfFilter {
         final short skipPort7V4Filter = gen.getUniqueLabel();
 
         // Check it's TCP.
-        gen.addLoad8(R0, IPV4_PROTOCOL_OFFSET);
+        gen.addLoad8intoR0(IPV4_PROTOCOL_OFFSET);
         gen.addJumpIfR0NotEquals(IPPROTO_TCP, skipPort7V4Filter);
 
         // Check it's not a fragment or is the initial fragment.
-        gen.addLoad16(R0, IPV4_FRAGMENT_OFFSET_OFFSET);
+        gen.addLoad16intoR0(IPV4_FRAGMENT_OFFSET_OFFSET);
         gen.addJumpIfR0AnyBitsSet(IPV4_FRAGMENT_OFFSET_MASK, skipPort7V4Filter);
 
         // Check it's destination port 7.
         gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-        gen.addLoad16Indexed(R0, TCP_UDP_DESTINATION_PORT_OFFSET);
+        gen.addLoad16R1IndexedIntoR0(TCP_UDP_DESTINATION_PORT_OFFSET);
         gen.addJumpIfR0NotEquals(ECHO_PORT, skipPort7V4Filter);
 
         // Drop it.
@@ -3378,7 +3380,7 @@ public class ApfFilter {
                 gen.addCountAndPass(PASSED_MDNS);
             } else {
                 if (enableMdns4 && enableMdns6) {
-                    gen.addLoad16(R0, ETH_ETHERTYPE_OFFSET)
+                    gen.addLoad16intoR0(ETH_ETHERTYPE_OFFSET)
                             .addJumpIfR0NotEquals(ETH_P_IP, offloadIPv6Mdns);
                 }
 
@@ -3518,7 +3520,7 @@ public class ApfFilter {
         gen.addLoadImmediate(R0, ETHER_SRC_ADDR_OFFSET);
         gen.addCountAndPassIfBytesAtR0Equal(mHardwareAddress, PASSED_ETHER_OUR_SRC_MAC);
 
-        gen.addLoad16(R0, ETH_ETHERTYPE_OFFSET);
+        gen.addLoad16intoR0(ETH_ETHERTYPE_OFFSET);
         if (SdkLevel.isAtLeastV()) {
             // IPv4, ARP, IPv6, EAPOL, WAPI
             gen.addCountAndDropIfR0IsNoneOf(Set.of(0x0800L, 0x0806L, 0x86DDL, 0x888EL, 0x88B4L),
@@ -3544,7 +3546,7 @@ public class ApfFilter {
         generateArpFilter(gen);
         gen.defineLabel(skipArpFiltersLabel);
 
-        gen.addLoad16(R0, ETH_ETHERTYPE_OFFSET);
+        gen.addLoad16intoR0(ETH_ETHERTYPE_OFFSET);
 
         // Add IPv4 filters:
         short skipIPv4FiltersLabel = gen.getUniqueLabel();
@@ -3617,6 +3619,9 @@ public class ApfFilter {
         }
         if (enableIpv4PingOffload()) {
             sb.append("Ping4, ");
+        }
+        if (enableIpv6PingOffload()) {
+            sb.append("Ping6, ");
         }
         if (enableMdns4Offload()) {
             sb.append("Mdns4, ");
@@ -4138,7 +4143,7 @@ public class ApfFilter {
                 mApfVersionSupported, mApfRamSize));
         pw.println("InstallableProgramSizeClamp: " + mInstallableProgramSizeClamp);
         pw.println("Filter update status: " + (mIsRunning ? "RUNNING" : "PAUSED"));
-        pw.println("Multicast: " + (mMulticastFilter ? "DROP" : "ALLOW"));
+        pw.println("ApfConfig: " + getApfConfigMessage());
         pw.println("Minimum RDNSS lifetime: " + mMinRdnssLifetimeSec);
         pw.println("Interface MAC address: " + MacAddress.fromBytes(mHardwareAddress));
         pw.println("Multicast MAC addresses: ");
@@ -4147,9 +4152,20 @@ public class ApfFilter {
             pw.println(MacAddress.fromBytes(addr));
         }
         pw.decreaseIndent();
+        if (SdkLevel.isAtLeastV()) {
+            pw.print("Hardcoded Allowlisted Ethertypes:");
+            pw.println(" 0800(IPv4) 0806(ARP) 86DD(IPv6) 888E(EAPOL) 88B4(WAPI)");
+        } else {
+            pw.print("Denylisted Ethertypes:");
+            for (int p : mEthTypeBlackList) {
+                pw.print(String.format(" %04x", p));
+            }
+        }
         try {
             pw.println("IPv4 address: " + InetAddress.getByAddress(mIPv4Address).getHostAddress());
-        } catch (UnknownHostException|NullPointerException e) {}
+        } catch (UnknownHostException | NullPointerException e) {
+            pw.println("IPv4 address: None");
+        }
 
         pw.println("IPv4 multicast addresses: ");
         pw.increaseIndent();
@@ -4198,15 +4214,6 @@ public class ApfFilter {
                 "Last program length %d, installed %ds ago, lifetime %ds",
                 mLastInstalledProgram.length, filterAgeSeconds,
                 mLastInstalledProgramMinLifetime));
-        if (SdkLevel.isAtLeastV()) {
-            pw.print("Hardcoded Allowlisted Ethertypes:");
-            pw.println(" 0800(IPv4) 0806(ARP) 86DD(IPv6) 888E(EAPOL) 88B4(WAPI)");
-        } else {
-            pw.print("Denylisted Ethertypes:");
-            for (int p : mEthTypeBlackList) {
-                pw.print(String.format(" %04x", p));
-            }
-        }
         pw.println();
         pw.println("Mdns filters:");
         pw.increaseIndent();
