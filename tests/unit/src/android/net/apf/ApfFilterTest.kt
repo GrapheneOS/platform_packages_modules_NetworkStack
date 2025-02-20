@@ -90,6 +90,7 @@ import android.system.Os
 import android.system.OsConstants.AF_UNIX
 import android.system.OsConstants.IFA_F_TENTATIVE
 import android.system.OsConstants.SOCK_STREAM
+import android.util.Log
 import androidx.test.filters.SmallTest
 import com.android.internal.annotations.GuardedBy
 import com.android.net.module.util.HexDump
@@ -4828,5 +4829,98 @@ class ApfFilterTest {
         apfFilter = getApfFilter(apfConfig)
         verify(dependencies, never()).createEgressIgmpReportsReaderSocket(anyInt())
         verify(dependencies, times(1)).createEgressMulticastReportsReaderSocket(anyInt())
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testAllOffloadFeatureEnabled() {
+        val ipv4McastAddrs = listOf(
+            InetAddress.getByName("224.0.0.1") as Inet4Address,
+            InetAddress.getByName("239.0.0.1") as Inet4Address,
+            InetAddress.getByName("239.0.0.2") as Inet4Address,
+            InetAddress.getByName("239.0.0.3") as Inet4Address
+        )
+        doReturn(ipv4McastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())
+        val ipv6McastAddrs = listOf(
+            InetAddress.getByName("ff12::1:1111:1111") as Inet6Address,
+            InetAddress.getByName("ff12::1:2222:2222") as Inet6Address,
+            InetAddress.getByName("ff12::1:3333:3333") as Inet6Address,
+        )
+        // mock IPv6 multicast address from /proc/net/igmp6
+        doReturn(ipv6McastAddrs).`when`(dependencies).getIPv6MulticastAddresses(any())
+        val apfConfig = getDefaultConfig()
+        apfConfig.apfRamSize = 8192
+        apfConfig.multicastFilter = true
+        apfConfig.handleArpOffload = true
+        apfConfig.handleNdOffload = true
+        apfConfig.handleIgmpOffload = true
+        apfConfig.handleMldOffload = true
+        apfConfig.handleIpv4PingOffload = true
+        apfConfig.handleIpv6PingOffload = true
+        apfConfig.handleMdnsOffload = true
+        val apfFilter = getApfFilter(apfConfig)
+        apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
+
+        val captor = ArgumentCaptor.forClass(OffloadEngine::class.java)
+        verify(nsdManager).registerOffloadEngine(
+            eq(ifParams.name),
+            anyLong(),
+            anyLong(),
+            any(),
+            captor.capture()
+        )
+        val offloadEngine = captor.value
+
+        val lp = LinkProperties()
+        val ipv4LinkAddress = LinkAddress(InetAddress.getByAddress(hostIpv4Address), 24)
+        lp.addLinkAddress(ipv4LinkAddress)
+        val ipv6LinkAddress = LinkAddress(hostLinkLocalIpv6Address, 64)
+        lp.addLinkAddress(ipv6LinkAddress)
+        for (addr in hostIpv6Addresses) {
+            lp.addLinkAddress(LinkAddress(InetAddress.getByAddress(addr), 64))
+        }
+        apfFilter.setLinkProperties(lp)
+        apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
+
+        val castOffloadInfo = OffloadServiceInfo(
+            OffloadServiceInfo.Key("gambit-3cb56c6253638b3641e3d289013cc0ae", "_googlecast._tcp"),
+            listOf(),
+            "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
+            HexDump.hexStringToByteArray(castOffloadPayload),
+            0,
+            OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
+        )
+        val tvRemoteOffloadInfo = OffloadServiceInfo(
+            OffloadServiceInfo.Key("gambit", "_androidtvremote2._tcp"),
+            listOf(),
+            "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
+            HexDump.hexStringToByteArray(tvRemoteOffloadPayload),
+            0,
+            OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
+        )
+
+        visibleOnHandlerThread(handler) {
+            offloadEngine.onOffloadServiceUpdated(castOffloadInfo)
+            offloadEngine.onOffloadServiceUpdated(tvRemoteOffloadInfo)
+        }
+
+        apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
+
+        val ra1 = """
+            333300000001f434f06452fe86dd60010c0000503afffe800000000000001cb6b5bc353b7cfdff0
+            2000000000000000000000000000186000fab000000000000000000000000030440c00000070800
+            00070800000000fdeed0c47546534400000000000000001802400000000708fd0c8be643ee00001
+            a018000000000000101f434f06452fe
+        """.replace("\\s+".toRegex(), "").trim()
+        val ra1Bytes = HexDump.hexStringToByteArray(ra1)
+        Os.write(writerSocket, ra1Bytes, 0, ra1Bytes.size)
+
+        val program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
+
+        Log.i(TAG, "all feature on, size: ${program.size}, program:")
+        val programChunk = program.toList().chunked(2000)
+        programChunk.forEach {
+            Log.i(TAG, HexDump.toHexString(it.toByteArray()))
+        }
     }
 }
