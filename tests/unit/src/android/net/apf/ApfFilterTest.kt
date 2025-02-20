@@ -29,6 +29,7 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REQUEST_REPLIED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_UNKNOWN
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_V6_ONLY
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_NOT_ALLOWED
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHER_OUR_SRC_MAC
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_GARP_REPLY
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IGMP_INVALID
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IGMP_REPORT
@@ -681,7 +682,7 @@ class ApfFilterTest {
                 apfFilter.mApfVersionSupported,
                 program,
                 HexDump.hexStringToByteArray(nonDhcpBcastPkt),
-                PASSED_ETHER_OUR_SRC_MAC
+                if (NetworkStackUtils.isAtLeast25Q2()) DROPPED_ETHER_OUR_SRC_MAC else PASSED_ETHER_OUR_SRC_MAC
         )
     }
 
