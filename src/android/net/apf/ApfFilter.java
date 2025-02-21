@@ -135,6 +135,7 @@ import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REQUEST_REPL
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_UNKNOWN;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_V6_ONLY;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_NOT_ALLOWED;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHER_OUR_SRC_MAC;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ETH_BROADCAST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_GARP_REPLY;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV4_BROADCAST_ADDR;
@@ -1696,16 +1697,17 @@ public class ApfFilter {
             gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
             // Load the TCP header size into R0 (it's indexed by R1)
             gen.addLoad8R1IndexedIntoR0(ETH_HEADER_LEN + TCP_HEADER_SIZE_OFFSET);
-            // Size offset is in the top nibble, but it must be multiplied by 4, and the two
-            // top bits of the low nibble are guaranteed to be zeroes. Right-shift R0 by 2.
+            // Size offset is in the top nibble, bottom nibble is reserved,
+            // but not necessarily zero.  Thus we need to >> 4 then << 2,
+            // achieve this by >> 2 and masking with 0b00111100.
             gen.addRightShift(2);
+            gen.addAnd(0x3C);
             // R0 += R1 -> R0 contains TCP + IP headers length
             gen.addAddR1ToR0();
             // Load IPv4 total length
             gen.addSwap();
             gen.addLoad16intoR0(IPV4_TOTAL_LENGTH_OFFSET);
-            gen.addSwap();
-            gen.addNeg(R0);
+            gen.addNeg(R1);
             gen.addAddR1ToR0();
             gen.addJumpIfR0NotEquals(0, nextFilterLabel);
             // Add IPv4 header length
@@ -3502,7 +3504,10 @@ public class ApfFilter {
         // Here's a basic summary of what the initial program does:
         //
         // if it is a loopback (src mac is nic's primary mac) packet
-        //    pass
+        //    if 25Q2+:
+        //      drop
+        //    else
+        //      pass
         // if it's a 802.3 Frame (ethtype < 0x0600):
         //    drop or pass based on configurations
         // if it has a ether-type that belongs to the black list
@@ -3518,7 +3523,11 @@ public class ApfFilter {
         // insert IPv6 filter to drop, pass, or fall off the end for ICMPv6 packets
 
         gen.addLoadImmediate(R0, ETHER_SRC_ADDR_OFFSET);
-        gen.addCountAndPassIfBytesAtR0Equal(mHardwareAddress, PASSED_ETHER_OUR_SRC_MAC);
+        if (NetworkStackUtils.isAtLeast25Q2()) {
+            gen.addCountAndDropIfBytesAtR0Equal(mHardwareAddress, DROPPED_ETHER_OUR_SRC_MAC);
+        } else {
+            gen.addCountAndPassIfBytesAtR0Equal(mHardwareAddress, PASSED_ETHER_OUR_SRC_MAC);
+        }
 
         gen.addLoad16intoR0(ETH_ETHERTYPE_OFFSET);
         if (SdkLevel.isAtLeastV()) {

@@ -70,6 +70,7 @@ public class ApfCounterTracker {
         PASSED_MDNS,
         PASSED_MLD,  // see also MAX_PASS_COUNTER below
         DROPPED_ETH_BROADCAST,  // see also MIN_DROP_COUNTER below
+        DROPPED_ETHER_OUR_SRC_MAC,
         DROPPED_RA,
         DROPPED_IPV4_L2_BROADCAST,
         DROPPED_IPV4_BROADCAST_ADDR,

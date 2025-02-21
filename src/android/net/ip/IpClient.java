@@ -82,6 +82,7 @@ import static com.android.net.module.util.NetworkStackConstants.RFC7421_PREFIX_L
 import static com.android.net.module.util.NetworkStackConstants.VENDOR_SPECIFIC_IE_ID;
 import static com.android.networkstack.apishim.ConstantsShim.IFA_F_MANAGETEMPADDR;
 import static com.android.networkstack.apishim.ConstantsShim.IFA_F_NOPREFIXROUTE;
+import static com.android.networkstack.util.NetworkStackUtils.APF_ENABLE;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_ARP_OFFLOAD;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_IGMP_OFFLOAD;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_IGMP_OFFLOAD_VERSION;
@@ -818,6 +819,7 @@ public class IpClient extends StateMachine {
     private final boolean mIsAcceptRaMinLftEnabled;
     private final boolean mEnableApfPollingCounters;
     private final boolean mPopulateLinkAddressLifetime;
+    private final boolean mEnableApf;
     private final boolean mApfHandleArpOffload;
     private final boolean mApfHandleNdOffload;
     private final boolean mApfHandleMdnsOffload;
@@ -1097,6 +1099,7 @@ public class IpClient extends StateMachine {
         mIsAcceptRaMinLftEnabled =
                 SdkLevel.isAtLeastV() || mDependencies.isFeatureEnabled(context,
                         IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION);
+        mEnableApf = mDependencies.isFeatureNotChickenedOut(mContext, APF_ENABLE);
         mApfHandleArpOffload = mDependencies.isFeatureNotChickenedOut(
                 mContext, APF_HANDLE_ARP_OFFLOAD);
         mApfHandleNdOffload = mDependencies.isFeatureNotChickenedOut(
@@ -2782,7 +2785,7 @@ public class IpClient extends StateMachine {
     @Nullable
     private ApfFilter maybeCreateApfFilter(final ApfCapabilities apfCaps) {
         ApfFilter.ApfConfiguration apfConfig = new ApfFilter.ApfConfiguration();
-        if (apfCaps == null) {
+        if (apfCaps == null || !mEnableApf) {
             return null;
         }
         // For now only support generating programs for Ethernet frames. If this restriction is

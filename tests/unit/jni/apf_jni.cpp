@@ -276,7 +276,8 @@ static jobjectArray com_android_server_ApfTest_disassembleApf(
                             reinterpret_cast<jbyte*>(buf.data()));
     std::vector<std::string> disassemble_output;
     for (uint32_t pc = 0; pc < program_len;) {
-         disassemble_output.emplace_back(apf_disassemble(buf.data(), program_len, &pc));
+      const disas_ret ret = apf_disassemble(buf.data(), program_len, &pc);
+      disassemble_output.emplace_back(ret.content);
     }
     jclass stringClass = env->FindClass("java/lang/String");
     jobjectArray disassembleOutput =

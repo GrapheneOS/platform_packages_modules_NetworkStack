@@ -35,6 +35,7 @@ import static com.android.net.module.util.netlink.NetlinkConstants.RTM_NEWROUTE;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTN_UNICAST;
 import static com.android.net.module.util.netlink.StructNlMsgHdr.NLM_F_ACK;
 import static com.android.net.module.util.netlink.StructNlMsgHdr.NLM_F_REQUEST;
+import static com.android.networkstack.util.NetworkStackUtils.APF_ENABLE;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -219,6 +220,7 @@ public class IpClientTest {
                 any(), any(), any(), anyInt(), anyBoolean(), any())).thenReturn(mNetlinkMonitor);
         when(mNetlinkMonitor.start()).thenReturn(true);
         doReturn(mPackageManager).when(mContext).getPackageManager();
+        doReturn(true).when(mDependencies).isFeatureNotChickenedOut(mContext, APF_ENABLE);
 
         mIfParams = null;
     }
