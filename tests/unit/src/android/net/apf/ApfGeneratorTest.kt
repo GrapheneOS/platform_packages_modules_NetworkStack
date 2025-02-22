@@ -71,7 +71,10 @@ class ApfGeneratorTest {
         @Parameterized.Parameters
         @JvmStatic
         fun data(): Iterable<Any?> {
-            return mutableListOf<Int?>(6, 7)
+            return mutableListOf<Int?>(
+                ApfJniUtils.APF_INTERPRETER_VERSION_V6,
+                ApfJniUtils.APF_INTERPRETER_VERSION_NEXT
+            )
         }
     }
 
@@ -80,7 +83,7 @@ class ApfGeneratorTest {
     // Indicates which apfInterpreter to load.
     @Parameterized.Parameter(0)
     @JvmField
-    var aApfInterpreterVersion: Int = 7
+    var aApfInterpreterVersion: Int = ApfJniUtils.APF_INTERPRETER_VERSION_NEXT
 
     private val ramSize = 2048
     private val clampSize = 2048
@@ -711,7 +714,7 @@ class ApfGeneratorTest {
                 'a'.code.toByte()
         ), program)
         assertContentEquals(listOf(
-                "0: jbseq       r0, 0x1, DROP, 61"
+                "0: jbseq       r0, (1), DROP, 61"
         ), apfTestHelpers.disassembleApf(program).map{ it.trim() })
 
         val qnames = byteArrayOf(1, 'A'.code.toByte(), 1, 'B'.code.toByte(), 0, 0)
@@ -808,9 +811,9 @@ class ApfGeneratorTest {
                 1, 2, 1, 1
         ), program)
         assertContentEquals(listOf(
-                "0: jbseq       r0, 0x2, DROP, { 0102, 0304 }",
-                "9: jbsne       r0, 0x2, DROP, { 0102, 0304 }",
-                "18: jbsne       r0, 0x2, DROP, 0101"
+                "0: jbseq       r0, (2), DROP, { 0102, 0304 }[2]",
+                "9: jbsne       r0, (2), DROP, { 0102, 0304 }[2]",
+                "18: jbsne       r0, (2), DROP, 0101"
         ), apfTestHelpers.disassembleApf(program).map{ it.trim() })
     }
 

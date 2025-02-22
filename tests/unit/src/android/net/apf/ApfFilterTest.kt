@@ -159,7 +159,10 @@ class ApfFilterTest {
         @Parameterized.Parameters
         @JvmStatic
         fun data(): Iterable<Any?> {
-            return mutableListOf<Int?>(6, 7)
+            return mutableListOf<Int?>(
+                ApfJniUtils.APF_INTERPRETER_VERSION_V6,
+                ApfJniUtils.APF_INTERPRETER_VERSION_NEXT
+            )
         }
     }
 
@@ -169,7 +172,7 @@ class ApfFilterTest {
     // Indicates which apfInterpreter to load.
     @Parameterized.Parameter(0)
     @JvmField
-    var apfInterpreterVersion: Int = 7
+    var apfInterpreterVersion: Int = ApfJniUtils.APF_INTERPRETER_VERSION_NEXT
 
     @Mock
     private lateinit var context: Context

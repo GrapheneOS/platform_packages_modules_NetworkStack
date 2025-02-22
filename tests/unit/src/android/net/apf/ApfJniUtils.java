@@ -21,15 +21,19 @@ import java.util.List;
  * The class contains the helper method for interacting with native apf code.
  */
 public class ApfJniUtils {
-
+    static final int APF_INTERPRETER_VERSION_V6 = 6000;
+    static final int APF_INTERPRETER_VERSION_NEXT = 99999999;
     public ApfJniUtils(int apfInterpreterVersion) {
         // Load up native shared library containing APF interpreter exposed via JNI.
-        if (apfInterpreterVersion == 6) {
+        if (apfInterpreterVersion == APF_INTERPRETER_VERSION_V6) {
             System.loadLibrary("apfjniv6");
-        } else if (apfInterpreterVersion == 7) {
+        } else if (apfInterpreterVersion == APF_INTERPRETER_VERSION_NEXT) {
             System.loadLibrary("apfjninext");
         } else {
-            throw new IllegalArgumentException("apfInterpreterVersion must be 6 or 7");
+            throw new IllegalArgumentException(
+                "apfInterpreterVersion must be "
+                    + APF_INTERPRETER_VERSION_V6 + " or "
+                    + APF_INTERPRETER_VERSION_NEXT);
         }
     }
 
