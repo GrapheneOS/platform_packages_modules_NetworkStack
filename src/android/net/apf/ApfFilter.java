@@ -3690,7 +3690,6 @@ public class ApfFilter {
                 // Stop if we get too big.
                 if (gen.programLengthOverEstimate() > mMaximumApfProgramSize) {
                     Log.i(TAG, "Past maximum program size, skipping RAs");
-                    sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
                     break;
                 }
 

@@ -2648,12 +2648,8 @@ public class ApfTest {
     public void testApfProgramOverSize() throws Exception {
         final ApfConfiguration config = getDefaultConfig();
         config.apfVersionSupported = 2;
-        config.apfRamSize = 512;
+        config.apfRamSize = 256;
         final ApfFilter apfFilter = getApfFilter(config);
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
-        final byte[] ra = buildLargeRa();
-        pretendPacketReceived(ra);
-        // The generated program size will be 529, which is larger than 512
         mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         verify(mNetworkQuirkMetrics).setEvent(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
         verify(mNetworkQuirkMetrics).statsWrite();
