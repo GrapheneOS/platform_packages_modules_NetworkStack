@@ -87,7 +87,7 @@ public class ApfMdnsUtils {
            // If (QTYPE == PTR) and (QNAME == mServiceName + mServiceType), then reply.
             MdnsOffloadRule.Matcher ptrMatcher = new MdnsOffloadRule.Matcher(
                     encodedServiceType,
-                    TYPE_PTR
+                    new int[] { TYPE_PTR }
             );
             addMatcherIfNotExist(allMatchers, matcherGroup, ptrMatcher);
             final List<String> subTypes = info.getSubtypes();
@@ -103,7 +103,7 @@ public class ApfMdnsUtils {
                 buf.write(-1);
                 final byte[] encodedFullServiceType = encodeQname(buf, serviceTypeSuffix);
                 final MdnsOffloadRule.Matcher subtypePtrMatcher = new MdnsOffloadRule.Matcher(
-                        encodedFullServiceType, TYPE_PTR);
+                        encodedFullServiceType, new int[] { TYPE_PTR });
                 addMatcherIfNotExist(allMatchers, matcherGroup, subtypePtrMatcher);
             } else {
                 // If (QTYPE == PTR) and (QNAME == subType + _sub + mServiceType), then reply.
@@ -113,24 +113,22 @@ public class ApfMdnsUtils {
                     final byte[] encodedFullServiceType = encodeQname(fullServiceType);
                     // If (QTYPE == PTR) and (QNAME == subType + "_sub" + mServiceType), then reply.
                     final MdnsOffloadRule.Matcher subtypePtrMatcher = new MdnsOffloadRule.Matcher(
-                            encodedFullServiceType, TYPE_PTR);
+                            encodedFullServiceType, new int[] { TYPE_PTR });
                     addMatcherIfNotExist(allMatchers, matcherGroup, subtypePtrMatcher);
                 }
             }
             final byte[] encodedFullQualifiedNameQname = encodeQname(fullQualifiedName);
             // If (QTYPE == SRV) and (QNAME == mServiceName + mServiceType), then reply.
-            addMatcherIfNotExist(allMatchers, matcherGroup,
-                    new MdnsOffloadRule.Matcher(encodedFullQualifiedNameQname, TYPE_SRV));
             // If (QTYPE == TXT) and (QNAME == mServiceName + mServiceType), then reply.
             addMatcherIfNotExist(allMatchers, matcherGroup,
-                    new MdnsOffloadRule.Matcher(encodedFullQualifiedNameQname, TYPE_TXT));
+                    new MdnsOffloadRule.Matcher(encodedFullQualifiedNameQname,
+                            new int[] { TYPE_SRV, TYPE_TXT }));
             // If (QTYPE == A or AAAA) and (QNAME == mDeviceHostName), then reply.
             final String[] hostNameLabels = info.getHostname().split("\\.", 0);
             final byte[] encodedHostName = encodeQname(hostNameLabels);
             addMatcherIfNotExist(allMatchers, matcherGroup,
-                    new MdnsOffloadRule.Matcher(encodedHostName, TYPE_A));
-            addMatcherIfNotExist(allMatchers, matcherGroup,
-                    new MdnsOffloadRule.Matcher(encodedHostName, TYPE_AAAA));
+                    new MdnsOffloadRule.Matcher(encodedHostName,
+                            new int[] { TYPE_A, TYPE_AAAA }));
             if (!matcherGroup.isEmpty()) {
                 rules.add(new MdnsOffloadRule(
                         key.getServiceName() + "." + key.getServiceType(),
