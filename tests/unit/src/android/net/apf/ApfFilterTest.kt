@@ -109,6 +109,7 @@ import com.android.networkstack.metrics.NetworkQuirkMetrics
 import com.android.networkstack.packets.NeighborAdvertisement
 import com.android.networkstack.packets.NeighborSolicitation
 import com.android.networkstack.util.NetworkStackUtils
+import com.android.networkstack.util.NetworkStackUtils.isAtLeast25Q2
 import com.android.testutils.DevSdkIgnoreRule
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo
 import com.android.testutils.DevSdkIgnoreRunner
@@ -289,6 +290,57 @@ class ApfFilterTest {
             0a3001c0001000000780010fe800000000000000000000000000003c0a3001c
             0001000000780010200a0000000000000000000000000003c0a3001c0001000
             000780010200b0000000000000000000000000003
+        """.replace("\\s+".toRegex(), "").trim()
+
+    // answers = [
+    //    DNSRR(rrname="_airplay._tcp.local", type="PTR", rdata="gambit._airplay._tcp.local", ttl=120),
+    //    DNSRR(rrname="gambit._airplay._tcp.local", type="SRV", rdata="0 0 6466 Android_2570595cc11d4af4a4b7146b946eeb9e.local", ttl=120),
+    //    DNSRR(rrname="gambit._airplay._tcp.local", type="TXT", rdata='"deviceid=58:55:CA:1A:E2:88 features=0x39f7 model=AppleTV2,1 srcvers=130.14"', ttl=120), DNSRR(rrname="Android_f47ac10b58cc4b88bc3f5e7a81e59872.local", type="A", ttl=120, rdata="100.89.85.228"),
+    //    DNSRR(rrname="Android_f47ac10b58cc4b88bc3f5e7a81e59872.local", type="AAAA", ttl=120, rdata="fe80:0000:0000:0000:0000:0000:0000:0003"),
+    //    DNSRR(rrname="Android_f47ac10b58cc4b88bc3f5e7a81e59872.local", type="AAAA", ttl=120, rdata="200a:0000:0000:0000:0000:0000:0000:0003"),
+    //    DNSRR(rrname="Android_f47ac10b58cc4b88bc3f5e7a81e59872.local", type="AAAA", ttl=120, rdata="200b:0000:0000:0000:0000:0000:0000:0003"),
+    // ]
+    // dns = dns_compress(DNS(qr=1, aa=1, rd=0, qd=None, an=answers))
+    val airplayOffloadPayload = """
+            000084000000000700000000085f616972706c6179045f746370056c6f63616
+            c00000c00010000007800090667616d626974c00cc02b002100010000007800
+            37302030203634363620416e64726f69645f323537303539356363313164346
+            16634613462373134366239343665656239652e6c6f63616cc02b0010000100
+            000078004d4c2264657669636569643d35383a35353a43413a31413a45323a3
+            8382066656174757265733d307833396637206d6f64656c3d4170706c655456
+            322c3120737263766572733d3133302e31342228416e64726f69645f6634376
+            163313062353863633462383862633366356537613831653539383732c01a00
+            010001000000780004645955e4c0d0001c0001000000780010fe80000000000
+            0000000000000000003c0d0001c0001000000780010200a0000000000000000
+            000000000003c0d0001c0001000000780010200b00000000000000000000000
+            00003
+        """.replace("\\s+".toRegex(), "").trim()
+
+    // answers = [
+    //    DNSRR(rrname="_raop._tcp.local", type="PTR", rdata="5855CA1AE288@gambit._raop._tcp.local", ttl=120),
+    //    DNSRR(rrname="5855CA1AE288@gambit._raop._tcp.local", type="SRV", rdata="0 0 6466 Android_2570595cc11d4af4a4b7146b946eeb9e.local", ttl=120),
+    //    DNSRR(rrname="5855CA1AE288@gambit._raop._tcp.local", type="TXT", rdata='"txtvers=1 ch=2 cn=0,1,2,3 da=true et=0,3,5 md=0,1,2 pw=false sv=false sr=44100 ss=16 tp=UDP vn=65537 vs=130.14 am=AppleTV2,1 sf=0x4"', ttl=120),
+    //    DNSRR(rrname="Android_f47ac10b58cc4b88bc3f5e7a81e59872.local", type="A", ttl=120, rdata="100.89.85.228"),
+    //    DNSRR(rrname="Android_f47ac10b58cc4b88bc3f5e7a81e59872.local", type="AAAA", ttl=120, rdata="fe80:0000:0000:0000:0000:0000:0000:0003"),
+    //    DNSRR(rrname="Android_f47ac10b58cc4b88bc3f5e7a81e59872.local", type="AAAA", ttl=120, rdata="200a:0000:0000:0000:0000:0000:0000:0003"),
+    //    DNSRR(rrname="Android_f47ac10b58cc4b88bc3f5e7a81e59872.local", type="AAAA", ttl=120, rdata="200b:0000:0000:0000:0000:0000:0000:0003"),
+    // ]
+    // dns = dns_compress(DNS(qr=1, aa=1, rd=0, qd=None, an=answers))
+    val raopOffloadPayload = """
+            000084000000000700000000055f72616f70045f746370056c6f63616c00000
+            c0001000000780016133538353543413141453238384067616d626974c00cc0
+            2800210001000000780037302030203634363620416e64726f69645f3235373
+            0353935636331316434616634613462373134366239343665656239652e6c6f
+            63616cc028001000010000007800868522747874766572733d312063683d322
+            0636e3d302c312c322c332064613d747275652065743d302c332c35206d643d
+            302c312c322070773d66616c73652073763d66616c73652073723d343431303
+            02073733d31362074703d55445020766e3d36353533372076733d3133302e31
+            3420616d3d4170706c655456322c312073663d3078342228416e64726f69645
+            f66343761633130623538636334623838626333663565376138316535393837
+            32c01700010001000000780004645955e4c113001c0001000000780010fe800
+            000000000000000000000000003c113001c0001000000780010200a00000000
+            00000000000000000003c113001c0001000000780010200b000000000000000
+            0000000000003
         """.replace("\\s+".toRegex(), "").trim()
 
     private val handlerThread by lazy {
@@ -686,7 +738,7 @@ class ApfFilterTest {
                 apfFilter.mApfVersionSupported,
                 program,
                 HexDump.hexStringToByteArray(nonDhcpBcastPkt),
-                if (NetworkStackUtils.isAtLeast25Q2()) DROPPED_ETHER_OUR_SRC_MAC else PASSED_ETHER_OUR_SRC_MAC
+                if (isAtLeast25Q2()) DROPPED_ETHER_OUR_SRC_MAC else PASSED_ETHER_OUR_SRC_MAC
         )
     }
 
@@ -4902,12 +4954,32 @@ class ApfFilterTest {
             OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
         )
 
+        val airplayOffloadInfo = OffloadServiceInfo(
+            OffloadServiceInfo.Key("gambit", "_airplay._tcp"),
+            listOf(),
+            "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
+            HexDump.hexStringToByteArray(airplayOffloadPayload),
+            0,
+            OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
+        )
+
+        val raopOffloadInfo = OffloadServiceInfo(
+            OffloadServiceInfo.Key("5855CA1AE288@gambit", "_raop._tcp"),
+            listOf(),
+            "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
+            HexDump.hexStringToByteArray(raopOffloadPayload),
+            0,
+            OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
+        )
+
         visibleOnHandlerThread(handler) {
             offloadEngine.onOffloadServiceUpdated(castOffloadInfo)
             offloadEngine.onOffloadServiceUpdated(tvRemoteOffloadInfo)
+            offloadEngine.onOffloadServiceUpdated(airplayOffloadInfo)
+            offloadEngine.onOffloadServiceUpdated(raopOffloadInfo)
         }
 
-        apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
+        apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 4)
 
         val ra1 = """
             333300000001f434f06452fe86dd60010c0000503afffe800000000000001cb6b5bc353b7cfdff0
