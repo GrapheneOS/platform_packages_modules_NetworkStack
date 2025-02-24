@@ -1738,6 +1738,7 @@ public class ApfFilter {
     private static final int MAX_RAS = 10;
 
     private final ArrayList<Ra> mRas = new ArrayList<>();
+    private int mNumFilteredRas = 0;
     private final SparseArray<KeepalivePacket> mKeepalivePackets = new SparseArray<>();
 
     // We don't want to filter an RA for it's whole lifetime as it'll be expired by the time we ever
@@ -3641,8 +3642,10 @@ public class ApfFilter {
             sb.append("Mdns6, ");
         }
         sb.append("] ");
-        sb.append("RAs: ");
+        sb.append("total RAs: ");
         sb.append(mRas.size());
+        sb.append(" filtered RAs: ");
+        sb.append(mNumFilteredRas);
         sb.append(" mDNSs: ");
         sb.append(mOffloadRules.size());
         sb.append(" }");
@@ -3702,6 +3705,7 @@ public class ApfFilter {
 
             // Step 2: Actually generate the program
             gen = emitPrologue();
+            mNumFilteredRas = rasToFilter.size();
             for (Ra ra : rasToFilter) {
                 ra.generateFilter(gen, timeSeconds);
                 programMinLft = Math.min(programMinLft, ra.getRemainingFilterLft(timeSeconds));
@@ -4231,7 +4235,13 @@ public class ApfFilter {
         pw.println();
         pw.println("RA filters:");
         pw.increaseIndent();
-        for (Ra ra: mRas) {
+        for (int i = 0; i < mRas.size(); ++i) {
+            if (i < mNumFilteredRas) {
+                pw.println("Filtered: ");
+            } else {
+                pw.println("Ignored: ");
+            }
+            final Ra ra = mRas.get(i);
             pw.println(ra);
             pw.increaseIndent();
             pw.println(String.format(
