@@ -140,13 +140,6 @@ public class ApfSessionInfoMetricsTest {
         verifyCounterName(Counter.PASSED_ARP_REQUEST, CounterName.CN_PASSED_ARP_REQUEST);
         verifyCounterName(Counter.PASSED_IPV4_FROM_DHCPV4_SERVER,
                 CounterName.CN_PASSED_IPV4_FROM_DHCPV4_SERVER);
-        verifyCounterName(Counter.PASSED_IPV6_NS_DAD, CounterName.CN_PASSED_IPV6_NS_DAD);
-        verifyCounterName(Counter.PASSED_IPV6_NS_NO_ADDRESS,
-                CounterName.CN_PASSED_IPV6_NS_NO_ADDRESS);
-        verifyCounterName(Counter.PASSED_IPV6_NS_NO_SLLA_OPTION,
-                CounterName.CN_PASSED_IPV6_NS_NO_SLLA_OPTION);
-        verifyCounterName(Counter.PASSED_IPV6_NS_TENTATIVE,
-                CounterName.CN_PASSED_IPV6_NS_TENTATIVE);
         verifyCounterName(Counter.PASSED_MLD, CounterName.CN_PASSED_MLD);
         verifyCounterName(Counter.DROPPED_IPV4_NON_DHCP4, CounterName.CN_DROPPED_IPV4_NON_DHCP4);
         verifyCounterName(Counter.DROPPED_IPV6_NS_INVALID, CounterName.CN_DROPPED_IPV6_NS_INVALID);

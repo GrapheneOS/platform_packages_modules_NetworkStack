@@ -184,10 +184,6 @@ import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_UNICAST;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_HOPOPTS;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NON_ICMP;
-import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_DAD;
-import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_SLLA_OPTION;
-import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_TENTATIVE;
-import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_ADDRESS;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_UNICAST_NON_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_MDNS;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_MLD;
@@ -2316,7 +2312,7 @@ public class ApfFilter {
         if (allIPv6Addrs.isEmpty()) {
             // If there is no IPv6 link local address, allow all NS packets to avoid racing
             // against RS.
-            v6Gen.addCountAndPass(PASSED_IPV6_NS_NO_ADDRESS);
+            v6Gen.addCountAndPass(PASSED_IPV6_ICMP);
             return;
         }
 
@@ -2363,7 +2359,7 @@ public class ApfFilter {
         v6Gen.addLoadImmediate(R0, ICMP6_NS_TARGET_IP_OFFSET);
         if (!tentativeIPv6Addrs.isEmpty()) {
             v6Gen.addCountAndPassIfBytesAtR0EqualsAnyOf(
-                    tentativeIPv6Addrs, PASSED_IPV6_NS_TENTATIVE);
+                    tentativeIPv6Addrs, PASSED_IPV6_ICMP);
         }
 
         final List<byte[]> nonTentativeIpv6Addrs = getIpv6Addresses(
@@ -2380,14 +2376,14 @@ public class ApfFilter {
 
         // if source ip is unspecified (::), it's DAD request -> pass
         v6Gen.addLoadImmediate(R0, IPV6_SRC_ADDR_OFFSET)
-                .addCountAndPassIfBytesAtR0Equal(IPV6_UNSPECIFIED_ADDRESS, PASSED_IPV6_NS_DAD);
+                .addCountAndPassIfBytesAtR0Equal(IPV6_UNSPECIFIED_ADDRESS, PASSED_IPV6_ICMP);
 
         // Only offload NUD/Address resolution packets that have SLLA as the their first option.
         // For option-less NUD packets or NUD/Address resolution packets where
         // the first option is not SLLA, pass them to the kernel for handling.
         // if payload len < 32 -> pass
         v6Gen.addLoad16intoR0(IPV6_PAYLOAD_LEN_OFFSET)
-                .addCountAndPassIfR0LessThan(32, PASSED_IPV6_NS_NO_SLLA_OPTION);
+                .addCountAndPassIfR0LessThan(32, PASSED_IPV6_ICMP);
 
         // if the first option is not SLLA -> pass
         // 0                   1                   2                   3
@@ -2396,8 +2392,7 @@ public class ApfFilter {
         // |     Type      |    Length     |Link-Layer Addr  |
         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
         v6Gen.addLoad8intoR0(ICMP6_NS_OPTION_TYPE_OFFSET)
-                .addCountAndPassIfR0NotEquals(ICMPV6_ND_OPTION_SLLA,
-                        PASSED_IPV6_NS_NO_SLLA_OPTION);
+                .addCountAndPassIfR0NotEquals(ICMPV6_ND_OPTION_SLLA, PASSED_IPV6_ICMP);
 
         // Src IPv6 address check:
         // if multicast address (FF::/8) or loopback address (00::/8) -> drop

@@ -69,10 +69,6 @@ import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_UNICAST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_HOPOPTS
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NON_ICMP
-import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_DAD
-import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_ADDRESS
-import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_SLLA_OPTION
-import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_TENTATIVE
 import android.net.apf.ApfCounterTracker.Counter.PASSED_MDNS
 import android.net.apf.ApfCounterTracker.Counter.PASSED_MLD
 import android.net.apf.ApfFilter.Dependencies
@@ -2697,7 +2693,7 @@ class ApfFilterTest {
             apfFilter.mApfVersionSupported,
             program,
             HexDump.hexStringToByteArray(nsPkt),
-            PASSED_IPV6_NS_NO_ADDRESS
+            PASSED_IPV6_ICMP
         )
     }
 
@@ -2997,7 +2993,7 @@ class ApfFilterTest {
             apfFilter.mApfVersionSupported,
             program,
             HexDump.hexStringToByteArray(tentativeTargetIpNsPkt),
-            PASSED_IPV6_NS_TENTATIVE
+            PASSED_IPV6_ICMP
         )
 
         // Using scapy to generate IPv6 NS packet:
@@ -3035,7 +3031,7 @@ class ApfFilterTest {
             apfFilter.mApfVersionSupported,
             program,
             HexDump.hexStringToByteArray(dadNsPkt),
-            PASSED_IPV6_NS_DAD
+            PASSED_IPV6_ICMP
         )
 
         // Using scapy to generate IPv6 NS packet:
@@ -3053,7 +3049,7 @@ class ApfFilterTest {
             apfFilter.mApfVersionSupported,
             program,
             HexDump.hexStringToByteArray(noOptionNsPkt),
-            PASSED_IPV6_NS_NO_SLLA_OPTION
+            PASSED_IPV6_ICMP
         )
 
         // Using scapy to generate IPv6 NS packet:
@@ -3112,7 +3108,7 @@ class ApfFilterTest {
             apfFilter.mApfVersionSupported,
             program,
             HexDump.hexStringToByteArray(sllaNotFirstOptionNsPkt),
-            PASSED_IPV6_NS_NO_SLLA_OPTION
+            PASSED_IPV6_ICMP
         )
 
         // Using scapy to generate IPv6 NS packet:
@@ -3131,7 +3127,7 @@ class ApfFilterTest {
             apfFilter.mApfVersionSupported,
             program,
             HexDump.hexStringToByteArray(noSllaOptionNsPkt),
-            PASSED_IPV6_NS_NO_SLLA_OPTION
+            PASSED_IPV6_ICMP
         )
 
         // Using scapy to generate IPv6 NS packet:
