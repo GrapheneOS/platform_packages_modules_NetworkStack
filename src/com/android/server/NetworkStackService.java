@@ -361,8 +361,8 @@ public class NetworkStackService extends Service {
         }
 
         @Override
-        public void makeNetworkMonitor(Network network, String name, INetworkMonitorCallbacks cb)
-                throws RemoteException {
+        public void makeNetworkMonitor(Network network, @Nullable String name,
+                INetworkMonitorCallbacks cb) throws RemoteException {
             mPermChecker.enforceNetworkStackCallingPermission();
             updateNetworkStackAidlVersion(cb.getInterfaceVersion(), cb.getInterfaceHash());
             final SharedLog log = addValidationLogs(network, name);
