@@ -184,10 +184,6 @@ import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_UNICAST;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_HOPOPTS;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NON_ICMP;
-import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_DAD;
-import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_SLLA_OPTION;
-import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_TENTATIVE;
-import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_ADDRESS;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_UNICAST_NON_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_MDNS;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_MLD;
@@ -375,8 +371,6 @@ public class ApfFilter {
     }
 
     private static final String TAG = "ApfFilter";
-    private static final boolean DBG = true;
-    private static final boolean VDBG = false;
 
     private final int mApfRamSize;
     private final int mMaximumApfProgramSize;
@@ -1740,6 +1734,7 @@ public class ApfFilter {
     private static final int MAX_RAS = 10;
 
     private final ArrayList<Ra> mRas = new ArrayList<>();
+    private int mNumFilteredRas = 0;
     private final SparseArray<KeepalivePacket> mKeepalivePackets = new SparseArray<>();
 
     // We don't want to filter an RA for it's whole lifetime as it'll be expired by the time we ever
@@ -2317,7 +2312,7 @@ public class ApfFilter {
         if (allIPv6Addrs.isEmpty()) {
             // If there is no IPv6 link local address, allow all NS packets to avoid racing
             // against RS.
-            v6Gen.addCountAndPass(PASSED_IPV6_NS_NO_ADDRESS);
+            v6Gen.addCountAndPass(PASSED_IPV6_ICMP);
             return;
         }
 
@@ -2364,7 +2359,7 @@ public class ApfFilter {
         v6Gen.addLoadImmediate(R0, ICMP6_NS_TARGET_IP_OFFSET);
         if (!tentativeIPv6Addrs.isEmpty()) {
             v6Gen.addCountAndPassIfBytesAtR0EqualsAnyOf(
-                    tentativeIPv6Addrs, PASSED_IPV6_NS_TENTATIVE);
+                    tentativeIPv6Addrs, PASSED_IPV6_ICMP);
         }
 
         final List<byte[]> nonTentativeIpv6Addrs = getIpv6Addresses(
@@ -2381,14 +2376,14 @@ public class ApfFilter {
 
         // if source ip is unspecified (::), it's DAD request -> pass
         v6Gen.addLoadImmediate(R0, IPV6_SRC_ADDR_OFFSET)
-                .addCountAndPassIfBytesAtR0Equal(IPV6_UNSPECIFIED_ADDRESS, PASSED_IPV6_NS_DAD);
+                .addCountAndPassIfBytesAtR0Equal(IPV6_UNSPECIFIED_ADDRESS, PASSED_IPV6_ICMP);
 
         // Only offload NUD/Address resolution packets that have SLLA as the their first option.
         // For option-less NUD packets or NUD/Address resolution packets where
         // the first option is not SLLA, pass them to the kernel for handling.
         // if payload len < 32 -> pass
         v6Gen.addLoad16intoR0(IPV6_PAYLOAD_LEN_OFFSET)
-                .addCountAndPassIfR0LessThan(32, PASSED_IPV6_NS_NO_SLLA_OPTION);
+                .addCountAndPassIfR0LessThan(32, PASSED_IPV6_ICMP);
 
         // if the first option is not SLLA -> pass
         // 0                   1                   2                   3
@@ -2397,8 +2392,7 @@ public class ApfFilter {
         // |     Type      |    Length     |Link-Layer Addr  |
         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
         v6Gen.addLoad8intoR0(ICMP6_NS_OPTION_TYPE_OFFSET)
-                .addCountAndPassIfR0NotEquals(ICMPV6_ND_OPTION_SLLA,
-                        PASSED_IPV6_NS_NO_SLLA_OPTION);
+                .addCountAndPassIfR0NotEquals(ICMPV6_ND_OPTION_SLLA, PASSED_IPV6_ICMP);
 
         // Src IPv6 address check:
         // if multicast address (FF::/8) or loopback address (00::/8) -> drop
@@ -3370,7 +3364,13 @@ public class ApfFilter {
             final short offloadIPv6Mdns = gen.getUniqueLabel();
 
             for (MdnsOffloadRule.Matcher matcher : rule.mMatchers) {
-                gen.addJumpIfPktAtR0ContainDnsQ(matcher.mQnames, matcher.mQtype, ruleMatch);
+                for (int qtype : matcher.mQtypes) {
+                    try {
+                        gen.addJumpIfPktAtR0ContainDnsQ(matcher.mQnames, qtype, ruleMatch);
+                    } catch (IllegalArgumentException e) {
+                        Log.e(TAG, "Failed to generate mDNS offload filter for rule: " + rule, e);
+                    }
+                }
             }
 
             gen.addJump(ruleNotMatch);
@@ -3639,8 +3639,10 @@ public class ApfFilter {
             sb.append("Mdns6, ");
         }
         sb.append("] ");
-        sb.append("RAs: ");
+        sb.append("total RAs: ");
         sb.append(mRas.size());
+        sb.append(" filtered RAs: ");
+        sb.append(mNumFilteredRas);
         sb.append(" mDNSs: ");
         sb.append(mOffloadRules.size());
         sb.append(" }");
@@ -3687,8 +3689,7 @@ public class ApfFilter {
                 ra.generateFilter(gen, timeSeconds);
                 // Stop if we get too big.
                 if (gen.programLengthOverEstimate() > mMaximumApfProgramSize) {
-                    if (VDBG) Log.d(TAG, "Past maximum program size, skipping RAs");
-                    sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
+                    Log.i(TAG, "Past maximum program size, skipping RAs");
                     break;
                 }
 
@@ -3701,6 +3702,7 @@ public class ApfFilter {
 
             // Step 2: Actually generate the program
             gen = emitPrologue();
+            mNumFilteredRas = rasToFilter.size();
             for (Ra ra : rasToFilter) {
                 ra.generateFilter(gen, timeSeconds);
                 programMinLft = Math.min(programMinLft, ra.getRemainingFilterLft(timeSeconds));
@@ -3720,9 +3722,6 @@ public class ApfFilter {
         mLastInstalledProgram = program;
         mMaxProgramSize = Math.max(mMaxProgramSize, program.length);
 
-        if (VDBG) {
-            hexDump("Installing filter: ", program, program.length);
-        }
     }
 
     private void hexDump(String msg, byte[] packet, int length) {
@@ -3749,8 +3748,6 @@ public class ApfFilter {
      */
     @VisibleForTesting
     public void processRa(byte[] packet, int length) {
-        if (VDBG) hexDump("Read packet = ", packet, length);
-
         final Ra ra;
         try {
             ra = new Ra(packet, length);
@@ -4235,17 +4232,21 @@ public class ApfFilter {
         pw.println();
         pw.println("RA filters:");
         pw.increaseIndent();
-        for (Ra ra: mRas) {
+        for (int i = 0; i < mRas.size(); ++i) {
+            if (i < mNumFilteredRas) {
+                pw.println("Filtered: ");
+            } else {
+                pw.println("Ignored: ");
+            }
+            final Ra ra = mRas.get(i);
             pw.println(ra);
             pw.increaseIndent();
             pw.println(String.format(
                     "Last seen %ds ago", secondsSinceBoot() - ra.mLastSeen));
-            if (DBG) {
-                pw.println("Last match:");
-                pw.increaseIndent();
-                pw.println(ra.getLastMatchingPacket());
-                pw.decreaseIndent();
-            }
+            pw.println("Last match:");
+            pw.increaseIndent();
+            pw.println(ra.getLastMatchingPacket());
+            pw.decreaseIndent();
             pw.decreaseIndent();
         }
         pw.decreaseIndent();
@@ -4276,12 +4277,10 @@ public class ApfFilter {
         }
         pw.decreaseIndent();
 
-        if (DBG) {
-            pw.println("Last program:");
-            pw.increaseIndent();
-            pw.println(HexDump.toHexString(mLastInstalledProgram, false /* lowercase */));
-            pw.decreaseIndent();
-        }
+        pw.println("Last program:");
+        pw.increaseIndent();
+        pw.println(HexDump.toHexString(mLastInstalledProgram, false /* lowercase */));
+        pw.decreaseIndent();
 
         pw.println("APF packet counters: ");
         pw.increaseIndent();
@@ -4359,10 +4358,6 @@ public class ApfFilter {
                 }
             } catch (ArrayIndexOutOfBoundsException e) {
                 pw.println("Uh-oh: " + e);
-            }
-            if (VDBG) {
-                pw.println("Raw data dump: ");
-                pw.println(HexDump.dumpHexString(mDataSnapshot));
             }
         }
         pw.decreaseIndent();

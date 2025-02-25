@@ -680,8 +680,8 @@ class ApfGeneratorTest {
                 0x03.toByte(), 0xe8.toByte(), 0xff.toByte(),
         ), program)
         assertContentEquals(listOf(
-                "0: datacopy    src=0, len=10",
-                "2: datacopy    src=1, len=5",
+                "0: datacopy    src=0, (10)c90acb0105cc03e8ff27",
+                "2: datacopy    src=1, (5)0acb0105cc",
                 "5: pktcopy     src=1000, len=255"
         ), apfTestHelpers.disassembleApf(program).map { it.trim() })
 
@@ -887,10 +887,10 @@ class ApfGeneratorTest {
                 "0: data        9, 112233445566778899",
                 "12: debugbuf    size=${ramSize - program.size - Counter.totalSize()}",
                 "16: allocate    18",
-                "20: datacopy    src=3, len=6",
-                "23: datacopy    src=4, len=3",
-                "26: datacopy    src=9, len=3",
-                "29: datacopy    src=3, len=6",
+                "20: datacopy    src=3, (6)112233445566",
+                "23: datacopy    src=4, (3)223344",
+                "26: datacopy    src=9, (3)778899",
+                "29: datacopy    src=3, (6)112233445566",
                 "32: transmit    ip_ofs=255"
         ), apfTestHelpers.disassembleApf(program).map{ it.trim() })
         apfTestHelpers.assertPass(APF_VERSION_6, program, testPacket)
@@ -919,10 +919,10 @@ class ApfGeneratorTest {
             "0: data        260, $byteHexString",
             "263: debugbuf    size=${ramSize - program.size - Counter.totalSize()}",
             "267: allocate    300",
-            "271: datacopy    src=3, len=255",
-            "274: datacopy    src=3, len=35",
-            "277: datacopy    src=258, len=5",
-            "281: datacopy    src=255, len=5",
+            "271: datacopy    src=3, (255)" + "01".repeat(255),
+            "274: datacopy    src=3, (35)" + "01".repeat(35),
+            "277: datacopy    src=258, (5)" + "02".repeat(5),
+            "281: datacopy    src=255, (5)" + "01".repeat(3) + "02".repeat(2),
             "284: transmit    ip_ofs=255"
         ), apfTestHelpers.disassembleApf(program).map{ it.trim() })
         apfTestHelpers.assertPass(APF_VERSION_6, program, testPacket)
@@ -948,8 +948,8 @@ class ApfGeneratorTest {
             "0: data        300, $byteHexString",
             "303: debugbuf    size=${ramSize - program.size - Counter.totalSize()}",
             "307: allocate    300",
-            "311: datacopy    src=3, len=255",
-            "314: datacopy    src=258, len=45",
+            "311: datacopy    src=3, (255)" + "03".repeat(255),
+            "314: datacopy    src=258, (45)" + "04".repeat(45),
             "318: transmit    ip_ofs=255"
         ), apfTestHelpers.disassembleApf(program).map{ it.trim() })
         apfTestHelpers.assertPass(APF_VERSION_6, program, testPacket)

@@ -103,12 +103,19 @@ class ApfMdnsUtilsTest {
                 MdnsOffloadRule(
                         "${info1.key.serviceName}.${info1.key.serviceType}",
                         listOf(
-                                MdnsOffloadRule.Matcher(encodedServiceType, TYPE_PTR),
-                                MdnsOffloadRule.Matcher(encodedServiceTypeWithSub1, TYPE_PTR),
-                                MdnsOffloadRule.Matcher(encodedFullServiceName1, TYPE_SRV),
-                                MdnsOffloadRule.Matcher(encodedFullServiceName1, TYPE_TXT),
-                                MdnsOffloadRule.Matcher(encodedTestHostName, TYPE_A),
-                                MdnsOffloadRule.Matcher(encodedTestHostName, TYPE_AAAA),
+                                MdnsOffloadRule.Matcher(encodedServiceType, intArrayOf(TYPE_PTR)),
+                                MdnsOffloadRule.Matcher(
+                                    encodedServiceTypeWithSub1,
+                                    intArrayOf(TYPE_PTR)
+                                ),
+                                MdnsOffloadRule.Matcher(
+                                    encodedFullServiceName1,
+                                    intArrayOf(TYPE_SRV, TYPE_TXT)
+                                ),
+                                MdnsOffloadRule.Matcher(
+                                    encodedTestHostName,
+                                    intArrayOf(TYPE_A, TYPE_AAAA)
+                                ),
 
                         ),
                         testRawPacket1,
@@ -116,9 +123,14 @@ class ApfMdnsUtilsTest {
                 MdnsOffloadRule(
                         "${info2.key.serviceName}.${info2.key.serviceType}",
                         listOf(
-                                MdnsOffloadRule.Matcher(encodedServiceTypeWithWildCard, TYPE_PTR),
-                                MdnsOffloadRule.Matcher(encodedFullServiceName2, TYPE_SRV),
-                                MdnsOffloadRule.Matcher(encodedFullServiceName2, TYPE_TXT),
+                                MdnsOffloadRule.Matcher(
+                                    encodedServiceTypeWithWildCard,
+                                    intArrayOf(TYPE_PTR)
+                                ),
+                                MdnsOffloadRule.Matcher(
+                                    encodedFullServiceName2,
+                                    intArrayOf(TYPE_SRV, TYPE_TXT)
+                                ),
 
                         ),
                         null,

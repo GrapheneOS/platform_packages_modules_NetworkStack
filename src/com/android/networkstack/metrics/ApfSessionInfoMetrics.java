@@ -57,10 +57,6 @@ import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_FROM_DHCPV4_
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_UNICAST;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NON_ICMP;
-import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_DAD;
-import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_ADDRESS;
-import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_NO_SLLA_OPTION;
-import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NS_TENTATIVE;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_UNICAST_NON_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_MLD;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_NON_IP_UNICAST;
@@ -106,10 +102,6 @@ import static android.stats.connectivity.CounterName.CN_PASSED_IPV4_FROM_DHCPV4_
 import static android.stats.connectivity.CounterName.CN_PASSED_IPV4_UNICAST;
 import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_ICMP;
 import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_NON_ICMP;
-import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_NS_DAD;
-import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_NS_NO_ADDRESS;
-import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_NS_NO_SLLA_OPTION;
-import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_NS_TENTATIVE;
 import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_UNICAST_NON_ICMP;
 import static android.stats.connectivity.CounterName.CN_PASSED_MLD;
 import static android.stats.connectivity.CounterName.CN_PASSED_NON_IP_UNICAST;
@@ -147,10 +139,6 @@ public class ApfSessionInfoMetrics {
                 Map.entry(PASSED_IPV4_UNICAST, CN_PASSED_IPV4_UNICAST),
                 Map.entry(PASSED_IPV6_ICMP, CN_PASSED_IPV6_ICMP),
                 Map.entry(PASSED_IPV6_NON_ICMP, CN_PASSED_IPV6_NON_ICMP),
-                Map.entry(PASSED_IPV6_NS_DAD, CN_PASSED_IPV6_NS_DAD),
-                Map.entry(PASSED_IPV6_NS_NO_ADDRESS, CN_PASSED_IPV6_NS_NO_ADDRESS),
-                Map.entry(PASSED_IPV6_NS_NO_SLLA_OPTION, CN_PASSED_IPV6_NS_NO_SLLA_OPTION),
-                Map.entry(PASSED_IPV6_NS_TENTATIVE, CN_PASSED_IPV6_NS_TENTATIVE),
                 Map.entry(PASSED_IPV6_UNICAST_NON_ICMP, CN_PASSED_IPV6_UNICAST_NON_ICMP),
                 Map.entry(PASSED_NON_IP_UNICAST, CN_PASSED_NON_IP_UNICAST),
                 Map.entry(PASSED_MLD, CN_PASSED_MLD),
