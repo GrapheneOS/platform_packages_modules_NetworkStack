@@ -3463,18 +3463,10 @@ public class ApfFilter {
      * <li>Let execution continue off the end of the program for IPv6 ICMPv6 packets. This allows
      *     insertion of RA filters here, or if there aren't any, just passes the packets.
      * </ul>
+     * @param gen the APF generator to generate the filter code
      */
-    private ApfV4GeneratorBase<?> emitPrologue() throws IllegalInstructionException {
-        // This is guaranteed to succeed because of the check in maybeCreate.
-        ApfV4GeneratorBase<?> gen;
-        if (useApfV6Generator()) {
-            gen = new ApfV6Generator(mApfVersionSupported, mApfRamSize,
-                    mInstallableProgramSizeClamp);
-        } else {
-            gen = new ApfV4Generator(mApfVersionSupported, mApfRamSize,
-                    mInstallableProgramSizeClamp);
-        }
-
+    private void emitPrologue(@NonNull ApfV4GeneratorBase<?> gen)
+            throws IllegalInstructionException {
         final short labelCheckMdnsQueryPayload = gen.getUniqueLabel();
 
         if (hasDataAccess(mApfVersionSupported)) {
@@ -3587,8 +3579,6 @@ public class ApfFilter {
             generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen);
             gen.defineLabel(skipMdnsQueryPayloadCheck);
         }
-
-        return gen;
     }
 
     /**
@@ -3655,6 +3645,16 @@ public class ApfFilter {
         }
     }
 
+    private ApfV4GeneratorBase<?> createApfGenerator() throws IllegalInstructionException {
+        if (useApfV6Generator()) {
+            return new ApfV6Generator(mApfVersionSupported, mApfRamSize,
+                    mInstallableProgramSizeClamp);
+        } else {
+            return new ApfV4Generator(mApfVersionSupported, mApfRamSize,
+                    mInstallableProgramSizeClamp);
+        }
+    }
+
     /**
      * Generate and install a new filter program.
      */
@@ -3669,7 +3669,9 @@ public class ApfFilter {
             final int timeSeconds = secondsSinceBoot();
             mLastTimeInstalledProgram = timeSeconds;
             // Step 1: Determine how many RA filters we can fit in the program.
-            ApfV4GeneratorBase<?> gen = emitPrologue();
+
+            ApfV4GeneratorBase<?> gen = createApfGenerator();
+            emitPrologue(gen);
 
             // The epilogue normally goes after the RA filters, but add it early to include its
             // length when estimating the total.
@@ -3701,7 +3703,8 @@ public class ApfFilter {
             mNumProgramUpdates++;
 
             // Step 2: Actually generate the program
-            gen = emitPrologue();
+            gen = createApfGenerator();
+            emitPrologue(gen);
             mNumFilteredRas = rasToFilter.size();
             for (Ra ra : rasToFilter) {
                 ra.generateFilter(gen, timeSeconds);
