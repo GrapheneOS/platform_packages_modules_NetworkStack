@@ -3680,10 +3680,16 @@ public class ApfFilter {
         final byte[] program;
         int programMinLft = Integer.MAX_VALUE;
 
+        // Ensure the entire APF program uses the same time base.
+        final int timeSeconds = secondsSinceBoot();
+        // Every return from this function calls installPacketFilter().
+        mLastTimeInstalledProgram = timeSeconds;
+
+        // Increase the counter before we generate the program.
+        // This keeps the APF_PROGRAM_ID counter in sync with the program.
+        mNumProgramUpdates++;
+
         try {
-            // Ensure the entire APF program uses the same time base.
-            final int timeSeconds = secondsSinceBoot();
-            mLastTimeInstalledProgram = timeSeconds;
             // Step 1: Determine how many RA filters we can fit in the program.
 
             ApfV4GeneratorBase<?> gen = createApfGenerator();
@@ -3720,10 +3726,6 @@ public class ApfFilter {
 
                 rasToFilter.add(ra);
             }
-
-            // Increase the counter before we generate the program.
-            // This keeps the APF_PROGRAM_ID counter in sync with the program.
-            mNumProgramUpdates++;
 
             // Step 2: Actually generate the program
             gen = createApfGenerator();
