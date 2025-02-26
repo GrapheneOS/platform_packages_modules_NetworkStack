@@ -95,9 +95,11 @@ public class ApfSessionInfoMetricsTest {
         verifyCounterName(Counter.RESERVED_OOB, CounterName.CN_UNKNOWN);
         verifyCounterName(Counter.TOTAL_PACKETS, CounterName.CN_TOTAL_PACKETS);
         verifyCounterName(Counter.PASSED_DHCP, CounterName.CN_PASSED_DHCP);
+        verifyCounterName(Counter.PASSED_ETHER_OUR_SRC_MAC, CounterName.CN_PASSED_OUR_SRC_MAC);
         verifyCounterName(Counter.PASSED_IPV4, CounterName.CN_PASSED_IPV4);
         verifyCounterName(Counter.PASSED_IPV6_NON_ICMP, CounterName.CN_PASSED_IPV6_NON_ICMP);
-        verifyCounterName(Counter.PASSED_IPV4_UNICAST,  CounterName.CN_PASSED_IPV4_UNICAST);
+        verifyCounterName(Counter.PASSED_IPV4_UNICAST, CounterName.CN_PASSED_IPV4_UNICAST);
+        verifyCounterName(Counter.PASSED_IPV6_HOPOPTS, CounterName.CN_PASSED_IPV6_HOPOPTS);
         verifyCounterName(Counter.PASSED_IPV6_ICMP, CounterName.CN_PASSED_IPV6_ICMP);
         verifyCounterName(Counter.PASSED_IPV6_UNICAST_NON_ICMP,
                 CounterName.CN_PASSED_IPV6_UNICAST_NON_ICMP);
@@ -105,6 +107,8 @@ public class ApfSessionInfoMetricsTest {
                 CounterName.CN_PASSED_ARP_UNICAST_REPLY);
         verifyCounterName(Counter.PASSED_NON_IP_UNICAST, CounterName.CN_PASSED_NON_IP_UNICAST);
         verifyCounterName(Counter.DROPPED_ETH_BROADCAST, CounterName.CN_DROPPED_ETH_BROADCAST);
+        verifyCounterName(Counter.DROPPED_ETHER_OUR_SRC_MAC,
+                CounterName.CN_DROPPED_ETHER_OUR_SRC_MAC);
         verifyCounterName(Counter.DROPPED_RA, CounterName.CN_DROPPED_RA);
         verifyCounterName(Counter.DROPPED_GARP_REPLY, CounterName.CN_DROPPED_GARP_REPLY);
         verifyCounterName(Counter.DROPPED_ARP_OTHER_HOST, CounterName.CN_DROPPED_ARP_OTHER_HOST);
@@ -114,9 +118,19 @@ public class ApfSessionInfoMetricsTest {
                 CounterName.CN_DROPPED_IPV4_BROADCAST_ADDR);
         verifyCounterName(Counter.DROPPED_IPV4_BROADCAST_NET,
                 CounterName.CN_DROPPED_IPV4_BROADCAST_NET);
+        verifyCounterName(Counter.DROPPED_IPV4_ICMP_INVALID,
+                CounterName.CN_DROPPED_IPV4_ICMP_INVALID);
         verifyCounterName(Counter.DROPPED_IPV4_MULTICAST, CounterName.CN_DROPPED_IPV4_MULTICAST);
         verifyCounterName(Counter.DROPPED_IPV6_ROUTER_SOLICITATION,
                 CounterName.CN_DROPPED_IPV6_ROUTER_SOLICITATION);
+        verifyCounterName(Counter.DROPPED_IPV6_MLD_INVALID,
+                CounterName.CN_DROPPED_IPV6_MLD_INVALID);
+        verifyCounterName(Counter.DROPPED_IPV6_MLD_REPORT,
+                CounterName.CN_DROPPED_IPV6_MLD_REPORT);
+        verifyCounterName(Counter.DROPPED_IPV6_MLD_V1_GENERAL_QUERY_REPLIED,
+                CounterName.CN_DROPPED_IPV6_MLD_V1_GENERAL_QUERY_REPLIED);
+        verifyCounterName(Counter.DROPPED_IPV6_MLD_V2_GENERAL_QUERY_REPLIED,
+                CounterName.CN_DROPPED_IPV6_MLD_V2_GENERAL_QUERY_REPLIED);
         verifyCounterName(Counter.DROPPED_IPV6_MULTICAST_NA,
                 CounterName.CN_DROPPED_IPV6_MULTICAST_NA);
         verifyCounterName(Counter.DROPPED_IPV6_NON_ICMP_MULTICAST,
@@ -131,6 +145,7 @@ public class ApfSessionInfoMetricsTest {
         verifyCounterName(Counter.DROPPED_IPV4_NATT_KEEPALIVE,
                 CounterName.CN_DROPPED_IPV4_NATT_KEEPALIVE);
         verifyCounterName(Counter.DROPPED_MDNS, CounterName.CN_DROPPED_MDNS);
+        verifyCounterName(Counter.DROPPED_MDNS_REPLIED, CounterName.CN_DROPPED_MDNS_REPLIED);
         verifyCounterName(Counter.DROPPED_IPV4_TCP_PORT7_UNICAST,
                 CounterName.CN_DROPPED_IPV4_TCP_PORT7_UNICAST);
         verifyCounterName(Counter.DROPPED_ARP_NON_IPV4, CounterName.CN_DROPPED_ARP_NON_IPV4);
@@ -142,6 +157,12 @@ public class ApfSessionInfoMetricsTest {
                 CounterName.CN_PASSED_IPV4_FROM_DHCPV4_SERVER);
         verifyCounterName(Counter.PASSED_MLD, CounterName.CN_PASSED_MLD);
         verifyCounterName(Counter.DROPPED_IPV4_NON_DHCP4, CounterName.CN_DROPPED_IPV4_NON_DHCP4);
+        verifyCounterName(Counter.DROPPED_IPV4_PING_REQUEST_REPLIED,
+                CounterName.CN_DROPPED_IPV4_PING_REQUEST_REPLIED);
+        verifyCounterName(Counter.DROPPED_IPV6_ICMP6_ECHO_REQUEST_INVALID,
+                CounterName.CN_DROPPED_IPV6_ICMP6_ECHO_REQUEST_INVALID);
+        verifyCounterName(Counter.DROPPED_IPV6_ICMP6_ECHO_REQUEST_REPLIED,
+                CounterName.CN_DROPPED_IPV6_ICMP6_ECHO_REQUEST_REPLIED);
         verifyCounterName(Counter.DROPPED_IPV6_NS_INVALID, CounterName.CN_DROPPED_IPV6_NS_INVALID);
         verifyCounterName(Counter.DROPPED_IPV6_NS_OTHER_HOST,
                 CounterName.CN_DROPPED_IPV6_NS_OTHER_HOST);
@@ -150,10 +171,6 @@ public class ApfSessionInfoMetricsTest {
         verifyCounterName(Counter.DROPPED_ARP_REQUEST_REPLIED,
                 CounterName.CN_DROPPED_ARP_REQUEST_REPLIED);
         verifyCounterName(Counter.DROPPED_ARP_V6_ONLY, CounterName.CN_DROPPED_ARP_V6_ONLY);
-        verifyCounterName(Counter.DROPPED_IPV4_ICMP_INVALID,
-                CounterName.CN_DROPPED_IPV4_ICMP_INVALID);
-        verifyCounterName(Counter.DROPPED_IPV4_PING_REQUEST_REPLIED,
-                CounterName.CN_DROPPED_IPV4_PING_REQUEST_REPLIED);
         verifyCounterName(Counter.DROPPED_IGMP_INVALID, CounterName.CN_DROPPED_IGMP_INVALID);
         verifyCounterName(Counter.DROPPED_IGMP_V3_GENERAL_QUERY_REPLIED,
                 CounterName.CN_DROPPED_IGMP_V3_GENERAL_QUERY_REPLIED);
