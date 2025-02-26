@@ -383,6 +383,15 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
     /**
      * Appends a conditional jump instruction to the program: Jumps to {@code tgt} if the UDP
      * payload's DNS questions contain the QNAMEs specified in {@code qnames} and qtype
+     * equals any of {@code qtypes}. Examines the payload starting at the offset in R0.
+     * Drops packets if packets are corrupted.
+     */
+    public abstract Type addJumpIfPktAtR0ContainDnsQ(@NonNull byte[] qnames, @NonNull int[] qtypes,
+            short tgt);
+
+    /**
+     * Appends a conditional jump instruction to the program: Jumps to {@code tgt} if the UDP
+     * payload's DNS questions contain the QNAMEs specified in {@code qnames} and qtype
      * equals {@code qtype}. Examines the payload starting at the offset in R0.
      * R = 1 means check for "contain".
      * Drops packets if packets are corrupted.

@@ -3385,12 +3385,10 @@ public class ApfFilter {
             final short offloadIPv6Mdns = gen.getUniqueLabel();
 
             for (MdnsOffloadRule.Matcher matcher : rule.mMatchers) {
-                for (int qtype : matcher.mQtypes) {
-                    try {
-                        gen.addJumpIfPktAtR0ContainDnsQ(matcher.mQnames, qtype, ruleMatch);
-                    } catch (IllegalArgumentException e) {
-                        Log.e(TAG, "Failed to generate mDNS offload filter for rule: " + rule, e);
-                    }
+                try {
+                    gen.addJumpIfPktAtR0ContainDnsQ(matcher.mQnames, matcher.mQtypes, ruleMatch);
+                } catch (IllegalArgumentException e) {
+                    Log.e(TAG, "Failed to generate mDNS offload filter for rule: " + rule, e);
                 }
             }
 
