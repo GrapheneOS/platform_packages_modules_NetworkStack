@@ -521,7 +521,7 @@ public class ApfFilter {
         // in an SSID. This is limited to APFv3 devices because this large write triggers
         // a crash on some older devices (b/78905546).
         if (hasDataAccess(mApfVersionSupported)) {
-            installPacketFilter(new byte[mApfRamSize], false /* isFailOpen */);
+            installPacketFilter(new byte[mApfRamSize], getApfConfigMessage() + " (cleanup)");
         }
     }
 
@@ -3658,9 +3658,8 @@ public class ApfFilter {
         return sb.toString();
     }
 
-    private void installPacketFilter(byte[] program, boolean isFailOpen) {
-        final String msg = getApfConfigMessage() + (isFailOpen ? " (fail open)" : "");
-        if (!mApfController.installPacketFilter(program, msg)) {
+    private void installPacketFilter(byte[] program, String logInfo) {
+        if (!mApfController.installPacketFilter(program, logInfo)) {
             sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
         }
     }
@@ -3701,7 +3700,8 @@ public class ApfFilter {
             if (gen.programLengthOverEstimate() > mMaximumApfProgramSize) {
                 Log.e(TAG, "Program exceeds maximum size " + mMaximumApfProgramSize);
                 sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
-                installPacketFilter(new byte[mMaximumApfProgramSize], true /* isFailOpen */);
+                installPacketFilter(new byte[mMaximumApfProgramSize],
+                        getApfConfigMessage() + " (clear memory, reason: program too large)");
                 return;
             }
 
@@ -3735,11 +3735,13 @@ public class ApfFilter {
         } catch (IllegalInstructionException | IllegalStateException | IllegalArgumentException e) {
             Log.wtf(TAG, "Failed to generate APF program.", e);
             sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_GENERATE_FILTER_EXCEPTION);
-            installPacketFilter(new byte[mMaximumApfProgramSize], true /* isFailOpen */);
+            installPacketFilter(new byte[mMaximumApfProgramSize],
+                    getApfConfigMessage() + String.format(" (clear memory, reason: %s)",
+                            e.getMessage()));
             return;
         }
         if (mIsRunning) {
-            installPacketFilter(program, false /* isFailOpen */);
+            installPacketFilter(program, getApfConfigMessage());
         }
         mLastInstalledProgramMinLifetime = programMinLft;
         mLastInstalledProgram = program;
