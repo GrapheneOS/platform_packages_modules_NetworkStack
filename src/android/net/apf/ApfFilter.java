@@ -3358,7 +3358,7 @@ public class ApfFilter {
      * ensuring each packet is either passed or dropped.
      * <p>
      * The only way to enter the mDNS offload payload check logic is by jumping to the
-     * labelCheckMdnsQueryPayload label. In the fall-through case, the check is skipped.
+     * labelCheckMdnsQueryPayload label.
      * On entry, the packet is known to be an IPv4/IPv6 mDNS query packet, and register R1
      * is set to the offset of the beginning of the UDP payload (the DNS header).
      *
@@ -3368,10 +3368,8 @@ public class ApfFilter {
     private void generateMdnsQueryOffload(ApfV6GeneratorBase<?> gen,
             short labelCheckMdnsQueryPayload)
             throws IllegalInstructionException {
-        final short skipMdnsQueryPayloadCheck = gen.getUniqueLabel();
-        gen.addJump(skipMdnsQueryPayloadCheck);
         // The mDNS payload check logic is terminal; the program will always result in either
-        // PASS or DROP. It will never jump to code outside of this check (e.g., to epilogue).
+        // PASS or DROP.
         gen.defineLabel(labelCheckMdnsQueryPayload);
         // TODO: Implement failover logic for insufficient APF RAM to offload all records. When
         //  APF RAM is not enough, rules with lower priority should be transitioned to passthrough
@@ -3470,8 +3468,6 @@ public class ApfFilter {
         } else {
             gen.addCountAndPass(PASSED_MDNS);
         }
-
-        gen.defineLabel(skipMdnsQueryPayloadCheck);
     }
 
     /**
@@ -3695,13 +3691,13 @@ public class ApfFilter {
 
             emitPrologue(gen, labelCheckMdnsQueryPayload);
 
-            if (enableMdns4Offload() || enableMdns6Offload()) {
-                generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload);
-            }
-
             // The epilogue normally goes after the RA filters, but add it early to include its
             // length when estimating the total.
             emitEpilogue(gen);
+
+            if (enableMdns4Offload() || enableMdns6Offload()) {
+                generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload);
+            }
 
             // Can't fit the program even without any RA filters?
             if (gen.programLengthOverEstimate() > mMaximumApfProgramSize) {
@@ -3733,15 +3729,15 @@ public class ApfFilter {
             gen = createApfGenerator();
             labelCheckMdnsQueryPayload = gen.getUniqueLabel();
             emitPrologue(gen, labelCheckMdnsQueryPayload);
-            if (enableMdns4Offload() || enableMdns6Offload()) {
-                generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload);
-            }
             mNumFilteredRas = rasToFilter.size();
             for (Ra ra : rasToFilter) {
                 ra.generateFilter(gen, timeSeconds);
                 programMinLft = Math.min(programMinLft, ra.getRemainingFilterLft(timeSeconds));
             }
             emitEpilogue(gen);
+            if (enableMdns4Offload() || enableMdns6Offload()) {
+                generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload);
+            }
             program = gen.generate();
         } catch (IllegalInstructionException | IllegalStateException | IllegalArgumentException e) {
             Log.wtf(TAG, "Failed to generate APF program.", e);
