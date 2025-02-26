@@ -2810,25 +2810,46 @@ public class ApfFilter {
     private void generateIgmpV3ReportTransmit(ApfV6GeneratorBase<?> gen,
             byte[] igmpPktFromEthSrcToIpTos, byte[] igmpPktFromIpIdToSrc)
             throws IllegalInstructionException {
+        // We place template packet chunks in the data region first to reduce the number of
+        // instructions needed for creating multiple IGMPv2 reports.
+        // The following packet chunks can be used for creating both IGMPv2 and IGMPv3 reports:
+        //   - from Ethernet source to IPv4 Tos: 10 bytes
+        //   - from IPv4 identification to source address: 12 bytes
+        final int igmpV2Ipv4TotalLen =
+                IPV4_HEADER_MIN_LEN + IPV4_ROUTER_ALERT_OPTION_LEN + IPV4_IGMP_MIN_SIZE;
+        final byte[] igmpV3ReportPayload = createIgmpV3ReportPayload();
+        final byte[] igmpReportTemplate = CollectionUtils.concatArrays(
+                ETH_MULTICAST_IGMP_V3_ALL_MULTICAST_ROUTERS_ADDRESS,
+                igmpPktFromEthSrcToIpTos,
+                new byte[] {
+                        (byte) ((igmpV2Ipv4TotalLen >> 8) & 0xff),
+                        (byte) (igmpV2Ipv4TotalLen & 0xff),
+                },
+                igmpPktFromIpIdToSrc,
+                IPV4_ALL_IGMPV3_MULTICAST_ROUTERS_ADDRESS,
+                IPV4_ROUTER_ALERT_OPTION,
+                igmpV3ReportPayload
+        );
+        gen.maybeUpdateDataRegion(igmpReportTemplate);
+
         final int ipv4TotalLen = IPV4_HEADER_MIN_LEN
                 + IPV4_ROUTER_ALERT_OPTION_LEN
                 + IPV4_IGMP_MIN_SIZE
                 + (mIPv4McastAddrsExcludeAllHost.size() * IPV4_IGMP_GROUP_RECORD_SIZE);
-        final byte[] encodedIPv4TotalLen = {
-                (byte) ((ipv4TotalLen >> 8) & 0xff), (byte) (ipv4TotalLen & 0xff),
-        };
-        final byte[] packet = CollectionUtils.concatArrays(
+        final byte[] igmpV3FromEthDstToIpTos = CollectionUtils.concatArrays(
                 ETH_MULTICAST_IGMP_V3_ALL_MULTICAST_ROUTERS_ADDRESS,
-                igmpPktFromEthSrcToIpTos,
-                encodedIPv4TotalLen,
+                igmpPktFromEthSrcToIpTos
+        );
+        final byte[] igmpV3PktFromIpIdToEnd = CollectionUtils.concatArrays(
                 igmpPktFromIpIdToSrc,
                 IPV4_ALL_IGMPV3_MULTICAST_ROUTERS_ADDRESS,
                 IPV4_ROUTER_ALERT_OPTION,
-                createIgmpV3ReportPayload()
+                igmpV3ReportPayload
         );
-
         gen.addAllocate(ETHER_HEADER_LEN + ipv4TotalLen)
-                .addDataCopy(packet)
+                .addDataCopy(igmpV3FromEthDstToIpTos)
+                .addWriteU16(ipv4TotalLen)
+                .addDataCopy(igmpV3PktFromIpIdToEnd)
                 .addTransmitL4(
                         // ip_ofs
                         ETHER_HEADER_LEN,
@@ -2852,19 +2873,19 @@ public class ApfFilter {
             throws IllegalInstructionException {
         final int ipv4TotalLen =
                 IPV4_HEADER_MIN_LEN + IPV4_ROUTER_ALERT_OPTION_LEN + IPV4_IGMP_MIN_SIZE;
-
-        // Reuse IGMPv3 packet chunks when creating the IGMPv2 report listed below:
-        //   - from Ethernet source to IPv4 Tos: 10 bytes
-        //   - from IPv4 identification to source address: 12 bytes
-        //   - multicast group addresses: 4 bytes * number of addresses
+        final byte[] igmpV2PktFromEthSrcToIpSrc =  CollectionUtils.concatArrays(
+                igmpPktFromEthSrcToIpTos,
+                new byte[] {
+                        (byte) ((ipv4TotalLen >> 8) & 0xff), (byte) (ipv4TotalLen & 0xff),
+                },
+                igmpPktFromIpIdToSrc
+        );
         for (Inet4Address mcastAddr: mIPv4McastAddrsExcludeAllHost) {
             final MacAddress mcastEther =
                     NetworkStackUtils.ipv4MulticastToEthernetMulticast(mcastAddr);
             gen.addAllocate(ETHER_HEADER_LEN + ipv4TotalLen)
                     .addDataCopy(mcastEther.toByteArray())
-                    .addDataCopy(igmpPktFromEthSrcToIpTos)
-                    .addWriteU16(ipv4TotalLen)
-                    .addDataCopy(igmpPktFromIpIdToSrc)
+                    .addDataCopy(igmpV2PktFromEthSrcToIpSrc)
                     .addDataCopy(mcastAddr.getAddress())
                     .addDataCopy(IGMPV2_REPORT_FROM_IPV4_OPTION_TO_IGMP_CHECKSUM)
                     .addDataCopy(mcastAddr.getAddress())
