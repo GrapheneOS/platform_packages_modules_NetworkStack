@@ -521,7 +521,7 @@ public class ApfFilter {
         // in an SSID. This is limited to APFv3 devices because this large write triggers
         // a crash on some older devices (b/78905546).
         if (hasDataAccess(mApfVersionSupported)) {
-            installPacketFilter(new byte[mApfRamSize]);
+            installPacketFilter(new byte[mApfRamSize], false /* isFailOpen */);
         }
     }
 
@@ -3639,8 +3639,9 @@ public class ApfFilter {
         return sb.toString();
     }
 
-    private void installPacketFilter(byte[] program) {
-        if (!mApfController.installPacketFilter(program, getApfConfigMessage())) {
+    private void installPacketFilter(byte[] program, boolean isFailOpen) {
+        final String msg = getApfConfigMessage() + (isFailOpen ? " (fail open)" : "");
+        if (!mApfController.installPacketFilter(program, msg)) {
             sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
         }
     }
@@ -3681,7 +3682,7 @@ public class ApfFilter {
             if (gen.programLengthOverEstimate() > mMaximumApfProgramSize) {
                 Log.e(TAG, "Program exceeds maximum size " + mMaximumApfProgramSize);
                 sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
-                installPacketFilter(new byte[mMaximumApfProgramSize]);
+                installPacketFilter(new byte[mMaximumApfProgramSize], true /* isFailOpen */);
                 return;
             }
 
@@ -3715,11 +3716,11 @@ public class ApfFilter {
         } catch (IllegalInstructionException | IllegalStateException | IllegalArgumentException e) {
             Log.wtf(TAG, "Failed to generate APF program.", e);
             sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_GENERATE_FILTER_EXCEPTION);
-            installPacketFilter(new byte[mMaximumApfProgramSize]);
+            installPacketFilter(new byte[mMaximumApfProgramSize], true /* isFailOpen */);
             return;
         }
         if (mIsRunning) {
-            installPacketFilter(program);
+            installPacketFilter(program, false /* isFailOpen */);
         }
         mLastInstalledProgramMinLifetime = programMinLft;
         mLastInstalledProgram = program;
