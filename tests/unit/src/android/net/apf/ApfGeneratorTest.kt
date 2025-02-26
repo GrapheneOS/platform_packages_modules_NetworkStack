@@ -698,10 +698,10 @@ class ApfGeneratorTest {
                 encodeInstruction(21, 1, 0), 42,
         ), program)
         assertContentEquals(listOf(
-                "0: edatacopy    src=r0, len=5",
-                "3: epktcopy     src=r0, len=5",
-                "6: edatacopy    src=r0, len=r1",
-                "8: epktcopy     src=r0, len=r1"
+                "0: edatacopy   src=r0, len=5",
+                "3: epktcopy    src=r0, len=5",
+                "6: edatacopy   src=r0, len=r1",
+                "8: epktcopy    src=r0, len=r1"
         ), apfTestHelpers.disassembleApf(program).map{ it.trim() })
 
         gen = ApfV6Generator(APF_VERSION_6, ramSize, clampSize)
