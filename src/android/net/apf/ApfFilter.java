@@ -3357,13 +3357,22 @@ public class ApfFilter {
      * The generated filter code is guaranteed to process all IPv4 and IPv6 mDNS packets,
      * ensuring each packet is either passed or dropped.
      * <p>
+     * The only way to enter the mDNS offload payload check logic is by jumping to the
+     * labelCheckMdnsQueryPayload label. In the fall-through case, the check is skipped.
      * On entry, the packet is known to be an IPv4/IPv6 mDNS query packet, and register R1
      * is set to the offset of the beginning of the UDP payload (the DNS header).
      *
      * @param gen the APF generator to generate the filter code
+     * @param labelCheckMdnsQueryPayload the label to jump to for checking the mDNS query payload
      */
-    private void generateMdnsQueryOffload(ApfV6GeneratorBase<?> gen)
+    private void generateMdnsQueryOffload(ApfV6GeneratorBase<?> gen,
+            short labelCheckMdnsQueryPayload)
             throws IllegalInstructionException {
+        final short skipMdnsQueryPayloadCheck = gen.getUniqueLabel();
+        gen.addJump(skipMdnsQueryPayloadCheck);
+        // The mDNS payload check logic is terminal; the program will always result in either
+        // PASS or DROP. It will never jump to code outside of this check (e.g., to epilogue).
+        gen.defineLabel(labelCheckMdnsQueryPayload);
         // TODO: Implement failover logic for insufficient APF RAM to offload all records. When
         //  APF RAM is not enough, rules with lower priority should be transitioned to passthrough
         //  mode (e.g., if a QNAME matches, the packet should be passed). If RAM remains
@@ -3461,6 +3470,8 @@ public class ApfFilter {
         } else {
             gen.addCountAndPass(PASSED_MDNS);
         }
+
+        gen.defineLabel(skipMdnsQueryPayloadCheck);
     }
 
     /**
@@ -3483,11 +3494,10 @@ public class ApfFilter {
      *     insertion of RA filters here, or if there aren't any, just passes the packets.
      * </ul>
      * @param gen the APF generator to generate the filter code
+     * @param labelCheckMdnsQueryPayload the label to jump to for checking the mDNS query payload
      */
-    private void emitPrologue(@NonNull ApfV4GeneratorBase<?> gen)
+    private void emitPrologue(@NonNull ApfV4GeneratorBase<?> gen, short labelCheckMdnsQueryPayload)
             throws IllegalInstructionException {
-        final short labelCheckMdnsQueryPayload = gen.getUniqueLabel();
-
         if (hasDataAccess(mApfVersionSupported)) {
             if (gen instanceof ApfV4Generator) {
                 // Increment TOTAL_PACKETS.
@@ -3589,15 +3599,6 @@ public class ApfFilter {
         // Add IPv6 filters:
         gen.defineLabel(ipv6FilterLabel);
         generateIPv6Filter(gen, labelCheckMdnsQueryPayload);
-
-        // Add mDNS query payload check.
-        if (enableMdns4Offload() || enableMdns6Offload()) {
-            final short skipMdnsQueryPayloadCheck = gen.getUniqueLabel();
-            gen.addJump(skipMdnsQueryPayloadCheck);
-            gen.defineLabel(labelCheckMdnsQueryPayload);
-            generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen);
-            gen.defineLabel(skipMdnsQueryPayloadCheck);
-        }
     }
 
     /**
@@ -3690,7 +3691,13 @@ public class ApfFilter {
             // Step 1: Determine how many RA filters we can fit in the program.
 
             ApfV4GeneratorBase<?> gen = createApfGenerator();
-            emitPrologue(gen);
+            short labelCheckMdnsQueryPayload = gen.getUniqueLabel();
+
+            emitPrologue(gen, labelCheckMdnsQueryPayload);
+
+            if (enableMdns4Offload() || enableMdns6Offload()) {
+                generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload);
+            }
 
             // The epilogue normally goes after the RA filters, but add it early to include its
             // length when estimating the total.
@@ -3724,7 +3731,11 @@ public class ApfFilter {
 
             // Step 2: Actually generate the program
             gen = createApfGenerator();
-            emitPrologue(gen);
+            labelCheckMdnsQueryPayload = gen.getUniqueLabel();
+            emitPrologue(gen, labelCheckMdnsQueryPayload);
+            if (enableMdns4Offload() || enableMdns6Offload()) {
+                generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload);
+            }
             mNumFilteredRas = rasToFilter.size();
             for (Ra ra : rasToFilter) {
                 ra.generateFilter(gen, timeSeconds);
