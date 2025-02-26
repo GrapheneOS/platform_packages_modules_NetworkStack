@@ -4182,7 +4182,7 @@ public class ApfFilter {
         }
         pw.decreaseIndent();
         if (SdkLevel.isAtLeastV()) {
-            pw.print("Hardcoded Allowlisted Ethertypes:");
+            pw.print("Hardcoded not denylisted Ethertypes:");
             pw.println(" 0800(IPv4) 0806(ARP) 86DD(IPv6) 888E(EAPOL) 88B4(WAPI)");
         } else {
             pw.print("Denylisted Ethertypes:");
