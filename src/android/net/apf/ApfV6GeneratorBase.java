@@ -270,6 +270,18 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
     }
 
     /**
+     * Add the content to the data region if it wasn't exist.
+     */
+    public final Type maybeUpdateDataRegion(@NonNull byte[] content)
+            throws IllegalInstructionException {
+        if (mInstructions.isEmpty()) {
+            throw new IllegalInstructionException("There are no instructions");
+        }
+        mInstructions.get(0).maybeUpdateBytesImm(content, 0, content.length);
+        return self();
+    }
+
+    /**
      * Add an instruction to the end of the program to copy data from APF program/data region to
      * output buffer and auto-increment the output buffer pointer.
      *
