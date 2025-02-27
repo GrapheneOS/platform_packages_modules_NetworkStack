@@ -4991,7 +4991,14 @@ class ApfFilterTest {
 
         val program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
 
-        Log.i(TAG, "all feature on, size: ${program.size}, program:")
+        val programSize = program.size
+        val counterSize = ApfCounterTracker.Counter.totalSize()
+        val totalSize = programSize + counterSize
+        Log.i(
+            TAG,
+            "all feature on, program size: $programSize, counter size: $counterSize," +
+                " total size:$totalSize, program:"
+        )
         val programChunk = program.toList().chunked(2000)
         programChunk.forEach {
             Log.i(TAG, HexDump.toHexString(it.toByteArray()))
