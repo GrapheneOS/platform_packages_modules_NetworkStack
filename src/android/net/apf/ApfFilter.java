@@ -1126,9 +1126,15 @@ public class ApfFilter {
          * Adds packet sections for an RA option with a 4-byte lifetime 4 bytes into the option
          * @param optionLength the length of the option in bytes
          * @param min the minimum acceptable lifetime
+         * @param isRdnss true iff this is an RDNSS option
          */
-        private long add4ByteLifetimeOption(int optionLength, int min) {
-            addMatchSection(ICMP6_4_BYTE_LIFETIME_OFFSET);
+        private long add4ByteLifetimeOption(int optionLength, int min, boolean isRdnss) {
+            if (isRdnss) {
+                addMatchSection(ICMP6_4_BYTE_LIFETIME_OFFSET - 2);
+                addIgnoreSection(2);  // reserved, but observed non-zero
+            } else {
+                addMatchSection(ICMP6_4_BYTE_LIFETIME_OFFSET);
+            }
             final long lifetime = getUint32(mPacket, mPacket.position());
             addLifetimeSection(ICMP6_4_BYTE_LIFETIME_LEN, lifetime, min);
             addMatchSection(optionLength - ICMP6_4_BYTE_LIFETIME_OFFSET
@@ -1246,13 +1252,13 @@ public class ApfFilter {
                     // are processed with the same specialized add4ByteLifetimeOption:
                     case ICMP6_RDNSS_OPTION_TYPE:
                         mRdnssOptionOffsets.add(position);
-                        lifetime = add4ByteLifetimeOption(optionLength, mMinRdnssLifetimeSec);
+                        lifetime = add4ByteLifetimeOption(optionLength, mMinRdnssLifetimeSec, true);
                         mMinRdnssLifetime = getMinForPositiveValue(mMinRdnssLifetime, lifetime);
                         if (lifetime == 0) mNumZeroLifetimeRas++;
                         break;
                     case ICMP6_ROUTE_INFO_OPTION_TYPE:
                         mRioOptionOffsets.add(position);
-                        lifetime = add4ByteLifetimeOption(optionLength, mAcceptRaMinLft);
+                        lifetime = add4ByteLifetimeOption(optionLength, mAcceptRaMinLft, false);
                         mMinRioRouteLifetime = getMinForPositiveValue(
                                 mMinRioRouteLifetime, lifetime);
                         if (lifetime == 0) mNumZeroLifetimeRas++;
