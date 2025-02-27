@@ -244,4 +244,12 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
         final short tgt = getUniqueLabel();
         return addJumpIfOneOf(R0, values, tgt).addCountAndDrop(cnt).defineLabel(tgt);
     }
+
+    @Override
+    public ApfV6Generator addJumpIfPktAtR0ContainDnsQ(byte[] qnames, int[] qtypes, short tgt) {
+        for (int qtype : qtypes) {
+            addJumpIfPktAtR0ContainDnsQ(qnames, qtype, tgt);
+        }
+        return self();
+    }
 }

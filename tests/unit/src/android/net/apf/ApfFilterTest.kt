@@ -4887,15 +4887,18 @@ class ApfFilterTest {
     fun testAllOffloadFeatureEnabled() {
         val ipv4McastAddrs = listOf(
             InetAddress.getByName("224.0.0.1") as Inet4Address,
-            InetAddress.getByName("239.0.0.1") as Inet4Address,
-            InetAddress.getByName("239.0.0.2") as Inet4Address,
-            InetAddress.getByName("239.0.0.3") as Inet4Address
+            InetAddress.getByName("224.0.0.251") as Inet4Address,
+            InetAddress.getByName("239.255.255.250") as Inet4Address
         )
         doReturn(ipv4McastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())
         val ipv6McastAddrs = listOf(
-            InetAddress.getByName("ff12::1:1111:1111") as Inet6Address,
-            InetAddress.getByName("ff12::1:2222:2222") as Inet6Address,
-            InetAddress.getByName("ff12::1:3333:3333") as Inet6Address,
+            InetAddress.getByName("ff02::1:ff11:33e1") as Inet6Address,
+            InetAddress.getByName("ff02::1:ff11:33e2") as Inet6Address,
+            InetAddress.getByName("ff02::fb") as Inet6Address,
+            InetAddress.getByName("ff02::c") as Inet6Address,
+            InetAddress.getByName("ff05::c") as Inet6Address,
+            InetAddress.getByName("ff02::1") as Inet6Address,
+            InetAddress.getByName("ff01::1") as Inet6Address,
         )
         // mock IPv6 multicast address from /proc/net/igmp6
         doReturn(ipv6McastAddrs).`when`(dependencies).getIPv6MulticastAddresses(any())

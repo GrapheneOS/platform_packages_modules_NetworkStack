@@ -521,7 +521,7 @@ public class ApfFilter {
         // in an SSID. This is limited to APFv3 devices because this large write triggers
         // a crash on some older devices (b/78905546).
         if (hasDataAccess(mApfVersionSupported)) {
-            installPacketFilter(new byte[mApfRamSize]);
+            installPacketFilter(new byte[mApfRamSize], getApfConfigMessage() + " (cleanup)");
         }
     }
 
@@ -2810,25 +2810,46 @@ public class ApfFilter {
     private void generateIgmpV3ReportTransmit(ApfV6GeneratorBase<?> gen,
             byte[] igmpPktFromEthSrcToIpTos, byte[] igmpPktFromIpIdToSrc)
             throws IllegalInstructionException {
+        // We place template packet chunks in the data region first to reduce the number of
+        // instructions needed for creating multiple IGMPv2 reports.
+        // The following packet chunks can be used for creating both IGMPv2 and IGMPv3 reports:
+        //   - from Ethernet source to IPv4 Tos: 10 bytes
+        //   - from IPv4 identification to source address: 12 bytes
+        final int igmpV2Ipv4TotalLen =
+                IPV4_HEADER_MIN_LEN + IPV4_ROUTER_ALERT_OPTION_LEN + IPV4_IGMP_MIN_SIZE;
+        final byte[] igmpV3ReportPayload = createIgmpV3ReportPayload();
+        final byte[] igmpReportTemplate = CollectionUtils.concatArrays(
+                ETH_MULTICAST_IGMP_V3_ALL_MULTICAST_ROUTERS_ADDRESS,
+                igmpPktFromEthSrcToIpTos,
+                new byte[] {
+                        (byte) ((igmpV2Ipv4TotalLen >> 8) & 0xff),
+                        (byte) (igmpV2Ipv4TotalLen & 0xff),
+                },
+                igmpPktFromIpIdToSrc,
+                IPV4_ALL_IGMPV3_MULTICAST_ROUTERS_ADDRESS,
+                IPV4_ROUTER_ALERT_OPTION,
+                igmpV3ReportPayload
+        );
+        gen.maybeUpdateDataRegion(igmpReportTemplate);
+
         final int ipv4TotalLen = IPV4_HEADER_MIN_LEN
                 + IPV4_ROUTER_ALERT_OPTION_LEN
                 + IPV4_IGMP_MIN_SIZE
                 + (mIPv4McastAddrsExcludeAllHost.size() * IPV4_IGMP_GROUP_RECORD_SIZE);
-        final byte[] encodedIPv4TotalLen = {
-                (byte) ((ipv4TotalLen >> 8) & 0xff), (byte) (ipv4TotalLen & 0xff),
-        };
-        final byte[] packet = CollectionUtils.concatArrays(
+        final byte[] igmpV3FromEthDstToIpTos = CollectionUtils.concatArrays(
                 ETH_MULTICAST_IGMP_V3_ALL_MULTICAST_ROUTERS_ADDRESS,
-                igmpPktFromEthSrcToIpTos,
-                encodedIPv4TotalLen,
+                igmpPktFromEthSrcToIpTos
+        );
+        final byte[] igmpV3PktFromIpIdToEnd = CollectionUtils.concatArrays(
                 igmpPktFromIpIdToSrc,
                 IPV4_ALL_IGMPV3_MULTICAST_ROUTERS_ADDRESS,
                 IPV4_ROUTER_ALERT_OPTION,
-                createIgmpV3ReportPayload()
+                igmpV3ReportPayload
         );
-
         gen.addAllocate(ETHER_HEADER_LEN + ipv4TotalLen)
-                .addDataCopy(packet)
+                .addDataCopy(igmpV3FromEthDstToIpTos)
+                .addWriteU16(ipv4TotalLen)
+                .addDataCopy(igmpV3PktFromIpIdToEnd)
                 .addTransmitL4(
                         // ip_ofs
                         ETHER_HEADER_LEN,
@@ -2852,19 +2873,19 @@ public class ApfFilter {
             throws IllegalInstructionException {
         final int ipv4TotalLen =
                 IPV4_HEADER_MIN_LEN + IPV4_ROUTER_ALERT_OPTION_LEN + IPV4_IGMP_MIN_SIZE;
-
-        // Reuse IGMPv3 packet chunks when creating the IGMPv2 report listed below:
-        //   - from Ethernet source to IPv4 Tos: 10 bytes
-        //   - from IPv4 identification to source address: 12 bytes
-        //   - multicast group addresses: 4 bytes * number of addresses
+        final byte[] igmpV2PktFromEthSrcToIpSrc =  CollectionUtils.concatArrays(
+                igmpPktFromEthSrcToIpTos,
+                new byte[] {
+                        (byte) ((ipv4TotalLen >> 8) & 0xff), (byte) (ipv4TotalLen & 0xff),
+                },
+                igmpPktFromIpIdToSrc
+        );
         for (Inet4Address mcastAddr: mIPv4McastAddrsExcludeAllHost) {
             final MacAddress mcastEther =
                     NetworkStackUtils.ipv4MulticastToEthernetMulticast(mcastAddr);
             gen.addAllocate(ETHER_HEADER_LEN + ipv4TotalLen)
                     .addDataCopy(mcastEther.toByteArray())
-                    .addDataCopy(igmpPktFromEthSrcToIpTos)
-                    .addWriteU16(ipv4TotalLen)
-                    .addDataCopy(igmpPktFromIpIdToSrc)
+                    .addDataCopy(igmpV2PktFromEthSrcToIpSrc)
                     .addDataCopy(mcastAddr.getAddress())
                     .addDataCopy(IGMPV2_REPORT_FROM_IPV4_OPTION_TO_IGMP_CHECKSUM)
                     .addDataCopy(mcastAddr.getAddress())
@@ -3336,13 +3357,20 @@ public class ApfFilter {
      * The generated filter code is guaranteed to process all IPv4 and IPv6 mDNS packets,
      * ensuring each packet is either passed or dropped.
      * <p>
+     * The only way to enter the mDNS offload payload check logic is by jumping to the
+     * labelCheckMdnsQueryPayload label.
      * On entry, the packet is known to be an IPv4/IPv6 mDNS query packet, and register R1
      * is set to the offset of the beginning of the UDP payload (the DNS header).
      *
      * @param gen the APF generator to generate the filter code
+     * @param labelCheckMdnsQueryPayload the label to jump to for checking the mDNS query payload
      */
-    private void generateMdnsQueryOffload(ApfV6GeneratorBase<?> gen)
+    private void generateMdnsQueryOffload(ApfV6GeneratorBase<?> gen,
+            short labelCheckMdnsQueryPayload)
             throws IllegalInstructionException {
+        // The mDNS payload check logic is terminal; the program will always result in either
+        // PASS or DROP.
+        gen.defineLabel(labelCheckMdnsQueryPayload);
         // TODO: Implement failover logic for insufficient APF RAM to offload all records. When
         //  APF RAM is not enough, rules with lower priority should be transitioned to passthrough
         //  mode (e.g., if a QNAME matches, the packet should be passed). If RAM remains
@@ -3364,12 +3392,10 @@ public class ApfFilter {
             final short offloadIPv6Mdns = gen.getUniqueLabel();
 
             for (MdnsOffloadRule.Matcher matcher : rule.mMatchers) {
-                for (int qtype : matcher.mQtypes) {
-                    try {
-                        gen.addJumpIfPktAtR0ContainDnsQ(matcher.mQnames, qtype, ruleMatch);
-                    } catch (IllegalArgumentException e) {
-                        Log.e(TAG, "Failed to generate mDNS offload filter for rule: " + rule, e);
-                    }
+                try {
+                    gen.addJumpIfPktAtR0ContainDnsQ(matcher.mQnames, matcher.mQtypes, ruleMatch);
+                } catch (IllegalArgumentException e) {
+                    Log.e(TAG, "Failed to generate mDNS offload filter for rule: " + rule, e);
                 }
             }
 
@@ -3463,20 +3489,11 @@ public class ApfFilter {
      * <li>Let execution continue off the end of the program for IPv6 ICMPv6 packets. This allows
      *     insertion of RA filters here, or if there aren't any, just passes the packets.
      * </ul>
+     * @param gen the APF generator to generate the filter code
+     * @param labelCheckMdnsQueryPayload the label to jump to for checking the mDNS query payload
      */
-    private ApfV4GeneratorBase<?> emitPrologue() throws IllegalInstructionException {
-        // This is guaranteed to succeed because of the check in maybeCreate.
-        ApfV4GeneratorBase<?> gen;
-        if (useApfV6Generator()) {
-            gen = new ApfV6Generator(mApfVersionSupported, mApfRamSize,
-                    mInstallableProgramSizeClamp);
-        } else {
-            gen = new ApfV4Generator(mApfVersionSupported, mApfRamSize,
-                    mInstallableProgramSizeClamp);
-        }
-
-        final short labelCheckMdnsQueryPayload = gen.getUniqueLabel();
-
+    private void emitPrologue(@NonNull ApfV4GeneratorBase<?> gen, short labelCheckMdnsQueryPayload)
+            throws IllegalInstructionException {
         if (hasDataAccess(mApfVersionSupported)) {
             if (gen instanceof ApfV4Generator) {
                 // Increment TOTAL_PACKETS.
@@ -3578,17 +3595,6 @@ public class ApfFilter {
         // Add IPv6 filters:
         gen.defineLabel(ipv6FilterLabel);
         generateIPv6Filter(gen, labelCheckMdnsQueryPayload);
-
-        // Add mDNS query payload check.
-        if (enableMdns4Offload() || enableMdns6Offload()) {
-            final short skipMdnsQueryPayloadCheck = gen.getUniqueLabel();
-            gen.addJump(skipMdnsQueryPayloadCheck);
-            gen.defineLabel(labelCheckMdnsQueryPayload);
-            generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen);
-            gen.defineLabel(skipMdnsQueryPayloadCheck);
-        }
-
-        return gen;
     }
 
     /**
@@ -3649,9 +3655,19 @@ public class ApfFilter {
         return sb.toString();
     }
 
-    private void installPacketFilter(byte[] program) {
-        if (!mApfController.installPacketFilter(program, getApfConfigMessage())) {
+    private void installPacketFilter(byte[] program, String logInfo) {
+        if (!mApfController.installPacketFilter(program, logInfo)) {
             sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_INSTALL_FAILURE);
+        }
+    }
+
+    private ApfV4GeneratorBase<?> createApfGenerator() throws IllegalInstructionException {
+        if (useApfV6Generator()) {
+            return new ApfV6Generator(mApfVersionSupported, mApfRamSize,
+                    mInstallableProgramSizeClamp);
+        } else {
+            return new ApfV4Generator(mApfVersionSupported, mApfRamSize,
+                    mInstallableProgramSizeClamp);
         }
     }
 
@@ -3669,17 +3685,26 @@ public class ApfFilter {
             final int timeSeconds = secondsSinceBoot();
             mLastTimeInstalledProgram = timeSeconds;
             // Step 1: Determine how many RA filters we can fit in the program.
-            ApfV4GeneratorBase<?> gen = emitPrologue();
+
+            ApfV4GeneratorBase<?> gen = createApfGenerator();
+            short labelCheckMdnsQueryPayload = gen.getUniqueLabel();
+
+            emitPrologue(gen, labelCheckMdnsQueryPayload);
 
             // The epilogue normally goes after the RA filters, but add it early to include its
             // length when estimating the total.
             emitEpilogue(gen);
 
+            if (enableMdns4Offload() || enableMdns6Offload()) {
+                generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload);
+            }
+
             // Can't fit the program even without any RA filters?
             if (gen.programLengthOverEstimate() > mMaximumApfProgramSize) {
                 Log.e(TAG, "Program exceeds maximum size " + mMaximumApfProgramSize);
                 sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
-                installPacketFilter(new byte[mMaximumApfProgramSize]);
+                installPacketFilter(new byte[mMaximumApfProgramSize],
+                        getApfConfigMessage() + " (clear memory, reason: program too large)");
                 return;
             }
 
@@ -3701,22 +3726,29 @@ public class ApfFilter {
             mNumProgramUpdates++;
 
             // Step 2: Actually generate the program
-            gen = emitPrologue();
+            gen = createApfGenerator();
+            labelCheckMdnsQueryPayload = gen.getUniqueLabel();
+            emitPrologue(gen, labelCheckMdnsQueryPayload);
             mNumFilteredRas = rasToFilter.size();
             for (Ra ra : rasToFilter) {
                 ra.generateFilter(gen, timeSeconds);
                 programMinLft = Math.min(programMinLft, ra.getRemainingFilterLft(timeSeconds));
             }
             emitEpilogue(gen);
+            if (enableMdns4Offload() || enableMdns6Offload()) {
+                generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload);
+            }
             program = gen.generate();
         } catch (IllegalInstructionException | IllegalStateException | IllegalArgumentException e) {
             Log.wtf(TAG, "Failed to generate APF program.", e);
             sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_GENERATE_FILTER_EXCEPTION);
-            installPacketFilter(new byte[mMaximumApfProgramSize]);
+            installPacketFilter(new byte[mMaximumApfProgramSize],
+                    getApfConfigMessage() + String.format(" (clear memory, reason: %s)",
+                            e.getMessage()));
             return;
         }
         if (mIsRunning) {
-            installPacketFilter(program);
+            installPacketFilter(program, getApfConfigMessage());
         }
         mLastInstalledProgramMinLifetime = programMinLft;
         mLastInstalledProgram = program;
@@ -4014,7 +4046,7 @@ public class ApfFilter {
 
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
     private boolean enableArpOffload() {
-        return mHandleArpOffload && useApfV6Generator();
+        return mHandleArpOffload && useApfV6Generator() && mIPv4Address != null;
     }
 
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
@@ -4159,7 +4191,7 @@ public class ApfFilter {
         }
         pw.decreaseIndent();
         if (SdkLevel.isAtLeastV()) {
-            pw.print("Hardcoded Allowlisted Ethertypes:");
+            pw.print("Hardcoded not denylisted Ethertypes:");
             pw.println(" 0800(IPv4) 0806(ARP) 86DD(IPv6) 888E(EAPOL) 88B4(WAPI)");
         } else {
             pw.print("Denylisted Ethertypes:");
