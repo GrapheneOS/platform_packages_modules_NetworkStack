@@ -186,7 +186,6 @@ import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NON_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_UNICAST_NON_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_MDNS;
-import static android.net.apf.ApfCounterTracker.Counter.PASSED_MLD;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_NON_IP_UNICAST;
 import static android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS;
 import static android.net.apf.ApfCounterTracker.getCounterValue;
@@ -3235,7 +3234,7 @@ public class ApfFilter {
         // If the multicast address is not "::", it is an MLD2 multicast-address-specific query,
         // then pass.
         gen.addLoadImmediate(R0, IPV6_MLD_MULTICAST_ADDR_OFFSET)
-                .addCountAndPassIfBytesAtR0NotEqual(IPV6_ADDR_ANY.getAddress(), PASSED_MLD);
+                .addCountAndPassIfBytesAtR0NotEqual(IPV6_ADDR_ANY.getAddress(), PASSED_IPV6_ICMP);
 
         // If we reach here, we know it is an MLDv1/MLDv2 general query.
 
