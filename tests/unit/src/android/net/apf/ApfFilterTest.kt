@@ -4881,9 +4881,7 @@ class ApfFilterTest {
         verify(dependencies, times(1)).createEgressMulticastReportsReaderSocket(anyInt())
     }
 
-    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-    @Test
-    fun testAllOffloadFeatureEnabled() {
+    fun getProgramWithAllFeatureEnabled(): Pair<ByteArray, Long> {
         val ipv4McastAddrs = listOf(
             InetAddress.getByName("224.0.0.1") as Inet4Address,
             InetAddress.getByName("224.0.0.251") as Inet4Address,
@@ -4986,10 +4984,18 @@ class ApfFilterTest {
             a018000000000000101f434f06452fe
         """.replace("\\s+".toRegex(), "").trim()
         val ra1Bytes = HexDump.hexStringToByteArray(ra1)
+        val beforeNs = SystemClock.elapsedRealtimeNanos()
         Os.write(writerSocket, ra1Bytes, 0, ra1Bytes.size)
 
         val program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
+        val afterNs = SystemClock.elapsedRealtimeNanos()
+        return Pair(program, (afterNs - beforeNs) / 1000000)
+    }
 
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testAllOffloadFeatureEnabled() {
+        val (program, generationTimeMs) = getProgramWithAllFeatureEnabled()
         val programSize = program.size
         val counterSize = ApfCounterTracker.Counter.totalSize()
         val totalSize = programSize + counterSize
@@ -5001,6 +5007,91 @@ class ApfFilterTest {
         val programChunk = program.toList().chunked(2000)
         programChunk.forEach {
             Log.i(TAG, HexDump.toHexString(it.toByteArray()))
+        }
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testAllOffloadFeatureEnabledPerformanceEstimation() {
+        val (program, generationTimeMs) = getProgramWithAllFeatureEnabled()
+        // Ignore the first iteration as it may take longer time for JVM warm up
+        if (apfInterpreterVersion == ApfJniUtils.APF_INTERPRETER_VERSION_NEXT) {
+            Log.i(
+                TAG,
+                "all offload on: program size ${program.size}, " +
+                    "generation time: $generationTimeMs ms"
+            )
+        }
+    }
+
+    fun getProgramWithAllFeatureOff(): Pair<ByteArray, Long> {
+        val ipv4McastAddrs = listOf(
+            InetAddress.getByName("224.0.0.1") as Inet4Address,
+            InetAddress.getByName("224.0.0.251") as Inet4Address,
+            InetAddress.getByName("239.255.255.250") as Inet4Address
+        )
+        doReturn(ipv4McastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())
+        val ipv6McastAddrs = listOf(
+            InetAddress.getByName("ff02::1:ff11:33e1") as Inet6Address,
+            InetAddress.getByName("ff02::1:ff11:33e2") as Inet6Address,
+            InetAddress.getByName("ff02::fb") as Inet6Address,
+            InetAddress.getByName("ff02::c") as Inet6Address,
+            InetAddress.getByName("ff05::c") as Inet6Address,
+            InetAddress.getByName("ff02::1") as Inet6Address,
+            InetAddress.getByName("ff01::1") as Inet6Address,
+        )
+        // mock IPv6 multicast address from /proc/net/igmp6
+        doReturn(ipv6McastAddrs).`when`(dependencies).getIPv6MulticastAddresses(any())
+        val apfConfig = getDefaultConfig()
+        apfConfig.apfRamSize = 8192
+        apfConfig.multicastFilter = true
+        apfConfig.handleArpOffload = false
+        apfConfig.handleNdOffload = false
+        apfConfig.handleIgmpOffload = false
+        apfConfig.handleMldOffload = false
+        apfConfig.handleIpv4PingOffload = false
+        apfConfig.handleIpv6PingOffload = false
+        apfConfig.handleMdnsOffload = false
+        val apfFilter = getApfFilter(apfConfig)
+        apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
+
+        val lp = LinkProperties()
+        val ipv4LinkAddress = LinkAddress(InetAddress.getByAddress(hostIpv4Address), 24)
+        lp.addLinkAddress(ipv4LinkAddress)
+        val ipv6LinkAddress = LinkAddress(hostLinkLocalIpv6Address, 64)
+        lp.addLinkAddress(ipv6LinkAddress)
+        for (addr in hostIpv6Addresses) {
+            lp.addLinkAddress(LinkAddress(InetAddress.getByAddress(addr), 64))
+        }
+        apfFilter.setLinkProperties(lp)
+        apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
+
+        val ra1 = """
+            333300000001f434f06452fe86dd60010c0000503afffe800000000000001cb6b5bc353b7cfdff0
+            2000000000000000000000000000186000fab000000000000000000000000030440c00000070800
+            00070800000000fdeed0c47546534400000000000000001802400000000708fd0c8be643ee00001
+            a018000000000000101f434f06452fe
+        """.replace("\\s+".toRegex(), "").trim()
+        val ra1Bytes = HexDump.hexStringToByteArray(ra1)
+        val beforeNs = SystemClock.elapsedRealtimeNanos()
+        Os.write(writerSocket, ra1Bytes, 0, ra1Bytes.size)
+
+        val program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
+        val afterNs = SystemClock.elapsedRealtimeNanos()
+        return Pair(program, (afterNs - beforeNs) / 1000000)
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testAllOffloadFeatureDisabledPerformanceEstimation() {
+        val (program, generationTimeMs) = getProgramWithAllFeatureOff()
+        // Ignore the first iteration as it may take longer time for JVM warm up
+        if (apfInterpreterVersion == ApfJniUtils.APF_INTERPRETER_VERSION_NEXT) {
+            Log.i(
+                TAG,
+                "all offload off: program size ${program.size}, " +
+                    "generation time: $generationTimeMs ms"
+            )
         }
     }
 }
