@@ -3102,22 +3102,26 @@ public class ApfFilter {
     private void generateMldV1ReportTransmit(ApfV6GeneratorBase<?> gen,
             byte[] mldPktFromEthSrcToIpv6Vtf, byte[] mldPktFromIpv6NextHdrToSrc)
             throws IllegalInstructionException {
-        // Reuse MLDv2 packet chunks when creating the MLDv1 report listed below:
-        //   - from Ethernet source to IPv6 VTF: 12 bytes
-        //   - from IPv6 next header to source address: 18 bytes
         final int packetSize =
                 ETHER_HEADER_LEN
                 + IPV6_HEADER_LEN
                 + IPV6_MLD_HOPOPTS.length
                 + IPV6_MLD_V1_MESSAGE_SIZE;
+        final int mldV1Ipv6PayloadLength = IPV6_MLD_HOPOPTS.length + IPV6_MLD_V1_MESSAGE_SIZE;
+        final byte[] mldV1PktFromEthSrcToIpv6Src =  CollectionUtils.concatArrays(
+                mldPktFromEthSrcToIpv6Vtf,
+                new byte[] {
+                        (byte) ((mldV1Ipv6PayloadLength >> 8) & 0xff),
+                        (byte) (mldV1Ipv6PayloadLength & 0xff),
+                },
+                mldPktFromIpv6NextHdrToSrc
+        );
         for (Inet6Address mcastAddr: mIPv6McastAddrsExcludeAllHost) {
             final MacAddress mcastEther =
                     NetworkStackUtils.ipv6MulticastToEthernetMulticast(mcastAddr);
             gen.addAllocate(packetSize)
                     .addDataCopy(mcastEther.toByteArray())
-                    .addDataCopy(mldPktFromEthSrcToIpv6Vtf)
-                    .addWriteU16(IPV6_MLD_HOPOPTS.length + IPV6_MLD_V1_MESSAGE_SIZE)
-                    .addDataCopy(mldPktFromIpv6NextHdrToSrc)
+                    .addDataCopy(mldV1PktFromEthSrcToIpv6Src)
                     .addDataCopy(mcastAddr.getAddress())
                     .addDataCopy(IPV6_MLD_HOPOPTS)
                     .addDataCopy(createMldV1ReportMessage(mcastAddr))
@@ -3144,25 +3148,45 @@ public class ApfFilter {
     private void generateMldV2ReportTransmit(ApfV6GeneratorBase<?> gen,
             byte[] mldPktFromEthSrcToIpv6Vtf, byte[] mldPktFromIpv6NextHdrToSrc)
             throws IllegalInstructionException {
+        final int mldV1Ipv6PayloadLength = IPV6_MLD_HOPOPTS.length + IPV6_MLD_V1_MESSAGE_SIZE;
+        final byte[] encodedMldV1Ipv6PayloadLength = {
+            (byte) ((mldV1Ipv6PayloadLength >> 8) & 0xff), (byte) (mldV1Ipv6PayloadLength & 0xff),
+        };
+        // We place template packet chunks in the data region first to reduce the number of
+        // instructions needed for creating multiple MLDv1 reports.
+        // The following packet chunks can be used for creating both MLDv1 and MLDv2 reports:
+        //   - from Ethernet source to IPv6 VTF: 12 bytes
+        //   - from IPv6 next header to source address: 18 bytes
+        final byte[] mldV2ReportPayload = createMldV2ReportPayload();
+        final byte[] template = CollectionUtils.concatArrays(
+            ETH_MULTICAST_MLD_V2_ALL_MULTICAST_ROUTERS_ADDRESS,
+            mldPktFromEthSrcToIpv6Vtf,
+            encodedMldV1Ipv6PayloadLength,
+            mldPktFromIpv6NextHdrToSrc,
+            IPV6_MLD_V2_ALL_ROUTERS_MULTICAST_ADDRESS,
+            IPV6_MLD_HOPOPTS,
+            mldV2ReportPayload
+        );
+        gen.maybeUpdateDataRegion(template);
+
+        final byte[] mldV2PktFromEthDstToIpv6Vtf = CollectionUtils.concatArrays(
+                ETH_MULTICAST_MLD_V2_ALL_MULTICAST_ROUTERS_ADDRESS,
+                mldPktFromEthSrcToIpv6Vtf
+        );
+        final byte[] mldV2PktFromIpv6NextHdrToEnd = CollectionUtils.concatArrays(
+                mldPktFromIpv6NextHdrToSrc,
+                IPV6_MLD_V2_ALL_ROUTERS_MULTICAST_ADDRESS,
+                IPV6_MLD_HOPOPTS,
+                mldV2ReportPayload
+        );
         final int mcastAddrsNum = mIPv6McastAddrsExcludeAllHost.size();
         final int ipv6PayloadLength = IPV6_MLD_HOPOPTS.length
                 + IPV6_MLD_MESSAGE_MIN_SIZE
                 + (mcastAddrsNum * IPV6_MLD_V2_MULTICAST_ADDRESS_RECORD_SIZE);
-        final byte[] encodedIPv6PayloadLength = {
-            (byte) ((ipv6PayloadLength >> 8) & 0xff), (byte) (ipv6PayloadLength & 0xff),
-        };
-        final byte[] packet = CollectionUtils.concatArrays(
-            ETH_MULTICAST_MLD_V2_ALL_MULTICAST_ROUTERS_ADDRESS,
-            mldPktFromEthSrcToIpv6Vtf,
-            encodedIPv6PayloadLength,
-            mldPktFromIpv6NextHdrToSrc,
-            IPV6_MLD_V2_ALL_ROUTERS_MULTICAST_ADDRESS,
-            IPV6_MLD_HOPOPTS,
-            createMldV2ReportPayload()
-        );
-
         gen.addAllocate(ETHER_HEADER_LEN + IPV6_HEADER_LEN + ipv6PayloadLength)
-            .addDataCopy(packet)
+            .addDataCopy(mldV2PktFromEthDstToIpv6Vtf)
+            .addWriteU16(ipv6PayloadLength)
+            .addDataCopy(mldV2PktFromIpv6NextHdrToEnd)
             .addTransmitL4(
                 // ip_ofs
                 ETHER_HEADER_LEN,
