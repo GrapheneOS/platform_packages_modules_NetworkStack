@@ -2658,6 +2658,7 @@ public class ApfFilter {
 
         if (enableMdns6Offload()) {
             generateIPv6MdnsFilter((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload);
+            gen.addLoad8intoR0(IPV6_NEXT_HEADER_OFFSET);
         }
 
         // Drop multicast if the multicast filter is enabled.
