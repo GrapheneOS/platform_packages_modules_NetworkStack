@@ -70,7 +70,6 @@ import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_HOPOPTS
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NON_ICMP
 import android.net.apf.ApfCounterTracker.Counter.PASSED_MDNS
-import android.net.apf.ApfCounterTracker.Counter.PASSED_MLD
 import android.net.apf.ApfFilter.Dependencies
 import android.net.apf.ApfTestHelpers.Companion.TIMEOUT_MS
 import android.net.apf.BaseApfGenerator.APF_VERSION_3
@@ -1846,7 +1845,7 @@ class ApfFilterTest {
             apfFilter.mApfVersionSupported,
             program,
             HexDump.hexStringToByteArray(pkt),
-            PASSED_MLD
+            PASSED_IPV6_ICMP
         )
     }
 
@@ -1870,7 +1869,7 @@ class ApfFilterTest {
             apfFilter.mApfVersionSupported,
             program,
             HexDump.hexStringToByteArray(pkt),
-            PASSED_MLD
+            PASSED_IPV6_ICMP
         )
     }
 
@@ -4991,7 +4990,14 @@ class ApfFilterTest {
 
         val program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
 
-        Log.i(TAG, "all feature on, size: ${program.size}, program:")
+        val programSize = program.size
+        val counterSize = ApfCounterTracker.Counter.totalSize()
+        val totalSize = programSize + counterSize
+        Log.i(
+            TAG,
+            "all feature on, program size: $programSize, counter size: $counterSize," +
+                " total size:$totalSize, program:"
+        )
         val programChunk = program.toList().chunked(2000)
         programChunk.forEach {
             Log.i(TAG, HexDump.toHexString(it.toByteArray()))

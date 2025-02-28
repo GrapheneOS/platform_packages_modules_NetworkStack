@@ -68,7 +68,6 @@ import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_HOPOPTS;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NON_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_UNICAST_NON_ICMP;
-import static android.net.apf.ApfCounterTracker.Counter.PASSED_MLD;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_NON_IP_UNICAST;
 import static android.net.apf.ApfCounterTracker.Counter.RESERVED_OOB;
 import static android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS;
@@ -123,7 +122,6 @@ import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_HOPOPTS;
 import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_ICMP;
 import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_NON_ICMP;
 import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_UNICAST_NON_ICMP;
-import static android.stats.connectivity.CounterName.CN_PASSED_MLD;
 import static android.stats.connectivity.CounterName.CN_PASSED_NON_IP_UNICAST;
 import static android.stats.connectivity.CounterName.CN_PASSED_OUR_SRC_MAC;
 import static android.stats.connectivity.CounterName.CN_TOTAL_PACKETS;
@@ -165,7 +163,6 @@ public class ApfSessionInfoMetrics {
                 Map.entry(PASSED_IPV6_NON_ICMP, CN_PASSED_IPV6_NON_ICMP),
                 Map.entry(PASSED_IPV6_UNICAST_NON_ICMP, CN_PASSED_IPV6_UNICAST_NON_ICMP),
                 Map.entry(PASSED_NON_IP_UNICAST, CN_PASSED_NON_IP_UNICAST),
-                Map.entry(PASSED_MLD, CN_PASSED_MLD),
                 Map.entry(DROPPED_ETH_BROADCAST, CN_DROPPED_ETH_BROADCAST),
                 Map.entry(DROPPED_ETHER_OUR_SRC_MAC, CN_DROPPED_ETHER_OUR_SRC_MAC),
                 Map.entry(DROPPED_RA, CN_DROPPED_RA),

@@ -186,7 +186,6 @@ import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NON_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_UNICAST_NON_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_MDNS;
-import static android.net.apf.ApfCounterTracker.Counter.PASSED_MLD;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_NON_IP_UNICAST;
 import static android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS;
 import static android.net.apf.ApfCounterTracker.getCounterValue;
@@ -1126,9 +1125,15 @@ public class ApfFilter {
          * Adds packet sections for an RA option with a 4-byte lifetime 4 bytes into the option
          * @param optionLength the length of the option in bytes
          * @param min the minimum acceptable lifetime
+         * @param isRdnss true iff this is an RDNSS option
          */
-        private long add4ByteLifetimeOption(int optionLength, int min) {
-            addMatchSection(ICMP6_4_BYTE_LIFETIME_OFFSET);
+        private long add4ByteLifetimeOption(int optionLength, int min, boolean isRdnss) {
+            if (isRdnss) {
+                addMatchSection(ICMP6_4_BYTE_LIFETIME_OFFSET - 2);
+                addIgnoreSection(2);  // reserved, but observed non-zero
+            } else {
+                addMatchSection(ICMP6_4_BYTE_LIFETIME_OFFSET);
+            }
             final long lifetime = getUint32(mPacket, mPacket.position());
             addLifetimeSection(ICMP6_4_BYTE_LIFETIME_LEN, lifetime, min);
             addMatchSection(optionLength - ICMP6_4_BYTE_LIFETIME_OFFSET
@@ -1246,13 +1251,13 @@ public class ApfFilter {
                     // are processed with the same specialized add4ByteLifetimeOption:
                     case ICMP6_RDNSS_OPTION_TYPE:
                         mRdnssOptionOffsets.add(position);
-                        lifetime = add4ByteLifetimeOption(optionLength, mMinRdnssLifetimeSec);
+                        lifetime = add4ByteLifetimeOption(optionLength, mMinRdnssLifetimeSec, true);
                         mMinRdnssLifetime = getMinForPositiveValue(mMinRdnssLifetime, lifetime);
                         if (lifetime == 0) mNumZeroLifetimeRas++;
                         break;
                     case ICMP6_ROUTE_INFO_OPTION_TYPE:
                         mRioOptionOffsets.add(position);
-                        lifetime = add4ByteLifetimeOption(optionLength, mAcceptRaMinLft);
+                        lifetime = add4ByteLifetimeOption(optionLength, mAcceptRaMinLft, false);
                         mMinRioRouteLifetime = getMinForPositiveValue(
                                 mMinRioRouteLifetime, lifetime);
                         if (lifetime == 0) mNumZeroLifetimeRas++;
@@ -3229,7 +3234,7 @@ public class ApfFilter {
         // If the multicast address is not "::", it is an MLD2 multicast-address-specific query,
         // then pass.
         gen.addLoadImmediate(R0, IPV6_MLD_MULTICAST_ADDR_OFFSET)
-                .addCountAndPassIfBytesAtR0NotEqual(IPV6_ADDR_ANY.getAddress(), PASSED_MLD);
+                .addCountAndPassIfBytesAtR0NotEqual(IPV6_ADDR_ANY.getAddress(), PASSED_IPV6_ICMP);
 
         // If we reach here, we know it is an MLDv1/MLDv2 general query.
 
@@ -3680,10 +3685,16 @@ public class ApfFilter {
         final byte[] program;
         int programMinLft = Integer.MAX_VALUE;
 
+        // Ensure the entire APF program uses the same time base.
+        final int timeSeconds = secondsSinceBoot();
+        // Every return from this function calls installPacketFilter().
+        mLastTimeInstalledProgram = timeSeconds;
+
+        // Increase the counter before we generate the program.
+        // This keeps the APF_PROGRAM_ID counter in sync with the program.
+        mNumProgramUpdates++;
+
         try {
-            // Ensure the entire APF program uses the same time base.
-            final int timeSeconds = secondsSinceBoot();
-            mLastTimeInstalledProgram = timeSeconds;
             // Step 1: Determine how many RA filters we can fit in the program.
 
             ApfV4GeneratorBase<?> gen = createApfGenerator();
@@ -3720,10 +3731,6 @@ public class ApfFilter {
 
                 rasToFilter.add(ra);
             }
-
-            // Increase the counter before we generate the program.
-            // This keeps the APF_PROGRAM_ID counter in sync with the program.
-            mNumProgramUpdates++;
 
             // Step 2: Actually generate the program
             gen = createApfGenerator();
