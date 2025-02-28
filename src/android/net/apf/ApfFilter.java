@@ -926,6 +926,7 @@ public class ApfFilter {
             this.min = min;
         }
 
+        @Override
         public String toString() {
             if (type == Type.LIFETIME) {
                 return String.format("%s: (%d, %d) %d %d", type, start, length, lifetime, min);
@@ -1037,6 +1038,7 @@ public class ApfFilter {
             sb.append("/").append(prefixLen).append(" ");
         }
 
+        @Override
         public String toString() {
             try {
                 StringBuffer sb = new StringBuffer();
@@ -1577,6 +1579,7 @@ public class ApfFilter {
             gen.defineLabel(nextFilterLabel);
         }
 
+        @Override
         public String toString() {
             try {
                 return String.format("%s -> %s",
@@ -1632,6 +1635,7 @@ public class ApfFilter {
             return fp.array();
         }
 
+        @Override
         public String toString() {
             try {
                 return String.format("%s -> %s , seq=%d, ack=%d",
