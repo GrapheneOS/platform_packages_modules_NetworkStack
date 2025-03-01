@@ -3764,6 +3764,16 @@ public class ApfFilter {
             return;
         }
         if (mIsRunning) {
+            if (program.length > mMaximumApfProgramSize) {
+                Log.wtf(TAG, String.format(
+                        "Size estimation logic is wrong: final program size: %d exceeds maximum "
+                                + "size: %d. ",
+                        program.length, mMaximumApfProgramSize));
+                sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
+                installPacketFilter(new byte[mMaximumApfProgramSize],
+                        getApfConfigMessage() + " (clear memory, reason: wrong size estimation)");
+                return;
+            }
             installPacketFilter(program, getApfConfigMessage());
         }
         mLastInstalledProgramMinLifetime = programMinLft;
