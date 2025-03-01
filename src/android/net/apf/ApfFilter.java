@@ -926,6 +926,7 @@ public class ApfFilter {
             this.min = min;
         }
 
+        @Override
         public String toString() {
             if (type == Type.LIFETIME) {
                 return String.format("%s: (%d, %d) %d %d", type, start, length, lifetime, min);
@@ -947,11 +948,11 @@ public class ApfFilter {
         // Router lifetime in packet
         private final int mRouterLifetime;
         // Minimum valid lifetime of PIOs in packet, Long.MAX_VALUE means not seen.
-        private long mMinPioValidLifetime = Long.MAX_VALUE;
+        private final long mMinPioValidLifetime;
         // Minimum route lifetime of RIOs in packet, Long.MAX_VALUE means not seen.
-        private long mMinRioRouteLifetime = Long.MAX_VALUE;
+        private final long mMinRioRouteLifetime;
         // Minimum lifetime of RDNSSs in packet, Long.MAX_VALUE means not seen.
-        private long mMinRdnssLifetime = Long.MAX_VALUE;
+        private final long mMinRdnssLifetime;
         // The time in seconds in which some of the information contained in this RA expires.
         private final int mExpirationTime;
         // When the packet was last captured, in seconds since Unix Epoch
@@ -1037,6 +1038,7 @@ public class ApfFilter {
             sb.append("/").append(prefixLen).append(" ");
         }
 
+        @Override
         public String toString() {
             try {
                 StringBuffer sb = new StringBuffer();
@@ -1141,34 +1143,6 @@ public class ApfFilter {
             return lifetime;
         }
 
-        /**
-         * Return the router lifetime of the RA
-         */
-        public int routerLifetime() {
-            return mRouterLifetime;
-        }
-
-        /**
-         * Return the minimum valid lifetime in PIOs
-         */
-        public long minPioValidLifetime() {
-            return mMinPioValidLifetime;
-        }
-
-        /**
-         * Return the minimum route lifetime in RIOs
-         */
-        public long minRioRouteLifetime() {
-            return mMinRioRouteLifetime;
-        }
-
-        /**
-         * Return the minimum lifetime in RDNSSs
-         */
-        public long minRdnssLifetime() {
-            return mMinRdnssLifetime;
-        }
-
         // Note that this parses RA and may throw InvalidRaException (from
         // Buffer.position(int) or due to an invalid-length option) or IndexOutOfBoundsException
         // (from ByteBuffer.get(int) ) if parsing encounters something non-compliant with
@@ -1214,6 +1188,10 @@ public class ApfFilter {
             // Add remaining fields (reachable time and retransmission timer) to match section.
             addMatchUntil(ICMP6_RA_OPTION_OFFSET);
 
+            long minPioValidLifetime = Long.MAX_VALUE;
+            long minRioRouteLifetime = Long.MAX_VALUE;
+            long minRdnssLifetime = Long.MAX_VALUE;
+
             while (mPacket.hasRemaining()) {
                 final int position = mPacket.position();
                 final int optionType = getUint8(mPacket, position);
@@ -1233,8 +1211,8 @@ public class ApfFilter {
                         lifetime = getUint32(mPacket, mPacket.position());
                         addLifetimeSection(ICMP6_PREFIX_OPTION_VALID_LIFETIME_LEN,
                                 lifetime, mAcceptRaMinLft);
-                        mMinPioValidLifetime = getMinForPositiveValue(
-                                mMinPioValidLifetime, lifetime);
+                        minPioValidLifetime = getMinForPositiveValue(
+                                minPioValidLifetime, lifetime);
                         if (lifetime == 0) mNumZeroLifetimeRas++;
 
                         // Parse preferred lifetime
@@ -1252,14 +1230,14 @@ public class ApfFilter {
                     case ICMP6_RDNSS_OPTION_TYPE:
                         mRdnssOptionOffsets.add(position);
                         lifetime = add4ByteLifetimeOption(optionLength, mMinRdnssLifetimeSec, true);
-                        mMinRdnssLifetime = getMinForPositiveValue(mMinRdnssLifetime, lifetime);
+                        minRdnssLifetime = getMinForPositiveValue(minRdnssLifetime, lifetime);
                         if (lifetime == 0) mNumZeroLifetimeRas++;
                         break;
                     case ICMP6_ROUTE_INFO_OPTION_TYPE:
                         mRioOptionOffsets.add(position);
                         lifetime = add4ByteLifetimeOption(optionLength, mAcceptRaMinLft, false);
-                        mMinRioRouteLifetime = getMinForPositiveValue(
-                                mMinRioRouteLifetime, lifetime);
+                        minRioRouteLifetime = getMinForPositiveValue(
+                                minRioRouteLifetime, lifetime);
                         if (lifetime == 0) mNumZeroLifetimeRas++;
                         break;
                     case ICMP6_SOURCE_LL_ADDRESS_OPTION_TYPE:
@@ -1280,6 +1258,10 @@ public class ApfFilter {
                         break;
                 }
             }
+
+            mMinPioValidLifetime = minPioValidLifetime;
+            mMinRioRouteLifetime = minRioRouteLifetime;
+            mMinRdnssLifetime = minRdnssLifetime;
             mExpirationTime = getExpirationTime();
         }
 
@@ -1597,6 +1579,7 @@ public class ApfFilter {
             gen.defineLabel(nextFilterLabel);
         }
 
+        @Override
         public String toString() {
             try {
                 return String.format("%s -> %s",
@@ -1652,6 +1635,7 @@ public class ApfFilter {
             return fp.array();
         }
 
+        @Override
         public String toString() {
             try {
                 return String.format("%s -> %s , seq=%d, ack=%d",
@@ -2658,6 +2642,7 @@ public class ApfFilter {
 
         if (enableMdns6Offload()) {
             generateIPv6MdnsFilter((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload);
+            gen.addLoad8intoR0(IPV6_NEXT_HEADER_OFFSET);
         }
 
         // Drop multicast if the multicast filter is enabled.
@@ -3101,22 +3086,26 @@ public class ApfFilter {
     private void generateMldV1ReportTransmit(ApfV6GeneratorBase<?> gen,
             byte[] mldPktFromEthSrcToIpv6Vtf, byte[] mldPktFromIpv6NextHdrToSrc)
             throws IllegalInstructionException {
-        // Reuse MLDv2 packet chunks when creating the MLDv1 report listed below:
-        //   - from Ethernet source to IPv6 VTF: 12 bytes
-        //   - from IPv6 next header to source address: 18 bytes
         final int packetSize =
                 ETHER_HEADER_LEN
                 + IPV6_HEADER_LEN
                 + IPV6_MLD_HOPOPTS.length
                 + IPV6_MLD_V1_MESSAGE_SIZE;
+        final int mldV1Ipv6PayloadLength = IPV6_MLD_HOPOPTS.length + IPV6_MLD_V1_MESSAGE_SIZE;
+        final byte[] mldV1PktFromEthSrcToIpv6Src =  CollectionUtils.concatArrays(
+                mldPktFromEthSrcToIpv6Vtf,
+                new byte[] {
+                        (byte) ((mldV1Ipv6PayloadLength >> 8) & 0xff),
+                        (byte) (mldV1Ipv6PayloadLength & 0xff),
+                },
+                mldPktFromIpv6NextHdrToSrc
+        );
         for (Inet6Address mcastAddr: mIPv6McastAddrsExcludeAllHost) {
             final MacAddress mcastEther =
                     NetworkStackUtils.ipv6MulticastToEthernetMulticast(mcastAddr);
             gen.addAllocate(packetSize)
                     .addDataCopy(mcastEther.toByteArray())
-                    .addDataCopy(mldPktFromEthSrcToIpv6Vtf)
-                    .addWriteU16(IPV6_MLD_HOPOPTS.length + IPV6_MLD_V1_MESSAGE_SIZE)
-                    .addDataCopy(mldPktFromIpv6NextHdrToSrc)
+                    .addDataCopy(mldV1PktFromEthSrcToIpv6Src)
                     .addDataCopy(mcastAddr.getAddress())
                     .addDataCopy(IPV6_MLD_HOPOPTS)
                     .addDataCopy(createMldV1ReportMessage(mcastAddr))
@@ -3143,25 +3132,45 @@ public class ApfFilter {
     private void generateMldV2ReportTransmit(ApfV6GeneratorBase<?> gen,
             byte[] mldPktFromEthSrcToIpv6Vtf, byte[] mldPktFromIpv6NextHdrToSrc)
             throws IllegalInstructionException {
+        final int mldV1Ipv6PayloadLength = IPV6_MLD_HOPOPTS.length + IPV6_MLD_V1_MESSAGE_SIZE;
+        final byte[] encodedMldV1Ipv6PayloadLength = {
+            (byte) ((mldV1Ipv6PayloadLength >> 8) & 0xff), (byte) (mldV1Ipv6PayloadLength & 0xff),
+        };
+        // We place template packet chunks in the data region first to reduce the number of
+        // instructions needed for creating multiple MLDv1 reports.
+        // The following packet chunks can be used for creating both MLDv1 and MLDv2 reports:
+        //   - from Ethernet source to IPv6 VTF: 12 bytes
+        //   - from IPv6 next header to source address: 18 bytes
+        final byte[] mldV2ReportPayload = createMldV2ReportPayload();
+        final byte[] template = CollectionUtils.concatArrays(
+            ETH_MULTICAST_MLD_V2_ALL_MULTICAST_ROUTERS_ADDRESS,
+            mldPktFromEthSrcToIpv6Vtf,
+            encodedMldV1Ipv6PayloadLength,
+            mldPktFromIpv6NextHdrToSrc,
+            IPV6_MLD_V2_ALL_ROUTERS_MULTICAST_ADDRESS,
+            IPV6_MLD_HOPOPTS,
+            mldV2ReportPayload
+        );
+        gen.maybeUpdateDataRegion(template);
+
+        final byte[] mldV2PktFromEthDstToIpv6Vtf = CollectionUtils.concatArrays(
+                ETH_MULTICAST_MLD_V2_ALL_MULTICAST_ROUTERS_ADDRESS,
+                mldPktFromEthSrcToIpv6Vtf
+        );
+        final byte[] mldV2PktFromIpv6NextHdrToEnd = CollectionUtils.concatArrays(
+                mldPktFromIpv6NextHdrToSrc,
+                IPV6_MLD_V2_ALL_ROUTERS_MULTICAST_ADDRESS,
+                IPV6_MLD_HOPOPTS,
+                mldV2ReportPayload
+        );
         final int mcastAddrsNum = mIPv6McastAddrsExcludeAllHost.size();
         final int ipv6PayloadLength = IPV6_MLD_HOPOPTS.length
                 + IPV6_MLD_MESSAGE_MIN_SIZE
                 + (mcastAddrsNum * IPV6_MLD_V2_MULTICAST_ADDRESS_RECORD_SIZE);
-        final byte[] encodedIPv6PayloadLength = {
-            (byte) ((ipv6PayloadLength >> 8) & 0xff), (byte) (ipv6PayloadLength & 0xff),
-        };
-        final byte[] packet = CollectionUtils.concatArrays(
-            ETH_MULTICAST_MLD_V2_ALL_MULTICAST_ROUTERS_ADDRESS,
-            mldPktFromEthSrcToIpv6Vtf,
-            encodedIPv6PayloadLength,
-            mldPktFromIpv6NextHdrToSrc,
-            IPV6_MLD_V2_ALL_ROUTERS_MULTICAST_ADDRESS,
-            IPV6_MLD_HOPOPTS,
-            createMldV2ReportPayload()
-        );
-
         gen.addAllocate(ETHER_HEADER_LEN + IPV6_HEADER_LEN + ipv6PayloadLength)
-            .addDataCopy(packet)
+            .addDataCopy(mldV2PktFromEthDstToIpv6Vtf)
+            .addWriteU16(ipv6PayloadLength)
+            .addDataCopy(mldV2PktFromIpv6NextHdrToEnd)
             .addTransmitL4(
                 // ip_ofs
                 ETHER_HEADER_LEN,
@@ -3755,6 +3764,16 @@ public class ApfFilter {
             return;
         }
         if (mIsRunning) {
+            if (program.length > mMaximumApfProgramSize) {
+                Log.wtf(TAG, String.format(
+                        "Size estimation logic is wrong: final program size: %d exceeds maximum "
+                                + "size: %d. ",
+                        program.length, mMaximumApfProgramSize));
+                sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
+                installPacketFilter(new byte[mMaximumApfProgramSize],
+                        getApfConfigMessage() + " (clear memory, reason: wrong size estimation)");
+                return;
+            }
             installPacketFilter(program, getApfConfigMessage());
         }
         mLastInstalledProgramMinLifetime = programMinLft;
@@ -3798,13 +3817,13 @@ public class ApfFilter {
 
         // Update info for Metrics
         mLowestRouterLifetimeSeconds = getMinForPositiveValue(
-                mLowestRouterLifetimeSeconds, ra.routerLifetime());
+                mLowestRouterLifetimeSeconds, ra.mRouterLifetime);
         mLowestPioValidLifetimeSeconds = getMinForPositiveValue(
-                mLowestPioValidLifetimeSeconds, ra.minPioValidLifetime());
+                mLowestPioValidLifetimeSeconds, ra.mMinPioValidLifetime);
         mLowestRioRouteLifetimeSeconds = getMinForPositiveValue(
-                mLowestRioRouteLifetimeSeconds, ra.minRioRouteLifetime());
+                mLowestRioRouteLifetimeSeconds, ra.mMinRioRouteLifetime);
         mLowestRdnssLifetimeSeconds = getMinForPositiveValue(
-                mLowestRdnssLifetimeSeconds, ra.minRdnssLifetime());
+                mLowestRdnssLifetimeSeconds, ra.mMinRdnssLifetime);
 
         // Remove all expired RA filters before trying to match the new RA.
         // TODO: matches() still checks that the old RA filter has not expired. Consider removing
