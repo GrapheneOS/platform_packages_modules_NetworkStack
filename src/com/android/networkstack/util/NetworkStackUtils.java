@@ -307,10 +307,22 @@ public class NetworkStackUtils {
             "apf_handle_ping_offload_version";
 
     /**
+     * Experiment flag to enable the feature of handle IPv6 ping offload in Apf.
+     */
+    public static final String APF_HANDLE_PING6_OFFLOAD_VERSION =
+            "apf_handle_ping6_offload_version";
+
+    /**
      * Experiment flag to enable the feature of handle IGMP offload in Apf.
      */
     public static final String APF_HANDLE_IGMP_OFFLOAD_VERSION =
             "apf_handle_igmp_offload_version";
+
+    /**
+     * Experiment flag to enable the feature of handle MLD offload in Apf.
+     */
+    public static final String APF_HANDLE_MLD_OFFLOAD_VERSION =
+            "apf_handle_mld_offload_version";
 
     /**** BEGIN Feature Kill Switch Flags ****/
 
@@ -332,6 +344,9 @@ public class NetworkStackUtils {
     public static final String IGNORE_TCP_INFO_FOR_BLOCKED_UIDS =
             "ignore_tcp_info_for_blocked_uids";
 
+    /** Kill switch to force disable APF */
+    public static final String APF_ENABLE = "apf_enable";
+
     /**
      * Kill switch flag to disable the feature of handle arp offload in Apf.
      * Warning: the following flag String is incorrect. The feature that is not chickened out is
@@ -344,6 +359,25 @@ public class NetworkStackUtils {
      */
     public static final String APF_HANDLE_ND_OFFLOAD = "apf_handle_nd_offload";
 
+    /**
+     * Kill switch flag to disable the feature of handle IGMP offload in Apf.
+     */
+    public static final String APF_HANDLE_IGMP_OFFLOAD = "apf_handle_igmp_offload";
+
+    /**
+     * Kill switch flag to disable the feature of handle MLD offload in Apf.
+     */
+    public static final String APF_HANDLE_MLD_OFFLOAD = "apf_handle_mld_offload";
+
+    /**
+     * Kill switch flag to disable the feature of handle IPv4 ping offload in Apf.
+     */
+    public static final String APF_HANDLE_PING4_OFFLOAD = "apf_handle_ping4_offload";
+
+    /**
+     * Kill switch flag to disable the feature of handle IPv6 ping offload in Apf.
+     */
+    public static final String APF_HANDLE_PING6_OFFLOAD = "apf_handle_ping6_offload";
     static {
         System.loadLibrary("networkstackutilsjni");
     }
