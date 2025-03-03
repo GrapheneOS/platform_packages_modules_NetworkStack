@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 The Android Open Source Project
+ * Copyright (C) 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,74 +17,59 @@ package android.net.apf;
 
 import static android.net.apf.BaseApfGenerator.Register.R0;
 
-import android.annotation.NonNull;
-
-import com.android.internal.annotations.VisibleForTesting;
+import androidx.annotation.NonNull;
 
 import java.util.List;
 import java.util.Set;
 
 /**
- * APFv6 assembler/generator. A tool for generating an APFv6 program.
+ * The abstract class for APFv6.1 assembler/generator.
+ *
+ * @param <Type> the generator class
  *
  * @hide
  */
-public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
-    /**
-     * Returns true if we support the specified {@code version}, otherwise false.
-     */
-    public static boolean supportsVersion(int version) {
-        return version >= APF_VERSION_6;
-    }
+public abstract class ApfV61GeneratorBase<Type extends ApfV61GeneratorBase<Type>> extends
+            ApfV6GeneratorBase<Type> {
 
     /**
-     * Creates an ApfV6Generator instance which emits instructions for APFv6.
+     * Creates an ApfV61GeneratorBase instance.
      */
-    public ApfV6Generator(int version, int ramSize, int clampSize)
-            throws IllegalInstructionException {
-        this(new byte[0], version, ramSize, clampSize);
-    }
-
-    /**
-     * Creates an ApfV6Generator instance which emits instructions APFv6.
-     * Initializes the data region with {@code bytes}.
-     */
-    @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
-    public ApfV6Generator(byte[] bytes, int version, int ramSize, int clampSize)
+    public ApfV61GeneratorBase(byte[] bytes, int version, int ramSize, int clampSize)
             throws IllegalInstructionException {
         super(bytes, version, ramSize, clampSize);
     }
 
     @Override
-    public ApfV6Generator addCountAndDropIfR0Equals(long val, ApfCounterTracker.Counter cnt)
+    public final Type addCountAndDropIfR0Equals(long val, ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         final short tgt = getUniqueLabel();
         return addJumpIfR0NotEquals(val, tgt).addCountAndDrop(cnt).defineLabel(tgt);
     }
 
     @Override
-    public ApfV6Generator addCountAndPassIfR0Equals(long val, ApfCounterTracker.Counter cnt)
+    public final Type addCountAndPassIfR0Equals(long val, ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         final short tgt = getUniqueLabel();
         return addJumpIfR0NotEquals(val, tgt).addCountAndPass(cnt).defineLabel(tgt);
     }
 
     @Override
-    public ApfV6Generator addCountAndDropIfR0NotEquals(long val, ApfCounterTracker.Counter cnt)
+    public final Type addCountAndDropIfR0NotEquals(long val, ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         final short tgt = getUniqueLabel();
         return addJumpIfR0Equals(val, tgt).addCountAndDrop(cnt).defineLabel(tgt);
     }
 
     @Override
-    public ApfV6Generator addCountAndPassIfR0NotEquals(long val, ApfCounterTracker.Counter cnt)
+    public final Type addCountAndPassIfR0NotEquals(long val, ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         final short tgt = getUniqueLabel();
         return addJumpIfR0Equals(val, tgt).addCountAndPass(cnt).defineLabel(tgt);
     }
 
     @Override
-    public ApfV6Generator addCountAndDropIfR0AnyBitsSet(long val, ApfCounterTracker.Counter cnt)
+    public Type addCountAndDropIfR0AnyBitsSet(long val, ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         final short countAndDropLabel = getUniqueLabel();
         final short skipLabel = getUniqueLabel();
@@ -96,7 +81,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     }
 
     @Override
-    public ApfV6Generator addCountAndPassIfR0AnyBitsSet(long val, ApfCounterTracker.Counter cnt)
+    public Type addCountAndPassIfR0AnyBitsSet(long val, ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         final short countAndPassLabel = getUniqueLabel();
         final short skipLabel = getUniqueLabel();
@@ -108,7 +93,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     }
 
     @Override
-    public ApfV6Generator addCountAndDropIfR0LessThan(long val, ApfCounterTracker.Counter cnt)
+    public final Type addCountAndDropIfR0LessThan(long val, ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         if (val <= 0) {
             throw new IllegalArgumentException("val must > 0, current val: " + val);
@@ -118,7 +103,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     }
 
     @Override
-    public ApfV6Generator addCountAndPassIfR0LessThan(long val, ApfCounterTracker.Counter cnt)
+    public final Type addCountAndPassIfR0LessThan(long val, ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         if (val <= 0) {
             throw new IllegalArgumentException("val must > 0, current val: " + val);
@@ -128,7 +113,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     }
 
     @Override
-    public ApfV6Generator addCountAndDropIfR0GreaterThan(long val, ApfCounterTracker.Counter cnt)
+    public Type addCountAndDropIfR0GreaterThan(long val, ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         if (val < 0 || val >= 4294967295L) {
             throw new IllegalArgumentException("val must >= 0 and < 2^32-1, current val: " + val);
@@ -138,7 +123,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     }
 
     @Override
-    public ApfV6Generator addCountAndPassIfR0GreaterThan(long val, ApfCounterTracker.Counter cnt)
+    public Type addCountAndPassIfR0GreaterThan(long val, ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         if (val < 0 || val >= 4294967295L) {
             throw new IllegalArgumentException("val must >= 0 and < 2^32-1, current val: " + val);
@@ -148,21 +133,21 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     }
 
     @Override
-    public ApfV6Generator addCountAndDropIfBytesAtR0NotEqual(byte[] bytes,
+    public final Type addCountAndDropIfBytesAtR0NotEqual(byte[] bytes,
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
         final short tgt = getUniqueLabel();
         return addJumpIfBytesAtR0Equal(bytes, tgt).addCountAndDrop(cnt).defineLabel(tgt);
     }
 
     @Override
-    public ApfV6Generator addCountAndPassIfBytesAtR0NotEqual(byte[] bytes,
+    public final Type addCountAndPassIfBytesAtR0NotEqual(byte[] bytes,
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
         final short tgt = getUniqueLabel();
         return addJumpIfBytesAtR0Equal(bytes, tgt).addCountAndPass(cnt).defineLabel(tgt);
     }
 
     @Override
-    public ApfV6Generator addCountAndPassIfR0IsOneOf(@NonNull Set<Long> values,
+    public Type addCountAndPassIfR0IsOneOf(@NonNull Set<Long> values,
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
         if (values.isEmpty()) {
             throw new IllegalArgumentException("values cannot be empty");
@@ -175,7 +160,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     }
 
     @Override
-    public ApfV6Generator addCountAndDropIfR0IsOneOf(@NonNull Set<Long> values,
+    public Type addCountAndDropIfR0IsOneOf(@NonNull Set<Long> values,
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
         if (values.isEmpty()) {
             throw new IllegalArgumentException("values cannot be empty");
@@ -188,7 +173,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     }
 
     @Override
-    public ApfV6Generator addCountAndPassIfR0IsNoneOf(@NonNull Set<Long> values,
+    public Type addCountAndPassIfR0IsNoneOf(@NonNull Set<Long> values,
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
         if (values.isEmpty()) {
             throw new IllegalArgumentException("values cannot be empty");
@@ -201,7 +186,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     }
 
     @Override
-    public ApfV6Generator addCountAndDropIfBytesAtR0EqualsAnyOf(@NonNull List<byte[]> bytesList,
+    public Type addCountAndDropIfBytesAtR0EqualsAnyOf(@NonNull List<byte[]> bytesList,
             ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         final short tgt = getUniqueLabel();
@@ -209,7 +194,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     }
 
     @Override
-    public ApfV6Generator addCountAndPassIfBytesAtR0EqualsAnyOf(@NonNull List<byte[]> bytesList,
+    public Type addCountAndPassIfBytesAtR0EqualsAnyOf(@NonNull List<byte[]> bytesList,
             ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         final short tgt = getUniqueLabel();
@@ -217,7 +202,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     }
 
     @Override
-    public ApfV6Generator addCountAndDropIfBytesAtR0EqualsNoneOf(@NonNull List<byte[]> bytesList,
+    public Type addCountAndDropIfBytesAtR0EqualsNoneOf(@NonNull List<byte[]> bytesList,
             ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         final short tgt = getUniqueLabel();
@@ -225,7 +210,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     }
 
     @Override
-    public ApfV6Generator addCountAndPassIfBytesAtR0EqualsNoneOf(@NonNull List<byte[]> bytesList,
+    public Type addCountAndPassIfBytesAtR0EqualsNoneOf(@NonNull List<byte[]> bytesList,
             ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         final short tgt = getUniqueLabel();
@@ -233,7 +218,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     }
 
     @Override
-    public ApfV6Generator addCountAndDropIfR0IsNoneOf(@NonNull Set<Long> values,
+    public Type addCountAndDropIfR0IsNoneOf(@NonNull Set<Long> values,
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
         if (values.isEmpty()) {
             throw new IllegalArgumentException("values cannot be empty");
@@ -246,7 +231,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     }
 
     @Override
-    public ApfV6Generator addJumpIfPktAtR0ContainDnsQ(byte[] qnames, int[] qtypes, short tgt) {
+    public final Type addJumpIfPktAtR0ContainDnsQ(byte[] qnames, int[] qtypes, short tgt) {
         for (int qtype : qtypes) {
             addJumpIfPktAtR0ContainDnsQ(qnames, qtype, tgt);
         }

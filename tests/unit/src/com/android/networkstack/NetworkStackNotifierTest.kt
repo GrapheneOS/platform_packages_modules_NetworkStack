@@ -67,6 +67,7 @@ import org.mockito.Mockito.never
 import org.mockito.MockitoAnnotations
 import kotlin.reflect.KClass
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 @RunWith(AndroidTestingRunner::class)
 @SmallTest
@@ -206,6 +207,10 @@ class NetworkStackNotifierTest {
         assertEquals(mPendingIntent, note.contentIntent)
         assertEquals(CHANNEL_CONNECTED, note.channelId)
         assertEquals(timeout, note.timeoutAfter)
+        assertTrue(
+            note.flags and Notification.FLAG_LOCAL_ONLY != 0,
+            "Connected notifications should be local only"
+        )
         verify(mDependencies).getActivityPendingIntent(
                 eq(mCurrentUserContext), mIntentCaptor.capture(),
                 intThat { it or FLAG_IMMUTABLE != 0 })
@@ -294,6 +299,10 @@ class NetworkStackNotifierTest {
                 eq(mCurrentUserContext), mIntentCaptor.capture(),
                 intThat { it or FLAG_IMMUTABLE != 0 })
         verifyVenueInfoIntent(mIntentCaptor.value)
+        assertTrue(
+            mNoteCaptor.value.flags and Notification.FLAG_LOCAL_ONLY != 0,
+            "Venue info notifications should be local only"
+        )
         verifyCanceledNotificationAfterDefaultNetworkLost()
     }
 

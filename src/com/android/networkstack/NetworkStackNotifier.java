@@ -287,7 +287,8 @@ public class NetworkStackNotifier {
             @NonNull CharSequence networkIdentifier) {
         return new Notification.Builder(mContext, channelId)
                 .setContentTitle(networkIdentifier)
-                .setSmallIcon(R.drawable.icon_wifi);
+                .setSmallIcon(R.drawable.icon_wifi)
+                .setLocalOnly(true);
     }
 
     /**
