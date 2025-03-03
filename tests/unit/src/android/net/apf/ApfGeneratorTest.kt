@@ -83,7 +83,7 @@ class ApfGeneratorTest {
     // Indicates which apfInterpreter to load.
     @Parameterized.Parameter(0)
     @JvmField
-    var aApfInterpreterVersion: Int = ApfJniUtils.APF_INTERPRETER_VERSION_NEXT
+    var apfInterpreterVersion: Int = ApfJniUtils.APF_INTERPRETER_VERSION_NEXT
 
     private val ramSize = 2048
     private val clampSize = 2048
@@ -93,7 +93,7 @@ class ApfGeneratorTest {
 
     @Before
     fun setUp() {
-        apfTestHelpers = ApfTestHelpers(aApfInterpreterVersion)
+        apfTestHelpers = ApfTestHelpers(apfInterpreterVersion)
     }
 
     @After
