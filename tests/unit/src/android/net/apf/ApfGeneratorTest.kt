@@ -668,19 +668,19 @@ class ApfGeneratorTest {
         ), apfTestHelpers.disassembleApf(program).map { it.trim() })
 
         gen = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
-        gen.addDataCopy(0, 10)
-        gen.addDataCopy(1, 5)
+        gen.addDataCopy(0, 2)
+        gen.addDataCopy(1, 1)
         gen.addPacketCopy(1000, 255)
         program = gen.generate().skipDataAndDebug()
         assertContentEquals(byteArrayOf(
-                encodeInstruction(25, 0, 1), 10,
-                encodeInstruction(25, 1, 1), 1, 5,
+                encodeInstruction(25, 0, 1), 2,
+                encodeInstruction(25, 1, 1), 1, 1,
                 encodeInstruction(25, 2, 0),
                 0x03.toByte(), 0xe8.toByte(), 0xff.toByte(),
         ), program)
         assertContentEquals(listOf(
-                "0: datacopy    src=0, (10)c90acb0105cc03e8ff27",
-                "2: datacopy    src=1, (5)0acb0105cc",
+                "0: datacopy    src=0, (2)c902",
+                "2: datacopy    src=1, (1)02",
                 "5: pktcopy     src=1000, len=255"
         ), apfTestHelpers.disassembleApf(program).map { it.trim() })
 
