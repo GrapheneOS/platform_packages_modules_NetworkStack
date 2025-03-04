@@ -19,8 +19,10 @@ import android.net.apf.ApfCounterTracker.Counter
 import android.net.apf.ApfCounterTracker.Counter.CORRUPT_DNS_PACKET
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETHERTYPE_NOT_ALLOWED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ETH_BROADCAST
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_RA
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ALLOCATE_FAILURE
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_REQUEST
+import android.net.apf.ApfCounterTracker.Counter.PASSED_MDNS
 import android.net.apf.ApfCounterTracker.Counter.PASSED_TRANSMIT_FAILURE
 import android.net.apf.ApfCounterTracker.Counter.RESERVED_OOB
 import android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS
@@ -49,6 +51,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import org.junit.After
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -817,6 +820,27 @@ class ApfGeneratorTest {
     }
 
     @Test
+    fun testApf61InstructionEncoding() {
+        var gen = ApfV61Generator(apfInterpreterVersion, ramSize, clampSize)
+        gen.addCountAndDropIfR0Equals(1, DROPPED_RA)
+        var program = gen.generate().skipDataAndDebug()
+        assertContentEquals(byteArrayOf(
+            encodeInstruction(15, 1, 0),
+            DROPPED_RA.jumpDropLabel.toByte(),
+            1,
+        ), program)
+
+        gen = ApfV61Generator(apfInterpreterVersion, ramSize, clampSize)
+        gen.addCountAndPassIfR0Equals(1, PASSED_MDNS)
+        program = gen.generate().skipDataAndDebug()
+        assertContentEquals(byteArrayOf(
+            encodeInstruction(15, 1, 0),
+            PASSED_MDNS.jumpPassLabel.toByte(),
+            1,
+        ), program)
+    }
+
+    @Test
     fun testWriteToTxBuffer() {
         var program = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
                 .addAllocate(14)
@@ -1032,6 +1056,15 @@ class ApfGeneratorTest {
         doTestCountAndPassDropCompareR0(
                 getGenerator = { ApfV6Generator(apfInterpreterVersion, ramSize, clampSize) },
                 incTotal = true
+        )
+    }
+
+    @Test
+    fun testV61CountAndPassDropCompareR0() {
+        assumeTrue(apfInterpreterVersion > ApfJniUtils.APF_INTERPRETER_VERSION_V6)
+        doTestCountAndPassDropCompareR0(
+            getGenerator = { ApfV61Generator(apfInterpreterVersion, ramSize, clampSize) },
+            incTotal = true
         )
     }
 

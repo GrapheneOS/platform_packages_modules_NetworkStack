@@ -140,6 +140,22 @@ public class ApfCounterTracker {
             }
             return RESERVED_OOB;
         }
+
+        /**
+         * Return the label such that if we jump to it, the counter will be increased by 1 and
+         * the packet will be passed.
+         */
+        public short getJumpPassLabel() {
+            return (short) (2 * this.value());
+        }
+
+        /**
+         * Return the label such that if we jump to it, the counter will be increased by 1 and
+         * the packet will be dropped.
+         */
+        public short getJumpDropLabel() {
+            return (short) (2 * this.value() + 1);
+        }
     }
 
     public static final Counter MIN_DROP_COUNTER = Counter.DROPPED_ETH_BROADCAST;
