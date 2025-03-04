@@ -110,7 +110,7 @@ public class ApfCounterTracker {
          * a given counter.
          */
         public int offset() {
-            return -this.ordinal() * 4;  // Currently, all counters are 32bit long.
+            return -this.value() * 4;  // Currently, all counters are 32bit long.
         }
 
         /**
