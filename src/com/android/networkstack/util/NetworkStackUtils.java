@@ -247,11 +247,6 @@ public class NetworkStackUtils {
             "ipclient_dhcpv6_prefix_delegation_version";
 
     /**
-     * Experiment flag to enable new ra filter.
-     */
-    public static final String APF_NEW_RA_FILTER_VERSION = "apf_new_ra_filter_version";
-
-    /**
      * Experiment flag to enable the feature of polling counters in Apf.
      */
     public static final String APF_POLLING_COUNTERS_VERSION = "apf_polling_counters_version";
