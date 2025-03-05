@@ -41,17 +41,15 @@ public abstract class ApfV61GeneratorBase<Type extends ApfV61GeneratorBase<Type>
     }
 
     @Override
-    public final Type addCountAndDropIfR0Equals(long val, ApfCounterTracker.Counter cnt)
-            throws IllegalInstructionException {
-        final short tgt = getUniqueLabel();
-        return addJumpIfR0NotEquals(val, tgt).addCountAndDrop(cnt).defineLabel(tgt);
+    public final Type addCountAndDropIfR0Equals(long val, ApfCounterTracker.Counter cnt) {
+        checkDropCounterRange(cnt);
+        return addJumpIfR0Equals(val, cnt.getJumpDropLabel());
     }
 
     @Override
-    public final Type addCountAndPassIfR0Equals(long val, ApfCounterTracker.Counter cnt)
-            throws IllegalInstructionException {
-        final short tgt = getUniqueLabel();
-        return addJumpIfR0NotEquals(val, tgt).addCountAndPass(cnt).defineLabel(tgt);
+    public final Type addCountAndPassIfR0Equals(long val, ApfCounterTracker.Counter cnt) {
+        checkPassCounterRange(cnt);
+        return addJumpIfR0Equals(val, cnt.getJumpPassLabel());
     }
 
     @Override

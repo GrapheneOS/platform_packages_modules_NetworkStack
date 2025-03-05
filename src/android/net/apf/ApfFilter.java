@@ -3676,7 +3676,10 @@ public class ApfFilter {
     }
 
     private ApfV4GeneratorBase<?> createApfGenerator() throws IllegalInstructionException {
-        if (useApfV6Generator()) {
+        if (useApfV61Generator()) {
+            return new ApfV61Generator(mApfVersionSupported, mApfRamSize,
+                    mInstallableProgramSizeClamp);
+        } else if (useApfV6Generator()) {
             return new ApfV6Generator(mApfVersionSupported, mApfRamSize,
                     mInstallableProgramSizeClamp);
         } else {
@@ -4137,6 +4140,11 @@ public class ApfFilter {
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
     private boolean useApfV6Generator() {
         return SdkLevel.isAtLeastV() && ApfV6Generator.supportsVersion(mApfVersionSupported);
+    }
+
+    @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
+    private boolean useApfV61Generator() {
+        return SdkLevel.isAtLeastV() && ApfV61Generator.supportsVersion(mApfVersionSupported);
     }
 
     /**
