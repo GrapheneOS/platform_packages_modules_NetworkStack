@@ -96,7 +96,6 @@ import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_PING6_O
 import static com.android.networkstack.util.NetworkStackUtils.APF_POLLING_COUNTERS_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION;
-import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_REPLACE_NETD_WITH_NETLINK_VERSION;
@@ -1344,10 +1343,6 @@ public class IpClient extends StateMachine {
     private void stopStateMachineUpdaters() {
         mLinkObserver.clearInterfaceParams();
         mLinkObserver.shutdown();
-    }
-
-    private boolean isGratuitousArpNaRoamingEnabled() {
-        return mDependencies.isFeatureNotChickenedOut(mContext, IPCLIENT_GARP_NA_ROAMING_VERSION);
     }
 
     @VisibleForTesting
@@ -2757,10 +2752,8 @@ public class IpClient extends StateMachine {
 
         // Before trigger probing to the critical neighbors, send Gratuitous ARP
         // and Neighbor Advertisment in advance to propgate host's IPv4/v6 addresses.
-        if (isGratuitousArpNaRoamingEnabled()) {
-            maybeSendGratuitousARP(mLinkProperties);
-            maybeSendGratuitousNAs(mLinkProperties, true /* isGratuitousNaAfterRoaming */);
-        }
+        maybeSendGratuitousARP(mLinkProperties);
+        maybeSendGratuitousNAs(mLinkProperties, true /* isGratuitousNaAfterRoaming */);
 
         // Check whether attempting to refresh previous IP lease on specific networks or need to
         // probe the critical neighbors proactively on L2 roaming happened. The NUD probe on the

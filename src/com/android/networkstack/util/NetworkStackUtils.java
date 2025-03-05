@@ -194,13 +194,6 @@ public class NetworkStackUtils {
     public static final String VALIDATION_METRICS_VERSION = "validation_metrics_version";
 
     /**
-     * Experiment flag to enable sending Gratuitous APR and Gratuitous Neighbor Advertisement for
-     * all assigned IPv4 and IPv6 GUAs after completing L2 roaming.
-     */
-    public static final String IPCLIENT_GARP_NA_ROAMING_VERSION =
-            "ipclient_garp_na_roaming_version";
-
-    /**
      * Experiment flag to enable "mcast_resolicit" neighbor parameter in IpReachabilityMonitor,
      * set it to 3 by default.
      */
