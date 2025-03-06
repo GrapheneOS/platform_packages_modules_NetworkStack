@@ -3612,12 +3612,10 @@ public class ApfFilter {
     }
 
     /**
-     * Append packet counting epilogue to the APF program.
-     * <p>
-     * Currently, the epilogue consists of two trampolines which count passed and dropped packets
-     * before jumping to the actual PASS and DROP labels.
+     * Append default packet handling and packet counting to the APF program.
      */
-    private void emitEpilogue(ApfV4GeneratorBase<?> gen) throws IllegalInstructionException {
+    private void emitDefaultPacketHandling(ApfV4GeneratorBase<?> gen)
+            throws IllegalInstructionException {
         // Execution will reach here if none of the filters match, which will pass the packet to
         // the application processor.
         gen.addCountAndPass(PASSED_IPV6_ICMP);
@@ -3714,9 +3712,9 @@ public class ApfFilter {
 
             emitPrologue(gen, labelCheckMdnsQueryPayload);
 
-            // The epilogue normally goes after the RA filters, but add it early to include its
-            // length when estimating the total.
-            emitEpilogue(gen);
+            // The default packet handling normally goes after the RA filters, but add it early to
+            // include its length when estimating the total.
+            emitDefaultPacketHandling(gen);
 
             if (enableMdns4Offload() || enableMdns6Offload()) {
                 generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload);
@@ -3753,7 +3751,7 @@ public class ApfFilter {
                 ra.generateFilter(gen, timeSeconds);
                 programMinLft = Math.min(programMinLft, ra.getRemainingFilterLft(timeSeconds));
             }
-            emitEpilogue(gen);
+            emitDefaultPacketHandling(gen);
             if (enableMdns4Offload() || enableMdns6Offload()) {
                 generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload);
             }

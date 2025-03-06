@@ -3881,8 +3881,8 @@ public abstract class IpClientIntegrationTestCommon {
         assertEquals(2, naList.size()); // privacy address and stable privacy address
     }
 
-    private void startGratuitousArpAndNaAfterRoamingTest(boolean isGratuitousArpNaRoamingEnabled,
-            boolean hasIpv4, boolean hasIpv6) throws Exception {
+    private void startGratuitousArpAndNaAfterRoamingTest(boolean hasIpv4, boolean hasIpv6)
+            throws Exception {
         final Layer2Information layer2Info = new Layer2Information(TEST_L2KEY, TEST_CLUSTER,
                 MacAddress.fromString(TEST_DEFAULT_BSSID));
         final ScanResultInfo scanResultInfo =
@@ -3899,12 +3899,6 @@ public abstract class IpClientIntegrationTestCommon {
         // not strictly necessary.
         setDhcpFeatures(true /* isRapidCommitEnabled */,
                 false /* isDhcpIpConflictDetectEnabled */);
-
-        if (isGratuitousArpNaRoamingEnabled) {
-            setFeatureEnabled(NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION, true);
-        } else {
-            setFeatureEnabled(NetworkStackUtils.IPCLIENT_GARP_NA_ROAMING_VERSION, false);
-        }
         startIpClientProvisioning(prov.build());
     }
 
@@ -3928,8 +3922,7 @@ public abstract class IpClientIntegrationTestCommon {
 
     @Test
     public void testGratuitousArpAndNaAfterRoaming() throws Exception {
-        startGratuitousArpAndNaAfterRoamingTest(true /* isGratuitousArpNaRoamingEnabled */,
-                true /* hasIpv4 */, true /* hasIpv6 */);
+        startGratuitousArpAndNaAfterRoamingTest(true /* hasIpv4 */, true /* hasIpv6 */);
         performDualStackProvisioning();
         forceLayer2Roaming();
 
@@ -3942,23 +3935,8 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    public void testGratuitousArpAndNaAfterRoaming_disableExpFlag() throws Exception {
-        startGratuitousArpAndNaAfterRoamingTest(false /* isGratuitousArpNaRoamingEnabled */,
-                true /* hasIpv4 */, true /* hasIpv6 */);
-        performDualStackProvisioning();
-        forceLayer2Roaming();
-
-        final List<ArpPacket> arpList = new ArrayList<>();
-        final List<NeighborAdvertisement> naList = new ArrayList<>();
-        waitForGratuitousArpAndNaPacket(arpList, naList);
-        assertEquals(2, naList.size()); // NAs sent due to RFC9131 implement, not from roam
-        assertEquals(0, arpList.size());
-    }
-
-    @Test
     public void testGratuitousArpAndNaAfterRoaming_IPv6OnlyNetwork() throws Exception {
-        startGratuitousArpAndNaAfterRoamingTest(true /* isGratuitousArpNaRoamingEnabled */,
-                false /* hasIpv4 */, true /* hasIpv6 */);
+        startGratuitousArpAndNaAfterRoamingTest(false /* hasIpv4 */, true /* hasIpv6 */);
         doIpv6OnlyProvisioning();
         forceLayer2Roaming();
 
@@ -3972,8 +3950,7 @@ public abstract class IpClientIntegrationTestCommon {
 
     @Test
     public void testGratuitousArpAndNaAfterRoaming_IPv4OnlyNetwork() throws Exception {
-        startGratuitousArpAndNaAfterRoamingTest(true /* isGratuitousArpNaRoamingEnabled */,
-                true /* hasIpv4 */, false /* hasIpv6 */);
+        startGratuitousArpAndNaAfterRoamingTest(true /* hasIpv4 */, false /* hasIpv6 */);
 
         // Start IPv4 provisioning and wait until entire provisioning completes.
         handleDhcpPackets(true /* isSuccessLease */, TEST_LEASE_DURATION_S,
