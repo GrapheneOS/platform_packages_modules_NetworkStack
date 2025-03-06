@@ -55,6 +55,13 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
     }
 
     @Override
+    public final int getBaseProgramSize() {
+        // When the APFv6+ generator is initialized, it always adds a 3-byte data jump
+        // instruction and a 4-byte exception instruction to the front of the program.
+        return 7;
+    }
+
+    @Override
     void updateExceptionBufferSize(int programSize) throws IllegalInstructionException {
         mInstructions.get(1).updateExceptionBufferSize(
                 mRamSize - ApfCounterTracker.Counter.totalSize() - programSize);

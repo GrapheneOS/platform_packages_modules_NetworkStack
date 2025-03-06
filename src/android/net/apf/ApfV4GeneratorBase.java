@@ -685,5 +685,10 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      * @throws IllegalInstructionException
      */
     public abstract Type addCountTrampoline() throws IllegalInstructionException;
+
+    /**
+     * Returns the base program size when the interpreter is initialized.
+     */
+    public abstract int getBaseProgramSize();
 }
 

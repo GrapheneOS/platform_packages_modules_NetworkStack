@@ -68,6 +68,11 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
     }
 
     @Override
+    public int getBaseProgramSize() {
+        return 0;
+    }
+
+    @Override
     void addR0ArithR1(Opcodes opcode) {
         append(new Instruction(opcode, Rbit1));  // APFv2/4: R0 op= R1
     }

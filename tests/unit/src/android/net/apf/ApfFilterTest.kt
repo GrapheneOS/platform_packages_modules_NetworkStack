@@ -111,6 +111,7 @@ import com.android.testutils.DevSdkIgnoreRunner
 import com.android.testutils.quitResources
 import com.android.testutils.visibleOnHandlerThread
 import com.android.testutils.waitForIdle
+import com.google.common.truth.Truth.assertThat
 import java.io.FileDescriptor
 import java.net.Inet4Address
 import java.net.Inet6Address
@@ -134,11 +135,14 @@ import org.mockito.Mockito
 import org.mockito.Mockito.clearInvocations
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.doReturn
+import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
 import org.mockito.MockitoAnnotations
 import org.mockito.invocation.InvocationOnMock
+
+open class FromU<Type>(val value: Type)
 
 /**
  * Test for APF filter.
@@ -338,11 +342,96 @@ class ApfFilterTest {
             0000000000003
         """.replace("\\s+".toRegex(), "").trim()
 
+    private val passthroughCastOffloadInfo by lazy {
+        FromU(
+            OffloadServiceInfo(
+                OffloadServiceInfo.Key(
+                    "gambit-3cb56c6253638b3641e3d289013cc0ae",
+                    "_googlecast._tcp"
+                ),
+                listOf(),
+                "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
+                null,
+                0,
+                OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
+            )
+        )
+    }
+
+    private val castOffloadInfo by lazy {
+        FromU(
+            OffloadServiceInfo(
+                OffloadServiceInfo.Key(
+                    "gambit-3cb56c6253638b3641e3d289013cc0ae",
+                    "_googlecast._tcp"
+                ),
+                listOf(),
+                "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
+                HexDump.hexStringToByteArray(castOffloadPayload),
+                1,
+                OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
+            )
+        )
+    }
+    private val tvRemoteOffloadInfo by lazy {
+        FromU(
+            OffloadServiceInfo(
+                OffloadServiceInfo.Key("gambit", "_androidtvremote2._tcp"),
+                listOf(),
+                "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
+                HexDump.hexStringToByteArray(tvRemoteOffloadPayload),
+                2,
+                OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
+            )
+        )
+    }
+    private val manySubtypeOffloadInfo by lazy {
+        FromU(
+            OffloadServiceInfo(
+                OffloadServiceInfo.Key("gambit", "_testsubtype._tcp"),
+                listOf("subtype1", "subtype2", "subtype3", "subtype4", "subtype5"),
+                "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
+                HexDump.hexStringToByteArray(castOffloadPayload),
+                3,
+                OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
+            )
+        )
+    }
+
+    private val airplayOffloadInfo by lazy {
+        FromU(
+            OffloadServiceInfo(
+                OffloadServiceInfo.Key("gambit", "_airplay._tcp"),
+                listOf(),
+                "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
+                HexDump.hexStringToByteArray(airplayOffloadPayload),
+                4,
+                OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
+            )
+        )
+    }
+
+    private val raopOffloadInfo by lazy {
+        FromU(
+            OffloadServiceInfo(
+                OffloadServiceInfo.Key("5855CA1AE288@gambit", "_raop._tcp"),
+                listOf(),
+                "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
+                HexDump.hexStringToByteArray(raopOffloadPayload),
+                4,
+                OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
+            )
+
+        )
+    }
+    private val counterTotalSize = ApfCounterTracker.Counter.totalSize()
+
     private val handlerThread by lazy {
         HandlerThread("$TAG handler thread").apply { start() }
     }
     private val handler by lazy { Handler(handlerThread.looper) }
-    private var writerSocket = FileDescriptor()
+    private lateinit var raReadSocket: FileDescriptor
+    private var raWriterSocket = FileDescriptor()
     private var mcastWriteSocket = FileDescriptor()
     private lateinit var apfTestHelpers: ApfTestHelpers
 
@@ -364,9 +453,9 @@ class ApfFilterTest {
             }
         }.`when`(dependencies).onApfFilterCreated(any())
         doReturn(SystemClock.elapsedRealtime()).`when`(dependencies).elapsedRealtime()
-        val readSocket = FileDescriptor()
-        Os.socketpair(AF_UNIX, SOCK_STREAM, 0, writerSocket, readSocket)
-        doReturn(readSocket).`when`(dependencies).createPacketReaderSocket(anyInt())
+        raReadSocket = FileDescriptor()
+        Os.socketpair(AF_UNIX, SOCK_STREAM, 0, raWriterSocket, raReadSocket)
+        doReturn(raReadSocket).`when`(dependencies).createPacketReaderSocket(anyInt())
         val mcastReadSocket = FileDescriptor()
         Os.socketpair(AF_UNIX, SOCK_STREAM, 0, mcastWriteSocket, mcastReadSocket)
         doReturn(mcastReadSocket)
@@ -398,7 +487,7 @@ class ApfFilterTest {
 
     @After
     fun tearDown() {
-        IoUtils.closeQuietly(writerSocket)
+        IoUtils.closeQuietly(raWriterSocket)
         IoUtils.closeQuietly(mcastWriteSocket)
         shutdownApfFilters()
         handler.waitForIdle(TIMEOUT_MS)
@@ -2401,7 +2490,7 @@ class ApfFilterTest {
             2a0079e12e003f010000000000000000
         """.replace("\\s+".toRegex(), "").trim()
         val ra1Bytes = HexDump.hexStringToByteArray(ra1)
-        Os.write(writerSocket, ra1Bytes, 0, ra1Bytes.size)
+        Os.write(raWriterSocket, ra1Bytes, 0, ra1Bytes.size)
 
         program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
 
@@ -3720,15 +3809,9 @@ class ApfFilterTest {
             captor.capture()
         )
         val offloadEngine = captor.value
-        val info = OffloadServiceInfo(
-            OffloadServiceInfo.Key("gambit", "_googlecast._tcp"),
-            listOf(),
-            "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
-            ByteArray(5) { 0x01 },
-            0,
-            OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
-        )
-        visibleOnHandlerThread(handler) { offloadEngine.onOffloadServiceUpdated(info) }
+        visibleOnHandlerThread(handler) {
+            offloadEngine.onOffloadServiceUpdated(castOffloadInfo.value)
+        }
 
         verify(apfController).installPacketFilter(any(), any())
 
@@ -3752,16 +3835,8 @@ class ApfFilterTest {
             captor.capture()
         )
         val offloadEngine = captor.value
-        val castOffloadInfo = OffloadServiceInfo(
-            OffloadServiceInfo.Key("gambit", "_googlecast._tcp"),
-            listOf(),
-            "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
-            HexDump.hexStringToByteArray(castOffloadPayload),
-            0,
-            OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
-        )
         visibleOnHandlerThread(handler) {
-            offloadEngine.onOffloadServiceUpdated(castOffloadInfo)
+            offloadEngine.onOffloadServiceUpdated(castOffloadInfo.value)
         }
         apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
         val corruptedOffloadInfo = OffloadServiceInfo(
@@ -3779,11 +3854,23 @@ class ApfFilterTest {
     }
 
     private fun getApfWithMdnsOffloadEnabled(
+        apfRam: Int = 4096,
         mcFilter: Boolean = true,
         v6Only: Boolean = false,
-        removeTvRemoteRecord: Boolean = false
+        addedOffloadInfos: List<FromU<OffloadServiceInfo>> = listOf(
+            castOffloadInfo,
+            tvRemoteOffloadInfo,
+            manySubtypeOffloadInfo,
+            manySubtypeOffloadInfo
+        ),
+        removedOffloadInfos: List<FromU<OffloadServiceInfo>> = listOf(),
+        raReaderSocket: FileDescriptor = raReadSocket
     ): Pair<ApfFilter, ByteArray> {
+        val localNsdManager = mock(NsdManager::class.java)
+        doReturn(localNsdManager).`when`(context).getSystemService(NsdManager::class.java)
+        doReturn(raReaderSocket).`when`(dependencies).createPacketReaderSocket(anyInt())
         val apfConfig = getDefaultConfig()
+        apfConfig.apfRamSize = apfRam
         apfConfig.handleMdnsOffload = true
         if (mcFilter) {
             apfConfig.multicastFilter = true
@@ -3791,7 +3878,7 @@ class ApfFilterTest {
         val apfFilter = getApfFilter(apfConfig)
         apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
         val captor = ArgumentCaptor.forClass(OffloadEngine::class.java)
-        verify(nsdManager).registerOffloadEngine(
+        verify(localNsdManager).registerOffloadEngine(
             eq(ifParams.name),
             anyLong(),
             anyLong(),
@@ -3810,44 +3897,26 @@ class ApfFilterTest {
         val ipv6LinkAddress = LinkAddress(hostLinkLocalIpv6Address, 64)
         lp.addLinkAddress(ipv6LinkAddress)
         apfFilter.setLinkProperties(lp)
-        apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
-        val castOffloadInfo = OffloadServiceInfo(
-            OffloadServiceInfo.Key("gambit-3cb56c6253638b3641e3d289013cc0ae", "_googlecast._tcp"),
-            listOf(),
-            "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
-            HexDump.hexStringToByteArray(castOffloadPayload),
-            0,
-            OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
-        )
-        val tvRemoteOffloadInfo = OffloadServiceInfo(
-            OffloadServiceInfo.Key("gambit", "_androidtvremote2._tcp"),
-            listOf(),
-            "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
-            HexDump.hexStringToByteArray(tvRemoteOffloadPayload),
-            0,
-            OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
-        )
-        val manySubtypeOffloadInfo = OffloadServiceInfo(
-            OffloadServiceInfo.Key("gambit", "_testsubtype._tcp"),
-            listOf("subtype1", "subtype2", "subtype3", "subtype4", "subtype5"),
-            "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
-            HexDump.hexStringToByteArray(castOffloadPayload),
-            0,
-            OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
-        )
+        var program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
 
-        visibleOnHandlerThread(handler) {
-            offloadEngine.onOffloadServiceUpdated(castOffloadInfo)
-            offloadEngine.onOffloadServiceUpdated(tvRemoteOffloadInfo)
-            if (removeTvRemoteRecord) {
-                offloadEngine.onOffloadServiceRemoved(tvRemoteOffloadInfo)
+        if (addedOffloadInfos.isNotEmpty()) {
+            visibleOnHandlerThread(handler) {
+                addedOffloadInfos.forEach { offloadEngine.onOffloadServiceUpdated(it.value) }
             }
-            offloadEngine.onOffloadServiceUpdated(manySubtypeOffloadInfo)
+            program = apfTestHelpers.consumeInstalledProgram(
+                apfController,
+                installCnt = addedOffloadInfos.size
+            )
         }
-        val program = apfTestHelpers.consumeInstalledProgram(
-            apfController,
-            installCnt = if (removeTvRemoteRecord) 4 else 3
-        )
+        if (removedOffloadInfos.isNotEmpty()) {
+            visibleOnHandlerThread(handler) {
+                removedOffloadInfos.forEach { offloadEngine.onOffloadServiceRemoved(it.value) }
+            }
+            program = apfTestHelpers.consumeInstalledProgram(
+                apfController,
+                installCnt = removedOffloadInfos.size
+            )
+        }
         return Pair(apfFilter, program)
     }
 
@@ -4179,7 +4248,9 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testIPv4MdnsQueryDropped() {
-        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(removeTvRemoteRecord = true)
+        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(
+            removedOffloadInfos = listOf(tvRemoteOffloadInfo)
+        )
         // Using scapy to generate packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
         // ip = IP(src="10.0.0.3", dst="224.0.0.251")
@@ -4615,7 +4686,9 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testIPv6MdnsQueryDropped() {
-        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(removeTvRemoteRecord = true)
+        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(
+            removedOffloadInfos = listOf(tvRemoteOffloadInfo)
+        )
         // Using scapy to generate packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:FB")
         // ip = IPv6(src="fe80::1", dst="ff02::fb")
@@ -4749,7 +4822,7 @@ class ApfFilterTest {
             a018000000000000101f434f06452fe
         """.replace("\\s+".toRegex(), "").trim()
         val raBytes = HexDump.hexStringToByteArray(ra)
-        Os.write(writerSocket, raBytes, 0, raBytes.size)
+        Os.write(raWriterSocket, raBytes, 0, raBytes.size)
 
         program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
         apfTestHelpers.verifyProgramRun(
@@ -4797,6 +4870,351 @@ class ApfFilterTest {
             apfFilter.mApfVersionSupported,
             program,
             HexDump.hexStringToByteArray(subTypePtrQuery),
+            PASSED_MDNS
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testMdnsOffloadRulePrioritizedOverRaFilter() {
+        val (apfFilterForEstimation, _) = getApfWithMdnsOffloadEnabled(
+            apfRam = 4096,
+            addedOffloadInfos = listOf(
+                castOffloadInfo,
+                tvRemoteOffloadInfo,
+                manySubtypeOffloadInfo
+            ),
+            raReaderSocket = FileDescriptor(),
+        )
+
+        val apfRam = apfFilterForEstimation.overEstimatedProgramSize + counterTotalSize
+
+        val (apfFilter, _) = getApfWithMdnsOffloadEnabled(
+            apfRam = apfRam,
+            addedOffloadInfos = listOf(
+                castOffloadInfo,
+                tvRemoteOffloadInfo,
+                manySubtypeOffloadInfo
+            ),
+        )
+        // ###[ Ethernet ]###
+        //  dst       = 33:33:00:00:00:01
+        //  src       = f4:34:f0:64:52:fe
+        //  type      = IPv6
+        // ###[ IPv6 ]###
+        //      version   = 6
+        //      tc        = 0
+        //      fl        = 68608
+        //      plen      = 80
+        //      nh        = ICMPv6
+        //      hlim      = 255
+        //      src       = fe80::1cb6:b5bc:353b:7cfd
+        //      dst       = ff02::1
+        // ###[ ICMPv6 Neighbor Discovery - Router Advertisement ]###
+        //         type      = Router Advertisement
+        //         code      = 0
+        //         cksum     = 0xfab
+        //         chlim     = 0
+        //         M         = 0
+        //         O         = 0
+        //         H         = 0
+        //         prf       = Medium (default)
+        //         P         = 0
+        //         res       = 0
+        //         routerlifetime= 0
+        //         reachabletime= 0
+        //         retranstimer= 0
+        // ###[ ICMPv6 Neighbor Discovery Option - Prefix Information ]###
+        //            type      = 3
+        //            len       = 4
+        //            prefixlen = 64
+        //            L         = 1
+        //            A         = 1
+        //            R         = 0
+        //            res1      = 0
+        //            validlifetime= 0x708
+        //            preferredlifetime= 0x708
+        //            res2      = 0x0
+        //            prefix    = fdee:d0c4:7546:5344::
+        // ###[ ICMPv6 Neighbor Discovery Option - Route Information Option ]###
+        //               type      = 24
+        //               len       = 2
+        //               plen      = 64
+        //               res1      = 0
+        //               prf       = Medium (default)
+        //               res2      = 0
+        //               rtlifetime= 1800
+        //               prefix    = fd0c:8be6:43ee::
+        // ###[ ICMPv6 Neighbor Discovery Option - Expanded Flags Option ]###
+        //                  type      = 26
+        //                  len       = 1
+        //                  res       = 140737488355328
+        // ###[ ICMPv6 Neighbor Discovery Option - Source Link-Layer Address ]###
+        //                     type      = 1
+        //                     len       = 1
+        //                     lladdr    = f4:34:f0:64:52:fe
+        val ra = """
+            333300000001f434f06452fe86dd60010c0000503afffe800000000000001cb6b5bc353b7cfdff0
+            2000000000000000000000000000186000fab000000000000000000000000030440c00000070800
+            00070800000000fdeed0c47546534400000000000000001802400000000708fd0c8be643ee00001
+            a018000000000000101f434f06452fe
+        """.replace("\\s+".toRegex(), "").trim()
+        val raBytes = HexDump.hexStringToByteArray(ra)
+        Os.write(raWriterSocket, raBytes, 0, raBytes.size)
+
+        val program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
+        assertThat(program.size).isLessThan(apfRam + 1)
+
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            raBytes,
+            PASSED_IPV6_ICMP
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testMdnsOffloadRulePrioritizationAllRulesOffloaded() {
+        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(
+            apfRam = 4096,
+            addedOffloadInfos = listOf(
+                castOffloadInfo,
+                tvRemoteOffloadInfo,
+                manySubtypeOffloadInfo
+            ),
+        )
+        assertThat(program.size).isLessThan(4097)
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="_googlecast._tcp.local", qtype="PTR"))
+        // pkt = eth/ip/udp/dns
+        val castIPv4MdnsPtrQueryForOffload = """
+            01005e0000fb0102030405060800450000440001000040118faa0a000003e00
+            000fb14e914e900309fa50000010000010000000000000b5f676f6f676c6563
+            617374045f746370056c6f63616c00000c0001
+        """.replace("\\s+".toRegex(), "").trim()
+
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(castIPv4MdnsPtrQueryForOffload),
+            DROPPED_MDNS_REPLIED
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="_androidtvremote2._tcp.local", qtype="PTR"))
+        // pkt = eth/ip/udp/dns
+        val tvRemoteIPv4MdnsPtrQueryForOffload = """
+            01005e0000fb01020304050608004500004a0001000040118fa40a000003e00
+            000fb14e914e900366966000001000001000000000000115f616e64726f6964
+            747672656d6f746532045f746370056c6f63616c00000c0001
+        """.replace("\\s+".toRegex(), "").trim()
+
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(tvRemoteIPv4MdnsPtrQueryForOffload),
+            DROPPED_MDNS_REPLIED
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="sub1._sub._testsubtype._tcp.local", qtype="PTR"))
+        // pkt = eth/ip/udp/dns
+        val subTypePtrQueryForPassthrough = """
+            01005e0000fb01020304050608004500004f0001000040118f9f0a000003e00
+            000fb14e914e9003b1b3f0000010000010000000000000473756231045f7375
+            620c5f7465737473756274797065045f746370056c6f63616c00000c0001
+        """.replace("\\s+".toRegex(), "").trim()
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(subTypePtrQueryForPassthrough),
+            PASSED_MDNS
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testMdnsOffloadRulePrioritizationSomeRulesFailOpened() {
+        val (apfFilterForEstimation, _) = getApfWithMdnsOffloadEnabled(
+            apfRam = 4096,
+            addedOffloadInfos = listOf(
+                castOffloadInfo,
+                tvRemoteOffloadInfo,
+                manySubtypeOffloadInfo
+            ),
+        )
+
+        val apfRam = apfFilterForEstimation.overEstimatedProgramSize + counterTotalSize - 1
+
+        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(
+            apfRam = apfRam,
+            addedOffloadInfos = listOf(
+                castOffloadInfo,
+                tvRemoteOffloadInfo,
+                manySubtypeOffloadInfo
+            ),
+        )
+        assertThat(program.size).isLessThan(apfRam + 1)
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="_googlecast._tcp.local", qtype="PTR"))
+        // pkt = eth/ip/udp/dns
+        val castIPv4MdnsPtrQueryForOffload = """
+            01005e0000fb0102030405060800450000440001000040118faa0a000003e00
+            000fb14e914e900309fa50000010000010000000000000b5f676f6f676c6563
+            617374045f746370056c6f63616c00000c0001
+        """.replace("\\s+".toRegex(), "").trim()
+
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(castIPv4MdnsPtrQueryForOffload),
+            DROPPED_MDNS_REPLIED
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="_androidtvremote2._tcp.local", qtype="PTR"))
+        // pkt = eth/ip/udp/dns
+        val tvRemoteIPv4MdnsPtrQueryForPassthrough = """
+            01005e0000fb01020304050608004500004a0001000040118fa40a000003e00
+            000fb14e914e900366966000001000001000000000000115f616e64726f6964
+            747672656d6f746532045f746370056c6f63616c00000c0001
+        """.replace("\\s+".toRegex(), "").trim()
+
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(tvRemoteIPv4MdnsPtrQueryForPassthrough),
+            PASSED_MDNS
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="sub1._sub._testsubtype._tcp.local", qtype="PTR"))
+        // pkt = eth/ip/udp/dns
+        val subTypePtrQueryForPassthrough = """
+            01005e0000fb01020304050608004500004f0001000040118f9f0a000003e00
+            000fb14e914e9003b1b3f0000010000010000000000000473756231045f7375
+            620c5f7465737473756274797065045f746370056c6f63616c00000c0001
+        """.replace("\\s+".toRegex(), "").trim()
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(subTypePtrQueryForPassthrough),
+            PASSED_MDNS
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testMdnsOffloadRulePrioritizationAllRulesFailOpened() {
+        val (apfFilterForEstimation, _) = getApfWithMdnsOffloadEnabled(
+            apfRam = 4096,
+            addedOffloadInfos = listOf(passthroughCastOffloadInfo),
+        )
+
+        val apfRam = apfFilterForEstimation.overEstimatedProgramSize + counterTotalSize
+        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(
+            apfRam = apfRam,
+            addedOffloadInfos = listOf(
+                castOffloadInfo,
+                tvRemoteOffloadInfo,
+                manySubtypeOffloadInfo
+            ),
+        )
+        assertThat(program.size).isLessThan(apfRam + 1)
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="_googlecast._tcp.local", qtype="PTR"))
+        // pkt = eth/ip/udp/dns
+        val castIPv4MdnsPtrQueryForPassthrough = """
+            01005e0000fb0102030405060800450000440001000040118faa0a000003e00
+            000fb14e914e900309fa50000010000010000000000000b5f676f6f676c6563
+            617374045f746370056c6f63616c00000c0001
+        """.replace("\\s+".toRegex(), "").trim()
+
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(castIPv4MdnsPtrQueryForPassthrough),
+            PASSED_MDNS
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="_androidtvremote2._tcp.local", qtype="PTR"))
+        // pkt = eth/ip/udp/dns
+        val tvRemoteIPv4MdnsPtrQueryForPassthrough = """
+            01005e0000fb01020304050608004500004a0001000040118fa40a000003e00
+            000fb14e914e900366966000001000001000000000000115f616e64726f6964
+            747672656d6f746532045f746370056c6f63616c00000c0001
+        """.replace("\\s+".toRegex(), "").trim()
+
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(tvRemoteIPv4MdnsPtrQueryForPassthrough),
+            PASSED_MDNS
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="sub1._sub._testsubtype._tcp.local", qtype="PTR"))
+        // pkt = eth/ip/udp/dns
+        val subTypePtrQueryForPassthrough = """
+            01005e0000fb01020304050608004500004f0001000040118f9f0a000003e00
+            000fb14e914e9003b1b3f0000010000010000000000000473756231045f7375
+            620c5f7465737473756274797065045f746370056c6f63616c00000c0001
+        """.replace("\\s+".toRegex(), "").trim()
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(subTypePtrQueryForPassthrough),
+            PASSED_MDNS
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="_airplay._tcp.local", qtype="PTR"))
+        // pkt = eth/ip/udp/dns
+        val airplayIPv4MdnsPtrQueryForPassthrough = """
+            01005e0000fb0102030405060800450000410001000040118fad0a000003e00
+            000fb14e914e9002d8203000001000001000000000000085f616972706c6179
+            045f746370056c6f63616c00000c0001
+        """.replace("\\s+".toRegex(), "").trim()
+
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(airplayIPv4MdnsPtrQueryForPassthrough),
             PASSED_MDNS
         )
     }
@@ -5057,46 +5475,11 @@ class ApfFilterTest {
         apfFilter.setLinkProperties(lp)
         apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
 
-        val castOffloadInfo = OffloadServiceInfo(
-            OffloadServiceInfo.Key("gambit-3cb56c6253638b3641e3d289013cc0ae", "_googlecast._tcp"),
-            listOf(),
-            "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
-            HexDump.hexStringToByteArray(castOffloadPayload),
-            0,
-            OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
-        )
-        val tvRemoteOffloadInfo = OffloadServiceInfo(
-            OffloadServiceInfo.Key("gambit", "_androidtvremote2._tcp"),
-            listOf(),
-            "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
-            HexDump.hexStringToByteArray(tvRemoteOffloadPayload),
-            0,
-            OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
-        )
-
-        val airplayOffloadInfo = OffloadServiceInfo(
-            OffloadServiceInfo.Key("gambit", "_airplay._tcp"),
-            listOf(),
-            "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
-            HexDump.hexStringToByteArray(airplayOffloadPayload),
-            0,
-            OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
-        )
-
-        val raopOffloadInfo = OffloadServiceInfo(
-            OffloadServiceInfo.Key("5855CA1AE288@gambit", "_raop._tcp"),
-            listOf(),
-            "Android_f47ac10b58cc4b88bc3f5e7a81e59872.local",
-            HexDump.hexStringToByteArray(raopOffloadPayload),
-            0,
-            OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
-        )
-
         visibleOnHandlerThread(handler) {
-            offloadEngine.onOffloadServiceUpdated(castOffloadInfo)
-            offloadEngine.onOffloadServiceUpdated(tvRemoteOffloadInfo)
-            offloadEngine.onOffloadServiceUpdated(airplayOffloadInfo)
-            offloadEngine.onOffloadServiceUpdated(raopOffloadInfo)
+            offloadEngine.onOffloadServiceUpdated(castOffloadInfo.value)
+            offloadEngine.onOffloadServiceUpdated(tvRemoteOffloadInfo.value)
+            offloadEngine.onOffloadServiceUpdated(airplayOffloadInfo.value)
+            offloadEngine.onOffloadServiceUpdated(raopOffloadInfo.value)
         }
 
         apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 4)
@@ -5109,7 +5492,7 @@ class ApfFilterTest {
         """.replace("\\s+".toRegex(), "").trim()
         val ra1Bytes = HexDump.hexStringToByteArray(ra1)
         val beforeNs = SystemClock.elapsedRealtimeNanos()
-        Os.write(writerSocket, ra1Bytes, 0, ra1Bytes.size)
+        Os.write(raWriterSocket, ra1Bytes, 0, ra1Bytes.size)
 
         val program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
         val afterNs = SystemClock.elapsedRealtimeNanos()
@@ -5198,7 +5581,7 @@ class ApfFilterTest {
         """.replace("\\s+".toRegex(), "").trim()
         val ra1Bytes = HexDump.hexStringToByteArray(ra1)
         val beforeNs = SystemClock.elapsedRealtimeNanos()
-        Os.write(writerSocket, ra1Bytes, 0, ra1Bytes.size)
+        Os.write(raWriterSocket, ra1Bytes, 0, ra1Bytes.size)
 
         val program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
         val afterNs = SystemClock.elapsedRealtimeNanos()
@@ -5252,7 +5635,7 @@ class ApfFilterTest {
             000000000000000
         """.replace("\\s+".toRegex(), "").trim()
         val ra1Bytes = HexDump.hexStringToByteArray(ra1)
-        Os.write(writerSocket, ra1Bytes, 0, ra1Bytes.size)
+        Os.write(raWriterSocket, ra1Bytes, 0, ra1Bytes.size)
 
         program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
         apfTestHelpers.verifyProgramRun(
@@ -5276,7 +5659,7 @@ class ApfFilterTest {
             000000000000000
         """.replace("\\s+".toRegex(), "").trim()
         val ra2Bytes = HexDump.hexStringToByteArray(ra2)
-        Os.write(writerSocket, ra2Bytes, 0, ra2Bytes.size)
+        Os.write(raWriterSocket, ra2Bytes, 0, ra2Bytes.size)
 
         program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
         apfTestHelpers.verifyProgramRun(
