@@ -1886,6 +1886,24 @@ class ApfGeneratorTest {
         assertEquals(0, gen.baseProgramSize)
     }
 
+    @Test
+    fun testGetApfV6DefaultPacketHandlingSizeOverEstimate() {
+        val gen = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
+        gen.addDefaultPacketHandling()
+        val size = gen.programLengthOverEstimate() - gen.baseProgramSize
+        assertEquals(2, size)
+        assertEquals(size, gen.defaultPacketHandlingSizeOverEstimate)
+    }
+
+    @Test
+    fun testGetApfV4DefaultPacketHandlingSizeOverEstimate() {
+        val gen = ApfV4Generator(apfInterpreterVersion, ramSize, clampSize)
+        gen.addDefaultPacketHandling()
+        val size = gen.programLengthOverEstimate() - gen.baseProgramSize
+        assertEquals(25, size)
+        assertEquals(size, gen.defaultPacketHandlingSizeOverEstimate)
+    }
+
     private fun encodeInstruction(opcode: Int, immLength: Int, register: Int): Byte {
         val immLengthEncoding = if (immLength == 4) 3 else immLength
         return opcode.shl(3).or(immLengthEncoding.shl(1)).or(register).toByte()

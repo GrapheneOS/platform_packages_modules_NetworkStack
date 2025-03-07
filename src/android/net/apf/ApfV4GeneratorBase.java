@@ -706,5 +706,10 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
         addCountAndPass(PASSED_IPV6_ICMP);
         return addCountTrampoline();
     }
+
+    /**
+     * Returns an overestimate of the size of the default packet handling logic.
+     */
+    public abstract int getDefaultPacketHandlingSizeOverEstimate();
 }
 

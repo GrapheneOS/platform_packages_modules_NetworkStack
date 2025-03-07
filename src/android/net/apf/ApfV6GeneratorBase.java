@@ -661,4 +661,10 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
     public final Type addCountTrampoline() {
         return self();
     }
+
+    @Override
+    public final int getDefaultPacketHandlingSizeOverEstimate() {
+        // addCountAndPass(PASSED_IPV6_ICMP); -> 2 bytes
+        return 2;
+    }
 }

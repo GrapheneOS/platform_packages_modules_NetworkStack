@@ -372,6 +372,22 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
                 .addJump(DROP_LABEL);
     }
 
+    @Override
+    public int getDefaultPacketHandlingSizeOverEstimate() {
+        // addCountAndPass(PASSED_IPV6_ICMP); -> 7 bytes
+        // defineLabel(mCountAndPassLabel)
+        // .addLoadData(R0, 0) ->  1 bytes
+        // .addAdd(1) -> 2 bytes
+        // .addStoreData(R0, 0) -> 1 bytes
+        // .addJump(PASS_LABEL) -> 5 bytes
+        // .defineLabel(mCountAndDropLabel)
+        // .addLoadData(R0, 0) -> 1 bytes
+        // .addAdd(1) -> 2 bytes
+        // .addStoreData(R0, 0) -> 1 bytes
+        // .addJump(DROP_LABEL); -> 5 bytes
+        return 25;
+    }
+
     /**
      * This function is no-op in APFv4
      */
