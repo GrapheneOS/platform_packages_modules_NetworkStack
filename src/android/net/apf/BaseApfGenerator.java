@@ -21,12 +21,12 @@ import static android.net.apf.BaseApfGenerator.Rbit.Rbit1;
 import static android.net.apf.BaseApfGenerator.Register.R0;
 
 import android.annotation.NonNull;
+import android.util.SparseArray;
 
 import com.android.net.module.util.HexDump;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 
@@ -456,7 +456,7 @@ public abstract class BaseApfGenerator {
         }
 
         Instruction setLabel(short label) throws IllegalInstructionException {
-            if (mLabels.containsKey(label)) {
+            if (mLabels.get(label) != null) {
                 throw new IllegalInstructionException("duplicate label " + label);
             }
             if (mOpcode != Opcodes.LABEL) {
@@ -988,7 +988,7 @@ public abstract class BaseApfGenerator {
 
 
     final ArrayList<Instruction> mInstructions = new ArrayList<Instruction>();
-    private final HashMap<Short, Instruction> mLabels = new HashMap<>();
+    private final SparseArray<Instruction> mLabels = new SparseArray<>();
     public final int mVersion;
     public final int mRamSize;
     public final int mClampSize;
