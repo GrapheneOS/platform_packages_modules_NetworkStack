@@ -34,6 +34,7 @@ java_defaults {
         "net-tests-utils",
         "net-utils-framework-common",
         "testables",
+        "truth",
     ],
     libs: [
         "android.test.runner.stubs",

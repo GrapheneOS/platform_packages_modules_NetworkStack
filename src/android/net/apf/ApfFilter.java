@@ -423,6 +423,12 @@ public class ApfFilter {
     private final MulticastReportMonitor mMulticastReportMonitor;
     private final ApfMdnsOffloadEngine mApfMdnsOffloadEngine;
     private final List<MdnsOffloadRule> mOffloadRules = new ArrayList<>();
+    // The number of mDNS rules requiring APF to transmit a reply and drop the query packet. A
+    // value of -1 means all mDNS query packets should be passed; no mDNS query packets will trigger
+    // the transmit and reply logic.
+    private int mNumOfMdnsRuleToOffload = -1;
+
+    private int mOverEstimatedProgramSize = 0;
 
     private static boolean isDeviceIdleModeChangedAction(Intent intent) {
         return ACTION_DEVICE_IDLE_MODE_CHANGED.equals(intent.getAction());
@@ -2033,8 +2039,12 @@ public class ApfFilter {
         // (APFv6+ specific logic)
         // if it's mDNS:
         //   if it's a query:
-        //     if the query matches one of the offload rules:
+        //     if mNumOfMdnsRuleToOffload == -1:
+        //       pass
+        //     if the query matches one of the offload rules from idx [0, mNumOfMdnsRuleToOffload):
         //       transmit mDNS reply and drop
+        //     else if query matches one of the rest of the offload rules:
+        //       pass
         //     else if filtering multicast (i.e. multicast lock not held):
         //       drop
         //     else
@@ -2571,8 +2581,12 @@ public class ApfFilter {
         // (APFv6+ specific logic)
         // if it's mDNS:
         //   if it's a query:
-        //     if the query matches one of the offload rules:
+        //     if mNumOfMdnsRuleToOffload == -1:
+        //       pass
+        //     if the query matches one of the offload rules from idx [0, mNumOfMdnsRuleToOffload):
         //       transmit mDNS reply and drop
+        //     else if query matches one of the rest of the offload rules:
+        //       pass
         //     else if filtering multicast (i.e. multicast lock not held):
         //       drop
         //     else
@@ -3380,15 +3394,16 @@ public class ApfFilter {
      * @param labelCheckMdnsQueryPayload the label to jump to for checking the mDNS query payload
      */
     private void generateMdnsQueryOffload(ApfV6GeneratorBase<?> gen,
-            short labelCheckMdnsQueryPayload)
+            short labelCheckMdnsQueryPayload, int numOfMdnsRuleToOffload)
             throws IllegalInstructionException {
         // The mDNS payload check logic is terminal; the program will always result in either
         // PASS or DROP.
         gen.defineLabel(labelCheckMdnsQueryPayload);
-        // TODO: Implement failover logic for insufficient APF RAM to offload all records. When
-        //  APF RAM is not enough, rules with lower priority should be transitioned to passthrough
-        //  mode (e.g., if a QNAME matches, the packet should be passed). If RAM remains
-        //  insufficient even with all rules in passthrough mode, the mDNS filter should fail open.
+
+        if (numOfMdnsRuleToOffload == -1) {
+            gen.addCountAndPass(PASSED_MDNS);
+            return;
+        }
 
         // Set R0 to the offset of the beginning of the UDP payload (the DNS header)
         gen.addSwap();
@@ -3400,7 +3415,8 @@ public class ApfFilter {
         final byte[] mdns6EthDstToFlowLabel = createMdns6PktFromEthDstToIPv6FlowLabel(enableMdns6);
         final byte[] mdns6NextHdrToUdpDport = createMdns6PktFromIPv6NextHdrToUdpDport(enableMdns6);
 
-        for (MdnsOffloadRule rule : mOffloadRules) {
+        for (int i = 0; i < mOffloadRules.size(); i++) {
+            final MdnsOffloadRule rule = mOffloadRules.get(i);
             final short ruleNotMatch = gen.getUniqueLabel();
             final short ruleMatch = gen.getUniqueLabel();
             final short offloadIPv6Mdns = gen.getUniqueLabel();
@@ -3418,7 +3434,9 @@ public class ApfFilter {
             gen.defineLabel(ruleMatch);
 
             // If there is no offload payload, pass the packet to let NsdService handle it.
-            if (rule.mOffloadPayload == null) {
+            // If there isn't enough space to offload all rules, packets should be processed
+            // by iterating through the rules, starting with the lowest priority.
+            if (rule.mOffloadPayload == null || i >= numOfMdnsRuleToOffload) {
                 gen.addCountAndPass(PASSED_MDNS);
             } else {
                 if (enableMdns4 && enableMdns6) {
@@ -3686,6 +3704,20 @@ public class ApfFilter {
         }
     }
 
+    @VisibleForTesting
+    public int getOverEstimatedProgramSize() {
+        return mOverEstimatedProgramSize;
+    }
+
+    private int calcMdnsOffloadProgramSizeOverEstimate(int numOfMdnsRuleToOffload)
+            throws IllegalInstructionException {
+        ApfV6GeneratorBase<?> gen = (ApfV6GeneratorBase<?>) createApfGenerator();
+        short tmpLabelCheckMdnsQueryPayload = gen.getUniqueLabel();
+        generateMdnsQueryOffload(gen, tmpLabelCheckMdnsQueryPayload,
+                numOfMdnsRuleToOffload);
+        return gen.programLengthOverEstimate() - gen.getBaseProgramSize();
+    }
+
     /**
      * Generate and install a new filter program.
      */
@@ -3705,8 +3737,7 @@ public class ApfFilter {
         mNumProgramUpdates++;
 
         try {
-            // Step 1: Determine how many RA filters we can fit in the program.
-
+            // Step 1: Determine how many RA filters/mDNS offloads we can fit in the program.
             ApfV4GeneratorBase<?> gen = createApfGenerator();
             short labelCheckMdnsQueryPayload = gen.getUniqueLabel();
 
@@ -3716,17 +3747,59 @@ public class ApfFilter {
             // include its length when estimating the total.
             emitDefaultPacketHandling(gen);
 
-            if (enableMdns4Offload() || enableMdns6Offload()) {
-                generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload);
-            }
-
-            // Can't fit the program even without any RA filters?
+            // Can't fit the program even without any RA filters/Mdns offloads?
             if (gen.programLengthOverEstimate() > mMaximumApfProgramSize) {
                 Log.e(TAG, "Program exceeds maximum size " + mMaximumApfProgramSize);
                 sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
                 installPacketFilter(new byte[mMaximumApfProgramSize],
                         getApfConfigMessage() + " (clear memory, reason: program too large)");
                 return;
+            }
+
+            // We attempt to fit the mDNS offload rules into the program before fitting RAs. The
+            // strategy is as follows:
+            // 1. If sufficient memory is available, offload all rules.
+            // 2. If memory is insufficient, switch low-priority rules to passthrough mode.
+            // 3. If memory remains insufficient after all rules are switched to passthrough
+            // mode, fail open to pass all mDNS packets.
+            //
+            // We prioritize mDNS offload over RA filters because:
+            // 1. We plan to move away from the multicast lock API, making mDNS offload critical
+            // for the application's proper function. Without it, app developers would likely
+            // still use the multicast lock, which would wake the device for almost all
+            // multicast traffic, leading to serious power problems.
+            // 2. For devices like TVs, reliable mDNS offload is key to meeting EU power regulation
+            // requirement. These devices are usually on home networks with very chatty mDNS
+            // traffic.
+            if (enableMdns4Offload() || enableMdns6Offload()) {
+                final int remainSize = mMaximumApfProgramSize - gen.programLengthOverEstimate();
+                mNumOfMdnsRuleToOffload = mOffloadRules.size();
+                for (; mNumOfMdnsRuleToOffload >= -1; --mNumOfMdnsRuleToOffload) {
+                    int programSize = calcMdnsOffloadProgramSizeOverEstimate(
+                            mNumOfMdnsRuleToOffload);
+                    if (programSize <= remainSize) {
+                        break;
+                    }
+                }
+
+                // When the size of offload rules is non-zero, at bare minimum, the
+                // program should be pass the mDNS packets. Otherwise, the application use case will
+                // be broken after we migrate away from multicast lock.
+                // If the remaining size is insufficient for mDNS fail-open, we should fail-open
+                // for the entire program.
+                if (mNumOfMdnsRuleToOffload < -1) {
+                    Log.e(TAG, "Program exceeds maximum size (unable to fail-open for mDNS)  "
+                            + mMaximumApfProgramSize);
+                    sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
+                    installPacketFilter(new byte[mMaximumApfProgramSize], getApfConfigMessage()
+                            + " (clear memory, reason: unable to fail-open for mDNS)");
+                    return;
+                }
+
+                generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload,
+                        mNumOfMdnsRuleToOffload);
+            } else {
+                mNumOfMdnsRuleToOffload = -1;
             }
 
             for (Ra ra : mRas) {
@@ -3753,8 +3826,10 @@ public class ApfFilter {
             }
             emitDefaultPacketHandling(gen);
             if (enableMdns4Offload() || enableMdns6Offload()) {
-                generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload);
+                generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload,
+                        mNumOfMdnsRuleToOffload);
             }
+            mOverEstimatedProgramSize = gen.programLengthOverEstimate();
             program = gen.generate();
         } catch (IllegalInstructionException | IllegalStateException | IllegalArgumentException e) {
             Log.wtf(TAG, "Failed to generate APF program.", e);
@@ -4287,10 +4362,19 @@ public class ApfFilter {
         pw.println();
         pw.println("Mdns filters:");
         pw.increaseIndent();
-        for (MdnsOffloadRule rule : mOffloadRules) {
-            pw.println(
-                    String.format("offloaded service: %s, payloadSize: %d", rule.mFullServiceName,
+        if (mNumOfMdnsRuleToOffload == -1) {
+            pw.println("pass all mDNS packet");
+        } else {
+            for (int i = 0; i < mOffloadRules.size(); ++i) {
+                final MdnsOffloadRule rule = mOffloadRules.get(i);
+                if (i >= mNumOfMdnsRuleToOffload) {
+                    pw.println(String.format("passthrough service: %s", rule.mFullServiceName));
+                } else {
+                    pw.println(String.format("offload service: %s, payloadSize: %d",
+                            rule.mFullServiceName,
                             rule.mOffloadPayload == null ? 0 : rule.mOffloadPayload.length));
+                }
+            }
         }
         pw.decreaseIndent();
         pw.println();
