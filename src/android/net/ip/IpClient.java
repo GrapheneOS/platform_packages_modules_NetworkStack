@@ -195,6 +195,7 @@ import com.android.networkstack.apishim.common.NetworkInformationShim;
 import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.metrics.IpProvisioningMetrics;
 import com.android.networkstack.metrics.NetworkQuirkMetrics;
+import com.android.networkstack.metrics.NetworkStackStatsLog;
 import com.android.networkstack.packets.NeighborAdvertisement;
 import com.android.networkstack.packets.NeighborSolicitation;
 import com.android.networkstack.util.NetworkStackUtils;
@@ -395,6 +396,10 @@ public class IpClient extends StateMachine {
          */
         public void onProvisioningSuccess(LinkProperties newLp) {
             log("onProvisioningSuccess({" + newLp + "})");
+            // TODO:The following code is only for metrics testing and should be removed after
+            //  testing complete.
+            NetworkStackStatsLog.write(NetworkStackStatsLog.CORE_NETWORKING_TERRIBLE_ERROR_OCCURRED,
+                    NetworkStackStatsLog.CORE_NETWORKING_TERRIBLE_ERROR_OCCURRED__ERROR_TYPE__TYPE_UNKNOWN);
             try {
                 mCallback.onProvisioningSuccess(mShim.makeSensitiveFieldsParcelingCopy(newLp));
             } catch (RemoteException e) {
