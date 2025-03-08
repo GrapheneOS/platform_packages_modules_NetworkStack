@@ -53,179 +53,157 @@ public abstract class ApfV61GeneratorBase<Type extends ApfV61GeneratorBase<Type>
     }
 
     @Override
-    public final Type addCountAndDropIfR0NotEquals(long val, ApfCounterTracker.Counter cnt)
-            throws IllegalInstructionException {
-        final short tgt = getUniqueLabel();
-        return addJumpIfR0Equals(val, tgt).addCountAndDrop(cnt).defineLabel(tgt);
+    public final Type addCountAndDropIfR0NotEquals(long val, ApfCounterTracker.Counter cnt) {
+        checkDropCounterRange(cnt);
+        return addJumpIfR0NotEquals(val, cnt.getJumpDropLabel());
     }
 
     @Override
-    public final Type addCountAndPassIfR0NotEquals(long val, ApfCounterTracker.Counter cnt)
-            throws IllegalInstructionException {
-        final short tgt = getUniqueLabel();
-        return addJumpIfR0Equals(val, tgt).addCountAndPass(cnt).defineLabel(tgt);
+    public final Type addCountAndPassIfR0NotEquals(long val, ApfCounterTracker.Counter cnt) {
+        checkPassCounterRange(cnt);
+        return addJumpIfR0NotEquals(val, cnt.getJumpPassLabel());
     }
 
     @Override
-    public Type addCountAndDropIfR0AnyBitsSet(long val, ApfCounterTracker.Counter cnt)
-            throws IllegalInstructionException {
-        final short countAndDropLabel = getUniqueLabel();
-        final short skipLabel = getUniqueLabel();
-        return addJumpIfR0AnyBitsSet(val, countAndDropLabel)
-                .addJump(skipLabel)
-                .defineLabel(countAndDropLabel)
-                .addCountAndDrop(cnt)
-                .defineLabel(skipLabel);
+    public Type addCountAndDropIfR0AnyBitsSet(long val, ApfCounterTracker.Counter cnt) {
+        checkDropCounterRange(cnt);
+        return addJumpIfR0AnyBitsSet(val, cnt.getJumpDropLabel());
     }
 
     @Override
-    public Type addCountAndPassIfR0AnyBitsSet(long val, ApfCounterTracker.Counter cnt)
-            throws IllegalInstructionException {
-        final short countAndPassLabel = getUniqueLabel();
-        final short skipLabel = getUniqueLabel();
-        return addJumpIfR0AnyBitsSet(val, countAndPassLabel)
-                .addJump(skipLabel)
-                .defineLabel(countAndPassLabel)
-                .addCountAndPass(cnt)
-                .defineLabel(skipLabel);
+    public Type addCountAndPassIfR0AnyBitsSet(long val, ApfCounterTracker.Counter cnt) {
+        checkPassCounterRange(cnt);
+        return addJumpIfR0AnyBitsSet(val, cnt.getJumpPassLabel());
     }
 
     @Override
-    public final Type addCountAndDropIfR0LessThan(long val, ApfCounterTracker.Counter cnt)
-            throws IllegalInstructionException {
+    public final Type addCountAndDropIfR0LessThan(long val, ApfCounterTracker.Counter cnt) {
         if (val <= 0) {
             throw new IllegalArgumentException("val must > 0, current val: " + val);
         }
-        final short tgt = getUniqueLabel();
-        return addJumpIfR0GreaterThan(val - 1, tgt).addCountAndDrop(cnt).defineLabel(tgt);
+        checkDropCounterRange(cnt);
+        return addJumpIfR0LessThan(val, cnt.getJumpDropLabel());
     }
 
     @Override
-    public final Type addCountAndPassIfR0LessThan(long val, ApfCounterTracker.Counter cnt)
-            throws IllegalInstructionException {
+    public final Type addCountAndPassIfR0LessThan(long val, ApfCounterTracker.Counter cnt) {
         if (val <= 0) {
             throw new IllegalArgumentException("val must > 0, current val: " + val);
         }
-        final short tgt = getUniqueLabel();
-        return addJumpIfR0GreaterThan(val - 1, tgt).addCountAndPass(cnt).defineLabel(tgt);
+        checkPassCounterRange(cnt);
+        return addJumpIfR0LessThan(val, cnt.getJumpPassLabel());
     }
 
     @Override
-    public Type addCountAndDropIfR0GreaterThan(long val, ApfCounterTracker.Counter cnt)
-            throws IllegalInstructionException {
+    public Type addCountAndDropIfR0GreaterThan(long val, ApfCounterTracker.Counter cnt) {
         if (val < 0 || val >= 4294967295L) {
             throw new IllegalArgumentException("val must >= 0 and < 2^32-1, current val: " + val);
         }
-        final short tgt = getUniqueLabel();
-        return addJumpIfR0LessThan(val + 1, tgt).addCountAndDrop(cnt).defineLabel(tgt);
+        checkDropCounterRange(cnt);
+        return addJumpIfR0GreaterThan(val, cnt.getJumpDropLabel());
     }
 
     @Override
-    public Type addCountAndPassIfR0GreaterThan(long val, ApfCounterTracker.Counter cnt)
-            throws IllegalInstructionException {
+    public Type addCountAndPassIfR0GreaterThan(long val, ApfCounterTracker.Counter cnt) {
         if (val < 0 || val >= 4294967295L) {
             throw new IllegalArgumentException("val must >= 0 and < 2^32-1, current val: " + val);
         }
-        final short tgt = getUniqueLabel();
-        return addJumpIfR0LessThan(val + 1, tgt).addCountAndPass(cnt).defineLabel(tgt);
+        checkPassCounterRange(cnt);
+        return addJumpIfR0GreaterThan(val, cnt.getJumpPassLabel());
     }
 
     @Override
     public final Type addCountAndDropIfBytesAtR0NotEqual(byte[] bytes,
-            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
-        final short tgt = getUniqueLabel();
-        return addJumpIfBytesAtR0Equal(bytes, tgt).addCountAndDrop(cnt).defineLabel(tgt);
+            ApfCounterTracker.Counter cnt) {
+        checkDropCounterRange(cnt);
+        return addJumpIfBytesAtR0NotEqual(bytes, cnt.getJumpDropLabel());
     }
 
     @Override
     public final Type addCountAndPassIfBytesAtR0NotEqual(byte[] bytes,
-            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
-        final short tgt = getUniqueLabel();
-        return addJumpIfBytesAtR0Equal(bytes, tgt).addCountAndPass(cnt).defineLabel(tgt);
+            ApfCounterTracker.Counter cnt) {
+        checkPassCounterRange(cnt);
+        return addJumpIfBytesAtR0NotEqual(bytes, cnt.getJumpPassLabel());
     }
 
     @Override
     public Type addCountAndPassIfR0IsOneOf(@NonNull Set<Long> values,
-            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+            ApfCounterTracker.Counter cnt) {
         if (values.isEmpty()) {
             throw new IllegalArgumentException("values cannot be empty");
         }
         if (values.size() == 1) {
             return addCountAndPassIfR0Equals(values.iterator().next(), cnt);
         }
-        final short tgt = getUniqueLabel();
-        return addJumpIfNoneOf(R0, values, tgt).addCountAndPass(cnt).defineLabel(tgt);
+        checkPassCounterRange(cnt);
+        return addJumpIfOneOf(R0, values, cnt.getJumpPassLabel());
     }
 
     @Override
     public Type addCountAndDropIfR0IsOneOf(@NonNull Set<Long> values,
-            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+            ApfCounterTracker.Counter cnt) {
         if (values.isEmpty()) {
             throw new IllegalArgumentException("values cannot be empty");
         }
         if (values.size() == 1) {
             return addCountAndDropIfR0Equals(values.iterator().next(), cnt);
         }
-        final short tgt = getUniqueLabel();
-        return addJumpIfNoneOf(R0, values, tgt).addCountAndDrop(cnt).defineLabel(tgt);
+        checkDropCounterRange(cnt);
+        return addJumpIfOneOf(R0, values, cnt.getJumpDropLabel());
     }
 
     @Override
     public Type addCountAndPassIfR0IsNoneOf(@NonNull Set<Long> values,
-            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+            ApfCounterTracker.Counter cnt) {
         if (values.isEmpty()) {
             throw new IllegalArgumentException("values cannot be empty");
         }
         if (values.size() == 1) {
             return addCountAndPassIfR0NotEquals(values.iterator().next(), cnt);
         }
-        final short tgt = getUniqueLabel();
-        return addJumpIfOneOf(R0, values, tgt).addCountAndPass(cnt).defineLabel(tgt);
+        checkPassCounterRange(cnt);
+        return addJumpIfNoneOf(R0, values, cnt.getJumpPassLabel());
     }
 
     @Override
     public Type addCountAndDropIfBytesAtR0EqualsAnyOf(@NonNull List<byte[]> bytesList,
-            ApfCounterTracker.Counter cnt)
-            throws IllegalInstructionException {
-        final short tgt = getUniqueLabel();
-        return addJumpIfBytesAtR0EqualNoneOf(bytesList, tgt).addCountAndDrop(cnt).defineLabel(tgt);
+            ApfCounterTracker.Counter cnt) {
+        checkDropCounterRange(cnt);
+        return addJumpIfBytesAtR0EqualsAnyOf(bytesList, cnt.getJumpDropLabel());
     }
 
     @Override
     public Type addCountAndPassIfBytesAtR0EqualsAnyOf(@NonNull List<byte[]> bytesList,
-            ApfCounterTracker.Counter cnt)
-            throws IllegalInstructionException {
-        final short tgt = getUniqueLabel();
-        return addJumpIfBytesAtR0EqualNoneOf(bytesList, tgt).addCountAndPass(cnt).defineLabel(tgt);
+            ApfCounterTracker.Counter cnt) {
+        checkPassCounterRange(cnt);
+        return addJumpIfBytesAtR0EqualsAnyOf(bytesList, cnt.getJumpPassLabel());
     }
 
     @Override
     public Type addCountAndDropIfBytesAtR0EqualsNoneOf(@NonNull List<byte[]> bytesList,
-            ApfCounterTracker.Counter cnt)
-            throws IllegalInstructionException {
-        final short tgt = getUniqueLabel();
-        return addJumpIfBytesAtR0EqualsAnyOf(bytesList, tgt).addCountAndDrop(cnt).defineLabel(tgt);
+            ApfCounterTracker.Counter cnt) {
+        checkDropCounterRange(cnt);
+        return addJumpIfBytesAtR0EqualNoneOf(bytesList, cnt.getJumpDropLabel());
     }
 
     @Override
     public Type addCountAndPassIfBytesAtR0EqualsNoneOf(@NonNull List<byte[]> bytesList,
-            ApfCounterTracker.Counter cnt)
-            throws IllegalInstructionException {
-        final short tgt = getUniqueLabel();
-        return addJumpIfBytesAtR0EqualsAnyOf(bytesList, tgt).addCountAndPass(cnt).defineLabel(tgt);
+            ApfCounterTracker.Counter cnt) {
+        checkPassCounterRange(cnt);
+        return addJumpIfBytesAtR0EqualNoneOf(bytesList, cnt.getJumpPassLabel());
     }
 
     @Override
     public Type addCountAndDropIfR0IsNoneOf(@NonNull Set<Long> values,
-            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+            ApfCounterTracker.Counter cnt) {
         if (values.isEmpty()) {
             throw new IllegalArgumentException("values cannot be empty");
         }
         if (values.size() == 1) {
             return addCountAndDropIfR0NotEquals(values.iterator().next(), cnt);
         }
-        final short tgt = getUniqueLabel();
-        return addJumpIfOneOf(R0, values, tgt).addCountAndDrop(cnt).defineLabel(tgt);
+        checkDropCounterRange(cnt);
+        return addJumpIfNoneOf(R0, values, cnt.getJumpDropLabel());
     }
 
     @Override
