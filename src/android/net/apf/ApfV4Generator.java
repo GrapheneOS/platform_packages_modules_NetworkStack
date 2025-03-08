@@ -68,6 +68,11 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
     }
 
     @Override
+    public int getBaseProgramSize() {
+        return 0;
+    }
+
+    @Override
     void addR0ArithR1(Opcodes opcode) {
         append(new Instruction(opcode, Rbit1));  // APFv2/4: R0 op= R1
     }
@@ -365,6 +370,22 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
                 .addAdd(1)           // R0++
                 .addStoreData(R0, 0) // *(R1 + 0) = R0
                 .addJump(DROP_LABEL);
+    }
+
+    @Override
+    public int getDefaultPacketHandlingSizeOverEstimate() {
+        // addCountAndPass(PASSED_IPV6_ICMP); -> 7 bytes
+        // defineLabel(mCountAndPassLabel)
+        // .addLoadData(R0, 0) ->  1 bytes
+        // .addAdd(1) -> 2 bytes
+        // .addStoreData(R0, 0) -> 1 bytes
+        // .addJump(PASS_LABEL) -> 5 bytes
+        // .defineLabel(mCountAndDropLabel)
+        // .addLoadData(R0, 0) -> 1 bytes
+        // .addAdd(1) -> 2 bytes
+        // .addStoreData(R0, 0) -> 1 bytes
+        // .addJump(DROP_LABEL); -> 5 bytes
+        return 25;
     }
 
     /**

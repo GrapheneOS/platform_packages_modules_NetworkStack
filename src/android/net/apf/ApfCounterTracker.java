@@ -110,7 +110,7 @@ public class ApfCounterTracker {
          * a given counter.
          */
         public int offset() {
-            return -this.ordinal() * 4;  // Currently, all counters are 32bit long.
+            return -this.value() * 4;  // Currently, all counters are 32bit long.
         }
 
         /**
@@ -139,6 +139,22 @@ public class ApfCounterTracker {
                 }
             }
             return RESERVED_OOB;
+        }
+
+        /**
+         * Return the label such that if we jump to it, the counter will be increased by 1 and
+         * the packet will be passed.
+         */
+        public short getJumpPassLabel() {
+            return (short) (2 * this.value());
+        }
+
+        /**
+         * Return the label such that if we jump to it, the counter will be increased by 1 and
+         * the packet will be dropped.
+         */
+        public short getJumpDropLabel() {
+            return (short) (2 * this.value() + 1);
         }
     }
 
