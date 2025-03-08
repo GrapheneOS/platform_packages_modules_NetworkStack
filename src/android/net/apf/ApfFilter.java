@@ -3629,19 +3629,6 @@ public class ApfFilter {
         generateIPv6Filter(gen, labelCheckMdnsQueryPayload);
     }
 
-    /**
-     * Append default packet handling and packet counting to the APF program.
-     */
-    private void emitDefaultPacketHandling(ApfV4GeneratorBase<?> gen)
-            throws IllegalInstructionException {
-        // Execution will reach here if none of the filters match, which will pass the packet to
-        // the application processor.
-        gen.addCountAndPass(PASSED_IPV6_ICMP);
-
-        // TODO: merge the addCountTrampoline() into generate() method
-        gen.addCountTrampoline();
-    }
-
     private String getApfConfigMessage() {
         final StringBuilder sb = new StringBuilder();
         sb.append("{ ");
@@ -3745,7 +3732,7 @@ public class ApfFilter {
 
             // The default packet handling normally goes after the RA filters, but add it early to
             // include its length when estimating the total.
-            emitDefaultPacketHandling(gen);
+            gen.addDefaultPacketHandling();
 
             // Can't fit the program even without any RA filters/Mdns offloads?
             if (gen.programLengthOverEstimate() > mMaximumApfProgramSize) {
@@ -3824,7 +3811,7 @@ public class ApfFilter {
                 ra.generateFilter(gen, timeSeconds);
                 programMinLft = Math.min(programMinLft, ra.getRemainingFilterLft(timeSeconds));
             }
-            emitDefaultPacketHandling(gen);
+            gen.addDefaultPacketHandling();
             if (enableMdns4Offload() || enableMdns6Offload()) {
                 generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload,
                         mNumOfMdnsRuleToOffload);
