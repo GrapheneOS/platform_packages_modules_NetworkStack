@@ -36,7 +36,7 @@ import org.mockito.Mockito.doReturn
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.timeout
 import org.mockito.Mockito.verify
-import org.mockito.Mockito.verifyZeroInteractions
+import org.mockito.Mockito.verifyNoMoreInteractions
 
 /**
  * Test for RawPacketTracker.
@@ -100,7 +100,7 @@ class RawPacketTrackerTest {
         // stop capturing
         stopCaptureOnHandler(ifaceName)
         verifySetCapture(false, 1)
-        verifyZeroInteractions(tracker)
+        verifyNoMoreInteractions(tracker)
     }
 
     @Test
@@ -129,7 +129,7 @@ class RawPacketTrackerTest {
         }
 
         verifySetCapture(false, 0)
-        verifyZeroInteractions(tracker)
+        verifyNoMoreInteractions(tracker)
     }
 
     @Test
