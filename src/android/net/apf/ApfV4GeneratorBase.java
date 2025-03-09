@@ -19,6 +19,7 @@ package android.net.apf;
 import static android.net.apf.ApfConstants.IPV4_FRAGMENT_MORE_FRAGS_MASK;
 import static android.net.apf.ApfConstants.IPV4_FRAGMENT_OFFSET_MASK;
 import static android.net.apf.ApfConstants.IPV4_FRAGMENT_OFFSET_OFFSET;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP;
 import static android.net.apf.BaseApfGenerator.Rbit.Rbit0;
 import static android.net.apf.BaseApfGenerator.Register.R0;
 import static android.net.apf.BaseApfGenerator.Register.R1;
@@ -685,5 +686,30 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
      * @throws IllegalInstructionException
      */
     public abstract Type addCountTrampoline() throws IllegalInstructionException;
+
+    /**
+     * Returns the base program size when the interpreter is initialized.
+     */
+    public abstract int getBaseProgramSize();
+
+    /**
+     * Appends default packet handling and counting to the APF program.
+     * This method adds logic to:
+     * 1. Increment the {@code PASSED_IPV6_ICMP} counter and pass the packet.
+     * 3. Add trampoline logic for counter processing.
+     *
+     *
+     * @return The type resulting from the appended instructions.
+     * @throws IllegalInstructionException If an error occurs while adding instructions.
+     */
+    public final Type addDefaultPacketHandling() throws IllegalInstructionException {
+        addCountAndPass(PASSED_IPV6_ICMP);
+        return addCountTrampoline();
+    }
+
+    /**
+     * Returns an overestimate of the size of the default packet handling logic.
+     */
+    public abstract int getDefaultPacketHandlingSizeOverEstimate();
 }
 

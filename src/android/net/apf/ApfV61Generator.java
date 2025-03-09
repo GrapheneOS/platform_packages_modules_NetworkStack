@@ -21,7 +21,12 @@ package android.net.apf;
  * @hide
  */
 public final class ApfV61Generator extends ApfV61GeneratorBase<ApfV61Generator> {
-
+    /**
+     * Returns true if we support the specified {@code version}, otherwise false.
+     */
+    public static boolean supportsVersion(int version) {
+        return version >= APF_VERSION_61;
+    }
 
     /**
      * Creates an ApfV61Generator instance.
