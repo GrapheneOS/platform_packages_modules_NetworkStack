@@ -123,6 +123,26 @@ class ConnectivityPacketTrackerTest {
     }
 
     @Test
+    fun testPacketMatchPattern() {
+        val packetTracker = getConnectivityPacketTracker()
+        // Using scapy to generate ARP request packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // arp = ARP()
+        // pkt = eth/arp
+        val arpPkt = """
+            010203040506000102030405080600010800060400015c857e3c74e1c0a8012200000000000000000000
+        """.replace("\\s+".toRegex(), "").trim().uppercase()
+        val arpPktByteArray = HexDump.hexStringToByteArray(arpPkt)
+
+        // start capture packet
+        setCapture(packetTracker, true)
+
+        pretendPacketReceive(arpPktByteArray)
+        assertEquals(1, getMatchedPacketCount(packetTracker, arpPkt))
+        assertEquals(1, getMatchedPacketCount(packetTracker, arpPkt.lowercase()))
+    }
+
+    @Test
     fun testMaxCapturePacketSize() {
         doReturn(3).`when`(mDependencies).maxCapturePktSize
         val packetTracker = getConnectivityPacketTracker(mDependencies)

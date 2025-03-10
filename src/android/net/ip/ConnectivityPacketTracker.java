@@ -48,6 +48,7 @@ import com.android.networkstack.util.NetworkStackUtils;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.Objects;
 
 
@@ -163,7 +164,9 @@ public class ConnectivityPacketTracker {
      * @return The count of packets matching the pattern, or 0 if no matches are found
      */
     public int getMatchedPacketCount(String packet) {
-        final Integer count = mPacketCache.get(packet);
+        // always convert to upper case since we use upper case when capturing
+        final String packetPattern = packet.toUpperCase(Locale.ROOT);
+        final Integer count = mPacketCache.get(packetPattern);
         return (count != null) ? count : 0;
     }
 
