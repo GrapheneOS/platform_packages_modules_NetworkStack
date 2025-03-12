@@ -88,7 +88,6 @@ import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_ON_LINK
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION;
-import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION;
@@ -4812,7 +4811,6 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
     public void testIpReachabilityMonitor_ignoreNeverReachableIpv6Dns() throws Exception {
         runIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER,
                 ipv6Addr(IPV6_ON_LINK_DNS_SERVER),
@@ -4821,7 +4819,6 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
     public void testIpReachabilityMonitor_ignoreNeverReachableIpv6Dns_butEverReachable()
             throws Exception {
         runIpReachabilityMonitorEverReachableIpv6NeighborTest(IPV6_ON_LINK_DNS_SERVER,
@@ -4829,7 +4826,6 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
     public void testIpReachabilityMonitor_ignoreNeverReachableIpv6DefaultRouter() throws Exception {
         runIpReachabilityMonitorAddressResolutionTest(IPV6_OFF_LINK_DNS_SERVER,
                 ROUTER_LINK_LOCAL,
@@ -4838,7 +4834,6 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
     public void testIpReachabilityMonitor_ignoreNeverReachableIpv6DefaultRouter_butEverReachable()
             throws Exception {
         runIpReachabilityMonitorEverReachableIpv6NeighborTest(IPV6_ON_LINK_DNS_SERVER,
