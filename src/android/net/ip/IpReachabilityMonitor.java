@@ -22,7 +22,6 @@ import static android.net.metrics.IpReachabilityEvent.PROVISIONING_LOST;
 import static android.net.metrics.IpReachabilityEvent.PROVISIONING_LOST_ORGANIC;
 
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION;
-import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_MCAST_RESOLICIT_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION;
@@ -242,7 +241,6 @@ public class IpReachabilityMonitor {
     @NonNull
     private final Callback mCallback;
     private final boolean mMulticastResolicitEnabled;
-    private final boolean mIgnoreIncompleteIpv6DnsServerEnabled;
     private final boolean mIgnoreIncompleteIpv6DefaultRouterEnabled;
     private final boolean mMacChangeFailureOnlyAfterRoam;
     private final boolean mIgnoreOrganicNudFailure;
@@ -271,8 +269,6 @@ public class IpReachabilityMonitor {
         mDependencies = dependencies;
         mMulticastResolicitEnabled = dependencies.isFeatureNotChickenedOut(context,
                 IP_REACHABILITY_MCAST_RESOLICIT_VERSION);
-        mIgnoreIncompleteIpv6DnsServerEnabled = dependencies.isFeatureNotChickenedOut(context,
-                IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION);
         mIgnoreIncompleteIpv6DefaultRouterEnabled = dependencies.isFeatureEnabled(context,
                 IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION);
         mMacChangeFailureOnlyAfterRoam = dependencies.isFeatureNotChickenedOut(context,
@@ -515,10 +511,8 @@ public class IpReachabilityMonitor {
 
         // TODO: cleanup below code(checking if the incomplete IPv6 neighbor should be ignored)
         // once the feature of ignoring the neighbor was never ever reachable rolls out.
-        final boolean ignoreIncompleteIpv6DnsServer =
-                mIgnoreIncompleteIpv6DnsServerEnabled
-                        && isNeighborDnsServer(event)
-                        && shouldIgnoreIncompleteNeighbor(prev, event);
+        final boolean ignoreIncompleteIpv6DnsServer = isNeighborDnsServer(event)
+                && shouldIgnoreIncompleteNeighbor(prev, event);
 
         // Generally Router Advertisement should take SLLA option, then device won't do address
         // resolution for default router's IPv6 link-local address automatically. But sometimes

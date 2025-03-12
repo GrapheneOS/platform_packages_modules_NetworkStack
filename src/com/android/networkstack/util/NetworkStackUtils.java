@@ -201,13 +201,6 @@ public class NetworkStackUtils {
             "ip_reachability_mcast_resolicit_version";
 
     /**
-     * Experiment flag to attempt to ignore the on-link IPv6 DNS server which fails to respond to
-     * address resolution.
-     */
-    public static final String IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION =
-            "ip_reachability_ignore_incompleted_ipv6_dns_server_version";
-
-    /**
      * Experiment flag to attempt to ignore the IPv6 default router which fails to respond to
      * address resolution.
      */
