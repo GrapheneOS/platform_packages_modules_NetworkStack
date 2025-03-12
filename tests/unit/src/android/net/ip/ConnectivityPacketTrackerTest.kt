@@ -39,6 +39,7 @@ import libcore.io.IoUtils
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import org.mockito.ArgumentMatchers.anyBoolean
 import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.Mock
 import org.mockito.Mockito
@@ -78,7 +79,7 @@ class ConnectivityPacketTrackerTest {
         MockitoAnnotations.initMocks(this)
         val readSocket = FileDescriptor()
         Os.socketpair(AF_UNIX, SOCK_STREAM or SOCK_NONBLOCK, 0, writeSocket, readSocket)
-        doReturn(readSocket).`when`(mDependencies).createPacketReaderSocket(anyInt())
+        doReturn(readSocket).`when`(mDependencies).createPacketReaderSocket(anyInt(), anyBoolean())
         doReturn(TEST_MAX_CAPTURE_PKT_SIZE).`when`(mDependencies).maxCapturePktSize
     }
 
@@ -191,7 +192,13 @@ class ConnectivityPacketTrackerTest {
         val result = CompletableFuture<ConnectivityPacketTracker>()
         handler.post {
             try {
-                val tracker = ConnectivityPacketTracker(handler, ifParams, localLog, dependencies)
+                val tracker = ConnectivityPacketTracker(
+                    handler,
+                    ifParams,
+                    localLog,
+                    dependencies,
+                    true
+                )
                 tracker.start(TAG)
                 result.complete(tracker)
             } catch (e: Exception) {
