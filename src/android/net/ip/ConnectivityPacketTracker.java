@@ -80,14 +80,23 @@ public class ConnectivityPacketTracker {
         }
 
         /**
-         * Create a socket to read RAs.
+         * Creates a raw packet socket for reading network packets.
+         *
+         * This method creates a socket and binds it to the specified network interface index,
+         * and optionally attaches a control packet filter.
+         *
+         * @param ifIndex      The index of the network interface to bind the socket to.
+         * @param attachFilter If true, attaches a control packet filter to the socket.
+         * @return The FileDescriptor of the created socket, or null if an error occurred.
          */
         @Nullable
-        public FileDescriptor createPacketReaderSocket(int ifIndex) {
+        public FileDescriptor createPacketReaderSocket(int ifIndex, boolean attachFilter) {
             FileDescriptor socket = null;
             try {
                 socket = Os.socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, 0);
-                NetworkStackUtils.attachControlPacketFilter(socket);
+                if (attachFilter) {
+                    NetworkStackUtils.attachControlPacketFilter(socket);
+                }
                 Os.bind(socket, makePacketSocketAddress(ETH_P_ALL, ifIndex));
             } catch (ErrnoException | IOException e) {
                 final String msg = "Failed to create packet tracking socket: ";
@@ -99,6 +108,12 @@ public class ConnectivityPacketTracker {
             return socket;
         }
 
+
+        /**
+         * Gets the maximum size of a captured packet.
+         *
+         * @return The maximum capture packet size.
+         */
         public int getMaxCapturePktSize() {
             return MAX_CAPTURE_PACKET_SIZE;
         }
@@ -130,13 +145,18 @@ public class ConnectivityPacketTracker {
     // store packet hex string in uppercase as key, receive packet count as value
     private final LruCache<String, Integer> mPacketCache;
     private final Dependencies mDependencies;
+    private final boolean mAttachFilter;
     private long mLastRateLimitLogTimeMs = 0;
     private boolean mRunning;
     private boolean mCapturing;
     private String mDisplayName;
 
-    public ConnectivityPacketTracker(Handler h, InterfaceParams ifParams, LocalLog log) {
-        this(h, ifParams, log, new Dependencies(log));
+    public ConnectivityPacketTracker(
+            Handler h,
+            InterfaceParams ifParams,
+            LocalLog log,
+            boolean attachFilter) {
+        this(h, ifParams, log, new Dependencies(log), attachFilter);
     }
 
     /**
@@ -192,9 +212,12 @@ public class ConnectivityPacketTracker {
             @NonNull Handler handler,
             @NonNull InterfaceParams ifParams,
             @NonNull LocalLog log,
-            @NonNull Dependencies dependencies) {
+            @NonNull Dependencies dependencies,
+            boolean attachFilter
+    ) {
         mTag = TAG + "." + Objects.requireNonNull(ifParams).name;
         mLog = log;
+        mAttachFilter = attachFilter;
         mPacketListener = new PacketListener(handler, ifParams);
         mDependencies = dependencies;
         mPacketCache = new LruCache<>(mDependencies.getMaxCapturePktSize());
@@ -210,7 +233,7 @@ public class ConnectivityPacketTracker {
 
         @Override
         protected FileDescriptor createFd() {
-            return mDependencies.createPacketReaderSocket(mInterface.index);
+            return mDependencies.createPacketReaderSocket(mInterface.index, mAttachFilter);
         }
 
         @Override
