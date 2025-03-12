@@ -87,8 +87,6 @@ import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_AUTONOM
 import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_ON_LINK;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION;
-import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION;
-import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION;
@@ -454,6 +452,8 @@ public abstract class IpClientIntegrationTestCommon {
     private static final int TEST_MIN_MTU = 1280;
     private static final MacAddress ROUTER_MAC = MacAddress.fromString("00:1A:11:22:33:44");
     private static final byte[] ROUTER_MAC_BYTES = ROUTER_MAC.toByteArray();
+    private static final MacAddress ON_LINK_DNS_SERVER_MAC =
+            MacAddress.fromString("00:1A:11:AA:BB:CC");
     private static final Inet6Address ROUTER_LINK_LOCAL = ipv6Addr("fe80::1");
     private static final byte[] ROUTER_DUID = new byte[] {
             // type: Link-layer address, hardware type: EUI64(27)
@@ -968,15 +968,15 @@ public abstract class IpClientIntegrationTestCommon {
      * Set the sysctl "delay_first_probe_time" by executing a shell command as root.
      *
      * Directly using "su root echo delay > /proc/sys/net/ipv4/neigh/delay_first_probe_time" fails
-     * because only the "echo delay >" command runs as root; the redirection ">" and the following
+     * because only the "echo delay" command runs as root; the redirection ">" and the following
      * sysctl path string is not performed by the root shell, resulting in permission errors.
      *
-     * Theoretically we want to run "su root sh -c 'echo delay > /proc/sys/net/ipv4/neigh/
+     * Theoretically we want to run "su root sh -c 'echo delay > /proc/sys/net/ipv4(v6)/neigh/
      * delay_first_probe_time'" to change the sysctl, however, the `executeShellCommand`
      * function splits commands based on spaces, even within single quotes, so this doesn't work.
      * Instead, use `executeShellCommandRw` to execute a shell command receiving from stdin.
      */
-    private void setNudDelayFirstProbeTime(int delay) throws Exception {
+    private void setNudDelayFirstProbeTime(int delay, String family) throws Exception {
         final ParcelFileDescriptor[] fds = InstrumentationRegistry.getInstrumentation()
                 .getUiAutomation().executeShellCommandRw("su root sh");
 
@@ -984,9 +984,8 @@ public abstract class IpClientIntegrationTestCommon {
         final ParcelFileDescriptor stdin = fds[1];
         try (ParcelFileDescriptor.AutoCloseOutputStream output =
                      new ParcelFileDescriptor.AutoCloseOutputStream(stdin)) {
-            final String cmd =
-                    "echo " + delay + " > /proc/sys/net/ipv4/neigh/" + mIfaceName
-                            + "/delay_first_probe_time";
+            final String cmd = "echo " + delay + " > /proc/sys/net/" + family + "/neigh/"
+                    + mIfaceName + "/delay_first_probe_time";
             output.write(cmd.getBytes());
         }
         // Setting a value to sysctl doesn't have any output.
@@ -996,7 +995,7 @@ public abstract class IpClientIntegrationTestCommon {
 
         // Check if the sysctl "delay_first_probe_time" has updated.
         final String delay_first_probe_time = getOneLineCommandOutput(
-                "su root cat /proc/sys/net/ipv4/neigh/" + mIfaceName
+                "su root cat /proc/sys/net/" + family + "/neigh/" + mIfaceName
                         + "/delay_first_probe_time");
         assertEquals(delay, Integer.parseInt(delay_first_probe_time));
     }
@@ -2138,6 +2137,16 @@ public abstract class IpClientIntegrationTestCommon {
     private void waitForRouterSolicitation() throws ParseException {
         assertNotNull("No router solicitation received on interface within timeout",
                 mPacketReader.popPacket(PACKET_TIMEOUT_MS, this::isRouterSolicitation));
+    }
+
+    private void sendGratuitousNeighborAdvertisement(final MacAddress srcMac,
+            final Inet6Address srcIp, final Inet6Address targetIp) throws Exception {
+        int flags = NEIGHBOR_ADVERTISEMENT_FLAG_ROUTER | NEIGHBOR_ADVERTISEMENT_FLAG_OVERRIDE;
+        final Inet6Address dstIp = IPV6_ADDR_ALL_NODES_MULTICAST;
+        final MacAddress dstMac = NetworkStackUtils.ipv6MulticastToEthernetMulticast(dstIp);
+        final ByteBuffer packet =
+                NeighborAdvertisement.build(srcMac, dstMac, srcIp, dstIp, flags, targetIp);
+        mPacketReader.sendResponse(packet);
     }
 
     private void sendRouterAdvertisement(boolean waitForRs, short lifetime, int valid,
@@ -4096,14 +4105,20 @@ public abstract class IpClientIntegrationTestCommon {
         verify(mCb, never()).onReachabilityLost(any());
     }
 
+    // If the UDP packet is sent to off-link address, the targetIp should be default gateway's IP,
+    // otherwise, it should be the on-link DNS server address.
     private void expectAndRespondToMulticastNeighborSolicitation(final Inet6Address targetIp)
             throws Exception {
         final NeighborSolicitation ns = waitForMulticastNeighborSolicitation(targetIp);
-
+        final MacAddress srcMac =
+                targetIp.equals(ROUTER_LINK_LOCAL) ? ROUTER_MAC : ON_LINK_DNS_SERVER_MAC;
+        final Inet6Address srcIp = targetIp.equals(ROUTER_LINK_LOCAL)
+                ? ROUTER_LINK_LOCAL
+                : ipv6Addr(IPV6_ON_LINK_DNS_SERVER);
         int flag = NEIGHBOR_ADVERTISEMENT_FLAG_ROUTER | NEIGHBOR_ADVERTISEMENT_FLAG_SOLICITED;
-        final ByteBuffer na = NeighborAdvertisement.build(ROUTER_MAC /* srcMac */,
-                ns.ethHdr.srcMac /* dstMac */, ROUTER_LINK_LOCAL /* srcIp */,
-                ns.ipv6Hdr.srcIp /* dstIp */, flag, ROUTER_LINK_LOCAL /* target */);
+        final ByteBuffer na = NeighborAdvertisement.build(srcMac,
+                ns.ethHdr.srcMac /* dstMac */, srcIp,
+                ns.ipv6Hdr.srcIp /* dstIp */, flag, targetIp);
         mPacketReader.sendResponse(na);
     }
 
@@ -4366,7 +4381,7 @@ public abstract class IpClientIntegrationTestCommon {
             boolean shouldMakeNeighborReachableFirst) throws Exception {
         // Reduce the delay first probe time from 5s to 2s, speed up the test duration and we can
         // still use PACKET_TIMEOUT_MS to wait for the next upcoming ARP packet.
-        setNudDelayFirstProbeTime(TEST_DELAY_FIRST_PROBE_TIME_S);
+        setNudDelayFirstProbeTime(TEST_DELAY_FIRST_PROBE_TIME_S, "ipv4");
         mNetworkAgentThread =
                 new HandlerThread(IpClientIntegrationTestCommon.class.getSimpleName());
         mNetworkAgentThread.start();
@@ -4497,8 +4512,44 @@ public abstract class IpClientIntegrationTestCommon {
         socket.send(pkt);
     }
 
+    /**
+     * A function helper to set up the steps to verify NUD (neighbor unreachable detection) probes
+     * for IPv6 hosts. This function helper intends to respond to the NS probes for the default
+     * gateway during address resolution if the param shouldMakeNeighborReachableFirst is true,
+     * which makes the default gateway reachable first, and then sending a gratuitous NA with a
+     * different mac address, it will override the neighbor entry on the tap interface, as a result,
+     * it should do the address resolution eventually. The param shouldMakeNeighborReachableFirst
+     * depends on the specific test case which may or may not expect a NUD failure event.
+     *
+     * 36  2025-02-12 13:19:11.316069  fe80::1e3a:4b22:df15:896c  ff02::2  ICMPv6  76   Router Solicitation from 46:0c:b1:ab:47:f7
+     * 46  2025-02-12 13:19:11.409184  fe80::1  ff02::1                    ICMPv6  132  Router Advertisement
+     *
+     * // Respond to the NS for the default gateway and make the default gateay as reachable.
+     * 50  2025-02-12 13:19:11.443185  2001:db8:1:0:d8d6:93c1:9620:2a37  ff02::1:ff00:1      ICMPv6  92  Neighbor Solicitation for fe80::1 from 46:0c:b1:ab:47:f7
+     * 51  2025-02-12 13:19:11.448864  2001:db8:1:0:48c7:9fe:4ee:47ad    ff02::1:ff00:1      ICMPv6  92  Neighbor Solicitation for fe80::1 from 46:0c:b1:ab:47:f7
+     * 52  2025-02-12 13:19:11.522637  2001:db8:1:0:48c7:9fe:4ee:47ad    ff02::1:ff00:1      ICMPv6  92  Neighbor Solicitation for fe80::1 from 46:0c:b1:ab:47:f7
+     * 53  2025-02-12 13:19:11.523851  fe80::1  2001:db8:1:0:d8d6:93c1:9620:2a37             ICMPv6  92  Neighbor Advertisement fe80::1 (rtr, sol) is at 00:1a:11:22:33:44
+     * 54  2025-02-12 13:19:11.523881  2001:db8:1:0:48c7:9fe:4ee:47ad    2001:4860:4860::64  UDP  168  49350 → 1234 Len=100
+     *
+     * 55  2025-02-12 13:19:11.535166  fe80::1  ff02::1  ICMPv6  92  Neighbor Advertisement fe80::1 (rtr, ovr) is at 00:11:22:33:44:55
+     * 56  2025-02-12 13:19:11.535853  2001:db8:1:0:48c7:9fe:4ee:47ad  2001:4860:4860::64  UDP  168  36306 → 1234 Len=100
+     *
+     * // After test_delay_first_probe_time(2s) the tap interface starts probing again.
+     * 99   2025-02-12 13:19:13.544188  fe80::1e3a:4b22:df15:896c  fe80::1         ICMPv6  92  Neighbor Solicitation for fe80::1 from 46:0c:b1:ab:47:f7
+     * 107  2025-02-12 13:19:14.312212  fe80::1e3a:4b22:df15:896c  fe80::1         ICMPv6  92  Neighbor Solicitation for fe80::1 from 46:0c:b1:ab:47:f7
+     * ...
+     * 133  2025-02-12 13:19:20.456209  fe80::1e3a:4b22:df15:896c  fe80::1         ICMPv6  92  Neighbor Solicitation for fe80::1 from 46:0c:b1:ab:47:f7
+     * 134  2025-02-12 13:19:21.224214  fe80::1e3a:4b22:df15:896c  ff02::1:ff00:1  ICMPv6  92  Neighbor Solicitation for fe80::1 from 46:0c:b1:ab:47:f7
+     * 135  2025-02-12 13:19:21.992192  fe80::1e3a:4b22:df15:896c  ff02::1:ff00:1  ICMPv6  92  Neighbor Solicitation for fe80::1 from 46:0c:b1:ab:47:f7
+     * 136  2025-02-12 13:19:22.760202  fe80::1e3a:4b22:df15:896c  ff02::1:ff00:1  ICMPv6  92  Neighbor Solicitation for fe80::1 from 46:0c:b1:ab:47:f7
+     */
     private void prepareIpReachabilityMonitorAddressResolutionTest(final String dnsServer,
-            final Inet6Address targetIp) throws Exception {
+            final Inet6Address targetIp,
+            boolean shouldMakeNeighborReachableFirst) throws Exception {
+        // Reduce the delay first probe time from 5s to 2s, speed up the test duration and we can
+        // still use PACKET_TIMEOUT_MS to wait for the next upcoming ARP packet.
+        setNudDelayFirstProbeTime(TEST_DELAY_FIRST_PROBE_TIME_S, "ipv6");
+
         mNetworkAgentThread =
                 new HandlerThread(IpClientIntegrationTestCommon.class.getSimpleName());
         mNetworkAgentThread.start();
@@ -4522,14 +4573,30 @@ public abstract class IpClientIntegrationTestCommon {
         startIpClientProvisioning(config);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(true);
 
-        // If target IP of address resolution is default router's IPv6 link-local address,
-        // then we should not take SLLA option in RA.
         final ByteBuffer ra = buildRaPacket(TEST_IPV6_PREFIX, dnsServer,
                 3600 /* validLifetime */, 1800 /* preferredLifetime */, 3600 /* dnsLifetime */,
                 !targetIp.equals(ROUTER_LINK_LOCAL) /* shouldIncludeSlla */);
         final Inet6Address dnsServerIp = ipv6Addr(dnsServer);
         final LinkProperties lp = performDualStackProvisioning(ra, dnsServerIp);
         runAsShell(MANAGE_TEST_NETWORKS, () -> createTestNetworkAgentAndRegister(lp));
+
+        if (shouldMakeNeighborReachableFirst) {
+            sendPacketToPeer(dnsServerIp);
+            expectAndRespondToMulticastNeighborSolicitation(targetIp);
+            assertNeverNotifyNeighborLost();
+            verifyRestoringNeighborParametersToSteadyState();
+
+            // Send a gratuitous NA for the target neighbor with a different MAC address, this
+            // should make the neighbor state transit from REACHABLE to STALE, sending another UDP
+            // packet to neighbor will force the neighbor state transit from STALE to DELAY, and
+            // after DELAY_FIRST_PROBE_TIME the tap interface starts probing for the target neighbor
+            // again.
+            final MacAddress srcMac = MacAddress.fromString("00:11:22:33:44:55");
+            final Inet6Address srcIp = targetIp.equals(ROUTER_LINK_LOCAL)
+                    ? ROUTER_LINK_LOCAL
+                    : ipv6Addr(IPV6_ON_LINK_DNS_SERVER);
+            sendGratuitousNeighborAdvertisement(srcMac, srcIp, targetIp);
+        }
     }
 
     /**
@@ -4546,19 +4613,20 @@ public abstract class IpClientIntegrationTestCommon {
         sendUdpPacketToNetwork(mNetworkAgent.getNetwork(), dstIp, 1234 /* port */, data);
     }
 
-    private void expectAndDropMulticastNses(Inet6Address targetIp, boolean expectNeighborLost)
+    private void expectAndDropMultipleNses(Inet6Address targetIp, boolean expectNeighborLost)
             throws Exception {
-        // Wait for the multicast NSes but never respond to them, that results in the on-link
-        // DNS gets lost and onReachabilityLost callback will be invoked.
+        // Wait for the multiple NSes but never respond to them, that results in the on-link
+        // DNS or default gateway gets lost and onReachabilityLost callback will be invoked.
         final List<NeighborSolicitation> nsList = new ArrayList<NeighborSolicitation>();
         NeighborSolicitation ns;
         while ((ns = getNextNeighborSolicitation()) != null) {
-            // multicast NS for address resolution, IPv6 dst address in that NS is solicited-node
-            // multicast address based on the target IP, the target IP is either on-link IPv6 DNS
-            // server address or IPv6 link-local address of default gateway.
+            // multiple NSes for address resolution, a few unicast NSes will be sent first and
+            // fall back to multicast if mcast_resolicit is enabled. IPv6 dst address in multicast
+            // NS is solicited-node multicast address based on the target IP, the target IP is
+            // either on-link IPv6 DNS server address or IPv6 link-local address of default gateway.
             final LinkAddress actual = new LinkAddress(ns.nsHdr.target, 64);
             final LinkAddress target = new LinkAddress(targetIp, 64);
-            if (actual.equals(target) && ns.ipv6Hdr.dstIp.isMulticastAddress()) {
+            if (actual.equals(target)) {
                 nsList.add(ns);
             }
         }
@@ -4573,106 +4641,109 @@ public abstract class IpClientIntegrationTestCommon {
 
     private void runIpReachabilityMonitorAddressResolutionTest(final String dnsServer,
             final Inet6Address targetIp,
+            final boolean shouldMakeNeighborReachableFirst,
             final boolean expectNeighborLost) throws Exception {
-        prepareIpReachabilityMonitorAddressResolutionTest(dnsServer, targetIp);
+        prepareIpReachabilityMonitorAddressResolutionTest(dnsServer, targetIp,
+                shouldMakeNeighborReachableFirst);
         sendPacketToPeer(ipv6Addr(dnsServer));
-        expectAndDropMulticastNses(targetIp, expectNeighborLost);
+        expectAndDropMultipleNses(targetIp, expectNeighborLost);
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION, enabled = true)
     @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION, enabled = false)
     public void testIpReachabilityMonitor_incompleteIpv6DnsServerInDualStack() throws Exception {
         final Inet6Address targetIp = ipv6Addr(IPV6_ON_LINK_DNS_SERVER);
-        runIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER, targetIp,
+        runIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER,
+                targetIp,
+                false /* shouldMakeNeighborReachableFirst */,
                 false /* expectNeighborLost */);
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION, enabled = false)
-    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = false)
     public void testIpReachabilityMonitor_incompleteIpv6DnsServerInDualStack_flagoff()
             throws Exception {
         final Inet6Address targetIp = ipv6Addr(IPV6_ON_LINK_DNS_SERVER);
-        runIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER, targetIp,
-                true /* expectNeighborLost */);
+        runIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER,
+                targetIp,
+                false /* shouldMakeNeighborReachableFirst */,
+                false /* expectNeighborLost */);
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION, enabled = true)
     @Flag(name = IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION, enabled = false)
     public void testIpReachabilityMonitor_incompleteIpv6DefaultRouterInDualStack()
             throws Exception {
         runIpReachabilityMonitorAddressResolutionTest(IPV6_OFF_LINK_DNS_SERVER,
                 ROUTER_LINK_LOCAL /* targetIp */,
+                false /* shouldMakeNeighborReachableFirst */,
                 false /* expectNeighborLost */);
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION, enabled = false)
-    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = false)
     public void testIpReachabilityMonitor_incompleteIpv6DefaultRouterInDualStack_flagoff()
             throws Exception {
         runIpReachabilityMonitorAddressResolutionTest(IPV6_OFF_LINK_DNS_SERVER,
                 ROUTER_LINK_LOCAL /* targetIp */,
-                true /* expectNeighborLost */);
+                false /* shouldMakeNeighborReachableFirst */,
+                false /* expectNeighborLost */);
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION, enabled = true)
     public void testIpReachabilityMonitor_ignoreOnLinkIpv6DnsOrganicNudFailure()
             throws Exception {
         final Inet6Address targetIp = ipv6Addr(IPV6_ON_LINK_DNS_SERVER);
-        runIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER, targetIp,
+        runIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER,
+                targetIp,
+                true /* shouldMakeNeighborReachableFirst */,
                 false /* expectNeighborLost */);
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION, enabled = false)
-    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = false)
     public void testIpReachabilityMonitor_ignoreOnLinkIpv6DnsOrganicNudFailure_flagoff()
             throws Exception {
         final Inet6Address targetIp = ipv6Addr(IPV6_ON_LINK_DNS_SERVER);
-        runIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER, targetIp,
-                true /* expectNeighborLost */);
+        runIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER,
+                targetIp,
+                false /* shouldMakeNeighborReachableFirst */,
+                false /* expectNeighborLost */);
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION, enabled = true)
     public void testIpReachabilityMonitor_ignoreIpv6DefaultRouterOrganicNudFailure()
             throws Exception {
         runIpReachabilityMonitorAddressResolutionTest(IPV6_OFF_LINK_DNS_SERVER,
                 ROUTER_LINK_LOCAL /* targetIp */,
+                true /* shouldMakeNeighborReachableFirst */,
                 false /* expectNeighborLost */);
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION, enabled = false)
-    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = false)
     public void testIpReachabilityMonitor_ignoreIpv6DefaultRouterOrganicNudFailure_flagoff()
             throws Exception {
         runIpReachabilityMonitorAddressResolutionTest(IPV6_OFF_LINK_DNS_SERVER,
                 ROUTER_LINK_LOCAL /* targetIp */,
+                true /* shouldMakeNeighborReachableFirst */,
                 true /* expectNeighborLost */);
     }
 
     private void runIpReachabilityMonitorEverReachableIpv6NeighborTest(final String dnsServer,
             final Inet6Address targetIp) throws Exception {
-        prepareIpReachabilityMonitorAddressResolutionTest(dnsServer, targetIp);
+        prepareIpReachabilityMonitorAddressResolutionTest(dnsServer, targetIp,
+                false /*shouldMakeNeighborReachableFirst */);
         sendPacketToPeer(ipv6Addr(dnsServer));
 
         // Simulate the default router/DNS was reachable by responding to multicast NS(not for DAD).
@@ -4713,7 +4784,6 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION, enabled = true)
     @Flag(name = IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION, enabled = false)
     public void testIpReachabilityMonitor_ignoreIpv6DefaultRouter_everReachable() throws Exception {
@@ -4722,7 +4792,6 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION, enabled = true)
     @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION, enabled = false)
     public void testIpReachabilityMonitor_ignoreIpv6Dns_everReachable() throws Exception {
@@ -4731,14 +4800,14 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
     public void testIpReachabilityMonitor_ignoreNeverReachableIpv6Dns() throws Exception {
         runIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER,
-                ipv6Addr(IPV6_ON_LINK_DNS_SERVER), false /* expectNeighborLost */);
+                ipv6Addr(IPV6_ON_LINK_DNS_SERVER),
+                false /* shouldMakeNeighborReachableFirst */,
+                false /* expectNeighborLost */);
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
     public void testIpReachabilityMonitor_ignoreNeverReachableIpv6Dns_butEverReachable()
             throws Exception {
         runIpReachabilityMonitorEverReachableIpv6NeighborTest(IPV6_ON_LINK_DNS_SERVER,
@@ -4746,14 +4815,14 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
     public void testIpReachabilityMonitor_ignoreNeverReachableIpv6DefaultRouter() throws Exception {
         runIpReachabilityMonitorAddressResolutionTest(IPV6_OFF_LINK_DNS_SERVER,
-                ROUTER_LINK_LOCAL, false /* expectNeighborLost */);
+                ROUTER_LINK_LOCAL,
+                false /* shouldMakeNeighborReachableFirst */,
+                false /* expectNeighborLost */);
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = true)
     public void testIpReachabilityMonitor_ignoreNeverReachableIpv6DefaultRouter_butEverReachable()
             throws Exception {
         runIpReachabilityMonitorEverReachableIpv6NeighborTest(IPV6_ON_LINK_DNS_SERVER,
@@ -6343,17 +6412,20 @@ public abstract class IpClientIntegrationTestCommon {
         long expiry = when + ONE_WEEK_IN_MS;
         storeNudFailureEvents(when, expiry, 10, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ORGANIC);
 
+        // Expect that a NUD failure happens, but onReachabilityFailure callback won't be called due
+        // to the experiment flag is enabled and this event won't be written to db because the
+        // number of events has been up to the threshold, then the retrieved event count should
+        // still be 10.
         runIpReachabilityMonitorAddressResolutionTest(IPV6_OFF_LINK_DNS_SERVER,
                 ROUTER_LINK_LOCAL /* targetIp */,
+                true /* shouldMakeNeighborReachableFirst */,
                 false /* expectNeighborLost */);
         assertRetrievedNetworkEventCount(TEST_CLUSTER, 10 /* expectedCountInPastWeek */,
                 10 /* expectedCountInPastDay */, 10 /* expectedCountInPastSixHours */);
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DNS_SERVER_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_INCOMPLETE_IPV6_DEFAULT_ROUTER_VERSION, enabled = false)
-    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION, enabled = true)
     public void testIgnoreNudFailuresStopWritingEvents() throws Exception {
         // Add enough failures that NUD failures are ignored.
@@ -6367,26 +6439,25 @@ public abstract class IpClientIntegrationTestCommon {
         storeNudFailureEvents(when, expiry, 9, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ORGANIC);
 
         prepareIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER,
-                ROUTER_LINK_LOCAL);
+                ROUTER_LINK_LOCAL, true /* shouldMakeNeighborReachableFirst */);
 
         // The first new failure is ignored and written to the database.
         // The total is 10 failures in the last 6 hours, and 20 failures
         // in the past week and day.
         sendPacketToPeer(ipv6Addr(IPV6_OFF_LINK_DNS_SERVER));
-        expectAndDropMulticastNses(ROUTER_LINK_LOCAL, false /* expectNeighborLost */);
+        expectAndDropMultipleNses(ROUTER_LINK_LOCAL, false /* expectNeighborLost */);
         assertRetrievedNetworkEventCount(TEST_CLUSTER, 20 /* expectedCountInPastWeek */,
                 20 /* expectedCountInPastDay */, 10 /* expectedCountInPastSixHours */);
 
         // The second new failure is ignored, but not written.
         sendPacketToPeer(ipv6Addr(IPV6_ON_LINK_DNS_SERVER));
-        expectAndDropMulticastNses(ipv6Addr(IPV6_ON_LINK_DNS_SERVER),
+        expectAndDropMultipleNses(ipv6Addr(IPV6_ON_LINK_DNS_SERVER),
                 false /* expectNeighborLost */);
         assertRetrievedNetworkEventCount(TEST_CLUSTER, 20 /* expectedCountInPastWeek */,
                 20 /* expectedCountInPastDay */, 10 /* expectedCountInPastSixHours */);
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION, enabled = false)
     public void testIgnoreNudFailuresIfTooManyInPastWeek_stopWritingEvent_flagOff()
             throws Exception {
@@ -6396,6 +6467,7 @@ public abstract class IpClientIntegrationTestCommon {
 
         runIpReachabilityMonitorAddressResolutionTest(IPV6_OFF_LINK_DNS_SERVER,
                 ROUTER_LINK_LOCAL /* targetIp */,
+                true /* shouldMakeNeighborReachableFirst */,
                 true /* expectNeighborLost */);
 
         // Although the total NUD failure events count in the past 6 hours hasn't been up to the
@@ -6407,7 +6479,6 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_IGNORE_NEVER_REACHABLE_NEIGHBOR_VERSION, enabled = false)
     @Flag(name = IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION, enabled = true)
     public void testIgnoreNudFailuresIfTooManyInPastWeek_stopWritingEvent_notUpToThreshold()
             throws Exception {
@@ -6417,6 +6488,7 @@ public abstract class IpClientIntegrationTestCommon {
 
         runIpReachabilityMonitorAddressResolutionTest(IPV6_OFF_LINK_DNS_SERVER,
                 ROUTER_LINK_LOCAL /* targetIp */,
+                true /* shouldMakeNeighborReachableFirst */,
                 true /* expectNeighborLost */);
         assertNotifyNeighborLost(ROUTER_LINK_LOCAL /* targetIp */,
                 NudEventType.NUD_ORGANIC_FAILED_CRITICAL);
