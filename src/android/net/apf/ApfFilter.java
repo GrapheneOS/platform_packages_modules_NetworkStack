@@ -3635,6 +3635,9 @@ public class ApfFilter {
         sb.append("mcast: ");
         sb.append(mMulticastFilter ? "DROP" : "ALLOW");
         sb.append(", ");
+        sb.append("doze: ");
+        sb.append(mInDozeMode ? "TRUE" : "FALSE");
+        sb.append(", ");
         sb.append("offloads: ");
         sb.append("[ ");
         if (enableArpOffload()) {
