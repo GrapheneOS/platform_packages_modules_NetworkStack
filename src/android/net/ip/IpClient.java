@@ -221,6 +221,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Random;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.CompletableFuture;
@@ -333,6 +334,7 @@ public class IpClient extends StateMachine {
         private final NetworkInformationShim mShim;
 
         private final boolean mApfDebug;
+        private final Random mRandom = new Random();
 
         @VisibleForTesting
         protected IpClientCallbacksWrapper(IIpClientCallbacks callback, @NonNull SharedLog log,
@@ -396,10 +398,13 @@ public class IpClient extends StateMachine {
          */
         public void onProvisioningSuccess(LinkProperties newLp) {
             log("onProvisioningSuccess({" + newLp + "})");
-            // TODO:The following code is only for metrics testing and should be removed after
-            //  testing complete.
-            NetworkStackStatsLog.write(NetworkStackStatsLog.CORE_NETWORKING_TERRIBLE_ERROR_OCCURRED,
-                    NetworkStackStatsLog.CORE_NETWORKING_TERRIBLE_ERROR_OCCURRED__ERROR_TYPE__TYPE_UNKNOWN);
+            // We log this error, which has a 1 in 1,000,000 probability, as a heartbeat for
+            // terrible error reporting.
+            if (mRandom.nextInt(1000000) == 0) {
+                NetworkStackStatsLog.write(
+                        NetworkStackStatsLog.CORE_NETWORKING_TERRIBLE_ERROR_OCCURRED,
+                        NetworkStackStatsLog.CORE_NETWORKING_TERRIBLE_ERROR_OCCURRED__ERROR_TYPE__TYPE_UNKNOWN);
+            }
             try {
                 mCallback.onProvisioningSuccess(mShim.makeSensitiveFieldsParcelingCopy(newLp));
             } catch (RemoteException e) {
