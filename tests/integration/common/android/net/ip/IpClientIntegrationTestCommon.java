@@ -5092,6 +5092,34 @@ public abstract class IpClientIntegrationTestCommon {
         }
     }
 
+    @Test
+    public void testKernelDeletesIPv6AddressesOnValidLifetimeExpires() throws Exception {
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIPv4()
+                .build();
+        startIpClientProvisioning(config);
+
+        // Intend to set the same preferred and valid lifetime in RA PIO to 3s. All global IPv6
+        // addresses will be deleted from the interface when the valid lifetime expires, this might
+        // be caused by the loss of RA due to the DTIM config. Then a onProvisioningFailure event
+        // will be triggered if that's the IPv6-only network.
+        final ByteBuffer ra = buildRaPacket(TEST_IPV6_PREFIX, IPV6_ON_LINK_DNS_SERVER,
+                3 /* validLifetime */, 3 /* preferredLifetime */, 600 /* dnsLifetime */,
+                true /* shouldIncludeSlla */);
+        doIpv6OnlyProvisioning(null /* inOrder */, ra);
+
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(PACKET_TIMEOUT_MS)).onProvisioningFailure(captor.capture());
+        final LinkProperties lp = captor.getValue();
+        assertNotNull(lp);
+        assertFalse(lp.hasGlobalIpv6Address());
+        assertEquals(1, lp.getLinkAddresses().size()); // only IPv6 Link-local address
+        // because the DNS server is on-link, if off-link, due to the loss of IPv6 address, off-link
+        // DNS dest will be removed from LP as well.
+        assertTrue(lp.hasIpv6DnsServer());
+        assertTrue(lp.hasIpv6DefaultRoute());
+    }
+
     @Test @SignatureRequiredTest(reason = "requires mNetd to delete IPv6 GUAs")
     public void testOnIpv6AddressRemoved() throws Exception {
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
