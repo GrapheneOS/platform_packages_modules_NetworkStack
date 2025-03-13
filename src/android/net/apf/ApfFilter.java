@@ -2476,15 +2476,18 @@ public class ApfFilter {
     /**
      * Generate filter code to reply and drop unicast ICMPv6 echo request.
      * <p>
-     * On entry, we know it is ICMPv6 packet, but don't know anything else.
-     * R0 contains the u8 ICMPv6 type.
+     * On entry, we know it is IPv6 packet, but don't know anything else.
+     * R0 contains the u8 IPv6 next header.
      * R1 contains nothing useful in it, and can be clobbered.
      */
     private void generateUnicastIpv6PingOffload(ApfV6GeneratorBase<?> gen)
             throws IllegalInstructionException {
 
         final short skipPing6Offload = gen.getUniqueLabel();
-        gen.addJumpIfR0NotEquals(ICMPV6_ECHO_REQUEST_TYPE, skipPing6Offload);
+        gen.addJumpIfR0NotEquals(IPPROTO_ICMPV6, skipPing6Offload);
+
+        gen.addLoad8intoR0(ICMP6_TYPE_OFFSET)
+                .addJumpIfR0NotEquals(ICMPV6_ECHO_REQUEST_TYPE, skipPing6Offload);
 
         // Only offload unicast ping6.
         // While we could potentially support offloading multicast and broadcast ping6 requests in
@@ -2597,6 +2600,9 @@ public class ApfFilter {
         //     else
         //       pass
         //
+        // (APFv6+ specific logic) if it's unicast ICMPv6 echo request to our host:
+        //    transmit echo reply and drop
+        //
         // if we're dropping multicast
         //   if it's not ICMPv6 or it's ICMPv6 but we're in doze mode:
         //     if it's multicast:
@@ -2634,9 +2640,6 @@ public class ApfFilter {
         //     drop
         //   transmit NA and drop
         //
-        // (APFv6+ specific logic) if it's unicast ICMPv6 echo request to our host:
-        //    transmit echo reply and drop
-        //
         // if it's ICMPv6 RS to any:
         //   drop
         //
@@ -2656,6 +2659,11 @@ public class ApfFilter {
 
         if (enableMdns6Offload()) {
             generateIPv6MdnsFilter((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload);
+            gen.addLoad8intoR0(IPV6_NEXT_HEADER_OFFSET);
+        }
+
+        if (enableIpv6PingOffload()) {
+            generateUnicastIpv6PingOffload((ApfV6GeneratorBase<?>) gen);
             gen.addLoad8intoR0(IPV6_NEXT_HEADER_OFFSET);
         }
 
@@ -2703,10 +2711,6 @@ public class ApfFilter {
             // End of NS filter. generateNsFilter() method is terminal, so NS packet will be
             // either dropped or passed inside generateNsFilter().
             gen.defineLabel(skipNsPacketFilter);
-        }
-
-        if (enableIpv6PingOffload()) {
-            generateUnicastIpv6PingOffload((ApfV6GeneratorBase<?>) gen);
         }
 
         // Add unsolicited multicast neighbor announcements filter
