@@ -1411,6 +1411,12 @@ public class ApfFilter {
             return Math.min(65535, filterLifetime);
         }
 
+        int getRaProgramLengthOverEstimate(int timeSeconds) throws IllegalInstructionException {
+            final ApfV4GeneratorBase<?> gen = createApfGenerator();
+            generateFilter(gen, timeSeconds);
+            return gen.programLengthOverEstimate() - gen.getBaseProgramSize();
+        }
+
         // Append a filter for this RA to {@code gen}. Jump to DROP_LABEL if it should be dropped.
         // Jump to the next filter if packet doesn't match this RA.
         void generateFilter(ApfV4GeneratorBase<?> gen, int timeSeconds)
@@ -3797,12 +3803,14 @@ public class ApfFilter {
                 mNumOfMdnsRuleToOffload = -1;
             }
 
+            int programLengthOverEstimate = gen.programLengthOverEstimate();
+
             for (Ra ra : mRas) {
                 // skip filter if it has expired.
                 if (ra.getRemainingFilterLft(timeSeconds) <= 0) continue;
-                ra.generateFilter(gen, timeSeconds);
+                programLengthOverEstimate += ra.getRaProgramLengthOverEstimate(timeSeconds);
                 // Stop if we get too big.
-                if (gen.programLengthOverEstimate() > mMaximumApfProgramSize) {
+                if (programLengthOverEstimate > mMaximumApfProgramSize) {
                     Log.i(TAG, "Past maximum program size, skipping RAs");
                     break;
                 }
