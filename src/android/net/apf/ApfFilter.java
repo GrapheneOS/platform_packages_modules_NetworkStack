@@ -3744,12 +3744,14 @@ public class ApfFilter {
 
             emitPrologue(gen, labelCheckMdnsQueryPayload);
 
+            int programLengthOverEstimate = gen.programLengthOverEstimate();
+
             // The default packet handling normally goes after the RA filters, but add it early to
             // include its length when estimating the total.
-            gen.addDefaultPacketHandling();
+            programLengthOverEstimate += gen.getDefaultPacketHandlingSizeOverEstimate();
 
             // Can't fit the program even without any RA filters/Mdns offloads?
-            if (gen.programLengthOverEstimate() > mMaximumApfProgramSize) {
+            if (programLengthOverEstimate > mMaximumApfProgramSize) {
                 Log.e(TAG, "Program exceeds maximum size " + mMaximumApfProgramSize);
                 sendNetworkQuirkMetrics(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
                 installPacketFilter(new byte[mMaximumApfProgramSize],
@@ -3773,12 +3775,13 @@ public class ApfFilter {
             // requirement. These devices are usually on home networks with very chatty mDNS
             // traffic.
             if (enableMdns4Offload() || enableMdns6Offload()) {
-                final int remainSize = mMaximumApfProgramSize - gen.programLengthOverEstimate();
+                final int remainSize = mMaximumApfProgramSize - programLengthOverEstimate;
                 mNumOfMdnsRuleToOffload = mOffloadRules.size();
+                int mDnsProgramLengthOverEstimate = 0;
                 for (; mNumOfMdnsRuleToOffload >= -1; --mNumOfMdnsRuleToOffload) {
-                    int programSize = calcMdnsOffloadProgramSizeOverEstimate(
+                    mDnsProgramLengthOverEstimate = calcMdnsOffloadProgramSizeOverEstimate(
                             mNumOfMdnsRuleToOffload);
-                    if (programSize <= remainSize) {
+                    if (mDnsProgramLengthOverEstimate <= remainSize) {
                         break;
                     }
                 }
@@ -3797,13 +3800,11 @@ public class ApfFilter {
                     return;
                 }
 
-                generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload,
-                        mNumOfMdnsRuleToOffload);
+                programLengthOverEstimate += mDnsProgramLengthOverEstimate;
             } else {
                 mNumOfMdnsRuleToOffload = -1;
             }
 
-            int programLengthOverEstimate = gen.programLengthOverEstimate();
 
             for (Ra ra : mRas) {
                 // skip filter if it has expired.
