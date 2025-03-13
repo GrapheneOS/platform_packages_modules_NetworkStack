@@ -2653,6 +2653,7 @@ public class ApfFilter {
 
         if (enableMldOffload()) {
             generateMldFilter((ApfV6GeneratorBase<?>) gen);
+            gen.addLoad8intoR0(IPV6_NEXT_HEADER_OFFSET);
         } else {
             gen.addCountAndPassIfR0Equals(IPPROTO_HOPOPTS, PASSED_IPV6_HOPOPTS);
         }
