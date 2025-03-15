@@ -3470,13 +3470,18 @@ class ApfFilterTest {
     }
 
     private fun getApfWithIpv6PingOffloadEnabled(
-        enableMultiCastFilter: Boolean = true
+        enableMultiCastFilter: Boolean = true,
+        inDozeMode: Boolean = false
     ): Pair<ApfFilter, ByteArray> {
         val apfConfig = getDefaultConfig()
         apfConfig.multicastFilter = enableMultiCastFilter
         apfConfig.handleIpv6PingOffload = true
         val apfFilter = getApfFilter(apfConfig)
         apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
+        if (inDozeMode) {
+            apfFilter.setDozeMode(inDozeMode)
+            apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
+        }
         val lp = LinkProperties()
         lp.addLinkAddress(LinkAddress(hostLinkLocalIpv6Address, 64))
         apfFilter.setLinkProperties(lp)
@@ -3489,6 +3494,61 @@ class ApfFilterTest {
     fun testIpv6EchoRequestReplied() {
         doReturn(64).`when`(dependencies).getIpv6DefaultHopLimit(ifParams.name)
         val (apfFilter, program) = getApfWithIpv6PingOffloadEnabled()
+        // Using scapy to generate IPv6 echo request packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="02:03:04:05:06:07")
+        // ip = IPv6(src="fe80::1", dst="fe80::03")
+        // icmp = ICMPv6EchoRequest(id=1, seq=123)
+        // pkt = eth/ip/icmp/b"hello"
+        val ipv6EchoRequestPkt = """
+            02030405060701020304050686dd60000000000d3a40fe80000000000000000
+            0000000000001fe80000000000000000000000000000380003e640001007b68
+            656c6c6f
+        """.replace("\\s+".toRegex(), "").trim()
+
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(ipv6EchoRequestPkt),
+            DROPPED_IPV6_ICMP6_ECHO_REQUEST_REPLIED
+        )
+        val transmitPkt = apfTestHelpers.consumeTransmittedPackets(1)[0]
+
+        // ###[ Ethernet ]###
+        //  dst       = 01:02:03:04:05:06
+        //  src       = 02:03:04:05:06:07
+        //  type      = IPv6
+        // ###[ IPv6 ]###
+        //      version   = 6
+        //      tc        = 0
+        //      fl        = 0
+        //      plen      = 13
+        //      nh        = ICMPv6
+        //      hlim      = 64
+        //      src       = fe80::3
+        //      dst       = fe80::1
+        // ###[ ICMPv6 Echo Reply ]###
+        //         type      = Echo Reply
+        //         code      = 0
+        //         cksum     = 0x3d64
+        //         id        = 0x1
+        //         seq       = 0x7b
+        //         data      = b'hello'
+        val expectedReply = """
+            01020304050602030405060786DD60000000000D3A40FE80000000000000000
+            0000000000003FE80000000000000000000000000000181003D640001007B68
+            656C6C6F
+        """.replace("\\s+".toRegex(), "").trim()
+        assertContentEquals(
+            HexDump.hexStringToByteArray(expectedReply),
+            transmitPkt
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testIpv6EchoRequestRepliedInDozeMode() {
+        doReturn(64).`when`(dependencies).getIpv6DefaultHopLimit(ifParams.name)
+        val (apfFilter, program) = getApfWithIpv6PingOffloadEnabled(inDozeMode = true)
         // Using scapy to generate IPv6 echo request packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="02:03:04:05:06:07")
         // ip = IPv6(src="fe80::1", dst="fe80::03")
