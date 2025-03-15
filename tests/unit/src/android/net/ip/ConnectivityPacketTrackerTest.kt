@@ -39,6 +39,7 @@ import libcore.io.IoUtils
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import org.mockito.ArgumentMatchers.anyBoolean
 import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.Mock
 import org.mockito.Mockito
@@ -78,7 +79,7 @@ class ConnectivityPacketTrackerTest {
         MockitoAnnotations.initMocks(this)
         val readSocket = FileDescriptor()
         Os.socketpair(AF_UNIX, SOCK_STREAM or SOCK_NONBLOCK, 0, writeSocket, readSocket)
-        doReturn(readSocket).`when`(mDependencies).createPacketReaderSocket(anyInt())
+        doReturn(readSocket).`when`(mDependencies).createPacketReaderSocket(anyInt(), anyBoolean())
         doReturn(TEST_MAX_CAPTURE_PKT_SIZE).`when`(mDependencies).maxCapturePktSize
     }
 
@@ -120,6 +121,26 @@ class ConnectivityPacketTrackerTest {
         setCapture(packetTracker, false)
         assertEquals(0, getCapturePacketTypeCount(packetTracker))
         assertEquals(0, getMatchedPacketCount(packetTracker, arpPkt))
+    }
+
+    @Test
+    fun testPacketMatchPattern() {
+        val packetTracker = getConnectivityPacketTracker()
+        // Using scapy to generate ARP request packet:
+        // eth = Ether(src="00:01:02:03:04:05", dst="01:02:03:04:05:06")
+        // arp = ARP()
+        // pkt = eth/arp
+        val arpPkt = """
+            010203040506000102030405080600010800060400015c857e3c74e1c0a8012200000000000000000000
+        """.replace("\\s+".toRegex(), "").trim().uppercase()
+        val arpPktByteArray = HexDump.hexStringToByteArray(arpPkt)
+
+        // start capture packet
+        setCapture(packetTracker, true)
+
+        pretendPacketReceive(arpPktByteArray)
+        assertEquals(1, getMatchedPacketCount(packetTracker, arpPkt))
+        assertEquals(1, getMatchedPacketCount(packetTracker, arpPkt.lowercase()))
     }
 
     @Test
@@ -171,7 +192,13 @@ class ConnectivityPacketTrackerTest {
         val result = CompletableFuture<ConnectivityPacketTracker>()
         handler.post {
             try {
-                val tracker = ConnectivityPacketTracker(handler, ifParams, localLog, dependencies)
+                val tracker = ConnectivityPacketTracker(
+                    handler,
+                    ifParams,
+                    localLog,
+                    dependencies,
+                    true
+                )
                 tracker.start(TAG)
                 result.complete(tracker)
             } catch (e: Exception) {

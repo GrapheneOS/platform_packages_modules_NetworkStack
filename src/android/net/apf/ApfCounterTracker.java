@@ -141,11 +141,20 @@ public class ApfCounterTracker {
             return RESERVED_OOB;
         }
 
+        private void checkCounterRange(Counter lowerBound, Counter upperBound) {
+            if (value() < lowerBound.value() || value() > upperBound.value()) {
+                throw new IllegalArgumentException(
+                        String.format("Counter %s, is not in range [%s, %s]", this,
+                                lowerBound, upperBound));
+            }
+        }
+
         /**
          * Return the label such that if we jump to it, the counter will be increased by 1 and
          * the packet will be passed.
          */
         public short getJumpPassLabel() {
+            checkCounterRange(MIN_PASS_COUNTER, MAX_PASS_COUNTER);
             return (short) (2 * this.value());
         }
 
@@ -154,6 +163,7 @@ public class ApfCounterTracker {
          * the packet will be dropped.
          */
         public short getJumpDropLabel() {
+            checkCounterRange(MIN_DROP_COUNTER, MAX_DROP_COUNTER);
             return (short) (2 * this.value() + 1);
         }
     }

@@ -52,8 +52,10 @@ public class RawPacketTracker {
     static class Dependencies {
         public @NonNull ConnectivityPacketTracker createPacketTracker(
                 Handler handler, InterfaceParams ifParams, int maxPktRecords) {
+            // A BPF filter is unnecessary here, as the caller uses this device to send packets
+            // and verify the APF offload reply packets received from the remote device.
             return new ConnectivityPacketTracker(
-                    handler, ifParams, new LocalLog(maxPktRecords));
+                    handler, ifParams, new LocalLog(maxPktRecords), false /* attachFilter */);
         }
 
         public @NonNull HandlerThread createHandlerThread() {
