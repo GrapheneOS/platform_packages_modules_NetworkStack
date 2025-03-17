@@ -95,7 +95,6 @@ import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_PING6_O
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_PING6_OFFLOAD_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.APF_POLLING_COUNTERS_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION;
-import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_REPLACE_NETD_WITH_NETLINK_VERSION;
@@ -824,7 +823,6 @@ public class IpClient extends StateMachine {
     private final int mNudFailureCountWeeklyThreshold;
 
     // Experiment flags read from device config.
-    private final boolean mDhcp6PrefixDelegationEnabled;
     private final boolean mIsAcceptRaMinLftEnabled;
     private final boolean mEnableApfPollingCounters;
     private final boolean mPopulateLinkAddressLifetime;
@@ -1094,9 +1092,6 @@ public class IpClient extends StateMachine {
         // InterfaceController.Dependencies class.
         mNetd = deps.getNetd(mContext);
         mInterfaceCtrl = new InterfaceController(mInterfaceName, mNetd, mLog);
-
-        mDhcp6PrefixDelegationEnabled = mDependencies.isFeatureNotChickenedOut(
-                mContext, IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION);
 
         mAcceptRaMinLft = mDependencies.getDeviceConfigPropertyInt(CONFIG_ACCEPT_RA_MIN_LFT,
                 DEFAULT_ACCEPT_RA_MIN_LFT);
@@ -2041,7 +2036,7 @@ public class IpClient extends StateMachine {
         // removed list before checking the added list(e.g. anyway we can add the removed prefix
         // back again).
         for (LinkAddress la : results.removed) {
-            if (mDhcp6PrefixDelegationEnabled && isIpv6StableDelegatedAddress(la)) {
+            if (isIpv6StableDelegatedAddress(la)) {
                 final IpPrefix prefix = new IpPrefix(la.getAddress(), RFC7421_PREFIX_LENGTH);
                 mDelegatedPrefixes.remove(prefix);
             }
@@ -2049,7 +2044,7 @@ public class IpClient extends StateMachine {
         }
 
         for (LinkAddress la : results.added) {
-            if (mDhcp6PrefixDelegationEnabled && isIpv6StableDelegatedAddress(la)) {
+            if (isIpv6StableDelegatedAddress(la)) {
                 final IpPrefix prefix = new IpPrefix(la.getAddress(), RFC7421_PREFIX_LENGTH);
                 mDelegatedPrefixes.add(prefix);
             }
@@ -2092,22 +2087,20 @@ public class IpClient extends StateMachine {
         }
 
         // [4] Add route with delegated prefix according to the global address update.
-        if (mDhcp6PrefixDelegationEnabled) {
-            for (IpPrefix destination : mDelegatedPrefixes) {
-                // Direct-connected route to delegated prefix. Add RTN_UNREACHABLE to
-                // this route based on the delegated prefix. To prevent the traffic loop
-                // between host and upstream delegated router. Because we specify the
-                // IFA_F_NOPREFIXROUTE when adding the IPv6 address, the kernel does not
-                // create a delegated prefix route, as a result, the user space won't
-                // receive any RTM_NEWROUTE message about the delegated prefix, we still
-                // need to install an unreachable route for the delegated prefix manually
-                // in LinkProperties to notify the caller this update.
-                // TODO: support RTN_BLACKHOLE in netd and use that on newer Android
-                // versions.
-                final RouteInfo route = new RouteInfo(destination,
-                        null /* gateway */, mInterfaceName, RTN_UNREACHABLE);
-                newLp.addRoute(route);
-            }
+        for (IpPrefix destination : mDelegatedPrefixes) {
+            // Direct-connected route to delegated prefix. Add RTN_UNREACHABLE to
+            // this route based on the delegated prefix. To prevent the traffic loop
+            // between host and upstream delegated router. Because we specify the
+            // IFA_F_NOPREFIXROUTE when adding the IPv6 address, the kernel does not
+            // create a delegated prefix route, as a result, the user space won't
+            // receive any RTM_NEWROUTE message about the delegated prefix, we still
+            // need to install an unreachable route for the delegated prefix manually
+            // in LinkProperties to notify the caller this update.
+            // TODO: support RTN_BLACKHOLE in netd and use that on newer Android
+            // versions.
+            final RouteInfo route = new RouteInfo(destination,
+                    null /* gateway */, mInterfaceName, RTN_UNREACHABLE);
+            newLp.addRoute(route);
         }
 
         // [5] Add in TCP buffer sizes and HTTP Proxy config, if available.
@@ -2350,8 +2343,7 @@ public class IpClient extends StateMachine {
         // doesn't complete with success after timeout. This check also handles IPv6-only link
         // local mode case, since there will be no IPv6 default route in that mode even with Prefix
         // Delegation experiment flag enabled.
-        if (mDhcp6PrefixDelegationEnabled
-                && newLp.hasIpv6DefaultRoute()
+        if (newLp.hasIpv6DefaultRoute()
                 && mIpv6AutoconfTimeoutAlarm == null) {
             mIpv6AutoconfTimeoutAlarm = new WakeupMessage(mContext, getHandler(),
                     mTag + ".EVENT_IPV6_AUTOCONF_TIMEOUT", EVENT_IPV6_AUTOCONF_TIMEOUT);
@@ -2567,7 +2559,6 @@ public class IpClient extends StateMachine {
     }
 
     private void startDhcp6PrefixDelegation() {
-        if (!mDhcp6PrefixDelegationEnabled) return;
         if (mDhcp6Client != null) {
             Log.wtf(mTag, "Dhcp6Client should never be non-null in startDhcp6PrefixDelegation");
             return;

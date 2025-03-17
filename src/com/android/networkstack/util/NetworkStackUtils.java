@@ -213,12 +213,6 @@ public class NetworkStackUtils {
             "ip_reachability_ignore_organic_nud_failure_version";
 
     /**
-     * Experiment flag to enable DHCPv6 Prefix Delegation(RFC8415) in IpClient.
-     */
-    public static final String IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION =
-            "ipclient_dhcpv6_prefix_delegation_version";
-
-    /**
      * Experiment flag to enable the feature of polling counters in Apf.
      */
     public static final String APF_POLLING_COUNTERS_VERSION = "apf_polling_counters_version";
