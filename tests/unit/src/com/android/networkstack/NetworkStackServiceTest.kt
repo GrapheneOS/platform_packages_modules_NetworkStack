@@ -29,7 +29,6 @@ import android.net.dhcp.IDhcpServer
 import android.net.dhcp.IDhcpServerCallbacks
 import android.net.ip.IIpClientCallbacks
 import android.net.ip.IpClient
-import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.os.Process
@@ -56,11 +55,9 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.ArgumentMatchers.any
-import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.Mockito.doReturn
 import org.mockito.Mockito.eq
 import org.mockito.Mockito.mock
-import org.mockito.Mockito.spy
 import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
 
@@ -170,16 +167,9 @@ class NetworkStackServiceTest {
         verify(mockDhcpCb).onDhcpServerCreated(eq(IDhcpServer.STATUS_SUCCESS), any())
 
         // Call makeNetworkMonitor
-        // Use a spy of INetworkMonitorCallbacks and not a mock, as mockito can't create a mock on Q
-        // because of the missing CaptivePortalData class that is an argument of one of the methods
-        val mockBinder = mock(IBinder::class.java)
-        val mockNetworkMonitorCb = spy(INetworkMonitorCallbacks.Stub.asInterface(mockBinder))
+        val mockNetworkMonitorCb = mock(INetworkMonitorCallbacks::class.java)
         doReturn(9990003).`when`(mockNetworkMonitorCb).interfaceVersion
         doReturn("networkmonitor_hash").`when`(mockNetworkMonitorCb).interfaceHash
-        // Oneway transactions are always successful (return true). INetworkMonitorCallbacks is a
-        // oneway interface. This avoids the stub throwing because the method is not implemented by
-        // the (mock) remote.
-        doReturn(true).`when`(mockBinder).transact(anyInt(), any(), any(), eq(Binder.FLAG_ONEWAY))
 
         connector.makeNetworkMonitor(Network(123), "test_nm", mockNetworkMonitorCb)
 
@@ -187,8 +177,6 @@ class NetworkStackServiceTest {
         verify(mockNetworkMonitorCb).onNetworkMonitorCreated(any())
 
         // Call makeIpClient
-        // Use a spy of IIpClientCallbacks instead of a mock, as mockito cannot create a mock on Q
-        // because of the missing CaptivePortalData class that is an argument on one of the methods
         val mockIpClientCb = mock(IIpClientCallbacks::class.java)
         doReturn(9990004).`when`(mockIpClientCb).interfaceVersion
         doReturn("ipclient_hash").`when`(mockIpClientCb).interfaceHash
