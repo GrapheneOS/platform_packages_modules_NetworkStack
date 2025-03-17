@@ -4290,7 +4290,7 @@ public class ApfFilter {
         pw.println("ApfConfig: " + getApfConfigMessage());
         pw.println("Minimum RDNSS lifetime: " + mMinRdnssLifetimeSec);
         pw.println("Interface MAC address: " + MacAddress.fromBytes(mHardwareAddress));
-        pw.println("Multicast MAC addresses: ");
+        pw.println("Multicast MAC addresses:");
         pw.increaseIndent();
         for (byte[] addr : mDependencies.getEtherMulticastAddresses(mInterfaceParams.name)) {
             pw.println(MacAddress.fromBytes(addr));
@@ -4311,7 +4311,7 @@ public class ApfFilter {
             pw.println("IPv4 address: None");
         }
 
-        pw.println("IPv4 multicast addresses: ");
+        pw.println("IPv4 multicast addresses:");
         pw.increaseIndent();
         final List<Inet4Address> ipv4McastAddrs =
                 ProcfsParsingUtils.getIPv4MulticastAddresses(mInterfaceParams.name);
@@ -4319,13 +4319,13 @@ public class ApfFilter {
             pw.println(addr.getHostAddress());
         }
         pw.decreaseIndent();
-        pw.println("IPv6 non-tentative addresses: ");
+        pw.println("IPv6 non-tentative addresses:");
         pw.increaseIndent();
         for (Inet6Address addr : mIPv6NonTentativeAddresses) {
             pw.println(addr.getHostAddress());
         }
         pw.decreaseIndent();
-        pw.println("IPv6 tentative addresses: ");
+        pw.println("IPv6 tentative addresses:");
         pw.increaseIndent();
         for (Inet6Address addr : mIPv6TentativeAddresses) {
             pw.println(addr.getHostAddress());
@@ -4429,7 +4429,7 @@ public class ApfFilter {
         pw.println(HexDump.toHexString(mLastInstalledProgram, false /* lowercase */));
         pw.decreaseIndent();
 
-        pw.println("APF packet counters: ");
+        pw.println("APF packet counters:");
         pw.increaseIndent();
         if (!hasDataAccess(mApfVersionSupported)) {
             pw.println("APF counters not supported");
