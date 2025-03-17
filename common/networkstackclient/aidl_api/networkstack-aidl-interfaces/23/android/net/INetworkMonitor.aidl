@@ -1,16 +1,16 @@
-/*
- * Copyright (C) 2018 The Android Open Source Project
+/**
+ * Copyright (c) 2018, The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
+ * See the License for the specific language governing perNmissions and
  * limitations under the License.
  */
 ///////////////////////////////////////////////////////////////////////////////
@@ -33,14 +33,28 @@
 
 package android.net;
 /* @hide */
-interface INetworkMonitorCallbacks {
-  void onNetworkMonitorCreated(in android.net.INetworkMonitor networkMonitor) = 0;
-  void notifyNetworkTested(int testResult, @nullable String redirectUrl) = 1;
-  void notifyPrivateDnsConfigResolved(in android.net.PrivateDnsConfigParcel config) = 2;
-  void showProvisioningNotification(String action, String packageName) = 3;
-  void hideProvisioningNotification() = 4;
-  void notifyProbeStatusChanged(int probesCompleted, int probesSucceeded) = 5;
-  void notifyNetworkTestedWithExtras(in android.net.NetworkTestResultParcelable result) = 6;
-  void notifyDataStallSuspected(in android.net.DataStallReportParcelable report) = 7;
-  void notifyCaptivePortalDataChanged(in android.net.CaptivePortalData data) = 8;
+interface INetworkMonitor {
+  oneway void start();
+  oneway void launchCaptivePortalApp();
+  oneway void notifyCaptivePortalAppFinished(int response);
+  oneway void setAcceptPartialConnectivity();
+  oneway void forceReevaluation(int uid);
+  oneway void notifyPrivateDnsChanged(in android.net.PrivateDnsConfigParcel config);
+  oneway void notifyDnsResponse(int returnCode);
+  oneway void notifyNetworkConnected(in android.net.LinkProperties lp, in android.net.NetworkCapabilities nc);
+  oneway void notifyNetworkDisconnected();
+  oneway void notifyLinkPropertiesChanged(in android.net.LinkProperties lp);
+  oneway void notifyNetworkCapabilitiesChanged(in android.net.NetworkCapabilities nc);
+  oneway void notifyNetworkConnectedParcel(in android.net.networkstack.aidl.NetworkMonitorParameters params);
+  const int NETWORK_TEST_RESULT_VALID = 0;
+  const int NETWORK_TEST_RESULT_INVALID = 1;
+  const int NETWORK_TEST_RESULT_PARTIAL_CONNECTIVITY = 2;
+  const int NETWORK_VALIDATION_RESULT_VALID = 0x01;
+  const int NETWORK_VALIDATION_RESULT_PARTIAL = 0x02;
+  const int NETWORK_VALIDATION_RESULT_SKIPPED = 0x04;
+  const int NETWORK_VALIDATION_PROBE_DNS = 0x04;
+  const int NETWORK_VALIDATION_PROBE_HTTP = 0x08;
+  const int NETWORK_VALIDATION_PROBE_HTTPS = 0x10;
+  const int NETWORK_VALIDATION_PROBE_FALLBACK = 0x20;
+  const int NETWORK_VALIDATION_PROBE_PRIVDNS = 0x40;
 }
