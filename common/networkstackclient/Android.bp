@@ -221,6 +221,10 @@ aidl_interface {
             version: "22",
             imports: ["ipmemorystore-aidl-interfaces-V11"],
         },
+        {
+            version: "23",
+            imports: ["ipmemorystore-aidl-interfaces-V11"],
+        },
 
     ],
     frozen: true,

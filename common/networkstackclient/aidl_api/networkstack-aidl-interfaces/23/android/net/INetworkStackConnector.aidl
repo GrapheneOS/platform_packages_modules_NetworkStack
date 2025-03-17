@@ -1,16 +1,16 @@
-/*
- * Copyright (C) 2018 The Android Open Source Project
+/**
+ * Copyright (c) 2018, The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
+ * See the License for the specific language governing perNmissions and
  * limitations under the License.
  */
 ///////////////////////////////////////////////////////////////////////////////
@@ -33,14 +33,10 @@
 
 package android.net;
 /* @hide */
-interface INetworkMonitorCallbacks {
-  void onNetworkMonitorCreated(in android.net.INetworkMonitor networkMonitor) = 0;
-  void notifyNetworkTested(int testResult, @nullable String redirectUrl) = 1;
-  void notifyPrivateDnsConfigResolved(in android.net.PrivateDnsConfigParcel config) = 2;
-  void showProvisioningNotification(String action, String packageName) = 3;
-  void hideProvisioningNotification() = 4;
-  void notifyProbeStatusChanged(int probesCompleted, int probesSucceeded) = 5;
-  void notifyNetworkTestedWithExtras(in android.net.NetworkTestResultParcelable result) = 6;
-  void notifyDataStallSuspected(in android.net.DataStallReportParcelable report) = 7;
-  void notifyCaptivePortalDataChanged(in android.net.CaptivePortalData data) = 8;
+interface INetworkStackConnector {
+  oneway void makeDhcpServer(in String ifName, in android.net.dhcp.DhcpServingParamsParcel params, in android.net.dhcp.IDhcpServerCallbacks cb);
+  oneway void makeNetworkMonitor(in android.net.Network network, String name, in android.net.INetworkMonitorCallbacks cb);
+  oneway void makeIpClient(in String ifName, in android.net.ip.IIpClientCallbacks callbacks);
+  oneway void fetchIpMemoryStore(in android.net.IIpMemoryStoreCallbacks cb);
+  oneway void allowTestUid(int uid, in android.net.INetworkStackStatusCallback cb);
 }
