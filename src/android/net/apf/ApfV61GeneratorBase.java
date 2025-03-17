@@ -15,6 +15,7 @@
  */
 package android.net.apf;
 
+import static android.net.apf.BaseApfGenerator.Rbit.Rbit1;
 import static android.net.apf.BaseApfGenerator.Register.R0;
 
 import androidx.annotation.NonNull;
@@ -188,9 +189,26 @@ public abstract class ApfV61GeneratorBase<Type extends ApfV61GeneratorBase<Type>
 
     @Override
     public final Type addJumpIfPktAtR0ContainDnsQ(byte[] qnames, int[] qtypes, short tgt) {
-        for (int qtype : qtypes) {
-            addJumpIfPktAtR0ContainDnsQ(qnames, qtype, tgt);
+        for (int i = 0; i < qtypes.length; i += 2) {
+            if (i == qtypes.length - 1) {
+                addJumpIfPktAtR0ContainDnsQ(qnames, qtypes[i], tgt);
+            } else {
+                addJumpIfPktAtR0ContainDnsQ2(qnames, qtypes[i], qtypes[i + 1], tgt);
+            }
         }
         return self();
+    }
+
+    /**
+     * Appends a conditional jump instruction to the program: Jumps to {@code tgt} if the UDP
+     * payload's DNS questions contain the QNAMEs specified in {@code qnames} and qtype
+     * equals {@code qtype1} or {@code qtype2}. Examines the payload starting at the offset in R0.
+     * Drops packets if packets are corrupted.
+     */
+    public final Type addJumpIfPktAtR0ContainDnsQ2(@android.annotation.NonNull byte[] qnames,
+            int qtype1, int qtype2, short tgt) {
+        validateNames(qnames);
+        return append(new Instruction(ExtendedOpcodes.JDNSQMATCH2, Rbit1).setTargetLabel(tgt)
+                .addU8(qtype1).addU8(qtype2).setBytesImm(qnames));
     }
 }

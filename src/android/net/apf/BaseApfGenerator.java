@@ -192,7 +192,22 @@ public abstract class BaseApfGenerator {
          * imm1: Extended opcode
          * imm2(u16): Length of exception buffer (located *immediately* after the program itself)
          */
-        EXCEPTIONBUFFER(48);
+        EXCEPTIONBUFFER(48),
+        // Jumps if the UDP payload content (starting at R0) does [not] match one
+        // of the specified QNAMEs in question records, applying case insensitivity.
+        // The qtypes in the input packet can match either of the two supplied qtypes.
+        // SAFE version PASSES corrupt packets, while the other one DROPS.
+        // R=0/1 meaning 'does not match'/'matches'
+        // R0: Offset to UDP payload content
+        // imm1: Extended opcode
+        // imm2: Jump label offset
+        // imm3(u8): Question type1 (PTR/SRV/TXT/A/AAAA)
+        // imm4(u8): Question type2 (PTR/SRV/TXT/A/AAAA)
+        // imm5(bytes): null terminated list of null terminated LV-encoded QNAMEs
+        // e.g.: "jdnsqeq2 R0,label,A,AAAA,\002aa\005local\0\0",
+        //       "jdnsqne2 R0,label,A,AAAA,\002aa\005local\0\0"
+        JDNSQMATCH2(49),
+        JDNSQMATCHSAFE2(51);
 
         final int value;
 
