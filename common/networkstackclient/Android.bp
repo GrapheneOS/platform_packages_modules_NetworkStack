@@ -221,6 +221,10 @@ aidl_interface {
             version: "22",
             imports: ["ipmemorystore-aidl-interfaces-V11"],
         },
+        {
+            version: "23",
+            imports: ["ipmemorystore-aidl-interfaces-V11"],
+        },
 
     ],
     frozen: true,
@@ -232,7 +236,7 @@ java_library {
     min_sdk_version: "30",
     static_libs: [
         "ipmemorystore-aidl-interfaces-V11-java",
-        "networkstack-aidl-interfaces-V22-java",
+        "networkstack-aidl-interfaces-V23-java",
     ],
     visibility: ["//packages/modules/NetworkStack:__subpackages__"],
     apex_available: [

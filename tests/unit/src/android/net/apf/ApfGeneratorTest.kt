@@ -730,8 +730,8 @@ class ApfGeneratorTest {
                 encodeInstruction(21, 1, 1), 43, 1, 0x0c.toByte(),
         ) + qnames, program)
         assertContentEquals(listOf(
-                "0: jdnsqne     r0, DROP, 12, (1)A(1)B(0)(0)",
-                "10: jdnsqeq     r0, DROP, 12, (1)A(1)B(0)(0)"
+                "0: jdnsqne     r0, DROP, PTR, (1)A(1)B(0)(0)",
+                "10: jdnsqeq     r0, DROP, PTR, (1)A(1)B(0)(0)"
         ), apfTestHelpers.disassembleApf(program).map{ it.trim() })
 
         gen = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
@@ -744,8 +744,8 @@ class ApfGeneratorTest {
                 encodeInstruction(21, 1, 1), 45, 1, 0x0c.toByte(),
         ) + qnames, program)
         assertContentEquals(listOf(
-                "0: jdnsqnesafe r0, DROP, 12, (1)A(1)B(0)(0)",
-                "10: jdnsqeqsafe r0, DROP, 12, (1)A(1)B(0)(0)"
+                "0: jdnsqnesafe r0, DROP, PTR, (1)A(1)B(0)(0)",
+                "10: jdnsqeqsafe r0, DROP, PTR, (1)A(1)B(0)(0)"
         ), apfTestHelpers.disassembleApf(program).map{ it.trim() })
 
         gen = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)

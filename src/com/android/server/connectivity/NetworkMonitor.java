@@ -879,7 +879,8 @@ public class NetworkMonitor extends StateMachine {
             } else {
                 mCallback.notifyNetworkTestedWithExtras(result);
             }
-        } catch (RemoteException e) {
+        } catch (RemoteException | RuntimeException e) {
+            // TODO: stop catching RuntimeException once all mainline devices use the tethering APEX
             Log.e(TAG, "Error sending network test result", e);
         }
     }
@@ -910,7 +911,8 @@ public class NetworkMonitor extends StateMachine {
     private void notifyProbeStatusChanged(int probesCompleted, int probesSucceeded) {
         try {
             mCallback.notifyProbeStatusChanged(probesCompleted, probesSucceeded);
-        } catch (RemoteException e) {
+        } catch (RemoteException | RuntimeException e) {
+            // TODO: stop catching RuntimeException once all mainline devices use the tethering APEX
             Log.e(TAG, "Error sending probe status", e);
         }
     }
@@ -918,7 +920,8 @@ public class NetworkMonitor extends StateMachine {
     private void showProvisioningNotification(String action) {
         try {
             mCallback.showProvisioningNotification(action, mContext.getPackageName());
-        } catch (RemoteException e) {
+        } catch (RemoteException | RuntimeException e) {
+            // TODO: stop catching RuntimeException once all mainline devices use the tethering APEX
             Log.e(TAG, "Error showing provisioning notification", e);
         }
     }
@@ -926,7 +929,8 @@ public class NetworkMonitor extends StateMachine {
     private void hideProvisioningNotification() {
         try {
             mCallback.hideProvisioningNotification();
-        } catch (RemoteException e) {
+        } catch (RemoteException | RuntimeException e) {
+            // TODO: stop catching RuntimeException once all mainline devices use the tethering APEX
             Log.e(TAG, "Error hiding provisioning notification", e);
         }
     }
@@ -934,7 +938,8 @@ public class NetworkMonitor extends StateMachine {
     private void notifyDataStallSuspected(@NonNull DataStallReportParcelable p) {
         try {
             mCallback.notifyDataStallSuspected(p);
-        } catch (RemoteException e) {
+        } catch (RemoteException | RuntimeException e) {
+            // TODO: stop catching RuntimeException once all mainline devices use the tethering APEX
             Log.e(TAG, "Error sending notification for suspected data stall", e);
         }
     }
@@ -2085,7 +2090,8 @@ public class NetworkMonitor extends StateMachine {
     private void notifyPrivateDnsConfigResolved(@NonNull PrivateDnsConfig config) {
         try {
             mCallback.notifyPrivateDnsConfigResolved(config.toParcel());
-        } catch (RemoteException e) {
+        } catch (RemoteException | RuntimeException e) {
+            // TODO: stop catching RuntimeException once all mainline devices use the tethering APEX
             Log.e(TAG, "Error sending private DNS config resolved notification", e);
         }
     }
@@ -4121,7 +4127,8 @@ public class NetworkMonitor extends StateMachine {
         if (data == null) return;
         try {
             data.notifyChanged(mCallback);
-        } catch (RemoteException e) {
+        } catch (RemoteException | RuntimeException e) {
+            // TODO: stop catching RuntimeException once all mainline devices use the tethering APEX
             Log.e(TAG, "Error notifying ConnectivityService of new capport data", e);
         }
     }

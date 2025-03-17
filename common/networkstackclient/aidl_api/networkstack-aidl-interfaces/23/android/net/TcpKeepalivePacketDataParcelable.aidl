@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,15 +32,16 @@
 // later when a module using the interface is updated, e.g., Mainline modules.
 
 package android.net;
-/* @hide */
-interface INetworkMonitorCallbacks {
-  void onNetworkMonitorCreated(in android.net.INetworkMonitor networkMonitor) = 0;
-  void notifyNetworkTested(int testResult, @nullable String redirectUrl) = 1;
-  void notifyPrivateDnsConfigResolved(in android.net.PrivateDnsConfigParcel config) = 2;
-  void showProvisioningNotification(String action, String packageName) = 3;
-  void hideProvisioningNotification() = 4;
-  void notifyProbeStatusChanged(int probesCompleted, int probesSucceeded) = 5;
-  void notifyNetworkTestedWithExtras(in android.net.NetworkTestResultParcelable result) = 6;
-  void notifyDataStallSuspected(in android.net.DataStallReportParcelable report) = 7;
-  void notifyCaptivePortalDataChanged(in android.net.CaptivePortalData data) = 8;
+@JavaDerive(toString=true)
+parcelable TcpKeepalivePacketDataParcelable {
+  byte[] srcAddress;
+  int srcPort;
+  byte[] dstAddress;
+  int dstPort;
+  int seq;
+  int ack;
+  int rcvWnd;
+  int rcvWndScale;
+  int tos;
+  int ttl;
 }
