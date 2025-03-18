@@ -3591,8 +3591,9 @@ public class ApfFilter {
 
         gen.addLoad16intoR0(ETH_ETHERTYPE_OFFSET);
         if (SdkLevel.isAtLeastV()) {
-            // IPv4, ARP, IPv6, EAPOL, WAPI
-            gen.addCountAndDropIfR0IsNoneOf(Set.of(0x0800L, 0x0806L, 0x86DDL, 0x888EL, 0x88B4L),
+            // IPv4, ARP, IPv6, EAPOL, WAPI, TDLS
+            gen.addCountAndDropIfR0IsNoneOf(
+                    Set.of(0x0800L, 0x0806L, 0x86DDL, 0x888EL, 0x88B4L, 0x890DL),
                     DROPPED_ETHERTYPE_NOT_ALLOWED);
         } else  {
             if (mDrop802_3Frames) {
@@ -4298,7 +4299,7 @@ public class ApfFilter {
         pw.decreaseIndent();
         if (SdkLevel.isAtLeastV()) {
             pw.print("Hardcoded not denylisted Ethertypes:");
-            pw.println(" 0800(IPv4) 0806(ARP) 86DD(IPv6) 888E(EAPOL) 88B4(WAPI)");
+            pw.println(" 0800(IPv4) 0806(ARP) 86DD(IPv6) 888E(EAPOL) 88B4(WAPI) 890D(TDLS)");
         } else {
             pw.print("Denylisted Ethertypes:");
             for (int p : mEthTypeBlackList) {
