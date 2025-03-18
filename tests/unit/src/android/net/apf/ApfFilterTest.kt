@@ -4171,6 +4171,38 @@ class ApfFilterTest {
         // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
         // ip = IP(src="10.0.0.3", dst="224.0.0.251")
         // udp = UDP(dport=5353, sport=5353)
+        // questions = [
+        //   DNSQR(qname="_airplay._tcp.local", qtype="PTR"),
+        //   DNSQR(qname="gambit-3cb56c6253638b3641e3d289013cc0ae._googlecast._tcp.local", qtype="SRV")
+        // ]
+        // dns = dns_compress(DNS(qd=questions))
+        // pkt = eth/ip/udp/dns
+        val castIPv4MdnsSRVQuery = """
+            01005e0000fb01020304050608004500007b0001000040118f730a000003e00
+            000fb14e914e900674612000001000002000000000000085f616972706c6179
+            045f746370056c6f63616c00000c00012767616d6269742d336362353663363
+            23533363338623336343165336432383930313363633061650b5f676f6f676c
+            6563617374c01500210001
+        """.replace("\\s+".toRegex(), "").trim()
+
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(castIPv4MdnsSRVQuery),
+            DROPPED_MDNS_REPLIED
+        )
+
+        transmitPkt = apfTestHelpers.consumeTransmittedPackets(1)[0]
+
+        assertContentEquals(
+            HexDump.hexStringToByteArray(expectedIPv4CastMdnsReply),
+            transmitPkt
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
         // dns = DNS(qd=DNSQR(qname="_androidtvremote2._tcp.local", qtype="PTR"))
         // pkt = eth/ip/udp/dns
         val tvRemoteIPv4MdnsPtrQuery = """
