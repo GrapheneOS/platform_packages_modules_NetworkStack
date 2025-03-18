@@ -45,6 +45,7 @@ public class ApfCounterTracker {
         PASSED_ALLOCATE_FAILURE, // hardcoded in APFv6 interpreter
         PASSED_TRANSMIT_FAILURE, // hardcoded in APFv6 interpreter
         CORRUPT_DNS_PACKET,      // hardcoded in APFv6 interpreter
+        EXCEPTIONS,              // hardcoded in APFv6.1 interpreter
         FILTER_AGE_SECONDS,
         FILTER_AGE_16384THS,
         APF_VERSION,
