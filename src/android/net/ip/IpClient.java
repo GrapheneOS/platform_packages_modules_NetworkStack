@@ -2834,11 +2834,11 @@ public class IpClient extends StateMachine {
         apfConfig.handleNdOffload = mApfHandleNdOffload;
         apfConfig.handleMdnsOffload = mApfHandleMdnsOffload;
         apfConfig.handleIgmpOffload = mApfHandleIgmpOffload;
-        // TODO: Turn on MLD offload on devices with 2048 ~ 3999 bytes of APF RAM.
-        apfConfig.handleMldOffload = mApfHandleMldOffload && apfConfig.apfRamSize >= 4000;
+        // TODO: Turn on MLD offload on devices with 2048 ~ 2999 bytes of APF RAM.
+        apfConfig.handleMldOffload = mApfHandleMldOffload && apfConfig.apfRamSize >= 3000;
         apfConfig.handleIpv4PingOffload = mApfHandleIpv4PingOffload;
-        // TODO: Turn on Ping6 offload on devices with 2048 ~ 3999 bytes of APF RAM.
-        apfConfig.handleIpv6PingOffload = mApfHandleIpv6PingOffload && apfConfig.apfRamSize >= 4000;
+        // TODO: Turn on Ping6 offload on devices with 2048 ~ 2999 bytes of APF RAM.
+        apfConfig.handleIpv6PingOffload = mApfHandleIpv6PingOffload && apfConfig.apfRamSize >= 3000;
         apfConfig.minMetricsSessionDurationMs = mApfCounterPollingIntervalMs;
         apfConfig.hasClatInterface = mHasSeenClatInterface;
         return mDependencies.maybeCreateApfFilter(getHandler(), mContext, apfConfig,

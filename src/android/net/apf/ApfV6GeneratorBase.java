@@ -523,7 +523,7 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
                 || c == '@';
     }
 
-    private static void validateNames(@NonNull byte[] names) {
+    static void validateNames(@NonNull byte[] names) {
         final int len = names.length;
         if (len < 4) {
             throw new IllegalArgumentException("qnames must have at least length 4");
