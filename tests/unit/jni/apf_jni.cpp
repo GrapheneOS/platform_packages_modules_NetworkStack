@@ -278,7 +278,10 @@ static jobjectArray com_android_server_ApfTest_disassembleApf(
                             reinterpret_cast<jbyte*>(buf.data()));
     std::vector<std::string> disassemble_output;
     for (uint32_t pc = 0; pc < program_len;) {
-      const disas_ret ret = apf_disassemble(buf.data(), program_len, &pc);
+      // TODO: Implement proper selection of APFv4 or APFv6 code for
+      // disassembly.
+      const disas_ret ret =
+          apf_disassemble(buf.data(), program_len, &pc, true /* is_v6*/);
       disassemble_output.emplace_back(ret.content);
     }
     jclass stringClass = env->FindClass("java/lang/String");

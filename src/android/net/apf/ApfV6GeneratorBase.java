@@ -618,6 +618,18 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
         append(new Instruction(opcode, R0));  // APFv6+: R0 op= R1
     }
 
+    @Override
+    public final Type addAdd(long val) {
+        if (val == 0) return self();
+        return append(new Instruction(Opcodes.ADD).addTwosCompSigned(val));
+    }
+
+    @Override
+    public final Type addAnd(long val) {
+        if (val == 0) return addLoadImmediate(R0, 0);
+        return append(new Instruction(Opcodes.AND).addTwosCompSigned(val));
+    }
+
     /**
      * Add an instruction to the end of the program to increment the counter value and
      * immediately return PASS.
