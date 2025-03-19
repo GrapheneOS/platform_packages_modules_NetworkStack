@@ -510,7 +510,7 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
      * packet at an offset specified by register0 match none of the elements in {@code bytesSet}.
      * R=0 means check for not equal.
      */
-    public final Type addJumpIfBytesAtR0EqualNoneOf(@NonNull List<byte[]> bytesList, short tgt) {
+    public final Type addJumpIfBytesAtR0EqualsNoneOf(@NonNull List<byte[]> bytesList, short tgt) {
         return addJumpIfBytesAtR0EqualsHelper(bytesList, tgt, false /* jumpOnMatch */);
     }
 

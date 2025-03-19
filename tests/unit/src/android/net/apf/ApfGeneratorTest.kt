@@ -801,8 +801,8 @@ class ApfGeneratorTest {
 
         gen = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
         gen.addJumpIfBytesAtR0EqualsAnyOf(listOf(byteArrayOf(1, 2), byteArrayOf(3, 4)), DROP_LABEL)
-        gen.addJumpIfBytesAtR0EqualNoneOf(listOf(byteArrayOf(1, 2), byteArrayOf(3, 4)), DROP_LABEL)
-        gen.addJumpIfBytesAtR0EqualNoneOf(listOf(byteArrayOf(1, 1), byteArrayOf(1, 1)), DROP_LABEL)
+        gen.addJumpIfBytesAtR0EqualsNoneOf(listOf(byteArrayOf(1, 2), byteArrayOf(3, 4)), DROP_LABEL)
+        gen.addJumpIfBytesAtR0EqualsNoneOf(listOf(byteArrayOf(1, 1), byteArrayOf(1, 1)), DROP_LABEL)
         program = gen.generate().skipDataAndDebug()
         assertContentEquals(byteArrayOf(
                 encodeInstruction(opcode = 20, immLength = 2, register = 1),
@@ -1810,7 +1810,7 @@ class ApfGeneratorTest {
 
         program = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
                 .addLoadImmediate(R0, 1)
-                .addJumpIfBytesAtR0EqualNoneOf(
+                .addJumpIfBytesAtR0EqualsNoneOf(
                         listOf(byteArrayOf(1, 2, 3), byteArrayOf(6, 5, 4)),
                         DROP_LABEL
                 )
@@ -1820,7 +1820,7 @@ class ApfGeneratorTest {
 
         program = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
                 .addLoadImmediate(R0, 0)
-                .addJumpIfBytesAtR0EqualNoneOf(
+                .addJumpIfBytesAtR0EqualsNoneOf(
                         listOf(byteArrayOf(1, 2, 3), byteArrayOf(6, 5, 4)),
                         DROP_LABEL
                 )

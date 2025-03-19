@@ -205,7 +205,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
             ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         final short tgt = getUniqueLabel();
-        return addJumpIfBytesAtR0EqualNoneOf(bytesList, tgt).addCountAndDrop(cnt).defineLabel(tgt);
+        return addJumpIfBytesAtR0EqualsNoneOf(bytesList, tgt).addCountAndDrop(cnt).defineLabel(tgt);
     }
 
     @Override
@@ -213,7 +213,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
             ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         final short tgt = getUniqueLabel();
-        return addJumpIfBytesAtR0EqualNoneOf(bytesList, tgt).addCountAndPass(cnt).defineLabel(tgt);
+        return addJumpIfBytesAtR0EqualsNoneOf(bytesList, tgt).addCountAndPass(cnt).defineLabel(tgt);
     }
 
     @Override
