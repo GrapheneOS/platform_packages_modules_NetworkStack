@@ -166,13 +166,13 @@ public abstract class ApfV61GeneratorBase<Type extends ApfV61GeneratorBase<Type>
     @Override
     public Type addCountAndDropIfBytesAtR0EqualsNoneOf(@NonNull List<byte[]> bytesList,
             ApfCounterTracker.Counter cnt) {
-        return addJumpIfBytesAtR0EqualNoneOf(bytesList, cnt.getJumpDropLabel());
+        return addJumpIfBytesAtR0EqualsNoneOf(bytesList, cnt.getJumpDropLabel());
     }
 
     @Override
     public Type addCountAndPassIfBytesAtR0EqualsNoneOf(@NonNull List<byte[]> bytesList,
             ApfCounterTracker.Counter cnt) {
-        return addJumpIfBytesAtR0EqualNoneOf(bytesList, cnt.getJumpPassLabel());
+        return addJumpIfBytesAtR0EqualsNoneOf(bytesList, cnt.getJumpPassLabel());
     }
 
     @Override

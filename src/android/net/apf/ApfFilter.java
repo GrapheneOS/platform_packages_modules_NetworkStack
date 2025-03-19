@@ -1980,7 +1980,7 @@ public class ApfFilter {
         // We need to check both the mDNS multicast MAC address and the device's MAC address
         // because multicast to unicast conversion might have occurred.
         gen.addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET)
-                .addJumpIfBytesAtR0EqualNoneOf(
+                .addJumpIfBytesAtR0EqualsNoneOf(
                         List.of(mHardwareAddress, ETH_MULTICAST_MDNS_V4_MAC_ADDRESS),
                         skipMdnsFilter
                 );
@@ -2441,7 +2441,7 @@ public class ApfFilter {
         // We need to check both the mDNS multicast MAC address and the device's MAC address
         // because multicast to unicast conversion might have occurred.
         gen.addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET)
-                .addJumpIfBytesAtR0EqualNoneOf(
+                .addJumpIfBytesAtR0EqualsNoneOf(
                         List.of(mHardwareAddress, ETH_MULTICAST_MDNS_V6_MAC_ADDRESS),
                         skipMdnsFilter
                 );
@@ -2508,7 +2508,7 @@ public class ApfFilter {
         gen.addLoadImmediate(R0, ETHER_DST_ADDR_OFFSET)
                 .addJumpIfBytesAtR0NotEqual(mHardwareAddress, skipPing6Offload)
                 .addLoadImmediate(R0, IPV6_DEST_ADDR_OFFSET)
-                .addJumpIfBytesAtR0EqualNoneOf(nonTentativeIPv6Addrs, skipPing6Offload);
+                .addJumpIfBytesAtR0EqualsNoneOf(nonTentativeIPv6Addrs, skipPing6Offload);
 
         // We need to check if the packet is sufficiently large to be a valid ICMPv6 echo packet.
         gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE)
