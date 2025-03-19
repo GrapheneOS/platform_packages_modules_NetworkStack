@@ -5778,18 +5778,15 @@ class ApfFilterTest {
         var apfRamSize = 600
         val maxApfRamSize = 2048
 
-        while (apfRamSize < maxApfRamSize) {
+        while (apfRamSize <= maxApfRamSize) {
             val (program, _) = getProgramWithAllFeatureOff(
                 apfRamSize = apfRamSize,
                 apfVersion = 2
             )
             assertThat(program.size).isLessThan(apfRamSize + 1)
             assertThat(program).isNotEqualTo(ByteArray(apfRamSize) { 0 })
-            val step = Random.nextInt(1, 256)
+            val step = Random.nextInt(1, 16)
             apfRamSize += step
-            if (apfRamSize > maxApfRamSize) {
-                break
-            }
         }
     }
 
@@ -5800,7 +5797,7 @@ class ApfFilterTest {
         var apfRamSize = 1024
         val maxApfRamSize = 4096
 
-        while (apfRamSize < maxApfRamSize) {
+        while (apfRamSize <= maxApfRamSize) {
             val (program, _) = getProgramWithAllFeatureOff(
                 apfRamSize = apfRamSize,
                 apfVersion = 4
@@ -5808,11 +5805,8 @@ class ApfFilterTest {
             val availableRam = apfRamSize - ApfCounterTracker.Counter.totalSize()
             assertThat(program.size).isLessThan(availableRam + 1)
             assertThat(program).isNotEqualTo(ByteArray(availableRam) { 0 })
-            val step = Random.nextInt(1, 256)
+            val step = Random.nextInt(1, 16)
             apfRamSize += step
-            if (apfRamSize > maxApfRamSize) {
-                break
-            }
         }
     }
 
@@ -5822,7 +5816,7 @@ class ApfFilterTest {
         var apfRamSize = 3000
         val maxApfRamSize = 6000
 
-        while (apfRamSize < maxApfRamSize) {
+        while (apfRamSize <= maxApfRamSize) {
             val (program, _) = getProgramWithAllFeatureEnabled(
                 apfRamSize = apfRamSize,
                 apfVersion = apfInterpreterVersion
@@ -5830,11 +5824,8 @@ class ApfFilterTest {
             val availableRam = apfRamSize - ApfCounterTracker.Counter.totalSize()
             assertThat(program.size).isLessThan(availableRam + 1)
             assertThat(program).isNotEqualTo(ByteArray(availableRam) { 0 })
-            val step = Random.nextInt(1, 512)
+            val step = Random.nextInt(1, 16)
             apfRamSize += step
-            if (apfRamSize > maxApfRamSize) {
-                break
-            }
         }
     }
 
