@@ -769,24 +769,12 @@ public abstract class BaseApfGenerator {
 
     void checkPassCounterRange(ApfCounterTracker.Counter cnt) {
         if (mDisableCounterRangeCheck) return;
-        if (cnt.value() < ApfCounterTracker.MIN_PASS_COUNTER.value()
-                || cnt.value() > ApfCounterTracker.MAX_PASS_COUNTER.value()) {
-            throw new IllegalArgumentException(
-                    String.format("Counter %s, is not in range [%s, %s]", cnt,
-                            ApfCounterTracker.MIN_PASS_COUNTER,
-                            ApfCounterTracker.MAX_PASS_COUNTER));
-        }
+        cnt.getJumpPassLabel();
     }
 
     void checkDropCounterRange(ApfCounterTracker.Counter cnt) {
         if (mDisableCounterRangeCheck) return;
-        if (cnt.value() < ApfCounterTracker.MIN_DROP_COUNTER.value()
-                || cnt.value() > ApfCounterTracker.MAX_DROP_COUNTER.value()) {
-            throw new IllegalArgumentException(
-                    String.format("Counter %s, is not in range [%s, %s]", cnt,
-                            ApfCounterTracker.MIN_DROP_COUNTER,
-                            ApfCounterTracker.MAX_DROP_COUNTER));
-        }
+        cnt.getJumpDropLabel();
     }
 
     /**
