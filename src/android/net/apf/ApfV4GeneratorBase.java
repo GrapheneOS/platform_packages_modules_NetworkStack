@@ -161,10 +161,7 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
     /**
      * Add an instruction to the end of the program to add {@code value} to register R0.
      */
-    public final Type addAdd(long val) {
-        if (val == 0) return self();  // nop, as APFv6 would '+= R1'
-        return append(new Instruction(Opcodes.ADD).addTwosCompUnsigned(val));
-    }
+    public abstract Type addAdd(long val);
 
     /**
      * Add an instruction to the end of the program to subtract {@code value} from register R0.
@@ -192,10 +189,7 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
     /**
      * Add an instruction to the end of the program to logically and register R0 with {@code value}.
      */
-    public final Type addAnd(long val) {
-        if (val == 0) return addLoadImmediate(R0, 0);  // equivalent, as APFv6 would '+= R1'
-        return append(new Instruction(Opcodes.AND).addTwosCompUnsigned(val));
-    }
+    public abstract Type addAnd(long val);
 
     /**
      * Add an instruction to the end of the program to logically or register R0 with {@code value}.
