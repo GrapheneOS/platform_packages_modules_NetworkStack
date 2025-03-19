@@ -163,6 +163,7 @@ import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HO
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_REPLIED_NON_DAD;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ROUTER_SOLICITATION;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_MDNS;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_NON_UNICAST_TDLS;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_RA;
 import static android.net.apf.ApfCounterTracker.Counter.FILTER_AGE_16384THS;
 import static android.net.apf.ApfCounterTracker.Counter.FILTER_AGE_SECONDS;
@@ -3568,6 +3569,11 @@ public class ApfFilter {
         //      drop
         //    else
         //      pass
+        // if it's a TDLS packet:
+        //    it is unicast:
+        //      pass
+        //    else
+        //      drop
         // if it's a 802.3 Frame (ethtype < 0x0600):
         //    drop or pass based on configurations
         // if it has a ether-type that belongs to the black list
@@ -3591,9 +3597,17 @@ public class ApfFilter {
 
         gen.addLoad16intoR0(ETH_ETHERTYPE_OFFSET);
         if (SdkLevel.isAtLeastV()) {
-            // IPv4, ARP, IPv6, EAPOL, WAPI, TDLS
+            // Pass unicast TDLS packet but drop non-unicast TDLS packet.
+            short skipTDLScheck = gen.getUniqueLabel();
+            gen.addJumpIfR0NotEquals(0x890DL, skipTDLScheck)
+                    .addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET)
+                    .addCountAndDropIfBytesAtR0NotEqual(mHardwareAddress, DROPPED_NON_UNICAST_TDLS)
+                    .addCountAndPass(PASSED_NON_IP_UNICAST)
+                    .defineLabel(skipTDLScheck);
+
+            // IPv4, ARP, IPv6, EAPOL, WAPI
             gen.addCountAndDropIfR0IsNoneOf(
-                    Set.of(0x0800L, 0x0806L, 0x86DDL, 0x888EL, 0x88B4L, 0x890DL),
+                    Set.of(0x0800L, 0x0806L, 0x86DDL, 0x888EL, 0x88B4L),
                     DROPPED_ETHERTYPE_NOT_ALLOWED);
         } else  {
             if (mDrop802_3Frames) {
@@ -4299,7 +4313,8 @@ public class ApfFilter {
         pw.decreaseIndent();
         if (SdkLevel.isAtLeastV()) {
             pw.print("Hardcoded not denylisted Ethertypes:");
-            pw.println(" 0800(IPv4) 0806(ARP) 86DD(IPv6) 888E(EAPOL) 88B4(WAPI) 890D(TDLS)");
+            pw.println(
+                    " 0800(IPv4) 0806(ARP) 86DD(IPv6) 888E(EAPOL) 88B4(WAPI) 890D(TDLS unicast)");
         } else {
             pw.print("Denylisted Ethertypes:");
             for (int p : mEthTypeBlackList) {
