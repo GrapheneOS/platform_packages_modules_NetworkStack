@@ -58,6 +58,7 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HOST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_REPLIED_NON_DAD
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_MDNS
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_MDNS_REPLIED
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_NON_UNICAST_TDLS
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_RA
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_BROADCAST_REPLY
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_REQUEST
@@ -71,6 +72,7 @@ import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_HOPOPTS
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NON_ICMP
 import android.net.apf.ApfCounterTracker.Counter.PASSED_MDNS
+import android.net.apf.ApfCounterTracker.Counter.PASSED_NON_IP_UNICAST
 import android.net.apf.ApfFilter.Dependencies
 import android.net.apf.ApfTestHelpers.Companion.TIMEOUT_MS
 import android.net.apf.BaseApfGenerator.APF_VERSION_3
@@ -5773,7 +5775,7 @@ class ApfFilterTest {
     @Test
     fun testAPFv2GenerateValidProgram() {
         assumeTrue(apfInterpreterVersion == ApfJniUtils.APF_INTERPRETER_VERSION_NEXT)
-        var apfRamSize = 512
+        var apfRamSize = 600
         val maxApfRamSize = 2048
 
         while (apfRamSize < maxApfRamSize) {
@@ -5907,6 +5909,34 @@ class ApfFilterTest {
             program,
             ra1Bytes,
             PASSED_IPV6_ICMP
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testFilteringNonUnicastTDLSPacket() {
+        val apfConfig = getDefaultConfig()
+        apfConfig.apfRamSize = 1500
+        val apfFilter = getApfFilter(apfConfig)
+        val program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
+        // Using scapy to generate packet:
+        // pkt = Ether(dst="ff:ff:ff:ff:ff:ff", type=0x890D)/Raw(load="01")
+        val bcastTDLSPkt = "ffffffffffff000000000000890d3031"
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(bcastTDLSPkt),
+            DROPPED_NON_UNICAST_TDLS
+        )
+
+        // Using scapy to generate packet:
+        // pkt = Ether(dst="02:03:04:05:06:07", type=0x890D)/Raw(load="01")
+        val ucastTDLSPkt = "020304050607000000000000890d3031"
+        apfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(ucastTDLSPkt),
+            PASSED_NON_IP_UNICAST
         )
     }
 }
