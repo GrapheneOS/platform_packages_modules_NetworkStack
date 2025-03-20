@@ -522,7 +522,23 @@ public abstract class BaseApfGenerator {
             return this;
         }
 
-        private int findMatchInDataBytes(@NonNull byte[] content, int fromIndex, int toIndex) {
+        int findMatchInDataBytes(@NonNull byte[] content, int fromIndex, int toIndex)
+                throws IllegalInstructionException {
+            if (fromIndex >= toIndex || fromIndex < 0 || toIndex > content.length) {
+                throw new IllegalArgumentException(
+                        String.format("fromIndex: %d, toIndex: %d, content length: %d", fromIndex,
+                                toIndex, content.length));
+            }
+            if (mOpcode != Opcodes.JMP || mBytesImm == null) {
+                throw new IllegalInstructionException(String.format(
+                        "this method is only valid for jump data instruction, mOpcode "
+                                + ":%s, mBytesImm: %s", Opcodes.JMP,
+                        mBytesImm == null ? "(empty)" : HexDump.toHexString(mBytesImm)));
+            }
+            if (mImmSizeOverride != 2) {
+                throw new IllegalInstructionException(
+                        "mImmSizeOverride must be 2, mImmSizeOverride: " + mImmSizeOverride);
+            }
             final int subArrayLength = toIndex - fromIndex;
             for (int i = 0; i < mBytesImm.length - subArrayLength + 1; i++) {
                 boolean found = true;
@@ -558,21 +574,6 @@ public abstract class BaseApfGenerator {
          */
         int maybeUpdateBytesImm(byte[] content, int fromIndex, int toIndex)
                 throws IllegalInstructionException {
-            if (fromIndex >= toIndex || fromIndex < 0 || toIndex > content.length) {
-                throw new IllegalArgumentException(
-                        String.format("fromIndex: %d, toIndex: %d, content length: %d", fromIndex,
-                                toIndex, content.length));
-            }
-            if (mOpcode != Opcodes.JMP || mBytesImm == null) {
-                throw new IllegalInstructionException(String.format(
-                        "maybeUpdateBytesImm() is only valid for jump data instruction, mOpcode "
-                                + ":%s, mBytesImm: %s", Opcodes.JMP,
-                        mBytesImm == null ? "(empty)" : HexDump.toHexString(mBytesImm)));
-            }
-            if (mImmSizeOverride != 2) {
-                throw new IllegalInstructionException(
-                        "mImmSizeOverride must be 2, mImmSizeOverride: " + mImmSizeOverride);
-            }
             int offsetInDataBytes = findMatchInDataBytes(content, fromIndex, toIndex);
             if (offsetInDataBytes == -1) {
                 offsetInDataBytes = mBytesImm.length;
