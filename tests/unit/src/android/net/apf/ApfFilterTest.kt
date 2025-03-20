@@ -5566,6 +5566,18 @@ class ApfFilterTest {
             val apfFilter = getApfFilter(apfConfig)
             apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
 
+            val srcAddr = byteArrayOf(10, 0, 0, 5)
+            val dstAddr = byteArrayOf(10, 0, 0, 6)
+            val srcPort = 1024
+            val dstPort = 4500
+            val parcel = NattKeepalivePacketDataParcelable()
+            parcel.srcAddress = InetAddress.getByAddress(srcAddr).address
+            parcel.srcPort = srcPort
+            parcel.dstAddress = InetAddress.getByAddress(dstAddr).address
+            parcel.dstPort = dstPort
+            apfFilter.addNattKeepalivePacketFilter(1, parcel)
+            apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
+
             val captor = ArgumentCaptor.forClass(OffloadEngine::class.java)
             verify(localNsdManager).registerOffloadEngine(
                 eq(ifParams.name),
