@@ -199,6 +199,12 @@ public abstract class ApfV61GeneratorBase<Type extends ApfV61GeneratorBase<Type>
         return self();
     }
 
+    @Override
+    public Type addAllocate(int size) {
+        final int imm = (int) Math.ceil(Math.max(0, size - 266) / 8.0);
+        return append(new Instruction(Opcodes.ALLOC_XMIT, Rbit1).addUnsigned(imm));
+    }
+
     /**
      * Appends a conditional jump instruction to the program: Jumps to {@code tgt} if the UDP
      * payload's DNS questions contain the QNAMEs specified in {@code qnames} and qtype
