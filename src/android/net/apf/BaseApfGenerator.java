@@ -106,7 +106,33 @@ public abstract class BaseApfGenerator {
         // R=1 means copy from APF program/data region.
         // The copy length is stored in (u8)imm2.
         // e.g. "pktcopy 5, 5" "datacopy 5, 5"
-        PKTDATACOPY(25);
+        PKTDATACOPY(25),
+        // JSET with reverse condition (jump if no bits set)
+        JNSET(26),
+        // APFv6.1: Compare byte sequence [R=0 not] equal, e.g. "jbsptrne 22,16,label,<dataptr>"
+        // imm1 is jmp target
+        // imm2(u8) is offset [0..255] into packet
+        // imm3(u8) is (count - 1) * 16 + (compare_len - 1), thus both count & compare_len are in
+        // [1..16] which is followed by compare_len u8 'even offset' ptrs into max 526 byte data
+        // section to compare against - ie. they are multipied by 2 and have 3 added to them
+        // (to skip over 'datajmp u16')
+        // Warning: do not specify the same byte sequence multiple times.
+        JBSPTRMATCH(27),
+        // APFv6.1: Bytecode optimized allocate | transmit instruction.
+        // R=1 -> allocate(266 + imm * 8)
+        // R=0 -> transmit
+        //   immlen=0 -> no checksum offload (transmit ip_ofs=255)
+        //   immlen>0 -> with checksum offload (transmit(udp) ip_ofs=14 ...)
+        //     imm & 7 | type of offload      | ip_ofs | udp | csum_start  | csum_ofs      | partial_csum |
+        //         0   | ip4/udp              |   14   |  X  | 14+20-8 =26 | 14+20   +6=40 |   imm >> 3   |
+        //         1   | ip4/tcp              |   14   |     | 14+20-8 =26 | 14+20  +10=44 |     --"--    |
+        //         2   | ip4/icmp             |   14   |     | 14+20   =34 | 14+20   +2=36 |     --"--    |
+        //         3   | ip4/routeralert/icmp |   14   |     | 14+20+4 =38 | 14+20+4 +2=40 |     --"--    |
+        //         4   | ip6/udp              |   14   |  X  | 14+40-32=22 | 14+40   +6=60 |     --"--    |
+        //         5   | ip6/tcp              |   14   |     | 14+40-32=22 | 14+40  +10=64 |     --"--    |
+        //         6   | ip6/icmp             |   14   |     | 14+40-32=22 | 14+40   +2=56 |     --"--    |
+        //         7   | ip6/routeralert/icmp |   14   |     | 14+40-32=22 | 14+40+8 +2=64 |     --"--    |
+        ALLOC_XMIT(28);
 
         final int value;
 
