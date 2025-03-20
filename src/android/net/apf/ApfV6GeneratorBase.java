@@ -114,10 +114,7 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
      *
      * @param size the buffer length to be allocated.
      */
-    public final Type addAllocate(int size) {
-        // Rbit1 means the extra be16 immediate is present
-        return append(new Instruction(ExtendedOpcodes.ALLOCATE, Rbit1).addU16(size));
-    }
+    public abstract Type addAllocate(int size);
 
     /**
      * Add an instruction to the beginning of the program to reserve the empty data region.
