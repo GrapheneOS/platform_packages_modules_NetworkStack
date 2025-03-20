@@ -2153,7 +2153,10 @@ public class ApfFilter {
 
             // If IPv4 destination address is in multicast range, drop.
             gen.addLoad8intoR0(IPV4_DEST_ADDR_OFFSET);
-            gen.addAnd(0xf0);
+            // we just loaded a byte, so top 24 bits are zero, thus and'ing
+            // with either one of 0xF0 and 0xFFFFFFF0 accomplishes the same thing,
+            // we thus choose the one which encodes shorter
+            gen.addAnd((gen instanceof ApfV4Generator) ? 0xF0 : 0xFFFFFFF0);
             gen.addCountAndDropIfR0Equals(0xe0, DROPPED_IPV4_MULTICAST);
 
             // If IPv4 broadcast packet, drop regardless of L2 (b/30231088).
