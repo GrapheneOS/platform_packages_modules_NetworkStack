@@ -532,6 +532,28 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
 
     /**
      * Add instructions to the end of the program to increase counter and drop packet if the
+     * bytes of the packet at an offset specified by {@code offset} does match {@code bytes}.
+     * This method needs to be non-final because APFv4 and APFv6 share the same implementation,
+     * but in APFv6.1, this method will be overridden to use the JBSPTRMATCH instruction.
+     */
+    public Type addCountAndDropIfBytesAtOffsetEqual(int offset, byte[] bytes,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+        return addLoadImmediate(R0, offset).addCountAndDropIfBytesAtR0Equal(bytes, cnt);
+    }
+
+    /**
+     * Add instructions to the end of the program to increase counter and pass packet if the
+     * bytes of the packet at an offset specified by {@code offset} does match {@code bytes}.
+     * This method needs to be non-final because APFv4 and APFv6 share the same implementation,
+     * but in APFv6.1, this method will be overridden to use the JBSPTRMATCH instruction.
+     */
+    public Type addCountAndPassIfBytesAtOffsetEqual(int offset, byte[] bytes,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+        return addLoadImmediate(R0, offset).addCountAndPassIfBytesAtR0Equal(bytes, cnt);
+    }
+
+    /**
+     * Add instructions to the end of the program to increase counter and drop packet if the
      * bytes of the packet at an offset specified by register0 match {@code bytes}.
      * WARNING: may modify R1
      */

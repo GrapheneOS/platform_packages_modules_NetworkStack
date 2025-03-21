@@ -2336,9 +2336,9 @@ public class ApfFilter {
         final List<byte[]> allSuffixes = getSolicitedNodeMcastAddressSuffix(allIPv6Addrs);
         final short notIpV6SolicitedNodeMcast = v6Gen.getUniqueLabel();
         final short endOfIpV6DstCheck = v6Gen.getUniqueLabel();
-        v6Gen.addLoadImmediate(R0, IPV6_DEST_ADDR_OFFSET)
-                .addJumpIfBytesAtR0NotEqual(IPV6_SOLICITED_NODES_PREFIX, notIpV6SolicitedNodeMcast)
-                .addAdd(13)
+        v6Gen.addJumpIfBytesAtOffsetNotEqual(
+                IPV6_DEST_ADDR_OFFSET, IPV6_SOLICITED_NODES_PREFIX, notIpV6SolicitedNodeMcast)
+                .addLoadImmediate(R0, IPV6_DEST_ADDR_OFFSET + 13)
                 .addCountAndDropIfBytesAtR0EqualsNoneOf(allSuffixes, DROPPED_IPV6_NS_OTHER_HOST)
                 .addJump(endOfIpV6DstCheck)
                 .defineLabel(notIpV6SolicitedNodeMcast)
@@ -2385,8 +2385,8 @@ public class ApfFilter {
                 ICMP6_NS_TARGET_IP_OFFSET, nonTentativeIpv6Addrs, DROPPED_IPV6_NS_OTHER_HOST);
 
         // if source ip is unspecified (::), it's DAD request -> pass
-        v6Gen.addLoadImmediate(R0, IPV6_SRC_ADDR_OFFSET)
-                .addCountAndPassIfBytesAtR0Equal(IPV6_UNSPECIFIED_ADDRESS, PASSED_IPV6_ICMP);
+        v6Gen.addCountAndPassIfBytesAtOffsetEqual(
+                IPV6_SRC_ADDR_OFFSET, IPV6_UNSPECIFIED_ADDRESS, PASSED_IPV6_ICMP);
 
         // Only offload NUD/Address resolution packets that have SLLA as the their first option.
         // For option-less NUD packets or NUD/Address resolution packets where
@@ -2459,8 +2459,7 @@ public class ApfFilter {
         // Some devices can use unicast queries for mDNS to improve performance and reliability.
         // These packets are not currently offloaded and will be passed by APF and handled
         // by NsdService.
-        gen.addLoadImmediate(R0, IPV6_DEST_ADDR_OFFSET)
-                .addJumpIfBytesAtR0NotEqual(MDNS_IPV6_ADDR, skipMdnsFilter);
+        gen.addJumpIfBytesAtOffsetNotEqual(IPV6_DEST_ADDR_OFFSET, MDNS_IPV6_ADDR, skipMdnsFilter);
 
         // We now know that the packet is an mDNS packet,
         // i.e., an IPv6 UDP packet destined for port 5353 with the expected destination MAC and IP
@@ -2511,8 +2510,8 @@ public class ApfFilter {
                 false /* includeAnycast */);
         gen.addJumpIfBytesAtOffsetNotEqual(
                 ETHER_DST_ADDR_OFFSET, mHardwareAddress, skipPing6Offload)
-                .addLoadImmediate(R0, IPV6_DEST_ADDR_OFFSET)
-                .addJumpIfBytesAtR0EqualsNoneOf(nonTentativeIPv6Addrs, skipPing6Offload);
+                .addJumpIfBytesAtOffsetEqualsNoneOf(
+                        IPV6_DEST_ADDR_OFFSET, nonTentativeIPv6Addrs, skipPing6Offload);
 
         // We need to check if the packet is sufficiently large to be a valid ICMPv6 echo packet.
         gen.addLoadFromMemory(R0, MemorySlot.PACKET_SIZE)
@@ -2735,8 +2734,8 @@ public class ApfFilter {
         // This is a way to cover ff02::1 and ff02::2 with a single JNEBS.
         // TODO: Drop only if they don't contain the address of on-link neighbours.
         final byte[] unsolicitedNaDropPrefix = Arrays.copyOf(IPV6_ALL_NODES_ADDRESS, 15);
-        gen.addLoadImmediate(R0, IPV6_DEST_ADDR_OFFSET);
-        gen.addJumpIfBytesAtR0NotEqual(unsolicitedNaDropPrefix, skipUnsolicitedMulticastNALabel);
+        gen.addJumpIfBytesAtOffsetNotEqual(
+                IPV6_DEST_ADDR_OFFSET, unsolicitedNaDropPrefix, skipUnsolicitedMulticastNALabel);
 
         gen.addCountAndDrop(DROPPED_IPV6_MULTICAST_NA);
         gen.defineLabel(skipUnsolicitedMulticastNALabel);
@@ -3272,15 +3271,14 @@ public class ApfFilter {
 
         // If the multicast address is not "::", it is an MLD2 multicast-address-specific query,
         // then pass.
-        gen.addLoadImmediate(R0, IPV6_MLD_MULTICAST_ADDR_OFFSET)
-                .addCountAndPassIfBytesAtR0NotEqual(IPV6_ADDR_ANY.getAddress(), PASSED_IPV6_ICMP);
+        gen.addCountAndPassIfBytesAtOffsetNotEqual(
+                IPV6_MLD_MULTICAST_ADDR_OFFSET, IPV6_ADDR_ANY.getAddress(), PASSED_IPV6_ICMP);
 
         // If we reach here, we know it is an MLDv1/MLDv2 general query.
 
         // The general query IPv6 destination address must be ff02::1.
-        gen.addLoadImmediate(R0, IPV6_DEST_ADDR_OFFSET)
-                .addCountAndDropIfBytesAtR0NotEqual(IPV6_ALL_NODES_ADDRESS,
-                        DROPPED_IPV6_MLD_INVALID);
+        gen.addCountAndDropIfBytesAtOffsetNotEqual(
+                        IPV6_DEST_ADDR_OFFSET, IPV6_ALL_NODES_ADDRESS, DROPPED_IPV6_MLD_INVALID);
 
         // If the MLD payload length is 24, it is an MLDv1 packet, otherwise, it is an MLDv2 packet.
         gen.addLoadFromMemory(R0, MemorySlot.SLOT_0)
@@ -3742,6 +3740,9 @@ public class ApfFilter {
         final List<byte[]> preloadedMacAddress = getKnownMacAddresses();
         final List<byte[]> preloadedIPv6Address = getIpv6Addresses(true /* includeNonTentative */,
                 true /* includeTentative */, true /* includeAnycast */);
+        preloadedIPv6Address.add(IPV6_ADDR_ALL_NODES_MULTICAST.getAddress());
+        preloadedIPv6Address.add(MDNS_IPV6_ADDR);
+        preloadedIPv6Address.add(IPV6_ADDR_ANY.getAddress());
         final int preloadDataSize =
                 preloadedIPv6Address.size() * 16 + preloadedMacAddress.size() * 6;
         final byte[] preloadData = new byte[preloadDataSize];

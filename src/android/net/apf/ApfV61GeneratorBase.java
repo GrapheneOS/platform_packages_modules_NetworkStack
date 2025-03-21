@@ -338,6 +338,18 @@ public abstract class ApfV61GeneratorBase<Type extends ApfV61GeneratorBase<Type>
     }
 
     @Override
+    public Type addCountAndPassIfBytesAtOffsetEqual(int offset, byte[] bytes,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+        return addJumpIfBytesAtOffsetEqualsAnyOf(offset, List.of(bytes), cnt.getJumpPassLabel());
+    }
+
+    @Override
+    public Type addCountAndDropIfBytesAtOffsetEqual(int offset, byte[] bytes,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+        return addJumpIfBytesAtOffsetEqualsAnyOf(offset, List.of(bytes), cnt.getJumpDropLabel());
+    }
+
+    @Override
     public Type addJumpIfBytesAtOffsetNotEqual(int offset, @NonNull byte[] bytes, short tgt)
             throws IllegalInstructionException {
         return addJumpIfBytesAtOffsetEqualsNoneOf(offset, List.of(bytes), tgt);
