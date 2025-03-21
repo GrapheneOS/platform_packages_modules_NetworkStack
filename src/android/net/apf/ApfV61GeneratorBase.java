@@ -201,7 +201,7 @@ public abstract class ApfV61GeneratorBase<Type extends ApfV61GeneratorBase<Type>
 
     @Override
     public Type addAllocate(int size) {
-        final int imm = (int) Math.ceil(Math.max(0, size - 266) / 8.0);
+        final int imm = (size > 266) ? (size - 266 + 7) / 8 : 0;
         return append(new Instruction(Opcodes.ALLOC_XMIT, Rbit1).addUnsigned(imm));
     }
 
