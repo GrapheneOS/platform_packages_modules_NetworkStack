@@ -2342,7 +2342,8 @@ public class ApfFilter {
                 .addCountAndDropIfBytesAtR0EqualsNoneOf(allSuffixes, DROPPED_IPV6_NS_OTHER_HOST)
                 .addJump(endOfIpV6DstCheck)
                 .defineLabel(notIpV6SolicitedNodeMcast)
-                .addCountAndDropIfBytesAtR0EqualsNoneOf(allIPv6Addrs, DROPPED_IPV6_NS_OTHER_HOST)
+                .addCountAndDropIfBytesAtOffsetEqualsNoneOf(
+                        IPV6_DEST_ADDR_OFFSET, allIPv6Addrs, DROPPED_IPV6_NS_OTHER_HOST)
                 .defineLabel(endOfIpV6DstCheck);
 
         // Hop limit not 255, NS requires hop limit to be 255 -> drop
@@ -2365,10 +2366,10 @@ public class ApfFilter {
                 true, /* includeTentative */
                 false /* includeAnycast */
         );
-        v6Gen.addLoadImmediate(R0, ICMP6_NS_TARGET_IP_OFFSET);
+
         if (!tentativeIPv6Addrs.isEmpty()) {
-            v6Gen.addCountAndPassIfBytesAtR0EqualsAnyOf(
-                    tentativeIPv6Addrs, PASSED_IPV6_ICMP);
+            v6Gen.addCountAndPassIfBytesAtOffsetEqualsAnyOf(
+                    ICMP6_NS_TARGET_IP_OFFSET, tentativeIPv6Addrs, PASSED_IPV6_ICMP);
         }
 
         final List<byte[]> nonTentativeIpv6Addrs = getIpv6Addresses(
@@ -2380,8 +2381,8 @@ public class ApfFilter {
             v6Gen.addCountAndDrop(DROPPED_IPV6_NS_OTHER_HOST);
             return;
         }
-        v6Gen.addCountAndDropIfBytesAtR0EqualsNoneOf(
-                nonTentativeIpv6Addrs, DROPPED_IPV6_NS_OTHER_HOST);
+        v6Gen.addCountAndDropIfBytesAtOffsetEqualsNoneOf(
+                ICMP6_NS_TARGET_IP_OFFSET, nonTentativeIpv6Addrs, DROPPED_IPV6_NS_OTHER_HOST);
 
         // if source ip is unspecified (::), it's DAD request -> pass
         v6Gen.addLoadImmediate(R0, IPV6_SRC_ADDR_OFFSET)
@@ -3737,6 +3738,21 @@ public class ApfFilter {
         return gen.programLengthOverEstimate() - gen.getBaseProgramSize();
     }
 
+    void preloadData(ApfV61GeneratorBase<?> gen) throws IllegalInstructionException {
+        final List<byte[]> preloadedIPv6Address = getIpv6Addresses(true /* includeNonTentative */,
+                true /* includeTentative */, true /* includeAnycast */);
+        final int preloadDataSize = preloadedIPv6Address.size() * 16;
+        final byte[] preloadData = new byte[preloadDataSize];
+        int offset = 0;
+        for (byte[] addr : preloadedIPv6Address) {
+            System.arraycopy(addr, 0, preloadData, offset, 16);
+            offset += 16;
+        }
+        if (preloadDataSize > 0) {
+            gen.addPreloadData(preloadData);
+        }
+    }
+
     /**
      * Generate and install a new filter program.
      */
@@ -3758,6 +3774,9 @@ public class ApfFilter {
         try {
             // Step 1: Determine how many RA filters/mDNS offloads we can fit in the program.
             ApfV4GeneratorBase<?> gen = createApfGenerator();
+            if (gen instanceof ApfV61GeneratorBase<?>) {
+                preloadData((ApfV61GeneratorBase<?>) gen);
+            }
             short labelCheckMdnsQueryPayload = gen.getUniqueLabel();
 
             emitPrologue(gen, labelCheckMdnsQueryPayload);
