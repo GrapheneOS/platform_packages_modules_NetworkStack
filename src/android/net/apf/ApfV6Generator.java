@@ -262,6 +262,18 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     }
 
     @Override
+    public ApfV6Generator addJumpIfBytesAtOffsetEqualsAnyOf(int offset, List<byte[]> bytesList,
+            short tgt) throws IllegalInstructionException {
+        return addLoadImmediate(R0, offset).addJumpIfBytesAtR0EqualsAnyOf(bytesList, tgt);
+    }
+
+    @Override
+    public ApfV6Generator addJumpIfBytesAtOffsetEqualsNoneOf(int offset, List<byte[]> bytesList,
+            short tgt) throws IllegalInstructionException {
+        return addLoadImmediate(R0, offset).addJumpIfBytesAtR0EqualsNoneOf(bytesList, tgt);
+    }
+
+    @Override
     public ApfV6Generator addCountAndDropIfR0IsNoneOf(@NonNull Set<Long> values,
             ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
         if (values.isEmpty()) {

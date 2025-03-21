@@ -552,6 +552,21 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
         return addJumpIfBytesAtR0EqualsHelper(bytesList, tgt, false /* jumpOnMatch */);
     }
 
+    /**
+     * Add an instruction to the end of the program to jump to {@code tgt} if the bytes of the
+     * packet at an offset specified by {@code offset} match any of the elements in
+     * {@code bytesSet}.
+     */
+    public abstract Type addJumpIfBytesAtOffsetEqualsAnyOf(int offset,
+            @NonNull List<byte[]> bytesList, short tgt) throws IllegalInstructionException;
+
+    /**
+     * Add an instruction to the end of the program to jump to {@code tgt} if the bytes of the
+     * packet at an offset specified by {@code offset} match none of the elements in
+     * {@code bytesSet}.
+     */
+    public abstract Type addJumpIfBytesAtOffsetEqualsNoneOf(int offset,
+            @NonNull List<byte[]> bytesList, short tgt) throws IllegalInstructionException;
 
     /**
      * Check if the byte is valid dns character: A-Z,0-9,-,_,%,@

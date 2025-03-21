@@ -22,6 +22,8 @@ import android.net.LinkProperties
 import android.net.MacAddress
 import android.net.NattKeepalivePacketDataParcelable
 import android.net.TcpKeepalivePacketDataParcelable
+import android.net.apf.ApfConstants.ETH_MULTICAST_MDNS_V4_MAC_ADDRESS
+import android.net.apf.ApfConstants.ETH_MULTICAST_MDNS_V6_MAC_ADDRESS
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_NON_IPV4
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_OTHER_HOST
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_REPLY_SPA_NO_HOST
@@ -240,6 +242,8 @@ class ApfFilterTest {
         intArrayOf(0x33, 0x33, 0xff, 0x55, 0x66, 0x77).map { it.toByte() }.toByteArray(),
         // 33:33:ff:bb:cc:dd
         intArrayOf(0x33, 0x33, 0xff, 0xbb, 0xcc, 0xdd).map { it.toByte() }.toByteArray(),
+        ETH_MULTICAST_MDNS_V4_MAC_ADDRESS,
+        ETH_MULTICAST_MDNS_V6_MAC_ADDRESS
     )
 
     // Using scapy to generate payload:
@@ -5797,7 +5801,8 @@ class ApfFilterTest {
             )
             assertThat(program.size).isLessThan(apfRamSize + 1)
             assertThat(program).isNotEqualTo(ByteArray(apfRamSize) { 0 })
-            val step = Random.nextInt(1, 16)
+            // TODO: reduce after fixing 'Failed to receive adb shell test output within 66000 ms'
+            val step = Random.nextInt(1, 64)
             apfRamSize += step
         }
     }
@@ -5817,7 +5822,8 @@ class ApfFilterTest {
             val availableRam = apfRamSize - ApfCounterTracker.Counter.totalSize()
             assertThat(program.size).isLessThan(availableRam + 1)
             assertThat(program).isNotEqualTo(ByteArray(availableRam) { 0 })
-            val step = Random.nextInt(1, 16)
+            // TODO: reduce after fixing 'Failed to receive adb shell test output within 66000 ms'
+            val step = Random.nextInt(1, 64)
             apfRamSize += step
         }
     }
@@ -5836,7 +5842,8 @@ class ApfFilterTest {
             val availableRam = apfRamSize - ApfCounterTracker.Counter.totalSize()
             assertThat(program.size).isLessThan(availableRam + 1)
             assertThat(program).isNotEqualTo(ByteArray(availableRam) { 0 })
-            val step = Random.nextInt(1, 16)
+            // TODO: reduce after fixing 'Failed to receive adb shell test output within 66000 ms'
+            val step = Random.nextInt(1, 64)
             apfRamSize += step
         }
     }

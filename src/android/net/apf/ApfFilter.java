@@ -1830,8 +1830,8 @@ public class ApfFilter {
 
         // Pass if non-broadcast reply.
         // This also accepts multicast arp, but we assume those don't exist.
-        gen.addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET);
-        gen.addCountAndPassIfBytesAtR0NotEqual(ETHER_BROADCAST, PASSED_ARP_UNICAST_REPLY);
+        gen.addCountAndPassIfBytesAtOffsetNotEqual(ETH_DEST_ADDR_OFFSET, ETHER_BROADCAST,
+                PASSED_ARP_UNICAST_REPLY);
 
         // It is a broadcast reply.
         if (mIPv4Address == null) {
@@ -1897,8 +1897,8 @@ public class ApfFilter {
         // the future, such packets will likely be dropped by multicast filters.
         // Since the device may have packet forwarding enabled, APF needs to pass any received
         // unicast IPv4 ping not destined for the device's IP address to the kernel.
-        gen.addLoadImmediate(R0, ETHER_DST_ADDR_OFFSET)
-                .addJumpIfBytesAtR0NotEqual(mHardwareAddress, skipIpv4PingFilter)
+        gen.addJumpIfBytesAtOffsetNotEqual(
+                ETH_DEST_ADDR_OFFSET, mHardwareAddress, skipIpv4PingFilter)
                 .addLoadImmediate(R0, IPV4_DEST_ADDR_OFFSET)
                 .addJumpIfBytesAtR0NotEqual(mIPv4Address, skipIpv4PingFilter);
 
@@ -1979,11 +1979,11 @@ public class ApfFilter {
         // address for IPv4 mDNS packet) or the device's MAC address, skip filtering.
         // We need to check both the mDNS multicast MAC address and the device's MAC address
         // because multicast to unicast conversion might have occurred.
-        gen.addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET)
-                .addJumpIfBytesAtR0EqualsNoneOf(
-                        List.of(mHardwareAddress, ETH_MULTICAST_MDNS_V4_MAC_ADDRESS),
-                        skipMdnsFilter
-                );
+        gen.addJumpIfBytesAtOffsetEqualsNoneOf(
+                ETH_DEST_ADDR_OFFSET,
+                List.of(mHardwareAddress, ETH_MULTICAST_MDNS_V4_MAC_ADDRESS),
+                skipMdnsFilter
+        );
 
         // Ignore packets with IPv4 options (header size not equal to 20) as they are rare.
         gen.addLoadFromMemory(R0, MemorySlot.IPV4_HEADER_SIZE)
@@ -2185,8 +2185,8 @@ public class ApfFilter {
             // Otherwise, this is an IPv4 unicast, pass
             // If L2 broadcast packet, drop.
             // TODO: can we invert this condition to fall through to the common pass case below?
-            gen.addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET);
-            gen.addCountAndPassIfBytesAtR0NotEqual(ETHER_BROADCAST, PASSED_IPV4_UNICAST);
+            gen.addCountAndPassIfBytesAtOffsetNotEqual(ETH_DEST_ADDR_OFFSET, ETHER_BROADCAST,
+                    PASSED_IPV4_UNICAST);
             gen.addCountAndDrop(DROPPED_IPV4_L2_BROADCAST);
         }
 
@@ -2329,8 +2329,8 @@ public class ApfFilter {
         // used by processes other than clatd. This is because APF cannot reliably detect signal
         // on when IPV6_{JOIN,LEAVE}_ANYCAST is triggered.
         final List<byte[]> allMACs = getKnownMacAddresses();
-        v6Gen.addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET)
-                .addCountAndDropIfBytesAtR0EqualsNoneOf(allMACs, DROPPED_IPV6_NS_OTHER_HOST);
+        v6Gen.addCountAndDropIfBytesAtOffsetEqualsNoneOf(ETH_DEST_ADDR_OFFSET, allMACs,
+                DROPPED_IPV6_NS_OTHER_HOST);
 
         // Dst IPv6 address check:
         final List<byte[]> allSuffixes = getSolicitedNodeMcastAddressSuffix(allIPv6Addrs);
@@ -2444,11 +2444,11 @@ public class ApfFilter {
         // address for IPv6 mDNS packet) or the device's MAC address, skip filtering.
         // We need to check both the mDNS multicast MAC address and the device's MAC address
         // because multicast to unicast conversion might have occurred.
-        gen.addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET)
-                .addJumpIfBytesAtR0EqualsNoneOf(
-                        List.of(mHardwareAddress, ETH_MULTICAST_MDNS_V6_MAC_ADDRESS),
-                        skipMdnsFilter
-                );
+        gen.addJumpIfBytesAtOffsetEqualsNoneOf(
+                ETH_DEST_ADDR_OFFSET,
+                List.of(mHardwareAddress, ETH_MULTICAST_MDNS_V6_MAC_ADDRESS),
+                skipMdnsFilter
+        );
 
         // Skip filtering if the packet is not an IPv6 UDP packet.
         gen.addLoad8intoR0(IPV6_NEXT_HEADER_OFFSET)
@@ -2509,8 +2509,8 @@ public class ApfFilter {
                 true /* includeNonTentative */,
                 false /* includeTentative */,
                 false /* includeAnycast */);
-        gen.addLoadImmediate(R0, ETHER_DST_ADDR_OFFSET)
-                .addJumpIfBytesAtR0NotEqual(mHardwareAddress, skipPing6Offload)
+        gen.addJumpIfBytesAtOffsetNotEqual(
+                ETHER_DST_ADDR_OFFSET, mHardwareAddress, skipPing6Offload)
                 .addLoadImmediate(R0, IPV6_DEST_ADDR_OFFSET)
                 .addJumpIfBytesAtR0EqualsNoneOf(nonTentativeIPv6Addrs, skipPing6Offload);
 
@@ -3604,8 +3604,8 @@ public class ApfFilter {
             // Pass unicast TDLS packet but drop non-unicast TDLS packet.
             short skipTDLScheck = gen.getUniqueLabel();
             gen.addJumpIfR0NotEquals(0x890DL, skipTDLScheck)
-                    .addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET)
-                    .addCountAndDropIfBytesAtR0NotEqual(mHardwareAddress, DROPPED_NON_UNICAST_TDLS)
+                    .addCountAndDropIfBytesAtOffsetNotEqual(
+                            ETH_DEST_ADDR_OFFSET, mHardwareAddress, DROPPED_NON_UNICAST_TDLS)
                     .addCountAndPass(PASSED_NON_IP_UNICAST)
                     .defineLabel(skipTDLScheck);
 
@@ -3650,8 +3650,8 @@ public class ApfFilter {
         gen.addJumpIfR0Equals(ETH_P_IPV6, ipv6FilterLabel);
 
         // Drop non-IP non-ARP broadcasts, pass the rest
-        gen.addLoadImmediate(R0, ETH_DEST_ADDR_OFFSET);
-        gen.addCountAndPassIfBytesAtR0NotEqual(ETHER_BROADCAST, PASSED_NON_IP_UNICAST);
+        gen.addCountAndPassIfBytesAtOffsetNotEqual(ETH_DEST_ADDR_OFFSET, ETHER_BROADCAST,
+                PASSED_NON_IP_UNICAST);
         gen.addCountAndDrop(DROPPED_ETH_BROADCAST);
 
         // Add IPv6 filters:
@@ -3739,11 +3739,17 @@ public class ApfFilter {
     }
 
     void preloadData(ApfV61GeneratorBase<?> gen) throws IllegalInstructionException {
+        final List<byte[]> preloadedMacAddress = getKnownMacAddresses();
         final List<byte[]> preloadedIPv6Address = getIpv6Addresses(true /* includeNonTentative */,
                 true /* includeTentative */, true /* includeAnycast */);
-        final int preloadDataSize = preloadedIPv6Address.size() * 16;
+        final int preloadDataSize =
+                preloadedIPv6Address.size() * 16 + preloadedMacAddress.size() * 6;
         final byte[] preloadData = new byte[preloadDataSize];
         int offset = 0;
+        for (byte[] addr : preloadedMacAddress) {
+            System.arraycopy(addr, 0, preloadData, offset, 6);
+            offset += 6;
+        }
         for (byte[] addr : preloadedIPv6Address) {
             System.arraycopy(addr, 0, preloadData, offset, 16);
             offset += 16;

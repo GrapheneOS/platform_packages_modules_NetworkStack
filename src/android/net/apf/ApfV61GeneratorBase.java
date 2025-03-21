@@ -325,6 +325,24 @@ public abstract class ApfV61GeneratorBase<Type extends ApfV61GeneratorBase<Type>
         return addJumpIfBytesAtOffsetEqualsNoneOf(offset, bytesList, cnt.getJumpPassLabel());
     }
 
+    @Override
+    public Type addCountAndPassIfBytesAtOffsetNotEqual(int offset, byte[] bytes,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+        return addJumpIfBytesAtOffsetEqualsNoneOf(offset, List.of(bytes), cnt.getJumpPassLabel());
+    }
+
+    @Override
+    public Type addCountAndDropIfBytesAtOffsetNotEqual(int offset, byte[] bytes,
+            ApfCounterTracker.Counter cnt) throws IllegalInstructionException {
+        return addJumpIfBytesAtOffsetEqualsNoneOf(offset, List.of(bytes), cnt.getJumpDropLabel());
+    }
+
+    @Override
+    public Type addJumpIfBytesAtOffsetNotEqual(int offset, @NonNull byte[] bytes, short tgt)
+            throws IllegalInstructionException {
+        return addJumpIfBytesAtOffsetEqualsNoneOf(offset, List.of(bytes), tgt);
+    }
+
     /**
      * Appends a conditional jump instruction to the program: Jumps to {@code tgt} if the UDP
      * payload's DNS questions contain the QNAMEs specified in {@code qnames} and qtype
