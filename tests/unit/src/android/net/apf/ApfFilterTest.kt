@@ -5848,76 +5848,96 @@ class ApfFilterTest {
         }
     }
 
+    private fun getProgramForRaSizeEstimation(
+        apfRamSize: Int,
+    ): Pair<Int, ByteArray> {
+        val localRaWriterSocket = FileDescriptor()
+        val localRaReaderSocket = FileDescriptor()
+        Os.socketpair(AF_UNIX, SOCK_STREAM, 0, localRaWriterSocket, localRaReaderSocket)
+        doReturn(localRaReaderSocket).`when`(dependencies).createPacketReaderSocket(anyInt())
+        var overEstimatedProgramSize = 0
+        var program = byteArrayOf(0)
+        tryTest {
+            val apfConfig = getDefaultConfig()
+            apfConfig.apfRamSize = apfRamSize
+            val apfFilter = getApfFilter(apfConfig)
+            apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
+
+            val lp = LinkProperties()
+            val ipv4LinkAddress = LinkAddress(InetAddress.getByAddress(hostIpv4Address), 24)
+            lp.addLinkAddress(ipv4LinkAddress)
+            val ipv6LinkAddress = LinkAddress(hostLinkLocalIpv6Address, 64)
+            lp.addLinkAddress(ipv6LinkAddress)
+            for (addr in hostIpv6Addresses) {
+                lp.addLinkAddress(LinkAddress(InetAddress.getByAddress(addr), 64))
+            }
+            apfFilter.setLinkProperties(lp)
+            program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
+
+            val ra1 = """
+                333300000001f434f06452fe86dd60010c0000503afffe800000000000001cb6b5bc353b7cfdff0
+                2000000000000000000000000000186000fab000000000000000000000000030440c00000070800
+                00070800000000fdeed0c47546534400000000000000001802400000000708fd0c8be643ee00001
+                a018000000000000101f434f06452fe
+            """.replace("\\s+".toRegex(), "").trim()
+            val ra1Bytes = HexDump.hexStringToByteArray(ra1)
+            Os.write(localRaWriterSocket, ra1Bytes, 0, ra1Bytes.size)
+            apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
+
+            // Using scapy to generate packet:
+            // eth = Ether(src="E8:9F:80:66:60:BC", dst="f2:9c:70:2c:39:5a")
+            // ip6 = IPv6(src="fe80::2", dst="ff02::1")
+            // icmpra = ICMPv6ND_RA(routerlifetime=360, retranstimer=360)
+            // pio1 = ICMPv6NDOptPrefixInfo(prefixlen=64, prefix="2002:db8::")
+            // rio = ICMPv6NDOptRouteInfo(prefix="2002:db8:cafe::")
+            // ra = eth/ip6/icmpra/pio1/rio
+            val ra2 = """
+                f29c702c395ae89f806660bc86dd6000000000483afffe800000000000000000000000000002ff0
+                200000000000000000000000000018600f6e3000801680000000000000168030440c0ffffffffff
+                ffffff0000000020020db800000000000000000000000018030000ffffffff20020db8cafe00000
+                000000000000000
+            """.replace("\\s+".toRegex(), "").trim()
+            val ra2Bytes = HexDump.hexStringToByteArray(ra2)
+            Os.write(localRaWriterSocket, ra2Bytes, 0, ra2Bytes.size)
+            program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
+            overEstimatedProgramSize = apfFilter.overEstimatedProgramSize
+        } cleanup {
+            IoUtils.closeQuietly(localRaWriterSocket)
+        }
+        return Pair(overEstimatedProgramSize, program)
+    }
+
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testRaFilterSizeEstimation() {
-        val apfConfig = getDefaultConfig()
-        apfConfig.apfRamSize = 1500
-        val apfFilter = getApfFilter(apfConfig)
-        apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
+        val (overEstimatedProgramSize, _) = getProgramForRaSizeEstimation(apfRamSize = 8096)
+        val apfRam = overEstimatedProgramSize - 1
+        val (_, program) = getProgramForRaSizeEstimation(apfRamSize = apfRam)
 
-        val lp = LinkProperties()
-        val ipv4LinkAddress = LinkAddress(InetAddress.getByAddress(hostIpv4Address), 24)
-        lp.addLinkAddress(ipv4LinkAddress)
-        val ipv6LinkAddress = LinkAddress(hostLinkLocalIpv6Address, 64)
-        lp.addLinkAddress(ipv6LinkAddress)
-        for (addr in hostIpv6Addresses) {
-            lp.addLinkAddress(LinkAddress(InetAddress.getByAddress(addr), 64))
-        }
-        apfFilter.setLinkProperties(lp)
-        var program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
-
-        // Using scapy to generate packet:
-        // eth = Ether(src="E8:9F:80:66:60:BB", dst="f2:9c:70:2c:39:5a")
-        // ip6 = IPv6(src="fe80::1", dst="ff02::1")
-        // icmpra = ICMPv6ND_RA(routerlifetime=3600, retranstimer=3600)
-        // pio1 = ICMPv6NDOptPrefixInfo(prefixlen=64, prefix="2001:db8::")
-        // rio = ICMPv6NDOptRouteInfo(prefix="2001:db8:cafe::")
-        // ra = eth/ip6/icmpra/pio1/rio
         val ra1 = """
-            f29c702c395ae89f806660bb86dd6000000000483afffe800000000000000000000000000001ff0
-            200000000000000000000000000018600dd9600080e100000000000000e10030440c0ffffffffff
-            ffffff0000000020010db800000000000000000000000018030000ffffffff20010db8cafe00000
-            000000000000000
+            333300000001f434f06452fe86dd60010c0000503afffe800000000000001cb6b5bc353b7cfdff0
+            2000000000000000000000000000186000fab000000000000000000000000030440c00000070800
+            00070800000000fdeed0c47546534400000000000000001802400000000708fd0c8be643ee00001
+            a018000000000000101f434f06452fe
         """.replace("\\s+".toRegex(), "").trim()
-        val ra1Bytes = HexDump.hexStringToByteArray(ra1)
-        Os.write(raWriterSocket, ra1Bytes, 0, ra1Bytes.size)
 
-        program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
-        apfTestHelpers.verifyProgramRun(
-            apfFilter.mApfVersionSupported,
-            program,
-            ra1Bytes,
-            DROPPED_RA
-        )
-
-        // Using scapy to generate packet:
-        // eth = Ether(src="E8:9F:80:66:60:BC", dst="f2:9c:70:2c:39:5a")
-        // ip6 = IPv6(src="fe80::2", dst="ff02::1")
-        // icmpra = ICMPv6ND_RA(routerlifetime=360, retranstimer=360)
-        // pio1 = ICMPv6NDOptPrefixInfo(prefixlen=64, prefix="2002:db8::")
-        // rio = ICMPv6NDOptRouteInfo(prefix="2002:db8:cafe::")
-        // ra = eth/ip6/icmpra/pio1/rio
         val ra2 = """
             f29c702c395ae89f806660bc86dd6000000000483afffe800000000000000000000000000002ff0
             200000000000000000000000000018600f6e3000801680000000000000168030440c0ffffffffff
             ffffff0000000020020db800000000000000000000000018030000ffffffff20020db8cafe00000
             000000000000000
         """.replace("\\s+".toRegex(), "").trim()
-        val ra2Bytes = HexDump.hexStringToByteArray(ra2)
-        Os.write(raWriterSocket, ra2Bytes, 0, ra2Bytes.size)
 
-        program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
         apfTestHelpers.verifyProgramRun(
-            apfFilter.mApfVersionSupported,
+            apfInterpreterVersion,
             program,
-            ra2Bytes,
+            HexDump.hexStringToByteArray(ra2),
             DROPPED_RA
         )
         apfTestHelpers.verifyProgramRun(
-            apfFilter.mApfVersionSupported,
+            apfInterpreterVersion,
             program,
-            ra1Bytes,
+            HexDump.hexStringToByteArray(ra1),
             PASSED_IPV6_ICMP
         )
     }
