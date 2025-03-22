@@ -3732,10 +3732,17 @@ public class ApfFilter {
     private int calcMdnsOffloadProgramSizeOverEstimate(int numOfMdnsRuleToOffload)
             throws IllegalInstructionException {
         ApfV6GeneratorBase<?> gen = (ApfV6GeneratorBase<?>) createApfGenerator();
+        // We need to preload data for size estimation because the preloaded data contains mDNS
+        // data chunks. If we don't preload, generateMdnsQueryOffload() will add data to the data
+        // region, resulting in an incorrect estimated size.
+        if (gen instanceof ApfV61GeneratorBase<?>) {
+            preloadData((ApfV61GeneratorBase<?>) gen);
+        }
+        final int programLengthOverEstimateBefore = gen.programLengthOverEstimate();
         short tmpLabelCheckMdnsQueryPayload = gen.getUniqueLabel();
         generateMdnsQueryOffload(gen, tmpLabelCheckMdnsQueryPayload,
                 numOfMdnsRuleToOffload);
-        return gen.programLengthOverEstimate() - gen.getBaseProgramSize();
+        return gen.programLengthOverEstimate() - programLengthOverEstimateBefore;
     }
 
     void preloadData(ApfV61GeneratorBase<?> gen) throws IllegalInstructionException {
@@ -3743,9 +3750,30 @@ public class ApfFilter {
         final List<byte[]> preloadedIPv6Address = getIpv6Addresses(true /* includeNonTentative */,
                 true /* includeTentative */, true /* includeAnycast */);
         preloadedIPv6Address.add(IPV6_ADDR_ALL_NODES_MULTICAST.getAddress());
-        preloadedIPv6Address.add(MDNS_IPV6_ADDR);
         preloadedIPv6Address.add(IPV6_ADDR_ANY.getAddress());
-        int preloadDataSize = preloadedIPv6Address.size() * 16 + preloadedMacAddress.size() * 6;
+        byte[] mdns6NextHdrToUdpDport = new byte[0];
+        byte[] mdns6EthDstToFlowLabel = new byte[0];
+        byte[] mdns4EthDstToTos = new byte[0];
+        if (enableMdns6Offload()) {
+            mdns6NextHdrToUdpDport = createMdns6PktFromIPv6NextHdrToUdpDport(true);
+            preloadedIPv6Address.removeIf(
+                    addr -> Arrays.equals(addr, mIPv6LinkLocalAddress.getAddress()));
+            mdns6EthDstToFlowLabel = createMdns6PktFromEthDstToIPv6FlowLabel(true);
+            preloadedMacAddress.removeIf(
+                    addr -> Arrays.equals(addr, mHardwareAddress) || Arrays.equals(addr,
+                            ETH_MULTICAST_MDNS_V6_MAC_ADDRESS));
+        }
+
+        if (enableMdns4Offload()) {
+            mdns4EthDstToTos = createMdns4PktFromEthDstToIPv4Tos(true);
+            preloadedMacAddress.removeIf(
+                    addr -> Arrays.equals(addr, mHardwareAddress) || Arrays.equals(addr,
+                            ETH_MULTICAST_MDNS_V4_MAC_ADDRESS));
+        }
+
+        int preloadDataSize = mdns6NextHdrToUdpDport.length + mdns6EthDstToFlowLabel.length
+                + mdns4EthDstToTos.length + preloadedIPv6Address.size() * 16
+                + preloadedMacAddress.size() * 6;
 
         if (enableArpOffload()) {
             preloadDataSize += FIXED_ARP_REPLY_HEADER.length;
@@ -3753,6 +3781,14 @@ public class ApfFilter {
 
         final byte[] preloadData = new byte[preloadDataSize];
         int offset = 0;
+        System.arraycopy(mdns6NextHdrToUdpDport, 0, preloadData, offset,
+                mdns6NextHdrToUdpDport.length);
+        offset += mdns6NextHdrToUdpDport.length;
+        System.arraycopy(mdns6EthDstToFlowLabel, 0, preloadData, offset,
+                mdns6EthDstToFlowLabel.length);
+        offset += mdns6EthDstToFlowLabel.length;
+        System.arraycopy(mdns4EthDstToTos, 0, preloadData, offset, mdns4EthDstToTos.length);
+        offset += mdns4EthDstToTos.length;
         for (byte[] addr : preloadedMacAddress) {
             System.arraycopy(addr, 0, preloadData, offset, 6);
             offset += 6;
