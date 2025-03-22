@@ -1812,8 +1812,8 @@ public class ApfFilter {
         }
 
         // Drop if not ARP IPv4.
-        gen.addLoadImmediate(R0, ARP_HEADER_OFFSET);
-        gen.addCountAndDropIfBytesAtR0NotEqual(ARP_IPV4_HEADER, DROPPED_ARP_NON_IPV4);
+        gen.addCountAndDropIfBytesAtOffsetNotEqual(ARP_HEADER_OFFSET, ARP_IPV4_HEADER,
+                DROPPED_ARP_NON_IPV4);
 
         final short checkArpRequest = gen.getUniqueLabel();
 
@@ -3590,11 +3590,13 @@ public class ApfFilter {
         //   pass
         // insert IPv6 filter to drop, pass, or fall off the end for ICMPv6 packets
 
-        gen.addLoadImmediate(R0, ETHER_SRC_ADDR_OFFSET);
         if (NetworkStackUtils.isAtLeast25Q2()) {
-            gen.addCountAndDropIfBytesAtR0Equal(mHardwareAddress, DROPPED_ETHER_OUR_SRC_MAC);
+            gen.addCountAndDropIfBytesAtOffsetEqual(ETHER_SRC_ADDR_OFFSET, mHardwareAddress,
+                    DROPPED_ETHER_OUR_SRC_MAC);
         } else {
-            gen.addCountAndPassIfBytesAtR0Equal(mHardwareAddress, PASSED_ETHER_OUR_SRC_MAC);
+            // TODO: we don't have test coverage for this line
+            gen.addCountAndPassIfBytesAtOffsetEqual(ETHER_SRC_ADDR_OFFSET, mHardwareAddress,
+                    PASSED_ETHER_OUR_SRC_MAC);
         }
 
         gen.addLoad16intoR0(ETH_ETHERTYPE_OFFSET);
@@ -3743,8 +3745,12 @@ public class ApfFilter {
         preloadedIPv6Address.add(IPV6_ADDR_ALL_NODES_MULTICAST.getAddress());
         preloadedIPv6Address.add(MDNS_IPV6_ADDR);
         preloadedIPv6Address.add(IPV6_ADDR_ANY.getAddress());
-        final int preloadDataSize =
-                preloadedIPv6Address.size() * 16 + preloadedMacAddress.size() * 6;
+        int preloadDataSize = preloadedIPv6Address.size() * 16 + preloadedMacAddress.size() * 6;
+
+        if (enableArpOffload()) {
+            preloadDataSize += FIXED_ARP_REPLY_HEADER.length;
+        }
+
         final byte[] preloadData = new byte[preloadDataSize];
         int offset = 0;
         for (byte[] addr : preloadedMacAddress) {
@@ -3755,6 +3761,12 @@ public class ApfFilter {
             System.arraycopy(addr, 0, preloadData, offset, 16);
             offset += 16;
         }
+        if (enableArpOffload()) {
+            System.arraycopy(FIXED_ARP_REPLY_HEADER, 0, preloadData, offset,
+                    FIXED_ARP_REPLY_HEADER.length);
+            offset += FIXED_ARP_REPLY_HEADER.length;
+        }
+
         if (preloadDataSize > 0) {
             gen.addPreloadData(preloadData);
         }
