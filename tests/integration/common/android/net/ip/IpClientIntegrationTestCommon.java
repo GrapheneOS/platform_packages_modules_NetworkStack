@@ -750,10 +750,6 @@ public abstract class IpClientIntegrationTestCommon {
         mIsSignatureRequiredTest = testMethod.getAnnotation(SignatureRequiredTest.class) != null;
         assumeFalse(testSkipped());
 
-        // Enable DHCPv6 Prefix Delegation.
-        setFeatureEnabled(NetworkStackUtils.IPCLIENT_DHCPV6_PREFIX_DELEGATION_VERSION,
-                true /* isDhcp6PrefixDelegationEnabled */);
-
         // Enable replacement of netd usage with netlink in IpClient.
         setFeatureEnabled(NetworkStackUtils.IPCLIENT_REPLACE_NETD_WITH_NETLINK_VERSION,
                 true /* isIpClientReplaceNetdWithNetlinkEnabled */);

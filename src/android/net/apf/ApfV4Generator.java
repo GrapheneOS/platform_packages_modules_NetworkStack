@@ -349,6 +349,18 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
         return maybeAddLoadCounterOffset(register.other(), counter).addStoreData(register, 0);
     }
 
+    @Override
+    public ApfV4Generator addAdd(long val) {
+        if (val == 0) return self();  // nop, as APFv6 would '+= R1'
+        return append(new Instruction(Opcodes.ADD).addTwosCompUnsigned(val));
+    }
+
+    @Override
+    public ApfV4Generator addAnd(long val) {
+        if (val == 0) return addLoadImmediate(R0, 0);  // equivalent, as APFv6 would '+= R1'
+        return append(new Instruction(Opcodes.AND).addTwosCompUnsigned(val));
+    }
+
     /**
      * Append the count & (pass|drop) trampoline, which increments the counter at the data address
      * pointed to by R1, then jumps to the (pass|drop) label. This saves a few bytes over inserting

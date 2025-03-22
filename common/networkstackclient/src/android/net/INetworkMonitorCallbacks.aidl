@@ -24,7 +24,7 @@ import android.net.PrivateDnsConfigParcel;
 import android.os.PersistableBundle;
 
 /** @hide */
-oneway interface INetworkMonitorCallbacks {
+interface INetworkMonitorCallbacks {
     void onNetworkMonitorCreated(in INetworkMonitor networkMonitor) = 0;
 
     // Deprecated. Use notifyNetworkTestedWithExtras() instead.
