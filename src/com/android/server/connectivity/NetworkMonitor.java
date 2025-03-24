@@ -517,6 +517,8 @@ public class NetworkMonitor extends StateMachine {
     private final boolean mIsCaptivePortalCheckEnabled;
 
     private boolean mUseHttps;
+    private final boolean mUseSerialProbe;
+    private final int mSerialProbeGapTime;
     /**
      * The total number of completed validation attempts (network validated or a captive portal was
      * detected) for this NetworkMonitor instance.
@@ -679,6 +681,8 @@ public class NetworkMonitor extends StateMachine {
                 && deps.isFeatureSupported(mContext, FEATURE_DDR_IN_CONNECTIVITY)
                 && deps.isFeatureSupported(mContext, FEATURE_DDR_IN_DNSRESOLVER);
         mUseHttps = getUseHttpsValidation();
+        mUseSerialProbe = getUseSerialProbeValidation();
+        mSerialProbeGapTime = getSerialProbeGapTime();
         mCaptivePortalUserAgent = getCaptivePortalUserAgent();
         mCaptivePortalFallbackSpecs =
                 makeCaptivePortalFallbackProbeSpecs(getCustomizedContextOrDefault());
@@ -2392,6 +2396,16 @@ public class NetworkMonitor extends StateMachine {
                         R.bool.config_force_dns_probe_private_ip_no_internet);
     }
 
+    private boolean getUseSerialProbeValidation() {
+        return mContext.getResources().getBoolean(
+                R.bool.config_probe_multi_http_https_url_serial);
+    }
+
+    private int getSerialProbeGapTime() {
+        return mContext.getResources().getInteger(
+                R.integer.config_serial_url_probe_gap_time);
+    }
+
     private boolean getUseHttpsValidation() {
         return mDependencies.getDeviceConfigPropertyInt(NAMESPACE_CONNECTIVITY,
                 CAPTIVE_PORTAL_USE_HTTPS, 1) == 1;
@@ -3426,14 +3440,26 @@ public class NetworkMonitor extends StateMachine {
             // Probe capport API with the first HTTP probe.
             // TODO: Have the capport probe as a different probe for cleanliness.
             final URL urlMaybeWithCapport = httpUrls[0];
+            int delayCount=0;
             for (final URL url : httpUrls) {
-                futures.add(ecs.submit(() -> new HttpProbe(properties, proxy, url,
-                        url.equals(urlMaybeWithCapport) ? capportApiUrl : null).sendProbe()));
+                final int cnt = delayCount++;
+                futures.add(ecs.submit(() -> {
+                    if (mUseSerialProbe && cnt > 0) {
+                        mDependencies.sleep(mSerialProbeGapTime * cnt);
+                    }
+                    return new HttpProbe(properties, proxy, url,
+                            url.equals(urlMaybeWithCapport) ? capportApiUrl : null).sendProbe();
+                }));
             }
-
+            delayCount=0;
             for (final URL url : httpsUrls) {
-                futures.add(ecs.submit(() -> new HttpsProbe(properties, proxy, url, capportApiUrl)
-                        .sendProbe()));
+                final int cnt = delayCount++;
+                futures.add(ecs.submit(() -> {
+                    if (mUseSerialProbe && cnt > 0) {
+                        mDependencies.sleep(mSerialProbeGapTime * cnt);
+                    }
+                    return new HttpsProbe(properties, proxy, url, capportApiUrl).sendProbe();
+                }));
             }
 
             final ArrayList<CaptivePortalProbeResult> completedProbes = new ArrayList<>();
@@ -3776,6 +3802,13 @@ public class NetworkMonitor extends StateMachine {
          * created threads and waits for the termination.
          */
         public void onExecutorServiceCreated(@NonNull ExecutorService ecs) {
+        }
+
+        /**
+         * Wait for another round of serial probe
+         */
+        public void sleep(int time) throws InterruptedException {
+            Thread.sleep((long)time);
         }
 
         public static final Dependencies DEFAULT = new Dependencies();
