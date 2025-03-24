@@ -45,6 +45,7 @@ public class ApfCounterTracker {
         PASSED_ALLOCATE_FAILURE, // hardcoded in APFv6 interpreter
         PASSED_TRANSMIT_FAILURE, // hardcoded in APFv6 interpreter
         CORRUPT_DNS_PACKET,      // hardcoded in APFv6 interpreter
+        EXCEPTIONS,              // hardcoded in APFv6.1 interpreter
         FILTER_AGE_SECONDS,
         FILTER_AGE_16384THS,
         APF_VERSION,
@@ -92,6 +93,7 @@ public class ApfCounterTracker {
         DROPPED_IPV4_NATT_KEEPALIVE,
         DROPPED_MDNS,
         DROPPED_MDNS_REPLIED,
+        DROPPED_NON_UNICAST_TDLS,
         DROPPED_IPV4_TCP_PORT7_UNICAST,
         DROPPED_ARP_NON_IPV4,
         DROPPED_ARP_OTHER_HOST,

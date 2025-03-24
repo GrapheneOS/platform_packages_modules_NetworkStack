@@ -24,7 +24,6 @@ import android.net.apf.ApfCounterTracker.Counter.PASSED_ALLOCATE_FAILURE
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_REQUEST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_MDNS
 import android.net.apf.ApfCounterTracker.Counter.PASSED_TRANSMIT_FAILURE
-import android.net.apf.ApfCounterTracker.Counter.RESERVED_OOB
 import android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS
 import android.net.apf.ApfTestHelpers.Companion.DROP
 import android.net.apf.ApfTestHelpers.Companion.MIN_PKT_SIZE
@@ -523,8 +522,9 @@ class ApfGeneratorTest {
                 ),
                 program
         )
+        val expectedCounterValue1 = PASSED_ARP_REQUEST.value()
         assertContentEquals(
-                listOf("0: pass        counter=11"),
+                listOf("0: pass        counter=$expectedCounterValue1"),
                 apfTestHelpers.disassembleApf(program).map { it.trim() }
         )
 
@@ -539,9 +539,9 @@ class ApfGeneratorTest {
                 ),
                 program
         )
-        val expectedCounterValue = DROPPED_ETHERTYPE_NOT_ALLOWED.value() - RESERVED_OOB.value()
+        val expectedCounterValue2 = DROPPED_ETHERTYPE_NOT_ALLOWED.value()
         assertContentEquals(
-                listOf("0: drop        counter=$expectedCounterValue"),
+                listOf("0: drop        counter=$expectedCounterValue2"),
                 apfTestHelpers.disassembleApf(program).map { it.trim() }
         )
 
@@ -730,8 +730,8 @@ class ApfGeneratorTest {
                 encodeInstruction(21, 1, 1), 43, 1, 0x0c.toByte(),
         ) + qnames, program)
         assertContentEquals(listOf(
-                "0: jdnsqne     r0, DROP, 12, (1)A(1)B(0)(0)",
-                "10: jdnsqeq     r0, DROP, 12, (1)A(1)B(0)(0)"
+                "0: jdnsqne     r0, DROP, PTR, (1)A(1)B(0)(0)",
+                "10: jdnsqeq     r0, DROP, PTR, (1)A(1)B(0)(0)"
         ), apfTestHelpers.disassembleApf(program).map{ it.trim() })
 
         gen = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
@@ -744,8 +744,8 @@ class ApfGeneratorTest {
                 encodeInstruction(21, 1, 1), 45, 1, 0x0c.toByte(),
         ) + qnames, program)
         assertContentEquals(listOf(
-                "0: jdnsqnesafe r0, DROP, 12, (1)A(1)B(0)(0)",
-                "10: jdnsqeqsafe r0, DROP, 12, (1)A(1)B(0)(0)"
+                "0: jdnsqnesafe r0, DROP, PTR, (1)A(1)B(0)(0)",
+                "10: jdnsqeqsafe r0, DROP, PTR, (1)A(1)B(0)(0)"
         ), apfTestHelpers.disassembleApf(program).map{ it.trim() })
 
         gen = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
@@ -801,8 +801,8 @@ class ApfGeneratorTest {
 
         gen = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
         gen.addJumpIfBytesAtR0EqualsAnyOf(listOf(byteArrayOf(1, 2), byteArrayOf(3, 4)), DROP_LABEL)
-        gen.addJumpIfBytesAtR0EqualNoneOf(listOf(byteArrayOf(1, 2), byteArrayOf(3, 4)), DROP_LABEL)
-        gen.addJumpIfBytesAtR0EqualNoneOf(listOf(byteArrayOf(1, 1), byteArrayOf(1, 1)), DROP_LABEL)
+        gen.addJumpIfBytesAtR0EqualsNoneOf(listOf(byteArrayOf(1, 2), byteArrayOf(3, 4)), DROP_LABEL)
+        gen.addJumpIfBytesAtR0EqualsNoneOf(listOf(byteArrayOf(1, 1), byteArrayOf(1, 1)), DROP_LABEL)
         program = gen.generate().skipDataAndDebug()
         assertContentEquals(byteArrayOf(
                 encodeInstruction(opcode = 20, immLength = 2, register = 1),
@@ -984,6 +984,95 @@ class ApfGeneratorTest {
         val transmitPackets = apfTestHelpers.consumeTransmittedPackets(1)
         val transmitPkt = HexDump.toHexString(transmitPackets[0])
         assertEquals( "03".repeat(255) + "04".repeat(45), transmitPkt)
+    }
+
+    @Test
+    fun testJBSPTRMATCHOpcodeEncoding() {
+        assumeTrue(apfInterpreterVersion != ApfJniUtils.APF_INTERPRETER_VERSION_V6)
+        val dataBytes = HexDump.hexStringToByteArray(
+            "01020304050607080910111213141516171819202122232425262728293031323334353637383940"
+        )
+        val bytes1 = HexDump.hexStringToByteArray("0102")
+        val bytes2 = HexDump.hexStringToByteArray("0304")
+        val bytes3 = HexDump.hexStringToByteArray("0506")
+        val bytes4 = HexDump.hexStringToByteArray("0708")
+        val bytes5 = HexDump.hexStringToByteArray("0910")
+        val bytes6 = HexDump.hexStringToByteArray("1112")
+        val bytes7 = HexDump.hexStringToByteArray("1314")
+        val bytes8 = HexDump.hexStringToByteArray("1516")
+        val bytes9 = HexDump.hexStringToByteArray("1718")
+        val bytes10 = HexDump.hexStringToByteArray("1920")
+        val bytes11 = HexDump.hexStringToByteArray("2122")
+        val bytes12 = HexDump.hexStringToByteArray("2324")
+        val bytes13 = HexDump.hexStringToByteArray("2526")
+        val bytes14 = HexDump.hexStringToByteArray("2728")
+        val bytes15 = HexDump.hexStringToByteArray("2930")
+        val bytes16 = HexDump.hexStringToByteArray("3132")
+        val bytes17 = HexDump.hexStringToByteArray("3334")
+        val bytesAtOddIndex = HexDump.hexStringToByteArray("0203")
+        val notExistBytes = HexDump.hexStringToByteArray("ffff")
+        val total17BytesList = listOf(
+            bytes1,
+            bytes2,
+            bytes3,
+            bytes4,
+            bytes5,
+            bytes6,
+            bytes7,
+            bytes8,
+            bytes9,
+            bytes10,
+            bytes11,
+            bytes12,
+            bytes13,
+            bytes14,
+            bytes15,
+            bytes16,
+            bytes17,
+        )
+        val joinedBytes: ByteArray = total17BytesList.flatMap { it.toList() }.toByteArray()
+        var program = ApfV61Generator(apfInterpreterVersion, ramSize, clampSize)
+            .addPreloadData(dataBytes)
+            .addJumpIfBytesAtOffsetEqualsNoneOf(0, listOf(bytes1, notExistBytes), PASS_LABEL)
+            .addJumpIfBytesAtOffsetEqualsAnyOf(1, listOf(bytes1, bytes2), PASS_LABEL)
+            .addJumpIfBytesAtOffsetEqualsNoneOf(2, listOf(notExistBytes), PASS_LABEL)
+            .addJumpIfBytesAtOffsetEqualsAnyOf(3, total17BytesList, PASS_LABEL)
+            .addJumpIfBytesAtOffsetEqualsNoneOf(4, listOf(bytesAtOddIndex), PASS_LABEL)
+            .addJumpIfBytesAtOffsetEqualsNoneOf(6, listOf(joinedBytes), PASS_LABEL)
+            .generate()
+        var debugBufferSize = ramSize - program.size - Counter.totalSize()
+        assertContentEquals(listOf(
+            "0: data        40, ${HexDump.toHexString(dataBytes)}",
+            "43: debugbuf    size=$debugBufferSize",
+            "47: jbsptrne    pktofs=0, (2), PASS, @0[0102]",
+            "52: li          r0, 0",
+            "53: jbsne       r0, (2), PASS, ffff",
+            "58: jbsptreq    pktofs=1, (2), PASS, { @0[0102], @2[0304] }[2]",
+            "64: li          r0, 2",
+            "66: jbsne       r0, (2), PASS, ffff",
+            "71: jbsptreq    pktofs=3, (2), PASS, { @0[0102], @2[0304], @4[0506], @6[0708], " +
+                "@8[0910], @10[1112], @12[1314], @14[1516], @16[1718], @18[1920], @20[2122], " +
+                "@22[2324], @24[2526], @26[2728], @28[2930], @30[3132] }[16]",
+            "91: jbsptreq    pktofs=3, (2), PASS, @32[3334]",
+            "96: li          r0, 4",
+            "98: jbsne       r0, (2), PASS, 0203",
+            "103: li          r0, 6",
+            "105: jbsne       r0, (34), PASS, ${HexDump.toHexString(joinedBytes)}",
+        ), apfTestHelpers.disassembleApf(program).map{ it.trim() })
+
+        val largePrefix = ByteArray(510) { 0 }
+        program = ApfV61Generator(apfInterpreterVersion, ramSize, clampSize)
+            .addPreloadData(largePrefix + dataBytes)
+            .addJumpIfBytesAtOffsetEqualsAnyOf(1, listOf(bytes1, bytes2), PASS_LABEL)
+            .generate()
+        debugBufferSize = ramSize - program.size - Counter.totalSize()
+        assertContentEquals(listOf(
+            "0: data        550, ${HexDump.toHexString(largePrefix + dataBytes)}",
+            "553: debugbuf    size=$debugBufferSize",
+            "557: jbsptreq    pktofs=1, (2), PASS, @510[0102]",
+            "562: li          r0, 1",
+            "564: jbseq       r0, (2), PASS, 0304",
+        ), apfTestHelpers.disassembleApf(program).map{ it.trim() })
     }
 
     @Test
@@ -1810,7 +1899,7 @@ class ApfGeneratorTest {
 
         program = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
                 .addLoadImmediate(R0, 1)
-                .addJumpIfBytesAtR0EqualNoneOf(
+                .addJumpIfBytesAtR0EqualsNoneOf(
                         listOf(byteArrayOf(1, 2, 3), byteArrayOf(6, 5, 4)),
                         DROP_LABEL
                 )
@@ -1820,7 +1909,7 @@ class ApfGeneratorTest {
 
         program = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
                 .addLoadImmediate(R0, 0)
-                .addJumpIfBytesAtR0EqualNoneOf(
+                .addJumpIfBytesAtR0EqualsNoneOf(
                         listOf(byteArrayOf(1, 2, 3), byteArrayOf(6, 5, 4)),
                         DROP_LABEL
                 )

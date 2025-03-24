@@ -15,6 +15,7 @@
  */
 package android.net.apf;
 
+import static android.net.apf.BaseApfGenerator.Rbit.Rbit1;
 import static android.net.apf.BaseApfGenerator.Register.R0;
 
 import android.annotation.NonNull;
@@ -205,7 +206,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
             ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         final short tgt = getUniqueLabel();
-        return addJumpIfBytesAtR0EqualNoneOf(bytesList, tgt).addCountAndDrop(cnt).defineLabel(tgt);
+        return addJumpIfBytesAtR0EqualsNoneOf(bytesList, tgt).addCountAndDrop(cnt).defineLabel(tgt);
     }
 
     @Override
@@ -213,7 +214,7 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
             ApfCounterTracker.Counter cnt)
             throws IllegalInstructionException {
         final short tgt = getUniqueLabel();
-        return addJumpIfBytesAtR0EqualNoneOf(bytesList, tgt).addCountAndPass(cnt).defineLabel(tgt);
+        return addJumpIfBytesAtR0EqualsNoneOf(bytesList, tgt).addCountAndPass(cnt).defineLabel(tgt);
     }
 
     @Override
@@ -230,6 +231,46 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
             throws IllegalInstructionException {
         final short tgt = getUniqueLabel();
         return addJumpIfBytesAtR0EqualsAnyOf(bytesList, tgt).addCountAndPass(cnt).defineLabel(tgt);
+    }
+
+    @Override
+    public ApfV6Generator addCountAndDropIfBytesAtOffsetEqualsAnyOf(int offset,
+            List<byte[]> bytesList, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException {
+        return addLoadImmediate(R0, offset).addCountAndDropIfBytesAtR0EqualsAnyOf(bytesList, cnt);
+    }
+
+    @Override
+    public ApfV6Generator addCountAndPassIfBytesAtOffsetEqualsAnyOf(int offset,
+            List<byte[]> bytesList, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException {
+        return addLoadImmediate(R0, offset).addCountAndPassIfBytesAtR0EqualsAnyOf(bytesList, cnt);
+    }
+
+    @Override
+    public ApfV6Generator addCountAndDropIfBytesAtOffsetEqualsNoneOf(int offset,
+            List<byte[]> bytesList, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException {
+        return addLoadImmediate(R0, offset).addCountAndDropIfBytesAtR0EqualsNoneOf(bytesList, cnt);
+    }
+
+    @Override
+    public ApfV6Generator addCountAndPassIfBytesAtOffsetEqualsNoneOf(int offset,
+            List<byte[]> bytesList, ApfCounterTracker.Counter cnt)
+            throws IllegalInstructionException {
+        return addLoadImmediate(R0, offset).addCountAndPassIfBytesAtR0EqualsNoneOf(bytesList, cnt);
+    }
+
+    @Override
+    public ApfV6Generator addJumpIfBytesAtOffsetEqualsAnyOf(int offset, List<byte[]> bytesList,
+            short tgt) throws IllegalInstructionException {
+        return addLoadImmediate(R0, offset).addJumpIfBytesAtR0EqualsAnyOf(bytesList, tgt);
+    }
+
+    @Override
+    public ApfV6Generator addJumpIfBytesAtOffsetEqualsNoneOf(int offset, List<byte[]> bytesList,
+            short tgt) throws IllegalInstructionException {
+        return addLoadImmediate(R0, offset).addJumpIfBytesAtR0EqualsNoneOf(bytesList, tgt);
     }
 
     @Override
@@ -251,5 +292,22 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
             addJumpIfPktAtR0ContainDnsQ(qnames, qtype, tgt);
         }
         return self();
+    }
+
+    @Override
+    public ApfV6Generator addAllocate(int size) {
+        // Rbit1 means the extra be16 immediate is present
+        return append(new Instruction(ExtendedOpcodes.ALLOCATE, Rbit1).addU16(size));
+    }
+
+    @Override
+    public ApfV6Generator addTransmitWithoutChecksum() {
+        return addTransmit(-1 /* ipOfs */);
+    }
+
+    @Override
+    protected boolean handleOptimizedTransmit(int ipOfs, int csumOfs, int csumStart,
+                                              int partialCsum, boolean isUdp) {
+        return false;
     }
 }

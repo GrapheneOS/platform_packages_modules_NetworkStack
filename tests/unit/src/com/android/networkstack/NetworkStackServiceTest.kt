@@ -29,8 +29,6 @@ import android.net.dhcp.IDhcpServer
 import android.net.dhcp.IDhcpServerCallbacks
 import android.net.ip.IIpClientCallbacks
 import android.net.ip.IpClient
-import android.os.Binder
-import android.os.Build
 import android.os.IBinder
 import android.os.Process
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -42,8 +40,6 @@ import com.android.server.NetworkStackService.NetworkStackConnector
 import com.android.server.NetworkStackService.PermissionChecker
 import com.android.server.connectivity.NetworkMonitor
 import com.android.testutils.DevSdkIgnoreRule
-import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter
-import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo
 import com.android.testutils.assertThrows
 import java.io.FileDescriptor
 import java.io.PrintWriter
@@ -56,11 +52,9 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.ArgumentMatchers.any
-import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.Mockito.doReturn
 import org.mockito.Mockito.eq
 import org.mockito.Mockito.mock
-import org.mockito.Mockito.spy
 import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
 
@@ -83,8 +77,13 @@ class NetworkStackServiceTest {
     private val deps = mock(Dependencies::class.java).apply {
         doReturn(mockIpMemoryStoreService).`when`(this).makeIpMemoryStoreService(any())
         doReturn(mockDhcpServer).`when`(this).makeDhcpServer(any(), any(), any(), any())
-        doReturn(mockNetworkMonitor).`when`(this).makeNetworkMonitor(any(), any(), any(), any(),
-                any())
+        doReturn(mockNetworkMonitor).`when`(this).makeNetworkMonitor(
+                any(),
+                any(),
+                any(),
+                any(),
+                any()
+        )
         doReturn(mockIpClient).`when`(this).makeIpClient(any(), any(), any(), any())
     }
     private val netd = mock(INetd::class.java).apply {
@@ -100,22 +99,7 @@ class NetworkStackServiceTest {
 
     private val connector = NetworkStackConnector(context, permChecker, deps)
 
-    @Test @IgnoreAfter(Build.VERSION_CODES.Q)
-    fun testDumpVersion_Q() {
-        prepareDumpVersionTest()
-
-        val dumpsysOut = StringWriter()
-        connector.dump(FileDescriptor(), PrintWriter(dumpsysOut, true /* autoFlush */),
-                arrayOf("version") /* args */)
-
-        assertEquals("NetworkStack version:\n" +
-                "NetworkStackConnector: ${INetworkStackConnector.VERSION}\n" +
-                "SystemServer: {9990001, 9990002, 9990003, 9990004, 9990005}\n" +
-                "Netd: $TEST_NETD_VERSION\n\n",
-                dumpsysOut.toString())
-    }
-
-    @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
+    @Test
     fun testDumpVersion() {
         prepareDumpVersionTest()
 
@@ -123,10 +107,14 @@ class NetworkStackServiceTest {
         val connectorHash = INetworkStackConnector.HASH
 
         val dumpsysOut = StringWriter()
-        connector.dump(FileDescriptor(), PrintWriter(dumpsysOut, true /* autoFlush */),
-                arrayOf("version") /* args */)
+        connector.dump(
+                FileDescriptor(),
+                PrintWriter(dumpsysOut, true /* autoFlush */),
+                arrayOf("version") /* args */
+        )
 
-        assertEquals("NetworkStack version:\n" +
+        assertEquals(
+                "NetworkStack version:\n" +
                 "LocalInterface:$connectorVersion:$connectorHash\n" +
                 "ipmemorystore:9990001:ipmemorystore_hash\n" +
                 "netd:$TEST_NETD_VERSION:$TEST_NETD_HASH\n" +
@@ -134,7 +122,8 @@ class NetworkStackServiceTest {
                 "networkstack:9990003:networkmonitor_hash\n" +
                 "networkstack:9990004:ipclient_hash\n" +
                 "networkstack:9990005:multiple_use_hash\n\n",
-                dumpsysOut.toString())
+                dumpsysOut.toString()
+        )
     }
 
     fun prepareDumpVersionTest() {
@@ -170,16 +159,9 @@ class NetworkStackServiceTest {
         verify(mockDhcpCb).onDhcpServerCreated(eq(IDhcpServer.STATUS_SUCCESS), any())
 
         // Call makeNetworkMonitor
-        // Use a spy of INetworkMonitorCallbacks and not a mock, as mockito can't create a mock on Q
-        // because of the missing CaptivePortalData class that is an argument of one of the methods
-        val mockBinder = mock(IBinder::class.java)
-        val mockNetworkMonitorCb = spy(INetworkMonitorCallbacks.Stub.asInterface(mockBinder))
+        val mockNetworkMonitorCb = mock(INetworkMonitorCallbacks::class.java)
         doReturn(9990003).`when`(mockNetworkMonitorCb).interfaceVersion
         doReturn("networkmonitor_hash").`when`(mockNetworkMonitorCb).interfaceHash
-        // Oneway transactions are always successful (return true). INetworkMonitorCallbacks is a
-        // oneway interface. This avoids the stub throwing because the method is not implemented by
-        // the (mock) remote.
-        doReturn(true).`when`(mockBinder).transact(anyInt(), any(), any(), eq(Binder.FLAG_ONEWAY))
 
         connector.makeNetworkMonitor(Network(123), "test_nm", mockNetworkMonitorCb)
 
@@ -187,8 +169,6 @@ class NetworkStackServiceTest {
         verify(mockNetworkMonitorCb).onNetworkMonitorCreated(any())
 
         // Call makeIpClient
-        // Use a spy of IIpClientCallbacks instead of a mock, as mockito cannot create a mock on Q
-        // because of the missing CaptivePortalData class that is an argument on one of the methods
         val mockIpClientCb = mock(IIpClientCallbacks::class.java)
         doReturn(9990004).`when`(mockIpClientCb).interfaceVersion
         doReturn("ipclient_hash").`when`(mockIpClientCb).interfaceHash
