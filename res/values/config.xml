@@ -51,6 +51,8 @@
     </string-array>
     <string-array name="config_captive_portal_https_urls" translatable="false">
     </string-array>
+    <bool name="config_probe_multi_http_https_url_serial">false</bool>
+    <integer name="config_serial_url_probe_gap_time">1000</integer>
 
     <!-- Customized default DNS Servers address. -->
     <string-array name="config_default_dns_servers" translatable="false">
