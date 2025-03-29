@@ -251,6 +251,8 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
         return append(new Instruction(ExtendedOpcodes.EWRITE4, reg));
     }
 
+    abstract int getDataCopyChunkSize();
+
     /**
      * Add instructions to the end of the program to copy data from APF program/data region to
      * output buffer and auto-increment the output buffer pointer.
@@ -258,14 +260,14 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
      * It will first attempt to match {@code content} with existing data bytes. If not exist, then
      * append the {@code content} to the data bytes.
      * The method copies the content using multiple datacopy instructions if the content size
-     * exceeds 255 bytes. Each instruction will copy a maximum of 255 bytes.
+     * exceeds 255 bytes in APFv6 or 511 bytes in APFv6.1.
      */
     public final Type addDataCopy(@NonNull byte[] content) throws IllegalInstructionException {
         if (mInstructions.isEmpty()) {
             throw new IllegalInstructionException("There is no instructions");
         }
         Objects.requireNonNull(content);
-        final int chunkSize = 255;
+        final int chunkSize = getDataCopyChunkSize();
         for (int fromIndex = 0; fromIndex < content.length; fromIndex += chunkSize) {
             final int toIndex = Math.min(content.length, fromIndex + chunkSize);
             final int copySrc = mInstructions.get(0).maybeUpdateBytesImm(content, fromIndex,
@@ -292,13 +294,11 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
      * output buffer and auto-increment the output buffer pointer.
      *
      * @param src the offset inside the APF program/data region for where to start copy.
-     * @param len the length of bytes needed to be copied, only <= 255 bytes can be copied at
-     *               one time.
+     * @param len the length of bytes needed to be copied, only <= 255 bytes(APFv6) or 511 bytes
+     *            (APFv6.1) can be copied at one time.
      * @return the Type object
      */
-    public final Type addDataCopy(int src, int len) {
-        return append(new Instruction(Opcodes.PKTDATACOPY, Rbit1).addDataOffset(src).addU8(len));
-    }
+    public abstract Type addDataCopy(int src, int len);
 
     /**
      * Add an instruction to the end of the program to copy data from input packet to output
