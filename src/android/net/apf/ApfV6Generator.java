@@ -310,4 +310,14 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
                                               int partialCsum, boolean isUdp) {
         return false;
     }
+
+    @Override
+    public int getDataCopyChunkSize() {
+        return 255;
+    }
+
+    @Override
+    public ApfV6Generator addDataCopy(int src, int len) {
+        return append(new Instruction(Opcodes.PKTDATACOPY, Rbit1).addDataOffset(src).addU8(len));
+    }
 }
