@@ -408,6 +408,10 @@ public class NetworkMonitorTest {
             }
             return null;
         }).when(mDependencies).onExecutorServiceCreated(any());
+        doAnswer(invocation -> {
+            waitForSerialProbes(invocation.getArgument(0));
+            return null;
+        }).when(mDependencies).sleep(anyInt());
         doReturn(mValidationLogger).when(mValidationLogger).forSubComponent(any());
 
         doReturn(mCleartextDnsNetwork).when(mNetwork).getPrivateDnsBypassingCopy();
@@ -3670,10 +3674,6 @@ public class NetworkMonitorTest {
         final WrappedNetworkMonitor monitor = makeMonitor(CELL_METERED_CAPABILITIES);
         notifyNetworkConnected(monitor, TEST_AGENT_CONFIG,
                 TEST_LINK_PROPERTIES, CELL_METERED_CAPABILITIES);
-        doAnswer(invocation -> {
-            waitForSerialProbes(invocation.getArgument(0));
-            return null;
-        }).when(mDependencies).sleep(anyInt());
         verifyNetworkTested(testResult, probesSucceeded, 1);
     }
 
