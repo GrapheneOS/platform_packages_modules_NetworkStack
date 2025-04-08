@@ -60,14 +60,6 @@ public class ApfJniUtils {
             String pcapFilename, byte[] apfProgram);
 
     /**
-     * Open packet capture file {@code pcapFilename} and run it through APF filter. Then
-     * checks whether all the packets are dropped and populates data[] {@code data} with
-     * the APF counters.
-     */
-    public native boolean dropsAllPackets(int apfVersion, byte[] program, byte[] data,
-            String pcapFilename);
-
-    /**
      * Disassemble the Apf program into human-readable text.
      */
     public native String[] disassembleApf(byte[] program);

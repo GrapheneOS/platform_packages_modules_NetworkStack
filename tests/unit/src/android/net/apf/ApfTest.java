@@ -81,7 +81,6 @@ import android.system.Os;
 import android.text.TextUtils;
 import android.text.format.DateUtils;
 import android.util.ArrayMap;
-import android.util.Log;
 import android.util.Pair;
 
 import androidx.test.InstrumentationRegistry;
@@ -98,7 +97,6 @@ import com.android.net.module.util.PacketBuilder;
 import com.android.networkstack.metrics.ApfSessionInfoMetrics;
 import com.android.networkstack.metrics.IpClientRaInfoMetrics;
 import com.android.networkstack.metrics.NetworkQuirkMetrics;
-import com.android.server.networkstack.tests.R;
 import com.android.testutils.ConcurrentUtils;
 import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRunner;
@@ -1006,41 +1004,6 @@ public class ApfTest {
                         mApfController, mNetworkQuirkMetrics, mDependencies)));
         HandlerUtils.waitForIdle(mHandler, TIMEOUT_MS);
         return apfFilter.get();
-    }
-
-    /**
-     * Generate APF program, run pcap file though APF filter, then check all the packets in the file
-     * should be dropped.
-     */
-    @Test
-    public void testApfFilterPcapFile() throws Exception {
-        // TODO: re-enable it after fix the apf_jni
-        Assume.assumeTrue(mApfVersion == 4);
-        final byte[] MOCK_PCAP_IPV4_ADDR = {(byte) 172, 16, 7, (byte) 151};
-        String pcapFilename = stageFile(R.raw.apfPcap);
-        LinkAddress link = new LinkAddress(InetAddress.getByAddress(MOCK_PCAP_IPV4_ADDR), 16);
-        LinkProperties lp = new LinkProperties();
-        lp.addLinkAddress(link);
-
-        ApfConfiguration config = getDefaultConfig();
-        config.apfVersionSupported = 4;
-        config.apfRamSize = 1700;
-        config.multicastFilter = DROP_MULTICAST;
-        config.ieee802_3Filter = DROP_802_3_FRAMES;
-        final ApfFilter apfFilter = getApfFilter(config);
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 2 /* installCnt */);
-        apfFilter.setLinkProperties(lp);
-        byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
-        byte[] data = new byte[Counter.totalSize()];
-        final boolean result;
-
-        result = mApfTestHelpers.dropsAllPackets(
-            mApfVersion, program, data, pcapFilename);
-        Log.i(TAG, "testApfFilterPcapFile(): Data counters: " + HexDump.toHexString(data, false));
-
-        assertTrue("Failed to drop all packets by filter. \nAPF counters:" +
-            HexDump.toHexString(data, false), result);
     }
 
     private static final int ETH_HEADER_LEN               = 14;

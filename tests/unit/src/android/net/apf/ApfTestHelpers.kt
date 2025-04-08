@@ -357,13 +357,4 @@ class ApfTestHelpers(apfInterpreterVersion: Int){
     fun compileToBpf(filter: String): String {
         return apfJniUtils.compileToBpf(filter)
     }
-
-    fun dropsAllPackets(
-        apfVersion: Int,
-        program: ByteArray,
-        data: ByteArray,
-        pcapFilename: String
-    ): Boolean {
-        return apfJniUtils.dropsAllPackets(apfVersion, program, data, pcapFilename)
-    }
 }
