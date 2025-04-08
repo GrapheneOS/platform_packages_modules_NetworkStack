@@ -34,6 +34,7 @@ class ApfTestHelpers(apfInterpreterVersion: Int){
         const val TIMEOUT_MS: Long = 1000
         const val PASS: Int = 1
         const val DROP: Int = 0
+        const val EXCEPTION: Int = 2
 
         // Interpreter will just accept packets without link layer headers, so pad fake packet to at
         // least the minimum packet size.
@@ -42,6 +43,7 @@ class ApfTestHelpers(apfInterpreterVersion: Int){
             return when (code) {
                 PASS -> "PASS"
                 DROP -> "DROP"
+                EXCEPTION -> "EXCEPTION"
                 else -> "UNKNOWN"
             }
         }
