@@ -94,7 +94,7 @@ class ApfGeneratorTest {
 
     @Before
     fun setUp() {
-        apfTestHelpers = ApfTestHelpers(apfInterpreterVersion)
+        apfTestHelpers = ApfTestHelpers()
     }
 
     @After

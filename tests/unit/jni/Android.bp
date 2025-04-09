@@ -38,32 +38,15 @@ cc_defaults {
     ],
     static_libs: [
         "libapf",
+        "libapfv6",
         "libapfdisassembler",
         "libpcap",
-        "libapfbuf",
     ],
     sdk_version: "30",
     stl: "c++_static",
 }
 
 cc_library_shared {
-    name: "libapfjniv6",
+    name: "libapfjni",
     defaults: ["libapfjni_defaults"],
-    cflags: [
-        "-DAPF_INTERPRETER_V6",
-    ],
-    static_libs: [
-        "libapf_v6",
-    ],
-}
-
-cc_library_shared {
-    name: "libapfjninext",
-    defaults: ["libapfjni_defaults"],
-    cflags: [
-        "-DAPF_INTERPRETER_NEXT",
-    ],
-    static_libs: [
-        "libapf_next",
-    ],
 }

@@ -446,7 +446,7 @@ class ApfFilterTest {
 
     @Before
     fun setUp() {
-        apfTestHelpers = ApfTestHelpers(apfInterpreterVersion)
+        apfTestHelpers = ApfTestHelpers()
         MockitoAnnotations.initMocks(this)
         // mock anycast6 address from /proc/net/anycast6
         doReturn(hostAnycast6Addresses).`when`(dependencies).getAnycast6Addresses(any())
