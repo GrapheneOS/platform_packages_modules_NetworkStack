@@ -159,7 +159,7 @@ public class RawPacketTracker {
         tracker.setCapture(true);
 
         // remove scheduled stop events if it already in the queue
-        mHandler.removeMessages(CMD_STOP_CAPTURE, ifaceName);
+        mHandler.removeEqualMessages(CMD_STOP_CAPTURE, ifaceName);
 
         // capture up to configured capture time and stop capturing
         final Message stopMsg = mHandler.obtainMessage(CMD_STOP_CAPTURE, ifaceName);
@@ -184,7 +184,7 @@ public class RawPacketTracker {
 
         final Message msg = mHandler.obtainMessage(CMD_STOP_CAPTURE, ifaceName);
         // remove scheduled stop events if it already in the queue
-        mHandler.removeMessages(CMD_STOP_CAPTURE, ifaceName);
+        mHandler.removeEqualMessages(CMD_STOP_CAPTURE, ifaceName);
         mHandler.sendMessage(msg);
     }
 
