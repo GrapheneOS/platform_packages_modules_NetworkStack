@@ -279,6 +279,7 @@ import com.android.net.module.util.CollectionUtils;
 import com.android.net.module.util.ConnectivityUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.PacketReader;
+import com.android.net.module.util.ProcfsParsingUtils;
 import com.android.networkstack.metrics.ApfSessionInfoMetrics;
 import com.android.networkstack.metrics.IpClientRaInfoMetrics;
 import com.android.networkstack.metrics.NetworkQuirkMetrics;
