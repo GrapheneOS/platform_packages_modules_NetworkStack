@@ -2733,7 +2733,8 @@ public class IpClient extends StateMachine {
         if (params.defaultMtu == mInterfaceParams.defaultMtu) return;
 
         if (mReplaceNetdWithNetlinkEnabled) {
-            if (!NetlinkUtils.setInterfaceMtu(mInterfaceName, mInterfaceParams.defaultMtu)) {
+            if (!NetlinkUtils.setInterfaceMtu(mInterfaceParams.index,
+                    mInterfaceParams.defaultMtu)) {
                 logError("Couldn't reset MTU on " + mInterfaceName + " from "
                         + params.defaultMtu + " to " + mInterfaceParams.defaultMtu);
             }
