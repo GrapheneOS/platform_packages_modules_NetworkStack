@@ -177,7 +177,6 @@ public class ApfTest {
     private HandlerThread mHandlerThread;
     private Handler mHandler;
     private long mCurrentTimeMs;
-    private final ApfTestHelpers mApfTestHelpers = new ApfTestHelpers();
 
     @Before
     public void setUp() throws Exception {
@@ -273,58 +272,58 @@ public class ApfTest {
     }
 
     private void assertPass(ApfV4Generator gen) throws ApfV4Generator.IllegalInstructionException {
-        mApfTestHelpers.assertPass(mApfVersion, gen);
+        ApfTestHelpers.assertPass(mApfVersion, gen);
     }
 
     private void assertDrop(ApfV4Generator gen) throws ApfV4Generator.IllegalInstructionException {
-        mApfTestHelpers.assertDrop(mApfVersion, gen);
+        ApfTestHelpers.assertDrop(mApfVersion, gen);
     }
 
     private void assertPass(byte[] program, byte[] packet) {
-        mApfTestHelpers.assertPass(mApfVersion, program, packet);
+        ApfTestHelpers.assertPass(mApfVersion, program, packet);
     }
 
     private void assertDrop(byte[] program, byte[] packet) {
-        mApfTestHelpers.assertDrop(mApfVersion, program, packet);
+        ApfTestHelpers.assertDrop(mApfVersion, program, packet);
     }
 
     private void assertPass(byte[] program, byte[] packet, int filterAge) {
-        mApfTestHelpers.assertPass(mApfVersion, program, packet, filterAge);
+        ApfTestHelpers.assertPass(mApfVersion, program, packet, filterAge);
     }
 
     private void assertDrop(byte[] program, byte[] packet, int filterAge) {
-        mApfTestHelpers.assertDrop(mApfVersion, program, packet, filterAge);
+        ApfTestHelpers.assertDrop(mApfVersion, program, packet, filterAge);
     }
 
     private void assertPass(ApfV4Generator gen, byte[] packet, int filterAge)
             throws ApfV4Generator.IllegalInstructionException {
-        mApfTestHelpers.assertPass(mApfVersion, gen, packet, filterAge);
+        ApfTestHelpers.assertPass(mApfVersion, gen, packet, filterAge);
     }
 
     private void assertDrop(ApfV4Generator gen, byte[] packet, int filterAge)
             throws ApfV4Generator.IllegalInstructionException {
-        mApfTestHelpers.assertDrop(mApfVersion, gen, packet, filterAge);
+        ApfTestHelpers.assertDrop(mApfVersion, gen, packet, filterAge);
     }
 
     private void assertDataMemoryContents(int expected, byte[] program, byte[] packet,
             byte[] data, byte[] expectedData) throws Exception {
-        mApfTestHelpers.assertDataMemoryContents(mApfVersion, expected, program, packet, data,
+        ApfTestHelpers.assertDataMemoryContents(mApfVersion, expected, program, packet, data,
                 expectedData, false /* ignoreInterpreterVersion */);
     }
 
     private void assertDataMemoryContentsIgnoreVersion(int expected, byte[] program,
             byte[] packet, byte[] data, byte[] expectedData) throws Exception {
-        mApfTestHelpers.assertDataMemoryContents(mApfVersion, expected, program, packet, data,
+        ApfTestHelpers.assertDataMemoryContents(mApfVersion, expected, program, packet, data,
                 expectedData, true /* ignoreInterpreterVersion */);
     }
 
     private void assertVerdict(String msg, int expected, byte[] program,
             byte[] packet, int filterAge) {
-        mApfTestHelpers.assertVerdict(mApfVersion, msg, expected, program, packet, filterAge);
+        ApfTestHelpers.assertVerdict(mApfVersion, msg, expected, program, packet, filterAge);
     }
 
     private void assertVerdict(int expected, byte[] program, byte[] packet) {
-        mApfTestHelpers.assertVerdict(mApfVersion, expected, program, packet);
+        ApfTestHelpers.assertVerdict(mApfVersion, expected, program, packet);
     }
 
     /**
@@ -1140,11 +1139,11 @@ public class ApfTest {
         ApfConfiguration config = getDefaultConfig();
         config.multicastFilter = DROP_MULTICAST;
         final ApfFilter apfFilter = getApfFilter(config);
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         apfFilter.setLinkProperties(lp);
 
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         ByteBuffer packet = ByteBuffer.wrap(new byte[100]);
         if (SdkLevel.isAtLeastV()) {
@@ -1197,7 +1196,7 @@ public class ApfTest {
         ApfConfiguration config = getDefaultConfig();
         ApfFilter apfFilter = getApfFilter(config);
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // Verify empty IPv6 packet is passed
         ByteBuffer packet = makeIpv6Packet(IPPROTO_UDP);
@@ -1438,11 +1437,11 @@ public class ApfTest {
         ApfConfiguration config = getDefaultConfig();
         config.ieee802_3Filter = DROP_802_3_FRAMES;
         final ApfFilter apfFilter = getApfFilter(config);
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         apfFilter.setLinkProperties(lp);
 
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // Construct IPv4 and IPv6 multicast packets.
         ByteBuffer mcastv4packet = makeIpv4Packet(IPPROTO_UDP);
@@ -1477,7 +1476,7 @@ public class ApfTest {
 
         // Turn on multicast filter and verify it works
         apfFilter.setMulticastFilter(true);
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         assertDrop(program, mcastv4packet.array());
         assertDrop(program, mcastv6packet.array());
         assertDrop(program, bcastv4packet1.array());
@@ -1486,7 +1485,7 @@ public class ApfTest {
 
         // Turn off multicast filter and verify it's off
         apfFilter.setMulticastFilter(false);
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         assertPass(program, mcastv4packet.array());
         assertPass(program, mcastv6packet.array());
         assertPass(program, bcastv4packet1.array());
@@ -1498,9 +1497,9 @@ public class ApfTest {
         config.ieee802_3Filter = DROP_802_3_FRAMES;
         clearInvocations(mApfController);
         final ApfFilter apfFilter2 = getApfFilter(config);
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         apfFilter2.setLinkProperties(lp);
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         assertDrop(program, mcastv4packet.array());
         assertDrop(program, mcastv6packet.array());
         assertDrop(program, bcastv4packet1.array());
@@ -1526,7 +1525,7 @@ public class ApfTest {
         final ApfConfiguration configuration = getDefaultConfig();
         final ApfFilter apfFilter = getApfFilter(configuration);
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         final ArgumentCaptor<BroadcastReceiver> receiverCaptor =
                 ArgumentCaptor.forClass(BroadcastReceiver.class);
         verify(mDependencies).addDeviceIdleReceiver(receiverCaptor.capture());
@@ -1548,13 +1547,13 @@ public class ApfTest {
             doReturn(true).when(mPowerManager).isDeviceIdleMode();
             receiver.onReceive(mContext, new Intent(ACTION_DEVICE_IDLE_MODE_CHANGED));
         }
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         // ...and even while dozing...
         assertPass(program, packet.array());
 
         // ...but when the multicast filter is also enabled, drop the multicast pings to save power.
         apfFilter.setMulticastFilter(true);
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         assertDrop(program, packet.array());
 
         // However, we should still let through all other ICMPv6 types.
@@ -1573,7 +1572,7 @@ public class ApfTest {
             doReturn(false).when(mPowerManager).isDeviceIdleMode();
             receiver.onReceive(mContext, new Intent(ACTION_DEVICE_IDLE_MODE_CHANGED));
         }
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         assertPass(program, packet.array());
     }
 
@@ -1583,7 +1582,7 @@ public class ApfTest {
         ApfConfiguration config = getDefaultConfig();
         ApfFilter apfFilter = getApfFilter(config);
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // Verify empty packet of 100 zero bytes is passed
         // Note that eth-type = 0 makes it an IEEE802.3 frame
@@ -1601,7 +1600,7 @@ public class ApfTest {
         // Now turn on the filter
         config.ieee802_3Filter = DROP_802_3_FRAMES;
         apfFilter = getApfFilter(config);
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // Verify that IEEE802.3 frame is dropped
         // In this case ethtype is used for payload length
@@ -1627,7 +1626,7 @@ public class ApfTest {
         ApfConfiguration config = getDefaultConfig();
         ApfFilter apfFilter = getApfFilter(config);
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // Verify empty packet of 100 zero bytes is passed
         // Note that eth-type = 0 makes it an IEEE802.3 frame
@@ -1645,7 +1644,7 @@ public class ApfTest {
         // Now add IPv4 to the black list
         config.ethTypeBlackList = ipv4BlackList;
         apfFilter = getApfFilter(config);
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // Verify that IPv4 frame will be dropped
         setIpv4VersionFields(packet);
@@ -1658,7 +1657,7 @@ public class ApfTest {
         // Now let us have both IPv4 and IPv6 in the black list
         config.ethTypeBlackList = ipv4Ipv6BlackList;
         apfFilter = getApfFilter(config);
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // Verify that IPv4 frame will be dropped
         setIpv4VersionFields(packet);
@@ -1697,7 +1696,7 @@ public class ApfTest {
         config.ieee802_3Filter = DROP_802_3_FRAMES;
         ApfFilter apfFilter = getApfFilter(config);
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // Verify initially ARP request filter is off, and GARP filter is on.
         verifyArpFilter(program, PASS);
@@ -1707,11 +1706,11 @@ public class ApfTest {
         LinkProperties lp = new LinkProperties();
         assertTrue(lp.addLinkAddress(linkAddress));
         apfFilter.setLinkProperties(lp);
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         verifyArpFilter(program, DROP);
 
         apfFilter.setLinkProperties(new LinkProperties());
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         // Inform ApfFilter of loss of IP and verify ARP filtering is off
         verifyArpFilter(program, PASS);
     }
@@ -1982,7 +1981,7 @@ public class ApfTest {
         clearInvocations(mApfController);
         pretendPacketReceived(packet.array());
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         verifyRaLifetime(program, packet, lifetime);
         return program;
     }
@@ -2002,7 +2001,7 @@ public class ApfTest {
         config.ieee802_3Filter = DROP_802_3_FRAMES;
         ApfFilter apfFilter = getApfFilter(config);
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         final int ROUTER_LIFETIME = 1000;
         final int PREFIX_VALID_LIFETIME = 200;
@@ -2087,7 +2086,7 @@ public class ApfTest {
         config.ieee802_3Filter = DROP_802_3_FRAMES;
         final ApfFilter apfFilter = getApfFilter(config);
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         final int RA_REACHABLE_TIME = 1800;
         final int RA_RETRANSMISSION_TIMER = 1234;
 
@@ -2102,7 +2101,7 @@ public class ApfTest {
 
         // Assume apf is shown the given RA, it generates program to filter it.
         pretendPacketReceived(raPacket);
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         assertDrop(program, raPacket);
 
         // A packet with different reachable time should be passed.
@@ -2127,7 +2126,7 @@ public class ApfTest {
         config.multicastFilter = DROP_MULTICAST;
         config.ieee802_3Filter = DROP_802_3_FRAMES;
         final ApfFilter apfFilter = getApfFilter(config);
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         final int routerLifetime = 1000;
         final int timePassedSeconds = 12;
@@ -2143,7 +2142,7 @@ public class ApfTest {
             apfFilter.installNewProgram();
         }
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         verifyRaLifetime(program, basePacket, routerLifetime, timePassedSeconds);
 
         // Packet should be passed if the program is installed after 1/6 * lifetime from last seen
@@ -2153,7 +2152,7 @@ public class ApfTest {
         synchronized (apfFilter) {
             apfFilter.installNewProgram();
         }
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         assertDrop(program, basePacket.array());
 
         mCurrentTimeMs += DateUtils.SECOND_IN_MILLIS;
@@ -2161,7 +2160,7 @@ public class ApfTest {
         synchronized (apfFilter) {
             apfFilter.installNewProgram();
         }
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         assertPass(program, basePacket.array());
     }
 
@@ -2234,13 +2233,13 @@ public class ApfTest {
     @Test
     public void testMatchedRaUpdatesLifetime() throws Exception {
         final ApfFilter apfFilter = getApfFilter(getDefaultConfig());
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // Create an RA and build an APF program
         byte[] ra = new RaPacketBuilder(1800 /* router lifetime */).build();
         pretendPacketReceived(ra);
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // lifetime dropped significantly, assert pass
         ra = new RaPacketBuilder(200 /* router lifetime */).build();
@@ -2248,7 +2247,7 @@ public class ApfTest {
 
         // update program with the new RA
         pretendPacketReceived(ra);
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // assert program was updated and new lifetimes were taken into account.
         assertDrop(program, ra);
@@ -2259,7 +2258,7 @@ public class ApfTest {
         final ApfConfiguration config = getDefaultConfig();
         config.acceptRaMinLft = 180;
         ApfFilter apfFilter = getApfFilter(config);
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         // Template packet:
         // Frame 1: 150 bytes on wire (1200 bits), 150 bytes captured (1200 bits)
         // Ethernet II, Src: Netgear_23:67:2c (28:c6:8e:23:67:2c), Dst: IPv6mcast_01 (33:33:00:00:00:01)
@@ -2311,7 +2310,7 @@ public class ApfTest {
                     String.format(packetStringFmt, lifetime + lifetime));
             // feed the RA into APF and generate the filter, the filter shouldn't crash.
             pretendPacketReceived(ra);
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         }
     }
 
@@ -2323,7 +2322,7 @@ public class ApfTest {
         final ApfConfiguration config = getDefaultConfig();
         config.acceptRaMinLft = 180;
         final ApfFilter apfFilter = getApfFilter(config);
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // Create an initial RA and build an APF program
         byte[] ra = new RaPacketBuilder(1800 /* router lifetime */)
@@ -2332,7 +2331,7 @@ public class ApfTest {
 
         pretendPacketReceived(ra);
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // repeated RA is dropped
         assertDrop(program, ra);
@@ -2352,7 +2351,7 @@ public class ApfTest {
         final ApfConfiguration config = getDefaultConfig();
         config.acceptRaMinLft = 180;
         final ApfFilter apfFilter = getApfFilter(config);
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // Create an initial RA and build an APF program
         byte[] ra = new RaPacketBuilder(1800 /* router lifetime */)
@@ -2361,7 +2360,7 @@ public class ApfTest {
 
         pretendPacketReceived(ra);
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // repeated RA is dropped
         assertDrop(program, ra);
@@ -2388,14 +2387,14 @@ public class ApfTest {
         final ApfConfiguration config = getDefaultConfig();
         config.acceptRaMinLft = 180;
         final ApfFilter apfFilter = getApfFilter(config);
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // Create an initial RA and build an APF program
         byte[] ra = new RaPacketBuilder(0 /* router lifetime */).build();
 
         pretendPacketReceived(ra);
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // repeated RA is dropped
         assertDrop(program, ra);
@@ -2417,14 +2416,14 @@ public class ApfTest {
         final ApfConfiguration config = getDefaultConfig();
         config.acceptRaMinLft = 180;
         final ApfFilter apfFilter = getApfFilter(config);
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // Create an initial RA and build an APF program
         byte[] ra = new RaPacketBuilder(100 /* router lifetime */).build();
 
         pretendPacketReceived(ra);
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // repeated RA is dropped
         assertDrop(program, ra);
@@ -2454,14 +2453,14 @@ public class ApfTest {
         final ApfConfiguration config = getDefaultConfig();
         config.acceptRaMinLft = 180;
         final ApfFilter apfFilter = getApfFilter(config);
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // Create an initial RA and build an APF program
         byte[] ra = new RaPacketBuilder(200 /* router lifetime */).build();
 
         pretendPacketReceived(ra);
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // repeated RA is dropped
         assertDrop(program, ra);
@@ -2487,14 +2486,14 @@ public class ApfTest {
         final ApfConfiguration config = getDefaultConfig();
         config.acceptRaMinLft = 180;
         final ApfFilter apfFilter = getApfFilter(config);
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // Create an initial RA and build an APF program
         byte[] ra = new RaPacketBuilder(1800 /* router lifetime */).build();
 
         pretendPacketReceived(ra);
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // repeated RA is dropped
         assertDrop(program, ra);
@@ -2526,13 +2525,13 @@ public class ApfTest {
         final ApfConfiguration config = getDefaultConfig();
         config.acceptRaMinLft = 180;
         final ApfFilter apfFilter = getApfFilter(config);
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // Create an initial RA and build an APF program
         byte[] ra = new RaPacketBuilder(1800 /* router lifetime */).build();
         pretendPacketReceived(ra);
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // repeated RA is dropped.
         assertDrop(program, ra);
@@ -2541,37 +2540,37 @@ public class ApfTest {
         ra = new RaPacketBuilder(599 /* router lifetime */).build();
         assertPass(program, ra);
         pretendPacketReceived(ra);
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         assertDrop(program, ra);
 
         ra = new RaPacketBuilder(180 /* router lifetime */).build();
         assertPass(program, ra);
         pretendPacketReceived(ra);
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         assertDrop(program, ra);
 
         ra = new RaPacketBuilder(0 /* router lifetime */).build();
         assertPass(program, ra);
         pretendPacketReceived(ra);
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         assertDrop(program, ra);
 
         ra = new RaPacketBuilder(180 /* router lifetime */).build();
         assertPass(program, ra);
         pretendPacketReceived(ra);
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         assertDrop(program, ra);
 
         ra = new RaPacketBuilder(599 /* router lifetime */).build();
         assertPass(program, ra);
         pretendPacketReceived(ra);
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         assertDrop(program, ra);
 
         ra = new RaPacketBuilder(1800 /* router lifetime */).build();
         assertPass(program, ra);
         pretendPacketReceived(ra);
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         assertDrop(program, ra);
     }
 
@@ -2617,7 +2616,7 @@ public class ApfTest {
         config.apfVersionSupported = 2;
         config.apfRamSize = 256;
         final ApfFilter apfFilter = getApfFilter(config);
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         verify(mNetworkQuirkMetrics).setEvent(NetworkQuirkEvent.QE_APF_OVER_SIZE_FAILURE);
         verify(mNetworkQuirkMetrics).statsWrite();
     }
@@ -2632,7 +2631,7 @@ public class ApfTest {
         doReturn(startTimeMs).when(mDependencies).elapsedRealtime();
         final ApfFilter apfFilter = getApfFilter(config);
         byte[] program =
-            mApfTestHelpers.consumeInstalledProgram(mApfController, 2 /* installCnt */);
+            ApfTestHelpers.consumeInstalledProgram(mApfController, 2 /* installCnt */);
         int maxProgramSize = 0;
         int numProgramUpdated = 0;
         maxProgramSize = Math.max(maxProgramSize, program.length);
@@ -2652,13 +2651,13 @@ public class ApfTest {
         expectedData[passedIpv6IcmpCounterIdx + 3] += 1;
         assertDataMemoryContentsIgnoreVersion(PASS, program, ra, data, expectedData);
         pretendPacketReceived(ra);
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         maxProgramSize = Math.max(maxProgramSize, program.length);
         numProgramUpdated++;
 
         apfFilter.setMulticastFilter(true);
         // setMulticastFilter will trigger program installation.
-        program = mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         maxProgramSize = Math.max(maxProgramSize, program.length);
         numProgramUpdated++;
 
@@ -2711,7 +2710,7 @@ public class ApfTest {
         final long durationTimeMs = config.minMetricsSessionDurationMs;
         doReturn(startTimeMs).when(mDependencies).elapsedRealtime();
         final ApfFilter apfFilter = getApfFilter(config);
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         final int routerLifetime = 1000;
         final int prefixValidLifetime = 200;
@@ -2749,20 +2748,20 @@ public class ApfTest {
         // Inject RA packets. Calling assertProgramUpdateAndGet()/assertNoProgramUpdate() is to make
         // sure that the RA packet has been processed.
         pretendPacketReceived(ra1.build());
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         pretendPacketReceived(ra2.build());
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         pretendPacketReceived(raInvalid.build());
         Thread.sleep(NO_CALLBACK_TIMEOUT_MS);
         verify(mApfController, never()).installPacketFilter(any(), any());
         pretendPacketReceived(raZeroRouterLifetime.build());
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         pretendPacketReceived(raZeroPioValidLifetime.build());
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         pretendPacketReceived(raZeroRdnssLifetime.build());
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
         pretendPacketReceived(raZeroRioRouteLifetime.build());
-        mApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
+        ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
 
         // Write metrics data to statsd pipeline when shutdown.
         doReturn(startTimeMs + durationTimeMs).when(mDependencies).elapsedRealtime();

@@ -23,8 +23,7 @@ import java.util.List;
 public class ApfJniUtils {
     static final int APF_INTERPRETER_VERSION_V6 = 6000;
     static final int APF_INTERPRETER_VERSION_NEXT = 99999999;
-    public ApfJniUtils() {
-        // TODO: static load the libapfjni
+    static {
         // Load up native shared library libapfjni containing all APF interpreters exposed via JNI.
         System.loadLibrary("apfjni");
     }
@@ -33,14 +32,14 @@ public class ApfJniUtils {
      * Call the APF interpreter to run {@code program} on {@code packet} with persistent memory
      * segment {@data} pretending the filter was installed {@code filter_age} seconds ago.
      */
-    public native int apfSimulate(int apfVersion, byte[] program, byte[] packet,
+    public static native int apfSimulate(int apfVersion, byte[] program, byte[] packet,
             byte[] data, int filterAge);
 
     /**
      * Compile a tcpdump human-readable filter (e.g. "icmp" or "tcp port 54") into a BPF
      * prorgam and return a human-readable dump of the BPF program identical to "tcpdump -d".
      */
-    public native String compileToBpf(String filter);
+    public static native String compileToBpf(String filter);
 
     /**
      * Open packet capture file {@code pcap_filename} and filter the packets using tcpdump
@@ -48,21 +47,21 @@ public class ApfJniUtils {
      * at the same time using APF program {@code apf_program}.  Return {@code true} if
      * both APF and BPF programs filter out exactly the same packets.
      */
-    public native boolean compareBpfApf(int apfVersion, String filter,
+    public static native boolean compareBpfApf(int apfVersion, String filter,
             String pcapFilename, byte[] apfProgram);
 
     /**
      * Disassemble the Apf program into human-readable text.
      */
-    public native String[] disassembleApf(byte[] program);
+    public static native String[] disassembleApf(byte[] program);
 
     /**
      * Get all transmitted packets.
      */
-    public native List<byte[]> getAllTransmittedPackets();
+    public static native List<byte[]> getAllTransmittedPackets();
 
     /**
      * Reset the memory region that stored the transmitted packet.
      */
-    public native void resetTransmittedPacketMemory();
+    public static native void resetTransmittedPacketMemory();
 }
