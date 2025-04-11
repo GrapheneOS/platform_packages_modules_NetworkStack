@@ -568,14 +568,6 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
     public abstract Type addJumpIfBytesAtOffsetEqualsNoneOf(int offset,
             @NonNull List<byte[]> bytesList, short tgt) throws IllegalInstructionException;
 
-    /**
-     * Check if the byte is valid dns character: A-Z,0-9,-,_,%,@
-     */
-    private static boolean isValidDnsCharacter(byte c) {
-        return (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '%'
-                || c == '@';
-    }
-
     static void validateNames(@NonNull byte[] names) {
         final int len = names.length;
         if (len < 4) {
@@ -595,12 +587,7 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
             if (i + label_len >= len - 1) {
                 throw new IllegalArgumentException(errorMessage);
             }
-            while (label_len-- > 0) {
-                if (!isValidDnsCharacter(names[i++])) {
-                    throw new IllegalArgumentException("qname: " + HexDump.toHexString(names)
-                            + " contains invalid character");
-                }
-            }
+            i += label_len;
             if (names[i] == 0) {
                 i++; // skip null terminator.
             }

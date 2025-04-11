@@ -133,16 +133,6 @@ class ApfGeneratorTest {
                 ApfV4Generator.DROP_LABEL
         ) }
         assertFailsWith<IllegalArgumentException> { gen.addJumpIfPktAtR0DoesNotContainDnsQ(
-                byteArrayOf(1, 'a'.code.toByte(), 0, 0),
-                0x0c,
-                ApfV4Generator.DROP_LABEL
-        ) }
-        assertFailsWith<IllegalArgumentException> { gen.addJumpIfPktAtR0DoesNotContainDnsQ(
-                byteArrayOf(1, '.'.code.toByte(), 0, 0),
-                0x0c,
-                ApfV4Generator.DROP_LABEL
-        ) }
-        assertFailsWith<IllegalArgumentException> { gen.addJumpIfPktAtR0DoesNotContainDnsQ(
                 byteArrayOf(0, 0),
                 0xc0,
                 ApfV4Generator.DROP_LABEL
@@ -173,16 +163,6 @@ class ApfGeneratorTest {
                 ApfV4Generator.DROP_LABEL
         ) }
         assertFailsWith<IllegalArgumentException> { gen.addJumpIfPktAtR0ContainDnsQ(
-                byteArrayOf(1, 'a'.code.toByte(), 0, 0),
-                0x0c,
-                ApfV4Generator.DROP_LABEL
-        ) }
-        assertFailsWith<IllegalArgumentException> { gen.addJumpIfPktAtR0ContainDnsQ(
-                byteArrayOf(1, '.'.code.toByte(), 0, 0),
-                0x0c,
-                ApfV4Generator.DROP_LABEL
-        ) }
-        assertFailsWith<IllegalArgumentException> { gen.addJumpIfPktAtR0ContainDnsQ(
                 byteArrayOf(0, 0),
                 0xc0,
                 ApfV4Generator.DROP_LABEL
@@ -208,14 +188,6 @@ class ApfGeneratorTest {
                 ApfV4Generator.DROP_LABEL
         ) }
         assertFailsWith<IllegalArgumentException> { gen.addJumpIfPktAtR0DoesNotContainDnsA(
-                byteArrayOf(1, 'a'.code.toByte(), 0, 0),
-                ApfV4Generator.DROP_LABEL
-        ) }
-        assertFailsWith<IllegalArgumentException> { gen.addJumpIfPktAtR0DoesNotContainDnsA(
-                byteArrayOf(1, '.'.code.toByte(), 0, 0),
-                ApfV4Generator.DROP_LABEL
-        ) }
-        assertFailsWith<IllegalArgumentException> { gen.addJumpIfPktAtR0DoesNotContainDnsA(
                 byteArrayOf(0, 0),
                 ApfV4Generator.DROP_LABEL
         ) }
@@ -233,14 +205,6 @@ class ApfGeneratorTest {
         ) }
         assertFailsWith<IllegalArgumentException> { gen.addJumpIfPktAtR0DoesNotContainDnsA(
                 byteArrayOf(1, 'A'.code.toByte(), 1, 'B'.code.toByte()),
-                ApfV4Generator.DROP_LABEL
-        ) }
-        assertFailsWith<IllegalArgumentException> { gen.addJumpIfPktAtR0ContainDnsA(
-                byteArrayOf(1, 'a'.code.toByte(), 0, 0),
-                ApfV4Generator.DROP_LABEL
-        ) }
-        assertFailsWith<IllegalArgumentException> { gen.addJumpIfPktAtR0ContainDnsA(
-                byteArrayOf(1, '.'.code.toByte(), 0, 0),
                 ApfV4Generator.DROP_LABEL
         ) }
         assertFailsWith<IllegalArgumentException> { gen.addJumpIfPktAtR0ContainDnsA(
