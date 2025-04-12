@@ -16,9 +16,9 @@
 package com.android.networkstack.util
 
 import android.net.MacAddress
-import android.net.apf.ProcfsParsingUtils
 import androidx.test.filters.SmallTest
 import com.android.net.module.util.HexDump
+import com.android.net.module.util.ProcfsParsingUtils
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
