@@ -1012,8 +1012,7 @@ public abstract class BaseApfGenerator {
     public static final int APF_VERSION_3 = 3;
     public static final int APF_VERSION_4 = 4;
     public static final int APF_VERSION_6 = 6000;
-    // TODO: update the version code once we finalized APFv6.1.
-    public static final int APF_VERSION_61 = 20250228;
+    public static final int APF_VERSION_61 = 6100;
 
 
     final ArrayList<Instruction> mInstructions = new ArrayList<Instruction>();

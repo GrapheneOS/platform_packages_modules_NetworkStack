@@ -63,14 +63,14 @@ com_android_server_ApfTest_apfSimulate(JNIEnv* env, jclass, jint apf_version,
     uint32_t packet_len = (uint32_t)packet.size();
     uint32_t program_len = env->GetArrayLength(jprogram);
     uint32_t data_len = jdata ? env->GetArrayLength(jdata) : 0;
-    // we need to guarantee room for APFv6's 5 u32 counters (20 bytes)
-    // and APFv6.1's 6 u32 counters (24 bytes)
+    // we need to guarantee room for APFv6's 5 u32 counters (20 bytes).
+    // APFv6.1 needs at least 1024 bytes.
     // and we need to make sure ram_len is a multiple of 4 bytes,
     // so that the counters (which are indexed from the back are aligned.
     uint32_t ram_len = program_len + data_len;
     if (apf_version > 4) {
         ram_len += 3; ram_len &= ~3;
-        uint32_t need = 24; // TODO: (apf_version > 6000) ? 24 : 20;
+        uint32_t need = 1024; // TODO: (apf_version > 6000) ? 1024 : 20;
         if (data_len < need) ram_len += need;
     }
     std::vector<uint32_t> buf((ram_len + 3) / 4, 0);
@@ -223,52 +223,6 @@ static jboolean com_android_server_ApfTest_compareBpfApf(
     return true;
 }
 
-static jboolean com_android_server_ApfTest_dropsAllPackets(
-    JNIEnv* env, jclass, jint apf_version, jbyteArray jprogram,
-    jbyteArray jdata, jstring jpcap_filename) {
-    ScopedUtfChars pcap_filename(env, jpcap_filename);
-    ScopedByteArrayRO apf_program(env, jprogram);
-    uint32_t apf_program_len = (uint32_t)apf_program.size();
-    uint32_t data_len = env->GetArrayLength(jdata);
-    uint32_t ram_len = apf_program_len + data_len;
-    if (apf_version > 4) {
-        ram_len += 3; ram_len &= ~3;
-        if (data_len < 20) ram_len += 20;
-    }
-    pcap_pkthdr apf_header;
-    const uint8_t* apf_packet;
-    char pcap_error[PCAP_ERRBUF_SIZE];
-    std::vector<uint32_t> buf((ram_len + 3) / 4, 0);
-    jbyte* jbuf = reinterpret_cast<jbyte*>(buf.data());
-
-    // Merge program and data into a single buffer.
-    env->GetByteArrayRegion(jprogram, 0, apf_program_len, jbuf);
-    env->GetByteArrayRegion(jdata, 0, data_len, jbuf + ram_len - data_len);
-
-    // Open pcap file
-    ScopedFILE apf_fp(fopen(pcap_filename.c_str(), "rb"));
-    ScopedPcap apf_pcap(pcap_fopen_offline(apf_fp.get(), pcap_error));
-
-    if (apf_pcap.get() == NULL) {
-        throwException(env, "pcap_fopen_offline failed: " + std::string(pcap_error));
-        return false;
-    }
-
-    while ((apf_packet = pcap_next(apf_pcap.get(), &apf_header)) != NULL) {
-        int result = run_apf_interpreter(
-            apf_version, buf.data(), apf_program_len, ram_len, apf_packet, apf_header.len, 0);
-
-        // Return false once packet passes the filter
-        if (result) {
-            env->SetByteArrayRegion(jdata, 0, data_len, jbuf + ram_len - data_len);
-            return false;
-         }
-    }
-
-    env->SetByteArrayRegion(jdata, 0, data_len, jbuf + ram_len - data_len);
-    return true;
-}
-
 static jobjectArray com_android_server_ApfTest_disassembleApf(
     JNIEnv* env, jclass, jbyteArray jprogram) {
     uint32_t program_len = env->GetArrayLength(jprogram);
@@ -345,20 +299,18 @@ extern "C" jint JNI_OnLoad(JavaVM* vm, void*) {
     }
 
     static JNINativeMethod gMethods[] = {
-            { "apfSimulate", "(I[B[B[BI)I",
-                    (void*)com_android_server_ApfTest_apfSimulate },
-            { "compileToBpf", "(Ljava/lang/String;)Ljava/lang/String;",
-                    (void*)com_android_server_ApfTest_compileToBpf },
-            { "compareBpfApf", "(ILjava/lang/String;Ljava/lang/String;[B)Z",
-                    (void*)com_android_server_ApfTest_compareBpfApf },
-            { "dropsAllPackets", "(I[B[BLjava/lang/String;)Z",
-                    (void*)com_android_server_ApfTest_dropsAllPackets },
-            { "disassembleApf", "([B)[Ljava/lang/String;",
-              (void*)com_android_server_ApfTest_disassembleApf },
-            { "getAllTransmittedPackets", "()Ljava/util/List;",
-                    (void*)com_android_server_ApfTest_getAllTransmittedPackets },
-            { "resetTransmittedPacketMemory", "()V",
-              (void*)com_android_server_ApfTest_resetTransmittedPacketMemory },
+        {"apfSimulate", "(I[B[B[BI)I",
+         (void *)com_android_server_ApfTest_apfSimulate},
+        {"compileToBpf", "(Ljava/lang/String;)Ljava/lang/String;",
+         (void *)com_android_server_ApfTest_compileToBpf},
+        {"compareBpfApf", "(ILjava/lang/String;Ljava/lang/String;[B)Z",
+         (void *)com_android_server_ApfTest_compareBpfApf},
+        {"disassembleApf", "([B)[Ljava/lang/String;",
+         (void *)com_android_server_ApfTest_disassembleApf},
+        {"getAllTransmittedPackets", "()Ljava/util/List;",
+         (void *)com_android_server_ApfTest_getAllTransmittedPackets},
+        {"resetTransmittedPacketMemory", "()V",
+         (void *)com_android_server_ApfTest_resetTransmittedPacketMemory},
     };
 
     jniRegisterNativeMethods(env, "android/net/apf/ApfJniUtils",
