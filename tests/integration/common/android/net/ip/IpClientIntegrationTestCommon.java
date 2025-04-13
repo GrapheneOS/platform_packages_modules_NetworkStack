@@ -2173,8 +2173,13 @@ public abstract class IpClientIntegrationTestCommon {
     // TODO: move this and the following method to a common location and use them in ApfTest.
     private static ByteBuffer buildPioOption(int valid, int preferred, String prefixString)
             throws Exception {
-        return PrefixInformationOption.build(new IpPrefix(prefixString),
-                (byte) (PIO_FLAG_ON_LINK | PIO_FLAG_AUTONOMOUS), valid, preferred);
+        return buildPioOption(valid, preferred, (byte) (PIO_FLAG_ON_LINK | PIO_FLAG_AUTONOMOUS),
+                prefixString);
+    }
+
+    private static ByteBuffer buildPioOption(int valid, int preferred, byte flags,
+            String prefixString) throws Exception {
+        return PrefixInformationOption.build(new IpPrefix(prefixString), flags, valid, preferred);
     }
 
     private static ByteBuffer buildRdnssOption(int lifetime, String... servers) throws Exception {
