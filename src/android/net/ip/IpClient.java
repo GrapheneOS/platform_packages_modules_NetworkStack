@@ -593,6 +593,8 @@ public class IpClient extends StateMachine {
     @VisibleForTesting
     static final String ACCEPT_RA_MIN_LFT = "accept_ra_min_lft";
     private static final String DAD_TRANSMITS = "dad_transmits";
+    @VisibleForTesting
+    public static final String RA_HONOR_PIO_PFLAG = "ra_honor_pio_pflag";
 
     /**
      * The IpClientCommands constant values.
@@ -2564,6 +2566,14 @@ public class IpClient extends StateMachine {
                 setIpv6Sysctl(DAD_TRANSMITS, 0 /* dad_transmits */);
             }
         }
+        if (mDhcp6PdPreferredFlagEnabled
+                && mDependencies.hasIpv6Sysctl(mInterfaceName, RA_HONOR_PIO_PFLAG)) {
+            // If "accept_ra" sysctl is 0 (e.g. in IPv6 link-local provisioning mode),
+            // kernel only processes the SLLA option (see ndisc_router_discovery in ndisc.c
+            // for details), but not PIO. So always enable the "ra_honor_pio_flag" sysctl
+            // regardless of the provisioning mode.
+            setIpv6Sysctl(RA_HONOR_PIO_PFLAG, 1);
+        }
         return mInterfaceCtrl.setIPv6PrivacyExtensions(true)
                 && mInterfaceCtrl.setIPv6AddrGenModeIfSupported(mConfiguration.mIPv6AddrGenMode)
                 && mInterfaceCtrl.enableIPv6();
@@ -2701,6 +2711,10 @@ public class IpClient extends StateMachine {
         if (mIsAcceptRaMinLftEnabled
                 && mDependencies.hasIpv6Sysctl(mInterfaceName, ACCEPT_RA_MIN_LFT)) {
             setIpv6Sysctl(ACCEPT_RA_MIN_LFT, 0 /* sysctl default */);
+        }
+        if (mDhcp6PdPreferredFlagEnabled
+                && mDependencies.hasIpv6Sysctl(mInterfaceName, RA_HONOR_PIO_PFLAG)) {
+            setIpv6Sysctl(RA_HONOR_PIO_PFLAG, 0 /* sysctl default */);
         }
     }
 
