@@ -959,6 +959,25 @@ public class IpClientTest {
     }
 
     @Test
+    public void testApfForceDisable() throws Exception {
+        doReturn(false).when(mDependencies).isFeatureNotChickenedOut(mContext, APF_ENABLE);
+        final IpClient ipc = makeIpClient(TEST_IFNAME);
+        ProvisioningConfiguration.Builder config = new ProvisioningConfiguration.Builder()
+                .withoutIPv4()
+                .withoutIpReachabilityMonitor()
+                .withInitialConfiguration(
+                        conf(links(TEST_LOCAL_ADDRESSES), prefixes(TEST_PREFIXES), ips()))
+                .withApfCapabilities(
+                        new ApfCapabilities(3 /* version */, 2048 /* maxProgramSize */,
+                                ARPHRD_ETHER));
+        ipc.startProvisioning(config.build());
+        HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
+        verify(mDependencies, never()).maybeCreateApfFilter(
+                any(), any(), any(), any(), any(), any());
+        verifyShutdown(ipc);
+    }
+
+    @Test
     public void testDumpApfFilter_withNoException() throws Exception {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
