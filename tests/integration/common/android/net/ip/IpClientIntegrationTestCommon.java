@@ -85,6 +85,7 @@ import static com.android.net.module.util.NetworkStackConstants.NEIGHBOR_ADVERTI
 import static com.android.net.module.util.NetworkStackConstants.NEIGHBOR_ADVERTISEMENT_FLAG_SOLICITED;
 import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_AUTONOMOUS;
 import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_ON_LINK;
+import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION;
@@ -322,6 +323,9 @@ public abstract class IpClientIntegrationTestCommon {
     private static final int TEST_ARP_LOCKTIME_MS = 1500;
     private static final int TEST_DELAY_FIRST_PROBE_TIME_S = 2;
 
+    private static final byte TEST_PIO_FLAGS_P_UNSET = (byte) 0xC0; // L=1,A=1,R=0,P=0
+    private static final byte TEST_PIO_FLAGS_P_SET = (byte) 0xD0;   // L=1,A=1,R=0,P=1
+
     @Rule
     public final DevSdkIgnoreRule mIgnoreRule = new DevSdkIgnoreRule();
     @Rule
@@ -445,7 +449,9 @@ public abstract class IpClientIntegrationTestCommon {
     private static final String IPV4_ANY_ADDRESS_PREFIX = "0.0.0.0/0";
     private static final String HOSTNAME = "testhostname";
     private static final String TEST_IPV6_PREFIX = "2001:db8:1::/64";
+    private static final String TEST_IPV6_ULA_PREFIX = "fd00:1234:5678:9abc::/64";
     private static final String IPV6_OFF_LINK_DNS_SERVER = "2001:4860:4860::64";
+    private static final String TEST_DHCP6_DELEGATED_PREFIX = "2001:db8:dead:beef::/64";
     private static final String IPV6_ON_LINK_DNS_SERVER = "2001:db8:1::64";
     private static final int TEST_DEFAULT_MTU = 1500;
     private static final int TEST_MIN_MTU = 1280;
@@ -6515,5 +6521,109 @@ public abstract class IpClientIntegrationTestCommon {
         // event count should be 10.
         assertRetrievedNetworkEventCount(TEST_CLUSTER, 10 /* expectedCountInPastWeek */,
                 10 /* expectedCountInPastDay */, 10 /* expectedCountInPastSixHours */);
+    }
+
+    private void prepareDhcp6PrefixDelegationPreferredFlagTests(byte flags, boolean hasUlaPio)
+            throws Exception {
+        // DHCPv6 prefix delegation preferred flag relevant test cases require the kernel to support
+        // "ra_honor_pio_pflag" sysctl, which lands since 6.12 kernel version.
+        final String ra_honor_pio_flag =
+                "/proc/sys/net/ipv6/conf/" + mIfaceName + "/ra_honor_pio_pflag";
+        assumeTrue(new File(ra_honor_pio_flag).exists());
+
+        final List<ByteBuffer> options = new ArrayList<>();
+        final ByteBuffer pio =
+                buildPioOption(3600 /* valid */, 1800 /* preferred */, flags, TEST_IPV6_PREFIX);
+        final ByteBuffer ulaPio =
+                buildPioOption(200 /* valid */, 100 /* preferred */, TEST_IPV6_ULA_PREFIX);
+        final ByteBuffer rdnss = buildRdnssOption(3600, IPV6_OFF_LINK_DNS_SERVER);
+        options.add(pio);
+        if (hasUlaPio) options.add(ulaPio);
+        options.add(rdnss);
+        final ByteBuffer ra = buildRaPacket(options.toArray(new ByteBuffer[options.size()]));
+
+        ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
+                .withoutIPv4()
+                .build();
+        startIpClientProvisioning(config);
+
+        waitForRouterSolicitation();
+        mPacketReader.sendResponse(ra);
+    }
+
+    @Test
+    @Flag(name = IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION, enabled = true)
+    public void testDhcp6PrefixDelegationPreferred() throws Exception {
+        prepareDhcp6PrefixDelegationPreferredFlagTests(TEST_PIO_FLAGS_P_SET, false /* hasUlaPio */);
+
+        // Verify that DHCPv6 Prefix Delegation should be used for IPv6 provisioning when P bit
+        // is set in the PIO, and device should ignore the A bit and haven't any SLAAC address
+        // derived from that on-link prefix.
+        final IpPrefix delegatedPrefix = new IpPrefix(TEST_DHCP6_DELEGATED_PREFIX);
+        handleDhcp6Packets(delegatedPrefix, true /* shouldReplyRapidCommit */);
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        final LinkProperties lp = captor.getValue();
+        assertTrue(hasIpv6AddressPrefixedWith(lp, delegatedPrefix));
+        assertFalse(hasIpv6AddressPrefixedWith(lp, new IpPrefix(TEST_IPV6_PREFIX)));
+    }
+
+    @Test
+    @Flag(name = IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION, enabled = true)
+    public void testDhcp6PrefixDelegationPreferred_withoutPFlag() throws Exception {
+        prepareDhcp6PrefixDelegationPreferredFlagTests(TEST_PIO_FLAGS_P_UNSET,
+                false /* hasUlaPio */);
+
+        // Verify that DHCPv6 Prefix Delegation should not be used for IPv6 provisioning when P bit
+        // is not set in the PIO, and device should do SLAAC based on the on-link prefix in PIO.
+        assertNull(getNextDhcp6Packet(PACKET_TIMEOUT_MS));
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        final LinkProperties lp = captor.getValue();
+        assertTrue(hasIpv6AddressPrefixedWith(lp, new IpPrefix(TEST_IPV6_PREFIX)));
+        assertFalse(hasIpv6AddressPrefixedWith(lp, new IpPrefix(TEST_DHCP6_DELEGATED_PREFIX)));
+    }
+
+    @Test
+    @Flag(name = IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION, enabled = true)
+    public void testDhcp6PrefixDelegationPreferred_multiplePiosWithPFlag() throws Exception {
+        prepareDhcp6PrefixDelegationPreferredFlagTests(TEST_PIO_FLAGS_P_SET, true /* hasUlaPio */);
+
+        // Verify that DHCPv6 Prefix Delegation should be used for IPv6 provisioning when the
+        // P bit is set in the PIO, apart of that, RA also includes a PIO with ULA prefix, so
+        // the device ignore the A bit in the PIO and have the ULA address based on the ULA prefix.
+        final IpPrefix delegatedPrefix = new IpPrefix(TEST_DHCP6_DELEGATED_PREFIX);
+        handleDhcp6Packets(delegatedPrefix, true /* shouldReplyRapidCommit */);
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        final LinkProperties lp = captor.getValue();
+        assertTrue(hasIpv6AddressPrefixedWith(lp, delegatedPrefix));
+        assertTrue(hasIpv6AddressPrefixedWith(lp, new IpPrefix(TEST_IPV6_ULA_PREFIX)));
+        assertFalse(hasIpv6AddressPrefixedWith(lp, new IpPrefix(TEST_IPV6_PREFIX)));
+    }
+
+    @Test
+    @Flag(name = IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION, enabled = true)
+    public void testDhcp6PrefixDelegationPreferred_withPFlag_preferredLifetimeBecomesZero()
+            throws Exception {
+        prepareDhcp6PrefixDelegationPreferredFlagTests(TEST_PIO_FLAGS_P_SET, true /* hasUlaPio */);
+
+        final IpPrefix delegatedPrefix = new IpPrefix(TEST_DHCP6_DELEGATED_PREFIX);
+        handleDhcp6Packets(delegatedPrefix, true /* shouldReplyRapidCommit */);
+        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onProvisioningSuccess(captor.capture());
+        final LinkProperties lp = captor.getValue();
+        assertTrue(hasIpv6AddressPrefixedWith(lp, delegatedPrefix));
+        assertFalse(hasIpv6AddressPrefixedWith(lp, new IpPrefix(TEST_IPV6_PREFIX)));
+
+        clearInvocations(mCb);
+
+        // Send another PIO with P flag but 0 preferred lifetime in the RA, this will result in the
+        // prefix being removed from the list, but the lifetimes of any prefixes already obtained
+        // via DHCPv6 are unaffected, i.e. there should be no any change on the LinkProperties.
+        final ByteBuffer pio = buildPioOption(3600 /* valid */, 0 /* preferred */,
+                TEST_PIO_FLAGS_P_SET, TEST_IPV6_PREFIX);
+        sendRouterAdvertisement(false /* waitForRs*/, (short) 1800 /* router lifetime */, pio);
+        verify(mCb, never()).onLinkPropertiesChange(any());
     }
 }
