@@ -52,6 +52,7 @@ import com.android.net.module.util.IpUtils
 import com.android.net.module.util.Ipv6Utils
 import com.android.net.module.util.NetworkStackConstants.ETHER_ADDR_LEN
 import com.android.net.module.util.NetworkStackConstants.ETHER_HEADER_LEN
+import com.android.net.module.util.NetworkStackConstants.ETHER_DST_ADDR_OFFSET
 import com.android.net.module.util.NetworkStackConstants.ETHER_SRC_ADDR_OFFSET
 import com.android.net.module.util.NetworkStackConstants.IPV4_ADDR_ANY
 import com.android.net.module.util.NetworkStackConstants.IPV4_CHECKSUM_OFFSET
@@ -243,38 +244,12 @@ class NetworkStackUtilsIntegrationTest {
     }
 
     @Test
-    fun testAttachEgressIgmpReportFilter() {
+    fun testAttachEgressMulticastReportFilterForMulticastGroupChange() {
         val socket = Os.socket(AF_PACKET, SOCK_RAW or SOCK_CLOEXEC, 0)
         val ifParams = InterfaceParams.getByName(iface.interfaceName)
             ?: fail("Could not obtain interface params for ${iface.interfaceName}")
         val socketAddr = SocketUtils.makePacketSocketAddress(ETH_P_ALL, ifParams.index)
-        NetworkStackUtils.attachEgressIgmpReportFilter(socket)
-        Os.bind(socket, socketAddr)
-        Os.setsockoptTimeval(
-            socket,
-            SOL_SOCKET,
-            SO_RCVTIMEO,
-            StructTimeval.fromMillis(TEST_TIMEOUT_MS)
-        )
-
-        val sendSocket = Os.socket(AF_PACKET, SOCK_RAW or SOCK_CLOEXEC, 0)
-        Os.bind(sendSocket, socketAddr)
-
-        testExpectedPacketsReceived(sendSocket, socket)
-
-        // shorten the socket timeout to prevent waiting too long in the test
-        Os.setsockoptTimeval(socket, SOL_SOCKET, SO_RCVTIMEO, StructTimeval.fromMillis(100))
-
-        testExpectedPacketsNotReceived(sendSocket, socket)
-    }
-
-    @Test
-    fun testAttachEgressIgmpReportFilterForMulticastGroupChange() {
-        val socket = Os.socket(AF_PACKET, SOCK_RAW or SOCK_CLOEXEC, 0)
-        val ifParams = InterfaceParams.getByName(iface.interfaceName)
-            ?: fail("Could not obtain interface params for ${iface.interfaceName}")
-        val socketAddr = SocketUtils.makePacketSocketAddress(ETH_P_ALL, ifParams.index)
-        NetworkStackUtils.attachEgressIgmpReportFilter(socket)
+        NetworkStackUtils.attachEgressMulticastReportFilter(socket)
         Os.bind(socket, socketAddr)
         Os.setsockoptTimeval(
             socket,
@@ -288,6 +263,8 @@ class NetworkStackUtilsIntegrationTest {
         val networkInterface = NetworkInterface.getByName(iface.interfaceName)
 
         multicastSock.joinGroup(mcastAddr, networkInterface)
+
+        val igmpv3ReportPacketFilter = { pkt: ByteArray -> isIgmpv3ReportPacket(pkt) }
         // Using scapy to generate IGMPv3 membership report:
         // ether = Ether(src='02:03:04:05:06:07', dst='01:00:5e:00:00:16')
         // ip = IP(src='0.0.0.0', dst='224.0.0.22', id=0, flags='DF', options=[IPOption_Router_Alert()])
@@ -301,7 +278,12 @@ class NetworkStackUtilsIntegrationTest {
         val expectedJoinPkt = HexDump.hexStringToByteArray(
             joinReport.replace("020304050607", srcMac)
         )
-        assertNextPacketEquals(socket, expectedJoinPkt, "IGMPv3 join report")
+        assertUntilPacketEquals(
+            socket,
+            expectedJoinPkt,
+            "IGMPv3 join report",
+            igmpv3ReportPacketFilter
+        )
 
         multicastSock.leaveGroup(mcastAddr, networkInterface)
         // Using scapy to generate IGMPv3 membership report:
@@ -316,7 +298,12 @@ class NetworkStackUtilsIntegrationTest {
         val expectedLeavePkt = HexDump.hexStringToByteArray(
             leaveReport.replace("020304050607", srcMac)
         )
-        assertNextPacketEquals(socket, expectedLeavePkt, "IGMPv3 leave report")
+        assertUntilPacketEquals(
+            socket,
+            expectedLeavePkt,
+            "IGMPv3 leave report",
+            igmpv3ReportPacketFilter
+        )
     }
 
     @Test
@@ -528,7 +515,9 @@ class NetworkStackUtilsIntegrationTest {
     private fun assertUntilPacketEquals(
         socket: FileDescriptor,
         expected: ByteArray,
-        descr: String
+        descr: String,
+        filter: (ByteArray) -> Boolean =
+            { pkt: ByteArray -> !isTestInterfaceEgressPacket(pkt) }
     ) {
         val buffer = ByteArray(TEST_MTU)
         var readBytes: Int
@@ -537,7 +526,7 @@ class NetworkStackUtilsIntegrationTest {
             .also { readBytes = it } > 0
         ) {
             actualPkt = buffer.copyOfRange(0, readBytes)
-            if (!isTestInterfaceEgressPacket(actualPkt)) break
+            if (filter(actualPkt)) break
         }
 
         assertNotNull(actualPkt, "no received packets")
@@ -549,7 +538,13 @@ class NetworkStackUtilsIntegrationTest {
         )
     }
 
-    private fun assertUntilSocketReadErrno(msg: String, socket: FileDescriptor, errno: Int) {
+    private fun assertUntilSocketReadErrno(
+        msg: String,
+        socket: FileDescriptor,
+        errno: Int,
+        filter: (ByteArray) -> Boolean =
+            { pkt: ByteArray -> !isTestInterfaceEgressPacket(pkt) }
+    ) {
         val buffer = ByteArray(TEST_MTU)
         var readBytes: Int
         var actualPkt: ByteArray? = null
@@ -558,7 +553,7 @@ class NetworkStackUtilsIntegrationTest {
                     .also { readBytes = it } > 0
             ) {
                 actualPkt = buffer.copyOfRange(0, readBytes)
-                if (!isTestInterfaceEgressPacket(actualPkt)) break
+                if (filter(actualPkt)) break
             }
             fail(msg + ": " + HexDump.toHexString(actualPkt))
         } catch (expected: ErrnoException) {
@@ -692,6 +687,16 @@ class NetworkStackUtilsIntegrationTest {
         )
         val ifParams = InterfaceParams.getByName(iface.interfaceName)
         return srcMac.contentEquals(ifParams.macAddr.toByteArray())
+    }
+
+    // Assume only IGMPv3 reports with ether destination 01:00:5E:00:00:16
+    private fun isIgmpv3ReportPacket(packet: ByteArray): Boolean {
+        val dstMac = packet.copyOfRange(
+            ETHER_DST_ADDR_OFFSET,
+            ETHER_DST_ADDR_OFFSET + ETHER_ADDR_LEN
+        )
+
+        return dstMac.contentEquals(MacAddress.fromString("01:00:5E:00:00:16").toByteArray())
     }
 
     private fun doTestDhcpResponseWithMfBitDropped(generic: Boolean) {

@@ -468,8 +468,6 @@ class ApfFilterTest {
         val mcastReadSocket = FileDescriptor()
         Os.socketpair(AF_UNIX, SOCK_STREAM, 0, mcastWriteSocket, mcastReadSocket)
         doReturn(mcastReadSocket)
-                .`when`(dependencies).createEgressIgmpReportsReaderSocket(anyInt())
-        doReturn(mcastReadSocket)
                 .`when`(dependencies).createEgressMulticastReportsReaderSocket(anyInt())
         doReturn(nsdManager).`when`(context).getSystemService(NsdManager::class.java)
     }
@@ -5499,15 +5497,14 @@ class ApfFilterTest {
     @Test
     fun testCreateEgressReportReaderSocket() {
         var apfFilter = getApfFilter()
-        verify(dependencies, never()).createEgressIgmpReportsReaderSocket(anyInt())
         verify(dependencies, never()).createEgressMulticastReportsReaderSocket(anyInt())
         clearInvocations(dependencies)
 
         val apfConfig = getDefaultConfig()
+        apfConfig.handleIgmpOffload = false
         apfConfig.handleMldOffload = true
         apfFilter = getApfFilter(apfConfig)
 
-        verify(dependencies, never()).createEgressIgmpReportsReaderSocket(anyInt())
         verify(dependencies, times(1)).createEgressMulticastReportsReaderSocket(anyInt())
         clearInvocations(dependencies)
 
@@ -5515,15 +5512,15 @@ class ApfFilterTest {
         apfConfig.handleMldOffload = false
         apfFilter = getApfFilter(apfConfig)
 
-        verify(dependencies, never()).createEgressMulticastReportsReaderSocket(anyInt())
-        verify(dependencies, times(1)).createEgressIgmpReportsReaderSocket(anyInt())
+        verify(dependencies, times(1)).createEgressMulticastReportsReaderSocket(anyInt())
         clearInvocations(dependencies)
 
         apfConfig.handleIgmpOffload = true
         apfConfig.handleMldOffload = true
         apfFilter = getApfFilter(apfConfig)
-        verify(dependencies, never()).createEgressIgmpReportsReaderSocket(anyInt())
+
         verify(dependencies, times(1)).createEgressMulticastReportsReaderSocket(anyInt())
+        clearInvocations(dependencies)
     }
 
     fun getProgramWithAllFeatureEnabled(
