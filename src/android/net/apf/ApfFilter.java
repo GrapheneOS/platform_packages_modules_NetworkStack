@@ -660,24 +660,6 @@ public class ApfFilter {
         }
 
         /**
-         * Create a socket to read egress IGMPv2/v3 reports.
-         */
-        @Nullable
-        public FileDescriptor createEgressIgmpReportsReaderSocket(int ifIndex) {
-            FileDescriptor socket;
-            try {
-                socket = Os.socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, 0);
-                NetworkStackUtils.attachEgressIgmpReportFilter(socket);
-                Os.bind(socket, makePacketSocketAddress(ETH_P_ALL, ifIndex));
-            } catch (SocketException | ErrnoException e) {
-                Log.wtf(TAG, "Error starting filter", e);
-                return null;
-            }
-
-            return socket;
-        }
-
-        /**
          * Create a socket to read egress IGMPv2/v3, MLDv1/v2 reports.
          */
         @Nullable
@@ -833,13 +815,9 @@ public class ApfFilter {
     private MulticastReportMonitor createMulticastReportMonitor() {
         FileDescriptor socketFd = null;
 
-        // Check if MLD report monitor is enabled first, it includes the IGMP report monitor.
-        if (enableMldReportsMonitor()) {
+        if (enableMldReportsMonitor() || enableIgmpReportsMonitor()) {
             socketFd =
-                mDependencies.createEgressMulticastReportsReaderSocket(mInterfaceParams.index);
-        } else if (enableIgmpReportsMonitor()) {
-            socketFd =
-                mDependencies.createEgressIgmpReportsReaderSocket(mInterfaceParams.index);
+                    mDependencies.createEgressMulticastReportsReaderSocket(mInterfaceParams.index);
         }
 
         return socketFd != null ? new MulticastReportMonitor(
