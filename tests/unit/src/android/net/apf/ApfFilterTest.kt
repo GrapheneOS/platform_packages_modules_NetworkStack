@@ -112,6 +112,9 @@ import com.android.networkstack.util.NetworkStackUtils.isAtLeast25Q2
 import com.android.testutils.DevSdkIgnoreRule
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo
 import com.android.testutils.DevSdkIgnoreRunner
+import com.android.testutils.EtherPkt
+import com.android.testutils.Ip6Pkt
+import com.android.testutils.RaPkt
 import com.android.testutils.quitResources
 import com.android.testutils.tryTest
 import com.android.testutils.visibleOnHandlerThread
@@ -5609,30 +5612,26 @@ class ApfFilterTest {
 
             apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 4)
 
-            val ra1 = """
-                333300000001f434f06452fe86dd60010c0000503afffe800000000000001cb6b5bc353b7cfdff0
-                2000000000000000000000000000186000fab000000000000000000000000030440c00000070800
-                00070800000000fdeed0c47546534400000000000000001802400000000708fd0c8be643ee00001
-                a018000000000000101f434f06452fe
-            """.replace("\\s+".toRegex(), "").trim()
-            val ra1Bytes = HexDump.hexStringToByteArray(ra1)
+            val ra1Bytes = run {
+                val eth = EtherPkt(src = "f4:34:f0:64:52:fe", dst = "33:33:00:00:00:01")
+                val ip6 = Ip6Pkt(src = "fe80::1cb6:b5bc:353b:7cfd", dst = "ff02::1")
+                val ra = RaPkt(lft = 0)
+                ra.addPioOption("fdee:d0c4:7546::/64", valid = 1800, preferred = 1800, flags = "la")
+                ra.addRioOption(prefix = "fd0c:8be6:43ee::/64")
+                ra.addSllaOption("f4:34:f0:64:52:fe")
+                (eth / ip6 / ra).build()
+            }
             Os.write(localRaWriterSocket, ra1Bytes, 0, ra1Bytes.size)
             apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
 
-            // Using scapy to generate packet:
-            // eth = Ether(src="E8:9F:80:66:60:BC", dst="f2:9c:70:2c:39:5a")
-            // ip6 = IPv6(src="fe80::2", dst="ff02::1")
-            // icmpra = ICMPv6ND_RA(routerlifetime=360, retranstimer=360)
-            // pio1 = ICMPv6NDOptPrefixInfo(prefixlen=64, prefix="2002:db8::")
-            // rio = ICMPv6NDOptRouteInfo(prefix="2002:db8:cafe::")
-            // ra = eth/ip6/icmpra/pio1/rio
-            val ra2 = """
-                f29c702c395ae89f806660bc86dd6000000000483afffe800000000000000000000000000002ff0
-                200000000000000000000000000018600f6e3000801680000000000000168030440c0ffffffffff
-                ffffff0000000020020db800000000000000000000000018030000ffffffff20020db8cafe00000
-                000000000000000
-            """.replace("\\s+".toRegex(), "").trim()
-            val ra2Bytes = HexDump.hexStringToByteArray(ra2)
+            val ra2Bytes = run {
+                val eth = EtherPkt(src = "e8:9f:80:66:60:bc", dst = "f2:9c:70:2c:39:5a")
+                val ip6 = Ip6Pkt(src = "fe80::2", dst = "ff02::1")
+                val ra = RaPkt(lft = 360, retransTimer = 360)
+                        .addPioOption(prefix = "2002:db8::/64", flags = "LA")
+                        .addRioOption(prefix = "2002:db8:cafe::/48")
+                (eth / ip6 / ra).build()
+            }
             val beforeNs = SystemClock.elapsedRealtimeNanos()
             Os.write(localRaWriterSocket, ra2Bytes, 0, ra2Bytes.size)
             program = apfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
