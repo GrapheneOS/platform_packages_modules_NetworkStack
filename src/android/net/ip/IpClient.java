@@ -1199,6 +1199,21 @@ public class IpClient extends StateMachine {
                         if (!mDhcp6PdPreferredFlagEnabled) return;
                         sendMessage(EVENT_PIO_PREFIX_UPDATE, info);
                     }
+
+                    @Override
+                    public void startDhcp6() {
+                        // TODO: implement this.
+                    }
+
+                    @Override
+                    public void stopDhcp6() {
+                        // TODO: implement this.
+                    }
+
+                    @Override
+                    public void rebindDhcp6() {
+                        // TODO: implement this.
+                    }
                 },
                 config, mLog, mDependencies
         );
