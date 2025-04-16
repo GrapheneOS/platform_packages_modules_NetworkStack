@@ -172,21 +172,6 @@ public class IpClientLinkObserver {
         }
     }
 
-    /** Prefix information received from RTM_NEWPREFIX netlink message. */
-    public static class PrefixInfo {
-        public final IpPrefix prefix;
-        public short flags;
-        public long preferred;
-        public long valid;
-
-        public PrefixInfo(@NonNull final IpPrefix prefix, short flags, long preferred, long valid) {
-            this.prefix = prefix;
-            this.flags = flags;
-            this.preferred = preferred;
-            this.valid = valid;
-        }
-    }
-
     private final Context mContext;
     private final String mInterfaceName;
     private final Callback mCallback;
