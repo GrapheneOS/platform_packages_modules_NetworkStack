@@ -832,7 +832,6 @@ public class IpClient extends StateMachine {
     private final boolean mApfHandleIpv4PingOffload;
     private final boolean mApfHandleIpv6PingOffload;
     private final boolean mIgnoreNudFailureEnabled;
-    private final boolean mDhcp6PdPreferredFlagEnabled;
     private final boolean mReplaceNetdWithNetlinkEnabled;
 
     private InterfaceParams mInterfaceParams;
@@ -1138,12 +1137,13 @@ public class IpClient extends StateMachine {
         mNudFailureCountWeeklyThreshold = mDependencies.getDeviceConfigPropertyInt(
                 CONFIG_NUD_FAILURE_COUNT_WEEKLY_THRESHOLD,
                 DEFAULT_NUD_FAILURE_COUNT_WEEKLY_THRESHOLD);
-        mDhcp6PdPreferredFlagEnabled =
-                mDependencies.isFeatureEnabled(mContext, IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION);
         mReplaceNetdWithNetlinkEnabled = mDependencies.isFeatureEnabled(mContext,
                 IPCLIENT_REPLACE_NETD_WITH_NETLINK_VERSION);
         IpClientLinkObserver.Configuration config = new IpClientLinkObserver.Configuration(
-                mAcceptRaMinLft, mPopulateLinkAddressLifetime, mDhcp6PdPreferredFlagEnabled);
+                mAcceptRaMinLft,
+                mPopulateLinkAddressLifetime,
+                mDependencies.isFeatureEnabled(mContext,
+                        IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION));
 
         mLinkObserver = new IpClientLinkObserver(
                 mContext, getHandler(),
