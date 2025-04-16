@@ -139,13 +139,6 @@ public class IpClientLinkObserver {
         void onClatInterfaceStateUpdate(boolean add);
 
         /**
-         * Called when the prefix information was updated via RTM_NEWPREFIX netlink message.
-         *
-         * @param info prefix information.
-         */
-        void onNewPrefix(PrefixInfo info);
-
-        /**
          * Start requesting a prefix via DHCPv6-PD when the length of the prefix list
          * with DHCPv6 preferred flag increases to one.
          */
