@@ -186,7 +186,7 @@ public class IpClientLinkObserver {
     private final IpClientNetlinkMonitor mNetlinkMonitor;
     private final NetworkInformationShim mShim;
     private final AlarmManager.OnAlarmListener mExpirePref64Alarm;
-    // Map of prefix in PIO with P flag and its preferred lifetime expiry in unix timestamp.
+    // Map of prefix in PIO with P flag and its preferred lifetime expiry in seconds since boot.
     private final Map<IpPrefix, Long> mDhcp6PdPreferredPrefixes = new ArrayMap<>();
 
     private long mNat64PrefixExpiry;
@@ -678,11 +678,9 @@ public class IpClientLinkObserver {
         final long preferredLifetime = msg.getPreferredLifetime();
         final IpPrefix prefix = msg.getPrefix();
 
-        // If the pflag isn't set, the prefix must not be tracked by setting
-        // the prefix expiry to the current unix timestamp. This prefix won't
-        // be added to the list of prefix with p flag then. In the case of a
-        // prefix has the p flag but 0 preferred lifetime, it will also be
-        // removed from the list later in this way.
+        // If pflag is false or preferredLifetime is 0, set expiry to now. This ensures the prefix
+        // is removed immediately by the removeIf below. Otherwise, calculate the actual expiry time
+        // based on the preferred lifetime.
         final long expiry = pflag ? now + preferredLifetime * 1000 : now;
 
         // Note that while expired prefixes are supposed to be removed when the alarm fires, it is
