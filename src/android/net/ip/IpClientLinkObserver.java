@@ -672,8 +672,7 @@ public class IpClientLinkObserver {
         // TODO: implement this.
     }
 
-    private void handlePrefixInformationUpdate(final RtNetlinkPrefixMessage msg,
-            boolean pflag) {
+    private void handlePrefixInformationUpdate(RtNetlinkPrefixMessage msg, boolean pflag) {
         final long now = SystemClock.elapsedRealtime();
         final long preferredLifetime = msg.getPreferredLifetime();
         final IpPrefix prefix = msg.getPrefix();
