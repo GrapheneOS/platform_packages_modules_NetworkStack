@@ -691,6 +691,8 @@ public class IpClientLinkObserver {
         mDhcp6PdPreferredPrefixes.entrySet().removeIf(p -> p.getValue() <= now);
         final int finalSize = mDhcp6PdPreferredPrefixes.size();
 
+        maybeScheduleNextPreferredLifetimeAlarm();
+
         // Size unchanged, nothing to do here:
         if (initialSize == finalSize) return;
         switch (finalSize) {
@@ -704,11 +706,6 @@ public class IpClientLinkObserver {
                 mCallback.rebindDhcp6();
                 break;
         }
-
-        // Track the minimum prefix preferred lifetime expiry in the list if
-        // the list of prefix(es) with P flag has been updated, and schedule
-        // the next alarm.
-        maybeScheduleNextPreferredLifetimeAlarm();
     }
 
     private void processRtNetlinkPrefixMessage(RtNetlinkPrefixMessage msg) {
