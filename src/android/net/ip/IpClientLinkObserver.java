@@ -685,7 +685,13 @@ public class IpClientLinkObserver {
         // removed from the list later in this way.
         final long expiry = pflag ? now + preferredLifetime * 1000 : now;
 
-        // Insert or update the prefix, then remove it if it has expired.
+        // Note that while expired prefixes are supposed to be removed when the alarm fires, it is
+        // possible that this has yet to happen when this function runs. In this (very unlikely)
+        // case, the subsequent call to removeIf may affect multiple prefixes. This could cause a
+        // situation where a prefix is added and an expired prefix is removed at the same time, so
+        // initialSize == finalSize returns true and no REBIND is triggered.
+        // Given the low likelihood (and relatively minor impact) of this race, special handling is
+        // not required.
         final int initialSize = mDhcp6PdPreferredPrefixes.size();
         mDhcp6PdPreferredPrefixes.put(prefix, expiry);
         mDhcp6PdPreferredPrefixes.entrySet().removeIf(p -> p.getValue() <= now);
