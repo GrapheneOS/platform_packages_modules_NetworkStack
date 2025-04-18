@@ -34,6 +34,7 @@ import static android.net.ip.IpClient.IpClientCommands.CMD_ADD_KEEPALIVE_PACKET_
 import static android.net.ip.IpClient.IpClientCommands.CMD_COMPLETE_PRECONNECTION;
 import static android.net.ip.IpClient.IpClientCommands.CMD_CONFIRM;
 import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_START;
+import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_STOP;
 import static android.net.ip.IpClient.IpClientCommands.CMD_JUMP_RUNNING_TO_STOPPING;
 import static android.net.ip.IpClient.IpClientCommands.CMD_JUMP_STOPPING_TO_STOPPED;
 import static android.net.ip.IpClient.IpClientCommands.CMD_REMOVE_KEEPALIVE_PACKET_FILTER_FROM_APF;
@@ -628,6 +629,7 @@ public class IpClient extends StateMachine {
         static final int EVENT_NUD_FAILURE_QUERY_SUCCESS = 22;
         static final int EVENT_NUD_FAILURE_QUERY_FAILURE = 23;
         static final int CMD_DHCP6_PD_START = 24;
+        static final int CMD_DHCP6_PD_STOP = 25;
         // Internal commands to use instead of trying to call transitionTo() inside
         // a given State's enter() method. Calling transitionTo() from enter/exit
         // encounters a Log.wtf() that can cause trouble on eng builds.
@@ -1200,7 +1202,7 @@ public class IpClient extends StateMachine {
 
                     @Override
                     public void stopDhcp6() {
-                        // TODO: implement this.
+                        sendMessage(CMD_DHCP6_PD_STOP);
                     }
 
                     @Override
@@ -3847,6 +3849,10 @@ public class IpClient extends StateMachine {
 
                 case CMD_DHCP6_PD_START:
                     startDhcp6PrefixDelegation();
+                    break;
+
+                case CMD_DHCP6_PD_STOP:
+                    mDhcp6Client.sendMessage(Dhcp6Client.CMD_STOP_DHCP6);
                     break;
 
                 case Dhcp6Client.CMD_DHCP6_RESULT:
