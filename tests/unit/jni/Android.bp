@@ -39,6 +39,7 @@ cc_defaults {
     static_libs: [
         "libapf",
         "libapfv6",
+        "libapfnext",
         "libapfdisassembler",
         "libpcap",
     ],
