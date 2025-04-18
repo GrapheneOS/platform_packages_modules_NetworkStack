@@ -33,6 +33,7 @@ import static android.net.ip.IpClient.IpClientCommands.CMD_ADDRESSES_CLEARED;
 import static android.net.ip.IpClient.IpClientCommands.CMD_ADD_KEEPALIVE_PACKET_FILTER_TO_APF;
 import static android.net.ip.IpClient.IpClientCommands.CMD_COMPLETE_PRECONNECTION;
 import static android.net.ip.IpClient.IpClientCommands.CMD_CONFIRM;
+import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_START;
 import static android.net.ip.IpClient.IpClientCommands.CMD_JUMP_RUNNING_TO_STOPPING;
 import static android.net.ip.IpClient.IpClientCommands.CMD_JUMP_STOPPING_TO_STOPPED;
 import static android.net.ip.IpClient.IpClientCommands.CMD_REMOVE_KEEPALIVE_PACKET_FILTER_FROM_APF;
@@ -626,6 +627,7 @@ public class IpClient extends StateMachine {
         static final int EVENT_NUD_FAILURE_QUERY_TIMEOUT = 21;
         static final int EVENT_NUD_FAILURE_QUERY_SUCCESS = 22;
         static final int EVENT_NUD_FAILURE_QUERY_FAILURE = 23;
+        static final int CMD_DHCP6_PD_START = 24;
         // Internal commands to use instead of trying to call transitionTo() inside
         // a given State's enter() method. Calling transitionTo() from enter/exit
         // encounters a Log.wtf() that can cause trouble on eng builds.
@@ -1193,7 +1195,7 @@ public class IpClient extends StateMachine {
 
                     @Override
                     public void startDhcp6() {
-                        // TODO: implement this.
+                        sendMessage(CMD_DHCP6_PD_START);
                     }
 
                     @Override
@@ -2565,12 +2567,18 @@ public class IpClient extends StateMachine {
     }
 
     private void startDhcp6PrefixDelegation() {
-        if (mDhcp6Client != null) {
+        // For heuristic DHCPv6 PD mode, Dhcp6Client must be null at starting, however, for
+        // DHCPv6 Preferred flag mode, Dhcp6Client can be non-null at startup, for example,
+        // stopping Dhcp6Client when the length of the prefix list with the P flag is reduced
+        // to zero, and then restarting Dhcp6Client when a new prefix with the P flag is received.
+        if (!mDhcp6PdPreferredFlagEnabled && mDhcp6Client != null) {
             Log.wtf(mTag, "Dhcp6Client should never be non-null in startDhcp6PrefixDelegation");
             return;
         }
-        mDhcp6Client = mDependencies.makeDhcp6Client(mContext, IpClient.this, mInterfaceParams,
-                mDependencies.getDhcp6ClientDependencies());
+        if (mDhcp6Client == null) {
+            mDhcp6Client = mDependencies.makeDhcp6Client(mContext, IpClient.this,
+                    mInterfaceParams, mDependencies.getDhcp6ClientDependencies());
+        }
         mDhcp6Client.sendMessage(Dhcp6Client.CMD_START_DHCP6);
     }
 
@@ -3835,6 +3843,10 @@ public class IpClient extends StateMachine {
                         default:
                             logError("Unknown CMD_POST_DHCP_ACTION status: %s", msg.arg1);
                     }
+                    break;
+
+                case CMD_DHCP6_PD_START:
+                    startDhcp6PrefixDelegation();
                     break;
 
                 case Dhcp6Client.CMD_DHCP6_RESULT:
