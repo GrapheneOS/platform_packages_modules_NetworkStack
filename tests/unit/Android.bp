@@ -116,7 +116,6 @@ java_defaults {
     name: "libnetworkstackutilsjni_deps",
     jni_libs: [
         "libnativehelper_compat_libc++",
-        "libapfjniv6",
-        "libapfjninext",
+        "libapfjni",
     ],
 }

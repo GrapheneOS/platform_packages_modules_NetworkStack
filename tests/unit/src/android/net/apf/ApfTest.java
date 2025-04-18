@@ -177,8 +177,7 @@ public class ApfTest {
     private HandlerThread mHandlerThread;
     private Handler mHandler;
     private long mCurrentTimeMs;
-    private final ApfTestHelpers mApfTestHelpers = new ApfTestHelpers(
-            ApfJniUtils.APF_INTERPRETER_VERSION_V6);
+    private final ApfTestHelpers mApfTestHelpers = new ApfTestHelpers();
 
     @Before
     public void setUp() throws Exception {

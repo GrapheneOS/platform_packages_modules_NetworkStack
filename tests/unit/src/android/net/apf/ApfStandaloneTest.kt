@@ -67,7 +67,7 @@ class ApfStandaloneTest {
 
     @Before
     fun setUp() {
-        apfTestHelpers = ApfTestHelpers(apfInterpreterVersion)
+        apfTestHelpers = ApfTestHelpers()
     }
 
     fun runApfTest(isSuspendMode: Boolean) {
