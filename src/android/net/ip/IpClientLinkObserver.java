@@ -23,6 +23,7 @@ import static android.system.OsConstants.IFF_LOOPBACK;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ND_OPTION_PIO;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
 import static com.android.net.module.util.NetworkStackConstants.INFINITE_LEASE;
+import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_DHCPV6_PD_PREFERRED;
 import static com.android.net.module.util.netlink.NetlinkConstants.IFF_LOWER_UP;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTM_F_CLONED;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTN_UNICAST;
@@ -40,6 +41,7 @@ import android.net.RouteInfo;
 import android.os.Handler;
 import android.os.SystemClock;
 import android.system.OsConstants;
+import android.util.ArrayMap;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -74,6 +76,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -136,11 +139,23 @@ public class IpClientLinkObserver {
         void onClatInterfaceStateUpdate(boolean add);
 
         /**
-         * Called when the prefix information was updated via RTM_NEWPREFIX netlink message.
-         *
-         * @param info prefix information.
+         * Start requesting a prefix via DHCPv6-PD when the length of the prefix list
+         * with DHCPv6 preferred flag increases to one.
          */
-        void onNewPrefix(PrefixInfo info);
+        void startDhcp6();
+
+        /**
+         * Stop requesting a prefix via DHCPv6-PD when the length of the prefix list
+         * with DHCPv6 preferred flag decreases to zero.
+         */
+        void stopDhcp6();
+
+        /**
+         * Perform a DHCPv6 Rebind whenever the prefix list with DHCPv6 preferred flag
+         * has update (e.g. a prefix is added to or removed) if the client already has
+         * received delegated prefix(es) from one or more servers.
+         */
+        void rebindDhcp6();
     }
 
     /** Configuration parameters for IpClientLinkObserver. */
@@ -154,21 +169,6 @@ public class IpClientLinkObserver {
             this.minRdnssLifetime = minRdnssLifetime;
             this.populateLinkAddressLifetime = populateLinkAddressLifetime;
             this.isDhcp6PdPreferredFlagEnabled = isDhcp6PdPreferredFlagEnabled;
-        }
-    }
-
-    /** Prefix information received from RTM_NEWPREFIX netlink message. */
-    public static class PrefixInfo {
-        public final IpPrefix prefix;
-        public short flags;
-        public long preferred;
-        public long valid;
-
-        public PrefixInfo(@NonNull final IpPrefix prefix, short flags, long preferred, long valid) {
-            this.prefix = prefix;
-            this.flags = flags;
-            this.preferred = preferred;
-            this.valid = valid;
         }
     }
 
@@ -186,6 +186,8 @@ public class IpClientLinkObserver {
     private final IpClientNetlinkMonitor mNetlinkMonitor;
     private final NetworkInformationShim mShim;
     private final AlarmManager.OnAlarmListener mExpirePref64Alarm;
+    // Map of prefix in PIO with P flag and its preferred lifetime expiry in seconds since boot.
+    private final Map<IpPrefix, Long> mDhcp6PdPreferredPrefixes = new ArrayMap<>();
 
     private long mNat64PrefixExpiry;
 
@@ -240,7 +242,10 @@ public class IpClientLinkObserver {
     }
 
     public void shutdown() {
-        mHandler.post(mNetlinkMonitor::stop);
+        mHandler.post(() -> {
+            mNetlinkMonitor.stop();
+            mDhcp6PdPreferredPrefixes.clear();
+        });
     }
 
     private void maybeLog(String operation, String iface, LinkAddress address) {
@@ -663,16 +668,57 @@ public class IpClientLinkObserver {
         }
     }
 
+    private void maybeScheduleNextPreferredLifetimeAlarm() {
+        // TODO: implement this.
+    }
+
+    private void handlePrefixInformationUpdate(RtNetlinkPrefixMessage msg, boolean pflag) {
+        final long now = SystemClock.elapsedRealtime();
+        final long preferredLifetime = msg.getPreferredLifetime();
+        final IpPrefix prefix = msg.getPrefix();
+
+        // If pflag is false or preferredLifetime is 0, set expiry to now. This ensures the prefix
+        // is removed immediately by the removeIf below. Otherwise, calculate the actual expiry time
+        // based on the preferred lifetime.
+        final long expiry = pflag ? now + preferredLifetime * 1000 : now;
+
+        // Note that while expired prefixes are supposed to be removed when the alarm fires, it is
+        // possible that this has yet to happen when this function runs. In this (very unlikely)
+        // case, the subsequent call to removeIf may affect multiple prefixes. This could cause a
+        // situation where a prefix is added and an expired prefix is removed at the same time, so
+        // initialSize == finalSize returns true and no REBIND is triggered.
+        // Given the low likelihood (and relatively minor impact) of this race, special handling is
+        // not required.
+        final int initialSize = mDhcp6PdPreferredPrefixes.size();
+        mDhcp6PdPreferredPrefixes.put(prefix, expiry);
+        mDhcp6PdPreferredPrefixes.entrySet().removeIf(p -> p.getValue() <= now);
+        final int finalSize = mDhcp6PdPreferredPrefixes.size();
+
+        maybeScheduleNextPreferredLifetimeAlarm();
+
+        // Size unchanged, nothing to do here:
+        if (initialSize == finalSize) return;
+        switch (finalSize) {
+            case 0:
+                mCallback.stopDhcp6();
+                break;
+            case 1:
+                mCallback.startDhcp6();
+                break;
+            default:
+                mCallback.rebindDhcp6();
+                break;
+        }
+    }
+
     private void processRtNetlinkPrefixMessage(RtNetlinkPrefixMessage msg) {
         final StructPrefixMsg prefixmsg = msg.getPrefixMsg();
         if (prefixmsg.prefix_family != AF_INET6) return;
         if (prefixmsg.prefix_ifindex != mIfindex) return;
         if (prefixmsg.prefix_type != ICMPV6_ND_OPTION_PIO) return;
-        final PrefixInfo info = new PrefixInfo(msg.getPrefix(),
-                prefixmsg.prefix_flags,
-                msg.getPreferredLifetime(),
-                msg.getValidLifetime());
-        mCallback.onNewPrefix(info);
+
+        final boolean pflag = (prefixmsg.prefix_flags & PIO_FLAG_DHCPV6_PD_PREFERRED) != 0;
+        handlePrefixInformationUpdate(msg, pflag);
     }
 
     private void processNetlinkMessage(NetlinkMessage nlMsg, long whenMs) {
