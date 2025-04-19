@@ -23,35 +23,15 @@
 #include <string>
 #include <vector>
 
-#include "v4/apf_interpreter.h"
 #include "disassembler.h"
 #include "nativehelper/scoped_primitive_array.h"
 
 #include "next/test_buf_allocator.h"
-
-#ifdef APF_INTERPRETER_NEXT
-#include "next/apf_interpreter.h"
-#endif
-
-#ifdef APF_INTERPRETER_V6
-#include "v6/apf_interpreter.h"
-#endif
+#include "apflib.h"
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #define LOG_TAG "ApfJniUtils"
 
-static int run_apf_interpreter(int apf_version, uint32_t* program,
-                               uint32_t program_len, uint32_t ram_len,
-                               const uint8_t* packet, uint32_t packet_len,
-                               uint32_t filter_age) {
-  if (apf_version <= 4) {
-    return accept_packet((uint8_t*)program, program_len, ram_len, packet, packet_len,
-                         filter_age);
-  } else {
-    return apf_run(nullptr, program, program_len, ram_len, packet, packet_len,
-                         filter_age << 14);
-  }
-}
 
 // JNI function acting as simply call-through to native APF interpreter.
 static jint
@@ -82,10 +62,10 @@ com_android_server_ApfTest_apfSimulate(JNIEnv* env, jclass, jint apf_version,
         env->GetByteArrayRegion(jdata, 0, data_len, jbuf + ram_len - data_len);
     }
 
-    jint result = run_apf_interpreter(
+    jint result = apf_run_generic(
         apf_version, buf.data(), program_len, ram_len,
         reinterpret_cast<const uint8_t *>(packet.get()), packet_len,
-        filter_age);
+        filter_age << 14);
 
     if (jdata) {
         env->SetByteArrayRegion(jdata, 0, data_len, jbuf + ram_len - data_len);
@@ -205,7 +185,7 @@ static jboolean com_android_server_ApfTest_compareBpfApf(
         const uint8_t* apf_packet;
         do {
             apf_packet = pcap_next(apf_pcap.get(), &apf_header);
-        } while (apf_packet != NULL && !run_apf_interpreter(apf_version,
+        } while (apf_packet != NULL && !apf_run_generic(apf_version,
                 apf_program.data(), program_len, ram_len,
                 apf_packet, apf_header.len, 0 /* filter_age */));
 
