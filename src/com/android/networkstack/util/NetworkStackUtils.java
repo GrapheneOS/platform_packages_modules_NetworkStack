@@ -544,16 +544,6 @@ public class NetworkStackUtils {
     }
 
     /**
-     * Attaches a socket filter that accepts egress IGMPv2/IGMPv3 reports to the given socket.
-     *
-     * This filter doesn't include IGMPv1 report since device will not send out IGMPv1 report
-     * when the device leaves a multicast address group.
-     *
-     * @param fd the socket's {@link FileDescriptor}.
-     */
-    public static native void attachEgressIgmpReportFilter(FileDescriptor fd) throws ErrnoException;
-
-    /**
      * Attaches a socket filter that accepts egress IGMPv2/v3, MLDv1/v2 reports to the given socket.
      *
      * This filter doesn't include IGMPv1 report since device will not send out IGMPv1 report
