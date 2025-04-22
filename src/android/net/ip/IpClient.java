@@ -33,6 +33,8 @@ import static android.net.ip.IpClient.IpClientCommands.CMD_ADDRESSES_CLEARED;
 import static android.net.ip.IpClient.IpClientCommands.CMD_ADD_KEEPALIVE_PACKET_FILTER_TO_APF;
 import static android.net.ip.IpClient.IpClientCommands.CMD_COMPLETE_PRECONNECTION;
 import static android.net.ip.IpClient.IpClientCommands.CMD_CONFIRM;
+import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_START;
+import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_STOP;
 import static android.net.ip.IpClient.IpClientCommands.CMD_JUMP_RUNNING_TO_STOPPING;
 import static android.net.ip.IpClient.IpClientCommands.CMD_JUMP_STOPPING_TO_STOPPED;
 import static android.net.ip.IpClient.IpClientCommands.CMD_REMOVE_KEEPALIVE_PACKET_FILTER_FROM_APF;
@@ -626,6 +628,8 @@ public class IpClient extends StateMachine {
         static final int EVENT_NUD_FAILURE_QUERY_TIMEOUT = 21;
         static final int EVENT_NUD_FAILURE_QUERY_SUCCESS = 22;
         static final int EVENT_NUD_FAILURE_QUERY_FAILURE = 23;
+        static final int CMD_DHCP6_PD_START = 24;
+        static final int CMD_DHCP6_PD_STOP = 25;
         // Internal commands to use instead of trying to call transitionTo() inside
         // a given State's enter() method. Calling transitionTo() from enter/exit
         // encounters a Log.wtf() that can cause trouble on eng builds.
@@ -1193,12 +1197,12 @@ public class IpClient extends StateMachine {
 
                     @Override
                     public void startDhcp6() {
-                        // TODO: implement this.
+                        sendMessage(CMD_DHCP6_PD_START);
                     }
 
                     @Override
                     public void stopDhcp6() {
-                        // TODO: implement this.
+                        sendMessage(CMD_DHCP6_PD_STOP);
                     }
 
                     @Override
@@ -2349,7 +2353,8 @@ public class IpClient extends StateMachine {
         // doesn't complete with success after timeout. This check also handles IPv6-only link
         // local mode case, since there will be no IPv6 default route in that mode even with Prefix
         // Delegation experiment flag enabled.
-        if (newLp.hasIpv6DefaultRoute()
+        if (!mDhcp6PdPreferredFlagEnabled
+                && newLp.hasIpv6DefaultRoute()
                 && mIpv6AutoconfTimeoutAlarm == null) {
             mIpv6AutoconfTimeoutAlarm = new WakeupMessage(mContext, getHandler(),
                     mTag + ".EVENT_IPV6_AUTOCONF_TIMEOUT", EVENT_IPV6_AUTOCONF_TIMEOUT);
@@ -2565,12 +2570,18 @@ public class IpClient extends StateMachine {
     }
 
     private void startDhcp6PrefixDelegation() {
-        if (mDhcp6Client != null) {
+        // For heuristic DHCPv6 PD mode, Dhcp6Client must be null at starting, however, for
+        // DHCPv6 Preferred flag mode, Dhcp6Client can be non-null at startup, for example,
+        // stopping Dhcp6Client when the length of the prefix list with the P flag is reduced
+        // to zero, and then restarting Dhcp6Client when a new prefix with the P flag is received.
+        if (!mDhcp6PdPreferredFlagEnabled && mDhcp6Client != null) {
             Log.wtf(mTag, "Dhcp6Client should never be non-null in startDhcp6PrefixDelegation");
             return;
         }
-        mDhcp6Client = mDependencies.makeDhcp6Client(mContext, IpClient.this, mInterfaceParams,
-                mDependencies.getDhcp6ClientDependencies());
+        if (mDhcp6Client == null) {
+            mDhcp6Client = mDependencies.makeDhcp6Client(mContext, IpClient.this,
+                    mInterfaceParams, mDependencies.getDhcp6ClientDependencies());
+        }
         mDhcp6Client.sendMessage(Dhcp6Client.CMD_START_DHCP6);
     }
 
@@ -3835,6 +3846,14 @@ public class IpClient extends StateMachine {
                         default:
                             logError("Unknown CMD_POST_DHCP_ACTION status: %s", msg.arg1);
                     }
+                    break;
+
+                case CMD_DHCP6_PD_START:
+                    startDhcp6PrefixDelegation();
+                    break;
+
+                case CMD_DHCP6_PD_STOP:
+                    mDhcp6Client.sendMessage(Dhcp6Client.CMD_STOP_DHCP6);
                     break;
 
                 case Dhcp6Client.CMD_DHCP6_RESULT:
