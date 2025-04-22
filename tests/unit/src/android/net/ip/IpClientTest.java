@@ -25,12 +25,14 @@ import static android.system.OsConstants.IFA_F_PERMANENT;
 import static android.system.OsConstants.IFA_F_TENTATIVE;
 import static android.system.OsConstants.RT_SCOPE_UNIVERSE;
 
+import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ND_OPTION_PIO;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ROUTER_ADVERTISEMENT;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTM_NEWLINK;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTPROT_KERNEL;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTM_DELROUTE;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTM_NEWADDR;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTM_NEWNDUSEROPT;
+import static com.android.net.module.util.netlink.NetlinkConstants.RTM_NEWPREFIX;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTM_NEWROUTE;
 import static com.android.net.module.util.netlink.NetlinkConstants.RTN_UNICAST;
 import static com.android.net.module.util.netlink.StructNlMsgHdr.NLM_F_ACK;
@@ -99,11 +101,13 @@ import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.netlink.NduseroptMessage;
 import com.android.net.module.util.netlink.RtNetlinkAddressMessage;
 import com.android.net.module.util.netlink.RtNetlinkLinkMessage;
+import com.android.net.module.util.netlink.RtNetlinkPrefixMessage;
 import com.android.net.module.util.netlink.RtNetlinkRouteMessage;
 import com.android.net.module.util.netlink.StructIfaddrMsg;
 import com.android.net.module.util.netlink.StructIfinfoMsg;
 import com.android.net.module.util.netlink.StructNdOptRdnss;
 import com.android.net.module.util.netlink.StructNlMsgHdr;
+import com.android.net.module.util.netlink.StructPrefixMsg;
 import com.android.net.module.util.netlink.StructRtMsg;
 import com.android.networkstack.R;
 import com.android.networkstack.ipmemorystore.IpMemoryStoreService;
@@ -331,6 +335,17 @@ public class IpClientTest {
         return RtNetlinkLinkMessage.build(nlmsghdr, ifInfoMsg, 0 /* mtu */, TEST_MAC, ifaceName);
     }
 
+    private static RtNetlinkPrefixMessage buildRtmPrefixMessage(final IpPrefix prefix, byte flags,
+            long preferred, long valid) {
+        final StructNlMsgHdr nlmsghdr = makeNetlinkMessageHeader(RTM_NEWPREFIX, (short) 0);
+        final StructPrefixMsg prefixmsg =
+                new StructPrefixMsg((short) OsConstants.AF_INET6 /* family */, TEST_IFINDEX,
+                        (short) ICMPV6_ND_OPTION_PIO /* type */,
+                        (short) prefix.getPrefixLength(),
+                        (short) flags);
+        return new RtNetlinkPrefixMessage(nlmsghdr, prefixmsg, prefix, preferred, valid);
+    }
+
     private void onInterfaceAddressUpdated(final LinkAddress la, int flags) {
         final RtNetlinkAddressMessage msg =
                 buildRtmAddressMessage(RTM_NEWADDR, la, TEST_IFINDEX, flags);
@@ -354,6 +369,11 @@ public class IpClientTest {
 
     private void onInterfaceAdded(int ifaceIndex, String ifaceName) {
         final RtNetlinkLinkMessage msg = buildRtmLinkMessage(RTM_NEWLINK, ifaceIndex, ifaceName);
+        mNetlinkMessageProcessor.processNetlinkMessage(msg, TEST_UNUSED_REAL_TIME /* whenMs */);
+    }
+
+    private void onNewPrefix(final IpPrefix prefix, byte flags, long preferred, long valid) {
+        final RtNetlinkPrefixMessage msg = buildRtmPrefixMessage(prefix, flags, preferred, valid);
         mNetlinkMessageProcessor.processNetlinkMessage(msg, TEST_UNUSED_REAL_TIME /* whenMs */);
     }
 
