@@ -1568,6 +1568,8 @@ public class IpClientTest {
 
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
         verify(mDependencies, times(1)).makeDhcp6Client(any(), any(), any(), any());
+
+        ipc.shutdown();
     }
 
     interface Fn<A,B> {
