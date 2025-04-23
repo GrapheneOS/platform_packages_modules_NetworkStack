@@ -2355,8 +2355,7 @@ public class IpClient extends StateMachine {
         // doesn't complete with success after timeout. This check also handles IPv6-only link
         // local mode case, since there will be no IPv6 default route in that mode even with Prefix
         // Delegation experiment flag enabled.
-        if (!mDhcp6PdPreferredFlagEnabled
-                && newLp.hasIpv6DefaultRoute()
+        if (newLp.hasIpv6DefaultRoute()
                 && mIpv6AutoconfTimeoutAlarm == null) {
             mIpv6AutoconfTimeoutAlarm = new WakeupMessage(mContext, getHandler(),
                     mTag + ".EVENT_IPV6_AUTOCONF_TIMEOUT", EVENT_IPV6_AUTOCONF_TIMEOUT);
@@ -2579,15 +2578,8 @@ public class IpClient extends StateMachine {
                 && mInterfaceCtrl.enableIPv6();
     }
 
+    /** Creates Dhcp6Client and starts DHCPv6-PD. It is safe to call this function multiple times */
     private void startDhcp6PrefixDelegation() {
-        // For heuristic DHCPv6 PD mode, Dhcp6Client must be null at starting, however, for
-        // DHCPv6 Preferred flag mode, Dhcp6Client can be non-null at startup, for example,
-        // stopping Dhcp6Client when the length of the prefix list with the P flag is reduced
-        // to zero, and then restarting Dhcp6Client when a new prefix with the P flag is received.
-        if (!mDhcp6PdPreferredFlagEnabled && mDhcp6Client != null) {
-            Log.wtf(mTag, "Dhcp6Client should never be non-null in startDhcp6PrefixDelegation");
-            return;
-        }
         if (mDhcp6Client == null) {
             mDhcp6Client = mDependencies.makeDhcp6Client(mContext, IpClient.this,
                     mInterfaceParams, mDependencies.getDhcp6ClientDependencies());
@@ -3863,6 +3855,11 @@ public class IpClient extends StateMachine {
                     break;
 
                 case CMD_DHCP6_PD_START:
+                    // Cancelling autoconf timeut alarm on best effort basis. Dhcp6Client handles
+                    // multiple START commands correctly (i.e. only the first START has any effect).
+                    // It is of course also possible that the autoconf timer has already fired
+                    // when the first P-flag arrives.
+                    if (mIpv6AutoconfTimeoutAlarm != null) mIpv6AutoconfTimeoutAlarm.cancel();
                     startDhcp6PrefixDelegation();
                     break;
 
