@@ -188,6 +188,7 @@ public class IpClientLinkObserver {
     private final AlarmManager.OnAlarmListener mExpirePref64Alarm;
     // Map of prefix in PIO with P flag and its preferred lifetime expiry in seconds since boot.
     private final Map<IpPrefix, Long> mDhcp6PdPreferredPrefixes = new ArrayMap<>();
+    private final AlarmManager.OnAlarmListener mExpireDhcp6PdPreferredPrefixAlarm;
 
     private long mNat64PrefixExpiry;
 
@@ -234,6 +235,7 @@ public class IpClientLinkObserver {
                 (nlMsg, whenMs) -> processNetlinkMessage(nlMsg, whenMs));
         mShim = NetworkInformationShimImpl.newInstance();
         mExpirePref64Alarm = new IpClientObserverAlarmListener();
+        mExpireDhcp6PdPreferredPrefixAlarm = new Dhcp6PdPreferredPrefixAlarmListener();
         mHandler.post(() -> {
             if (!mNetlinkMonitor.start()) {
                 Log.wtf(mTag, "Fail to start NetlinkMonitor.");
@@ -359,6 +361,7 @@ public class IpClientLinkObserver {
         // mLinkProperties, as desired.
         mDnsServerRepository = new DnsServerRepository(mConfig.minRdnssLifetime);
         cancelPref64Alarm();
+        mAlarmManager.cancel(mExpireDhcp6PdPreferredPrefixAlarm);
         mLinkProperties.clear();
         mLinkProperties.setInterfaceName(mInterfaceName);
     }
@@ -668,8 +671,32 @@ public class IpClientLinkObserver {
         }
     }
 
-    private void maybeScheduleNextPreferredLifetimeAlarm() {
-        // TODO: implement this.
+    private class Dhcp6PdPreferredPrefixAlarmListener implements AlarmManager.OnAlarmListener {
+        @Override
+        public void onAlarm() {
+            final long now = SystemClock.elapsedRealtime();
+            mDhcp6PdPreferredPrefixes.entrySet().removeIf(p -> p.getValue() < now);
+            if (mDhcp6PdPreferredPrefixes.isEmpty()) {
+                mCallback.stopDhcp6();
+                return;
+            }
+            mCallback.rebindDhcp6();
+            updateDhcp6PdPreferredPrefixAlarm();
+        }
+    }
+
+    private void updateDhcp6PdPreferredPrefixAlarm() {
+        // There may be an existing alarm, so try to cancel first.
+        mAlarmManager.cancel(mExpireDhcp6PdPreferredPrefixAlarm);
+        if (mDhcp6PdPreferredPrefixes.isEmpty()) return;
+
+        final long expiry = Collections.min(mDhcp6PdPreferredPrefixes.values());
+        final String tag = mTag + ".DHCPV6PDPREFERRED";
+        mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                expiry,
+                tag,
+                mExpireDhcp6PdPreferredPrefixAlarm,
+                mHandler);
     }
 
     private void handlePrefixInformationUpdate(RtNetlinkPrefixMessage msg, boolean pflag) {
@@ -694,7 +721,7 @@ public class IpClientLinkObserver {
         mDhcp6PdPreferredPrefixes.entrySet().removeIf(p -> p.getValue() <= now);
         final int finalSize = mDhcp6PdPreferredPrefixes.size();
 
-        maybeScheduleNextPreferredLifetimeAlarm();
+        updateDhcp6PdPreferredPrefixAlarm();
 
         // Size unchanged, nothing to do here:
         if (initialSize == finalSize) return;

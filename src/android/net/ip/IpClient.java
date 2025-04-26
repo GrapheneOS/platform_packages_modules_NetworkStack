@@ -33,6 +33,8 @@ import static android.net.ip.IpClient.IpClientCommands.CMD_ADDRESSES_CLEARED;
 import static android.net.ip.IpClient.IpClientCommands.CMD_ADD_KEEPALIVE_PACKET_FILTER_TO_APF;
 import static android.net.ip.IpClient.IpClientCommands.CMD_COMPLETE_PRECONNECTION;
 import static android.net.ip.IpClient.IpClientCommands.CMD_CONFIRM;
+import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_START;
+import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_STOP;
 import static android.net.ip.IpClient.IpClientCommands.CMD_JUMP_RUNNING_TO_STOPPING;
 import static android.net.ip.IpClient.IpClientCommands.CMD_JUMP_STOPPING_TO_STOPPED;
 import static android.net.ip.IpClient.IpClientCommands.CMD_REMOVE_KEEPALIVE_PACKET_FILTER_FROM_APF;
@@ -591,6 +593,8 @@ public class IpClient extends StateMachine {
     @VisibleForTesting
     static final String ACCEPT_RA_MIN_LFT = "accept_ra_min_lft";
     private static final String DAD_TRANSMITS = "dad_transmits";
+    @VisibleForTesting
+    public static final String RA_HONOR_PIO_PFLAG = "ra_honor_pio_pflag";
 
     /**
      * The IpClientCommands constant values.
@@ -626,6 +630,8 @@ public class IpClient extends StateMachine {
         static final int EVENT_NUD_FAILURE_QUERY_TIMEOUT = 21;
         static final int EVENT_NUD_FAILURE_QUERY_SUCCESS = 22;
         static final int EVENT_NUD_FAILURE_QUERY_FAILURE = 23;
+        static final int CMD_DHCP6_PD_START = 24;
+        static final int CMD_DHCP6_PD_STOP = 25;
         // Internal commands to use instead of trying to call transitionTo() inside
         // a given State's enter() method. Calling transitionTo() from enter/exit
         // encounters a Log.wtf() that can cause trouble on eng builds.
@@ -658,7 +664,7 @@ public class IpClient extends StateMachine {
     static final String CONFIG_APF_COUNTER_POLLING_INTERVAL_SECS =
             "ipclient_apf_counter_polling_interval_secs";
     @VisibleForTesting
-    static final int DEFAULT_APF_COUNTER_POLLING_INTERVAL_SECS = 300;
+    static final int DEFAULT_APF_COUNTER_POLLING_INTERVAL_SECS = 1800;
 
     // Used to wait for the provisioning to complete eventually and then decide the target
     // network type, which gives the accurate hint to set DTIM multiplier. Per current IPv6
@@ -832,6 +838,7 @@ public class IpClient extends StateMachine {
     private final boolean mApfHandleIpv4PingOffload;
     private final boolean mApfHandleIpv6PingOffload;
     private final boolean mIgnoreNudFailureEnabled;
+    private final boolean mDhcp6PdPreferredFlagEnabled;
     private final boolean mReplaceNetdWithNetlinkEnabled;
 
     private InterfaceParams mInterfaceParams;
@@ -1094,8 +1101,8 @@ public class IpClient extends StateMachine {
         mApfCounterPollingIntervalMs = mDependencies.getDeviceConfigPropertyInt(
                 CONFIG_APF_COUNTER_POLLING_INTERVAL_SECS,
                 DEFAULT_APF_COUNTER_POLLING_INTERVAL_SECS) * DateUtils.SECOND_IN_MILLIS;
-        mEnableApfPollingCounters = mDependencies.isFeatureEnabled(context,
-                APF_POLLING_COUNTERS_VERSION);
+        mEnableApfPollingCounters = mDependencies.isFeatureNotChickenedOut(context,
+                APF_POLLING_COUNTERS_VERSION) && SdkLevel.isAtLeastV();
         mIsAcceptRaMinLftEnabled =
                 SdkLevel.isAtLeastV() || mDependencies.isFeatureEnabled(context,
                         IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION);
@@ -1137,13 +1144,12 @@ public class IpClient extends StateMachine {
         mNudFailureCountWeeklyThreshold = mDependencies.getDeviceConfigPropertyInt(
                 CONFIG_NUD_FAILURE_COUNT_WEEKLY_THRESHOLD,
                 DEFAULT_NUD_FAILURE_COUNT_WEEKLY_THRESHOLD);
+        mDhcp6PdPreferredFlagEnabled =
+                mDependencies.isFeatureEnabled(mContext, IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION);
         mReplaceNetdWithNetlinkEnabled = mDependencies.isFeatureEnabled(mContext,
                 IPCLIENT_REPLACE_NETD_WITH_NETLINK_VERSION);
         IpClientLinkObserver.Configuration config = new IpClientLinkObserver.Configuration(
-                mAcceptRaMinLft,
-                mPopulateLinkAddressLifetime,
-                mDependencies.isFeatureEnabled(mContext,
-                        IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION));
+                mAcceptRaMinLft, mPopulateLinkAddressLifetime, mDhcp6PdPreferredFlagEnabled);
 
         mLinkObserver = new IpClientLinkObserver(
                 mContext, getHandler(),
@@ -1193,12 +1199,12 @@ public class IpClient extends StateMachine {
 
                     @Override
                     public void startDhcp6() {
-                        // TODO: implement this.
+                        sendMessage(CMD_DHCP6_PD_START);
                     }
 
                     @Override
                     public void stopDhcp6() {
-                        // TODO: implement this.
+                        sendMessage(CMD_DHCP6_PD_STOP);
                     }
 
                     @Override
@@ -2349,7 +2355,8 @@ public class IpClient extends StateMachine {
         // doesn't complete with success after timeout. This check also handles IPv6-only link
         // local mode case, since there will be no IPv6 default route in that mode even with Prefix
         // Delegation experiment flag enabled.
-        if (newLp.hasIpv6DefaultRoute()
+        if (!mDhcp6PdPreferredFlagEnabled
+                && newLp.hasIpv6DefaultRoute()
                 && mIpv6AutoconfTimeoutAlarm == null) {
             mIpv6AutoconfTimeoutAlarm = new WakeupMessage(mContext, getHandler(),
                     mTag + ".EVENT_IPV6_AUTOCONF_TIMEOUT", EVENT_IPV6_AUTOCONF_TIMEOUT);
@@ -2559,18 +2566,32 @@ public class IpClient extends StateMachine {
                 setIpv6Sysctl(DAD_TRANSMITS, 0 /* dad_transmits */);
             }
         }
+        if (mDhcp6PdPreferredFlagEnabled
+                && mDependencies.hasIpv6Sysctl(mInterfaceName, RA_HONOR_PIO_PFLAG)) {
+            // If "accept_ra" sysctl is 0 (e.g. in IPv6 link-local provisioning mode),
+            // kernel only processes the SLLA option (see ndisc_router_discovery in ndisc.c
+            // for details), but not PIO. So always enable the "ra_honor_pio_flag" sysctl
+            // regardless of the provisioning mode.
+            setIpv6Sysctl(RA_HONOR_PIO_PFLAG, 1);
+        }
         return mInterfaceCtrl.setIPv6PrivacyExtensions(true)
                 && mInterfaceCtrl.setIPv6AddrGenModeIfSupported(mConfiguration.mIPv6AddrGenMode)
                 && mInterfaceCtrl.enableIPv6();
     }
 
     private void startDhcp6PrefixDelegation() {
-        if (mDhcp6Client != null) {
+        // For heuristic DHCPv6 PD mode, Dhcp6Client must be null at starting, however, for
+        // DHCPv6 Preferred flag mode, Dhcp6Client can be non-null at startup, for example,
+        // stopping Dhcp6Client when the length of the prefix list with the P flag is reduced
+        // to zero, and then restarting Dhcp6Client when a new prefix with the P flag is received.
+        if (!mDhcp6PdPreferredFlagEnabled && mDhcp6Client != null) {
             Log.wtf(mTag, "Dhcp6Client should never be non-null in startDhcp6PrefixDelegation");
             return;
         }
-        mDhcp6Client = mDependencies.makeDhcp6Client(mContext, IpClient.this, mInterfaceParams,
-                mDependencies.getDhcp6ClientDependencies());
+        if (mDhcp6Client == null) {
+            mDhcp6Client = mDependencies.makeDhcp6Client(mContext, IpClient.this,
+                    mInterfaceParams, mDependencies.getDhcp6ClientDependencies());
+        }
         mDhcp6Client.sendMessage(Dhcp6Client.CMD_START_DHCP6);
     }
 
@@ -2690,6 +2711,10 @@ public class IpClient extends StateMachine {
         if (mIsAcceptRaMinLftEnabled
                 && mDependencies.hasIpv6Sysctl(mInterfaceName, ACCEPT_RA_MIN_LFT)) {
             setIpv6Sysctl(ACCEPT_RA_MIN_LFT, 0 /* sysctl default */);
+        }
+        if (mDhcp6PdPreferredFlagEnabled
+                && mDependencies.hasIpv6Sysctl(mInterfaceName, RA_HONOR_PIO_PFLAG)) {
+            setIpv6Sysctl(RA_HONOR_PIO_PFLAG, 0 /* sysctl default */);
         }
     }
 
@@ -3837,6 +3862,14 @@ public class IpClient extends StateMachine {
                     }
                     break;
 
+                case CMD_DHCP6_PD_START:
+                    startDhcp6PrefixDelegation();
+                    break;
+
+                case CMD_DHCP6_PD_STOP:
+                    mDhcp6Client.sendMessage(Dhcp6Client.CMD_STOP_DHCP6);
+                    break;
+
                 case Dhcp6Client.CMD_DHCP6_RESULT:
                     switch(msg.arg1) {
                         case Dhcp6Client.DHCP6_PD_SUCCESS:
@@ -3884,7 +3917,7 @@ public class IpClient extends StateMachine {
                     break;
 
                 case CMD_UPDATE_APF_DATA_SNAPSHOT:
-                    if (mApfFilter != null) {
+                    if (mApfFilter != null && mApfFilter.mApfVersionSupported >= 4) {
                         // We prevents calls to readPacketFilterRam() when  mApfFilter is null.
                         // This is correct because any data read would be discarded when
                         // processing the EVENT_READ_PACKET_FILTER_COMPLETE event if no
