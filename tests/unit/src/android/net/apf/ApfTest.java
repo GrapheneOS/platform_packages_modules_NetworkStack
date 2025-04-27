@@ -22,9 +22,11 @@ import static android.net.apf.ApfTestHelpers.DROP;
 import static android.net.apf.ApfTestHelpers.MIN_PKT_SIZE;
 import static android.net.apf.ApfTestHelpers.PASS;
 import static android.net.apf.ApfTestHelpers.assertProgramEquals;
+import static android.net.apf.BaseApfGenerator.APF_VERSION_2;
 import static android.net.apf.BaseApfGenerator.APF_VERSION_3;
 import static android.net.apf.BaseApfGenerator.APF_VERSION_4;
 import static android.net.apf.BaseApfGenerator.APF_VERSION_6;
+import static android.net.apf.BaseApfGenerator.APF_VERSION_61;
 import static android.net.apf.BaseApfGenerator.DROP_LABEL;
 import static android.net.apf.BaseApfGenerator.MemorySlot;
 import static android.net.apf.BaseApfGenerator.PASS_LABEL;
@@ -147,7 +149,6 @@ import java.util.concurrent.atomic.AtomicReference;
 @RunWith(DevSdkIgnoreRunner.class)
 @SmallTest
 public class ApfTest {
-    private static final int APF_VERSION_2 = 2;
     private int mRamSize = 1024;
     private int mClampSize = 1024;
 
@@ -159,7 +160,12 @@ public class ApfTest {
 
     @Parameterized.Parameters
     public static Iterable<? extends Object> data() {
-        return Arrays.asList(4, 6000);
+        return Arrays.asList(APF_VERSION_2, APF_VERSION_3, APF_VERSION_4, APF_VERSION_6,
+                APF_VERSION_61, 99999999);
+    }
+
+    private void assumeHasData() {
+         Assume.assumeTrue(mApfVersion >= APF_VERSION_3);
     }
 
     @Mock private Context mContext;
@@ -863,6 +869,8 @@ public class ApfTest {
      */
     @Test
     public void testApfDataWrite() throws IllegalInstructionException, Exception {
+        assumeHasData();
+
         byte[] packet = new byte[MIN_PKT_SIZE];
         byte[] data = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
         byte[] expected_data = data.clone();
@@ -889,6 +897,8 @@ public class ApfTest {
      */
     @Test
     public void testApfDataRead() throws IllegalInstructionException, Exception {
+        assumeHasData();
+
         // Program that DROPs if address 10 (-6) contains 0x87654321.
         ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3, mRamSize, mClampSize);
         gen.addLoadImmediate(R1, 1000);
@@ -919,6 +929,8 @@ public class ApfTest {
      */
     @Test
     public void testApfDataReadModifyWrite() throws IllegalInstructionException, Exception {
+        assumeHasData();
+
         ApfV4Generator gen = new ApfV4Generator(APF_VERSION_3, mRamSize, mClampSize);
         gen.addLoadImmediate(R1, -22);
         gen.addLoadData(R0, 0);  // Load from address 32 -22 + 0 = 10
@@ -941,8 +953,8 @@ public class ApfTest {
 
     @Test
     public void testApfDataBoundChecking() throws IllegalInstructionException, Exception {
-        // TODO: re-enable it after fix the apf_jni
-        Assume.assumeTrue(mApfVersion == 4);
+        assumeHasData();
+
         byte[] packet = new byte[MIN_PKT_SIZE];
         byte[] data = new byte[32];
         byte[] expected_data = data;
@@ -960,10 +972,12 @@ public class ApfTest {
         // APFv6 needs to round this up to be a multiple of 4, so 40.
         gen = new ApfV4Generator(APF_VERSION_3, mRamSize, mClampSize);
         gen.addLoadImmediate(R0, 20);
-        if (mApfVersion == 4) {
-            gen.addLoadData(R1, 15);  // R0(20)+15+U32[0..3] >= 6 prog + 32 data, so invalid
-        } else {
+        if (mApfVersion >= APF_VERSION_61) {
+            gen.addLoadData(R1, -20 + 1024 - 3);  // R0(20)-20+1024-3+U32[0..3] >= 1024 ram, invalid
+        } else if (mApfVersion == APF_VERSION_6) {
             gen.addLoadData(R1, 17);  // R0(20)+17+U32[0..3] >= 6 prog + 2 pad + 32 data, so invalid
+        } else {
+            gen.addLoadData(R1, 15);  // R0(20)+15+U32[0..3] >= 6 prog + 32 data, so invalid
         }
         gen.addJump(DROP_LABEL);  // Not reached.
         assertDataMemoryContents(PASS, gen.generate(), packet, data, expected_data);
@@ -985,7 +999,7 @@ public class ApfTest {
         // ...but doesn't allow accesses before the start of the buffer
         gen = new ApfV4Generator(APF_VERSION_3, mRamSize, mClampSize);
         gen.addLoadImmediate(R0, 20);
-        gen.addLoadData(R1, -1000);
+        gen.addLoadData(R1, -20 - 1024 - 1);
         gen.addJump(DROP_LABEL);  // Not reached.
         assertDataMemoryContents(PASS, gen.generate(), packet, data, expected_data);
     }
@@ -2623,6 +2637,8 @@ public class ApfTest {
 
     @Test
     public void testApfSessionInfoMetrics() throws Exception {
+        assumeHasData();
+
         final ApfConfiguration config = getDefaultConfig();
         config.apfVersionSupported = 4;
         config.apfRamSize = 4096;
