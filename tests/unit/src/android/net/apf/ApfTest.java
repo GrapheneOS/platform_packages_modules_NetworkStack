@@ -784,22 +784,22 @@ public class ApfTest {
         ApfV4Generator gen;
 
         // 0-byte immediate: li R0, 0
-        gen = new ApfV4Generator(APF_VERSION_4, mRamSize, mClampSize);
+        gen = new ApfV4Generator(APF_VERSION_2, mRamSize, mClampSize);
         gen.addLoadImmediate(R0, 0);
         assertProgramEquals(new byte[]{LI_OP | SIZE0}, gen.generate());
 
         // 1-byte immediate: li R0, 42
-        gen = new ApfV4Generator(APF_VERSION_4, mRamSize, mClampSize);
+        gen = new ApfV4Generator(APF_VERSION_2, mRamSize, mClampSize);
         gen.addLoadImmediate(R0, 42);
         assertProgramEquals(new byte[]{LI_OP | SIZE8, 42}, gen.generate());
 
         // 2-byte immediate: li R1, 0x1234
-        gen = new ApfV4Generator(APF_VERSION_4, mRamSize, mClampSize);
+        gen = new ApfV4Generator(APF_VERSION_2, mRamSize, mClampSize);
         gen.addLoadImmediate(R1, 0x1234);
         assertProgramEquals(new byte[]{LI_OP | SIZE16 | R1_REG, 0x12, 0x34}, gen.generate());
 
         // 4-byte immediate: li R0, 0x12345678
-        gen = new ApfV4Generator(APF_VERSION_3, mRamSize, mClampSize);
+        gen = new ApfV4Generator(APF_VERSION_2, mRamSize, mClampSize);
         gen.addLoadImmediate(R0, 0x12345678);
         assertProgramEquals(
                 new byte[]{LI_OP | SIZE32, 0x12, 0x34, 0x56, 0x78},
@@ -814,18 +814,18 @@ public class ApfTest {
         ApfV4Generator gen;
 
         // 1-byte negative immediate: li R0, -42
-        gen = new ApfV4Generator(APF_VERSION_3, mRamSize, mClampSize);
+        gen = new ApfV4Generator(APF_VERSION_2, mRamSize, mClampSize);
         gen.addLoadImmediate(R0, -42);
         assertProgramEquals(new byte[]{LI_OP | SIZE8, -42}, gen.generate());
 
         // 2-byte negative immediate: li R1, -0x1122
-        gen = new ApfV4Generator(APF_VERSION_3, mRamSize, mClampSize);
+        gen = new ApfV4Generator(APF_VERSION_2, mRamSize, mClampSize);
         gen.addLoadImmediate(R1, -0x1122);
         assertProgramEquals(new byte[]{LI_OP | SIZE16 | R1_REG, (byte)0xEE, (byte)0xDE},
                 gen.generate());
 
         // 4-byte negative immediate: li R0, -0x11223344
-        gen = new ApfV4Generator(APF_VERSION_3, mRamSize, mClampSize);
+        gen = new ApfV4Generator(APF_VERSION_2, mRamSize, mClampSize);
         gen.addLoadImmediate(R0, -0x11223344);
         assertProgramEquals(
                 new byte[]{LI_OP | SIZE32, (byte)0xEE, (byte)0xDD, (byte)0xCC, (byte)0xBC},
