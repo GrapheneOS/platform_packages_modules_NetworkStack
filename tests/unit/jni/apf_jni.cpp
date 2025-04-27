@@ -43,15 +43,18 @@ com_android_server_ApfTest_apfSimulate(JNIEnv* env, jclass, jint apf_version,
     uint32_t packet_len = (uint32_t)packet.size();
     uint32_t program_len = env->GetArrayLength(jprogram);
     uint32_t data_len = jdata ? env->GetArrayLength(jdata) : 0;
-    // we need to guarantee room for APFv6's 5 u32 counters (20 bytes).
-    // APFv6.1 needs at least 1024 bytes.
-    // and we need to make sure ram_len is a multiple of 4 bytes,
-    // so that the counters (which are indexed from the back are aligned.
+    // For APFv6+ we need to make sure ram_len is a multiple of 4 bytes,
+    // so that the counters (which are indexed from the back) are aligned.
+    // We also need to guarantee room for APFv6's 5 u32 counters (20 bytes),
+    // and APFv6.1's 6 u32 counters (24 bytes).
+    // Furthermore APFv6.1 has a 1024 byte minimum ram_len.
     uint32_t ram_len = program_len + data_len;
-    if (apf_version > 4) {
+    if (apf_version >= 6000) {
+        uint32_t builtin_counters = (apf_version >= 6100) ? 6 : 5;
+        uint32_t required_data_len = builtin_counters * sizeof(uint32_t);
+        if (data_len < required_data_len) ram_len = program_len + required_data_len;
         ram_len += 3; ram_len &= ~3;
-        uint32_t need = 1024; // TODO: (apf_version > 6000) ? 1024 : 20;
-        if (data_len < need) ram_len += need;
+        if (apf_version >= 6100 && ram_len < 1024) ram_len = 1024;
     }
     std::vector<uint32_t> buf((ram_len + 3) / 4, 0);
     jbyte* jbuf = reinterpret_cast<jbyte*>(buf.data());
