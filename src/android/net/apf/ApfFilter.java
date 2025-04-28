@@ -380,6 +380,7 @@ public class ApfFilter {
     private final InterfaceParams mInterfaceParams;
     private final TokenBucket mTokenBucket;
 
+    @VisibleForTesting
     public final int mApfVersionSupported;
     @VisibleForTesting
     @NonNull
