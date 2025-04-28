@@ -65,6 +65,7 @@ import static android.net.util.SocketUtils.makePacketSocketAddress;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.stats.connectivity.NetworkQuirkEvent.QE_DHCP6_HEURISTIC_TRIGGERED;
 import static android.stats.connectivity.NetworkQuirkEvent.QE_DHCP6_PD_PROVISIONED;
+import static android.stats.connectivity.NetworkQuirkEvent.QE_DHCP6_PFLAG_TRIGGERED;
 import static android.system.OsConstants.AF_PACKET;
 import static android.system.OsConstants.ARPHRD_ETHER;
 import static android.system.OsConstants.ETH_P_ARP;
@@ -3860,6 +3861,12 @@ public class IpClient extends StateMachine {
                     // It is of course also possible that the autoconf timer has already fired
                     // when the first P-flag arrives.
                     if (mIpv6AutoconfTimeoutAlarm != null) mIpv6AutoconfTimeoutAlarm.cancel();
+
+                    // Note that this event may be logged multiple times, for example, when a
+                    // P-flag prefix expires and a new one is received. QE_DHCP6_PFLAG_TRIGGERED
+                    // and QE_DHCP6_PD_PROVISIONED are not mutually exclusive.
+                    mNetworkQuirkMetrics.setEvent(QE_DHCP6_PFLAG_TRIGGERED);
+                    mNetworkQuirkMetrics.statsWrite();
                     startDhcp6PrefixDelegation();
                     break;
 
