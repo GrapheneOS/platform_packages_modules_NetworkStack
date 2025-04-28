@@ -2355,8 +2355,7 @@ public class IpClient extends StateMachine {
         // doesn't complete with success after timeout. This check also handles IPv6-only link
         // local mode case, since there will be no IPv6 default route in that mode even with Prefix
         // Delegation experiment flag enabled.
-        if (newLp.hasIpv6DefaultRoute()
-                && mIpv6AutoconfTimeoutAlarm == null) {
+        if (newLp.hasIpv6DefaultRoute() && mIpv6AutoconfTimeoutAlarm == null) {
             mIpv6AutoconfTimeoutAlarm = new WakeupMessage(mContext, getHandler(),
                     mTag + ".EVENT_IPV6_AUTOCONF_TIMEOUT", EVENT_IPV6_AUTOCONF_TIMEOUT);
             final long alarmTime = SystemClock.elapsedRealtime()
