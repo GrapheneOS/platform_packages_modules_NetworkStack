@@ -1363,7 +1363,6 @@ public class IpClientTest {
     @Test
     public void testDhcp6PdPreferredFlag_quirkMetricLogged() throws Exception {
         final IpClient ipc = prepareDhcp6PdPreferredFlagTest();
-        final Handler handler = ipc.getHandler();
 
         final IpPrefix prefix = new IpPrefix("2001:db8:1:2::/64");
         onNewPrefix(prefix, TEST_PIO_FLAGS_P_SET, 1000 /* preferred */, 1500 /* valid */);
