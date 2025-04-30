@@ -72,6 +72,8 @@ import static com.android.networkstack.util.NetworkStackUtils.DNS_DDR_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.NETWORKMONITOR_ASYNC_PRIVDNS_RESOLUTION;
 import static com.android.networkstack.util.NetworkStackUtils.REEVALUATE_WHEN_RESUME;
+import static com.android.server.connectivity.DdrTracker.FLAG_TRY_ALL_SERVERS;
+import static com.android.server.connectivity.FakeDns.QUERY_FLAGS_NONE;
 import static com.android.server.connectivity.NetworkMonitor.CONFIG_ASYNC_PRIVDNS_PROBE_TIMEOUT_MS;
 import static com.android.server.connectivity.NetworkMonitor.INITIAL_REEVALUATE_DELAY_MS;
 import static com.android.server.connectivity.NetworkMonitor.extractCharset;
@@ -2459,7 +2461,8 @@ public class NetworkMonitorTest {
                 + "ipv6hint=2001:db8::100 dohpath=/dns-query{?dns}";
         setStatus(mHttpsConnection, 204);
         setStatus(mHttpConnection, 204);
-        mFakeDns.setAnswer("_dns.resolver.arpa", new String[] { svcb1, svcb2 }, TYPE_SVCB);
+        mFakeDns.setAnswer("_dns.resolver.arpa", () -> new String[] { svcb1, svcb2 }, TYPE_SVCB,
+                FLAG_TRY_ALL_SERVERS);
 
         WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig(true));
@@ -2504,9 +2507,12 @@ public class NetworkMonitorTest {
                 + "ipv6hint=2001:db8::1,2001:db8::100 dohpath=/dns-query{?dns}";
         setStatus(mHttpsConnection, 204);
         setStatus(mHttpConnection, 204);
-        mFakeDns.setAnswer("_dns.resolver.arpa", new String[] { svcb2 }, TYPE_SVCB);
-        mFakeDns.setAnswer("_dns.dot.google", new String[] { svcb1 }, TYPE_SVCB);
-        mFakeDns.setAnswer("_dns.doh.google", new String[] { svcb2 }, TYPE_SVCB);
+        mFakeDns.setAnswer("_dns.resolver.arpa", () -> new String[] { svcb2 }, TYPE_SVCB,
+                FLAG_TRY_ALL_SERVERS);
+        mFakeDns.setAnswer("_dns.dot.google", () -> new String[] { svcb1 }, TYPE_SVCB,
+                QUERY_FLAGS_NONE);
+        mFakeDns.setAnswer("_dns.doh.google", () -> new String[] { svcb2 }, TYPE_SVCB,
+                QUERY_FLAGS_NONE);
         mFakeDns.setAnswer("dot.google", new String[] { "2001:db8::853" }, TYPE_AAAA);
         mFakeDns.setAnswer("doh.google", new String[] { "2001:db8::854" }, TYPE_AAAA);
 
@@ -2558,8 +2564,10 @@ public class NetworkMonitorTest {
         final String svcb = "1 doh.google alpn=h2 ipv4hint=192.0.2.100 dohpath=/dns-query{?dns}";
         setStatus(mHttpsConnection, 204);
         setStatus(mHttpConnection, 204);
-        mFakeDns.setAnswer("_dns.resolver.arpa", new String[] { svcb }, TYPE_SVCB);
-        mFakeDns.setAnswer("_dns.dns.google", new String[] { svcb }, TYPE_SVCB);
+        mFakeDns.setAnswer("_dns.resolver.arpa", () -> new String[] { svcb }, TYPE_SVCB,
+                FLAG_TRY_ALL_SERVERS);
+        mFakeDns.setAnswer("_dns.dns.google", () -> new String[] { svcb }, TYPE_SVCB,
+                QUERY_FLAGS_NONE);
         mFakeDns.setAnswer("dns.google", new String[] { "2001:db8::853" }, TYPE_AAAA);
 
         WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
@@ -2605,8 +2613,10 @@ public class NetworkMonitorTest {
         final String svcb = "1 doh.google alpn=h3 ipv4hint=192.0.2.100 dohpath=/dns-query{?dns}";
         setStatus(mHttpsConnection, 204);
         setStatus(mHttpConnection, 204);
-        mFakeDns.setAnswer("_dns.resolver.arpa", new String[] { svcb }, TYPE_SVCB);
-        mFakeDns.setAnswer("_dns.dns.google", new String[] { svcb }, TYPE_SVCB);
+        mFakeDns.setAnswer("_dns.resolver.arpa", () -> new String[] { svcb }, TYPE_SVCB,
+                FLAG_TRY_ALL_SERVERS);
+        mFakeDns.setAnswer("_dns.dns.google", () -> new String[] { svcb }, TYPE_SVCB,
+                QUERY_FLAGS_NONE);
         mFakeDns.setAnswer("dns.google", new String[] { "2001:db8::853" }, TYPE_AAAA);
 
         // Verify the callback for opportunistic mode.

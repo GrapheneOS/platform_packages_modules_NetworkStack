@@ -60,6 +60,8 @@ import java.util.concurrent.TimeoutException;
  */
 public class FakeDns {
     private static final int HANDLER_TIMEOUT_MS = 1000;
+    public static final int QUERY_FLAGS_ANY = -1;
+    public static final int QUERY_FLAGS_NONE = 0;
 
     @NonNull
     private final Network mNetwork;
@@ -78,15 +80,18 @@ public class FakeDns {
         final String mHostname;
         final int mType;
         final AnswerSupplier mAnswerSupplier;
-        DnsEntry(String host, int type, AnswerSupplier answerSupplier) {
+        final int mFlags;
+        DnsEntry(String host, int type, int flags, AnswerSupplier answerSupplier) {
             mHostname = host;
             mType = type;
             mAnswerSupplier = answerSupplier;
+            mFlags = flags;
         }
         // Full match or partial match that target host contains the entry hostname to support
         // random private dns probe hostname.
-        private boolean matches(String hostname, int type) {
-            return hostname.endsWith(mHostname) && type == mType;
+        private boolean matches(String hostname, int type, int flags) {
+            return hostname.endsWith(mHostname) && type == mType
+                    && (mFlags == QUERY_FLAGS_ANY || mFlags == flags);
         }
     }
 
@@ -122,7 +127,7 @@ public class FakeDns {
 
     /** Returns the answer for a given name and type on the given mock network. */
     private CompletableFuture<String[]> getAnswer(Network mockNetwork, String hostname,
-            int type) {
+            int type, int flags) {
         if (mNetwork.equals(mockNetwork) && !mNonBypassPrivateDnsWorking) {
             return CompletableFuture.completedFuture(null);
         }
@@ -131,7 +136,7 @@ public class FakeDns {
 
         synchronized (mAnswers) {
             answerSupplier = mAnswers.stream()
-                    .filter(e -> e.matches(hostname, type))
+                    .filter(e -> e.matches(hostname, type, flags))
                     .map(answer -> answer.mAnswerSupplier).findFirst().orElse(null);
         }
         if (answerSupplier == null) {
@@ -161,10 +166,15 @@ public class FakeDns {
 
     /** Sets the answer for a given name and type. */
     public void setAnswer(String hostname, AnswerSupplier answerSupplier, int type) {
-        DnsEntry record = new DnsEntry(hostname, type, answerSupplier);
+        setAnswer(hostname, answerSupplier, type, QUERY_FLAGS_ANY);
+    }
+
+    /** Sets the answer for a given name, type and flags. */
+    public void setAnswer(String hostname, AnswerSupplier answerSupplier, int type, int flags) {
+        DnsEntry record = new DnsEntry(hostname, type, flags, answerSupplier);
         synchronized (mAnswers) {
             // Remove the existing one.
-            mAnswers.removeIf(entry -> entry.matches(hostname, type));
+            mAnswers.removeIf(entry -> entry.matches(hostname, type, flags));
             // Add or replace a new record.
             mAnswers.add(record);
         }
@@ -184,8 +194,8 @@ public class FakeDns {
             throws UnknownHostException {
         final List<InetAddress> answer;
         try {
-            answer = stringsToInetAddresses(queryAllTypes(mockNetwork, hostname).get(
-                    HANDLER_TIMEOUT_MS, TimeUnit.MILLISECONDS));
+            answer = stringsToInetAddresses(queryAllTypes(mockNetwork, hostname, QUERY_FLAGS_NONE)
+                    .get(HANDLER_TIMEOUT_MS, TimeUnit.MILLISECONDS));
         } catch (ExecutionException | InterruptedException | TimeoutException e) {
             throw new AssertionError("No mock DNS reply within timeout", e);
         }
@@ -198,16 +208,16 @@ public class FakeDns {
     // Regardless of the type, depends on what the responses contained in the network.
     @SuppressWarnings("FutureReturnValueIgnored")
     private CompletableFuture<String[]> queryAllTypes(
-            Network mockNetwork, String hostname) {
+            Network mockNetwork, String hostname, int flags) {
         if (mNetwork.equals(mockNetwork) && !mNonBypassPrivateDnsWorking) {
             return CompletableFuture.completedFuture(null);
         }
 
         final CompletableFuture<String[]> aFuture =
-                getAnswer(mockNetwork, hostname, TYPE_A)
+                getAnswer(mockNetwork, hostname, TYPE_A, flags)
                         .exceptionally(e -> new String[0]);
         final CompletableFuture<String[]> aaaaFuture =
-                getAnswer(mockNetwork, hostname, TYPE_AAAA)
+                getAnswer(mockNetwork, hostname, TYPE_AAAA, flags)
                         .exceptionally(e -> new String[0]);
 
         final CompletableFuture<String[]> combinedFuture = new CompletableFuture<>();
@@ -223,27 +233,27 @@ public class FakeDns {
     /** Starts mocking DNS queries. */
     public void startMocking() throws UnknownHostException {
         // Queries on mNetwork using getAllByName.
-        doAnswer(invocation -> {
-            return getAllByName((Network) invocation.getMock(), invocation.getArgument(0));
-        }).when(mNetwork).getAllByName(any());
+        doAnswer(invocation ->
+                getAllByName((Network) invocation.getMock(), invocation.getArgument(0))
+        ).when(mNetwork).getAllByName(any());
 
         // Queries on mCleartextDnsNetwork using DnsResolver#query.
-        doAnswer(invocation -> {
-            return mockQuery(invocation, 0 /* posNetwork */, 1 /* posHostname */,
-                    3 /* posExecutor */, 5 /* posCallback */, -1 /* posType */);
-        }).when(mDnsResolver).query(any(), any(), anyInt(), any(), any(), any());
+        doAnswer(invocation ->
+                mockQuery(invocation, 0 /* posNetwork */, 1 /* posHostname */,
+                    3 /* posExecutor */, 5 /* posCallback */, -1 /* posType */, 2 /* posFlags */)
+        ).when(mDnsResolver).query(any(), any(), anyInt(), any(), any(), any());
 
         // Queries on mCleartextDnsNetwork using DnsResolver#query with QueryType.
-        doAnswer(invocation -> {
-            return mockQuery(invocation, 0 /* posNetwork */, 1 /* posHostname */,
-                    4 /* posExecutor */, 6 /* posCallback */, 2 /* posType */);
-        }).when(mDnsResolver).query(any(), any(), anyInt(), anyInt(), any(), any(), any());
+        doAnswer(invocation ->
+                mockQuery(invocation, 0 /* posNetwork */, 1 /* posHostname */,
+                    4 /* posExecutor */, 6 /* posCallback */, 2 /* posType */, 3 /* posFlags */)
+        ).when(mDnsResolver).query(any(), any(), anyInt(), anyInt(), any(), any(), any());
 
         // Queries using rawQuery. Currently, mockQuery only supports TYPE_SVCB.
-        doAnswer(invocation -> {
-            return mockQuery(invocation, 0 /* posNetwork */, 1 /* posHostname */,
-                    5 /* posExecutor */, 7 /* posCallback */, 3 /* posType */);
-        }).when(mDnsResolver).rawQuery(any(), any(), anyInt(), anyInt(), anyInt(), any(),
+        doAnswer(invocation ->
+                mockQuery(invocation, 0 /* posNetwork */, 1 /* posHostname */,
+                    5 /* posExecutor */, 7 /* posCallback */, 3 /* posType */, 4 /* posFlags */)
+        ).when(mDnsResolver).rawQuery(any(), any(), anyInt(), anyInt(), anyInt(), any(),
                 any(), any());
     }
 
@@ -259,15 +269,16 @@ public class FakeDns {
     // Mocks all the DnsResolver query methods used in this test.
     @SuppressWarnings("FutureReturnValueIgnored")
     private Answer mockQuery(InvocationOnMock invocation, int posNetwork, int posHostname,
-            int posExecutor, int posCallback, int posType) {
+            int posExecutor, int posCallback, int posType, int posFlags) {
         String hostname = invocation.getArgument(posHostname);
         Executor executor = invocation.getArgument(posExecutor);
         Network network = invocation.getArgument(posNetwork);
         DnsResolver.Callback callback = invocation.getArgument(posCallback);
 
+        final int flags = invocation.getArgument(posFlags);
         final CompletableFuture<String[]> answerFuture = (posType != -1)
-                ? getAnswer(network, hostname, invocation.getArgument(posType))
-                : queryAllTypes(network, hostname);
+                ? getAnswer(network, hostname, invocation.getArgument(posType), flags)
+                : queryAllTypes(network, hostname, flags);
 
         answerFuture.whenComplete((answer, exception) -> {
             new Handler(Looper.getMainLooper()).post(() -> executor.execute(() -> {
