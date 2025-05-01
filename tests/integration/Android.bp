@@ -48,6 +48,7 @@ java_defaults {
         "androidx.test.rules",
         "mockito-target-extended-minus-junit4",
         "net-tests-utils",
+        "net-utils-networkstack",
         "testables",
     ],
     libs: [
