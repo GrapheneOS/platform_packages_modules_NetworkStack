@@ -186,7 +186,7 @@ public class IpClientLinkObserver {
     private final IpClientNetlinkMonitor mNetlinkMonitor;
     private final NetworkInformationShim mShim;
     private final AlarmManager.OnAlarmListener mExpirePref64Alarm;
-    // Map of prefix in PIO with P flag and its preferred lifetime expiry in seconds since boot.
+    // Map of prefix in PIO with P flag and its preferred lifetime expiry in milliseconds since boot
     private final Map<IpPrefix, Long> mDhcp6PdPreferredPrefixes = new ArrayMap<>();
     private final AlarmManager.OnAlarmListener mExpireDhcp6PdPreferredPrefixAlarm;
 
@@ -675,7 +675,7 @@ public class IpClientLinkObserver {
         @Override
         public void onAlarm() {
             final long now = SystemClock.elapsedRealtime();
-            mDhcp6PdPreferredPrefixes.entrySet().removeIf(p -> p.getValue() < now);
+            mDhcp6PdPreferredPrefixes.values().removeIf(expiry -> expiry <= now);
             if (mDhcp6PdPreferredPrefixes.isEmpty()) {
                 mCallback.stopDhcp6();
                 return;
@@ -718,7 +718,7 @@ public class IpClientLinkObserver {
         // not required.
         final int initialSize = mDhcp6PdPreferredPrefixes.size();
         mDhcp6PdPreferredPrefixes.put(prefix, expiry);
-        mDhcp6PdPreferredPrefixes.entrySet().removeIf(p -> p.getValue() <= now);
+        mDhcp6PdPreferredPrefixes.values().removeIf(v -> v <= now);
         final int finalSize = mDhcp6PdPreferredPrefixes.size();
 
         updateDhcp6PdPreferredPrefixAlarm();

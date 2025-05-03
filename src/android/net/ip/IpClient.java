@@ -65,6 +65,7 @@ import static android.net.util.SocketUtils.makePacketSocketAddress;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.stats.connectivity.NetworkQuirkEvent.QE_DHCP6_HEURISTIC_TRIGGERED;
 import static android.stats.connectivity.NetworkQuirkEvent.QE_DHCP6_PD_PROVISIONED;
+import static android.stats.connectivity.NetworkQuirkEvent.QE_DHCP6_PFLAG_TRIGGERED;
 import static android.system.OsConstants.AF_PACKET;
 import static android.system.OsConstants.ARPHRD_ETHER;
 import static android.system.OsConstants.ETH_P_ARP;
@@ -664,7 +665,7 @@ public class IpClient extends StateMachine {
     static final String CONFIG_APF_COUNTER_POLLING_INTERVAL_SECS =
             "ipclient_apf_counter_polling_interval_secs";
     @VisibleForTesting
-    static final int DEFAULT_APF_COUNTER_POLLING_INTERVAL_SECS = 1800;
+    static final int DEFAULT_APF_COUNTER_POLLING_INTERVAL_SECS = 300;
 
     // Used to wait for the provisioning to complete eventually and then decide the target
     // network type, which gives the accurate hint to set DTIM multiplier. Per current IPv6
@@ -1101,8 +1102,8 @@ public class IpClient extends StateMachine {
         mApfCounterPollingIntervalMs = mDependencies.getDeviceConfigPropertyInt(
                 CONFIG_APF_COUNTER_POLLING_INTERVAL_SECS,
                 DEFAULT_APF_COUNTER_POLLING_INTERVAL_SECS) * DateUtils.SECOND_IN_MILLIS;
-        mEnableApfPollingCounters = mDependencies.isFeatureNotChickenedOut(context,
-                APF_POLLING_COUNTERS_VERSION) && SdkLevel.isAtLeastV();
+        mEnableApfPollingCounters = mDependencies.isFeatureEnabled(context,
+                APF_POLLING_COUNTERS_VERSION);
         mIsAcceptRaMinLftEnabled =
                 SdkLevel.isAtLeastV() || mDependencies.isFeatureEnabled(context,
                         IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION);
@@ -2355,9 +2356,7 @@ public class IpClient extends StateMachine {
         // doesn't complete with success after timeout. This check also handles IPv6-only link
         // local mode case, since there will be no IPv6 default route in that mode even with Prefix
         // Delegation experiment flag enabled.
-        if (!mDhcp6PdPreferredFlagEnabled
-                && newLp.hasIpv6DefaultRoute()
-                && mIpv6AutoconfTimeoutAlarm == null) {
+        if (newLp.hasIpv6DefaultRoute() && mIpv6AutoconfTimeoutAlarm == null) {
             mIpv6AutoconfTimeoutAlarm = new WakeupMessage(mContext, getHandler(),
                     mTag + ".EVENT_IPV6_AUTOCONF_TIMEOUT", EVENT_IPV6_AUTOCONF_TIMEOUT);
             final long alarmTime = SystemClock.elapsedRealtime()
@@ -2579,15 +2578,8 @@ public class IpClient extends StateMachine {
                 && mInterfaceCtrl.enableIPv6();
     }
 
+    /** Creates Dhcp6Client and starts DHCPv6-PD. It is safe to call this function multiple times */
     private void startDhcp6PrefixDelegation() {
-        // For heuristic DHCPv6 PD mode, Dhcp6Client must be null at starting, however, for
-        // DHCPv6 Preferred flag mode, Dhcp6Client can be non-null at startup, for example,
-        // stopping Dhcp6Client when the length of the prefix list with the P flag is reduced
-        // to zero, and then restarting Dhcp6Client when a new prefix with the P flag is received.
-        if (!mDhcp6PdPreferredFlagEnabled && mDhcp6Client != null) {
-            Log.wtf(mTag, "Dhcp6Client should never be non-null in startDhcp6PrefixDelegation");
-            return;
-        }
         if (mDhcp6Client == null) {
             mDhcp6Client = mDependencies.makeDhcp6Client(mContext, IpClient.this,
                     mInterfaceParams, mDependencies.getDhcp6ClientDependencies());
@@ -3863,6 +3855,17 @@ public class IpClient extends StateMachine {
                     break;
 
                 case CMD_DHCP6_PD_START:
+                    // Cancelling autoconf timeut alarm on best effort basis. Dhcp6Client handles
+                    // multiple START commands correctly (i.e. only the first START has any effect).
+                    // It is of course also possible that the autoconf timer has already fired
+                    // when the first P-flag arrives.
+                    if (mIpv6AutoconfTimeoutAlarm != null) mIpv6AutoconfTimeoutAlarm.cancel();
+
+                    // Note that this event may be logged multiple times, for example, when a
+                    // P-flag prefix expires and a new one is received. QE_DHCP6_PFLAG_TRIGGERED
+                    // and QE_DHCP6_PD_PROVISIONED are not mutually exclusive.
+                    mNetworkQuirkMetrics.setEvent(QE_DHCP6_PFLAG_TRIGGERED);
+                    mNetworkQuirkMetrics.statsWrite();
                     startDhcp6PrefixDelegation();
                     break;
 
@@ -3917,7 +3920,7 @@ public class IpClient extends StateMachine {
                     break;
 
                 case CMD_UPDATE_APF_DATA_SNAPSHOT:
-                    if (mApfFilter != null && mApfFilter.mApfVersionSupported >= 4) {
+                    if (mApfFilter != null) {
                         // We prevents calls to readPacketFilterRam() when  mApfFilter is null.
                         // This is correct because any data read would be discarded when
                         // processing the EVENT_READ_PACKET_FILTER_COMPLETE event if no

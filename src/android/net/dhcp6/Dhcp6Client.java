@@ -16,8 +16,8 @@
 
 package android.net.dhcp6;
 
-import static android.net.dhcp6.Dhcp6Packet.IAID;
-import static android.net.dhcp6.Dhcp6Packet.PrefixDelegation;
+import static com.android.net.module.util.dhcp6.Dhcp6Packet.IAID;
+import static com.android.net.module.util.dhcp6.Dhcp6Packet.PrefixDelegation;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_INET6;
 import static android.system.OsConstants.IPPROTO_UDP;
@@ -50,6 +50,9 @@ import com.android.internal.util.WakeupMessage;
 import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.PacketReader;
+import com.android.net.module.util.dhcp6.Dhcp6AdvertisePacket;
+import com.android.net.module.util.dhcp6.Dhcp6Packet;
+import com.android.net.module.util.dhcp6.Dhcp6ReplyPacket;
 import com.android.net.module.util.structs.IaPrefixOption;
 
 import java.io.FileDescriptor;
@@ -278,9 +281,9 @@ public class Dhcp6Client extends StateMachine {
             // prefix, e.g. the list of prefix is empty). However, if prefix(es) do exist and all
             // prefixes are invalid, then we should just ignore this packet.
             if (!packet.isValid(mTransId, mClientDuid)) return;
-            if (!packet.mPrefixDelegation.ipos.isEmpty()) {
+            if (!packet.getPrefixDelegation().ipos.isEmpty()) {
                 boolean allInvalidPrefixes = true;
-                for (IaPrefixOption ipo : packet.mPrefixDelegation.ipos) {
+                for (IaPrefixOption ipo : packet.getPrefixDelegation().ipos) {
                     if (ipo != null && ipo.isValid()) {
                         allInvalidPrefixes = false;
                         break;
@@ -547,7 +550,7 @@ public class Dhcp6Client extends StateMachine {
 
         @Override
         protected void receivePacket(Dhcp6Packet packet) {
-            final PrefixDelegation pd = packet.mPrefixDelegation;
+            final PrefixDelegation pd = packet.getPrefixDelegation();
             // Ignore any Advertise or Reply for Solicit(with Rapid Commit) with NoPrefixAvail
             // status code, retransmit Solicit to see if any valid response from other Servers.
             if (pd.statusCode == Dhcp6Packet.STATUS_NO_PREFIX_AVAIL) {
@@ -557,7 +560,7 @@ public class Dhcp6Client extends StateMachine {
             if (packet instanceof Dhcp6AdvertisePacket) {
                 Log.d(TAG, "Get prefix delegation option from Advertise: " + pd);
                 mAdvertise = pd;
-                mServerDuid = packet.mServerDuid;
+                mServerDuid = packet.getServerDuid();
                 mSolMaxRtMs = packet.getSolMaxRtMs().orElse(mSolMaxRtMs);
                 transitionTo(mRequestState);
             } else if (packet instanceof Dhcp6ReplyPacket) {
@@ -568,7 +571,7 @@ public class Dhcp6Client extends StateMachine {
                 }
                 Log.d(TAG, "Get prefix delegation option from RapidCommit Reply: " + pd);
                 mReply = pd;
-                mServerDuid = packet.mServerDuid;
+                mServerDuid = packet.getServerDuid();
                 mSolMaxRtMs = packet.getSolMaxRtMs().orElse(mSolMaxRtMs);
                 transitionTo(mBoundState);
             }
@@ -593,7 +596,7 @@ public class Dhcp6Client extends StateMachine {
         @Override
         protected void receivePacket(Dhcp6Packet packet) {
             if (!(packet instanceof Dhcp6ReplyPacket)) return;
-            final PrefixDelegation pd = packet.mPrefixDelegation;
+            final PrefixDelegation pd = packet.getPrefixDelegation();
             if (pd.statusCode == Dhcp6Packet.STATUS_NO_PREFIX_AVAIL) {
                 Log.w(TAG, "Server responded to Request without available prefix, restart Solicit");
                 transitionTo(mSolicitState);
@@ -698,7 +701,7 @@ public class Dhcp6Client extends StateMachine {
         @Override
         protected void receivePacket(Dhcp6Packet packet) {
             if (!(packet instanceof Dhcp6ReplyPacket)) return;
-            final PrefixDelegation pd = packet.mPrefixDelegation;
+            final PrefixDelegation pd = packet.getPrefixDelegation();
             // Stay at Renew/Rebind state if the Reply message takes NoPrefixAvail status code,
             // retransmit Renew/Rebind message to server, to retry obtaining the prefixes.
             if (pd.statusCode == Dhcp6Packet.STATUS_NO_PREFIX_AVAIL) {
@@ -710,7 +713,7 @@ public class Dhcp6Client extends StateMachine {
             Log.d(TAG, "Get prefix delegation option from Reply as response to Renew/Rebind " + pd);
             if (pd.ipos.isEmpty()) return;
             mReply = pd;
-            mServerDuid = packet.mServerDuid;
+            mServerDuid = packet.getServerDuid();
             // Once the delegated prefix gets refreshed successfully we have to extend the
             // preferred lifetime and valid lifetime of global IPv6 addresses, otherwise
             // these addresses will become depreacated finally and then provisioning failure

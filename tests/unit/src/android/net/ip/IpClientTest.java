@@ -99,6 +99,7 @@ import android.net.shared.ProvisioningConfiguration.ScanResultInfo;
 import android.os.Build;
 import android.os.Handler;
 import android.os.SystemClock;
+import android.stats.connectivity.NetworkQuirkEvent;
 import android.system.OsConstants;
 
 import androidx.test.filters.SmallTest;
@@ -119,6 +120,7 @@ import com.android.net.module.util.netlink.StructPrefixMsg;
 import com.android.net.module.util.netlink.StructRtMsg;
 import com.android.networkstack.R;
 import com.android.networkstack.ipmemorystore.IpMemoryStoreService;
+import com.android.networkstack.metrics.NetworkQuirkMetrics;
 import com.android.server.NetworkStackService;
 import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
@@ -208,6 +210,7 @@ public class IpClientTest {
     @Mock private PackageManager mPackageManager;
     @Mock private ApfFilter mApfFilter;
     @Mock private Dhcp6Client mDhcp6Client;
+    @Mock private NetworkQuirkMetrics mQuirkMetrics;
 
     private InterfaceParams mIfParams;
     private INetlinkMessageProcessor mNetlinkMessageProcessor;
@@ -234,6 +237,7 @@ public class IpClientTest {
                 any(), any(), any(), anyInt(), anyBoolean(), any())).thenReturn(mNetlinkMonitor);
         when(mNetlinkMonitor.start()).thenReturn(true);
         when(mDependencies.makeDhcp6Client(any(), any(), any(), any())).thenReturn(mDhcp6Client);
+        when(mDependencies.getNetworkQuirkMetrics()).thenReturn(mQuirkMetrics);
         doReturn(mPackageManager).when(mContext).getPackageManager();
         doReturn(true).when(mDependencies).isFeatureNotChickenedOut(mContext, APF_ENABLE);
 
@@ -1352,6 +1356,19 @@ public class IpClientTest {
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
         verify(mDependencies, never()).makeDhcp6Client(any(), any(), any(), any());
         verifyPrefixLifetimeAlarmNeverSet(handler);
+
+        ipc.shutdown();
+    }
+
+    @Test
+    public void testDhcp6PdPreferredFlag_quirkMetricLogged() throws Exception {
+        final IpClient ipc = prepareDhcp6PdPreferredFlagTest();
+
+        final IpPrefix prefix = new IpPrefix("2001:db8:1:2::/64");
+        onNewPrefix(prefix, TEST_PIO_FLAGS_P_SET, 1000 /* preferred */, 1500 /* valid */);
+        HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
+        verify(mQuirkMetrics).setEvent(NetworkQuirkEvent.QE_DHCP6_PFLAG_TRIGGERED);
+        verify(mQuirkMetrics).statsWrite();
 
         ipc.shutdown();
     }
