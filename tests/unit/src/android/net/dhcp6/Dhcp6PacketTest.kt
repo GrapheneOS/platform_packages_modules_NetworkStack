@@ -19,6 +19,10 @@ package android.net.dhcp6
 import androidx.test.filters.SmallTest
 import androidx.test.runner.AndroidJUnit4
 import com.android.net.module.util.HexDump
+import com.android.net.module.util.dhcp6.Dhcp6AdvertisePacket
+import com.android.net.module.util.dhcp6.Dhcp6Packet
+import com.android.net.module.util.dhcp6.Dhcp6ReplyPacket
+import com.android.net.module.util.dhcp6.Dhcp6SolicitPacket
 import com.android.testutils.assertThrows
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -230,10 +234,10 @@ class Dhcp6PacketTest {
         val bytes = HexDump.hexStringToByteArray(replyHex)
         val packet = Dhcp6Packet.decode(bytes, bytes.size)
         assertTrue(packet is Dhcp6ReplyPacket)
-        assertEquals(0, packet.mPrefixDelegation.iaid)
-        assertEquals(0, packet.mPrefixDelegation.t1)
-        assertEquals(0, packet.mPrefixDelegation.t2)
-        assertEquals(Dhcp6Packet.STATUS_NO_PREFIX_AVAIL, packet.mStatusCode)
+        assertEquals(0, packet.getPrefixDelegation().iaid)
+        assertEquals(0, packet.getPrefixDelegation().t1)
+        assertEquals(0, packet.getPrefixDelegation().t2)
+        assertEquals(Dhcp6Packet.STATUS_NO_PREFIX_AVAIL, packet.getStatusCode())
     }
 
     @Test
@@ -258,10 +262,10 @@ class Dhcp6PacketTest {
         val bytes = HexDump.hexStringToByteArray(replyHex)
         val packet = Dhcp6Packet.decode(bytes, bytes.size)
         assertTrue(packet is Dhcp6ReplyPacket)
-        assertEquals(0, packet.mPrefixDelegation.iaid)
-        assertEquals(0, packet.mPrefixDelegation.t1)
-        assertEquals(0, packet.mPrefixDelegation.t2)
-        assertEquals(Dhcp6Packet.STATUS_NO_PREFIX_AVAIL, packet.mStatusCode)
+        assertEquals(0, packet.getPrefixDelegation().iaid)
+        assertEquals(0, packet.getPrefixDelegation().t1)
+        assertEquals(0, packet.getPrefixDelegation().t2)
+        assertEquals(Dhcp6Packet.STATUS_NO_PREFIX_AVAIL, packet.getStatusCode())
     }
 
     @Test
@@ -286,10 +290,10 @@ class Dhcp6PacketTest {
         val bytes = HexDump.hexStringToByteArray(replyHex)
         val packet = Dhcp6Packet.decode(bytes, bytes.size)
         assertTrue(packet is Dhcp6ReplyPacket)
-        assertEquals(0, packet.mPrefixDelegation.iaid)
-        assertEquals(0, packet.mPrefixDelegation.t1)
-        assertEquals(0, packet.mPrefixDelegation.t2)
-        assertEquals(Dhcp6Packet.STATUS_NO_PREFIX_AVAIL, packet.mPrefixDelegation.statusCode)
+        assertEquals(0, packet.getPrefixDelegation().iaid)
+        assertEquals(0, packet.getPrefixDelegation().t1)
+        assertEquals(0, packet.getPrefixDelegation().t2)
+        assertEquals(Dhcp6Packet.STATUS_NO_PREFIX_AVAIL, packet.getPrefixDelegation().statusCode)
     }
 
     @Test
@@ -312,10 +316,10 @@ class Dhcp6PacketTest {
         val bytes = HexDump.hexStringToByteArray(replyHex)
         val packet = Dhcp6Packet.decode(bytes, bytes.size)
         assertTrue(packet is Dhcp6ReplyPacket)
-        assertEquals(0, packet.mPrefixDelegation.iaid)
-        assertEquals(0, packet.mPrefixDelegation.t1)
-        assertEquals(0, packet.mPrefixDelegation.t2)
-        assertEquals(Dhcp6Packet.STATUS_NO_PREFIX_AVAIL, packet.mPrefixDelegation.statusCode)
+        assertEquals(0, packet.getPrefixDelegation().iaid)
+        assertEquals(0, packet.getPrefixDelegation().t1)
+        assertEquals(0, packet.getPrefixDelegation().t2)
+        assertEquals(Dhcp6Packet.STATUS_NO_PREFIX_AVAIL, packet.getPrefixDelegation().statusCode)
     }
 
     @Test
