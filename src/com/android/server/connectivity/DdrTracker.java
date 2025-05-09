@@ -27,6 +27,7 @@ import static com.android.net.module.util.DnsPacket.TYPE_SVCB;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.SuppressLint;
 import android.net.DnsResolver;
 import android.net.LinkProperties;
 import android.net.Network;
@@ -81,6 +82,12 @@ class DdrTracker {
     static final String DDR_HOSTNAME = "_dns.resolver.arpa";
 
     private static final String ALPN_DOH3 = "h3";
+
+    /**
+     * Matches the (non-API) constant in DnsResolver/include/netd_resolv/resolv.h
+     */
+    @VisibleForTesting
+    static final int FLAG_TRY_ALL_SERVERS = 1 << 31;
 
     interface Callback {
         /**
@@ -231,15 +238,6 @@ class DdrTracker {
         return (mLatestSvcbPacket != null) ? mLatestSvcbPacket.getDohPath(alpn) : null;
     }
 
-    @NonNull
-    private String createHostnameForSvcbQuery() {
-        final String hostname = getStrictModeHostname();
-        if (!TextUtils.isEmpty(hostname)) {
-            return "_dns." + hostname;
-        }
-        return DDR_HOSTNAME;
-    }
-
     /** Performs a DNS SVCB Lookup asynchronously. */
     void startSvcbLookup() {
         if (getPrivateDnsMode() == PRIVATE_DNS_MODE_OFF) {
@@ -268,7 +266,9 @@ class DdrTracker {
         // This is for network revalidation in strict mode that a SVCB lookup can be performed
         // and its result can be accepted even if there is no DNS configuration change.
         final int token = ++mTokenId;
-        final String hostname = createHostnameForSvcbQuery();
+        final String strictModeHostname = getStrictModeHostname();
+        final boolean strictMode = !TextUtils.isEmpty(strictModeHostname);
+        final String hostname = strictMode ? "_dns." + strictModeHostname : DDR_HOSTNAME;
         final DnsResolver.Callback<byte[]> callback = new DnsResolver.Callback<byte[]>() {
             boolean isResultFresh() {
                 return token == mTokenId;
@@ -314,7 +314,7 @@ class DdrTracker {
                 }
             }
         };
-        sendDnsSvcbQuery(hostname, mCancelSignal, callback);
+        sendDnsSvcbQuery(hostname, strictMode, mCancelSignal, callback);
     }
 
     /**
@@ -426,14 +426,17 @@ class DdrTracker {
     /**
      * A non-blocking call doing DNS SVCB lookup.
      */
-    private void sendDnsSvcbQuery(String host, @NonNull CancellationSignal cancelSignal,
+    @SuppressLint("WrongConstant") // FLAG_TRY_ALL_SERVERS is a hidden flag
+    private void sendDnsSvcbQuery(String host, boolean strictMode,
+            @NonNull CancellationSignal cancelSignal,
             @NonNull DnsResolver.Callback<byte[]> callback) {
         // Note: the even though this code does not pass FLAG_NO_CACHE_LOOKUP, the query is
         // currently not cached, because the DNS resolver cache does not cache SVCB records.
         // TODO: support caching SVCB records in the DNS resolver cache.
         // This should just work but will need testing.
-        mDnsResolver.rawQuery(mCleartextDnsNetwork, host, CLASS_IN, TYPE_SVCB, 0 /* flags */,
-                mExecutor, cancelSignal, callback);
+        final int flags = strictMode ? 0 : FLAG_TRY_ALL_SERVERS;
+        mDnsResolver.rawQuery(mCleartextDnsNetwork, host, CLASS_IN, TYPE_SVCB,
+                flags, mExecutor, cancelSignal, callback);
     }
 
     private static InetAddress[] toArray(List<InetAddress> list) {
