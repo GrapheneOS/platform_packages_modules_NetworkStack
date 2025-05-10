@@ -83,7 +83,14 @@ class ApfMdnsOffloadEngineTest {
     @Test
     fun testOffloadEngineRegistration() {
         val callback = mock(Callback::class.java)
-        val apfOffloadEngine = ApfMdnsOffloadEngine(interfaceName, handler, nsdManager, callback)
+        val apfOffloadEngine =
+            ApfMdnsOffloadEngine(
+                interfaceName,
+                handler,
+                nsdManager,
+                callback,
+                false /* skipMdnsRecordWithoutPriority */
+            )
         apfOffloadEngine.registerOffloadEngine()
         verify(nsdManager).registerOffloadEngine(
             eq(interfaceName),
@@ -132,9 +139,67 @@ class ApfMdnsOffloadEngineTest {
     }
 
     @Test
+    fun testOnlyOffloadRecordsWithPriority() {
+        val callback = mock(Callback::class.java)
+        val apfOffloadEngine =
+            ApfMdnsOffloadEngine(
+                interfaceName,
+                handler,
+                nsdManager,
+                callback,
+                true /* skipMdnsRecordWithoutPriority */
+            )
+        apfOffloadEngine.registerOffloadEngine()
+        verify(nsdManager).registerOffloadEngine(
+            eq(interfaceName),
+            anyLong(),
+            anyLong(),
+            any(),
+            eq(apfOffloadEngine)
+        )
+        val infoWithoutPriority = OffloadServiceInfo(
+            OffloadServiceInfo.Key("TestServiceName2", "_advertisertest._tcp"),
+            listOf(),
+            "Android_test.local",
+            byteArrayOf(0x01, 0x02, 0x03, 0x04),
+            Int.MAX_VALUE,
+            OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
+        )
+        val infoWithPriority = OffloadServiceInfo(
+            OffloadServiceInfo.Key("TestServiceName", "_advertisertest._tcp"),
+            listOf(),
+            "Android_test.local",
+            byteArrayOf(0x01, 0x02, 0x03, 0x04),
+            0,
+            OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
+        )
+        visibleOnHandlerThread(handler) {
+            apfOffloadEngine.onOffloadServiceUpdated(
+                infoWithoutPriority
+            )
+        }
+        verify(callback).onOffloadRulesUpdated(eq(extractOffloadReplyRule(listOf())))
+        visibleOnHandlerThread(handler) {
+            apfOffloadEngine.onOffloadServiceUpdated(
+                infoWithPriority
+            )
+        }
+        verify(callback).onOffloadRulesUpdated(
+            eq(extractOffloadReplyRule(listOf(infoWithPriority)))
+        )
+    }
+
+    @Test
     fun testCorruptedOffloadServiceInfoUpdateNotTriggerUpdate() {
         val callback = mock(Callback::class.java)
-        val apfOffloadEngine = ApfMdnsOffloadEngine(interfaceName, handler, nsdManager, callback)
+        val apfOffloadEngine =
+            ApfMdnsOffloadEngine(
+                interfaceName,
+                handler,
+                nsdManager,
+                callback,
+                false /* skipMdnsRecordWithoutPriority */
+            )
         apfOffloadEngine.registerOffloadEngine()
         val corruptedOffloadInfo = OffloadServiceInfo(
             OffloadServiceInfo.Key("gambit", "_${"a".repeat(63)}._tcp"),

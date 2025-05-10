@@ -5293,7 +5293,7 @@ public abstract class IpClientIntegrationTestCommon {
         ByteBuffer iapd;
         Dhcp6Packet packet;
         while ((packet = getNextDhcp6Packet()) != null) {
-            final PrefixDelegation pd = new PrefixDelegation(packet.getIaId(), t1, t2, ipos);
+            final PrefixDelegation pd = new PrefixDelegation(packet.getIaid(), t1, t2, ipos);
             iapd = pd.build();
             if (packet instanceof Dhcp6SolicitPacket) {
                 if (shouldReplyRapidCommit) {
@@ -5609,7 +5609,7 @@ public abstract class IpClientIntegrationTestCommon {
                 7200 /* valid */);
         final IaPrefixOption ipo1 = buildIaPrefixOption(prefix1, 5000 /* preferred */,
                 6000 /* valid */);
-        final PrefixDelegation pd = new PrefixDelegation(packet.getIaId(), 3600 /* t1 */,
+        final PrefixDelegation pd = new PrefixDelegation(packet.getIaid(), 3600 /* t1 */,
                 4500 /* t2 */, Arrays.asList(ipo, ipo1));
         final ByteBuffer iapd = pd.build();
         mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
@@ -5647,7 +5647,7 @@ public abstract class IpClientIntegrationTestCommon {
         final IpPrefix prefix1 = new IpPrefix("2001:db8:2::/64");
         final IaPrefixOption ipo = buildIaPrefixOption(prefix1, 4500 /* preferred */,
                 7200 /* valid */);
-        final PrefixDelegation pd = new PrefixDelegation(packet.getIaId(), 3600 /* t1 */,
+        final PrefixDelegation pd = new PrefixDelegation(packet.getIaid(), 3600 /* t1 */,
                 4500 /* t2 */, Arrays.asList(ipo));
         final ByteBuffer iapd = pd.build();
         mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
@@ -5683,7 +5683,7 @@ public abstract class IpClientIntegrationTestCommon {
 
         // Reply with IA_PD but IA_Prefix is absent, client should still stay at the RenewState
         // and restransmit the Renew message, that should not result in any LinkProperties update.
-        final PrefixDelegation pd = new PrefixDelegation(packet.getIaId(), 3600 /* t1 */,
+        final PrefixDelegation pd = new PrefixDelegation(packet.getIaid(), 3600 /* t1 */,
                 4500 /* t2 */, new ArrayList<IaPrefixOption>(0));
         final ByteBuffer iapd = pd.build();
         mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
@@ -5713,7 +5713,7 @@ public abstract class IpClientIntegrationTestCommon {
                 0 /* valid */);
         final IaPrefixOption ipo1 = buildIaPrefixOption(prefix1, 5000 /* preferred */,
                 6000 /* valid */);
-        final PrefixDelegation pd = new PrefixDelegation(packet.getIaId(), 3600 /* t1 */,
+        final PrefixDelegation pd = new PrefixDelegation(packet.getIaid(), 3600 /* t1 */,
                 4500 /* t2 */, Arrays.asList(ipo, ipo1));
         final ByteBuffer iapd = pd.build();
         mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
@@ -5762,7 +5762,7 @@ public abstract class IpClientIntegrationTestCommon {
         final IpPrefix prefix = new IpPrefix("2001:db8:1::/64");
         final IaPrefixOption ipo = buildIaPrefixOption(prefix, 3600 /* preferred */,
                 3600 /* valid */);
-        final PrefixDelegation pd = new PrefixDelegation(packet.getIaId(), 3600 /* t1 */,
+        final PrefixDelegation pd = new PrefixDelegation(packet.getIaid(), 3600 /* t1 */,
                 3600 /* t2 */, Collections.singletonList(ipo));
         final ByteBuffer iapd = pd.build();
         mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
@@ -5828,7 +5828,7 @@ public abstract class IpClientIntegrationTestCommon {
         Dhcp6Packet packet = getNextDhcp6Packet(PACKET_TIMEOUT_MS);
         assertTrue(packet instanceof Dhcp6SolicitPacket);
 
-        final PrefixDelegation pd = new PrefixDelegation(packet.getIaId(), 0 /* t1 */, 0 /* t2 */,
+        final PrefixDelegation pd = new PrefixDelegation(packet.getIaid(), 0 /* t1 */, 0 /* t2 */,
                 new ArrayList<IaPrefixOption>() /* ipos */, Dhcp6Packet.STATUS_NO_PREFIX_AVAIL);
         final ByteBuffer iapd = pd.build();
         if (shouldReplyWithAdvertise) {
@@ -5866,7 +5866,7 @@ public abstract class IpClientIntegrationTestCommon {
         final IpPrefix prefix = new IpPrefix("2001:db8:1::/64");
         final IaPrefixOption ipo = buildIaPrefixOption(prefix, 4500 /* preferred */,
                 7200 /* valid */);
-        PrefixDelegation pd = new PrefixDelegation(packet.getIaId(), 1000 /* t1 */,
+        PrefixDelegation pd = new PrefixDelegation(packet.getIaid(), 1000 /* t1 */,
                 2000 /* t2 */, Arrays.asList(ipo));
         ByteBuffer iapd = pd.build();
         mPacketReader.sendResponse(buildDhcp6Advertise(packet, iapd.array(), mClientMac,
@@ -5877,7 +5877,7 @@ public abstract class IpClientIntegrationTestCommon {
 
         // Reply for Request with NoPrefixAvail status code. Not sure if this is reasonable in
         // practice, but Server can do everything it wants.
-        pd = new PrefixDelegation(packet.getIaId(), 0 /* t1 */, 0 /* t2 */,
+        pd = new PrefixDelegation(packet.getIaid(), 0 /* t1 */, 0 /* t2 */,
                 new ArrayList<IaPrefixOption>() /* ipos */, Dhcp6Packet.STATUS_NO_PREFIX_AVAIL);
         iapd = pd.build();
         mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
@@ -5908,7 +5908,7 @@ public abstract class IpClientIntegrationTestCommon {
         final IpPrefix prefix = new IpPrefix("2001:db8:1::/64");
         final IaPrefixOption ipo = buildIaPrefixOption(prefix, 4500 /* preferred */,
                 7200 /* valid */);
-        PrefixDelegation pd = new PrefixDelegation(packet.getIaId(), 1000 /* t1 */,
+        PrefixDelegation pd = new PrefixDelegation(packet.getIaid(), 1000 /* t1 */,
                 2000 /* t2 */, Arrays.asList(ipo));
         ByteBuffer iapd = pd.build();
         mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
@@ -5924,7 +5924,7 @@ public abstract class IpClientIntegrationTestCommon {
 
         // Reply for Renew with NoPrefixAvail status code, check if client will retransmit the
         // Renew message.
-        pd = new PrefixDelegation(packet.getIaId(), 3600 /* t1 */, 4500 /* t2 */,
+        pd = new PrefixDelegation(packet.getIaid(), 3600 /* t1 */, 4500 /* t2 */,
                 new ArrayList<IaPrefixOption>(0) /* ipos */, Dhcp6Packet.STATUS_NO_PREFIX_AVAIL);
         iapd = pd.build();
         mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
@@ -5960,7 +5960,7 @@ public abstract class IpClientIntegrationTestCommon {
         final IpPrefix prefix = new IpPrefix("2001:db8:1::/64");
         final IaPrefixOption ipo = buildIaPrefixOption(prefix, 4500 /* preferred */,
                 7200 /* valid */);
-        PrefixDelegation pd = new PrefixDelegation(packet.getIaId(), 1000 /* t1 */,
+        PrefixDelegation pd = new PrefixDelegation(packet.getIaid(), 1000 /* t1 */,
                 2000 /* t2 */, Arrays.asList(ipo));
         ByteBuffer iapd = pd.build();
         mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
@@ -5982,7 +5982,7 @@ public abstract class IpClientIntegrationTestCommon {
 
         // Reply for Rebind with NoPrefixAvail status code, check if client will retransmit the
         // Rebind message.
-        pd = new PrefixDelegation(packet.getIaId(), 3600 /* t1 */,
+        pd = new PrefixDelegation(packet.getIaid(), 3600 /* t1 */,
                 4500 /* t2 */, new ArrayList<IaPrefixOption>(0) /* ipos */,
                 Dhcp6Packet.STATUS_NO_PREFIX_AVAIL);
         iapd = pd.build();
