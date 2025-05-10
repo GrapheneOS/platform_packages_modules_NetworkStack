@@ -348,6 +348,7 @@ public class ApfFilter {
         public boolean handleMldOffload;
         public boolean handleIpv4PingOffload;
         public boolean handleIpv6PingOffload;
+        public boolean skipMdnsRecordWithoutPriority;
     }
 
 
@@ -417,6 +418,7 @@ public class ApfFilter {
     private final boolean mHandleMldOffload;
     private final boolean mHandleIpv4PingOffload;
     private final boolean mHandleIpv6PingOffload;
+    private final boolean mSkipMdnsRecordWithoutPriority;
 
     private final NetworkQuirkMetrics mNetworkQuirkMetrics;
     private final IpClientRaInfoMetrics mIpClientRaInfoMetrics;
@@ -563,6 +565,7 @@ public class ApfFilter {
         mHandleMldOffload = config.handleMldOffload;
         mHandleIpv4PingOffload = config.handleIpv4PingOffload;
         mHandleIpv6PingOffload = config.handleIpv6PingOffload;
+        mSkipMdnsRecordWithoutPriority = config.skipMdnsRecordWithoutPriority;
         mDependencies = dependencies;
         mNetworkQuirkMetrics = networkQuirkMetrics;
         mIpClientRaInfoMetrics = dependencies.getIpClientRaInfoMetrics();
@@ -613,7 +616,9 @@ public class ApfFilter {
                         mOffloadRules.clear();
                         mOffloadRules.addAll(allRules);
                         installNewProgram();
-                    });
+                    },
+                    mSkipMdnsRecordWithoutPriority
+                    );
             mApfMdnsOffloadEngine.registerOffloadEngine();
         } else {
             mApfMdnsOffloadEngine = null;

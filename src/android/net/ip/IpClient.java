@@ -841,6 +841,7 @@ public class IpClient extends StateMachine {
     private final boolean mIgnoreNudFailureEnabled;
     private final boolean mDhcp6PdPreferredFlagEnabled;
     private final boolean mReplaceNetdWithNetlinkEnabled;
+    private final boolean mIsTvDevice;
 
     private InterfaceParams mInterfaceParams;
 
@@ -1113,8 +1114,8 @@ public class IpClient extends StateMachine {
         mApfHandleNdOffload = mDependencies.isFeatureNotChickenedOut(
                 mContext, APF_HANDLE_ND_OFFLOAD);
         // TODO: turn on APF mDNS offload on handhelds.
-        mApfHandleMdnsOffload = isAtLeast25Q2() && context.getPackageManager().hasSystemFeature(
-                FEATURE_LEANBACK);
+        mIsTvDevice = context.getPackageManager().hasSystemFeature(FEATURE_LEANBACK);
+        mApfHandleMdnsOffload = isAtLeast25Q2() && mIsTvDevice;
         mApfHandleIgmpOffload =
                 mDependencies.isFeatureNotChickenedOut(mContext, APF_HANDLE_IGMP_OFFLOAD)
                     && (isAtLeast25Q2()
@@ -2856,6 +2857,14 @@ public class IpClient extends StateMachine {
         apfConfig.handleArpOffload = mApfHandleArpOffload;
         apfConfig.handleNdOffload = mApfHandleNdOffload;
         apfConfig.handleMdnsOffload = mApfHandleMdnsOffload;
+        // In Android 16 for Android TV, the mDNS offload fail-open mechanism is not functional
+        // due to the need to coexist with Wake on LAN filters. Specifically, during CPU
+        // suspend, APF is used for offload, and the Wake on LAN filter exclusively decides if a
+        // packet wakes the CPU. This means mDNS packets will be dropped by the Wake on LAN
+        // filter even if APF intends to pass them. Therefore, mDNS records will either be fully
+        // offloaded or dropped. To ensure high-priority mDNS records are offloaded and to
+        // manage RAM usage, we skip offloading records without proper priority settings.
+        apfConfig.skipMdnsRecordWithoutPriority = mIsTvDevice;
         apfConfig.handleIgmpOffload = mApfHandleIgmpOffload;
         // TODO: Turn on MLD offload on devices with 2048 ~ 2999 bytes of APF RAM.
         apfConfig.handleMldOffload = mApfHandleMldOffload && apfConfig.apfRamSize >= 3000;

@@ -24,6 +24,8 @@ import android.os.Build;
 import android.os.Handler;
 import android.util.Log;
 
+import com.android.net.module.util.CollectionUtils;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -60,16 +62,19 @@ public class ApfMdnsOffloadEngine implements OffloadEngine {
     private final NsdManager mNsdManager;
     @NonNull
     private final Callback mCallback;
+    private final boolean mSkipMdnsRecordWithoutPriority;
 
     /**
      * Constructor for ApfOffloadEngine.
      */
     public ApfMdnsOffloadEngine(@NonNull String interfaceName, @NonNull Handler handler,
-            @NonNull NsdManager nsdManager, @NonNull Callback callback) {
+            @NonNull NsdManager nsdManager, @NonNull Callback callback,
+            boolean skipMdnsRecordWithoutPriority) {
         mInterfaceName = interfaceName;
         mHandler = handler;
         mNsdManager = nsdManager;
         mCallback = callback;
+        mSkipMdnsRecordWithoutPriority = skipMdnsRecordWithoutPriority;
     }
 
     @Override
@@ -90,8 +95,14 @@ public class ApfMdnsOffloadEngine implements OffloadEngine {
             mOffloadServiceInfos.add(info);
         }
         try {
+            final List<OffloadServiceInfo> filteredOffloadServiceInfo = CollectionUtils.filter(
+                    mOffloadServiceInfos, offloadServiceInfo -> {
+                        final boolean shouldSkip = mSkipMdnsRecordWithoutPriority
+                                && offloadServiceInfo.getPriority() == Integer.MAX_VALUE;
+                        return !shouldSkip;
+                    });
             List<MdnsOffloadRule> offloadRules = ApfMdnsUtils.extractOffloadReplyRule(
-                    mOffloadServiceInfos);
+                    filteredOffloadServiceInfo);
             mCallback.onOffloadRulesUpdated(offloadRules);
         } catch (IOException e) {
             Log.e(TAG, "Failed to extract offload reply rule", e);
