@@ -33,6 +33,7 @@ import static android.net.ip.IpClient.IpClientCommands.CMD_ADDRESSES_CLEARED;
 import static android.net.ip.IpClient.IpClientCommands.CMD_ADD_KEEPALIVE_PACKET_FILTER_TO_APF;
 import static android.net.ip.IpClient.IpClientCommands.CMD_COMPLETE_PRECONNECTION;
 import static android.net.ip.IpClient.IpClientCommands.CMD_CONFIRM;
+import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_REBIND;
 import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_START;
 import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_STOP;
 import static android.net.ip.IpClient.IpClientCommands.CMD_JUMP_RUNNING_TO_STOPPING;
@@ -633,6 +634,7 @@ public class IpClient extends StateMachine {
         static final int EVENT_NUD_FAILURE_QUERY_FAILURE = 23;
         static final int CMD_DHCP6_PD_START = 24;
         static final int CMD_DHCP6_PD_STOP = 25;
+        static final int CMD_DHCP6_PD_REBIND = 26;
         // Internal commands to use instead of trying to call transitionTo() inside
         // a given State's enter() method. Calling transitionTo() from enter/exit
         // encounters a Log.wtf() that can cause trouble on eng builds.
@@ -1211,7 +1213,7 @@ public class IpClient extends StateMachine {
 
                     @Override
                     public void rebindDhcp6() {
-                        // TODO: implement this.
+                        sendMessage(CMD_DHCP6_PD_REBIND);
                     }
                 },
                 config, mLog, mDependencies
@@ -3864,7 +3866,7 @@ public class IpClient extends StateMachine {
                     break;
 
                 case CMD_DHCP6_PD_START:
-                    // Cancelling autoconf timeut alarm on best effort basis. Dhcp6Client handles
+                    // Cancelling autoconf timeout alarm on best effort basis. Dhcp6Client handles
                     // multiple START commands correctly (i.e. only the first START has any effect).
                     // It is of course also possible that the autoconf timer has already fired
                     // when the first P-flag arrives.
@@ -3880,6 +3882,10 @@ public class IpClient extends StateMachine {
 
                 case CMD_DHCP6_PD_STOP:
                     mDhcp6Client.sendMessage(Dhcp6Client.CMD_STOP_DHCP6);
+                    break;
+
+                case CMD_DHCP6_PD_REBIND:
+                    mDhcp6Client.sendMessage(Dhcp6Client.CMD_REBIND_DHCP6);
                     break;
 
                 case Dhcp6Client.CMD_DHCP6_RESULT:
