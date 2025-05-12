@@ -1059,6 +1059,23 @@ public class IpClientTest {
     }
 
     @Test
+    public void testApfUpdateCapabilities_newApfCapabilitiesWithVersionZero() throws Exception {
+        final IpClient ipc = makeIpClient(TEST_IFNAME);
+        final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
+                true /* isApfSupported */);
+        assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, config.apfVersionSupported);
+        assertEquals(4096, config.apfRamSize);
+        clearInvocations(mDependencies);
+
+        ipc.updateApfCapabilities(
+                new ApfCapabilities(0 /* version */, 0 /* maxProgramSize */, ARPHRD_ETHER));
+        HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
+        verify(mDependencies, never()).maybeCreateApfFilter(any(), any(), any(), any(), any(),
+                any());
+        verifyShutdown(ipc);
+    }
+
+    @Test
     public void testApfUpdateCapabilities_raceBetweenStopAndStartIpClient() throws Exception {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         ProvisioningConfiguration.Builder config = new ProvisioningConfiguration.Builder()
