@@ -2879,15 +2879,19 @@ public class IpClient extends StateMachine {
                 mInterfaceParams, mIpClientApfController, mNetworkQuirkMetrics);
     }
 
+    private boolean isApfSupported(ApfCapabilities apfCapabilities) {
+        return apfCapabilities != null && apfCapabilities.apfVersionSupported >= 2;
+    }
+
     private boolean handleUpdateApfCapabilities(@NonNull final ApfCapabilities apfCapabilities) {
         // For the use case where the wifi interface switches from secondary to primary, the
         // secondary interface does not support APF by default see the overlay config about
         // {@link config_wifiEnableApfOnNonPrimarySta}. so we should see empty ApfCapabilities
         // in {@link ProvisioningConfiguration} when wifi starts provisioning on the secondary
         // interface. For other cases, we should not accept the updateApfCapabilities call.
-        if (mCurrentApfCapabilities != null || apfCapabilities == null) {
-            Log.wtf(mTag, "current ApfCapabilities " + mCurrentApfCapabilities
-                    + " is not null or new ApfCapabilities " + apfCapabilities + " is null");
+        if (isApfSupported(mCurrentApfCapabilities) || !isApfSupported(apfCapabilities)) {
+            Log.wtf(mTag, "Invalid update: current ApfCapabilities: " + mCurrentApfCapabilities
+                    + " new ApfCapabilities: " + apfCapabilities);
             return false;
         }
         if (mApfFilter != null) {
