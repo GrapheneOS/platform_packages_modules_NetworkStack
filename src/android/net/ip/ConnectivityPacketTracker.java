@@ -94,6 +94,8 @@ public class ConnectivityPacketTracker {
             FileDescriptor socket = null;
             try {
                 socket = Os.socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, 0);
+                // for production code, 'attachFilter' must always be `true`.
+                // setting it to `false` is exclusively for testing purpose.
                 if (attachFilter) {
                     NetworkStackUtils.attachControlPacketFilter(socket);
                 }
