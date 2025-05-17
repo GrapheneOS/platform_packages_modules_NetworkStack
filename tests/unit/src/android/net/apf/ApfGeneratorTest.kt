@@ -1937,7 +1937,16 @@ class ApfGeneratorTest {
         val gen = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
         gen.addDefaultPacketHandling()
         val size = gen.programLengthOverEstimate() - gen.baseProgramSize
-        assertEquals(2, size)
+        assertEquals(15, size)
+        assertEquals(size, gen.defaultPacketHandlingSizeOverEstimate)
+    }
+
+    @Test
+    fun testGetApfV61DefaultPacketHandlingSizeOverEstimate() {
+        val gen = ApfV61Generator(apfInterpreterVersion, ramSize, clampSize)
+        gen.addDefaultPacketHandling()
+        val size = gen.programLengthOverEstimate() - gen.baseProgramSize
+        assertEquals(13, size)
         assertEquals(size, gen.defaultPacketHandlingSizeOverEstimate)
     }
 
@@ -1946,7 +1955,7 @@ class ApfGeneratorTest {
         val gen = ApfV4Generator(apfInterpreterVersion, ramSize, clampSize)
         gen.addDefaultPacketHandling()
         val size = gen.programLengthOverEstimate() - gen.baseProgramSize
-        assertEquals(25, size)
+        assertEquals(38, size)
         assertEquals(size, gen.defaultPacketHandlingSizeOverEstimate)
     }
 

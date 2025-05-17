@@ -394,4 +394,12 @@ public abstract class ApfV61GeneratorBase<Type extends ApfV61GeneratorBase<Type>
                     .addU8(len));
         }
     }
+
+    @Override
+    public final int getDefaultPacketHandlingSizeOverEstimate() {
+        // addLoad8intoR0(ICMP6_TYPE_OFFSET); -> 2 bytes
+        // addCountAndPassIfR0Equals(ICMPV6_ROUTER_ADVERTISEMENT, PASSED_RA); -> 9 bytes
+        // addCountAndPass(PASSED_IPV6_ICMP); -> 2 bytes
+        return 13;
+    }
 }

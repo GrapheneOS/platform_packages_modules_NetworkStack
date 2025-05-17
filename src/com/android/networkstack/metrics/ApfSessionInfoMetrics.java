@@ -16,6 +16,7 @@
 
 package com.android.networkstack.metrics;
 
+import static android.net.apf.ApfCounterTracker.Counter.CORRUPT_DNS_PACKET;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_802_3_FRAME;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_NON_IPV4;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_ARP_OTHER_HOST;
@@ -55,7 +56,10 @@ import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_REPLIED_
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ROUTER_SOLICITATION;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_MDNS;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_MDNS_REPLIED;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_NON_UNICAST_TDLS;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_RA;
+import static android.net.apf.ApfCounterTracker.Counter.EXCEPTIONS;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_ALLOCATE_FAILURE;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_BROADCAST_REPLY;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_REQUEST;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_UNICAST_REPLY;
@@ -69,8 +73,11 @@ import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NON_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_UNICAST_NON_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_NON_IP_UNICAST;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_RA;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_TRANSMIT_FAILURE;
 import static android.net.apf.ApfCounterTracker.Counter.RESERVED_OOB;
 import static android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS;
+import static android.stats.connectivity.CounterName.CN_CORRUPT_DNS_PACKET;
 import static android.stats.connectivity.CounterName.CN_DROPPED_802_3_FRAME;
 import static android.stats.connectivity.CounterName.CN_DROPPED_ARP_NON_IPV4;
 import static android.stats.connectivity.CounterName.CN_DROPPED_ARP_OTHER_HOST;
@@ -110,7 +117,10 @@ import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_NS_REPLIED_
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_ROUTER_SOLICITATION;
 import static android.stats.connectivity.CounterName.CN_DROPPED_MDNS;
 import static android.stats.connectivity.CounterName.CN_DROPPED_MDNS_REPLIED;
+import static android.stats.connectivity.CounterName.CN_DROPPED_NON_UNICAST_TDLS;
 import static android.stats.connectivity.CounterName.CN_DROPPED_RA;
+import static android.stats.connectivity.CounterName.CN_EXCEPTIONS;
+import static android.stats.connectivity.CounterName.CN_PASSED_ALLOCATE_FAILURE;
 import static android.stats.connectivity.CounterName.CN_PASSED_ARP_BROADCAST_REPLY;
 import static android.stats.connectivity.CounterName.CN_PASSED_ARP_REQUEST;
 import static android.stats.connectivity.CounterName.CN_PASSED_ARP_UNICAST_REPLY;
@@ -124,6 +134,8 @@ import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_NON_ICMP;
 import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_UNICAST_NON_ICMP;
 import static android.stats.connectivity.CounterName.CN_PASSED_NON_IP_UNICAST;
 import static android.stats.connectivity.CounterName.CN_PASSED_OUR_SRC_MAC;
+import static android.stats.connectivity.CounterName.CN_PASSED_RA;
+import static android.stats.connectivity.CounterName.CN_PASSED_TRANSMIT_FAILURE;
 import static android.stats.connectivity.CounterName.CN_TOTAL_PACKETS;
 import static android.stats.connectivity.CounterName.CN_UNKNOWN;
 
@@ -208,6 +220,12 @@ public class ApfSessionInfoMetrics {
                     CN_DROPPED_IGMP_V3_GENERAL_QUERY_REPLIED),
                 Map.entry(DROPPED_IGMP_INVALID, CN_DROPPED_IGMP_INVALID),
                 Map.entry(DROPPED_IGMP_REPORT, CN_DROPPED_IGMP_REPORT),
+                Map.entry(PASSED_ALLOCATE_FAILURE, CN_PASSED_ALLOCATE_FAILURE),
+                Map.entry(PASSED_TRANSMIT_FAILURE, CN_PASSED_TRANSMIT_FAILURE),
+                Map.entry(CORRUPT_DNS_PACKET, CN_CORRUPT_DNS_PACKET),
+                Map.entry(EXCEPTIONS, CN_EXCEPTIONS),
+                Map.entry(PASSED_RA, CN_PASSED_RA),
+                Map.entry(DROPPED_NON_UNICAST_TDLS, CN_DROPPED_NON_UNICAST_TDLS),
                 Map.entry(DROPPED_GARP_REPLY, CN_DROPPED_GARP_REPLY)
             )
     );
