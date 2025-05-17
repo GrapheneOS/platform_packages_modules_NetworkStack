@@ -64,7 +64,8 @@ public class ApfCounterTracker {
         PASSED_IPV6_NON_ICMP,
         PASSED_IPV6_UNICAST_NON_ICMP,
         PASSED_NON_IP_UNICAST,
-        PASSED_MDNS, // see also MAX_PASS_COUNTER below
+        PASSED_MDNS,
+        PASSED_RA, // see also MAX_PASS_COUNTER below
         DROPPED_ETH_BROADCAST,  // see also MIN_DROP_COUNTER below
         DROPPED_ETHER_OUR_SRC_MAC,
         DROPPED_RA,
@@ -173,7 +174,7 @@ public class ApfCounterTracker {
     public static final Counter MIN_DROP_COUNTER = Counter.DROPPED_ETH_BROADCAST;
     public static final Counter MAX_DROP_COUNTER = Counter.DROPPED_GARP_REPLY;
     public static final Counter MIN_PASS_COUNTER = Counter.PASSED_ARP_BROADCAST_REPLY;
-    public static final Counter MAX_PASS_COUNTER = Counter.PASSED_MDNS;
+    public static final Counter MAX_PASS_COUNTER = Counter.PASSED_RA;
 
     private static final String TAG = ApfCounterTracker.class.getSimpleName();
 

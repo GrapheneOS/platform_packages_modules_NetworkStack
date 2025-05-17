@@ -320,4 +320,12 @@ public final class ApfV6Generator extends ApfV6GeneratorBase<ApfV6Generator> {
     public ApfV6Generator addDataCopy(int src, int len) {
         return append(new Instruction(Opcodes.PKTDATACOPY, Rbit1).addDataOffset(src).addU8(len));
     }
+
+    @Override
+    public int getDefaultPacketHandlingSizeOverEstimate() {
+        // addLoad8intoR0(ICMP6_TYPE_OFFSET); -> 2 bytes
+        // addCountAndPassIfR0Equals(ICMPV6_ROUTER_ADVERTISEMENT, PASSED_RA); -> 11 bytes
+        // addCountAndPass(PASSED_IPV6_ICMP); -> 2 bytes
+        return 15;
+    }
 }
