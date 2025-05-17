@@ -2656,15 +2656,15 @@ public class ApfTest {
         final byte[] data = new byte[Counter.totalSize()];
         final byte[] expectedData = data.clone();
         final int totalPacketsCounterIdx = Counter.totalSize() + Counter.TOTAL_PACKETS.offset();
-        final int passedIpv6IcmpCounterIdx =
-                Counter.totalSize() + Counter.PASSED_IPV6_ICMP.offset();
+        final int passedRaCounterIdx =
+                Counter.totalSize() + Counter.PASSED_RA.offset();
         final int droppedIpv4MulticastIdx =
                 Counter.totalSize() + Counter.DROPPED_IPV4_MULTICAST.offset();
 
         // Receive an RA packet (passed).
         final byte[] ra = buildLargeRa();
         expectedData[totalPacketsCounterIdx + 3] += 1;
-        expectedData[passedIpv6IcmpCounterIdx + 3] += 1;
+        expectedData[passedRaCounterIdx + 3] += 1;
         assertDataMemoryContentsIgnoreVersion(PASS, program, ra, data, expectedData);
         pretendPacketReceived(ra);
         program = ApfTestHelpers.consumeInstalledProgram(mApfController, 1 /* installCnt */);
@@ -2699,7 +2699,7 @@ public class ApfTest {
 
         // Verify Counters
         final Map<Counter, Long> expectedCounters = Map.of(Counter.TOTAL_PACKETS, 2L,
-                Counter.PASSED_IPV6_ICMP, 1L, Counter.DROPPED_IPV4_MULTICAST, 1L);
+                Counter.PASSED_RA, 1L, Counter.DROPPED_IPV4_MULTICAST, 1L);
         final ArgumentCaptor<Counter> counterCaptor = ArgumentCaptor.forClass(Counter.class);
         final ArgumentCaptor<Long> valueCaptor = ArgumentCaptor.forClass(Long.class);
         verify(mApfSessionInfoMetrics, times(expectedCounters.size())).addApfCounter(

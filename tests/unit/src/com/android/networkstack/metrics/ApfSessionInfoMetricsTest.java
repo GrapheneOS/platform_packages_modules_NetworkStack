@@ -16,6 +16,19 @@
 
 package com.android.networkstack.metrics;
 
+import static android.net.apf.ApfCounterTracker.Counter.CORRUPT_DNS_PACKET;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_NON_UNICAST_TDLS;
+import static android.net.apf.ApfCounterTracker.Counter.EXCEPTIONS;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_ALLOCATE_FAILURE;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_RA;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_TRANSMIT_FAILURE;
+import static android.stats.connectivity.CounterName.CN_CORRUPT_DNS_PACKET;
+import static android.stats.connectivity.CounterName.CN_DROPPED_NON_UNICAST_TDLS;
+import static android.stats.connectivity.CounterName.CN_EXCEPTIONS;
+import static android.stats.connectivity.CounterName.CN_PASSED_ALLOCATE_FAILURE;
+import static android.stats.connectivity.CounterName.CN_PASSED_RA;
+import static android.stats.connectivity.CounterName.CN_PASSED_TRANSMIT_FAILURE;
+
 import static org.junit.Assert.assertEquals;
 
 import android.net.apf.ApfCounterTracker.Counter;
@@ -176,5 +189,11 @@ public class ApfSessionInfoMetricsTest {
         verifyCounterName(Counter.DROPPED_IGMP_V2_GENERAL_QUERY_REPLIED,
                 CounterName.CN_DROPPED_IGMP_V2_GENERAL_QUERY_REPLIED);
         verifyCounterName(Counter.DROPPED_IGMP_REPORT, CounterName.CN_DROPPED_IGMP_REPORT);
+        verifyCounterName(PASSED_ALLOCATE_FAILURE, CN_PASSED_ALLOCATE_FAILURE);
+        verifyCounterName(PASSED_TRANSMIT_FAILURE, CN_PASSED_TRANSMIT_FAILURE);
+        verifyCounterName(CORRUPT_DNS_PACKET, CN_CORRUPT_DNS_PACKET);
+        verifyCounterName(EXCEPTIONS, CN_EXCEPTIONS);
+        verifyCounterName(PASSED_RA, CN_PASSED_RA);
+        verifyCounterName(DROPPED_NON_UNICAST_TDLS, CN_DROPPED_NON_UNICAST_TDLS);
     }
 }

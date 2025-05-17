@@ -75,6 +75,7 @@ import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NON_ICMP
 import android.net.apf.ApfCounterTracker.Counter.PASSED_MDNS
 import android.net.apf.ApfCounterTracker.Counter.PASSED_NON_IP_UNICAST
+import android.net.apf.ApfCounterTracker.Counter.PASSED_RA
 import android.net.apf.ApfFilter.Dependencies
 import android.net.apf.ApfTestHelpers.Companion.TIMEOUT_MS
 import android.net.apf.BaseApfGenerator.APF_VERSION_3
@@ -592,7 +593,7 @@ class ApfFilterTest {
             apfFilter.mApfVersionSupported,
             program,
             HexDump.hexStringToByteArray(raPkt),
-            PASSED_IPV6_ICMP
+            PASSED_RA
         )
 
         // Using scapy to generate ethernet packet with type 0x88A2:
@@ -5071,7 +5072,7 @@ class ApfFilterTest {
             apfFilter.mApfVersionSupported,
             program,
             raBytes,
-            PASSED_IPV6_ICMP
+            PASSED_RA
         )
     }
 
@@ -5932,7 +5933,7 @@ class ApfFilterTest {
             apfInterpreterVersion,
             program,
             HexDump.hexStringToByteArray(ra1),
-            PASSED_IPV6_ICMP
+            PASSED_RA
         )
     }
 

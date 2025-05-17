@@ -699,14 +699,16 @@ public class IpClientLinkObserver {
                 mHandler);
     }
 
-    private void handlePrefixInformationUpdate(RtNetlinkPrefixMessage msg, boolean pflag) {
-        final long now = SystemClock.elapsedRealtime();
-        final long preferredLifetime = msg.getPreferredLifetime();
-        final IpPrefix prefix = msg.getPrefix();
+    /** Implements PD-preferred prefix tracking as described in rfc9762 */
+    private void trackPdPreferredPrefix(IpPrefix prefix, long preferredLifetime, boolean pflag) {
+        // The kernel does not send an RTM_NEWPREFIX message for a link-local prefix, but just in
+        // case, ignore it. The p-flag is meaningless for link-local prefixes.
+        if (prefix.getAddress().isLinkLocalAddress()) return;
 
         // If pflag is false or preferredLifetime is 0, set expiry to now. This ensures the prefix
         // is removed immediately by the removeIf below. Otherwise, calculate the actual expiry time
         // based on the preferred lifetime.
+        final long now = SystemClock.elapsedRealtime();
         final long expiry = pflag ? now + preferredLifetime * 1000 : now;
 
         // Note that while expired prefixes are supposed to be removed when the alarm fires, it is
@@ -745,7 +747,7 @@ public class IpClientLinkObserver {
         if (prefixmsg.prefix_type != ICMPV6_ND_OPTION_PIO) return;
 
         final boolean pflag = (prefixmsg.prefix_flags & PIO_FLAG_DHCPV6_PD_PREFERRED) != 0;
-        handlePrefixInformationUpdate(msg, pflag);
+        trackPdPreferredPrefix(msg.getPrefix(), msg.getPreferredLifetime(), pflag);
     }
 
     private void processNetlinkMessage(NetlinkMessage nlMsg, long whenMs) {

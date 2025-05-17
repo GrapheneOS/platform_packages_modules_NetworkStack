@@ -33,6 +33,7 @@ import static android.net.ip.IpClient.IpClientCommands.CMD_ADDRESSES_CLEARED;
 import static android.net.ip.IpClient.IpClientCommands.CMD_ADD_KEEPALIVE_PACKET_FILTER_TO_APF;
 import static android.net.ip.IpClient.IpClientCommands.CMD_COMPLETE_PRECONNECTION;
 import static android.net.ip.IpClient.IpClientCommands.CMD_CONFIRM;
+import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_REBIND;
 import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_START;
 import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_STOP;
 import static android.net.ip.IpClient.IpClientCommands.CMD_JUMP_RUNNING_TO_STOPPING;
@@ -633,6 +634,7 @@ public class IpClient extends StateMachine {
         static final int EVENT_NUD_FAILURE_QUERY_FAILURE = 23;
         static final int CMD_DHCP6_PD_START = 24;
         static final int CMD_DHCP6_PD_STOP = 25;
+        static final int CMD_DHCP6_PD_REBIND = 26;
         // Internal commands to use instead of trying to call transitionTo() inside
         // a given State's enter() method. Calling transitionTo() from enter/exit
         // encounters a Log.wtf() that can cause trouble on eng builds.
@@ -1146,8 +1148,8 @@ public class IpClient extends StateMachine {
         mNudFailureCountWeeklyThreshold = mDependencies.getDeviceConfigPropertyInt(
                 CONFIG_NUD_FAILURE_COUNT_WEEKLY_THRESHOLD,
                 DEFAULT_NUD_FAILURE_COUNT_WEEKLY_THRESHOLD);
-        mDhcp6PdPreferredFlagEnabled =
-                mDependencies.isFeatureEnabled(mContext, IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION);
+        mDhcp6PdPreferredFlagEnabled = mDependencies.isFeatureNotChickenedOut(mContext,
+                    IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION);
         mReplaceNetdWithNetlinkEnabled = mDependencies.isFeatureEnabled(mContext,
                 IPCLIENT_REPLACE_NETD_WITH_NETLINK_VERSION);
         IpClientLinkObserver.Configuration config = new IpClientLinkObserver.Configuration(
@@ -1211,7 +1213,7 @@ public class IpClient extends StateMachine {
 
                     @Override
                     public void rebindDhcp6() {
-                        // TODO: implement this.
+                        sendMessage(CMD_DHCP6_PD_REBIND);
                     }
                 },
                 config, mLog, mDependencies
@@ -2734,7 +2736,8 @@ public class IpClient extends StateMachine {
         if (params.defaultMtu == mInterfaceParams.defaultMtu) return;
 
         if (mReplaceNetdWithNetlinkEnabled) {
-            if (!NetlinkUtils.setInterfaceMtu(mInterfaceName, mInterfaceParams.defaultMtu)) {
+            if (!NetlinkUtils.setInterfaceMtu(mInterfaceParams.index,
+                    mInterfaceParams.defaultMtu)) {
                 logError("Couldn't reset MTU on " + mInterfaceName + " from "
                         + params.defaultMtu + " to " + mInterfaceParams.defaultMtu);
             }
@@ -2877,15 +2880,19 @@ public class IpClient extends StateMachine {
                 mInterfaceParams, mIpClientApfController, mNetworkQuirkMetrics);
     }
 
+    private boolean isApfSupported(ApfCapabilities apfCapabilities) {
+        return apfCapabilities != null && apfCapabilities.apfVersionSupported >= 2;
+    }
+
     private boolean handleUpdateApfCapabilities(@NonNull final ApfCapabilities apfCapabilities) {
         // For the use case where the wifi interface switches from secondary to primary, the
         // secondary interface does not support APF by default see the overlay config about
         // {@link config_wifiEnableApfOnNonPrimarySta}. so we should see empty ApfCapabilities
         // in {@link ProvisioningConfiguration} when wifi starts provisioning on the secondary
         // interface. For other cases, we should not accept the updateApfCapabilities call.
-        if (mCurrentApfCapabilities != null || apfCapabilities == null) {
-            Log.wtf(mTag, "current ApfCapabilities " + mCurrentApfCapabilities
-                    + " is not null or new ApfCapabilities " + apfCapabilities + " is null");
+        if (isApfSupported(mCurrentApfCapabilities) || !isApfSupported(apfCapabilities)) {
+            Log.wtf(mTag, "Invalid update: current ApfCapabilities: " + mCurrentApfCapabilities
+                    + " new ApfCapabilities: " + apfCapabilities);
             return false;
         }
         if (mApfFilter != null) {
@@ -3864,7 +3871,7 @@ public class IpClient extends StateMachine {
                     break;
 
                 case CMD_DHCP6_PD_START:
-                    // Cancelling autoconf timeut alarm on best effort basis. Dhcp6Client handles
+                    // Cancelling autoconf timeout alarm on best effort basis. Dhcp6Client handles
                     // multiple START commands correctly (i.e. only the first START has any effect).
                     // It is of course also possible that the autoconf timer has already fired
                     // when the first P-flag arrives.
@@ -3880,6 +3887,10 @@ public class IpClient extends StateMachine {
 
                 case CMD_DHCP6_PD_STOP:
                     mDhcp6Client.sendMessage(Dhcp6Client.CMD_STOP_DHCP6);
+                    break;
+
+                case CMD_DHCP6_PD_REBIND:
+                    mDhcp6Client.sendMessage(Dhcp6Client.CMD_REBIND_DHCP6);
                     break;
 
                 case Dhcp6Client.CMD_DHCP6_RESULT:

@@ -16,14 +16,14 @@
 
 package android.net.dhcp6;
 
-import static com.android.net.module.util.dhcp6.Dhcp6Packet.IAID;
-import static com.android.net.module.util.dhcp6.Dhcp6Packet.PrefixDelegation;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.system.OsConstants.AF_INET6;
 import static android.system.OsConstants.IPPROTO_UDP;
 import static android.system.OsConstants.SOCK_DGRAM;
 import static android.system.OsConstants.SOCK_NONBLOCK;
 
+import static com.android.net.module.util.dhcp6.Dhcp6Packet.IAID;
+import static com.android.net.module.util.dhcp6.Dhcp6Packet.PrefixDelegation;
 import static com.android.net.module.util.NetworkStackConstants.ALL_DHCP_RELAY_AGENTS_AND_SERVERS;
 import static com.android.net.module.util.NetworkStackConstants.DHCP6_CLIENT_PORT;
 import static com.android.net.module.util.NetworkStackConstants.DHCP6_SERVER_PORT;
@@ -85,6 +85,9 @@ public class Dhcp6Client extends StateMachine {
     // Notification from DHCPv6 state machine post DHCPv6 discovery/renewal. Indicates
     // success/failure
     public static final int CMD_DHCP6_RESULT = PUBLIC_BASE + 3;
+    // Commands from controller to force doing a DHCPv6 PD Rebind.
+    public static final int CMD_REBIND_DHCP6 = PUBLIC_BASE + 4;
+
     // Message.arg1 arguments to CMD_DHCP6_RESULT notification
     public static final int DHCP6_PD_SUCCESS = 1;
     public static final int DHCP6_PD_PREFIX_EXPIRED = 2;
@@ -661,12 +664,14 @@ public class Dhcp6Client extends StateMachine {
                 case CMD_DHCP6_PD_RENEW:
                     transitionTo(mRenewState);
                     return HANDLED;
+                case CMD_REBIND_DHCP6:
+                    transitionTo(mRebindState);
+                    return HANDLED;
                 default:
                     return NOT_HANDLED;
             }
         }
     }
-
 
     /**
      *  Per RFC8415 section 18.2.10.1: Reply for renew or Rebind.
@@ -767,6 +772,13 @@ public class Dhcp6Client extends StateMachine {
     class RebindState extends ReacquireState {
         RebindState() {
             super(REB_TIMEOUT, REB_MAX_RT);
+        }
+
+        @Override
+        public void enter() {
+            super.enter();
+            mRenewAlarm.cancel();
+            mRebindAlarm.cancel();
         }
 
         @Override
