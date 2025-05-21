@@ -39,6 +39,16 @@
       "name": "NetworkStackRootTests"
     }
   ],
+  "hsum-presubmit": [
+    {
+      "name": "NetworkStackIntegrationTests",
+      "options": [
+        {
+          "exclude-annotation": "com.android.testutils.SkipPresubmit"
+        }
+      ]
+    }
+  ],
   "mainline-presubmit": [
     // These are unit tests only, so they don't actually require any modules to be installed.
     // We must specify at least one module here or the tests won't run. Use the same set as CTS
