@@ -189,7 +189,6 @@ import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_UNICAST_NON_
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_MDNS;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_NON_IP_UNICAST;
 import static android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS;
-import static android.net.apf.ApfCounterTracker.getCounterValue;
 import static android.net.apf.BaseApfGenerator.MemorySlot;
 import static android.net.apf.BaseApfGenerator.Register.R0;
 import static android.net.apf.BaseApfGenerator.Register.R1;
@@ -4514,71 +4513,15 @@ public class ApfFilter {
             pw.println("No last snapshot.");
         } else {
             try {
-                Counter[] counters = Counter.class.getEnumConstants();
-                long counterFilterAgeSeconds =
-                        getCounterValue(mDataSnapshot, FILTER_AGE_SECONDS);
-                long counterApfProgramId =
-                        getCounterValue(mDataSnapshot, APF_PROGRAM_ID);
-                for (Counter c : Arrays.asList(counters).subList(1, counters.length)) {
-                    long value = getCounterValue(mDataSnapshot, c);
-
-                    String note = "";
-                    boolean checkValueIncreases = true;
-                    switch (c) {
-                        case FILTER_AGE_SECONDS:
-                            checkValueIncreases = false;
-                            if (value != counterFilterAgeSeconds) {
-                                note = " [ERROR: impossible]";
-                            } else if (counterApfProgramId < mNumProgramUpdates) {
-                                note = " [IGNORE: obsolete program]";
-                            } else if (value > filterAgeSeconds) {
-                                long offset = value - filterAgeSeconds;
-                                note = " [ERROR: in the future by " + offset + "s]";
-                            }
-                            break;
-                        case FILTER_AGE_16384THS:
-                            if (mApfVersionSupported > BaseApfGenerator.APF_VERSION_4) {
-                                checkValueIncreases = false;
-                                if (value % 16384 == 0) {
-                                    // valid, but unlikely
-                                    note = " [INFO: zero fractional portion]";
-                                }
-                                if (value / 16384 != counterFilterAgeSeconds) {
-                                    // should not be able to happen
-                                    note = " [ERROR: mismatch with FILTER_AGE_SECONDS]";
-                                }
-                            } else if (value != 0) {
-                                note = " [UNEXPECTED: APF<=4, yet non-zero]";
-                            }
-                            break;
-                        case APF_PROGRAM_ID:
-                            if (value != counterApfProgramId) {
-                                note = " [ERROR: impossible]";
-                            } else if (value < mNumProgramUpdates) {
-                                note = " [WARNING: OBSOLETE PROGRAM]";
-                            } else if (value > mNumProgramUpdates) {
-                                note = " [ERROR: INVALID FUTURE ID]";
-                            }
-                            break;
-                        default:
-                            break;
-                    }
-
-                    // Only print non-zero counters (or those with a note)
-                    if (value != 0 || !note.equals("")) {
-                        pw.println(c.toString() + ": " + value + note);
-                    }
-
-                    if (checkValueIncreases) {
-                        // If the counter's value decreases, it may have been cleaned up or there
-                        // may be a bug.
-                        long oldValue = mApfCounterTracker.getCounters().getOrDefault(c, 0L);
-                        if (value < oldValue) {
-                            Log.e(TAG, String.format(
-                                    "Apf Counter: %s unexpectedly decreased. oldValue: %d. "
-                                            + "newValue: %d", c.toString(), oldValue, value));
-                        }
-                    }
+                final List<Pair<Counter, String>> counters =
+                        mApfCounterTracker.dumpCountersFromData(
+                            mDataSnapshot,
+                            filterAgeSeconds,
+                            mNumProgramUpdates,
+                            mApfVersionSupported
+                        );
+                for (Pair<Counter, String> entry : counters) {
+                    pw.println(entry.first.toString() + ": " + entry.second);
                 }
             } catch (ArrayIndexOutOfBoundsException e) {
                 pw.println("Uh-oh: " + e);
