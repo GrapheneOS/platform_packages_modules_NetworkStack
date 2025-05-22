@@ -816,6 +816,29 @@ public class ApfFilter {
         return mApfCounterTracker.getCounters().toString();
     }
 
+    /**
+     * Dumps a list of counters and their associated string representations.
+     * This method retrieves counter data from a snapshot.
+     *
+     * @return A {@link List} of {@link Pair} objects, where each {@link Pair} contains a
+     * {@link Counter} object and its corresponding {@link String} representation.
+     * Returns {@code null} if the data snapshot is not available.
+     */
+    public @Nullable List<Pair<Counter, String>> dumpCounters() {
+        try {
+            if (mDataSnapshot == null) {
+                return null;
+            }
+
+            int filterAgeSeconds = secondsSinceBoot() - mLastTimeInstalledProgram;
+            return mApfCounterTracker.dumpCountersFromData(
+                mDataSnapshot, filterAgeSeconds, mNumProgramUpdates, mApfVersionSupported);
+        } catch (ArrayIndexOutOfBoundsException e) {
+            Log.wtf(TAG, "counter out of bound", e);
+            return null;
+        }
+    }
+
     private MulticastReportMonitor createMulticastReportMonitor() {
         FileDescriptor socketFd = null;
 
