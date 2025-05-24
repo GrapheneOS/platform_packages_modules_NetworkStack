@@ -291,6 +291,12 @@ public class NetworkStackUtils {
     public static final String APF_HANDLE_MLD_OFFLOAD_VERSION =
             "apf_handle_mld_offload_version";
 
+    /**
+     * Experiment flag to enable the feature of handle MDNS advertising offload in Apf.
+     */
+    public static final String APF_HANDLE_MDNS_ADVERTISING_OFFLOAD_VERSION =
+            "apf_handle_mdns_advertising_offload_version";
+
     /**** BEGIN Feature Kill Switch Flags ****/
 
     /**
