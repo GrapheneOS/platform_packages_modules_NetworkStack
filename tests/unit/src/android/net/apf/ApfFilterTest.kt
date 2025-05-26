@@ -93,6 +93,7 @@ import android.system.OsConstants.SOCK_STREAM
 import android.util.Log
 import androidx.test.filters.SmallTest
 import com.android.internal.annotations.GuardedBy
+import com.android.modules.utils.build.SdkLevel
 import com.android.net.module.util.HexDump
 import com.android.net.module.util.InterfaceParams
 import com.android.net.module.util.NetworkStackConstants.ARP_ETHER_IPV4_LEN
@@ -109,7 +110,6 @@ import com.android.networkstack.metrics.NetworkQuirkMetrics
 import com.android.networkstack.packets.NeighborAdvertisement
 import com.android.networkstack.packets.NeighborSolicitation
 import com.android.networkstack.util.NetworkStackUtils
-import com.android.networkstack.util.NetworkStackUtils.isAtLeast25Q2
 import com.android.testutils.DevSdkIgnoreRule
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo
 import com.android.testutils.DevSdkIgnoreRunner
@@ -833,7 +833,7 @@ class ApfFilterTest {
                 apfFilter.mApfVersionSupported,
                 program,
                 HexDump.hexStringToByteArray(nonDhcpBcastPkt),
-                if (isAtLeast25Q2()) DROPPED_ETHER_OUR_SRC_MAC else PASSED_ETHER_OUR_SRC_MAC
+                if (SdkLevel.isAtLeastB()) DROPPED_ETHER_OUR_SRC_MAC else PASSED_ETHER_OUR_SRC_MAC
         )
     }
 

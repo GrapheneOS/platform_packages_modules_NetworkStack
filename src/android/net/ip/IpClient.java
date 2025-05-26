@@ -103,7 +103,6 @@ import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_POPULATE_
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_REPLACE_NETD_WITH_NETLINK_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.createInet6AddressFromEui64;
-import static com.android.networkstack.util.NetworkStackUtils.isAtLeast25Q2;
 import static com.android.networkstack.util.NetworkStackUtils.macAddressToEui64;
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
@@ -130,6 +129,7 @@ import android.net.RouteInfo;
 import android.net.TcpKeepalivePacketDataParcelable;
 import android.net.Uri;
 import android.net.apf.ApfCapabilities;
+import android.net.apf.ApfCounterTracker;
 import android.net.apf.ApfFilter;
 import android.net.dhcp.DhcpClient;
 import android.net.dhcp.DhcpPacket;
@@ -163,6 +163,7 @@ import android.text.TextUtils;
 import android.text.format.DateUtils;
 import android.util.LocalLog;
 import android.util.Log;
+import android.util.Pair;
 import android.util.SparseArray;
 
 import androidx.annotation.NonNull;
@@ -644,6 +645,28 @@ public class IpClient extends StateMachine {
         static final int CMD_JUMP_STOPPING_TO_STOPPED = 102;
     }
 
+    /**
+     * The ApfShellCommands constant values.
+     *
+     * @hide
+     */
+    public static class ApfShellCommands {
+        private ApfShellCommands() {
+        }
+
+        static final String CMD_READ_APF_DATA = "read";
+        static final String CMD_GET_APF_FILTER_STATUS = "status";
+        static final String CMD_PAUSE_APF_FILTER = "pause";
+        static final String CMD_RESUME_APF_FILTER = "resume";
+        static final String CMD_INSTALL_APF_PROGRAM = "install";
+        static final String CMD_GET_APF_CAPABILITIES = "capabilities";
+        static final String CMD_DUMP_APF_COUNTERS = "dump-counters";
+
+        static boolean shouldUpdateDataSnapshot(final String cmd) {
+            return cmd.equals(CMD_READ_APF_DATA) || cmd.equals(CMD_DUMP_APF_COUNTERS);
+        }
+    }
+
     private static final int ARG_LINKPROP_CHANGED_LINKSTATE_DOWN = 0;
     private static final int ARG_LINKPROP_CHANGED_LINKSTATE_UP = 1;
 
@@ -1118,26 +1141,27 @@ public class IpClient extends StateMachine {
                 mContext, APF_HANDLE_ND_OFFLOAD);
         // TODO: turn on APF mDNS offload on handhelds.
         mIsTvDevice = context.getPackageManager().hasSystemFeature(FEATURE_LEANBACK);
-        mApfHandleMdnsOffload = isAtLeast25Q2() && (mIsTvDevice || mDependencies.isFeatureEnabled(
-                context, APF_HANDLE_MDNS_ADVERTISING_OFFLOAD_VERSION));
+        mApfHandleMdnsOffload =
+                SdkLevel.isAtLeastB() && (mIsTvDevice || mDependencies.isFeatureEnabled(context,
+                        APF_HANDLE_MDNS_ADVERTISING_OFFLOAD_VERSION));
         mApfHandleIgmpOffload =
                 mDependencies.isFeatureNotChickenedOut(mContext, APF_HANDLE_IGMP_OFFLOAD)
-                    && (isAtLeast25Q2()
+                    && (SdkLevel.isAtLeastB()
                         || mDependencies.isFeatureEnabled(context, APF_HANDLE_IGMP_OFFLOAD_VERSION)
                     );
         mApfHandleMldOffload =
                 mDependencies.isFeatureNotChickenedOut(mContext, APF_HANDLE_MLD_OFFLOAD)
-                    && (isAtLeast25Q2()
+                    && (SdkLevel.isAtLeastB()
                         || mDependencies.isFeatureEnabled(context, APF_HANDLE_MLD_OFFLOAD_VERSION)
                     );
         mApfHandleIpv4PingOffload =
                 mDependencies.isFeatureNotChickenedOut(mContext, APF_HANDLE_PING4_OFFLOAD)
-                    && (isAtLeast25Q2()
+                    && (SdkLevel.isAtLeastB()
                         || mDependencies.isFeatureEnabled(context, APF_HANDLE_PING4_OFFLOAD_VERSION)
                     );
         mApfHandleIpv6PingOffload =
                 mDependencies.isFeatureNotChickenedOut(mContext, APF_HANDLE_PING6_OFFLOAD)
-                    && (isAtLeast25Q2()
+                    && (SdkLevel.isAtLeastB()
                         || mDependencies.isFeatureEnabled(context, APF_HANDLE_PING6_OFFLOAD_VERSION)
                 );
         mPopulateLinkAddressLifetime = mDependencies.isFeatureEnabled(context,
@@ -1636,7 +1660,7 @@ public class IpClient extends StateMachine {
 
         // Waiting for a "read" result cannot block the handler thread, since the result gets
         // processed on it. This is test only code, so mApfFilter going away is not a concern.
-        if (cmd.equals("read")) {
+        if (ApfShellCommands.shouldUpdateDataSnapshot(cmd)) {
             if (mApfFilter == null) {
                 throw new IllegalStateException("Error: No active APF filter");
             }
@@ -1657,18 +1681,18 @@ public class IpClient extends StateMachine {
                     throw new IllegalStateException("No active APF filter.");
                 }
                 switch (cmd) {
-                    case "status":
+                    case ApfShellCommands.CMD_GET_APF_FILTER_STATUS:
                         result.complete(mApfFilter.isRunning() ? "running" : "paused");
                         break;
-                    case "pause":
+                    case ApfShellCommands.CMD_PAUSE_APF_FILTER:
                         mApfFilter.pause();
                         result.complete("success");
                         break;
-                    case "resume":
+                    case ApfShellCommands.CMD_RESUME_APF_FILTER:
                         mApfFilter.resume();
                         result.complete("success");
                         break;
-                    case "install":
+                    case ApfShellCommands.CMD_INSTALL_APF_PROGRAM:
                         Objects.requireNonNull(optarg, "No program provided");
                         if (mApfFilter.isRunning()) {
                             throw new IllegalStateException("APF filter must first be paused");
@@ -1677,17 +1701,34 @@ public class IpClient extends StateMachine {
                                 HexDump.hexStringToByteArray(optarg), "program from shell command");
                         result.complete("success");
                         break;
-                    case "capabilities":
+                    case ApfShellCommands.CMD_GET_APF_CAPABILITIES:
                         final StringJoiner joiner = new StringJoiner(",");
                         joiner.add(Integer.toString(mCurrentApfCapabilities.apfVersionSupported));
                         joiner.add(Integer.toString(mCurrentApfCapabilities.maximumApfProgramSize));
                         joiner.add(Integer.toString(mCurrentApfCapabilities.apfPacketFormat));
                         result.complete(joiner.toString());
                         break;
-                    case "read":
+                    case ApfShellCommands.CMD_READ_APF_DATA:
                         final String snapshot = mApfFilter.getDataSnapshotHexString();
                         Objects.requireNonNull(snapshot, "No data snapshot recorded.");
                         result.complete(snapshot);
+                        break;
+                    case ApfShellCommands.CMD_DUMP_APF_COUNTERS:
+                        final List<Pair<ApfCounterTracker.Counter, String>> counters =
+                                mApfFilter.dumpCounters();
+                        if (counters == null || counters.isEmpty()) {
+                            result.complete("No counter available.");
+                            break;
+                        }
+
+                        final StringBuilder sb = new StringBuilder();
+                        for (Pair<ApfCounterTracker.Counter, String> entry: counters) {
+                            sb.append(entry.first.name())
+                                    .append(": ")
+                                    .append(entry.second)
+                                    .append("\n");
+                        }
+                        result.complete(sb.toString());
                         break;
                     default:
                         throw new IllegalArgumentException("Invalid apf command: " + cmd);
@@ -2808,7 +2849,7 @@ public class IpClient extends StateMachine {
     @Nullable
     private ApfFilter maybeCreateApfFilter(final ApfCapabilities apfCaps) {
         ApfFilter.ApfConfiguration apfConfig = new ApfFilter.ApfConfiguration();
-        if (apfCaps == null || !mEnableApf) {
+        if (!isApfSupported(apfCaps) || !mEnableApf) {
             return null;
         }
         // For now only support generating programs for Ethernet frames. If this restriction is
