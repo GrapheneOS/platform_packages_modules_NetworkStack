@@ -2849,7 +2849,7 @@ public class IpClient extends StateMachine {
     @Nullable
     private ApfFilter maybeCreateApfFilter(final ApfCapabilities apfCaps) {
         ApfFilter.ApfConfiguration apfConfig = new ApfFilter.ApfConfiguration();
-        if (apfCaps == null || !mEnableApf) {
+        if (!isApfSupported(apfCaps) || !mEnableApf) {
             return null;
         }
         // For now only support generating programs for Ethernet frames. If this restriction is
