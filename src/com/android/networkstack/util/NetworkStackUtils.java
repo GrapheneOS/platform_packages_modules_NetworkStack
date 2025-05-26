@@ -18,7 +18,6 @@ package com.android.networkstack.util;
 
 import static android.net.apf.ApfConstants.IPV6_SOLICITED_NODES_PREFIX;
 import static android.os.Build.VERSION.CODENAME;
-import static android.os.Build.VERSION.SDK_INT;
 import static android.system.OsConstants.IFA_F_DEPRECATED;
 import static android.system.OsConstants.IFA_F_TENTATIVE;
 
@@ -30,7 +29,6 @@ import android.net.MacAddress;
 import android.system.ErrnoException;
 import android.util.Log;
 
-import androidx.annotation.ChecksSdkIntAtLeast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
@@ -473,12 +471,6 @@ public class NetworkStackUtils {
             Log.e(TAG, "Invalid IPv6 address " + HexDump.toHexString(address), e);
             return null;
         }
-    }
-
-    /** Checks if the device is running on a release version of Android Baklava or newer */
-    @ChecksSdkIntAtLeast(api = 36 /* BUILD_VERSION_CODES.Baklava */)
-    public static boolean isAtLeast25Q2() {
-        return SDK_INT >= 36 || (SDK_INT == 35 && isAtLeastPreReleaseCodename("Baklava"));
     }
 
     private static boolean isAtLeastPreReleaseCodename(@NonNull String codename) {

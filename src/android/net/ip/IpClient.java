@@ -103,7 +103,6 @@ import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_POPULATE_
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_REPLACE_NETD_WITH_NETLINK_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.createInet6AddressFromEui64;
-import static com.android.networkstack.util.NetworkStackUtils.isAtLeast25Q2;
 import static com.android.networkstack.util.NetworkStackUtils.macAddressToEui64;
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
@@ -1118,26 +1117,27 @@ public class IpClient extends StateMachine {
                 mContext, APF_HANDLE_ND_OFFLOAD);
         // TODO: turn on APF mDNS offload on handhelds.
         mIsTvDevice = context.getPackageManager().hasSystemFeature(FEATURE_LEANBACK);
-        mApfHandleMdnsOffload = isAtLeast25Q2() && (mIsTvDevice || mDependencies.isFeatureEnabled(
-                context, APF_HANDLE_MDNS_ADVERTISING_OFFLOAD_VERSION));
+        mApfHandleMdnsOffload =
+                SdkLevel.isAtLeastB() && (mIsTvDevice || mDependencies.isFeatureEnabled(context,
+                        APF_HANDLE_MDNS_ADVERTISING_OFFLOAD_VERSION));
         mApfHandleIgmpOffload =
                 mDependencies.isFeatureNotChickenedOut(mContext, APF_HANDLE_IGMP_OFFLOAD)
-                    && (isAtLeast25Q2()
+                    && (SdkLevel.isAtLeastB()
                         || mDependencies.isFeatureEnabled(context, APF_HANDLE_IGMP_OFFLOAD_VERSION)
                     );
         mApfHandleMldOffload =
                 mDependencies.isFeatureNotChickenedOut(mContext, APF_HANDLE_MLD_OFFLOAD)
-                    && (isAtLeast25Q2()
+                    && (SdkLevel.isAtLeastB()
                         || mDependencies.isFeatureEnabled(context, APF_HANDLE_MLD_OFFLOAD_VERSION)
                     );
         mApfHandleIpv4PingOffload =
                 mDependencies.isFeatureNotChickenedOut(mContext, APF_HANDLE_PING4_OFFLOAD)
-                    && (isAtLeast25Q2()
+                    && (SdkLevel.isAtLeastB()
                         || mDependencies.isFeatureEnabled(context, APF_HANDLE_PING4_OFFLOAD_VERSION)
                     );
         mApfHandleIpv6PingOffload =
                 mDependencies.isFeatureNotChickenedOut(mContext, APF_HANDLE_PING6_OFFLOAD)
-                    && (isAtLeast25Q2()
+                    && (SdkLevel.isAtLeastB()
                         || mDependencies.isFeatureEnabled(context, APF_HANDLE_PING6_OFFLOAD_VERSION)
                 );
         mPopulateLinkAddressLifetime = mDependencies.isFeatureEnabled(context,

@@ -3574,7 +3574,7 @@ public class ApfFilter {
         //   pass
         // insert IPv6 filter to drop, pass, or fall off the end for ICMPv6 packets
 
-        if (NetworkStackUtils.isAtLeast25Q2()) {
+        if (SdkLevel.isAtLeastB()) {
             gen.addCountAndDropIfBytesAtOffsetEqual(ETHER_SRC_ADDR_OFFSET, mHardwareAddress,
                     DROPPED_ETHER_OUR_SRC_MAC);
         } else {
