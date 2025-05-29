@@ -2919,6 +2919,11 @@ public class IpClient extends StateMachine {
         apfConfig.handleIpv6PingOffload = mApfHandleIpv6PingOffload && apfConfig.apfRamSize >= 3000;
         apfConfig.minMetricsSessionDurationMs = mApfCounterPollingIntervalMs;
         apfConfig.hasClatInterface = mHasSeenClatInterface;
+        // Report APF version and RAM size upon creation. only reporting the metrics when
+        // IpClient stops is problematic for devices like TVs that remain connected to Wi-Fi all
+        // days.
+        NetworkStackStatsLog.write(NetworkStackStatsLog.APF_SESSION_INFO_REPORTED,
+                apfConfig.apfVersionSupported, apfConfig.apfRamSize);
         return mDependencies.maybeCreateApfFilter(getHandler(), mContext, apfConfig,
                 mInterfaceParams, mIpClientApfController, mNetworkQuirkMetrics);
     }
