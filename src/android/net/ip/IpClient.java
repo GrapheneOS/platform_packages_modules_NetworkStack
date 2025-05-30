@@ -157,6 +157,7 @@ import android.os.UserHandle;
 import android.stats.connectivity.DisconnectCode;
 import android.stats.connectivity.NetworkQuirkEvent;
 import android.stats.connectivity.NudEventType;
+import android.stats.connectivity.TransportType;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.text.TextUtils;
@@ -3330,11 +3331,22 @@ public class IpClient extends StateMachine {
         }
     }
 
+    private TransportType guessTransportType(@NonNull String interfaceName) {
+        if (interfaceName.startsWith("wlan")) {
+            return TransportType.TT_WIFI;
+        }
+        if (interfaceName.startsWith("usb") || interfaceName.startsWith("eth")) {
+            return TransportType.TT_ETHERNET;
+        }
+        return TransportType.TT_UNKNOWN;
+    }
+
     class StartedState extends State {
         @Override
         public void enter() {
             mIpProvisioningMetrics.reset();
             mStartTimeMillis = SystemClock.elapsedRealtime();
+            mIpProvisioningMetrics.setTransportType(guessTransportType(mInterfaceName));
 
             if (mConfiguration.mProvisioningTimeoutMs > 0) {
                 final long alarmTime = SystemClock.elapsedRealtime()
