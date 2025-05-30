@@ -3331,7 +3331,7 @@ public class IpClient extends StateMachine {
         }
     }
 
-    private TransportType guessTransportType(@NonNull String interfaceName) {
+    private static TransportType guessTransportType(@NonNull String interfaceName) {
         if (interfaceName.startsWith("wlan")) {
             return TransportType.TT_WIFI;
         }
@@ -3345,8 +3345,8 @@ public class IpClient extends StateMachine {
         @Override
         public void enter() {
             mIpProvisioningMetrics.reset();
-            mStartTimeMillis = SystemClock.elapsedRealtime();
             mIpProvisioningMetrics.setTransportType(guessTransportType(mInterfaceName));
+            mStartTimeMillis = SystemClock.elapsedRealtime();
 
             if (mConfiguration.mProvisioningTimeoutMs > 0) {
                 final long alarmTime = SystemClock.elapsedRealtime()
