@@ -482,6 +482,10 @@ android_app {
         "privapp_whitelist_com.android.networkstack",
     ],
     updatable: true,
+    licenses: [
+        "Android-Apache-2.0",
+        "opensourcerequest",
+    ],
 }
 
 cc_library_shared {

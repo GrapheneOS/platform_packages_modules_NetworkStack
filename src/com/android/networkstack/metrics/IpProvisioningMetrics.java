@@ -24,6 +24,7 @@ import android.stats.connectivity.DhcpFeature;
 import android.stats.connectivity.DisconnectCode;
 import android.stats.connectivity.HostnameTransResult;
 import android.stats.connectivity.Ipv6ProvisioningMode;
+import android.stats.connectivity.TransportType;
 
 import com.android.net.module.util.ConnectivityUtils;
 
@@ -65,9 +66,10 @@ public class IpProvisioningMetrics {
 
     /**
      * Write the TransportType into mStatsBuilder.
-     * TODO: implement this
      */
-    public void setTransportType() {}
+    public void setTransportType(TransportType transportType) {
+        mStatsBuilder.setTransportType(transportType);
+    }
 
     /**
      * Write the IPv4Provisioned latency into mStatsBuilder.
