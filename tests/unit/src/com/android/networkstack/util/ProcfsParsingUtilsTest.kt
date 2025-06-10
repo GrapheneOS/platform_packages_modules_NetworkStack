@@ -200,19 +200,28 @@ class ProcfsParsingUtilsTest {
         assertEquals(
             expectedResult,
             ProcfsParsingUtils.parseIPv4MulticastAddresses(
-                inputString, "wlan0", order)
+                inputString,
+                "wlan0",
+                order
+            )
         )
 
         assertEquals(
             emptyList<Inet4Address>(),
             ProcfsParsingUtils.parseIPv4MulticastAddresses(
-                inputString, "eth0", order)
+                inputString,
+                "eth0",
+                order
+            )
         )
 
         assertEquals(
             emptyList<Inet4Address>(),
             ProcfsParsingUtils.parseIPv4MulticastAddresses(
-                emptyList<String>(), "eth0", order)
+                emptyList<String>(),
+                "eth0",
+                order
+            )
         )
     }
 
@@ -250,19 +259,28 @@ class ProcfsParsingUtilsTest {
         assertEquals(
             expectedResult,
             ProcfsParsingUtils.parseIPv4MulticastAddresses(
-                inputString, "wlan0", order)
+                inputString,
+                "wlan0",
+                order
+            )
         )
 
         assertEquals(
             emptyList<Inet4Address>(),
             ProcfsParsingUtils.parseIPv4MulticastAddresses(
-                inputString, "eth0", order)
+                inputString,
+                "eth0",
+                order
+            )
         )
 
         assertEquals(
             emptyList<Inet4Address>(),
             ProcfsParsingUtils.parseIPv4MulticastAddresses(
-                emptyList<String>(), "eth0", order)
+                emptyList<String>(),
+                "eth0",
+                order
+            )
         )
     }
 
@@ -295,19 +313,41 @@ class ProcfsParsingUtilsTest {
         assertEquals(
             expectedResult,
             ProcfsParsingUtils.parseIPv4MulticastAddresses(
-                inputString, "wlan0", order)
+                inputString,
+                "wlan0",
+                order
+            )
         )
 
         assertEquals(
             emptyList<Inet4Address>(),
             ProcfsParsingUtils.parseIPv4MulticastAddresses(
-                inputString, "eth0", order)
+                inputString,
+                "eth0",
+                order
+            )
         )
 
         assertEquals(
             emptyList<Inet4Address>(),
             ProcfsParsingUtils.parseIPv4MulticastAddresses(
-                emptyList<String>(), "eth0", order)
+                emptyList<String>(),
+                "eth0",
+                order
+            )
+        )
+    }
+
+    @Test
+    fun testParseInterfaceMtu() {
+        assertEquals(
+            1500,
+            ProcfsParsingUtils.parseInterfaceMtu(listOf("1500"))
+        )
+
+        assertEquals(
+            ProcfsParsingUtils.DEFAULT_MTU,
+            ProcfsParsingUtils.parseInterfaceMtu(emptyList<String>())
         )
     }
 }
