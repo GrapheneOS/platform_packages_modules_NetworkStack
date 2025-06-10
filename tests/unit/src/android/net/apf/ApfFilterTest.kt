@@ -5906,7 +5906,7 @@ class ApfFilterTest {
     @Test
     fun testRaFilterSizeEstimation() {
         val (overEstimatedProgramSize, _) = getProgramForRaSizeEstimation(apfRamSize = 8096)
-        val apfRam = overEstimatedProgramSize - 1
+        val apfRam = overEstimatedProgramSize - 1 + ApfCounterTracker.Counter.totalSize()
         val (_, program) = getProgramForRaSizeEstimation(apfRamSize = apfRam)
 
         val ra1 = """
