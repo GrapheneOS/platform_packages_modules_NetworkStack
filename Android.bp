@@ -428,6 +428,7 @@ java_defaults {
     jni_libs: [
         "libnativehelper_compat_libc++",
         "libnetworkstackutilsjni",
+        "libcom_android_networkstack_com_android_net_module_util_jni_CommonConnectivityJni",
     ],
     // Resources already included in NetworkStackBase
     resource_dirs: [],
@@ -522,6 +523,34 @@ cc_library_shared {
         "-Wall",
         "-Werror",
         "-Wno-unused-parameter",
+    ],
+}
+
+cc_library_shared {
+    name: "libcom_android_networkstack_com_android_net_module_util_jni_CommonConnectivityJni",
+    srcs: [
+        "jni/commonconnectivity/onload.cpp",
+    ],
+    header_libs: [
+        "jni_headers",
+    ],
+    sdk_version: "current",
+    min_sdk_version: "30",
+    shared_libs: [
+        "liblog",
+        "libnativehelper_compat_libc++",
+    ],
+    static_libs: [
+        "libcommonconnectivityjni",
+    ],
+    stl: "libc++_static",
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wno-unused-parameter",
+    ],
+    visibility: [
+        "//packages/modules/NetworkStack:__subpackages__",
     ],
 }
 
