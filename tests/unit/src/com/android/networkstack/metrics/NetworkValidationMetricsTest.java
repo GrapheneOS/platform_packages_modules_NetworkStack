@@ -169,7 +169,7 @@ public class NetworkValidationMetricsTest {
 
         final JSONObject info = new JSONObject(apiContent);
         final CaptivePortalDataShim captivePortalData = CaptivePortalDataShimImpl.isSupported()
-                ? CaptivePortalDataShimImpl.fromJson(info) : null;
+                ? CaptivePortalDataShimImpl.fromJson(info, s -> false) : null;
 
         // 1. PT_CAPPORT_API probe w CapportApiData info
         metrics.addProbeEvent(ProbeType.PT_CAPPORT_API, 1234, ProbeResult.PR_SUCCESS,
