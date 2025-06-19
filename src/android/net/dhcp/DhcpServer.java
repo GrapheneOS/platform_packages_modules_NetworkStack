@@ -420,6 +420,7 @@ public class DhcpServer extends StateMachine {
         public boolean processMessage(Message msg) {
             switch (msg.what) {
                 case CMD_START_DHCP_SERVER:
+                    mLog.i("Starting DHCP server!");
                     final Pair<INetworkStackStatusCallback, IDhcpEventCallbacks> obj =
                             (Pair<INetworkStackStatusCallback, IDhcpEventCallbacks>) msg.obj;
                     mStartedState.mOnStartCallback = obj.first;
@@ -479,6 +480,7 @@ public class DhcpServer extends StateMachine {
                     return HANDLED;
 
                 case CMD_STOP_DHCP_SERVER:
+                    mLog.i("Stopping DHCP server!");
                     mStoppedState.mOnStopCallback = (INetworkStackStatusCallback) msg.obj;
                     transitionTo(mStoppedState);
                     return HANDLED;
