@@ -2701,8 +2701,10 @@ public class IpClient extends StateMachine {
                         @Override
                         public void notifyLost(String logMsg, NudEventType type) {
                             maybeStoreNudFailureToDatabase(type);
+                            // TODO: only ignore the organic NUD failures.
                             if (mIgnoreNudFailure) {
                                 Counter.logIncrement("core_networking.value_nud_failure_ignored");
+                                mIpProvisioningMetrics.incrementIgnoredNudFailureCount();
                                 return;
                             }
                             final int version = mCallback.getInterfaceVersion();
@@ -3459,6 +3461,7 @@ public class IpClient extends StateMachine {
             mIpMemoryStore.retrieveNetworkEventCount(mCluster, sinceTimes,
                     NETWORK_EVENT_NUD_FAILURE_TYPES, mListener);
             Counter.logIncrement("core_networking.value_nud_failure_queried");
+            mIpProvisioningMetrics.incrementQueriedNudFailureCount();
         }
 
         @Override
