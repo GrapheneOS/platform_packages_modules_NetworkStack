@@ -181,4 +181,21 @@ public class NetworkIpProvisioningMetricsTest {
         assertEquals(Ipv6ProvisioningMode.IPV6_PROV_MODE_SLAAC, stats.getIpv6ProvisioningMode());
         assertEquals(DisconnectCode.DC_NORMAL_TERMINATION, stats.getDisconnectCode());
     }
+
+    @Test
+    public void testIpProvisioningMetrics_setNudFailureCount() throws Exception {
+        final IpProvisioningMetrics metrics = new IpProvisioningMetrics();
+        metrics.reset();
+
+        for (int i = 0; i < 50; i++) {
+            metrics.incrementIgnoredNudFailureCount();
+        }
+        for (int i = 0; i < 100; i++) {
+            metrics.incrementQueriedNudFailureCount();
+        }
+
+        final NetworkIpProvisioningReported stats = metrics.statsWrite();
+        assertEquals(50, stats.getIgnoreNudFailureCount());
+        assertEquals(100, stats.getQueryNudFailureCount());
+    }
 }
