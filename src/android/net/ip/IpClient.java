@@ -178,7 +178,6 @@ import com.android.internal.util.MessageUtils;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 import com.android.internal.util.WakeupMessage;
-import com.android.modules.expresslog.Counter;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.CollectionUtils;
 import com.android.net.module.util.ConnectivityUtils;
@@ -2703,7 +2702,6 @@ public class IpClient extends StateMachine {
                             maybeStoreNudFailureToDatabase(type);
                             // TODO: only ignore the organic NUD failures.
                             if (mIgnoreNudFailure) {
-                                Counter.logIncrement("core_networking.value_nud_failure_ignored");
                                 mIpProvisioningMetrics.incrementIgnoredNudFailureCount();
                                 return;
                             }
@@ -3460,7 +3458,6 @@ public class IpClient extends StateMachine {
             sinceTimes[2] = now - SIX_HOURS_IN_MS;
             mIpMemoryStore.retrieveNetworkEventCount(mCluster, sinceTimes,
                     NETWORK_EVENT_NUD_FAILURE_TYPES, mListener);
-            Counter.logIncrement("core_networking.value_nud_failure_queried");
             mIpProvisioningMetrics.incrementQueriedNudFailureCount();
         }
 
