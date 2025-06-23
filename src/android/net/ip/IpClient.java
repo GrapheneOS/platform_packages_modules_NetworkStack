@@ -957,8 +957,9 @@ public class IpClient extends StateMachine {
          * Get a Dhcp6Client instance.
          */
         public Dhcp6Client makeDhcp6Client(Context context, StateMachine controller,
-                InterfaceParams ifParams, Dhcp6Client.Dependencies deps) {
-            return Dhcp6Client.makeDhcp6Client(context, controller, ifParams, deps);
+                InterfaceParams ifParams, Dhcp6PacketDispatcher dispatcher,
+                Dhcp6Client.Dependencies deps) {
+            return Dhcp6Client.makeDhcp6Client(context, controller, ifParams, dispatcher, deps);
         }
 
         /**
@@ -2627,8 +2628,9 @@ public class IpClient extends StateMachine {
     /** Creates Dhcp6Client and starts DHCPv6-PD. It is safe to call this function multiple times */
     private void startDhcp6PrefixDelegation() {
         if (mDhcp6Client == null) {
-            mDhcp6Client = mDependencies.makeDhcp6Client(mContext, IpClient.this,
-                    mInterfaceParams, mDependencies.getDhcp6ClientDependencies());
+            mDhcp6Client = mDependencies.makeDhcp6Client(mContext,
+                    IpClient.this, mInterfaceParams, mDhcp6PacketDispatcher,
+                    mDependencies.getDhcp6ClientDependencies());
         }
         mDhcp6Client.sendMessage(Dhcp6Client.CMD_START_DHCP6);
     }

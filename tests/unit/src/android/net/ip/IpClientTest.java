@@ -236,7 +236,8 @@ public class IpClientTest {
         when(mDependencies.makeIpClientNetlinkMonitor(
                 any(), any(), any(), anyInt(), anyBoolean(), any())).thenReturn(mNetlinkMonitor);
         when(mNetlinkMonitor.start()).thenReturn(true);
-        when(mDependencies.makeDhcp6Client(any(), any(), any(), any())).thenReturn(mDhcp6Client);
+        when(mDependencies.makeDhcp6Client(any(), any(), any(), any(), any()))
+                .thenReturn(mDhcp6Client);
         when(mDependencies.getNetworkQuirkMetrics()).thenReturn(mQuirkMetrics);
         doReturn(mPackageManager).when(mContext).getPackageManager();
         doReturn(true).when(mDependencies).isFeatureNotChickenedOut(mContext, APF_ENABLE);
@@ -1371,7 +1372,7 @@ public class IpClientTest {
         final IpPrefix prefix = new IpPrefix("2001:db8:1:2::/64");
         onNewPrefix(prefix, TEST_PIO_FLAGS_P_SET, 0 /* preferred */, 1500 /* valid */);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies, never()).makeDhcp6Client(any(), any(), any(), any());
+        verify(mDependencies, never()).makeDhcp6Client(any(), any(), any(), any(), any());
         verifyPrefixLifetimeAlarmNeverSet(handler);
 
         ipc.shutdown();
@@ -1399,7 +1400,7 @@ public class IpClientTest {
         final IpPrefix prefix = new IpPrefix("2001:db8:1:2::/64");
         onNewPrefix(prefix, TEST_PIO_FLAGS_P_SET, 1000 /* preferred */, 1500 /* valid */);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies).makeDhcp6Client(any(), any(), any(), any());
+        verify(mDependencies).makeDhcp6Client(any(), any(), any(), any(), any());
         verifyPrefixLifetimeAlarmSet(1000, handler);
 
         clearInvocations(mDependencies);
@@ -1407,7 +1408,7 @@ public class IpClientTest {
         // Trigger PIO update with the same preifx with a new non-zero preferred lifetime.
         onNewPrefix(prefix, TEST_PIO_FLAGS_P_SET, 2000 /* preferred */, 2500 /* valid */);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies, never()).makeDhcp6Client(any(), any(), any(), any());
+        verify(mDependencies, never()).makeDhcp6Client(any(), any(), any(), any(), any());
         verifyPrefixLifetimeAlarmSet(2000, handler);
 
         ipc.shutdown();
@@ -1422,7 +1423,7 @@ public class IpClientTest {
         final IpPrefix prefix = new IpPrefix("2001:db8:1:2::/64");
         onNewPrefix(prefix, TEST_PIO_FLAGS_P_SET, 1000 /* preferred */, 1500 /* valid */);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies).makeDhcp6Client(any(), any(), any(), any());
+        verify(mDependencies).makeDhcp6Client(any(), any(), any(), any(), any());
         verifyPrefixLifetimeAlarmSet(1000, handler);
 
         clearInvocations(mDependencies);
@@ -1432,7 +1433,7 @@ public class IpClientTest {
         // happen.
         onNewPrefix(prefix, TEST_PIO_FLAGS_P_SET, 0 /* preferred */, 2500 /* valid */);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies, never()).makeDhcp6Client(any(), any(), any(), any());
+        verify(mDependencies, never()).makeDhcp6Client(any(), any(), any(), any(), any());
 
         ipc.shutdown();
     }
@@ -1446,7 +1447,7 @@ public class IpClientTest {
         final IpPrefix prefix = new IpPrefix("2001:db8:1:2::/64");
         onNewPrefix(prefix, TEST_PIO_FLAGS_P_SET, 1000 /* preferred */, 1500 /* valid */);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies).makeDhcp6Client(any(), any(), any(), any());
+        verify(mDependencies).makeDhcp6Client(any(), any(), any(), any(), any());
         verifyPrefixLifetimeAlarmSet(1000, handler);
 
         clearInvocations(mDependencies);
@@ -1456,7 +1457,7 @@ public class IpClientTest {
         // happen.
         onNewPrefix(prefix, TEST_PIO_FLAGS_P_UNSET, 2000 /* preferred */, 2500 /* valid */);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies, never()).makeDhcp6Client(any(), any(), any(), any());
+        verify(mDependencies, never()).makeDhcp6Client(any(), any(), any(), any(), any());
 
         ipc.shutdown();
     }
@@ -1469,7 +1470,7 @@ public class IpClientTest {
         final IpPrefix prefix1 = new IpPrefix("2001:db8:1:2::/64");
         onNewPrefix(prefix1, TEST_PIO_FLAGS_P_SET, 1000 /* preferred */, 1500 /* valid */);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies).makeDhcp6Client(any(), any(), any(), any());
+        verify(mDependencies).makeDhcp6Client(any(), any(), any(), any(), any());
         verifyPrefixLifetimeAlarmSet(1000, handler);
 
         clearInvocations(mDependencies);
@@ -1479,7 +1480,7 @@ public class IpClientTest {
         final IpPrefix prefix2 = new IpPrefix("2002:db8:1:2::/64");
         onNewPrefix(prefix2, TEST_PIO_FLAGS_P_SET, 500 /* preferred */, 750 /* valid */);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies, never()).makeDhcp6Client(any(), any(), any(), any());
+        verify(mDependencies, never()).makeDhcp6Client(any(), any(), any(), any(), any());
         verifyPrefixLifetimeAlarmSet(500, handler);
 
         clearInvocations(mAlarm);
@@ -1526,7 +1527,7 @@ public class IpClientTest {
         final IpPrefix prefix1 = new IpPrefix("2001:db8:1:2::/64");
         onNewPrefix(prefix1, TEST_PIO_FLAGS_P_SET, 5 /* preferred */, 10 /* valid */);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies).makeDhcp6Client(any(), any(), any(), any());
+        verify(mDependencies).makeDhcp6Client(any(), any(), any(), any(), any());
         final OnAlarmListener alarm = verifyPrefixLifetimeAlarmSet(5, handler);
 
         clearInvocations(mDependencies);
@@ -1549,7 +1550,7 @@ public class IpClientTest {
         final IpPrefix prefix2 = new IpPrefix("2002:db8:1:2::/64");
         onNewPrefix(prefix2, TEST_PIO_FLAGS_P_SET, 500 /* preferred */, 750 /* valid */);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies).makeDhcp6Client(any(), any(), any(), any());
+        verify(mDependencies).makeDhcp6Client(any(), any(), any(), any(), any());
         verifyPrefixLifetimeAlarmSet(500, handler);
 
         ipc.shutdown();
@@ -1563,7 +1564,7 @@ public class IpClientTest {
         final IpPrefix prefix1 = new IpPrefix("2001:db8:1:2::/64");
         onNewPrefix(prefix1, TEST_PIO_FLAGS_P_SET, 10 /* preferred */, 20 /* valid */);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies).makeDhcp6Client(any(), any(), any(), any());
+        verify(mDependencies).makeDhcp6Client(any(), any(), any(), any(), any());
         final OnAlarmListener alarm = verifyPrefixLifetimeAlarmSet(10, handler);
 
         clearInvocations(mDependencies);
@@ -1571,7 +1572,7 @@ public class IpClientTest {
         final IpPrefix prefix2 = new IpPrefix("2002:db8:1:2::/64");
         onNewPrefix(prefix2, TEST_PIO_FLAGS_P_SET, 5 /* preferred */, 10 /* valid */);
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies, never()).makeDhcp6Client(any(), any(), any(), any());
+        verify(mDependencies, never()).makeDhcp6Client(any(), any(), any(), any(), any());
         verifyPrefixLifetimeAlarmSet(5, handler);
 
         clearInvocations(mAlarm);
@@ -1601,7 +1602,7 @@ public class IpClientTest {
         onNewPrefix(prefix, TEST_PIO_FLAGS_P_UNSET, 100 /* preferred */, 200 /* valid */);
 
         HandlerUtils.waitForIdle(ipc.getHandler(), TEST_TIMEOUT_MS);
-        verify(mDependencies, times(1)).makeDhcp6Client(any(), any(), any(), any());
+        verify(mDependencies, times(1)).makeDhcp6Client(any(), any(), any(), any(), any());
 
         ipc.shutdown();
     }
