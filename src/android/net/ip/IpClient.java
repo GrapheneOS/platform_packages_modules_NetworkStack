@@ -134,6 +134,7 @@ import android.net.apf.ApfFilter;
 import android.net.dhcp.DhcpClient;
 import android.net.dhcp.DhcpPacket;
 import android.net.dhcp6.Dhcp6Client;
+import android.net.dhcp6.Dhcp6PacketDispatcher;
 import android.net.ipmemorystore.OnNetworkEventCountRetrievedListener;
 import android.net.ipmemorystore.Status;
 import android.net.metrics.IpConnectivityLog;
@@ -842,6 +843,7 @@ public class IpClient extends StateMachine {
     private final Set<IpPrefix> mDelegatedPrefixes = new HashSet<>();
     @Nullable
     private final DevicePolicyManager mDevicePolicyManager;
+    private final Dhcp6PacketDispatcher mDhcp6PacketDispatcher;
 
     // Ignore any nonzero RA section with lifetime below this value.
     private final int mAcceptRaMinLft;
@@ -1123,6 +1125,7 @@ public class IpClient extends StateMachine {
         // InterfaceController.Dependencies class.
         mNetd = deps.getNetd(mContext);
         mInterfaceCtrl = new InterfaceController(mInterfaceName, mNetd, mLog);
+        mDhcp6PacketDispatcher = new Dhcp6PacketDispatcher(getHandler(), ifName);
 
         mAcceptRaMinLft = mDependencies.getDeviceConfigPropertyInt(CONFIG_ACCEPT_RA_MIN_LFT,
                 DEFAULT_ACCEPT_RA_MIN_LFT);
@@ -3521,6 +3524,10 @@ public class IpClient extends StateMachine {
             mPacketTracker = createPacketTracker();
             if (mPacketTracker != null) mPacketTracker.start(mConfiguration.mDisplayName);
 
+            if (!mDhcp6PacketDispatcher.start()) {
+                Log.e(TAG, "Failed to start DHCPv6 packet dispatcher");
+            }
+
             if (isIpv6Enabled() && !startIPv6(1 /* acceptRaDefrtr */)) {
                 doImmediateProvisioningFailure(IpManagerEvent.ERROR_STARTING_IPV6);
                 enqueueJumpToStoppingState(DisconnectCode.DC_ERROR_STARTING_IPV6);
@@ -3573,6 +3580,7 @@ public class IpClient extends StateMachine {
                 mApfFilter = null;
             }
 
+            mDhcp6PacketDispatcher.stop();
             resetLinkProperties();
 
             removeMessages(CMD_UPDATE_APF_DATA_SNAPSHOT);
