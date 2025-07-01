@@ -5318,10 +5318,22 @@ public abstract class IpClientIntegrationTestCommon {
         fail("No DHCPv6 packet received on interface within timeout");
     }
 
+    private static boolean hasIpv6LinkLocalAddress(final LinkProperties lp) {
+        for (LinkAddress address : lp.getLinkAddresses()) {
+            if (address.isIpv6() && address.getAddress().isLinkLocalAddress()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void prepareDhcp6PdTest() throws Exception {
         final String dnsServer = "2001:4860:4860::64";
         final ByteBuffer rdnss = buildRdnssOption(3600, dnsServer);
-        final ByteBuffer ra = buildRaPacket(rdnss);
+        final ByteBuffer pio = buildPioOption(3600 /* valid */, 1800 /* preferred */,
+                (byte) PIO_FLAG_ON_LINK, TEST_IPV6_PREFIX);
+        final ByteBuffer slla = buildSllaOption();
+        final ByteBuffer ra = buildRaPacket(pio, rdnss, slla);
 
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIPv4()
@@ -5329,6 +5341,12 @@ public abstract class IpClientIntegrationTestCommon {
         startIpClientProvisioning(config);
 
         waitForRouterSolicitation();
+
+        // Waiting for the IPv6 link-local address to appear, which ensures that the IPv6 stack
+        // is enabled and can process Router Advertisements.
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(argThat(
+                x -> hasIpv6LinkLocalAddress(x)
+        ));
         mPacketReader.sendResponse(ra);
     }
 
