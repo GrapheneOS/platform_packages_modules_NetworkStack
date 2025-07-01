@@ -17,27 +17,15 @@
 package android.net.dhcp6;
 
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
-import static android.system.OsConstants.AF_INET6;
-import static android.system.OsConstants.IPPROTO_UDP;
-import static android.system.OsConstants.SOCK_DGRAM;
-import static android.system.OsConstants.SOCK_NONBLOCK;
 
 import static com.android.net.module.util.dhcp6.Dhcp6Packet.IAID;
 import static com.android.net.module.util.dhcp6.Dhcp6Packet.PrefixDelegation;
-import static com.android.net.module.util.NetworkStackConstants.ALL_DHCP_RELAY_AGENTS_AND_SERVERS;
-import static com.android.net.module.util.NetworkStackConstants.DHCP6_CLIENT_PORT;
-import static com.android.net.module.util.NetworkStackConstants.DHCP6_SERVER_PORT;
-import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ANY;
 import static com.android.net.module.util.NetworkStackConstants.RFC7421_PREFIX_LENGTH;
 
 import android.content.Context;
 import android.net.ip.IpClient;
-import android.net.util.SocketUtils;
-import android.os.Handler;
 import android.os.Message;
 import android.os.SystemClock;
-import android.system.ErrnoException;
-import android.system.Os;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -49,15 +37,11 @@ import com.android.internal.util.StateMachine;
 import com.android.internal.util.WakeupMessage;
 import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.InterfaceParams;
-import com.android.net.module.util.PacketReader;
 import com.android.net.module.util.dhcp6.Dhcp6AdvertisePacket;
 import com.android.net.module.util.dhcp6.Dhcp6Packet;
 import com.android.net.module.util.dhcp6.Dhcp6ReplyPacket;
 import com.android.net.module.util.structs.IaPrefixOption;
 
-import java.io.FileDescriptor;
-import java.io.IOException;
-import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
@@ -131,7 +115,8 @@ public class Dhcp6Client extends StateMachine {
     @NonNull private final WakeupMessage mRebindAlarm;
     @NonNull private final WakeupMessage mExpiryAlarm;
     @NonNull private final InterfaceParams mIface;
-    @NonNull private final Dhcp6PacketHandler mDhcp6PacketHandler;
+    @NonNull private final Dhcp6PacketDispatcher mDhcp6PacketDispatcher;
+    @NonNull private final Dhcp6PacketDispatcher.MessageHandler mDhcp6MessageHandler;
     @NonNull private final byte[] mClientDuid;
 
     // States.
@@ -164,7 +149,8 @@ public class Dhcp6Client extends StateMachine {
     }
 
     private Dhcp6Client(@NonNull final Context context, @NonNull final StateMachine controller,
-            @NonNull final InterfaceParams iface, @NonNull final Dependencies deps) {
+            @NonNull final InterfaceParams iface, @NonNull final Dhcp6PacketDispatcher dispatcher,
+            @NonNull final Dependencies deps) {
         super(TAG, controller.getHandler());
 
         mDependencies = deps;
@@ -172,7 +158,11 @@ public class Dhcp6Client extends StateMachine {
         mController = controller;
         mIface = iface;
         mClientDuid = Dhcp6Packet.createClientDuid(iface.macAddr);
-        mDhcp6PacketHandler = new Dhcp6PacketHandler(getHandler());
+        mDhcp6PacketDispatcher = dispatcher;
+        // It is safe to process stale DHCPv6 messages because they contain a transaction ID.
+        // This ensures that even in the unlikely event of receiving an out-of-order message,
+        // it can be handled correctly.
+        mDhcp6MessageHandler = (packet, dst) -> sendMessage(CMD_RECEIVED_PACKET, packet);
 
         addState(mStoppedState);
         addState(mStartedState); {
@@ -202,8 +192,9 @@ public class Dhcp6Client extends StateMachine {
      */
     public static Dhcp6Client makeDhcp6Client(@NonNull final Context context,
             @NonNull final StateMachine controller, @NonNull final InterfaceParams ifParams,
+            @NonNull final Dhcp6PacketDispatcher dispatcher,
             @NonNull final Dependencies deps) {
-        final Dhcp6Client client = new Dhcp6Client(context, controller, ifParams, deps);
+        final Dhcp6Client client = new Dhcp6Client(context, controller, ifParams, dispatcher, deps);
         client.start();
         return client;
     }
@@ -477,17 +468,17 @@ public class Dhcp6Client extends StateMachine {
         @Override
         public void enter() {
             clearDhcp6State();
-            if (mDhcp6PacketHandler.start()) return;
-            Log.e(TAG, "Fail to start DHCPv6 Packet Handler");
-            // We cannot call transitionTo because a transition is still in progress.
-            // Instead, ensure that we process CMD_STOP_DHCP6 as soon as the transition is complete.
-            deferMessage(obtainMessage(CMD_STOP_DHCP6));
+            mDhcp6PacketDispatcher.registerHandler(
+                    mDhcp6MessageHandler,
+                    // register the expected DHCPv6 message types
+                    Dhcp6Packet.DHCP6_MESSAGE_TYPE_ADVERTISE,
+                    Dhcp6Packet.DHCP6_MESSAGE_TYPE_REPLY
+            );
         }
 
         @Override
         public void exit() {
-            mDhcp6PacketHandler.stop();
-            if (DBG) Log.d(TAG, "DHCPv6 Packet Handler stopped");
+            mDhcp6PacketDispatcher.unregisterHandler(mDhcp6MessageHandler);
             clearDhcp6State();
         }
 
@@ -792,60 +783,13 @@ public class Dhcp6Client extends StateMachine {
         }
     }
 
-    private class Dhcp6PacketHandler extends PacketReader {
-        private FileDescriptor mUdpSock;
-
-        Dhcp6PacketHandler(Handler handler) {
-            super(handler);
-        }
-
-        @Override
-        protected void handlePacket(byte[] recvbuf, int length) {
-            try {
-                final Dhcp6Packet packet = Dhcp6Packet.decode(recvbuf, length);
-                if (DBG) Log.d(TAG, "Received packet: " + packet);
-                sendMessage(CMD_RECEIVED_PACKET, packet);
-            } catch (Dhcp6Packet.ParseException e) {
-                Log.e(TAG, "Can't parse DHCPv6 packet: " + e.getMessage());
-            }
-        }
-
-        @Override
-        protected FileDescriptor createFd() {
-            try {
-                mUdpSock = Os.socket(AF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP);
-                SocketUtils.bindSocketToInterface(mUdpSock, mIface.name);
-                Os.bind(mUdpSock, IPV6_ADDR_ANY, DHCP6_CLIENT_PORT);
-            } catch (SocketException | ErrnoException e) {
-                Log.e(TAG, "Error creating udp socket", e);
-                closeFd(mUdpSock);
-                mUdpSock = null;
-                return null;
-            }
-            return mUdpSock;
-        }
-
-        public int transmitPacket(final ByteBuffer buf) throws ErrnoException, SocketException {
-            int ret = Os.sendto(mUdpSock, buf.array(), 0 /* byteOffset */,
-                    buf.limit() /* byteCount */, 0 /* flags */, ALL_DHCP_RELAY_AGENTS_AND_SERVERS,
-                    DHCP6_SERVER_PORT);
-            return ret;
-        }
-    }
-
     @SuppressWarnings("ByteBufferBackingArray")
     private boolean transmitPacket(@NonNull final ByteBuffer buf,
             @NonNull final String description) {
-        try {
-            if (DBG) {
-                Log.d(TAG, "Multicasting " + description + " to ff02::1:2" + " packet raw data: "
-                        + HexDump.toHexString(buf.array(), 0, buf.limit()));
-            }
-            mDhcp6PacketHandler.transmitPacket(buf);
-        } catch (ErrnoException | IOException e) {
-            Log.e(TAG, "Can't send packet: ", e);
-            return false;
+        if (DBG) {
+            Log.d(TAG, "Multicasting " + description + " to ff02::1:2" + " packet raw data: "
+                    + HexDump.toHexString(buf.array(), 0, buf.limit()));
         }
-        return true;
+        return mDhcp6PacketDispatcher.transmitPacket(buf) > 0;
     }
 }
