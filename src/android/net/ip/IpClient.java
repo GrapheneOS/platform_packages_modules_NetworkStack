@@ -134,6 +134,7 @@ import android.net.apf.ApfFilter;
 import android.net.dhcp.DhcpClient;
 import android.net.dhcp.DhcpPacket;
 import android.net.dhcp6.Dhcp6Client;
+import android.net.dhcp6.Dhcp6PacketDispatcher;
 import android.net.ipmemorystore.OnNetworkEventCountRetrievedListener;
 import android.net.ipmemorystore.Status;
 import android.net.metrics.IpConnectivityLog;
@@ -661,6 +662,7 @@ public class IpClient extends StateMachine {
         static final String CMD_INSTALL_APF_PROGRAM = "install";
         static final String CMD_GET_APF_CAPABILITIES = "capabilities";
         static final String CMD_DUMP_APF_COUNTERS = "dump-counters";
+        static final String CMD_GET_APF_CONFIG = "config";
 
         static boolean shouldUpdateDataSnapshot(final String cmd) {
             return cmd.equals(CMD_READ_APF_DATA) || cmd.equals(CMD_DUMP_APF_COUNTERS);
@@ -842,6 +844,7 @@ public class IpClient extends StateMachine {
     private final Set<IpPrefix> mDelegatedPrefixes = new HashSet<>();
     @Nullable
     private final DevicePolicyManager mDevicePolicyManager;
+    private final Dhcp6PacketDispatcher mDhcp6PacketDispatcher;
 
     // Ignore any nonzero RA section with lifetime below this value.
     private final int mAcceptRaMinLft;
@@ -957,8 +960,9 @@ public class IpClient extends StateMachine {
          * Get a Dhcp6Client instance.
          */
         public Dhcp6Client makeDhcp6Client(Context context, StateMachine controller,
-                InterfaceParams ifParams, Dhcp6Client.Dependencies deps) {
-            return Dhcp6Client.makeDhcp6Client(context, controller, ifParams, deps);
+                InterfaceParams ifParams, Dhcp6PacketDispatcher dispatcher,
+                Dhcp6Client.Dependencies deps) {
+            return Dhcp6Client.makeDhcp6Client(context, controller, ifParams, dispatcher, deps);
         }
 
         /**
@@ -1123,6 +1127,7 @@ public class IpClient extends StateMachine {
         // InterfaceController.Dependencies class.
         mNetd = deps.getNetd(mContext);
         mInterfaceCtrl = new InterfaceController(mInterfaceName, mNetd, mLog);
+        mDhcp6PacketDispatcher = new Dhcp6PacketDispatcher(getHandler(), ifName);
 
         mAcceptRaMinLft = mDependencies.getDeviceConfigPropertyInt(CONFIG_ACCEPT_RA_MIN_LFT,
                 DEFAULT_ACCEPT_RA_MIN_LFT);
@@ -1729,6 +1734,9 @@ public class IpClient extends StateMachine {
                                     .append("\n");
                         }
                         result.complete(sb.toString());
+                        break;
+                    case ApfShellCommands.CMD_GET_APF_CONFIG:
+                        result.complete(mApfFilter.getApfConfigMessage());
                         break;
                     default:
                         throw new IllegalArgumentException("Invalid apf command: " + cmd);
@@ -2627,8 +2635,9 @@ public class IpClient extends StateMachine {
     /** Creates Dhcp6Client and starts DHCPv6-PD. It is safe to call this function multiple times */
     private void startDhcp6PrefixDelegation() {
         if (mDhcp6Client == null) {
-            mDhcp6Client = mDependencies.makeDhcp6Client(mContext, IpClient.this,
-                    mInterfaceParams, mDependencies.getDhcp6ClientDependencies());
+            mDhcp6Client = mDependencies.makeDhcp6Client(mContext,
+                    IpClient.this, mInterfaceParams, mDhcp6PacketDispatcher,
+                    mDependencies.getDhcp6ClientDependencies());
         }
         mDhcp6Client.sendMessage(Dhcp6Client.CMD_START_DHCP6);
     }
@@ -3521,6 +3530,10 @@ public class IpClient extends StateMachine {
             mPacketTracker = createPacketTracker();
             if (mPacketTracker != null) mPacketTracker.start(mConfiguration.mDisplayName);
 
+            if (!mDhcp6PacketDispatcher.start()) {
+                Log.e(TAG, "Failed to start DHCPv6 packet dispatcher");
+            }
+
             if (isIpv6Enabled() && !startIPv6(1 /* acceptRaDefrtr */)) {
                 doImmediateProvisioningFailure(IpManagerEvent.ERROR_STARTING_IPV6);
                 enqueueJumpToStoppingState(DisconnectCode.DC_ERROR_STARTING_IPV6);
@@ -3573,6 +3586,7 @@ public class IpClient extends StateMachine {
                 mApfFilter = null;
             }
 
+            mDhcp6PacketDispatcher.stop();
             resetLinkProperties();
 
             removeMessages(CMD_UPDATE_APF_DATA_SNAPSHOT);

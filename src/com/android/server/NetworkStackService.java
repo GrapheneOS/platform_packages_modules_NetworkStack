@@ -647,6 +647,8 @@ public class NetworkStackService extends Service {
                 pw.println("        reads and returns the current state of APF memory.");
                 pw.println("      dump-counters");
                 pw.println("        dump APF packet counters.");
+                pw.println("      config");
+                pw.println("        get APF config messages.");
             }
 
             private void captureShellCommand(

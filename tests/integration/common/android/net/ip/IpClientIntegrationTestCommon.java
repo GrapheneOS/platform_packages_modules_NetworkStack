@@ -164,6 +164,7 @@ import android.net.dhcp.DhcpPacket;
 import android.net.dhcp.DhcpPacket.ParseException;
 import android.net.dhcp.DhcpRequestPacket;
 import android.net.dhcp6.Dhcp6Client;
+import android.net.dhcp6.Dhcp6PacketDispatcher;
 import android.net.ipmemorystore.NetworkAttributes;
 import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener;
 import android.net.ipmemorystore.OnNetworkEventCountRetrievedListener;
@@ -540,8 +541,10 @@ public abstract class IpClientIntegrationTestCommon {
 
         @Override
         public Dhcp6Client makeDhcp6Client(Context context, StateMachine controller,
-                InterfaceParams ifParams, Dhcp6Client.Dependencies deps) {
-            mDhcp6Client = Dhcp6Client.makeDhcp6Client(context, controller, ifParams, deps);
+                InterfaceParams ifParams, Dhcp6PacketDispatcher dispatcher,
+                Dhcp6Client.Dependencies deps) {
+            mDhcp6Client =
+                    Dhcp6Client.makeDhcp6Client(context, controller, ifParams, dispatcher, deps);
             return mDhcp6Client;
         }
 
