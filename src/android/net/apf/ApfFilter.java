@@ -854,6 +854,68 @@ public class ApfFilter {
         }
     }
 
+    /**
+     * Generates a string summarizing the current APF (Android Packet Filter) configuration.
+     *
+     * This method provides a human-readable snapshot of the APF state, primarily for logging and
+     * debugging purposes. The summary includes:
+     *
+     * The multicast filter state (DROP or ALLOW).</li>
+     * Whether the device is in doze mode.</li>
+     * A list of all enabled hardware packet offloads (e.g., ARP, ND, IGMP).</li>
+     * Counts of total and filtered Router Advertisements (RAs).</li>
+     * The number of active mDNS offload rules.</li>
+     *
+     *
+     * @return A formatted {@link String} describing the current APF configuration.
+     * Example: { mcast: DROP, doze: TRUE, offloads: [ ARP, ND, ], total RAs: 5 }
+     */
+    public String getApfConfigMessage() {
+        final StringBuilder sb = new StringBuilder();
+        sb.append("{ ");
+        sb.append("mcast: ");
+        sb.append(mMulticastFilter ? "DROP" : "ALLOW");
+        sb.append(", ");
+        sb.append("doze: ");
+        sb.append(mInDozeMode ? "TRUE" : "FALSE");
+        sb.append(", ");
+        sb.append("offloads: ");
+        sb.append("[ ");
+        if (enableArpOffload()) {
+            sb.append("ARP, ");
+        }
+        if (enableNdOffload()) {
+            sb.append("ND, ");
+        }
+        if (enableIgmpOffload()) {
+            sb.append("IGMP, ");
+        }
+        if (enableMldOffload()) {
+            sb.append("MLD, ");
+        }
+        if (enableIpv4PingOffload()) {
+            sb.append("Ping4, ");
+        }
+        if (enableIpv6PingOffload()) {
+            sb.append("Ping6, ");
+        }
+        if (enableMdns4Offload()) {
+            sb.append("Mdns4, ");
+        }
+        if (enableMdns6Offload()) {
+            sb.append("Mdns6, ");
+        }
+        sb.append("] ");
+        sb.append("total RAs: ");
+        sb.append(mRas.size());
+        sb.append(" filtered RAs: ");
+        sb.append(mNumFilteredRas);
+        sb.append(" mDNSs: ");
+        sb.append(mOffloadRules.size());
+        sb.append(" }");
+        return sb.toString();
+    }
+
     private MulticastReportMonitor createMulticastReportMonitor() {
         FileDescriptor socketFd = null;
 
@@ -3710,52 +3772,6 @@ public class ApfFilter {
         // Add IPv6 filters:
         gen.defineLabel(ipv6FilterLabel);
         generateIPv6Filter(gen, labelCheckMdnsQueryPayload);
-    }
-
-    private String getApfConfigMessage() {
-        final StringBuilder sb = new StringBuilder();
-        sb.append("{ ");
-        sb.append("mcast: ");
-        sb.append(mMulticastFilter ? "DROP" : "ALLOW");
-        sb.append(", ");
-        sb.append("doze: ");
-        sb.append(mInDozeMode ? "TRUE" : "FALSE");
-        sb.append(", ");
-        sb.append("offloads: ");
-        sb.append("[ ");
-        if (enableArpOffload()) {
-            sb.append("ARP, ");
-        }
-        if (enableNdOffload()) {
-            sb.append("ND, ");
-        }
-        if (enableIgmpOffload()) {
-            sb.append("IGMP, ");
-        }
-        if (enableMldOffload()) {
-            sb.append("MLD, ");
-        }
-        if (enableIpv4PingOffload()) {
-            sb.append("Ping4, ");
-        }
-        if (enableIpv6PingOffload()) {
-            sb.append("Ping6, ");
-        }
-        if (enableMdns4Offload()) {
-            sb.append("Mdns4, ");
-        }
-        if (enableMdns6Offload()) {
-            sb.append("Mdns6, ");
-        }
-        sb.append("] ");
-        sb.append("total RAs: ");
-        sb.append(mRas.size());
-        sb.append(" filtered RAs: ");
-        sb.append(mNumFilteredRas);
-        sb.append(" mDNSs: ");
-        sb.append(mOffloadRules.size());
-        sb.append(" }");
-        return sb.toString();
     }
 
     private void installPacketFilter(byte[] program, String logInfo) {

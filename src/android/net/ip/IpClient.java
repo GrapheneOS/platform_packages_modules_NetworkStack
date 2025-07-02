@@ -662,6 +662,7 @@ public class IpClient extends StateMachine {
         static final String CMD_INSTALL_APF_PROGRAM = "install";
         static final String CMD_GET_APF_CAPABILITIES = "capabilities";
         static final String CMD_DUMP_APF_COUNTERS = "dump-counters";
+        static final String CMD_GET_APF_CONFIG = "config";
 
         static boolean shouldUpdateDataSnapshot(final String cmd) {
             return cmd.equals(CMD_READ_APF_DATA) || cmd.equals(CMD_DUMP_APF_COUNTERS);
@@ -1733,6 +1734,9 @@ public class IpClient extends StateMachine {
                                     .append("\n");
                         }
                         result.complete(sb.toString());
+                        break;
+                    case ApfShellCommands.CMD_GET_APF_CONFIG:
+                        result.complete(mApfFilter.getApfConfigMessage());
                         break;
                     default:
                         throw new IllegalArgumentException("Invalid apf command: " + cmd);
