@@ -2266,6 +2266,13 @@ public abstract class IpClientIntegrationTestCommon {
 
     private LinkProperties doIpv6OnlyProvisioning(InOrder inOrder, ByteBuffer ra) throws Exception {
         waitForRouterSolicitation();
+        // Waiting for the IPv6 link-local address to appear, which ensures that the IPv6 stack
+        // is enabled and can process Router Advertisements.
+        // TODO: why this is only required for certain platform (see b/428036745). Otherwise, it
+        // seems that the kernel missed the RA and failed to get the default IPv6 route.
+        verify(mCb, timeout(TEST_TIMEOUT_MS)).onLinkPropertiesChange(argThat(
+                x -> hasIpv6LinkLocalAddress(x)
+        ));
         mPacketReader.sendResponse(ra);
 
         // The lambda below needs to write a LinkProperties to a local variable, but lambdas cannot
