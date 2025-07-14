@@ -33,8 +33,6 @@ import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.function.Predicate;
-
 /**
  * Compatibility implementation of {@link CaptivePortalDataShim}.
  */
@@ -59,9 +57,8 @@ public class CaptivePortalDataShimImpl
      */
     @RequiresApi(Build.VERSION_CODES.Q)
     @NonNull
-    public static CaptivePortalDataShim fromJson(JSONObject obj,
-            Predicate<String> evaluateCustomTabOptIn)
-            throws JSONException, UnsupportedApiLevelException {
+    public static CaptivePortalDataShim fromJson(JSONObject obj) throws JSONException,
+            UnsupportedApiLevelException {
         if (!isSupported()) {
             return com.android.networkstack.apishim.api29.CaptivePortalDataShimImpl.fromJson(obj);
         }
@@ -90,13 +87,12 @@ public class CaptivePortalDataShimImpl
         return ShimUtils.isReleaseOrDevelopmentApiAbove(Build.VERSION_CODES.Q);
     }
 
-    protected static long getLongOrDefault(JSONObject o, String key, long def)
-            throws JSONException {
+    private static long getLongOrDefault(JSONObject o, String key, long def) throws JSONException {
         if (!o.has(key)) return def;
         return o.getLong(key);
     }
 
-    protected static Uri getUriOrNull(JSONObject o, String key) throws JSONException {
+    private static Uri getUriOrNull(JSONObject o, String key) throws JSONException {
         if (!o.has(key)) return null;
         return Uri.parse(o.getString(key));
     }

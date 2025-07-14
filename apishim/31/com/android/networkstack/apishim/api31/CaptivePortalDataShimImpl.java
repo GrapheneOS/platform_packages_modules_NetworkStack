@@ -19,17 +19,11 @@ package com.android.networkstack.apishim.api31;
 import android.net.CaptivePortalData;
 import android.net.Uri;
 import android.os.Build;
-import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
 import com.android.networkstack.apishim.common.CaptivePortalDataShim;
-
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.util.function.Predicate;
 
 /**
  * Compatibility implementation of {@link CaptivePortalDataShim}.
@@ -37,11 +31,6 @@ import java.util.function.Predicate;
 @RequiresApi(Build.VERSION_CODES.S)
 public class CaptivePortalDataShimImpl
         extends com.android.networkstack.apishim.api30.CaptivePortalDataShimImpl {
-    // Copy this value from CaptivePortalData to avoid needing an API bump, which would slow
-    // down this work by many months and have to be maintained forever. See the constant with
-    // the same name in CaptivePortalData.
-    public static final int CAPTIVE_PORTAL_DATA_SOURCE_CAPPORT_WITH_CUSTOM_TABS_OPTIN = 2;
-
     public CaptivePortalDataShimImpl(@NonNull CaptivePortalData data) {
         super(data);
     }
@@ -70,38 +59,6 @@ public class CaptivePortalDataShimImpl
     public CaptivePortalDataShim withVenueFriendlyName(String friendlyName) {
         return new CaptivePortalDataShimImpl(new CaptivePortalData.Builder(mData)
                 .setVenueFriendlyName(friendlyName)
-                .build());
-    }
-
-    /**
-     * Parse a {@link CaptivePortalDataShim} from a JSON object.
-     * @throws JSONException The JSON is not a representation of correct captive portal data.
-     */
-    @NonNull
-    public static CaptivePortalDataShim fromJson(JSONObject obj,
-                Predicate<String> evaluateCustomTabOptIn) throws JSONException {
-        final long refreshTimeMs = System.currentTimeMillis();
-        final long secondsRemaining = getLongOrDefault(obj, "seconds-remaining", -1L);
-        final long millisRemaining = secondsRemaining <= Long.MAX_VALUE / 1000
-                ? secondsRemaining * 1000
-                : Long.MAX_VALUE;
-        final long expiryTimeMs = secondsRemaining == -1L ? -1L :
-                refreshTimeMs + Math.min(Long.MAX_VALUE - refreshTimeMs, millisRemaining);
-        final String optInToCustomTabsString = obj.optString("x-android-use-custom-tabs", null);
-        final boolean optInToCustomTabs = evaluateCustomTabOptIn.test(optInToCustomTabsString);
-        Log.i("CapportParsing", "Opt-in to custom tabs : \"" + optInToCustomTabsString
-                + "\" = " + (optInToCustomTabs ? "true" : "false"));
-        final int userPortalSource = optInToCustomTabs
-                ? CAPTIVE_PORTAL_DATA_SOURCE_CAPPORT_WITH_CUSTOM_TABS_OPTIN
-                : CaptivePortalData.CAPTIVE_PORTAL_DATA_SOURCE_OTHER;
-        return new CaptivePortalDataShimImpl(new CaptivePortalData.Builder()
-                .setRefreshTime(refreshTimeMs)
-                // captive is mandatory; throws JSONException if absent
-                .setCaptive(obj.getBoolean("captive"))
-                .setUserPortalUrl(getUriOrNull(obj, "user-portal-url"), userPortalSource)
-                .setVenueInfoUrl(getUriOrNull(obj, "venue-info-url"))
-                .setBytesRemaining(getLongOrDefault(obj, "bytes-remaining", -1L))
-                .setExpiryTime(expiryTimeMs)
                 .build());
     }
 
