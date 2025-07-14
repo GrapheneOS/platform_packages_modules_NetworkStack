@@ -96,9 +96,11 @@ import static com.android.networkstack.util.NetworkStackUtils.DNS_PROBE_PRIVATE_
 
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -221,6 +223,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -612,6 +615,38 @@ public class NetworkMonitor extends StateMachine {
             version = 0;
         }
         return version;
+    }
+
+    private Predicate<String> getOptInToCustomTabs(final Context context) {
+        return (minimumVersionString) -> {
+            if (null == minimumVersionString) return false;
+            if ("true".equals(minimumVersionString)) return true;
+            final long minimumVersion;
+            try {
+                minimumVersion = Long.parseLong(minimumVersionString);
+            } catch (final NumberFormatException e) {
+                Log.e(TAG, "Capport min version for custom tab opt-in neither \"true\" "
+                        + "nor a number : \"" + minimumVersionString + "\"");
+                return false;
+            }
+            final Intent signInIntent =
+                    new Intent(ConnectivityManager.ACTION_CAPTIVE_PORTAL_SIGN_IN);
+            final PackageManager packageManager = context.getPackageManager();
+            final ComponentName handler = signInIntent.resolveActivity(packageManager);
+            final PackageInfo captivePortalInfo;
+            try {
+                captivePortalInfo = packageManager.getPackageInfo(handler.getPackageName(),
+                        PackageManager.GET_ACTIVITIES);
+                if (null == captivePortalInfo) {
+                    Log.e(TAG, "No error but captive portal package info is null ?");
+                    return false;
+                }
+            } catch (final PackageManager.NameNotFoundException noHandler) {
+                Log.e(TAG, "No handler activity for captive portal sign in ?");
+                return false;
+            }
+            return captivePortalInfo.getLongVersionCode() >= minimumVersion;
+        };
     }
 
     public NetworkMonitor(Context context, INetworkMonitorCallbacks cb, Network network,
@@ -3352,9 +3387,9 @@ public class NetworkMonitor extends StateMachine {
 
             try {
                 final JSONObject info = new JSONObject(apiContent);
-                final CaptivePortalDataShim capportData = CaptivePortalDataShimImpl.fromJson(info);
-                if (capportData != null && capportData.isCaptive()
-                        && capportData.getUserPortalUrl() == null) {
+                final CaptivePortalDataShim capportData = CaptivePortalDataShimImpl.fromJson(info,
+                        getOptInToCustomTabs(mContext));
+                if (capportData.isCaptive() && capportData.getUserPortalUrl() == null) {
                     validationLog("Missing user-portal-url from capport response");
                     return null;
                 }
