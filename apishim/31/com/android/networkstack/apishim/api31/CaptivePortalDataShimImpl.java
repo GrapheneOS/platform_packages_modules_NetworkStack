@@ -24,7 +24,9 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
+import com.android.modules.utils.build.SdkLevel;
 import com.android.networkstack.apishim.common.CaptivePortalDataShim;
+import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -79,7 +81,12 @@ public class CaptivePortalDataShimImpl
      */
     @NonNull
     public static CaptivePortalDataShim fromJson(JSONObject obj,
-                Predicate<String> evaluateCustomTabOptIn) throws JSONException {
+                Predicate<String> evaluateCustomTabOptIn)
+            throws JSONException, UnsupportedApiLevelException {
+        if (!SdkLevel.isAtLeastS()) {
+            return com.android.networkstack.apishim.api30.CaptivePortalDataShimImpl.fromJson(obj,
+                    evaluateCustomTabOptIn);
+        }
         final long refreshTimeMs = System.currentTimeMillis();
         final long secondsRemaining = getLongOrDefault(obj, "seconds-remaining", -1L);
         final long millisRemaining = secondsRemaining <= Long.MAX_VALUE / 1000
