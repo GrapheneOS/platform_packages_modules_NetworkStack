@@ -824,6 +824,7 @@ public class IpClient extends StateMachine {
     @VisibleForTesting
     protected final IpClientCallbacksWrapper mCallback;
     private final ApfFilter.IApfController mIpClientApfController;
+    private final ApfFilter.IApfController mNonHalApfController;
     private final Dependencies mDependencies;
     private final ConnectivityManager mCm;
     private final INetd mNetd;
@@ -1076,6 +1077,31 @@ public class IpClient extends StateMachine {
             return new IpClientNetlinkMonitor(h, log, tag, sockRcvbufSize,
                     isDhcp6PdPreferredFlagEnabled, p);
         }
+
+        /**
+         * Get the APF capabilities for the specified interface through Non-HAL API.
+         */
+        @Nullable
+        public ApfCapabilities getApfCapabilities(String ifName, SharedLog log) {
+            return null;
+        }
+
+        /**
+         * Install a packet filter on the specified interface through Non-HAL API.
+         */
+        public boolean installPacketFilter(String ifName, byte[] filter, SharedLog log) {
+            // TODO: Add implementation
+            return false;
+        }
+
+        /**
+         * Read the packet filter RAM from the specified interface through Non-HAL API.
+         */
+        @Nullable
+        public byte[] readPacketFilterRam(String ifName, SharedLog log) {
+            // TODO: Add implementation
+            return null;
+        }
     }
 
     public IpClient(Context context, String ifName, IIpClientCallbacks callback,
@@ -1120,6 +1146,26 @@ public class IpClient extends StateMachine {
             @Override
             public void readPacketFilterRam(String event) {
                 mCallback.startReadPacketFilter(event);
+            }
+        };
+        mNonHalApfController = new ApfFilter.IApfController() {
+            @Override
+            public boolean installPacketFilter(byte[] filter, String filterConfig) {
+                mLog.log("[Non-HAL API] installPacketFilter(byte[" + filter.length + "])"
+                        + " config: "
+                        + filterConfig);
+                if (mApfDebug) {
+                    mApfLog.log(
+                            "[Non-HAL API] updated APF program: " + HexDump.toHexString(filter));
+                }
+                return mDependencies.installPacketFilter(ifName, filter, mLog);
+            }
+
+            @Override
+            public void readPacketFilterRam(String event) {
+                mLog.log("[Non-HAL API] startReadPacketFilter(), event: " + event);
+                final byte[] apfRam = mDependencies.readPacketFilterRam(ifName, mLog);
+                readPacketFilterComplete(apfRam);
             }
         };
 
@@ -2857,7 +2903,14 @@ public class IpClient extends StateMachine {
     }
 
     @Nullable
-    private ApfFilter maybeCreateApfFilter(final ApfCapabilities apfCaps) {
+    private ApfFilter maybeCreateApfFilter(final ApfCapabilities apfCapsFromHalApi) {
+        final ApfCapabilities apfCapsFromNonHalApi =
+                mDependencies.getApfCapabilities(mInterfaceName, mLog);
+        mLog.log("getting APF capabilities from non-hal API: " + apfCapsFromNonHalApi);
+        final ApfCapabilities apfCaps =
+                apfCapsFromNonHalApi != null ? apfCapsFromNonHalApi : apfCapsFromHalApi;
+        final ApfFilter.IApfController apfController =
+                apfCapsFromNonHalApi != null ? mNonHalApfController : mIpClientApfController;
         ApfFilter.ApfConfiguration apfConfig = new ApfFilter.ApfConfiguration();
         if (!isApfSupported(apfCaps) || !mEnableApf) {
             return null;
@@ -2935,7 +2988,7 @@ public class IpClient extends StateMachine {
         NetworkStackStatsLog.write(NetworkStackStatsLog.APF_SESSION_INFO_REPORTED,
                 apfConfig.apfVersionSupported, apfConfig.apfRamSize);
         return mDependencies.maybeCreateApfFilter(getHandler(), mContext, apfConfig,
-                mInterfaceParams, mIpClientApfController, mNetworkQuirkMetrics);
+                mInterfaceParams, apfController, mNetworkQuirkMetrics);
     }
 
     private boolean isApfSupported(ApfCapabilities apfCapabilities) {
