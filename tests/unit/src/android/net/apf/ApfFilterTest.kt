@@ -66,6 +66,7 @@ import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_BROADCAST_REPLY
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_REQUEST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_UNICAST_REPLY
 import android.net.apf.ApfCounterTracker.Counter.PASSED_DHCP
+import android.net.apf.ApfCounterTracker.Counter.PASSED_DUE_TO_REPLY_OVER_MTU
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ETHER_OUR_SRC_MAC
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_FROM_DHCPV4_SERVER
@@ -458,6 +459,9 @@ class ApfFilterTest {
 
         // mock nd traffic class from /proc/sys/net/ipv6/conf/{ifname}/ndisc_tclass
         doReturn(0).`when`(dependencies).getNdTrafficClass(any())
+
+        // mock interface mtu from /sys/class/net/{ifname}/mtu
+        doReturn(1500).`when`(dependencies).getInterfaceMtu(any())
         doAnswer { invocation: InvocationOnMock ->
             synchronized(mApfFilterCreated) {
                 mApfFilterCreated.add(invocation.getArgument(0))
@@ -1252,6 +1256,30 @@ class ApfFilterTest {
 
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
+    fun testIgmpV2GeneralQueryPassedWithGeneratedPacketOverMtu() {
+        doReturn(10).`when`(dependencies).getInterfaceMtu(any())
+        val apfFilter = getIgmpApfFilter()
+        val program = ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 3)
+        // Using scapy to generate IGMPv2 general query packet without router alert option:
+        //   ether = Ether(src='00:11:22:33:44:55', dst='01:00:5e:00:00:01')
+        //   ip = IP(src='10.0.0.2', dst='224.0.0.1')
+        //   igmp = IGMP(type=0x11)
+        //   pkt = ether/ip/igmp
+        // TODO: use PacketBuilderUtils to construct IGMPv2 packet
+        val pkt = """
+        01005e00000100112233445508004500001c000100000102cfdc0a000002e00000011114eeeb00000000
+        """.replace("\\s+".toRegex(), "").trim()
+
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(pkt),
+            PASSED_DUE_TO_REPLY_OVER_MTU
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
     fun testIgmpV2GroupSpecificQueryPassed() {
         val apfFilter = getIgmpApfFilter()
         val program = ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 3)
@@ -1462,6 +1490,31 @@ class ApfFilterTest {
         assertContentEquals(
             HexDump.hexStringToByteArray(igmpv3ReportPkt),
             transmittedIgmpv3Reports[0]
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testIgmpV3GeneralQueryPassedWithGeneratedPacketOverMtu() {
+        doReturn(10).`when`(dependencies).getInterfaceMtu(any())
+        val apfFilter = getIgmpApfFilter()
+        val program = ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 3)
+        // Using scapy to generate IGMPv3 general query packet without router alert option:
+        //   ether = Ether(src='00:11:22:33:44:55', dst='01:00:5e:00:00:01')
+        //   ip = IP(src='10.0.0.2', dst='224.0.0.1')
+        //   igmp = IGMPv3(type=0x11)/IGMPv3mq()
+        //   pkt = ether/ip/igmp
+        // TODO: use PacketBuilderUtils to construct IGMPv3 packet
+        val pkt = """
+            01005e000001001122334455080045c00020000100000102cf180a000002e00000011114eeeb00000000
+            00000000
+        """.replace("\\s+".toRegex(), "").trim()
+
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(pkt),
+            PASSED_DUE_TO_REPLY_OVER_MTU
         )
     }
 
@@ -1841,6 +1894,32 @@ class ApfFilterTest {
 
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
+    fun testMldV1GeneralQueryPassedWithGeneratedPacketOverMtu() {
+        doReturn(10).`when`(dependencies).getInterfaceMtu(any())
+        val apfFilter = getMldApfFilter()
+        val program = ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 3)
+        // Using scapy to generate MLDv1 general query
+        //  ether = Ether(src='00:11:22:33:44:55', dst='33:33:00:00:00:01')
+        //  ipv6 = IPv6(src='fe80::fc01:83ff:fea6:3712', dst='ff02::1', hlim=1)
+        //  hopOpts = IPv6ExtHdrHopByHop(options=[RouterAlert(otype=5)])
+        //  mld = ICMPv6MLQuery()
+        //  pkt = ether/ipv6/hopOpts/mld
+        // TODO: use PacketBuilderUtils to construct MLDv1 packet
+        var pkt = """
+            33330000000100112233445586dd6000000000200001fe80000000000000fc0183fffea63712ff02000
+            00000000000000000000000013a000502000001008200a35d2710000000000000000000000000000000
+            000000
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(pkt),
+            PASSED_DUE_TO_REPLY_OVER_MTU
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
     fun testMldV2GeneralQueryReplied() {
         val apfFilter = getMldApfFilter()
         val program = ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 3)
@@ -1922,6 +2001,32 @@ class ApfFilterTest {
         assertContentEquals(
             HexDump.hexStringToByteArray(mldV2ReportPkt),
             transmittedMldV2Reports[0]
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testMldV2GeneralQueryPassedWithGeneratedPacketOverMtu() {
+        doReturn(10).`when`(dependencies).getInterfaceMtu(any())
+        val apfFilter = getMldApfFilter()
+        val program = ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 3)
+        // Using scapy to generate MLDv2 general query
+        //  ether = Ether(src='00:11:22:33:44:55', dst='33:33:00:00:00:01')
+        //  ipv6 = IPv6(src='fe80::fc01:83ff:fea6:3712', dst='ff02::1', hlim=1)
+        //  hopOpts = IPv6ExtHdrHopByHop(options=[RouterAlert(otype=5)])
+        //  mld = ICMPv6MLQuery2()
+        //  pkt = ether/ipv6/hopOpts/mld
+        // TODO: use PacketBuilderUtils to construct MLDv2 packet
+        var pkt = """
+            33330000000100112233445586dd6000000000240001fe80000000000000fc0183fffea63712ff02000
+            00000000000000000000000013a000502000001008200a3592710000000000000000000000000000000
+            00000000000000
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(pkt),
+            PASSED_DUE_TO_REPLY_OVER_MTU
         )
     }
 
@@ -4350,6 +4455,104 @@ class ApfFilterTest {
 
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
+    fun testIPv4MdnsQueryPassedWithGeneratedPacketOverMtu() {
+        doReturn(10).`when`(dependencies).getInterfaceMtu(any())
+        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(mcFilter = false)
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="_googlecast._tcp.local", qtype="PTR"))
+        // pkt = eth/ip/udp/dns
+        // TODO: use PacketBuilderUtils to construct IPv4 MDNS packet
+        val castIPv4MdnsPtrQuery = """
+            01005e0000fb0102030405060800450000440001000040118faa0a000003e00
+            000fb14e914e900309fa50000010000010000000000000b5f676f6f676c6563
+            617374045f746370056c6f63616c00000c0001
+        """.replace("\\s+".toRegex(), "").trim()
+
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(castIPv4MdnsPtrQuery),
+            PASSED_DUE_TO_REPLY_OVER_MTU
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // questions = [
+        //   DNSQR(qname="_airplay._tcp.local", qtype="PTR"),
+        //   DNSQR(qname="gambit-3cb56c6253638b3641e3d289013cc0ae._googlecast._tcp.local", qtype="TXT")
+        // ]
+        // dns = dns_compress(DNS(qd=questions))
+        // pkt = eth/ip/udp/dns
+        // TODO: use PacketBuilderUtils to construct IPv4 MDNS packet
+        val castIPv4MdnsTxtQuery = """
+            01005e0000fb01020304050608004500007b0001000040118f730a000003e00
+            000fb14e914e900675712000001000002000000000000085f616972706c6179
+            045f746370056c6f63616c00000c00012767616d6269742d336362353663363
+            23533363338623336343165336432383930313363633061650b5f676f6f676c
+            6563617374c01500100001
+        """.replace("\\s+".toRegex(), "").trim()
+
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(castIPv4MdnsTxtQuery),
+            PASSED_DUE_TO_REPLY_OVER_MTU
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // questions = [
+        //   DNSQR(qname="_airplay._tcp.local", qtype="PTR"),
+        //   DNSQR(qname="gambit-3cb56c6253638b3641e3d289013cc0ae._googlecast._tcp.local", qtype="SRV")
+        // ]
+        // dns = dns_compress(DNS(qd=questions))
+        // pkt = eth/ip/udp/dns
+        // TODO: use PacketBuilderUtils to construct IPv4 MDNS packet
+        val castIPv4MdnsSRVQuery = """
+            01005e0000fb01020304050608004500007b0001000040118f730a000003e00
+            000fb14e914e900674612000001000002000000000000085f616972706c6179
+            045f746370056c6f63616c00000c00012767616d6269742d336362353663363
+            23533363338623336343165336432383930313363633061650b5f676f6f676c
+            6563617374c01500210001
+        """.replace("\\s+".toRegex(), "").trim()
+
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(castIPv4MdnsSRVQuery),
+            PASSED_DUE_TO_REPLY_OVER_MTU
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="_androidtvremote2._tcp.local", qtype="PTR"))
+        // pkt = eth/ip/udp/dns
+        // TODO: use PacketBuilderUtils to construct IPv4 MDNS packet
+        val tvRemoteIPv4MdnsPtrQuery = """
+            01005e0000fb01020304050608004500004a0001000040118fa40a000003e00
+            000fb14e914e900366966000001000001000000000000115f616e64726f6964
+            747672656d6f746532045f746370056c6f63616c00000c0001
+        """.replace("\\s+".toRegex(), "").trim()
+
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(tvRemoteIPv4MdnsPtrQuery),
+            PASSED_DUE_TO_REPLY_OVER_MTU
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
     fun testIPv4MdnsQueryDropped() {
         val (apfFilter, program) = getApfWithMdnsOffloadEnabled(
             removedOffloadInfos = listOf(tvRemoteOffloadInfo)
@@ -4467,6 +4670,8 @@ class ApfFilterTest {
         )
     }
 
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
     fun testIPv6MdnsQueryReplied() {
         val (apfFilter, program) = getApfWithMdnsOffloadEnabled(mcFilter = false)
         // Using scapy to generate packet:
@@ -4783,6 +4988,78 @@ class ApfFilterTest {
         assertContentEquals(
             HexDump.hexStringToByteArray(expectedIPv6tvRemoteMdnsReply),
             transmitPkt
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testIPv6MdnsQueryPassedWithGeneratedPacketOverMtu() {
+        doReturn(10).`when`(dependencies).getInterfaceMtu(any())
+        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(mcFilter = false)
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:FB")
+        // ip = IPv6(src="fe80::1", dst="ff02::fb")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="_googlecast._tcp.local", qtype="PTR"))
+        // pkt = eth/ip/udp/dns
+        // TODO: use PacketBuilderUtils to construct IPv6 MDNS packet
+        val castIPv6MdnsPtrQuery = """
+            3333000000fb01020304050686dd6000000000301140fe80000000000000000
+            0000000000001ff0200000000000000000000000000fb14e914e900308c2400
+            00010000010000000000000b5f676f6f676c6563617374045f746370056c6f6
+            3616c00000c0001
+        """.replace("\\s+".toRegex(), "").trim()
+
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(castIPv6MdnsPtrQuery),
+            PASSED_DUE_TO_REPLY_OVER_MTU
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:FB")
+        // ip = IPv6(src="fe80::1", dst="ff02::fb")
+        // udp = UDP(dport=5353, sport=5353)
+        // questions = [
+        //   DNSQR(qname="_airplay._tcp.local", qtype="PTR"),
+        //   DNSQR(qname="gambit-3cb56c6253638b3641e3d289013cc0ae._googlecast._tcp.local", qtype="TXT")
+        // ]
+        // dns = dns_compress(DNS(qd=questions))
+        // pkt = eth/ip/udp/dns
+        val castIPv6MdnsTxtQuery = """
+            3333000000fb01020304050686dd6000000000671140fe80000000000000000
+            0000000000001ff0200000000000000000000000000fb14e914e90067439100
+            0001000002000000000000085f616972706c6179045f746370056c6f63616c0
+            0000c00012767616d6269742d33636235366336323533363338623336343165
+            336432383930313363633061650b5f676f6f676c6563617374c01500100001
+        """.replace("\\s+".toRegex(), "").trim()
+
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(castIPv6MdnsTxtQuery),
+            PASSED_DUE_TO_REPLY_OVER_MTU
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:FB")
+        // ip = IPv6(src="fe80::1", dst="ff02::fb")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="_androidtvremote2._tcp.local", qtype="PTR"))
+        // pkt = eth/ip/udp/dns
+        val tvRemoteIPv6MdnsPtrQuery = """
+            3333000000fb01020304050686dd6000000000361140fe80000000000000000
+            0000000000001ff0200000000000000000000000000fb14e914e9003655e500
+            0001000001000000000000115f616e64726f6964747672656d6f746532045f7
+            46370056c6f63616c00000c0001
+        """.replace("\\s+".toRegex(), "").trim()
+
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(tvRemoteIPv6MdnsPtrQuery),
+            PASSED_DUE_TO_REPLY_OVER_MTU
         )
     }
 
