@@ -1014,6 +1014,38 @@ public class IpClientTest {
     }
 
     @Test
+    @IgnoreUpTo(Build.VERSION_CODES.R)
+    public void testApfFilterUseNonHalApi() throws Exception {
+        final IpClient ipc = makeIpClient(TEST_IFNAME);
+        ProvisioningConfiguration.Builder config = new ProvisioningConfiguration.Builder()
+                .withoutIPv4()
+                .withoutIpReachabilityMonitor()
+                .withInitialConfiguration(
+                        conf(links(TEST_LOCAL_ADDRESSES), prefixes(TEST_PREFIXES), ips()))
+                .withApfCapabilities(null);
+        doReturn(new ApfCapabilities(6000 /* version */, 4096 /* maxProgramSize */,
+                ARPHRD_ETHER)).when(mDependencies).getApfCapabilities(eq(TEST_IFNAME), any());
+        ipc.startProvisioning(config.build());
+        final ArgumentCaptor<ApfConfiguration> configCaptor = ArgumentCaptor.forClass(
+                ApfConfiguration.class);
+        final ArgumentCaptor<ApfFilter.IApfController> apfController = ArgumentCaptor.forClass(
+                ApfFilter.IApfController.class);
+        verify(mDependencies, timeout(TEST_TIMEOUT_MS)).maybeCreateApfFilter(
+                any(), any(), configCaptor.capture(), any(), apfController.capture(), any());
+
+        final ApfConfiguration apfConfig = configCaptor.getValue();
+        assertEquals(6000, apfConfig.apfVersionSupported);
+
+        final ApfFilter.IApfController controller = apfController.getValue();
+        final byte[] program = new byte[] { 0x00, 0x01, 0x02, 0x03 };
+        controller.installPacketFilter(program, "testConfig");
+        verify(mDependencies).installPacketFilter(eq(TEST_IFNAME), eq(program), any());
+        controller.readPacketFilterRam("test");
+        verify(mDependencies).readPacketFilterRam(eq(TEST_IFNAME), any());
+        verifyShutdown(ipc);
+    }
+
+    @Test
     public void testDumpApfFilter_withNoException() throws Exception {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
