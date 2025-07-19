@@ -290,6 +290,26 @@ static void network_stack_utils_attachControlPacketFilter(
     }
 }
 
+static jlong network_stack_utils_getApfCapabilities(JNIEnv *env, jclass clazz,
+                                                    jstring ifname) {
+  jniThrowErrnoException(env, "getApfCapabilities", ENOSYS);
+  return -1;
+}
+
+static void network_stack_utils_installPacketFilter(JNIEnv *env, jclass clazz,
+                                                    jstring ifname,
+                                                    jbyteArray program) {
+  jniThrowErrnoException(env, "installPacketFilter", ENOSYS);
+}
+
+static jboolean network_stack_utils_readPacketFilterRam(JNIEnv *env,
+                                                        jclass clazz,
+                                                        jstring ifname,
+                                                        jbyteArray output) {
+  jniThrowErrnoException(env, "readPacketFilterRam", ENOSYS);
+  return false;
+}
+
 /*
  * JNI registration.
  */
@@ -305,6 +325,12 @@ static const JNINativeMethod gNetworkStackUtilsMethods[] = {
      (void *)network_stack_units_attachEgressMulticastReportFilter},
     {"attachControlPacketFilter", "(Ljava/io/FileDescriptor;)V",
      (void *)network_stack_utils_attachControlPacketFilter},
+    {"getApfCapabilities", "(Ljava/lang/String;)J",
+     (void *)network_stack_utils_getApfCapabilities},
+    {"installPacketFilter", "(Ljava/lang/String;[B)V",
+     (void *)network_stack_utils_installPacketFilter},
+    {"readPacketFilterRam", "(Ljava/lang/String;[B)Z",
+     (void *)network_stack_utils_readPacketFilterRam},
 };
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void*) {

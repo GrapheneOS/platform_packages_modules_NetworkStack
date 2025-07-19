@@ -540,6 +540,26 @@ public class NetworkStackUtils {
     public static native void attachControlPacketFilter(FileDescriptor fd) throws ErrnoException;
 
     /**
+     * Get the APF capabilities for the specified interface through Non-HAL API.
+     * @return a long containing two 32-bit integers: the APF version (lower 32-bit) and the APF
+     *         RAM size (upper 32-bit), or -1 if not supported.
+     */
+    public static native long getApfCapabilities(@NonNull String ifName)
+            throws ErrnoException;
+
+    /**
+     * Install APF program on the specified interface through Non-HAL API.
+     */
+    public static native void installPacketFilter(@NonNull String ifName, @NonNull byte[] filter)
+            throws ErrnoException;
+
+    /**
+     * Read the APF RAM from the specified interface through Non-HAL API.
+     */
+    public static native boolean readPacketFilterRam(@NonNull String ifName, @NonNull byte[] output)
+            throws ErrnoException;
+
+    /**
      * Add an entry into the ARP cache.
      */
     public static void addArpEntry(Inet4Address ipv4Addr, android.net.MacAddress ethAddr,

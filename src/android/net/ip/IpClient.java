@@ -898,6 +898,7 @@ public class IpClient extends StateMachine {
     private Integer mDadTransmits = null;
     private int mMaxDtimMultiplier = DTIM_MULTIPLIER_RESET;
     private ApfCapabilities mCurrentApfCapabilities;
+    private byte[] mApfRam = new byte[0];
     private WakeupMessage mIpv6AutoconfTimeoutAlarm = null;
     private boolean mIgnoreNudFailure;
     /**
@@ -1083,24 +1084,42 @@ public class IpClient extends StateMachine {
          */
         @Nullable
         public ApfCapabilities getApfCapabilities(String ifName, SharedLog log) {
-            return null;
+            try {
+                final long caps = NetworkStackUtils.getApfCapabilities(ifName);
+                if (caps < 0) return null;
+                // The lower 32 bits is the APF version, the upper 32 bit is the RAM size.
+                final int version = (int) caps;
+                final int size = (int) (caps >> 32);
+                return new ApfCapabilities(version, size, ARPHRD_ETHER);
+            } catch (ErrnoException e) {
+                log.e("[Non-HAL API] Cannot get APF capabilities: ", e);
+                return null;
+            }
         }
 
         /**
          * Install a packet filter on the specified interface through Non-HAL API.
          */
         public boolean installPacketFilter(String ifName, byte[] filter, SharedLog log) {
-            // TODO: Add implementation
-            return false;
+            try {
+                NetworkStackUtils.installPacketFilter(ifName, filter);
+                return true;
+            } catch (ErrnoException e) {
+                log.e("[Non-HAL API] Failed to install packet filter", e);
+                return false;
+            }
         }
 
         /**
          * Read the packet filter RAM from the specified interface through Non-HAL API.
          */
-        @Nullable
-        public byte[] readPacketFilterRam(String ifName, SharedLog log) {
-            // TODO: Add implementation
-            return null;
+        public boolean readPacketFilterRam(String ifName, byte[] output, SharedLog log) {
+            try {
+                return NetworkStackUtils.readPacketFilterRam(ifName, output);
+            } catch (ErrnoException e) {
+                log.e("[Non-HAL API] Failed to read packet filter RAM", e);
+                return false;
+            }
         }
     }
 
@@ -1164,8 +1183,9 @@ public class IpClient extends StateMachine {
             @Override
             public void readPacketFilterRam(String event) {
                 mLog.log("[Non-HAL API] startReadPacketFilter(), event: " + event);
-                final byte[] apfRam = mDependencies.readPacketFilterRam(ifName, mLog);
-                readPacketFilterComplete(apfRam);
+                if (mDependencies.readPacketFilterRam(ifName, mApfRam, mLog)) {
+                    readPacketFilterComplete(mApfRam);
+                }
             }
         };
 
@@ -2914,6 +2934,9 @@ public class IpClient extends StateMachine {
         ApfFilter.ApfConfiguration apfConfig = new ApfFilter.ApfConfiguration();
         if (!isApfSupported(apfCaps) || !mEnableApf) {
             return null;
+        }
+        if (apfCapsFromNonHalApi != null) {
+            mApfRam = new byte[apfCapsFromNonHalApi.maximumApfProgramSize];
         }
         // For now only support generating programs for Ethernet frames. If this restriction is
         // lifted the program generator will need its offsets adjusted.
