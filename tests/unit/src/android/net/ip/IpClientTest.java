@@ -1041,7 +1041,7 @@ public class IpClientTest {
         controller.installPacketFilter(program, "testConfig");
         verify(mDependencies).installPacketFilter(eq(TEST_IFNAME), eq(program), any());
         controller.readPacketFilterRam("test");
-        verify(mDependencies).readPacketFilterRam(eq(TEST_IFNAME), any());
+        verify(mDependencies).readPacketFilterRam(eq(TEST_IFNAME), any(), any());
         verifyShutdown(ipc);
     }
 
