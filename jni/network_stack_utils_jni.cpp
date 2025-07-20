@@ -295,11 +295,16 @@ static void network_stack_utils_attachControlPacketFilter(
  */
 static const JNINativeMethod gNetworkStackUtilsMethods[] = {
     /* name, signature, funcPtr */
-    { "addArpEntry", "([B[BLjava/lang/String;Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_addArpEntry },
-    { "attachDhcpFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_attachDhcpFilter },
-    { "attachRaFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_attachRaFilter },
-    { "attachEgressMulticastReportFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_units_attachEgressMulticastReportFilter },
-    { "attachControlPacketFilter", "(Ljava/io/FileDescriptor;)V", (void*) network_stack_utils_attachControlPacketFilter },
+    {"addArpEntry", "([B[BLjava/lang/String;Ljava/io/FileDescriptor;)V",
+     (void *)network_stack_utils_addArpEntry},
+    {"attachDhcpFilter", "(Ljava/io/FileDescriptor;)V",
+     (void *)network_stack_utils_attachDhcpFilter},
+    {"attachRaFilter", "(Ljava/io/FileDescriptor;)V",
+     (void *)network_stack_utils_attachRaFilter},
+    {"attachEgressMulticastReportFilter", "(Ljava/io/FileDescriptor;)V",
+     (void *)network_stack_units_attachEgressMulticastReportFilter},
+    {"attachControlPacketFilter", "(Ljava/io/FileDescriptor;)V",
+     (void *)network_stack_utils_attachControlPacketFilter},
 };
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void*) {
