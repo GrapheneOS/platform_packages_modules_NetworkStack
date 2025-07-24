@@ -4135,7 +4135,7 @@ public class IpClient extends StateMachine {
 
     /**
      * Check if current LinkProperties has either global IPv6 address or ULA (i.e. non IPv6
-     * link-local addres).
+     * link-local address).
      *
      * This function can be used to derive the DTIM multiplier per current network situation or
      * decide if we should start DHCPv6 Prefix Delegation when no IPv6 addresses are available
