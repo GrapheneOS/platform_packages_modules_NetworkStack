@@ -28,6 +28,7 @@ java_defaults {
         "libstaticjvmtiagent",
         // For NetworkStackUtils included in NetworkStackBase
         "libnetworkstackutilsjni",
+        "libcom_android_networkstack_com_android_net_module_util_jni_CommonConnectivityJni",
     ],
     jni_uses_sdk_apis: true,
     visibility: ["//visibility:private"],
