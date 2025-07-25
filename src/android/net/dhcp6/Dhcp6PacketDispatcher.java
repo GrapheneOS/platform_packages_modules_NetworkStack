@@ -146,19 +146,21 @@ public class Dhcp6PacketDispatcher extends FdEventsReader<Dhcp6PacketDispatcher.
 
     @Override
     protected FileDescriptor createFd() {
+        FileDescriptor socket = null;
         try {
-            final FileDescriptor socket =
-                    Os.socket(AF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP);
+            socket = Os.socket(AF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP);
             if (SdkLevel.isAtLeastS()) {
                 Os.setsockoptInt(socket, IPPROTO_IPV6, IPV6_RECVPKTINFO, 1);
             }
             SocketUtils.bindSocketToInterface(socket, mInterfaceName);
             Os.bind(socket, IPV6_ADDR_ANY, DHCP6_CLIENT_PORT);
-            return socket;
         } catch (SocketException | ErrnoException e) {
             Log.e(TAG, "Error creating udp socket", e);
+            closeFd(socket);
+            socket = null;
             return null;
         }
+        return socket;
     }
 
     @Override
