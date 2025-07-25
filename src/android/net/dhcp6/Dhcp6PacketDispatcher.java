@@ -135,7 +135,6 @@ public class Dhcp6PacketDispatcher extends FdEventsReader<Dhcp6PacketDispatcher.
             final byte type = packet.getMessageType();
             final MessageHandler handler = mMessageHandlers.get(type);
             if (handler == null) {
-                Log.e(TAG, "received DHCPv6 message type doesn't register yet");
                 return;
             }
             handler.handleMessage(packet, payload.mDstAddr);
