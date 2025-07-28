@@ -234,6 +234,7 @@ import com.android.networkstack.packets.NeighborSolicitation;
 import com.android.networkstack.util.NetworkStackUtils;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
 import com.android.testutils.CompatUtil;
+import com.android.testutils.ConnectivityDiagnosticsCollector;
 import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
 import com.android.testutils.HandlerUtils;
@@ -5006,7 +5007,9 @@ public abstract class IpClientIntegrationTestCommon {
         verify(mCb, timeout(TEST_TIMEOUT_MS)).setNeighborDiscoveryOffload(true);
     }
 
-    @Test @SignatureRequiredTest(reason = "requires mock callback object")
+    @ConnectivityDiagnosticsCollector.CollectTcpdumpOnFailure
+    @Test
+    @SignatureRequiredTest(reason = "requires mock callback object")
     public void testNetlinkSocketReceiveENOBUFS() throws Exception {
         ProvisioningConfiguration config = new ProvisioningConfiguration.Builder()
                 .withoutIPv4()
@@ -5360,6 +5363,7 @@ public abstract class IpClientIntegrationTestCommon {
         mPacketReader.sendResponse(ra);
     }
 
+    @ConnectivityDiagnosticsCollector.CollectTcpdumpOnFailure
     @Test
     @Flag(name =  IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION, enabled = true)
     public void testDhcp6Pd() throws Exception {
@@ -5808,6 +5812,7 @@ public abstract class IpClientIntegrationTestCommon {
         assertNull(packet);
     }
 
+    @ConnectivityDiagnosticsCollector.CollectTcpdumpOnFailure
     @Test
     public void testDhcp6Pd_multipleIaPrefixOptions() throws Exception {
         final InOrder inOrder = inOrder(mCb);
