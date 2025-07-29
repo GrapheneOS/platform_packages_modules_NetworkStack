@@ -420,27 +420,26 @@ public class Dhcp6AddrRegTracker {
     }
 
     private void scheduleNextTimer() {
-        // Find the minimal event time based on the "mIsScheduled", if there is no any entry
-        // with the `mIsScheduled` of true, then no timer will be scheduled. Either when the
-        // the link address is updated (valid lifetime changes more than 1%) or link address
-        // added at the first time, the "mIsScheduled" should be set to true, and it's set to
-        // false when receiving the ADDR_REG_REPLY message for the registering address, which
-        // stops the message retransmission.
-        long minimalEventTime = Long.MAX_VALUE;
-        for (Map.Entry<Inet6Address, RegistrationScheduler> entry : mTrackedAddresses.entrySet()) {
-            final RegistrationScheduler scheduler = entry.getValue();
+        // Find the minimum event time among all tracked addresses that are currently scheduled
+        // (i.e., mIsScheduled is true). If no addresses are scheduled, no alarm is set.
+        // An address is scheduled to be registered when:
+        // - It is added for the first time.
+        // - Its valid lifetime changes by more than 1%; for example, when a new RA is received that
+        //   extends the lifetime.
+        // - A retransmission is scheduled.
+        // An address is unscheduled when:
+        // - An ADDR_REG_REPLY message is received for it indicating successful registration.
+        // - The maximum retransmission count is reached.
+        long nextEvent = Long.MAX_VALUE;
+        for (RegistrationScheduler scheduler : mTrackedAddresses.values()) {
             if (!scheduler.mIsScheduled) continue;
-            if (scheduler.mEventTime < minimalEventTime) {
-                minimalEventTime = scheduler.mEventTime;
-            }
+            nextEvent = Math.min(nextEvent, scheduler.mEventTime);
         }
-        if (minimalEventTime == Long.MAX_VALUE) return;
+        if (nextEvent == Long.MAX_VALUE) return;
+
         final String tag = TAG + "." + mInterfaceName + ".KICK";
-        mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                minimalEventTime,
-                tag,
-                mAddressRegistrationAlarm,
-                mHandler);
+        mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, nextEvent, tag,
+                mAddressRegistrationAlarm, mHandler);
     }
 
     /**
