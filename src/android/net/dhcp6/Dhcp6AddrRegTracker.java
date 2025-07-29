@@ -103,13 +103,26 @@ public class Dhcp6AddrRegTracker {
     // A random value uniformly distributed between 0.9 and 1.1 (see RFC9686 section 4.6.1).
     private static final double sAddrRegDesyncMultiplier = (new Random()).nextDouble() * 0.2 + 0.9;
 
+    /**
+     * Calculate the next SLAAC address registration refresh interval.
+     *
+     * Return 80% of the valid lifetime, applying a desync multiplier to avoid cross-device
+     * synchronization.
+     *
+     * @param validMs link address valid lifetime in milliseconds.
+     * @return the AddrRegRefreshInterval in milliseconds
+     */
+    private long addrRegRefreshInterval(long validMs) {
+        return (long) (validMs * 0.8 * sAddrRegDesyncMultiplier);
+    }
+
     private class RegistrationScheduler {
         private static final int IRT_MS = 1000; // 1s
         private static final int MRC = 3;
 
         // Contains the IPv6 address to be registered including its preferred and valid lifetimes.
         // The IPv6 address to be registered.
-        private LinkAddress mAddress;
+        private final LinkAddress mAddress;
         // Keep track of the current retry count. mRetryCount is set to 0 when a reply is
         // received or the address is updated.
         private int mRetryCount;
@@ -125,11 +138,11 @@ public class Dhcp6AddrRegTracker {
         // The timestamp at which the DHCPv6 message retransmission starts.
         private long mTransStartMs;
 
-        RegistrationScheduler(LinkAddress address, long now) {
+        RegistrationScheduler(LinkAddress address, long eventTime) {
             mAddress = address;
             mRetryCount = 0;
             mIsScheduled = true;
-            mEventTime = now;
+            mEventTime = eventTime;
             mTransId = mRandom.nextInt() & 0xffffff;
         }
 
@@ -199,6 +212,8 @@ public class Dhcp6AddrRegTracker {
 
             // When the client retransmits the registration message, the lifetimes in the packet
             // MUST be updated so that they match the current lifetimes of the address.
+            // TODO: preferred and valid should always be positive. However, it may be safer to add
+            // a min(0, ..).
             final long preferred = (mAddress.getDeprecationTime() - now) / 1000;
             final long valid = (mAddress.getExpirationTime() - now) / 1000;
             final long elapsedTimeMs = now - mTransStartMs;
@@ -208,19 +223,6 @@ public class Dhcp6AddrRegTracker {
             // RFC9686 section 4.2.
             transmitPacket(packet, (Inet6Address) mAddress.getAddress());
             ++mRetryCount;
-        }
-
-        /**
-         * Calculate the next SLAAC address registration refresh interval.
-         *
-         * Return 80% of the valid lifetime, applying a desync multiplier to avoid cross-device
-         * synchronization.
-         *
-         * @param validMs link address valid lifetime in milliseconds.
-         * @return the AddrRegRefreshInterval in milliseconds
-         */
-        private long addrRegRefreshInterval(long validMs) {
-            return (long) (validMs * 0.8 * sAddrRegDesyncMultiplier);
         }
 
         /**
@@ -246,26 +248,6 @@ public class Dhcp6AddrRegTracker {
             resetTransactionParams();
             mIsScheduled = false;
             mEventTime = now + addrRegRefreshInterval(mAddress.getExpirationTime() - now);
-        }
-
-        /**
-         * Triggered iff the valid lifetime of a link address has changed by more than 1%.
-         *
-         * Per RFC9686 section 4.6.1 whenever the network changes the valid lifetime of an existing
-         * address by more than 1%, e.g. by sending a PIO with a new valid lifetime, client should
-         * calculates a new AddrRegRefreshInterval and schedule a refresh for
-         * min(now + AddrRegRefreshInterval, NextAddrRegRefreshTime) to register this new lifetime
-         * to DHCP server.
-         */
-        private void updateAddress(@NonNull final LinkAddress la, long now) {
-            if (!la.getAddress().equals(mAddress)) {
-                throw new IllegalStateException("link addresses to be updated don't match");
-            }
-            final long newValidMs = la.getExpirationTime() - now;
-            mEventTime = Math.min(mEventTime, now + addrRegRefreshInterval(newValidMs));
-            resetTransactionParams();
-            mIsScheduled = true;
-            mAddress = la;
         }
     }
 
@@ -311,15 +293,6 @@ public class Dhcp6AddrRegTracker {
     private void addAddress(LinkAddress la, long now) {
         final RegistrationScheduler scheduler = new RegistrationScheduler(la, now);
         mTrackedAddresses.put((Inet6Address) la.getAddress(), scheduler);
-    }
-
-    private void updateAddress(LinkAddress la, long now) {
-        final Inet6Address address = (Inet6Address) la.getAddress();
-        RegistrationScheduler scheduler = mTrackedAddresses.get(address);
-        if (scheduler == null) {
-            throw new IllegalStateException("Fail to find the scheduler for " + address);
-        }
-        scheduler.updateAddress(la, now);
     }
 
     // Note that Android does not consider deprecated addresses to determine
@@ -402,7 +375,25 @@ public class Dhcp6AddrRegTracker {
             if (!isLifetimeChangeSignificant(oldExpiryMs, newExpiryMs)) {
                 continue;
             }
-            updateAddress(la, now);
+
+            // Handle updates as a remove & add operation. This requires setting the new event time
+            // as defined in rfc9686:
+            //
+            //   Whenever the network changes the Valid Lifetime of an existing
+            //   address by more than 1%, for example, by sending a Prefix Information
+            //   Option (PIO) [RFC4861] with a new Valid Lifetime, the client
+            //   calculates a new AddrRegRefreshInterval.  The client schedules a
+            //   refresh for min(now + AddrRegRefreshInterval,
+            //   NextAddrRegRefreshTime).  If the refresh would be scheduled in the
+            //   past, then the refresh occurs immediately.
+            mTrackedAddresses.remove((Inet6Address) la.getAddress());
+            final long nextAddrRegRefreshTime = s.mEventTime;
+            final long newValidMs = newExpiryMs - now;
+            final long addrRegRefreshInterval = addrRegRefreshInterval(newValidMs);
+
+            final long refreshTime = Math.min(now + addrRegRefreshInterval, nextAddrRegRefreshTime);
+            addAddress(la, refreshTime);
+
             shouldDispatchRegistration = true;
             // Per RFC9686 section 4.6.1, if the refresh would be scheduled in the past, then the
             // refresh occurs immediately.
