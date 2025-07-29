@@ -99,7 +99,7 @@ public class Dhcp6AddrRegTracker {
     private final String mInterfaceName;
     private final byte[] mClientDuid;
 
-    private LinkProperties mLinkProperties;
+    @Nullable private LinkProperties mLinkProperties;
 
     // A random value uniformly distributed between 0.9 and 1.1 (see RFC9686 section 4.6.1).
     private static final double sAddrRegDesyncMultiplier = (new Random()).nextDouble() * 0.2 + 0.9;
@@ -310,6 +310,7 @@ public class Dhcp6AddrRegTracker {
     public void stop() {
         mDhcp6PacketDispatcher.unregisterHandler(mDhcp6MessageHandler);
         mAlarmManager.cancel(mAddressRegistrationAlarm);
+        mLinkProperties = null;
         mTrackedAddresses.clear();
     }
 
