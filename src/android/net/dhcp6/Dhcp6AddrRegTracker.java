@@ -254,7 +254,7 @@ public class Dhcp6AddrRegTracker {
     private class AddressRegistrationAlarmListener implements AlarmManager.OnAlarmListener {
         @Override
         public void onAlarm() {
-            dispatchRegistration(false /* dispatchOnlyTimer */);
+            dispatchRegistration();
         }
     }
 
@@ -319,8 +319,6 @@ public class Dhcp6AddrRegTracker {
      * Updates the LinkProperties and checks whether the link addresses have changed.
      */
     public void setLinkProperties(LinkProperties newLp) {
-        boolean shouldDispatchRegistration = false;
-        boolean dispatchOnlyTimer = false;
         final long now = SystemClock.elapsedRealtime();
 
         // Collect the LinkAddresses from all RegistrationScheduler objects and compare them against
@@ -338,21 +336,18 @@ public class Dhcp6AddrRegTracker {
                         linkAddress -> new Pair(
                                 linkAddress.getAddress(),
                                 linkAddress.getPrefixLength()));
+
+        boolean hasUpdate = false;
         for (LinkAddress la : addressDiff.added) {
             if (!isRegistrableAddress(la)) continue;
+            hasUpdate = true;
             addAddress(la, now);
-            shouldDispatchRegistration = true;
-            // Dispatch the ADDR_REG_INFORM immediately upon the initial addition of an address.
-            dispatchOnlyTimer = false;
         }
 
         for (LinkAddress la : addressDiff.removed) {
             if (!isRegistrableAddress(la)) continue;
+            hasUpdate = true;
             mTrackedAddresses.remove((Inet6Address) la.getAddress());
-            shouldDispatchRegistration = true;
-            // No need to immediately dispatch ADDR_REG_INFORM on address removal; simply reschedule
-            // the next alarm based on the remaining addresses' mEventTime.
-            dispatchOnlyTimer = true;
         }
 
         for (LinkAddress la : addressDiff.updated) {
@@ -375,6 +370,7 @@ public class Dhcp6AddrRegTracker {
             if (!isLifetimeChangeSignificant(oldExpiryMs, newExpiryMs)) {
                 continue;
             }
+            hasUpdate = true;
 
             // Handle updates as a remove & add operation. This requires setting the new event time
             // as defined in rfc9686:
@@ -393,15 +389,10 @@ public class Dhcp6AddrRegTracker {
 
             final long refreshTime = Math.min(now + addrRegRefreshInterval, nextAddrRegRefreshTime);
             addAddress(la, refreshTime);
-
-            shouldDispatchRegistration = true;
-            // Per RFC9686 section 4.6.1, if the refresh would be scheduled in the past, then the
-            // refresh occurs immediately.
-            dispatchOnlyTimer = false;
         }
 
-        if (shouldDispatchRegistration) {
-            dispatchRegistration(dispatchOnlyTimer);
+        if (hasUpdate) {
+            dispatchRegistration();
         }
     }
 
@@ -429,21 +420,14 @@ public class Dhcp6AddrRegTracker {
     }
 
     /**
-     * Dispatch the address registration message transmission immediately if necessary, and
-     * schedules the next alarm based on `mEventTime`.
-     *
-     * @param dispatchOnlyTimer bypass the immediate dispatch address registration message
-     *                          transmission if it's true, otherwise, will only proceed to
-     *                          schedule the next alarm based on 'mEventTime'.
+     * Send all address registration messages where the timer has expired and schedule the next
+     * timer.
      */
-    private void dispatchRegistration(boolean dispatchOnlyTimer) {
-        if (!dispatchOnlyTimer) {
-            final long now = SystemClock.elapsedRealtime();
-            for (Map.Entry<Inet6Address, RegistrationScheduler> entry
-                    : mTrackedAddresses.entrySet()) {
-                if (!entry.getValue().isExpired(now)) continue;
-                entry.getValue().sendRegisterAddress(now);
-            }
+    private void dispatchRegistration() {
+        final long now = SystemClock.elapsedRealtime();
+        for (RegistrationScheduler scheduler : mTrackedAddresses.values()) {
+            if (!scheduler.isExpired(now)) continue;
+            scheduler.sendRegisterAddress(now);
         }
         scheduleNextTimer();
     }
@@ -478,7 +462,7 @@ public class Dhcp6AddrRegTracker {
             return;
         }
         scheduler.onReply();
-        dispatchRegistration(true /* dispatchOnlyTimer */);
+        dispatchRegistration();
     }
 
     @SuppressWarnings("ByteBufferBackingArray")
