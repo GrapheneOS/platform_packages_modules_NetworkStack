@@ -214,19 +214,16 @@ public class Dhcp6AddrRegTracker {
         }
 
         /**
-         * Calculate the next SLAAC address registration fresh interval in seconds.
+         * Calculate the next SLAAC address registration refresh interval.
          *
-         * This happens either when receiving an ADDR_REG_REPLY from the DHCPv6 server or the
-         * updated link address lifetime changes more than 1%.
+         * Return 80% of the valid lifetime, applying a desync multiplier to avoid cross-device
+         * synchronization.
          *
-         * Return the 80% of the SLAAC address's current valid lifetime, and applies a desync
-         * multiplier, in order to avoid synchronization with other clients, which could cause a
-         * large number of registration messages to reach the server at the same time.
-         *
-         * @param valid link address valid lifetime.
+         * @param validMs link address valid lifetime in milliseconds.
+         * @return the AddrRegRefreshInterval in milliseconds
          */
-        private long addrRegRefreshInterval(long valid) {
-            return (long) (valid * 0.8 * sAddrRegDesyncMultiplier * 1000);
+        private long addrRegRefreshInterval(long validMs) {
+            return (long) (validMs * 0.8 * sAddrRegDesyncMultiplier);
         }
 
         /**
@@ -267,8 +264,8 @@ public class Dhcp6AddrRegTracker {
             if (!la.getAddress().equals(mAddress)) {
                 throw new IllegalStateException("link addresses to be updated don't match");
             }
-            final long newValid = (la.getExpirationTime() - now) / 1000;
-            mEventTime = Math.min(mEventTime, now + addrRegRefreshInterval(newValid));
+            final long newValidMs = la.getExpirationTime() - now;
+            mEventTime = Math.min(mEventTime, now + addrRegRefreshInterval(newValidMs));
             resetTransactionParams();
             mIsScheduled = true;
             mAddress = (Inet6Address) la.getAddress();
