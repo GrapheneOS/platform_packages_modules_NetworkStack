@@ -396,17 +396,19 @@ public class Dhcp6AddrRegTracker {
         }
     }
 
+    /**
+     * Schedule a timer for the minimum event time among all tracked addresses that are currently
+     * scheduled (i.e., mIsScheduled is true). If no addresses are scheduled, no alarm is set.
+     * An address is scheduled to be registered when:
+     * - It is added for the first time.
+     * - Its valid lifetime changes by more than 1%; for example, when a new RA is received that
+     *   extends the lifetime.
+     * - A retransmission is scheduled.
+     * An address is unscheduled when:
+     * - An ADDR_REG_REPLY message is received for it indicating successful registration.
+     * - The maximum retransmission count is reached.
+     */
     private void scheduleNextTimer() {
-        // Find the minimum event time among all tracked addresses that are currently scheduled
-        // (i.e., mIsScheduled is true). If no addresses are scheduled, no alarm is set.
-        // An address is scheduled to be registered when:
-        // - It is added for the first time.
-        // - Its valid lifetime changes by more than 1%; for example, when a new RA is received that
-        //   extends the lifetime.
-        // - A retransmission is scheduled.
-        // An address is unscheduled when:
-        // - An ADDR_REG_REPLY message is received for it indicating successful registration.
-        // - The maximum retransmission count is reached.
         long nextEvent = Long.MAX_VALUE;
         for (RegistrationScheduler scheduler : mTrackedAddresses.values()) {
             if (!scheduler.mIsScheduled) continue;
