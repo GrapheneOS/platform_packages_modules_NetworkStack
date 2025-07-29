@@ -341,11 +341,14 @@ public class Dhcp6AddrRegTracker {
     }
 
     /**
-     * Check whether or not the valid lifetime of a link address has changed by more than 1%.
+     * rfc9686 section 4.6.1 states that the AddrRegRefreshInterval is only recalculated if the
+     * Valid Lifetime changes more than 1%. However, this mechanism does not work very well. In
+     * particular, if an address is never renewed, but a router regularly sends a self-decrementing
+     * RA, the 1% threshold approaches 0. Instead, this function checks whether the new valid
+     * lifetime expires within 3s of the last valid lifetime that was last registered.
      */
-    private static boolean hasValidLifetimeChangedMoreThanOnePercent(long now, long oldExpiry,
-            long newExpiry) {
-        return Math.abs(newExpiry - oldExpiry) > (oldExpiry - now) * 0.01;
+    private static boolean isLifetimeChangeSignificant(long oldExpiryMs, long newExpiryMs) {
+        return Math.abs(oldExpiryMs - newExpiryMs) >= 3_000 /* ms */;
     }
 
     private static LinkAddress findLinkAddress(@NonNull List<LinkAddress> linkAddresses,
@@ -396,7 +399,7 @@ public class Dhcp6AddrRegTracker {
             if (!isRegistrableAddress(la)) continue;
             final LinkAddress oldLinkAddress = findLinkAddress(
                     mLinkProperties.getLinkAddresses(), (Inet6Address) la.getAddress());
-            if (!hasValidLifetimeChangedMoreThanOnePercent(now, oldLinkAddress.getExpirationTime(),
+            if (!isLifetimeChangeSignificant(oldLinkAddress.getExpirationTime(),
                     la.getExpirationTime())) {
                 continue;
             }
