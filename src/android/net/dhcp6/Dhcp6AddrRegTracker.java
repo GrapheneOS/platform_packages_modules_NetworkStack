@@ -325,10 +325,6 @@ public class Dhcp6AddrRegTracker {
         mTrackedAddresses.put(address, scheduler);
     }
 
-    private void removeAddress(LinkAddress la) {
-        mTrackedAddresses.remove((Inet6Address) la.getAddress());
-    }
-
     private void updateAddress(LinkAddress la, long now) {
         final Inet6Address address = (Inet6Address) la.getAddress();
         RegistrationScheduler scheduler = mTrackedAddresses.get(address);
@@ -392,7 +388,7 @@ public class Dhcp6AddrRegTracker {
 
         for (LinkAddress la : addressDiff.removed) {
             if (!isRegistrableAddress(la)) continue;
-            removeAddress(la);
+            mTrackedAddresses.remove((Inet6Address) la.getAddress());
             shouldDispatchRegistration = true;
             // No need to immediately dispatch ADDR_REG_INFORM on address removal; simply reschedule
             // the next alarm based on the remaining addresses' mEventTime.
