@@ -33,7 +33,7 @@ import androidx.annotation.Nullable;
 
 import com.android.net.module.util.HexDump;
 import com.android.net.module.util.InterfaceParams;
-import com.android.net.module.util.LinkPropertiesUtils;
+import com.android.net.module.util.LinkPropertiesUtils.CompareOrUpdateResult;
 import com.android.net.module.util.dhcp6.Dhcp6AddrRegReplyPacket;
 import com.android.net.module.util.dhcp6.Dhcp6Packet;
 
@@ -371,8 +371,8 @@ public class Dhcp6AddrRegTracker {
         boolean shouldDispatchRegistration = false;
         boolean dispatchOnlyTimer = false;
         final long now = SystemClock.elapsedRealtime();
-        final LinkPropertiesUtils.CompareOrUpdateResult<Pair<InetAddress, Integer>, LinkAddress> addressDiff =
-                new LinkPropertiesUtils.CompareOrUpdateResult<>(
+        final CompareOrUpdateResult<Pair<InetAddress, Integer>, LinkAddress> addressDiff =
+                new CompareOrUpdateResult<>(
                         mLinkProperties == null ? null : mLinkProperties.getLinkAddresses(),
                         newLp.getLinkAddresses(),
                         linkAddress -> new Pair(
