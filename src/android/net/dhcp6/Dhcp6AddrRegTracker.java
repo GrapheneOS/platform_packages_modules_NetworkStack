@@ -109,12 +109,9 @@ public class Dhcp6AddrRegTracker {
         private static final int IRT_MS = 1000; // 1s
         private static final int MRC = 3;
 
+        // Contains the IPv6 address to be registered including its preferred and valid lifetimes.
         // The IPv6 address to be registered.
-        private Inet6Address mAddress;
-        // The deprecation time of an IPv6 address to be registered.
-        private long mDeprecationTimeMs;
-        // The expiration time of an IPv6 address to be registered.
-        private long mExpirationTimeMs;
+        private LinkAddress mAddress;
         // Keep track of the current retry count. mRetryCount is set to 0 when a reply is
         // received or the address is updated.
         private int mRetryCount;
@@ -130,11 +127,8 @@ public class Dhcp6AddrRegTracker {
         // The timestamp at which the DHCPv6 message retransmission starts.
         private long mTransStartMs;
 
-        RegistrationScheduler(@NonNull final Inet6Address address, final long deprecationTimeMs,
-                final long expirationTimeMs, final long now) {
+        RegistrationScheduler(LinkAddress address, long now) {
             mAddress = address;
-            mDeprecationTimeMs = deprecationTimeMs;
-            mExpirationTimeMs = expirationTimeMs;
             mRetryCount = 0;
             mIsScheduled = true;
             mEventTime = now;
@@ -203,13 +197,14 @@ public class Dhcp6AddrRegTracker {
 
             // When the client retransmits the registration message, the lifetimes in the packet
             // MUST be updated so that they match the current lifetimes of the address.
-            final long preferred = (mDeprecationTimeMs - now) / 1000;
-            final long valid = (mExpirationTimeMs - now) / 1000;
-            final ByteBuffer packet = Dhcp6Packet.buildAddrRegInformPacket(mTransId,
-                    now - mTransStartMs /* elapsedTime */, mClientDuid, mAddress, preferred, valid);
+            final long preferred = (mAddress.getDeprecationTime() - now) / 1000;
+            final long valid = (mAddress.getExpirationTime() - now) / 1000;
+            final long elapsedTimeMs = now - mTransStartMs;
+            final ByteBuffer packet = Dhcp6Packet.buildAddrRegInformPacket(mTransId, elapsedTimeMs,
+                    mClientDuid, (Inet6Address) mAddress.getAddress(), preferred, valid);
             // DHCPv6 ADDR-REG-INFORM message MUST be sent from the address being registered per
             // RFC9686 section 4.2.
-            transmitPacket(packet, mAddress);
+            transmitPacket(packet, (Inet6Address) mAddress.getAddress());
             ++mRetryCount;
         }
 
@@ -248,7 +243,7 @@ public class Dhcp6AddrRegTracker {
             final long now = SystemClock.elapsedRealtime();
             resetTransactionParams();
             mIsScheduled = false;
-            mEventTime = now + addrRegRefreshInterval(mExpirationTimeMs - now);
+            mEventTime = now + addrRegRefreshInterval(mAddress.getExpirationTime() - now);
         }
 
         /**
@@ -268,7 +263,7 @@ public class Dhcp6AddrRegTracker {
             mEventTime = Math.min(mEventTime, now + addrRegRefreshInterval(newValidMs));
             resetTransactionParams();
             mIsScheduled = true;
-            mAddress = (Inet6Address) la.getAddress();
+            mAddress = la;
         }
     }
 
@@ -313,13 +308,8 @@ public class Dhcp6AddrRegTracker {
     }
 
     private void addAddress(LinkAddress la, long now) {
-        final Inet6Address address = (Inet6Address) la.getAddress();
-        final RegistrationScheduler scheduler = new RegistrationScheduler(
-                address,
-                la.getDeprecationTime(),
-                la.getExpirationTime(),
-                now);
-        mTrackedAddresses.put(address, scheduler);
+        final RegistrationScheduler scheduler = new RegistrationScheduler(la, now);
+        mTrackedAddresses.put((Inet6Address) la.getAddress(), scheduler);
     }
 
     private void updateAddress(LinkAddress la, long now) {
