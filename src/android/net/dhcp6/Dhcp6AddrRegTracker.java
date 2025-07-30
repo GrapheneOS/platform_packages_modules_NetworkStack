@@ -100,8 +100,6 @@ public class Dhcp6AddrRegTracker {
     private final String mInterfaceName;
     private final byte[] mClientDuid;
 
-    @Nullable private LinkProperties mLinkProperties;
-
     // A random value uniformly distributed between 0.9 and 1.1 (see RFC9686 section 4.6.1).
     private static final double sAddrRegDesyncMultiplier = (new Random()).nextDouble() * 0.2 + 0.9;
 
@@ -133,6 +131,10 @@ public class Dhcp6AddrRegTracker {
             mIsScheduled = true;
             mEventTime = now;
             mTransId = mRandom.nextInt() & 0xffffff;
+        }
+
+        public LinkAddress getAddress() {
+            return mAddress;
         }
 
         /**
@@ -303,7 +305,6 @@ public class Dhcp6AddrRegTracker {
     public void stop() {
         mDhcp6PacketDispatcher.unregisterHandler(mDhcp6MessageHandler);
         mAlarmManager.cancel(mAddressRegistrationAlarm);
-        mLinkProperties = null;
         mTrackedAddresses.clear();
     }
 
@@ -341,19 +342,6 @@ public class Dhcp6AddrRegTracker {
         return Math.abs(oldExpiryMs - newExpiryMs) >= 3_000 /* ms */;
     }
 
-    private static LinkAddress findLinkAddress(@NonNull List<LinkAddress> linkAddresses,
-            @NonNull Inet6Address expect) {
-        if (linkAddresses == null) {
-            return null;
-        }
-
-        for (LinkAddress la : linkAddresses) {
-            final Inet6Address address = (Inet6Address) la.getAddress();
-            if (address.equals(expect)) return la;
-        }
-        return null;
-    }
-
     /**
      * Updates the LinkProperties and checks whether the link addresses have changed.
      */
@@ -361,9 +349,18 @@ public class Dhcp6AddrRegTracker {
         boolean shouldDispatchRegistration = false;
         boolean dispatchOnlyTimer = false;
         final long now = SystemClock.elapsedRealtime();
+
+        // Collect the LinkAddresses from all RegistrationScheduler objects and compare them against
+        // the new LinkProperties. Note that incompatible addresses, such as IPv4 or link-local
+        // addresses, are part of the added list and subsequently ignored by checking the result of
+        // isRegistrableAddress().
+        final List<LinkAddress> trackedLinkAddresses = mTrackedAddresses.values().stream()
+                .map(RegistrationScheduler::getAddress)
+                .toList();
+
         final CompareOrUpdateResult<Pair<InetAddress, Integer>, LinkAddress> addressDiff =
                 new CompareOrUpdateResult<>(
-                        mLinkProperties == null ? null : mLinkProperties.getLinkAddresses(),
+                        trackedLinkAddresses,
                         newLp.getLinkAddresses(),
                         linkAddress -> new Pair(
                                 linkAddress.getAddress(),
@@ -386,11 +383,23 @@ public class Dhcp6AddrRegTracker {
         }
 
         for (LinkAddress la : addressDiff.updated) {
+            // TODO: remove the call to isRegistrableAddress(). Since addresses are already filtered
+            // out of the added list above, addressDiff.updated can never contain addresses for
+            // which isRegistrableAddress() returns false. The same applies to addressDiff.removed.
             if (!isRegistrableAddress(la)) continue;
-            final LinkAddress oldLinkAddress = findLinkAddress(
-                    mLinkProperties.getLinkAddresses(), (Inet6Address) la.getAddress());
-            if (!isLifetimeChangeSignificant(oldLinkAddress.getExpirationTime(),
-                    la.getExpirationTime())) {
+
+            // The LinkAddress is guaranteed to be an IPv6 address.
+            final RegistrationScheduler s = mTrackedAddresses.get((Inet6Address) la.getAddress());
+
+            // Comparing the lifetime against the last registered address inside the
+            // RegistrationScheduler object ensures that significant lifetime changes are handled
+            // appropriately. I.e. if a router always updates the lifetime by less than 1%, the
+            // first few lifetime changes will be ignored as per isLifetimeChangeSignificant();
+            // however, in that case the RegistrationScheduler does not get updated, so the lifetime
+            // will eventually become sufficiently "out of sync".
+            final long oldExpiryMs = s.mAddress.getExpirationTime();
+            final long newExpiryMs = la.getExpirationTime();
+            if (!isLifetimeChangeSignificant(oldExpiryMs, newExpiryMs)) {
                 continue;
             }
             updateAddress(la, now);
@@ -403,8 +412,6 @@ public class Dhcp6AddrRegTracker {
         if (shouldDispatchRegistration) {
             dispatchRegistration(dispatchOnlyTimer);
         }
-
-        mLinkProperties = newLp;
     }
 
     private void scheduleNextTimer() {
