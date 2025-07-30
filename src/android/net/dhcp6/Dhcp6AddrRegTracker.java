@@ -27,6 +27,7 @@ import android.os.Handler;
 import android.os.SystemClock;
 import android.util.ArrayMap;
 import android.util.Log;
+import android.util.Pair;
 
 import androidx.annotation.Nullable;
 
@@ -37,11 +38,11 @@ import com.android.net.module.util.dhcp6.Dhcp6AddrRegReplyPacket;
 import com.android.net.module.util.dhcp6.Dhcp6Packet;
 
 import java.net.Inet6Address;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Random;
 
 /**
@@ -374,11 +375,11 @@ public class Dhcp6AddrRegTracker {
         boolean shouldDispatchRegistration = false;
         boolean dispatchOnlyTimer = false;
         final long now = SystemClock.elapsedRealtime();
-        final LinkPropertiesUtils.CompareOrUpdateResult<Integer, LinkAddress> addressDiff =
+        final LinkPropertiesUtils.CompareOrUpdateResult<Pair<InetAddress, Integer>, LinkAddress> addressDiff =
                 new LinkPropertiesUtils.CompareOrUpdateResult<>(
                         mLinkProperties == null ? null : mLinkProperties.getLinkAddresses(),
                         newLp.getLinkAddresses(),
-                        linkAddress -> Objects.hash(
+                        linkAddress -> new Pair(
                                 linkAddress.getAddress(),
                                 linkAddress.getPrefixLength()));
         for (LinkAddress la : addressDiff.added) {
