@@ -212,10 +212,10 @@ public class Dhcp6AddrRegTracker {
 
             // When the client retransmits the registration message, the lifetimes in the packet
             // MUST be updated so that they match the current lifetimes of the address.
-            // TODO: preferred and valid should always be positive. However, it may be safer to add
-            // a min(0, ..).
-            final long preferred = (mAddress.getDeprecationTime() - now) / 1000;
-            final long valid = (mAddress.getExpirationTime() - now) / 1000;
+            // TODO: Refactor buildAddrRegInformPacket to take the LinkAddress and current time as
+            // inputs and implement this functionality in there.
+            final long preferred = Math.max(0L, mAddress.getDeprecationTime() - now) / 1000;
+            final long valid = Math.max(0L, mAddress.getExpirationTime() - now) / 1000;
             final long elapsedTimeMs = now - mTransStartMs;
             final ByteBuffer packet = Dhcp6Packet.buildAddrRegInformPacket(mTransId, elapsedTimeMs,
                     mClientDuid, (Inet6Address) mAddress.getAddress(), preferred, valid);
