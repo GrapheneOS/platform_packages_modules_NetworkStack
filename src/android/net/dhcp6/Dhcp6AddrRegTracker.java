@@ -27,7 +27,6 @@ import android.os.Handler;
 import android.os.SystemClock;
 import android.util.ArrayMap;
 import android.util.Log;
-import android.util.Pair;
 
 import androidx.annotation.Nullable;
 
@@ -366,13 +365,11 @@ public class Dhcp6AddrRegTracker {
                 .map(la -> new Link6Address(la))
                 .toList();
 
-        final CompareOrUpdateResult<Pair<InetAddress, Integer>, Link6Address> addressDiff =
+        final CompareOrUpdateResult<InetAddress, Link6Address> addressDiff =
                 new CompareOrUpdateResult<>(
                         trackedLink6Addresses,
                         newLink6Addresses,
-                        link6Address -> new Pair(
-                                link6Address.getAddress(),
-                                link6Address.getPrefixLength()));
+                        link6Address -> link6Address.getAddress());
 
         boolean hasUpdate = false;
         for (Link6Address la : addressDiff.added) {
