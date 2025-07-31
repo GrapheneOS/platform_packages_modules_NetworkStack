@@ -27,6 +27,7 @@ import android.os.Handler;
 import android.os.SystemClock;
 import android.util.ArrayMap;
 import android.util.Log;
+import android.util.Pair;
 
 import androidx.annotation.Nullable;
 
@@ -37,11 +38,11 @@ import com.android.net.module.util.dhcp6.Dhcp6AddrRegReplyPacket;
 import com.android.net.module.util.dhcp6.Dhcp6Packet;
 
 import java.net.Inet6Address;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Random;
 
 /**
@@ -213,19 +214,16 @@ public class Dhcp6AddrRegTracker {
         }
 
         /**
-         * Calculate the next SLAAC address registration fresh interval in seconds.
+         * Calculate the next SLAAC address registration refresh interval.
          *
-         * This happens either when receiving an ADDR_REG_REPLY from the DHCPv6 server or the
-         * updated link address lifetime changes more than 1%.
+         * Return 80% of the valid lifetime, applying a desync multiplier to avoid cross-device
+         * synchronization.
          *
-         * Return the 80% of the SLAAC address's current valid lifetime, and applies a desync
-         * multiplier, in order to avoid synchronization with other clients, which could cause a
-         * large number of registration messages to reach the server at the same time.
-         *
-         * @param valid link address valid lifetime.
+         * @param validMs link address valid lifetime in milliseconds.
+         * @return the AddrRegRefreshInterval in milliseconds
          */
-        private long addrRegRefreshInterval(long valid) {
-            return (long) (valid * 0.8 * sAddrRegDesyncMultiplier * 1000);
+        private long addrRegRefreshInterval(long validMs) {
+            return (long) (validMs * 0.8 * sAddrRegDesyncMultiplier);
         }
 
         /**
@@ -266,8 +264,8 @@ public class Dhcp6AddrRegTracker {
             if (!la.getAddress().equals(mAddress)) {
                 throw new IllegalStateException("link addresses to be updated don't match");
             }
-            final long newValid = (la.getExpirationTime() - now) / 1000;
-            mEventTime = Math.min(mEventTime, now + addrRegRefreshInterval(newValid));
+            final long newValidMs = la.getExpirationTime() - now;
+            mEventTime = Math.min(mEventTime, now + addrRegRefreshInterval(newValidMs));
             resetTransactionParams();
             mIsScheduled = true;
             mAddress = (Inet6Address) la.getAddress();
@@ -324,10 +322,6 @@ public class Dhcp6AddrRegTracker {
         mTrackedAddresses.put(address, scheduler);
     }
 
-    private void removeAddress(LinkAddress la) {
-        mTrackedAddresses.remove((Inet6Address) la.getAddress());
-    }
-
     private void updateAddress(LinkAddress la, long now) {
         final Inet6Address address = (Inet6Address) la.getAddress();
         RegistrationScheduler scheduler = mTrackedAddresses.get(address);
@@ -374,11 +368,11 @@ public class Dhcp6AddrRegTracker {
         boolean shouldDispatchRegistration = false;
         boolean dispatchOnlyTimer = false;
         final long now = SystemClock.elapsedRealtime();
-        final LinkPropertiesUtils.CompareOrUpdateResult<Integer, LinkAddress> addressDiff =
+        final LinkPropertiesUtils.CompareOrUpdateResult<Pair<InetAddress, Integer>, LinkAddress> addressDiff =
                 new LinkPropertiesUtils.CompareOrUpdateResult<>(
                         mLinkProperties == null ? null : mLinkProperties.getLinkAddresses(),
                         newLp.getLinkAddresses(),
-                        linkAddress -> Objects.hash(
+                        linkAddress -> new Pair(
                                 linkAddress.getAddress(),
                                 linkAddress.getPrefixLength()));
         for (LinkAddress la : addressDiff.added) {
@@ -391,7 +385,7 @@ public class Dhcp6AddrRegTracker {
 
         for (LinkAddress la : addressDiff.removed) {
             if (!isRegistrableAddress(la)) continue;
-            removeAddress(la);
+            mTrackedAddresses.remove((Inet6Address) la.getAddress());
             shouldDispatchRegistration = true;
             // No need to immediately dispatch ADDR_REG_INFORM on address removal; simply reschedule
             // the next alarm based on the remaining addresses' mEventTime.
