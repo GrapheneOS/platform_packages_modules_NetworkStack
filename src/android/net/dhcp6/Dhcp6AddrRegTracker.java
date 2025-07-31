@@ -103,6 +103,43 @@ public class Dhcp6AddrRegTracker {
     // A random value uniformly distributed between 0.9 and 1.1 (see RFC9686 section 4.6.1).
     private static final double sAddrRegDesyncMultiplier = (new Random()).nextDouble() * 0.2 + 0.9;
 
+    private static class Link6Address extends LinkAddress {
+        Link6Address(LinkAddress la) {
+            super(la.getAddress(), la.getPrefixLength(), la.getFlags(), la.getScope(),
+                    la.getDeprecationTime(), la.getExpirationTime());
+
+            // Ensure that the passed LinkAddress contains an IPv6 address. Otherwise, the cast in
+            // getAddress will throw an exception.
+            if (!(la.getAddress() instanceof Inet6Address)) {
+                throw new IllegalStateException("Link6Address requires an IPv6 LinkAddress");
+            }
+        }
+
+        /** Return the contained Inet6Address. */
+        @Override
+        public Inet6Address getAddress() {
+            return (Inet6Address) super.getAddress();
+        }
+
+        /**
+         * Return the remaining preferred lifetime for this address.
+         *
+         * @param nowMs The current time based on {@link SystemClock#elapsedRealtime}
+         */
+        public long getPreferredLifetimeMs(long nowMs) {
+            return Math.max(0, getDeprecationTime() - nowMs);
+        }
+
+        /**
+         * Return the remaining valid lifetime for this address.
+         *
+         * @param nowMs The current time based on {@link SystemClock#elapsedRealtime}
+         */
+        public long getValidLifetimeMs(long nowMs) {
+            return Math.max(0, getExpirationTime() - nowMs);
+        }
+    }
+
     /**
      * Calculate the next SLAAC address registration refresh interval.
      *
@@ -122,7 +159,7 @@ public class Dhcp6AddrRegTracker {
 
         // Contains the IPv6 address to be registered including its preferred and valid lifetimes.
         // The IPv6 address to be registered.
-        private final LinkAddress mAddress;
+        private final Link6Address mAddress;
         // Keep track of the current retry count. mRetryCount is set to 0 when a reply is
         // received or the address is updated.
         private int mRetryCount;
@@ -138,7 +175,7 @@ public class Dhcp6AddrRegTracker {
         // The timestamp at which the DHCPv6 message retransmission starts.
         private long mTransStartMs;
 
-        AddressTracker(LinkAddress address, long eventTime) {
+        AddressTracker(Link6Address address, long eventTime) {
             mAddress = address;
             mRetryCount = 0;
             mIsScheduled = true;
@@ -146,7 +183,7 @@ public class Dhcp6AddrRegTracker {
             mTransId = mRandom.nextInt() & 0xffffff;
         }
 
-        public LinkAddress getAddress() {
+        public Link6Address getAddress() {
             return mAddress;
         }
 
@@ -214,14 +251,14 @@ public class Dhcp6AddrRegTracker {
             // MUST be updated so that they match the current lifetimes of the address.
             // TODO: Refactor buildAddrRegInformPacket to take the LinkAddress and current time as
             // inputs and implement this functionality in there.
-            final long preferred = Math.max(0L, mAddress.getDeprecationTime() - now) / 1000;
-            final long valid = Math.max(0L, mAddress.getExpirationTime() - now) / 1000;
+            final long preferred = mAddress.getPreferredLifetimeMs(now) / 1000;
+            final long valid = mAddress.getValidLifetimeMs(now) / 1000;
             final long elapsedTimeMs = now - mTransStartMs;
             final ByteBuffer packet = Dhcp6Packet.buildAddrRegInformPacket(mTransId, elapsedTimeMs,
-                    mClientDuid, (Inet6Address) mAddress.getAddress(), preferred, valid);
+                    mClientDuid, mAddress.getAddress(), preferred, valid);
             // DHCPv6 ADDR-REG-INFORM message MUST be sent from the address being registered per
             // RFC9686 section 4.2.
-            transmitPacket(packet, (Inet6Address) mAddress.getAddress());
+            transmitPacket(packet, mAddress.getAddress());
             ++mRetryCount;
         }
 
@@ -320,38 +357,36 @@ public class Dhcp6AddrRegTracker {
         // the new LinkProperties. Note that incompatible addresses, such as IPv4 or link-local
         // addresses, are part of the added list and subsequently ignored by checking the result of
         // isRegistrableAddress().
-        final List<LinkAddress> trackedLinkAddresses = mTrackedAddresses.values().stream()
+        final List<Link6Address> trackedLink6Addresses = mTrackedAddresses.values().stream()
                 .map(AddressTracker::getAddress)
                 .toList();
 
-        final CompareOrUpdateResult<Pair<InetAddress, Integer>, LinkAddress> addressDiff =
+        final List<Link6Address> newLink6Addresses = newLp.getLinkAddresses().stream()
+                .filter(la -> isRegistrableAddress(la))
+                .map(la -> new Link6Address(la))
+                .toList();
+
+        final CompareOrUpdateResult<Pair<InetAddress, Integer>, Link6Address> addressDiff =
                 new CompareOrUpdateResult<>(
-                        trackedLinkAddresses,
-                        newLp.getLinkAddresses(),
-                        linkAddress -> new Pair(
-                                linkAddress.getAddress(),
-                                linkAddress.getPrefixLength()));
+                        trackedLink6Addresses,
+                        newLink6Addresses,
+                        link6Address -> new Pair(
+                                link6Address.getAddress(),
+                                link6Address.getPrefixLength()));
 
         boolean hasUpdate = false;
-        for (LinkAddress la : addressDiff.added) {
-            if (!isRegistrableAddress(la)) continue;
+        for (Link6Address la : addressDiff.added) {
             hasUpdate = true;
-            mTrackedAddresses.put((Inet6Address) la.getAddress(), new AddressTracker(la, now));
+            mTrackedAddresses.put(la.getAddress(), new AddressTracker(la, now));
         }
 
-        for (LinkAddress la : addressDiff.removed) {
-            // Because isRegistrable is checked before adding the address to mTrackedAddresses,
-            // addressDiff.removed can never contain addresses for which isRegistrableAddress()
-            // returns false; i.e. the LinkAddress is guaranteed to be an IPv6 address.
+        for (Link6Address la : addressDiff.removed) {
             hasUpdate = true;
-            mTrackedAddresses.remove((Inet6Address) la.getAddress());
+            mTrackedAddresses.remove(la.getAddress());
         }
 
-        for (LinkAddress la : addressDiff.updated) {
-            // Because isRegistrable is checked before adding the address to mTrackedAddresses,
-            // addressDiff.updated can never contain addresses for which isRegistrableAddress()
-            // returns false; i.e. the LinkAddress is guaranteed to be an IPv6 address.
-            final AddressTracker tracker = mTrackedAddresses.get((Inet6Address) la.getAddress());
+        for (Link6Address la : addressDiff.updated) {
+            final AddressTracker tracker = mTrackedAddresses.get(la.getAddress());
 
             // Comparing the lifetime against the last registered address inside the
             // AddressTracker object ensures that significant lifetime changes are handled
@@ -376,13 +411,13 @@ public class Dhcp6AddrRegTracker {
             //   refresh for min(now + AddrRegRefreshInterval,
             //   NextAddrRegRefreshTime).  If the refresh would be scheduled in the
             //   past, then the refresh occurs immediately.
-            mTrackedAddresses.remove((Inet6Address) la.getAddress());
+            mTrackedAddresses.remove(la.getAddress());
             final long nextAddrRegRefreshTime = tracker.mEventTime;
             final long newValidMs = newExpiryMs - now;
             final long addrRegRefreshInterval = addrRegRefreshInterval(newValidMs);
 
             final long refreshTime = Math.min(now + addrRegRefreshInterval, nextAddrRegRefreshTime);
-            mTrackedAddresses.put((Inet6Address) la.getAddress(), new AddressTracker(la, now));
+            mTrackedAddresses.put(la.getAddress(), new AddressTracker(la, now));
         }
 
         if (hasUpdate) {
