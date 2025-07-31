@@ -250,11 +250,14 @@ public class Dhcp6AddrRegTracker {
             // MUST be updated so that they match the current lifetimes of the address.
             // TODO: Refactor buildAddrRegInformPacket to take the LinkAddress and current time as
             // inputs and implement this functionality in there.
-            final long preferred = mAddress.getPreferredLifetimeMs(now) / 1000;
-            final long valid = mAddress.getValidLifetimeMs(now) / 1000;
             final long elapsedTimeMs = now - mTransStartMs;
-            final ByteBuffer packet = Dhcp6Packet.buildAddrRegInformPacket(mTransId, elapsedTimeMs,
-                    mClientDuid, mAddress.getAddress(), preferred, valid);
+            final ByteBuffer packet = Dhcp6Packet.buildAddrRegInformPacket(
+                    mTransId,
+                    elapsedTimeMs,
+                    mClientDuid,
+                    mAddress.getAddress(),
+                    mAddress.getPreferredLifetimeMs(now) / 1000,
+                    mAddress.getValidLifetimeMs(now) / 1000);
             // DHCPv6 ADDR-REG-INFORM message MUST be sent from the address being registered per
             // RFC9686 section 4.2.
             transmitPacket(packet, mAddress.getAddress());
