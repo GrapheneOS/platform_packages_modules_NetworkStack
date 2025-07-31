@@ -345,18 +345,17 @@ public class Dhcp6AddrRegTracker {
         }
 
         for (LinkAddress la : addressDiff.removed) {
-            if (!isRegistrableAddress(la)) continue;
+            // Because isRegistrable is checked before adding the address to mTrackedAddresses,
+            // addressDiff.removed can never contain addresses for which isRegistrableAddress()
+            // returns false; i.e. the LinkAddress is guaranteed to be an IPv6 address.
             hasUpdate = true;
             mTrackedAddresses.remove((Inet6Address) la.getAddress());
         }
 
         for (LinkAddress la : addressDiff.updated) {
-            // TODO: remove the call to isRegistrableAddress(). Since addresses are already filtered
-            // out of the added list above, addressDiff.updated can never contain addresses for
-            // which isRegistrableAddress() returns false. The same applies to addressDiff.removed.
-            if (!isRegistrableAddress(la)) continue;
-
-            // The LinkAddress is guaranteed to be an IPv6 address.
+            // Because isRegistrable is checked before adding the address to mTrackedAddresses,
+            // addressDiff.updated can never contain addresses for which isRegistrableAddress()
+            // returns false; i.e. the LinkAddress is guaranteed to be an IPv6 address.
             final RegistrationScheduler s = mTrackedAddresses.get((Inet6Address) la.getAddress());
 
             // Comparing the lifetime against the last registered address inside the
