@@ -54,7 +54,7 @@ import java.util.Random;
  *
  * <ul>
  *   <li><strong>Address Tracking:</strong> It maintains a map of IPv6 addresses to their
- *       corresponding {@link AddressTracker} instances. Each scheduler tracks the
+ *       corresponding {@link AddressTracker} instances. Each tracker tracks the
  *       registration state, retransmission attempts, and refresh timers for a specific address.
  *   <li><strong>Message Transmission:</strong> It constructs and sends ADDR-REG-INFORM messages
  *       with the current address lifetimes and a unique transaction ID.
@@ -75,14 +75,14 @@ import java.util.Random;
  * <ol>
  *   <li>When a new IPv6 address is added to the LinkProperties, a {@link AddressTracker} is
  *       created for it, and an initial registration message is scheduled.
- *   <li>When the timer expires, the scheduler sends an ADDR-REG-INFORM message.
- *   <li>If no ADDR-REG-REPLY is received, the scheduler retransmits the message with exponential
+ *   <li>When the timer expires, the tracker sends an ADDR-REG-INFORM message.
+ *   <li>If no ADDR-REG-REPLY is received, the tracker retransmits the message with exponential
  *       backoff, up to a maximum number of attempts (MRC).
- *   <li>Upon receiving an ADDR-REG-REPLY, the scheduler resets the retransmission parameters and
+ *   <li>Upon receiving an ADDR-REG-REPLY, the tracker resets the retransmission parameters and
  *       schedules a new refresh timer.
- *   <li>When the address's valid lifetime changes more than 1%, the scheduler updates the refresh
+ *   <li>When the address's valid lifetime changes more than 1%, the tracker updates the refresh
  *       timer and resets the retransmission parameters.
- *   <li>When an address is removed from the LinkProperties, its scheduler is removed.
+ *   <li>When an address is removed from the LinkProperties, its tracker is removed.
  * </ol>
  * @hide
  */
@@ -291,8 +291,8 @@ public class Dhcp6AddrRegTracker {
     }
 
     private void addAddress(LinkAddress la, long now) {
-        final AddressTracker scheduler = new AddressTracker(la, now);
-        mTrackedAddresses.put((Inet6Address) la.getAddress(), scheduler);
+        final AddressTracker tracker = new AddressTracker(la, now);
+        mTrackedAddresses.put((Inet6Address) la.getAddress(), tracker);
     }
 
     // Note that Android does not consider deprecated addresses to determine
@@ -356,7 +356,7 @@ public class Dhcp6AddrRegTracker {
             // Because isRegistrable is checked before adding the address to mTrackedAddresses,
             // addressDiff.updated can never contain addresses for which isRegistrableAddress()
             // returns false; i.e. the LinkAddress is guaranteed to be an IPv6 address.
-            final AddressTracker s = mTrackedAddresses.get((Inet6Address) la.getAddress());
+            final AddressTracker tracker = mTrackedAddresses.get((Inet6Address) la.getAddress());
 
             // Comparing the lifetime against the last registered address inside the
             // AddressTracker object ensures that significant lifetime changes are handled
@@ -364,7 +364,7 @@ public class Dhcp6AddrRegTracker {
             // first few lifetime changes will be ignored as per isLifetimeChangeSignificant();
             // however, in that case the AddressTracker does not get updated, so the lifetime
             // will eventually become sufficiently "out of sync".
-            final long oldExpiryMs = s.mAddress.getExpirationTime();
+            final long oldExpiryMs = tracker.mAddress.getExpirationTime();
             final long newExpiryMs = la.getExpirationTime();
             if (!isLifetimeChangeSignificant(oldExpiryMs, newExpiryMs)) {
                 continue;
@@ -382,7 +382,7 @@ public class Dhcp6AddrRegTracker {
             //   NextAddrRegRefreshTime).  If the refresh would be scheduled in the
             //   past, then the refresh occurs immediately.
             mTrackedAddresses.remove((Inet6Address) la.getAddress());
-            final long nextAddrRegRefreshTime = s.mEventTime;
+            final long nextAddrRegRefreshTime = tracker.mEventTime;
             final long newValidMs = newExpiryMs - now;
             final long addrRegRefreshInterval = addrRegRefreshInterval(newValidMs);
 
@@ -409,9 +409,9 @@ public class Dhcp6AddrRegTracker {
      */
     private void scheduleNextTimer() {
         long nextEvent = Long.MAX_VALUE;
-        for (AddressTracker scheduler : mTrackedAddresses.values()) {
-            if (!scheduler.mIsScheduled) continue;
-            nextEvent = Math.min(nextEvent, scheduler.mEventTime);
+        for (AddressTracker tracker : mTrackedAddresses.values()) {
+            if (!tracker.mIsScheduled) continue;
+            nextEvent = Math.min(nextEvent, tracker.mEventTime);
         }
         if (nextEvent == Long.MAX_VALUE) return;
 
@@ -426,9 +426,9 @@ public class Dhcp6AddrRegTracker {
      */
     private void dispatchRegistration() {
         final long now = SystemClock.elapsedRealtime();
-        for (AddressTracker scheduler : mTrackedAddresses.values()) {
-            if (!scheduler.isExpired(now)) continue;
-            scheduler.sendRegisterAddress(now);
+        for (AddressTracker tracker : mTrackedAddresses.values()) {
+            if (!tracker.isExpired(now)) continue;
+            tracker.sendRegisterAddress(now);
         }
         scheduleNextTimer();
     }
@@ -447,9 +447,9 @@ public class Dhcp6AddrRegTracker {
             Log.e(TAG, "IPv6 destination address does not match the address being registered");
             return;
         }
-        final AddressTracker scheduler = mTrackedAddresses.get(address);
-        if (scheduler == null) {
-            Log.e(TAG, "Do not find a corresponding scheduler for IPv6 address " + address);
+        final AddressTracker tracker = mTrackedAddresses.get(address);
+        if (tracker == null) {
+            Log.e(TAG, "Do not find a corresponding tracker for IPv6 address " + address);
             return;
         }
 
@@ -458,11 +458,11 @@ public class Dhcp6AddrRegTracker {
         // change the mTransId, when the response arrives, the mTransId changes, and we throws
         // the response, that's the intended behavior, because we want to respect the updated
         // lifetime first.
-        if (scheduler.mTransId != packet.getTransactionId()) {
+        if (tracker.mTransId != packet.getTransactionId()) {
             Log.e(TAG, "transId doesn't match");
             return;
         }
-        scheduler.onReply();
+        tracker.onReply();
         dispatchRegistration();
     }
 
