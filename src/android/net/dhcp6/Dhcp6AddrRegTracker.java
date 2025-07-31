@@ -54,7 +54,7 @@ import java.util.Random;
  *
  * <ul>
  *   <li><strong>Address Tracking:</strong> It maintains a map of IPv6 addresses to their
- *       corresponding {@link RegistrationScheduler} instances. Each scheduler tracks the
+ *       corresponding {@link AddressTracker} instances. Each scheduler tracks the
  *       registration state, retransmission attempts, and refresh timers for a specific address.
  *   <li><strong>Message Transmission:</strong> It constructs and sends ADDR-REG-INFORM messages
  *       with the current address lifetimes and a unique transaction ID.
@@ -73,7 +73,7 @@ import java.util.Random;
  * <p>The class operates as follows:
  *
  * <ol>
- *   <li>When a new IPv6 address is added to the LinkProperties, a {@link RegistrationScheduler} is
+ *   <li>When a new IPv6 address is added to the LinkProperties, a {@link AddressTracker} is
  *       created for it, and an initial registration message is scheduled.
  *   <li>When the timer expires, the scheduler sends an ADDR-REG-INFORM message.
  *   <li>If no ADDR-REG-REPLY is received, the scheduler retransmits the message with exponential
@@ -94,7 +94,7 @@ public class Dhcp6AddrRegTracker {
     private final Random mRandom;
     private final Dhcp6PacketDispatcher mDhcp6PacketDispatcher;
     private final Dhcp6PacketDispatcher.MessageHandler mDhcp6MessageHandler;
-    private final Map<Inet6Address, RegistrationScheduler> mTrackedAddresses = new ArrayMap<>();
+    private final Map<Inet6Address, AddressTracker> mTrackedAddresses = new ArrayMap<>();
     private final AlarmManager mAlarmManager;
     private final AlarmManager.OnAlarmListener mAddressRegistrationAlarm;
     private final String mInterfaceName;
@@ -116,7 +116,7 @@ public class Dhcp6AddrRegTracker {
         return (long) (validMs * 0.8 * sAddrRegDesyncMultiplier);
     }
 
-    private class RegistrationScheduler {
+    private class AddressTracker {
         private static final int IRT_MS = 1000; // 1s
         private static final int MRC = 3;
 
@@ -138,7 +138,7 @@ public class Dhcp6AddrRegTracker {
         // The timestamp at which the DHCPv6 message retransmission starts.
         private long mTransStartMs;
 
-        RegistrationScheduler(LinkAddress address, long eventTime) {
+        AddressTracker(LinkAddress address, long eventTime) {
             mAddress = address;
             mRetryCount = 0;
             mIsScheduled = true;
@@ -291,7 +291,7 @@ public class Dhcp6AddrRegTracker {
     }
 
     private void addAddress(LinkAddress la, long now) {
-        final RegistrationScheduler scheduler = new RegistrationScheduler(la, now);
+        final AddressTracker scheduler = new AddressTracker(la, now);
         mTrackedAddresses.put((Inet6Address) la.getAddress(), scheduler);
     }
 
@@ -321,12 +321,12 @@ public class Dhcp6AddrRegTracker {
     public void setLinkProperties(LinkProperties newLp) {
         final long now = SystemClock.elapsedRealtime();
 
-        // Collect the LinkAddresses from all RegistrationScheduler objects and compare them against
+        // Collect the LinkAddresses from all AddressTracker objects and compare them against
         // the new LinkProperties. Note that incompatible addresses, such as IPv4 or link-local
         // addresses, are part of the added list and subsequently ignored by checking the result of
         // isRegistrableAddress().
         final List<LinkAddress> trackedLinkAddresses = mTrackedAddresses.values().stream()
-                .map(RegistrationScheduler::getAddress)
+                .map(AddressTracker::getAddress)
                 .toList();
 
         final CompareOrUpdateResult<Pair<InetAddress, Integer>, LinkAddress> addressDiff =
@@ -356,13 +356,13 @@ public class Dhcp6AddrRegTracker {
             // Because isRegistrable is checked before adding the address to mTrackedAddresses,
             // addressDiff.updated can never contain addresses for which isRegistrableAddress()
             // returns false; i.e. the LinkAddress is guaranteed to be an IPv6 address.
-            final RegistrationScheduler s = mTrackedAddresses.get((Inet6Address) la.getAddress());
+            final AddressTracker s = mTrackedAddresses.get((Inet6Address) la.getAddress());
 
             // Comparing the lifetime against the last registered address inside the
-            // RegistrationScheduler object ensures that significant lifetime changes are handled
+            // AddressTracker object ensures that significant lifetime changes are handled
             // appropriately. I.e. if a router always updates the lifetime by less than 1%, the
             // first few lifetime changes will be ignored as per isLifetimeChangeSignificant();
-            // however, in that case the RegistrationScheduler does not get updated, so the lifetime
+            // however, in that case the AddressTracker does not get updated, so the lifetime
             // will eventually become sufficiently "out of sync".
             final long oldExpiryMs = s.mAddress.getExpirationTime();
             final long newExpiryMs = la.getExpirationTime();
@@ -409,7 +409,7 @@ public class Dhcp6AddrRegTracker {
      */
     private void scheduleNextTimer() {
         long nextEvent = Long.MAX_VALUE;
-        for (RegistrationScheduler scheduler : mTrackedAddresses.values()) {
+        for (AddressTracker scheduler : mTrackedAddresses.values()) {
             if (!scheduler.mIsScheduled) continue;
             nextEvent = Math.min(nextEvent, scheduler.mEventTime);
         }
@@ -426,7 +426,7 @@ public class Dhcp6AddrRegTracker {
      */
     private void dispatchRegistration() {
         final long now = SystemClock.elapsedRealtime();
-        for (RegistrationScheduler scheduler : mTrackedAddresses.values()) {
+        for (AddressTracker scheduler : mTrackedAddresses.values()) {
             if (!scheduler.isExpired(now)) continue;
             scheduler.sendRegisterAddress(now);
         }
@@ -447,7 +447,7 @@ public class Dhcp6AddrRegTracker {
             Log.e(TAG, "IPv6 destination address does not match the address being registered");
             return;
         }
-        final RegistrationScheduler scheduler = mTrackedAddresses.get(address);
+        final AddressTracker scheduler = mTrackedAddresses.get(address);
         if (scheduler == null) {
             Log.e(TAG, "Do not find a corresponding scheduler for IPv6 address " + address);
             return;
