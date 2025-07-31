@@ -290,11 +290,6 @@ public class Dhcp6AddrRegTracker {
         mTrackedAddresses.clear();
     }
 
-    private void addAddress(LinkAddress la, long now) {
-        final AddressTracker tracker = new AddressTracker(la, now);
-        mTrackedAddresses.put((Inet6Address) la.getAddress(), tracker);
-    }
-
     // Note that Android does not consider deprecated addresses to determine
     // provisioning state; however, these addresses can still be used and must
     // be registered.
@@ -341,7 +336,7 @@ public class Dhcp6AddrRegTracker {
         for (LinkAddress la : addressDiff.added) {
             if (!isRegistrableAddress(la)) continue;
             hasUpdate = true;
-            addAddress(la, now);
+            mTrackedAddresses.put((Inet6Address) la.getAddress(), new AddressTracker(la, now));
         }
 
         for (LinkAddress la : addressDiff.removed) {
@@ -387,7 +382,7 @@ public class Dhcp6AddrRegTracker {
             final long addrRegRefreshInterval = addrRegRefreshInterval(newValidMs);
 
             final long refreshTime = Math.min(now + addrRegRefreshInterval, nextAddrRegRefreshTime);
-            addAddress(la, refreshTime);
+            mTrackedAddresses.put((Inet6Address) la.getAddress(), new AddressTracker(la, now));
         }
 
         if (hasUpdate) {
