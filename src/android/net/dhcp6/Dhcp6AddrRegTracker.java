@@ -294,7 +294,7 @@ public class Dhcp6AddrRegTracker {
         final InterfaceParams params = InterfaceParams.getByName(ifName);
         mClientDuid = Dhcp6Packet.createClientDuid(params.macAddr);
         mDhcp6PacketDispatcher = dispatcher;
-        mDhcp6MessageHandler = (packet, dst) -> mHandler.post(() -> onReceive(packet, dst));
+        mDhcp6MessageHandler = (packet, dst) -> mHandler.post(() -> onReceiveReply(packet, dst));
         mAddressRegistrationAlarm = new AddressRegistrationAlarmListener();
     }
 
@@ -450,7 +450,7 @@ public class Dhcp6AddrRegTracker {
         scheduleNextTimer();
     }
 
-    private void onReceive(@NonNull Dhcp6Packet packet, @Nullable Inet6Address dst) {
+    private void onReceiveReply(@NonNull Dhcp6Packet packet, @Nullable Inet6Address dst) {
         if (DBG) Log.d(TAG, "Received packet: " + packet);
         if (!(packet instanceof Dhcp6AddrRegReplyPacket)) return;
         if (!Arrays.equals(mClientDuid, packet.getClientDuid())) return;
