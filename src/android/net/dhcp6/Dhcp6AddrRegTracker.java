@@ -281,7 +281,7 @@ public class Dhcp6AddrRegTracker {
     private class AddressRegistrationAlarmListener implements AlarmManager.OnAlarmListener {
         @Override
         public void onAlarm() {
-            dispatchRegistration();
+            dispatchRegistration(SystemClock.elapsedRealtime());
         }
     }
 
@@ -409,7 +409,7 @@ public class Dhcp6AddrRegTracker {
         }
 
         if (hasUpdate) {
-            dispatchRegistration();
+            dispatchRegistration(now);
         }
     }
 
@@ -442,11 +442,10 @@ public class Dhcp6AddrRegTracker {
      * Send all address registration messages where the timer has expired and schedule the next
      * timer.
      */
-    private void dispatchRegistration() {
-        final long now = SystemClock.elapsedRealtime();
+    private void dispatchRegistration(long nowMs) {
         for (AddressTracker tracker : mTrackedAddresses.values()) {
-            if (!tracker.isExpired(now)) continue;
-            tracker.sendRegisterAddress(now);
+            if (!tracker.isExpired(nowMs)) continue;
+            tracker.sendRegisterAddress(nowMs);
         }
         scheduleNextTimer();
     }
@@ -481,8 +480,9 @@ public class Dhcp6AddrRegTracker {
             return;
         }
 
-        tracker.markRegistrationSuccess(SystemClock.elapsedRealtime());
-        dispatchRegistration();
+        final long nowMs = SystemClock.elapsedRealtime();
+        tracker.markRegistrationSuccess(nowMs);
+        dispatchRegistration(nowMs);
     }
 
     @SuppressWarnings("ByteBufferBackingArray")
