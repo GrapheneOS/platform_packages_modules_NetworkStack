@@ -155,6 +155,8 @@ public class Dhcp6AddrRegTracker {
     private class AddressTracker {
         private static final int IRT_MS = 1000; // 1s
         private static final int MRC = 3;
+        // Valid transaction IDs are 3 octets.
+        private static final int INVALID_TRANS_ID = 0x1000000;
 
         // Contains the IPv6 address to be registered including its preferred and valid lifetimes.
         // The IPv6 address to be registered.
@@ -264,29 +266,15 @@ public class Dhcp6AddrRegTracker {
             ++mRetryCount;
         }
 
-        /**
-         * Reset the registartion parameters when refreshing an address, i.e. receive the
-         * ADDR_REG_REPLY or link address lifetime changes more than 1%, which requires to
-         * schedule a new refresh.
-         */
-        private void resetTransactionParams() {
-            mTransId = mRandom.nextInt() & 0xffffff;
-            mRetryCount = 0;
-            mTransStartMs = 0;
-        }
+        private void markRegistrationSuccess(long nowMs) {
+            // Ensure that no further responses are processed for this address by setting the
+            // transaction ID to an invalid value. There is no need to reset the retry count,
+            // because an address update creates a new AddressTracker object.
+            mTransId = INVALID_TRANS_ID;
 
-        /**
-         * Triggered when an ADDR_REG_REPLY message for the address being registered arrives.
-         *
-         * Stop the ADDR_REG_INFORM message retransmission and reset the retransmission parameters,
-         * calculate a NextAddrRegRefreshTime for the address, but does not schedule any refreshes
-         * per RFC9686 section 4.6.1.
-         */
-        private void onReply() {
-            final long now = SystemClock.elapsedRealtime();
-            resetTransactionParams();
+            // Update mEventTime but do not schedule the next event until the address is updated.
             mIsScheduled = false;
-            mEventTime = now + addrRegRefreshInterval(mAddress.getExpirationTime() - now);
+            mEventTime = nowMs + addrRegRefreshInterval(mAddress.getValidLifetimeMs(nowMs));
         }
     }
 
@@ -492,7 +480,8 @@ public class Dhcp6AddrRegTracker {
             Log.e(TAG, "transId doesn't match");
             return;
         }
-        tracker.onReply();
+
+        tracker.markRegistrationSuccess(SystemClock.elapsedRealtime());
         dispatchRegistration();
     }
 
