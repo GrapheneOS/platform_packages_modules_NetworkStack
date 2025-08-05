@@ -82,6 +82,10 @@ import java.util.Random;
  *       timer and resets the retransmission parameters.
  *   <li>When an address is removed from the LinkProperties, its tracker is removed.
  * </ol>
+ *
+ * Message coalescing as described in RFC9686 is explicitly unsupported, because it is unclear how
+ * the code should interact with retries. Realistically, address lifetimes are already synchronized,
+ * so that coalescing would not be particularly useful anyway.
  * @hide
  */
 public class Dhcp6AddrRegTracker {
@@ -191,7 +195,6 @@ public class Dhcp6AddrRegTracker {
          * If an ADDR-REG-REPLY message is received for the address being registered or refreshed,
          * the client MUST stop retransmission, it can be done by setting the "mIsScheduled" to
          * false, see RFC9686 section 4.6.3.
-         * TODO: support coalescing expired events
          */
         public final boolean isExpired(long now) {
             return mIsScheduled && (now >= mEventTime);
