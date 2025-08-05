@@ -424,12 +424,6 @@ public class Dhcp6AddrRegTracker {
                 mAddressRegistrationAlarm, mHandler);
     }
 
-    private int transmitPacket(Dhcp6AddrRegInformPacket packet) {
-        // DHCPv6 ADDR-REG-INFORM message MUST be sent from the address being registered
-        // per RFC9686 section 4.2.
-        return mDhcp6PacketDispatcher.transmitPacket(packet.buildPacket(), packet.mIaAddress);
-    }
-
     /**
      * Send all address registration messages where the timer has expired and schedule the next
      * timer.
@@ -437,8 +431,11 @@ public class Dhcp6AddrRegTracker {
     private void dispatchRegistration(long nowMs) {
         for (AddressTracker tracker : mTrackedAddresses.values()) {
             if (!tracker.isExpired(nowMs)) continue;
+
+            // DHCPv6 ADDR-REG-INFORM message MUST be sent from the address being registered
+            // per RFC9686 section 4.2.
             final Dhcp6AddrRegInformPacket packet = tracker.getAddrRegInformPacket(nowMs);
-            transmitPacket(packet);
+            mDhcp6PacketDispatcher.transmitPacket(packet.buildPacket(), packet.mIaAddress);
             tracker.maybeScheduleNextEvent(nowMs);
         }
         scheduleNextTimer();
