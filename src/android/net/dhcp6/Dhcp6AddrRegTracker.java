@@ -30,15 +30,14 @@ import android.util.Log;
 
 import androidx.annotation.Nullable;
 
-import com.android.net.module.util.HexDump;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.LinkPropertiesUtils.CompareOrUpdateResult;
+import com.android.net.module.util.dhcp6.Dhcp6AddrRegInformPacket;
 import com.android.net.module.util.dhcp6.Dhcp6AddrRegReplyPacket;
 import com.android.net.module.util.dhcp6.Dhcp6Packet;
 
 import java.net.Inet6Address;
 import java.net.InetAddress;
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -225,45 +224,40 @@ public class Dhcp6AddrRegTracker {
          *
          * Select an average jitter random factor in the [85%, 115%] in a simple approximate way.
          */
-        private double getRetransmissionTimeout(int retryCount) {
+        private long getRetransmissionTimeout(int retryCount) {
             final double randomFactor = mRandom.nextDouble() * 0.3 + 0.85;
-            return IRT_MS * Math.pow(2, retryCount) * randomFactor;
+            return (long) (IRT_MS * Math.pow(2, retryCount) * randomFactor);
         }
 
-        /**
-         * (Re)transmit an ADDR_REG_INFORM message to register/refresh an IPv6 address.
-         */
-        public void sendRegisterAddress(long now) {
-            if (mRetryCount >= MRC) {
-                Log.i(TAG, "Failed to register self-generated IPv6 " + mAddress);
-                // Set mIsScheduled to false to indicate that the registration process for this
-                // address has been stopped (see isExpired) due to exceeding the maximum retry
-                // count (MRC). If this address is updated (e.g. lifetime changes by more than 1%),
-                // the code will try to re-register immediately, which is working as intented.
-                mIsScheduled = false;
-                return;
-            }
+        public Dhcp6AddrRegInformPacket getInformPacketAndScheduleNextEvent(long nowMs) {
+            if (!mIsScheduled) throw new IllegalStateException("Processed unscheduled event");
 
-            // Calculate the next retransmission timestamp.
-            mEventTime = now + (long) getRetransmissionTimeout(mRetryCount);
-            if (mRetryCount == 0) mTransStartMs = now;
+            if (mRetryCount == 0) mTransStartMs = nowMs;
+            final long elapsedTimeMs = nowMs - mTransStartMs;
 
             // When the client retransmits the registration message, the lifetimes in the packet
             // MUST be updated so that they match the current lifetimes of the address.
-            // TODO: Refactor buildAddrRegInformPacket to take the LinkAddress and current time as
-            // inputs and implement this functionality in there.
-            final long elapsedTimeMs = now - mTransStartMs;
-            final ByteBuffer packet = Dhcp6Packet.buildAddrRegInformPacket(
+            final Dhcp6AddrRegInformPacket p = new Dhcp6AddrRegInformPacket(
                     mTransId,
-                    elapsedTimeMs,
+                    (int) elapsedTimeMs / 10 /* centiseconds */,
                     mClientDuid,
                     mAddress.getAddress(),
-                    mAddress.getPreferredLifetimeMs(now) / 1000,
-                    mAddress.getValidLifetimeMs(now) / 1000);
-            // DHCPv6 ADDR-REG-INFORM message MUST be sent from the address being registered per
-            // RFC9686 section 4.2.
-            transmitPacket(packet, mAddress.getAddress());
-            ++mRetryCount;
+                    mAddress.getPreferredLifetimeMs(nowMs) / 1000,
+                    mAddress.getValidLifetimeMs(nowMs) / 1000);
+
+            // Attempt to register the address MRC + 1 times: the initial attempt + MRC retries.
+            if (mRetryCount >= MRC) {
+                // The retry limit has been reached. Do not schedule another retry.
+                mIsScheduled = false;
+            } else {
+                // Calculate the next retransmission timestamp only if the retry limit has not been
+                // reached. This ensures that if the address is updated, registration is immediately
+                // attempted.
+                mEventTime = nowMs + getRetransmissionTimeout(mRetryCount);
+            }
+
+            mRetryCount++;
+            return p;
         }
 
         private void markRegistrationSuccess(long nowMs) {
@@ -438,6 +432,12 @@ public class Dhcp6AddrRegTracker {
                 mAddressRegistrationAlarm, mHandler);
     }
 
+    private int transmitPacket(Dhcp6AddrRegInformPacket packet) {
+        // DHCPv6 ADDR-REG-INFORM message MUST be sent from the address being registered
+        // per RFC9686 section 4.2.
+        return mDhcp6PacketDispatcher.transmitPacket(packet.buildPacket(), packet.mIaAddress);
+    }
+
     /**
      * Send all address registration messages where the timer has expired and schedule the next
      * timer.
@@ -445,7 +445,8 @@ public class Dhcp6AddrRegTracker {
     private void dispatchRegistration(long nowMs) {
         for (AddressTracker tracker : mTrackedAddresses.values()) {
             if (!tracker.isExpired(nowMs)) continue;
-            tracker.sendRegisterAddress(nowMs);
+            final Dhcp6AddrRegInformPacket p = tracker.getInformPacketAndScheduleNextEvent(nowMs);
+            transmitPacket(p);
         }
         scheduleNextTimer();
     }
@@ -483,17 +484,5 @@ public class Dhcp6AddrRegTracker {
         final long nowMs = SystemClock.elapsedRealtime();
         tracker.markRegistrationSuccess(nowMs);
         dispatchRegistration(nowMs);
-    }
-
-    @SuppressWarnings("ByteBufferBackingArray")
-    private int transmitPacket(@NonNull final ByteBuffer buf, @NonNull final Inet6Address src) {
-        if (DBG) {
-            Log.d(TAG, "Multicasting DHCPv6 addr-reg-inform packet to ff02::1:2"
-                    + " from " + src
-                    + " on interface " + mInterfaceName
-                    + ", packet raw data: "
-                    + HexDump.toHexString(buf.array(), 0, buf.limit()));
-        }
-        return mDhcp6PacketDispatcher.transmitPacket(buf, src);
     }
 }
