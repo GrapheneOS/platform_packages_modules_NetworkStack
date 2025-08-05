@@ -198,33 +198,20 @@ public class Dhcp6AddrRegTracker {
         }
 
         /**
-         * Calculate the DHCPv6 message retransmission timeout per below formula.
+         * Calculates the retransmission delay using the formula:
          *
-         *     f(n) = IRT * 2^n * random_in_range(85%, 115%)
+         *     delay(n) = IRT * 2^n * random_in_range(85%, 115%)
          *
-         * Per RFC8415 section 15 the retranmission algorithm is:
+         * This serves as a simplification of RFC8415's retransmission delay algorithm that applies
+         * jitter at every step. A by the letter implementation of RFC8415 results in the following:
          *
-         * RT for the first message transmission is based on IRT:
+         *     delay_rfc8415(0) = [0.9, 1.1]s -> [90%, 110%]
+         *     delay_rfc8415(1) = [1.7, 2.3]s -> [85%, 115%]
+         *     delay_rfc8415(2) = [3.2, 4.8]s -> [80%, 120%]
          *
-         *     RT = IRT + RAND*IRT
-         *
-         * RT for each subsequent message transmission is based on the previous value of RT:
-         *
-         *     RT = 2*RTprev + RAND*RTprev
-         *
-         * Ignoring the jitter, this maps to:
-         *
-         *     RT = IRT * 2^(n) // n is the message tranmission count
-         *
-         * Accounting for the jitter, retransmissions occur at:
-         *
-         *     f(0) = [0.9, 1.1]s -> [90%, 110%]
-         *     f(1) = [1.7, 2.3]s -> [85%, 115%]
-         *     f(2) = [3.2, 4.8]s -> [80%, 120%]
-         *
-         * Select an average jitter random factor in the [85%, 115%] in a simple approximate way.
+         * This implementation applies +-15% of jitter to the final value.
          */
-        private long getRetransmissionTimeout(int retryCount) {
+        private long getRetransmissionDelay(int retryCount) {
             final double randomFactor = mRandom.nextDouble() * 0.3 + 0.85;
             return (long) (IRT_MS * Math.pow(2, retryCount) * randomFactor);
         }
@@ -253,7 +240,7 @@ public class Dhcp6AddrRegTracker {
                 // Calculate the next retransmission timestamp only if the retry limit has not been
                 // reached. This ensures that if the address is updated, registration is immediately
                 // attempted.
-                mEventTime = nowMs + getRetransmissionTimeout(mRetryCount);
+                mEventTime = nowMs + getRetransmissionDelay(mRetryCount);
             }
 
             mRetryCount++;
