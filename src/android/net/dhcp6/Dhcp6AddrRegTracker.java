@@ -389,7 +389,7 @@ public class Dhcp6AddrRegTracker {
             final long addrRegRefreshInterval = addrRegRefreshInterval(newValidMs);
 
             final long refreshTime = Math.min(now + addrRegRefreshInterval, nextAddrRegRefreshTime);
-            mTrackedAddresses.put(la.getAddress(), new AddressTracker(la, now));
+            mTrackedAddresses.put(la.getAddress(), new AddressTracker(la, refreshTime));
         }
 
         if (hasUpdate) {
