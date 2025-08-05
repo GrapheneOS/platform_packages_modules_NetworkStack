@@ -196,8 +196,8 @@ public class Dhcp6AddrRegTracker {
          * the client MUST stop retransmission, it can be done by setting the "mIsScheduled" to
          * false, see RFC9686 section 4.6.3.
          */
-        public final boolean isExpired(long now) {
-            return mIsScheduled && (now >= mEventTime);
+        public final boolean isExpired(long nowMs) {
+            return mIsScheduled && (nowMs >= mEventTime);
         }
 
         /**
@@ -325,7 +325,7 @@ public class Dhcp6AddrRegTracker {
      * Updates the LinkProperties and checks whether the link addresses have changed.
      */
     public void setLinkProperties(LinkProperties newLp) {
-        final long now = SystemClock.elapsedRealtime();
+        final long nowMs = SystemClock.elapsedRealtime();
 
         // Collect the LinkAddresses from all AddressTracker objects and compare them against
         // the new LinkProperties. Note that incompatible addresses, such as IPv4 or link-local
@@ -349,7 +349,7 @@ public class Dhcp6AddrRegTracker {
         boolean hasUpdate = false;
         for (Link6Address la : addressDiff.added) {
             hasUpdate = true;
-            mTrackedAddresses.put(la.getAddress(), new AddressTracker(la, now));
+            mTrackedAddresses.put(la.getAddress(), new AddressTracker(la, nowMs));
         }
 
         for (Link6Address la : addressDiff.removed) {
@@ -380,20 +380,20 @@ public class Dhcp6AddrRegTracker {
             //   address by more than 1%, for example, by sending a Prefix Information
             //   Option (PIO) [RFC4861] with a new Valid Lifetime, the client
             //   calculates a new AddrRegRefreshInterval.  The client schedules a
-            //   refresh for min(now + AddrRegRefreshInterval,
+            //   refresh for min(nowMs + AddrRegRefreshInterval,
             //   NextAddrRegRefreshTime).  If the refresh would be scheduled in the
             //   past, then the refresh occurs immediately.
             mTrackedAddresses.remove(la.getAddress());
             final long nextAddrRegRefreshTime = tracker.mEventTime;
-            final long newValidMs = newExpiryMs - now;
+            final long newValidMs = newExpiryMs - nowMs;
             final long addrRegRefreshInterval = addrRegRefreshInterval(newValidMs);
 
-            final long refreshTime = Math.min(now + addrRegRefreshInterval, nextAddrRegRefreshTime);
-            mTrackedAddresses.put(la.getAddress(), new AddressTracker(la, refreshTime));
+            final long refreshMs = Math.min(nowMs + addrRegRefreshInterval, nextAddrRegRefreshTime);
+            mTrackedAddresses.put(la.getAddress(), new AddressTracker(la, refreshMs));
         }
 
         if (hasUpdate) {
-            dispatchRegistration(now);
+            dispatchRegistration(nowMs);
         }
     }
 
