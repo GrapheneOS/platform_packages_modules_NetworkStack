@@ -214,7 +214,7 @@ public class Dhcp6AddrRegTracker {
          *
          * This implementation applies +-15% of jitter to the final value.
          */
-        private long getRetransmissionDelay(int retryCount) {
+        private long getRetransmissionDelayMs(int retryCount) {
             final double randomFactor = mRandom.nextDouble() * 0.3 + 0.85;
             return (long) (IRT_MS * Math.pow(2, retryCount) * randomFactor);
         }
@@ -246,7 +246,7 @@ public class Dhcp6AddrRegTracker {
                 // Calculate the next retransmission timestamp only if the retry limit has not been
                 // reached. This ensures that if the address is updated, registration is immediately
                 // attempted.
-                mEventTime = nowMs + getRetransmissionDelay(mRetryCount);
+                mEventTime = nowMs + getRetransmissionDelayMs(mRetryCount);
             }
 
             mRetryCount++;
