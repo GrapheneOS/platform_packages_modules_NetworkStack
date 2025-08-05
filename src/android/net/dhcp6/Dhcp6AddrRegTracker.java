@@ -219,21 +219,24 @@ public class Dhcp6AddrRegTracker {
             return (long) (IRT_MS * Math.pow(2, retryCount) * randomFactor);
         }
 
-        public Dhcp6AddrRegInformPacket getInformPacketAndScheduleNextEvent(long nowMs) {
-            if (!mIsScheduled) throw new IllegalStateException("Processed unscheduled event");
-
+        public Dhcp6AddrRegInformPacket getAddrRegInformPacket(long nowMs) {
             if (mRetryCount == 0) mTransStartMs = nowMs;
             final long elapsedTimeMs = nowMs - mTransStartMs;
 
             // When the client retransmits the registration message, the lifetimes in the packet
             // MUST be updated so that they match the current lifetimes of the address.
-            final Dhcp6AddrRegInformPacket p = new Dhcp6AddrRegInformPacket(
+            return new Dhcp6AddrRegInformPacket(
                     mTransId,
                     (int) elapsedTimeMs / 10 /* centiseconds */,
                     mClientDuid,
                     mAddress.getAddress(),
                     mAddress.getPreferredLifetimeMs(nowMs) / 1000,
                     mAddress.getValidLifetimeMs(nowMs) / 1000);
+        }
+
+        /** Increments the retry count and -- if necessary -- schedules the next event. */
+        public void maybeScheduleNextEvent(long nowMs) {
+            if (!mIsScheduled) throw new IllegalStateException("Processed unscheduled event");
 
             // Attempt to register the address MRC + 1 times: the initial attempt + MRC retries.
             if (mRetryCount >= MRC) {
@@ -247,7 +250,6 @@ public class Dhcp6AddrRegTracker {
             }
 
             mRetryCount++;
-            return p;
         }
 
         private void markRegistrationSuccess(long nowMs) {
@@ -435,8 +437,9 @@ public class Dhcp6AddrRegTracker {
     private void dispatchRegistration(long nowMs) {
         for (AddressTracker tracker : mTrackedAddresses.values()) {
             if (!tracker.isExpired(nowMs)) continue;
-            final Dhcp6AddrRegInformPacket p = tracker.getInformPacketAndScheduleNextEvent(nowMs);
-            transmitPacket(p);
+            final Dhcp6AddrRegInformPacket packet = tracker.getAddrRegInformPacket(nowMs);
+            transmitPacket(packet);
+            tracker.maybeScheduleNextEvent(nowMs);
         }
         scheduleNextTimer();
     }
