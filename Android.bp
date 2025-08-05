@@ -615,3 +615,17 @@ java_library_static {
     ],
     defaults: ["NetworkStackReleaseApiLevel"],
 }
+
+aconfig_declarations {
+    name: "networkstack.mainline.beta.flags",
+    package: "com.android.networkstack.mainline.beta",
+    container: "NetworkStack",
+    srcs: ["mainline_beta.aconfig"],
+}
+
+java_aconfig_library {
+    name: "com.android.networkstack.mainline.beta.flags-aconfig-java",
+    aconfig_declarations: "networkstack.mainline.beta.flags",
+    defaults: ["framework-minus-apex-aconfig-java-defaults"],
+    min_sdk_version: "30",
+}
