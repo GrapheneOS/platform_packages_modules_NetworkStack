@@ -537,6 +537,7 @@ cc_library_shared {
     sdk_version: "current",
     min_sdk_version: "30",
     shared_libs: [
+        "libbinder_ndk",
         "liblog",
         "libnativehelper_compat_libc++",
     ],

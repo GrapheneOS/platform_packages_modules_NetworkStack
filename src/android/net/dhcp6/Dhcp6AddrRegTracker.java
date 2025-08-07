@@ -30,15 +30,14 @@ import android.util.Log;
 
 import androidx.annotation.Nullable;
 
-import com.android.net.module.util.HexDump;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.LinkPropertiesUtils.CompareOrUpdateResult;
+import com.android.net.module.util.dhcp6.Dhcp6AddrRegInformPacket;
 import com.android.net.module.util.dhcp6.Dhcp6AddrRegReplyPacket;
 import com.android.net.module.util.dhcp6.Dhcp6Packet;
 
 import java.net.Inet6Address;
 import java.net.InetAddress;
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -83,6 +82,10 @@ import java.util.Random;
  *       timer and resets the retransmission parameters.
  *   <li>When an address is removed from the LinkProperties, its tracker is removed.
  * </ol>
+ *
+ * Message coalescing as described in RFC9686 is explicitly unsupported, because it is unclear how
+ * the code should interact with retries. Realistically, address lifetimes are already synchronized,
+ * so that coalescing would not be particularly useful anyway.
  * @hide
  */
 public class Dhcp6AddrRegTracker {
@@ -155,6 +158,8 @@ public class Dhcp6AddrRegTracker {
     private class AddressTracker {
         private static final int IRT_MS = 1000; // 1s
         private static final int MRC = 3;
+        // Valid transaction IDs are 3 octets.
+        private static final int INVALID_TRANS_ID = 0x1000000;
 
         // Contains the IPv6 address to be registered including its preferred and valid lifetimes.
         // The IPv6 address to be registered.
@@ -190,110 +195,79 @@ public class Dhcp6AddrRegTracker {
          * If an ADDR-REG-REPLY message is received for the address being registered or refreshed,
          * the client MUST stop retransmission, it can be done by setting the "mIsScheduled" to
          * false, see RFC9686 section 4.6.3.
-         * TODO: support coalescing expired events
          */
-        public final boolean isExpired(long now) {
-            return mIsScheduled && (now >= mEventTime);
+        public final boolean isExpired(long nowMs) {
+            return mIsScheduled && (nowMs >= mEventTime);
         }
 
         /**
-         * Calculate the DHCPv6 message retransmission timeout per below formula.
+         * Calculates the retransmission delay using the formula:
          *
-         *     f(n) = IRT * 2^n * random_in_range(85%, 115%)
+         *     delay(n) = IRT * 2^n * random_in_range(85%, 115%)
          *
-         * Per RFC8415 section 15 the retranmission algorithm is:
+         * This serves as a simplification of RFC8415's retransmission delay algorithm that applies
+         * jitter at every step. A by the letter implementation of RFC8415 results in the following:
          *
-         * RT for the first message transmission is based on IRT:
+         *     delay_rfc8415(0) = [0.9, 1.1]s -> [90%, 110%]
+         *     delay_rfc8415(1) = [1.7, 2.3]s -> [85%, 115%]
+         *     delay_rfc8415(2) = [3.2, 4.8]s -> [80%, 120%]
          *
-         *     RT = IRT + RAND*IRT
-         *
-         * RT for each subsequent message transmission is based on the previous value of RT:
-         *
-         *     RT = 2*RTprev + RAND*RTprev
-         *
-         * Ignoring the jitter, this maps to:
-         *
-         *     RT = IRT * 2^(n) // n is the message tranmission count
-         *
-         * Accounting for the jitter, retransmissions occur at:
-         *
-         *     f(0) = [0.9, 1.1]s -> [90%, 110%]
-         *     f(1) = [1.7, 2.3]s -> [85%, 115%]
-         *     f(2) = [3.2, 4.8]s -> [80%, 120%]
-         *
-         * Select an average jitter random factor in the [85%, 115%] in a simple approximate way.
+         * This implementation applies +-15% of jitter to the final value.
          */
-        private double getRetransmissionTimeout(int retryCount) {
+        private long getRetransmissionDelayMs(int retryCount) {
             final double randomFactor = mRandom.nextDouble() * 0.3 + 0.85;
-            return IRT_MS * Math.pow(2, retryCount) * randomFactor;
+            return (long) (IRT_MS * Math.pow(2, retryCount) * randomFactor);
         }
 
-        /**
-         * (Re)transmit an ADDR_REG_INFORM message to register/refresh an IPv6 address.
-         */
-        public void sendRegisterAddress(long now) {
-            if (mRetryCount >= MRC) {
-                Log.i(TAG, "Failed to register self-generated IPv6 " + mAddress);
-                // Set mIsScheduled to false to indicate that the registration process for this
-                // address has been stopped (see isExpired) due to exceeding the maximum retry
-                // count (MRC). If this address is updated (e.g. lifetime changes by more than 1%),
-                // the code will try to re-register immediately, which is working as intented.
-                mIsScheduled = false;
-                return;
-            }
-
-            // Calculate the next retransmission timestamp.
-            mEventTime = now + (long) getRetransmissionTimeout(mRetryCount);
-            if (mRetryCount == 0) mTransStartMs = now;
+        public Dhcp6AddrRegInformPacket getAddrRegInformPacket(long nowMs) {
+            if (mRetryCount == 0) mTransStartMs = nowMs;
+            final long elapsedTimeMs = nowMs - mTransStartMs;
 
             // When the client retransmits the registration message, the lifetimes in the packet
             // MUST be updated so that they match the current lifetimes of the address.
-            // TODO: Refactor buildAddrRegInformPacket to take the LinkAddress and current time as
-            // inputs and implement this functionality in there.
-            final long elapsedTimeMs = now - mTransStartMs;
-            final ByteBuffer packet = Dhcp6Packet.buildAddrRegInformPacket(
+            return new Dhcp6AddrRegInformPacket(
                     mTransId,
-                    elapsedTimeMs,
+                    (int) elapsedTimeMs / 10 /* centiseconds */,
                     mClientDuid,
                     mAddress.getAddress(),
-                    mAddress.getPreferredLifetimeMs(now) / 1000,
-                    mAddress.getValidLifetimeMs(now) / 1000);
-            // DHCPv6 ADDR-REG-INFORM message MUST be sent from the address being registered per
-            // RFC9686 section 4.2.
-            transmitPacket(packet, mAddress.getAddress());
-            ++mRetryCount;
+                    mAddress.getPreferredLifetimeMs(nowMs) / 1000,
+                    mAddress.getValidLifetimeMs(nowMs) / 1000);
         }
 
-        /**
-         * Reset the registartion parameters when refreshing an address, i.e. receive the
-         * ADDR_REG_REPLY or link address lifetime changes more than 1%, which requires to
-         * schedule a new refresh.
-         */
-        private void resetTransactionParams() {
-            mTransId = mRandom.nextInt() & 0xffffff;
-            mRetryCount = 0;
-            mTransStartMs = 0;
+        /** Increments the retry count and -- if necessary -- schedules the next event. */
+        public void maybeScheduleNextEvent(long nowMs) {
+            if (!mIsScheduled) throw new IllegalStateException("Processed unscheduled event");
+
+            // Attempt to register the address MRC + 1 times: the initial attempt + MRC retries.
+            if (mRetryCount >= MRC) {
+                // The retry limit has been reached. Do not schedule another retry.
+                mIsScheduled = false;
+            } else {
+                // Calculate the next retransmission timestamp only if the retry limit has not been
+                // reached. This ensures that if the address is updated, registration is immediately
+                // attempted.
+                mEventTime = nowMs + getRetransmissionDelayMs(mRetryCount);
+            }
+
+            mRetryCount++;
         }
 
-        /**
-         * Triggered when an ADDR_REG_REPLY message for the address being registered arrives.
-         *
-         * Stop the ADDR_REG_INFORM message retransmission and reset the retransmission parameters,
-         * calculate a NextAddrRegRefreshTime for the address, but does not schedule any refreshes
-         * per RFC9686 section 4.6.1.
-         */
-        private void onReply() {
-            final long now = SystemClock.elapsedRealtime();
-            resetTransactionParams();
+        private void markRegistrationSuccess(long nowMs) {
+            // Ensure that no further responses are processed for this address by setting the
+            // transaction ID to an invalid value. There is no need to reset the retry count,
+            // because an address update creates a new AddressTracker object.
+            mTransId = INVALID_TRANS_ID;
+
+            // Update mEventTime but do not schedule the next event until the address is updated.
             mIsScheduled = false;
-            mEventTime = now + addrRegRefreshInterval(mAddress.getExpirationTime() - now);
+            mEventTime = nowMs + addrRegRefreshInterval(mAddress.getValidLifetimeMs(nowMs));
         }
     }
 
     private class AddressRegistrationAlarmListener implements AlarmManager.OnAlarmListener {
         @Override
         public void onAlarm() {
-            dispatchRegistration();
+            dispatchRegistration(SystemClock.elapsedRealtime());
         }
     }
 
@@ -306,7 +280,7 @@ public class Dhcp6AddrRegTracker {
         final InterfaceParams params = InterfaceParams.getByName(ifName);
         mClientDuid = Dhcp6Packet.createClientDuid(params.macAddr);
         mDhcp6PacketDispatcher = dispatcher;
-        mDhcp6MessageHandler = (packet, dst) -> mHandler.post(() -> onReceive(packet, dst));
+        mDhcp6MessageHandler = (packet, dst) -> mHandler.post(() -> onReceiveReply(packet, dst));
         mAddressRegistrationAlarm = new AddressRegistrationAlarmListener();
     }
 
@@ -353,7 +327,7 @@ public class Dhcp6AddrRegTracker {
      * Updates the LinkProperties and checks whether the link addresses have changed.
      */
     public void setLinkProperties(LinkProperties newLp) {
-        final long now = SystemClock.elapsedRealtime();
+        final long nowMs = SystemClock.elapsedRealtime();
 
         // Collect the LinkAddresses from all AddressTracker objects and compare them against
         // the new LinkProperties. Note that incompatible addresses, such as IPv4 or link-local
@@ -377,7 +351,7 @@ public class Dhcp6AddrRegTracker {
         boolean hasUpdate = false;
         for (Link6Address la : addressDiff.added) {
             hasUpdate = true;
-            mTrackedAddresses.put(la.getAddress(), new AddressTracker(la, now));
+            mTrackedAddresses.put(la.getAddress(), new AddressTracker(la, nowMs));
         }
 
         for (Link6Address la : addressDiff.removed) {
@@ -408,20 +382,20 @@ public class Dhcp6AddrRegTracker {
             //   address by more than 1%, for example, by sending a Prefix Information
             //   Option (PIO) [RFC4861] with a new Valid Lifetime, the client
             //   calculates a new AddrRegRefreshInterval.  The client schedules a
-            //   refresh for min(now + AddrRegRefreshInterval,
+            //   refresh for min(nowMs + AddrRegRefreshInterval,
             //   NextAddrRegRefreshTime).  If the refresh would be scheduled in the
             //   past, then the refresh occurs immediately.
             mTrackedAddresses.remove(la.getAddress());
             final long nextAddrRegRefreshTime = tracker.mEventTime;
-            final long newValidMs = newExpiryMs - now;
+            final long newValidMs = newExpiryMs - nowMs;
             final long addrRegRefreshInterval = addrRegRefreshInterval(newValidMs);
 
-            final long refreshTime = Math.min(now + addrRegRefreshInterval, nextAddrRegRefreshTime);
-            mTrackedAddresses.put(la.getAddress(), new AddressTracker(la, now));
+            final long refreshMs = Math.min(nowMs + addrRegRefreshInterval, nextAddrRegRefreshTime);
+            mTrackedAddresses.put(la.getAddress(), new AddressTracker(la, refreshMs));
         }
 
         if (hasUpdate) {
-            dispatchRegistration();
+            dispatchRegistration(nowMs);
         }
     }
 
@@ -454,16 +428,20 @@ public class Dhcp6AddrRegTracker {
      * Send all address registration messages where the timer has expired and schedule the next
      * timer.
      */
-    private void dispatchRegistration() {
-        final long now = SystemClock.elapsedRealtime();
+    private void dispatchRegistration(long nowMs) {
         for (AddressTracker tracker : mTrackedAddresses.values()) {
-            if (!tracker.isExpired(now)) continue;
-            tracker.sendRegisterAddress(now);
+            if (!tracker.isExpired(nowMs)) continue;
+
+            // DHCPv6 ADDR-REG-INFORM message MUST be sent from the address being registered
+            // per RFC9686 section 4.2.
+            final Dhcp6AddrRegInformPacket packet = tracker.getAddrRegInformPacket(nowMs);
+            mDhcp6PacketDispatcher.transmitPacket(packet.buildPacket(), packet.mIaAddress);
+            tracker.maybeScheduleNextEvent(nowMs);
         }
         scheduleNextTimer();
     }
 
-    private void onReceive(@NonNull Dhcp6Packet packet, @Nullable Inet6Address dst) {
+    private void onReceiveReply(@NonNull Dhcp6Packet packet, @Nullable Inet6Address dst) {
         if (DBG) Log.d(TAG, "Received packet: " + packet);
         if (!(packet instanceof Dhcp6AddrRegReplyPacket)) return;
         if (!Arrays.equals(mClientDuid, packet.getClientDuid())) return;
@@ -492,19 +470,9 @@ public class Dhcp6AddrRegTracker {
             Log.e(TAG, "transId doesn't match");
             return;
         }
-        tracker.onReply();
-        dispatchRegistration();
-    }
 
-    @SuppressWarnings("ByteBufferBackingArray")
-    private int transmitPacket(@NonNull final ByteBuffer buf, @NonNull final Inet6Address src) {
-        if (DBG) {
-            Log.d(TAG, "Multicasting DHCPv6 addr-reg-inform packet to ff02::1:2"
-                    + " from " + src
-                    + " on interface " + mInterfaceName
-                    + ", packet raw data: "
-                    + HexDump.toHexString(buf.array(), 0, buf.limit()));
-        }
-        return mDhcp6PacketDispatcher.transmitPacket(buf, src);
+        final long nowMs = SystemClock.elapsedRealtime();
+        tracker.markRegistrationSuccess(nowMs);
+        dispatchRegistration(nowMs);
     }
 }
