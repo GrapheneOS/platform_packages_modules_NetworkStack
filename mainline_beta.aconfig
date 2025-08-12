@@ -1,0 +1,9 @@
+package: "com.android.networkstack.mainline.beta"
+container: "NetworkStack"
+
+flag {
+    name: "dhcpv6_address_registration"
+    namespace: "com_android_networkstack"
+    description: "Support registering self-generated IPv6 addresses using DHCPv6"
+    bug: "293393743"
+}
