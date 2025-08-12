@@ -387,8 +387,8 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
     @Override
     public int getDefaultPacketHandlingSizeOverEstimate() {
         // addLoad8intoR0(ICMP6_TYPE_OFFSET); -> 2 bytes
-        // addCountAndPassIfR0Equals(ICMPV6_ROUTER_ADVERTISEMENT, PASSED_RA); -> 11 bytes
-        // addCountAndPass(PASSED_IPV6_ICMP); -> 7 bytes
+        // addCountAndPassIfR0Equals(ICMPV6_ROUTER_ADVERTISEMENT, PASSED_RA); -> 12 bytes
+        // addCountAndPass(PASSED_IPV6_ICMP); -> 8 bytes
         // defineLabel(mCountAndPassLabel)
         // .addLoadData(R0, 0) ->  1 bytes
         // .addAdd(1) -> 2 bytes
@@ -399,7 +399,7 @@ public final class ApfV4Generator extends ApfV4GeneratorBase<ApfV4Generator> {
         // .addAdd(1) -> 2 bytes
         // .addStoreData(R0, 0) -> 1 bytes
         // .addJump(DROP_LABEL); -> 5 bytes
-        return 38;
+        return 40;
     }
 
     /**
