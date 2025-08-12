@@ -65,6 +65,8 @@ public class Dhcp6PacketDispatcher extends FdEventsReader<Dhcp6PacketDispatcher.
     private static final String TAG = Dhcp6PacketDispatcher.class.getSimpleName();
     protected final String mInterfaceName;
     private final SparseArray<MessageHandler> mMessageHandlers = new SparseArray<>();
+    // Indicate whether to use the control message APIs with ancillary data.
+    private final boolean mUseControlMessageApi;
 
     // The {@link android.system.OsConstants#IPV6_PKTINFO} is only available from
     // Android 15 (API 35). This local definition is used to provide backward compatibility.
@@ -89,9 +91,10 @@ public class Dhcp6PacketDispatcher extends FdEventsReader<Dhcp6PacketDispatcher.
         void handleMessage(@NonNull Dhcp6Packet packet, @Nullable Inet6Address dst);
     }
 
-    public Dhcp6PacketDispatcher(Handler handler, String iface) {
+    public Dhcp6PacketDispatcher(Handler handler, String iface, boolean useControlMessageApi) {
         super(handler, new Payload());
         mInterfaceName = iface;
+        mUseControlMessageApi = useControlMessageApi;
     }
 
     @Override
@@ -165,7 +168,7 @@ public class Dhcp6PacketDispatcher extends FdEventsReader<Dhcp6PacketDispatcher.
     @Override
     protected int readPacket(@NonNull FileDescriptor fd,
             @NonNull Payload packetBuffer) throws Exception {
-        if (SdkLevel.isAtLeastS()) {
+        if (mUseControlMessageApi) {
             final ByteBuffer payload = ByteBuffer.wrap(packetBuffer.mBytes);
 
             // The source address placehodler, will be filled by kernel.
