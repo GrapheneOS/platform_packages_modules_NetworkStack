@@ -872,6 +872,7 @@ public class IpClient extends StateMachine {
     private final boolean mDhcp6PdPreferredFlagEnabled;
     private final boolean mReplaceNetdWithNetlinkEnabled;
     private final boolean mIsTvDevice;
+    private final boolean mDhcp6AddressRegistrationEnabled;
 
     private InterfaceParams mInterfaceParams;
 
@@ -1121,6 +1122,13 @@ public class IpClient extends StateMachine {
                 return false;
             }
         }
+
+        /**
+         * Read the mainline beta flag `dhcpv6_address_registration`.
+         */
+        public boolean isDhcp6AddressRegistrationEnabled() {
+            return com.android.networkstack.mainline.beta.Flags.dhcpv6AddressRegistration();
+        }
     }
 
     public IpClient(Context context, String ifName, IIpClientCallbacks callback,
@@ -1193,7 +1201,21 @@ public class IpClient extends StateMachine {
         // InterfaceController.Dependencies class.
         mNetd = deps.getNetd(mContext);
         mInterfaceCtrl = new InterfaceController(mInterfaceName, mNetd, mLog);
-        mDhcp6PacketDispatcher = new Dhcp6PacketDispatcher(getHandler(), ifName);
+
+        // The DHCPv6 address registration feature requires control message APIs and their
+        // corresponding cmsg structures, such as Os.recvmsg and StructMsghdr. These are only
+        // available on Android S (SDK Level 31) and later. Therefore, a beta flag for this
+        // feature is also used to determine if this new control message syscalls should be
+        // activated.
+        //
+        // Meanwhile Dhcp6Client now uses the PacketDispatcher class as well. This change won't
+        // affect any behavior until the address registration feature is enabled. When that happens,
+        // Dhcp6Client will use control message syscalls to receive DHCPv6 messages with ancillary
+        // data, making the code safer to roll out along with mainline beta program.
+        mDhcp6AddressRegistrationEnabled =
+                mDependencies.isDhcp6AddressRegistrationEnabled() && SdkLevel.isAtLeastS();
+        mDhcp6PacketDispatcher = new Dhcp6PacketDispatcher(getHandler(), ifName,
+                mDhcp6AddressRegistrationEnabled /* useControlMessageApi */);
 
         mAcceptRaMinLft = mDependencies.getDeviceConfigPropertyInt(CONFIG_ACCEPT_RA_MIN_LFT,
                 DEFAULT_ACCEPT_RA_MIN_LFT);

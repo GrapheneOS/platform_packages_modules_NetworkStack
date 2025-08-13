@@ -279,6 +279,7 @@ java_defaults {
     ],
     static_libs: [
         "androidx.annotation_annotation",
+        "com.android.networkstack.mainline.beta.flags-aconfig-java",
         "modules-utils-build_system",
         "modules-utils-expresslog",
         "modules-utils-preconditions",
