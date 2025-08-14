@@ -669,11 +669,28 @@ public abstract class ApfV4GeneratorBase<Type extends ApfV4GeneratorBase<Type>> 
     }
 
     /**
-     * Add an instruction to the end of the program to move the value into
-     * {@code register} from the other register.
+     * Add an instruction to the end of the program to move the value into {@code register} from the
+     * other register. (See also the more explicitly named versions {@addMoveR1IntoR0} and
+     * {@addMoveR0IntoR1}.)
      */
     public final Type addMove(Register r) {
         return append(new Instruction(ExtendedOpcodes.MOVE, r));
+    }
+
+    /**
+     * Add an instruction to the end of the program to move the value from register R1 into register
+     * R0. (This is a more explicitly named version of {@addMove}.)
+     */
+    public final Type addMoveR1IntoR0() {
+        return addMove(R0);
+    }
+
+    /**
+     * Add an instruction to the end of the program to move the value from register R0 into register
+     * R1. (This is a more explicitly named version of {@addMove}.)
+     */
+    public final Type addMoveR0IntoR1() {
+        return addMove(R1);
     }
 
     /**
