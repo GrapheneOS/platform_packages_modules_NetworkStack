@@ -100,7 +100,10 @@ public class Dhcp6AddrRegTracker {
     private final AlarmManager mAlarmManager;
     private final AlarmManager.OnAlarmListener mAddressRegistrationAlarm;
     private final String mInterfaceName;
-    private final byte[] mClientDuid;
+
+    // Guaranteed non-null after start() is called.
+    @Nullable
+    private byte[] mClientDuid;
 
     // A random value uniformly distributed between 0.9 and 1.1 (see RFC9686 section 4.6.1).
     private static final double sAddrRegDesyncMultiplier = (new Random()).nextDouble() * 0.2 + 0.9;
@@ -277,8 +280,6 @@ public class Dhcp6AddrRegTracker {
         mAlarmManager = context.getSystemService(AlarmManager.class);
         mInterfaceName = ifName;
         mRandom = new Random();
-        final InterfaceParams params = InterfaceParams.getByName(ifName);
-        mClientDuid = Dhcp6Packet.createClientDuid(params.macAddr);
         mDhcp6PacketDispatcher = dispatcher;
         mDhcp6MessageHandler = (packet, dst) -> mHandler.post(() -> onReceiveReply(packet, dst));
         mAddressRegistrationAlarm = new AddressRegistrationAlarmListener();
@@ -287,7 +288,8 @@ public class Dhcp6AddrRegTracker {
     /**
      * Start the SLAAC address registration tracker.
      */
-    public void start() {
+    public void start(@NonNull final InterfaceParams params) {
+        mClientDuid = Dhcp6Packet.createClientDuid(params.macAddr);
         mDhcp6PacketDispatcher.registerHandler(
                 mDhcp6MessageHandler,
                 Dhcp6Packet.DHCP6_MESSAGE_TYPE_ADDR_REG_REPLY
