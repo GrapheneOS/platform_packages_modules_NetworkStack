@@ -68,8 +68,8 @@ class ApfTestHelpers private constructor() {
                     --program ${HexDump.toHexString(program)}
                     --packet ${HexDump.toHexString(packet)}
                     ${if (data != null) "--data ${HexDump.toHexString(data)}" else ""}
-                    --age $filterAge
-                    ${if (apfVersion > 4) "--v6" else ""}
+                    ${if (filterAge != 0) "--age $filterAge" else ""}
+                    ${if (apfVersion < 20000000) "--version $apfVersion" else ""}
                     --trace | less
             """.replace("\n", " ").replace("\\s+".toRegex(), " ") + "\n"
             assertReturnCodesEqual(
@@ -90,8 +90,8 @@ class ApfTestHelpers private constructor() {
                 apf_run
                     --program ${HexDump.toHexString(program)}
                     --packet ${HexDump.toHexString(packet)}
-                    --age $filterAge
-                    ${if (apfVersion > 4) " --v6" else ""}
+                    ${if (filterAge != 0) "--age $filterAge" else ""}
+                    ${if (apfVersion < 20000000) "--version $apfVersion" else ""}
                     --trace " + " | less\n
             """
             assertReturnCodesEqual(
@@ -311,8 +311,8 @@ class ApfTestHelpers private constructor() {
             val errMsg = "Counter is not increased properly. To debug: \n" +
                     " apf_run --program ${HexDump.toHexString(program)} " +
                     "--packet ${HexDump.toHexString(pkt)} " +
-                    "--data ${HexDump.toHexString(dataRegion)} --age 0 " +
-                    "${if (version == APF_VERSION_6) "--v6" else "" } --trace  | less \n"
+                    "--data ${HexDump.toHexString(dataRegion)} " +
+                    "${if (version < 20000000) "--version $version" else ""} --trace  | less \n"
             assertEquals(cntMap, decodeCountersIntoMap(dataRegion), errMsg)
         }
 
