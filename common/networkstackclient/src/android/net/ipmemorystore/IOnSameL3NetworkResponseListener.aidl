@@ -19,7 +19,7 @@ package android.net.ipmemorystore;
 import android.net.ipmemorystore.SameL3NetworkResponseParcelable;
 import android.net.ipmemorystore.StatusParcelable;
 
-/** {@hide} */
+/** @hide */
 oneway interface IOnSameL3NetworkResponseListener {
     /**
      * The memory store has come up with the answer to a query that was sent.

@@ -19,7 +19,7 @@ package com.android.networkstack.ipmemorystore;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-/** {@hide} */
+/** @hide */
 public final class Utils {
     /** Pretty print */
     public static String byteArrayToString(@Nullable final byte[] data) {
