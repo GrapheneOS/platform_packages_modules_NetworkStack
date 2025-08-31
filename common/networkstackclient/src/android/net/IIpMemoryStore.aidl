@@ -26,7 +26,7 @@ import android.net.ipmemorystore.IOnSameL3NetworkResponseListener;
 import android.net.ipmemorystore.IOnStatusAndCountListener;
 import android.net.ipmemorystore.IOnStatusListener;
 
-/** {@hide} */
+/** @hide */
 oneway interface IIpMemoryStore {
     /**
      * Store network attributes for a given L2 key.

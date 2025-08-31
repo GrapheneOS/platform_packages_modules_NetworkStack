@@ -16,7 +16,7 @@
 
 package android.net.ipmemorystore;
 
-/** {@hide} */
+/** @hide */
 @JavaDerive(toString=true)
 parcelable SameL3NetworkResponseParcelable {
     String l2Key1;

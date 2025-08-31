@@ -19,7 +19,7 @@ package android.net.ipmemorystore;
 /**
  * A blob of data opaque to the memory store. The client mutates this at its own risk,
  * and it is strongly suggested to never do it at all and treat this as immutable.
- * {@hide}
+ * @hide
  */
 parcelable Blob {
     byte[] data;

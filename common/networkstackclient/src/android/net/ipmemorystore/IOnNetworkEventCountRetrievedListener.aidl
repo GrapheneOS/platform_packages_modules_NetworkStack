@@ -20,7 +20,7 @@ import android.net.ipmemorystore.StatusParcelable;
 
 /**
  * A listener for the IpMemoryStore to return the counts of network event that matches the query.
- * {@hide}
+ * @hide
  */
 oneway interface IOnNetworkEventCountRetrievedListener {
     /**

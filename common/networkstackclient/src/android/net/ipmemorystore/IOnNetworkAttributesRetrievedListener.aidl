@@ -19,7 +19,7 @@ package android.net.ipmemorystore;
 import android.net.ipmemorystore.NetworkAttributesParcelable;
 import android.net.ipmemorystore.StatusParcelable;
 
-/** {@hide} */
+/** @hide */
 oneway interface IOnNetworkAttributesRetrievedListener {
     /**
      * Network attributes were fetched for the specified L2 key. While the L2 key will never
