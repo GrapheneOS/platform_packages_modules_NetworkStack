@@ -42,6 +42,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.stream.Collectors;
 
 /**
  * Track the self-generated IPv6 addresses registration process via DHCPv6 message (RFC9686).
@@ -345,12 +346,12 @@ public class Dhcp6AddrRegTracker {
         // isRegistrableAddress().
         final List<Link6Address> trackedLink6Addresses = mTrackedAddresses.values().stream()
                 .map(AddressTracker::getAddress)
-                .toList();
+                .collect(Collectors.toList());
 
         final List<Link6Address> newLink6Addresses = newLp.getLinkAddresses().stream()
                 .filter(la -> isRegistrableAddress(la))
                 .map(la -> new Link6Address(la))
-                .toList();
+                .collect(Collectors.toList());
 
         final CompareOrUpdateResult<InetAddress, Link6Address> addressDiff =
                 new CompareOrUpdateResult<>(
