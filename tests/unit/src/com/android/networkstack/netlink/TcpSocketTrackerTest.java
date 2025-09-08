@@ -73,6 +73,7 @@ import com.android.net.module.util.netlink.StructNlMsgHdr;
 import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
+import com.android.testutils.HandlerUtils;
 
 import libcore.util.HexEncoding;
 
@@ -98,6 +99,7 @@ import java.util.ArrayList;
 @SmallTest
 public class TcpSocketTrackerTest {
     private static final int TEST_BUFFER_SIZE = 1024;
+    private static final int HANDLER_TIMEOUT_MS = 1000;
     private static final String DIAG_MSG_HEX =
             // struct nlmsghdr.
             "10000000" +     // length = 16
@@ -743,7 +745,7 @@ public class TcpSocketTrackerTest {
         // Verify that device idle mode receiver does not register as the event for NM creation
         // is not yet received.
         verify(mDependencies, never()).addDeviceIdleReceiver(any(),
-                anyBoolean(), anyBoolean(), any());
+                anyBoolean(), anyBoolean());
 
         final Handler nmHandler = new Handler(Looper.getMainLooper());
         tst.init(nmHandler, new LinkProperties(), CELL_NOT_METERED_CAPABILITIES);
@@ -752,18 +754,11 @@ public class TcpSocketTrackerTest {
 
         // Enable doze mode with 1 netlink message.
         verify(mDependencies).addDeviceIdleReceiver(receiverCaptor.capture(),
-                anyBoolean(), anyBoolean(), eq(nmHandler));
+                anyBoolean(), anyBoolean());
         final BroadcastReceiver receiver = receiverCaptor.getValue();
-        if (dozeModeType == DEEP_DOZE) {
-            doReturn(true).when(mPowerManager).isDeviceIdleMode();
-            receiver.onReceive(mContext, new Intent(ACTION_DEVICE_IDLE_MODE_CHANGED));
-        } else {
-            doReturn(true).when(mPowerManager).isDeviceLightIdleMode();
-            receiver.onReceive(mContext, new Intent(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED));
-        }
+        mockDozeModeEnabled(receiver, nmHandler, dozeModeType, true);
         doReturn(getByteBufferFromHexString(composeSockDiagTcpHex(9, 10)
                 + NLMSG_DONE_HEX)).when(mDependencies).recvMessage(any());
-
         if (!featureEnabled) {
             // Verify TcpInfo is still processed.
             assertTrue(tst.pollSocketsInfo());
@@ -782,18 +777,25 @@ public class TcpSocketTrackerTest {
         assertFalse(tst.isDataStallSuspected());
 
         // Disable deep/light doze mode, verify polling are processed and counters are updated.
-        if (dozeModeType == DEEP_DOZE) {
-            doReturn(false).when(mPowerManager).isDeviceIdleMode();
-            receiver.onReceive(mContext, new Intent(ACTION_DEVICE_IDLE_MODE_CHANGED));
-        } else {
-            doReturn(false).when(mPowerManager).isDeviceLightIdleMode();
-            receiver.onReceive(mContext, new Intent(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED));
-        }
+        mockDozeModeEnabled(receiver, nmHandler, dozeModeType, false);
         assertTrue(tst.pollSocketsInfo());
         assertEquals(10, tst.getSentSinceLastRecv());
         // Lost 4 + default 5 retrans / 10 sent.
         assertEquals(90, tst.getLatestPacketFailPercentage());
         assertTrue(tst.isDataStallSuspected());
+    }
+
+    private void mockDozeModeEnabled(BroadcastReceiver receiver, Handler handler,
+            int dozeModeType, boolean enabled) {
+        if (dozeModeType == DEEP_DOZE) {
+            doReturn(enabled).when(mPowerManager).isDeviceIdleMode();
+            receiver.onReceive(mContext, new Intent(ACTION_DEVICE_IDLE_MODE_CHANGED));
+        } else {
+            doReturn(enabled).when(mPowerManager).isDeviceLightIdleMode();
+            receiver.onReceive(mContext, new Intent(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED));
+        }
+        // The Intent processing is deferred to the handler thread.
+        HandlerUtils.waitForIdle(handler, HANDLER_TIMEOUT_MS);
     }
 
     private void setupNormalTestTcpInfo() throws Exception {

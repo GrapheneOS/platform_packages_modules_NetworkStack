@@ -87,6 +87,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.function.BiConsumer;
 
 /**
  * Class for NetworkStack to send a SockDiag request and parse the returned tcp info.
@@ -181,25 +182,45 @@ public class TcpSocketTracker {
                 && ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED.equals(intent.getAction());
     }
 
-    final BroadcastReceiver mDeviceIdleReceiver = new BroadcastReceiver() {
-        @Override
-        @TargetApi(Build.VERSION_CODES.TIRAMISU)
-        public void onReceive(Context context, Intent intent) {
-            if (intent == null) return;
+    // This is only accessed on NetworkMonitor handler thread.
+    private DeferredBroadcastReceiver mDeviceIdleReceiver = null;
 
-            if (isDeviceIdleModeChangedAction(intent)
-                    || isDeviceLightIdleModeChangedAction(intent)) {
-                final PowerManager powerManager = context.getSystemService(PowerManager.class);
-                // For tcp polling mechanism, there is no difference between deep doze mode and
-                // light doze mode. The deep doze mode and light doze mode block networking
-                // for uids in the same way, use single variable to control.
-                final boolean deviceIdle = (mShouldDisableInDeepDoze
-                        && powerManager.isDeviceIdleMode())
-                        || (mShouldDisableInLightDoze && powerManager.isDeviceLightIdleMode());
-                setDozeMode(deviceIdle);
-            }
+    @TargetApi(Build.VERSION_CODES.TIRAMISU)
+    private void handleIdleModeIntent(Context context, Intent intent) {
+        if (intent == null) return;
+
+        if (isDeviceIdleModeChangedAction(intent)
+                || isDeviceLightIdleModeChangedAction(intent)) {
+            final PowerManager powerManager = context.getSystemService(PowerManager.class);
+            // For tcp polling mechanism, there is no difference between deep doze mode and
+            // light doze mode. The deep doze mode and light doze mode block networking
+            // for uids in the same way, use single variable to control.
+            final boolean deviceIdle = (mShouldDisableInDeepDoze
+                    && powerManager.isDeviceIdleMode())
+                    || (mShouldDisableInLightDoze && powerManager.isDeviceLightIdleMode());
+            setDozeMode(deviceIdle);
         }
-    };
+    }
+
+    /**
+     * A light-weighted {@link BroadcastReceiver} that dispatches the
+     * received {@link Intent} handling using a {@link Handler}.
+     */
+    private static class DeferredBroadcastReceiver extends BroadcastReceiver {
+        private final Handler mHandler;
+        private final BiConsumer<Context, Intent> mIntentConsumer;
+
+        DeferredBroadcastReceiver(@NonNull Handler handler,
+                                  @NonNull BiConsumer<Context, Intent> intentConsumer) {
+            mHandler = handler;
+            mIntentConsumer = intentConsumer;
+        }
+
+        @Override
+        public void onReceive(Context context, @NonNull Intent intent) {
+            mHandler.post(() -> mIntentConsumer.accept(context, intent));
+        }
+    }
 
     public TcpSocketTracker(@NonNull final Dependencies dps, @NonNull final Network network) {
         mDependencies = dps;
@@ -237,8 +258,9 @@ public class TcpSocketTracker {
      */
     public void init(@NonNull final Handler handler, @NonNull LinkProperties lp,
             @NonNull NetworkCapabilities nc) {
+        mDeviceIdleReceiver = new DeferredBroadcastReceiver(handler, this::handleIdleModeIntent);
         mDependencies.addDeviceIdleReceiver(mDeviceIdleReceiver, mShouldDisableInDeepDoze,
-                mShouldDisableInLightDoze, handler);
+                mShouldDisableInLightDoze);
         setOpportunisticMode(false);
         setLinkProperties(lp);
         setNetworkCapabilities(nc);
@@ -755,8 +777,7 @@ public class TcpSocketTracker {
         /** Add receiver for detecting doze mode change to control TCP detection. */
         @TargetApi(Build.VERSION_CODES.TIRAMISU)
         public void addDeviceIdleReceiver(@NonNull final BroadcastReceiver receiver,
-                boolean shouldDisableInDeepDoze, boolean shouldDisableInLightDoze,
-                @NonNull final Handler handler) {
+                boolean shouldDisableInDeepDoze, boolean shouldDisableInLightDoze) {
             // No need to register receiver if no related feature is enabled.
             if (!shouldDisableInDeepDoze && !shouldDisableInLightDoze) return;
 
@@ -767,8 +788,7 @@ public class TcpSocketTracker {
             if (shouldDisableInLightDoze) {
                 intentFilter.addAction(ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED);
             }
-            mContext.registerReceiver(receiver, intentFilter, null /* broadcastPermission */,
-                    handler);
+            mContext.registerReceiver(receiver, intentFilter);
         }
 
         /** Remove broadcast receiver. */
