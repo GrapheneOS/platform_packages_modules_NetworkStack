@@ -104,6 +104,7 @@ public class Dhcp6AddrRegTracker {
     // Guaranteed non-null after start() is called.
     @Nullable
     private byte[] mClientDuid;
+    private boolean mIsStarted = false;
 
     // A random value uniformly distributed between 0.9 and 1.1 (see RFC9686 section 4.6.1).
     private static final double sAddrRegDesyncMultiplier = (new Random()).nextDouble() * 0.2 + 0.9;
@@ -288,12 +289,14 @@ public class Dhcp6AddrRegTracker {
     /**
      * Start the SLAAC address registration tracker.
      */
-    public void start(@NonNull final InterfaceParams params) {
+    public void start(InterfaceParams params, LinkProperties lp) {
+        mIsStarted = true;
         mClientDuid = Dhcp6Packet.createClientDuid(params.macAddr);
         mDhcp6PacketDispatcher.registerHandler(
                 mDhcp6MessageHandler,
                 Dhcp6Packet.DHCP6_MESSAGE_TYPE_ADDR_REG_REPLY
         );
+        setLinkProperties(lp);
     }
 
     /**
@@ -329,6 +332,11 @@ public class Dhcp6AddrRegTracker {
      * Updates the LinkProperties and checks whether the link addresses have changed.
      */
     public void setLinkProperties(LinkProperties newLp) {
+        // Ignore all LinkProperties updates until address registration starts (as soon as an RA
+        // with an M or O flag is received). When the tracker is started, start() directly
+        // initializes the LinkProperties.
+        if (!mIsStarted) return;
+
         final long nowMs = SystemClock.elapsedRealtime();
 
         // Collect the LinkAddresses from all AddressTracker objects and compare them against
