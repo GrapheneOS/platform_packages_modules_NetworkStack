@@ -2797,8 +2797,9 @@ public class IpClient extends StateMachine {
                         @Override
                         public void notifyLost(String logMsg, NudEventType type) {
                             maybeStoreNudFailureToDatabase(type);
-                            // TODO: only ignore the organic NUD failures.
-                            if (mIgnoreNudFailure) {
+                            // Ignore only organic NUD failures if too many on a broken network.
+                            if (mIgnoreNudFailure
+                                    && type == NudEventType.NUD_ORGANIC_FAILED_CRITICAL) {
                                 mIpProvisioningMetrics.incrementIgnoredNudFailureCount();
                                 return;
                             }

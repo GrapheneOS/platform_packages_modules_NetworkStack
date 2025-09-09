@@ -4150,17 +4150,17 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     /**
-     *  A function helper to set up the steps to verify NUD (neighbor unreachable detection) probes.
-     *  This function helper intends to respond to the multicast NS for the default gateway during
-     *  address resolution, which makes the default gateway neighbor reachable, it ends up starting
-     *  an L2 roam, which will trigger kernel to probe all neighbors later then. The specific test
-     *  case may or may not respond to that probes, depending on whether it expectes an NUD failure
-     *  from that probe.
+     * A function helper to set up the steps to verify NUD (neighbor unreachable detection) probes.
+     * This function helper intends to respond to the multicast NS for the default gateway during
+     * address resolution, which makes the default gateway neighbor reachable, it ends up starting
+     * an L2 roam, which will trigger kernel to probe all neighbors later then. The specific test
+     * case may or may not respond to that probes, depending on whether it expectes an NUD failure
+     * from that probe.
      *
-     *  If a specific test case expects to see an NUD failure after an L2 roam, then it should not
-     *  respond to any unicast NS or multicast NS (if multicast_resolicit feature is enabled). The
-     *  packet order example as below, fe80::bf8e:de37:69d7:2b29 is the IPv6 link-local address of
-     *  a test tap interface.
+     * If a specific test case expects to see an NUD failure after an L2 roam, then it should not
+     * respond to any unicast NS or multicast NS (if multicast_resolicit feature is enabled). The
+     * packet order example as below, fe80::bf8e:de37:69d7:2b29 is the IPv6 link-local address of
+     * a test tap interface.
      *
      * 7 fe80::bf8e:de37:69d7:2b29  ff02::2 ICMPv6  76  Router Solicitation from 0a:c9:06:70:77:b3
      * 9 fe80::1                    ff02::1 ICMPv6  13  Router Advertisement
@@ -6340,13 +6340,31 @@ public abstract class IpClientIntegrationTestCommon {
     @Test
     @Flag(name = IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION, enabled = true)
     public void testIgnoreNudFailuresIfTooManyInPastDay() throws Exception {
-        // // NUD failure event count exceeds daily threshold nor weekly.
+        // NUD failure event count exceeds daily threshold nor weekly.
         final long when = System.currentTimeMillis() - ONE_DAY_IN_MS / 2; // 12h ago
         final long expiry = when + ONE_WEEK_IN_MS;
         storeNudFailureEvents(when, expiry, 10, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM);
 
+        // Trigger another NUD failure post roam, this event should not be ignored.
         runIpReachabilityMonitorMcastResolicitProbeFailedTest();
-        assertNeverNotifyNeighborLost();
+        assertNotifyNeighborLost(ROUTER_LINK_LOCAL /* targetIp */,
+                NudEventType.NUD_POST_ROAMING_FAILED_CRITICAL);
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION, enabled = true)
+    public void testIgnoreNudFailuresIfTooManyInPastDay_ignoreUpcomingOrganicNudFailure()
+            throws Exception {
+        // NUD failure event count exceeds daily threshold nor weekly.
+        final long when = System.currentTimeMillis() - ONE_DAY_IN_MS / 2; // 12h ago
+        final long expiry = when + ONE_WEEK_IN_MS;
+        storeNudFailureEvents(when, expiry, 10, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM);
+
+        // Trigger another organic NUD failure, this event should be ignored.
+        prepareIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER,
+                ROUTER_LINK_LOCAL, true /* shouldMakeNeighborReachableFirst */);
+        sendPacketToPeer(ipv6Addr(IPV6_OFF_LINK_DNS_SERVER));
+        expectAndDropMultipleNses(ROUTER_LINK_LOCAL, false /* expectNeighborLost */);
     }
 
     @Test
@@ -6357,9 +6375,12 @@ public abstract class IpClientIntegrationTestCommon {
         final long expiry = when + ONE_WEEK_IN_MS;
         storeNudFailureEvents(when, expiry, 19, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM);
 
-        runIpReachabilityMonitorMcastResolicitProbeFailedTest();
-        assertNotifyNeighborLost(ROUTER_LINK_LOCAL /* targetIp */,
-                NudEventType.NUD_POST_ROAMING_FAILED_CRITICAL);
+        // Trigger another organic NUD failure, this event should not be ignored due to the flag
+        // is disabled.
+        prepareIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER,
+                ROUTER_LINK_LOCAL, true /* shouldMakeNeighborReachableFirst */);
+        sendPacketToPeer(ipv6Addr(IPV6_OFF_LINK_DNS_SERVER));
+        expectAndDropMultipleNses(ROUTER_LINK_LOCAL, true /* expectNeighborLost */);
     }
 
     @Test
@@ -6389,8 +6410,31 @@ public abstract class IpClientIntegrationTestCommon {
         expiry = when + ONE_WEEK_IN_MS;
         storeNudFailureEvents(when, expiry, 9, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM);
 
+        // Trigger another NUD failure post roam, this event should not be ignored.
         runIpReachabilityMonitorMcastResolicitProbeFailedTest();
-        assertNeverNotifyNeighborLost();
+        assertNotifyNeighborLost(ROUTER_LINK_LOCAL /* targetIp */,
+                NudEventType.NUD_POST_ROAMING_FAILED_CRITICAL);
+    }
+
+    @Test
+    @Flag(name = IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION, enabled = true)
+    public void testIgnoreNudFailuresIfTooManyInPastWeek_ignoreUpcomingOrganicNudFailures()
+            throws Exception {
+        // NUD failure event count exceeds the weekly threshold, but not daily threshold in the past
+        // day.
+        long when = System.currentTimeMillis() - ONE_WEEK_IN_MS / 2; // half a week ago
+        long expiry = when + ONE_WEEK_IN_MS;
+        storeNudFailureEvents(when, expiry, 11, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM);
+
+        when = System.currentTimeMillis() - ONE_DAY_IN_MS / 2; // 12h ago
+        expiry = when + ONE_WEEK_IN_MS;
+        storeNudFailureEvents(when, expiry, 9, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM);
+
+        // Trigger another organic NUD failure, this event should be ignored.
+        prepareIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER,
+                ROUTER_LINK_LOCAL, true /* shouldMakeNeighborReachableFirst */);
+        sendPacketToPeer(ipv6Addr(IPV6_OFF_LINK_DNS_SERVER));
+        expectAndDropMultipleNses(ROUTER_LINK_LOCAL, false /* expectNeighborLost */);
     }
 
     @Test
@@ -6406,9 +6450,12 @@ public abstract class IpClientIntegrationTestCommon {
         expiry = when + ONE_WEEK_IN_MS;
         storeNudFailureEvents(when, expiry, 9, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM);
 
-        runIpReachabilityMonitorMcastResolicitProbeFailedTest();
-        assertNotifyNeighborLost(ROUTER_LINK_LOCAL /* targetIp */,
-                NudEventType.NUD_POST_ROAMING_FAILED_CRITICAL);
+        // Trigger another organic NUD failure, this event should not be ignored due to the flag
+        // is disabled.
+        prepareIpReachabilityMonitorAddressResolutionTest(IPV6_ON_LINK_DNS_SERVER,
+                ROUTER_LINK_LOCAL, true /* shouldMakeNeighborReachableFirst */);
+        sendPacketToPeer(ipv6Addr(IPV6_OFF_LINK_DNS_SERVER));
+        expectAndDropMultipleNses(ROUTER_LINK_LOCAL, true /* expectNeighborLost */);
     }
 
     @Test
