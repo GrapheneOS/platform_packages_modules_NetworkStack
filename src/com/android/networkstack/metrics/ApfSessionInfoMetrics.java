@@ -155,8 +155,6 @@ import java.util.Map;
  * @hide
  */
 public class ApfSessionInfoMetrics {
-    // Define the maximum size of the counter list
-    public static final int MAX_NUM_OF_COUNTERS = Counter.class.getEnumConstants().length - 1;
     private static final EnumMap<Counter, CounterName> apfCounterMetricsMap = new EnumMap<>(
             Map.ofEntries(
                 Map.entry(RESERVED_OOB, CN_UNKNOWN),
@@ -251,7 +249,7 @@ public class ApfSessionInfoMetrics {
      * Add an APF counter to the metrics builder.
      */
     public void addApfCounter(final Counter counter, final long value) {
-        if (mApfCounterListBuilder.getApfCounterCount() >= MAX_NUM_OF_COUNTERS) return;
+        if (mApfCounterListBuilder.getApfCounterCount() >= Counter.NUM_VALID_COUNTERS) return;
         final ApfCounter.Builder apfCounterBuilder = ApfCounter.newBuilder()
                 .setCounterName(apfFilterCounterToEnum(counter))
                 .setCounterValue(value);
