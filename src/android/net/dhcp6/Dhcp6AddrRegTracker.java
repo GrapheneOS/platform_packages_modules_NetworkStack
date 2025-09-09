@@ -42,6 +42,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.stream.Collectors;
 
 /**
  * Track the self-generated IPv6 addresses registration process via DHCPv6 message (RFC9686).
@@ -104,6 +105,7 @@ public class Dhcp6AddrRegTracker {
     // Guaranteed non-null after start() is called.
     @Nullable
     private byte[] mClientDuid;
+    private boolean mIsStarted = false;
 
     // A random value uniformly distributed between 0.9 and 1.1 (see RFC9686 section 4.6.1).
     private static final double sAddrRegDesyncMultiplier = (new Random()).nextDouble() * 0.2 + 0.9;
@@ -288,12 +290,14 @@ public class Dhcp6AddrRegTracker {
     /**
      * Start the SLAAC address registration tracker.
      */
-    public void start(@NonNull final InterfaceParams params) {
+    public void start(InterfaceParams params, LinkProperties lp) {
+        mIsStarted = true;
         mClientDuid = Dhcp6Packet.createClientDuid(params.macAddr);
         mDhcp6PacketDispatcher.registerHandler(
                 mDhcp6MessageHandler,
                 Dhcp6Packet.DHCP6_MESSAGE_TYPE_ADDR_REG_REPLY
         );
+        setLinkProperties(lp);
     }
 
     /**
@@ -329,6 +333,11 @@ public class Dhcp6AddrRegTracker {
      * Updates the LinkProperties and checks whether the link addresses have changed.
      */
     public void setLinkProperties(LinkProperties newLp) {
+        // Ignore all LinkProperties updates until address registration starts (as soon as an RA
+        // with an M or O flag is received). When the tracker is started, start() directly
+        // initializes the LinkProperties.
+        if (!mIsStarted) return;
+
         final long nowMs = SystemClock.elapsedRealtime();
 
         // Collect the LinkAddresses from all AddressTracker objects and compare them against
@@ -337,12 +346,12 @@ public class Dhcp6AddrRegTracker {
         // isRegistrableAddress().
         final List<Link6Address> trackedLink6Addresses = mTrackedAddresses.values().stream()
                 .map(AddressTracker::getAddress)
-                .toList();
+                .collect(Collectors.toList());
 
         final List<Link6Address> newLink6Addresses = newLp.getLinkAddresses().stream()
                 .filter(la -> isRegistrableAddress(la))
                 .map(la -> new Link6Address(la))
-                .toList();
+                .collect(Collectors.toList());
 
         final CompareOrUpdateResult<InetAddress, Link6Address> addressDiff =
                 new CompareOrUpdateResult<>(

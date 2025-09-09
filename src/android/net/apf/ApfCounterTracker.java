@@ -116,6 +116,10 @@ public class ApfCounterTracker {
         DROPPED_IGMP_REPORT,
         DROPPED_GARP_REPLY;  // see also MAX_DROP_COUNTER below
 
+        // Cached count of the number of valid Counter enum values, excluding
+        // RESERVED_OOB. This avoids redundant and costly values() queries.
+        public static final int NUM_VALID_COUNTERS = values().length - 1;
+
         /**
          * Returns the negative byte offset from the end of the APF data segment for
          * a given counter.
@@ -136,7 +140,7 @@ public class ApfCounterTracker {
          * Returns the total size of the data segment in bytes.
          */
         public static int totalSize() {
-            return (Counter.class.getEnumConstants().length - 1) * 4;
+            return NUM_VALID_COUNTERS * 4;
         }
 
         /**
@@ -144,7 +148,7 @@ public class ApfCounterTracker {
          */
         @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
         public static Counter getCounterEnumFromOffset(int offset) {
-            for (Counter cnt : Counter.class.getEnumConstants()) {
+            for (Counter cnt : Counter.values()) {
                 if (cnt.offset() == offset) {
                     return cnt;
                 }
@@ -191,7 +195,7 @@ public class ApfCounterTracker {
     private final Map<Counter, Long> mCounters = new ArrayMap<>();
 
     public ApfCounterTracker() {
-        Counter[] counters = Counter.class.getEnumConstants();
+        Counter[] counters = Counter.values();
         mCounterList = Arrays.asList(counters).subList(1, counters.length);
     }
 
@@ -272,7 +276,7 @@ public class ApfCounterTracker {
             int numProgramUpdates,
             int apfVersionSupported) throws ArrayIndexOutOfBoundsException {
         List<Pair<Counter, String>> counterList = new ArrayList<>();
-        Counter[] counters = Counter.class.getEnumConstants();
+        Counter[] counters = Counter.values();
         long counterFilterAgeSeconds =
                 getCounterValue(data, FILTER_AGE_SECONDS);
         long counterApfProgramId =
