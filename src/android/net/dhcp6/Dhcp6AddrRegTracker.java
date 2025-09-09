@@ -31,6 +31,7 @@ import android.util.Log;
 
 import androidx.annotation.VisibleForTesting;
 
+import com.android.net.module.util.HandlerUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.LinkPropertiesUtils.CompareOrUpdateResult;
 import com.android.net.module.util.dhcp6.Dhcp6AddrRegInformPacket;
@@ -284,6 +285,7 @@ public class Dhcp6AddrRegTracker {
     private class AddressRegistrationAlarmListener implements AlarmManager.OnAlarmListener {
         @Override
         public void onAlarm() {
+            HandlerUtils.ensureRunningOnHandlerThread(mHandler);
             dispatchRegistration(mDeps.elapsedRealtime());
         }
     }
@@ -310,6 +312,8 @@ public class Dhcp6AddrRegTracker {
      * Start the SLAAC address registration tracker.
      */
     public void start(InterfaceParams params, LinkProperties lp) {
+        HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+
         mIsStarted = true;
         mClientDuid = Dhcp6Packet.createClientDuid(params.macAddr);
         mDhcp6PacketDispatcher.registerHandler(
@@ -323,6 +327,8 @@ public class Dhcp6AddrRegTracker {
      * Stop the SLAAC address registration tracker.
      */
     public void stop() {
+        HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+
         mDhcp6PacketDispatcher.unregisterHandler(mDhcp6MessageHandler);
         mAlarmManager.cancel(mAddressRegistrationAlarm);
         mTrackedAddresses.clear();
@@ -352,6 +358,8 @@ public class Dhcp6AddrRegTracker {
      * Updates the LinkProperties and checks whether the link addresses have changed.
      */
     public void setLinkProperties(LinkProperties newLp) {
+        HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+
         // Ignore all LinkProperties updates until address registration starts (as soon as an RA
         // with an M or O flag is received). When the tracker is started, start() directly
         // initializes the LinkProperties.
@@ -472,6 +480,8 @@ public class Dhcp6AddrRegTracker {
     }
 
     private void onReceiveReply(@NonNull Dhcp6Packet packet, @Nullable Inet6Address dst) {
+        HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+
         if (DBG) Log.d(TAG, "Received packet: " + packet);
         if (!(packet instanceof Dhcp6AddrRegReplyPacket)) return;
         if (!Arrays.equals(mClientDuid, packet.getClientDuid())) return;
