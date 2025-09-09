@@ -26,6 +26,7 @@ import androidx.test.filters.SmallTest
 import androidx.test.runner.AndroidJUnit4
 import com.android.net.module.util.InterfaceParams
 import com.android.net.module.util.dhcp6.Dhcp6AddrRegInformPacket
+import com.android.net.module.util.dhcp6.Dhcp6AddrRegReplyPacket
 import com.android.net.module.util.dhcp6.Dhcp6Packet
 import com.android.testutils.postAndWait
 import com.android.testutils.waitForIdle
@@ -41,6 +42,7 @@ import org.junit.runner.RunWith
 import org.mockito.ArgumentCaptor
 import org.mockito.Mockito
 import org.mockito.Mockito.any
+import org.mockito.Mockito.anyByte
 import org.mockito.Mockito.anyInt
 import org.mockito.Mockito.anyLong
 import org.mockito.Mockito.clearInvocations
@@ -120,6 +122,25 @@ class Dhcp6AddrRegTrackerTest {
         return packet
     }
 
+    private fun expectMessageHandler(): Dhcp6PacketDispatcher.MessageHandler {
+        val captor = ArgumentCaptor.forClass(Dhcp6PacketDispatcher.MessageHandler::class.java)
+        verify(packetDispatcher).registerHandler(captor.capture(), anyByte())
+        return captor.value
+    }
+
+    private fun buildAddrRegReply(inform: Dhcp6AddrRegInformPacket): Dhcp6AddrRegReplyPacket {
+        // "UUID" based DUID for test.
+        val serverDuid = byteArrayOf(0, 4, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+        return Dhcp6AddrRegReplyPacket(
+            inform.transactionId,
+            inform.clientDuid,
+            serverDuid,
+            inform.mIaAddress,
+            inform.mPreferred,
+            inform.mValid
+        )
+    }
+
     @Test
     fun testNoPacketSentBeforeStart() {
         verify(packetDispatcher, never()).transmitPacket(any(), any())
@@ -185,6 +206,36 @@ class Dhcp6AddrRegTrackerTest {
         assertTrue(realtimeMs < 9_000, "Actual value $realtimeMs")
 
         // Verify that no further alarms are scheduled.
+        verify(alarmManager, never()).setExact(anyInt(), anyLong(), any(), any(), any())
+    }
+
+    @Test
+    fun testRetry_successAfterSecondAttempt() {
+        val ifaceParams = InterfaceParams.getByName(IFNAME)
+        val lp = LinkProperties()
+        handler.postAndWait { tracker.start(ifaceParams, lp) }
+        val messageHandler = expectMessageHandler()
+
+        val addr = InetAddress.getByName("2001:db8:12::34")
+        lp.addLinkAddress(LinkAddress(addr, 64))
+        handler.postAndWait { tracker.setLinkProperties(lp) }
+
+        // Retry once
+        expectAddrRegInformPacket(addr)
+        expectAlarmSet().advanceClockAndFire()
+        val inform = expectAddrRegInformPacket(addr)
+        val alarm = expectAlarmSet()
+
+        // Verify that the alarm has not been cancelled yet.
+        verify(alarmManager, never()).cancel(eq(alarm.listener))
+
+        // Send back response
+        val reply = buildAddrRegReply(inform)
+        messageHandler.handleMessage(reply, inform.mIaAddress)
+        handler.waitForIdle(TIMEOUT_MS)
+
+        // Verify that the last alarm is cancelled and no further alarms are scheduled.
+        verify(alarmManager).cancel(eq(alarm.listener))
         verify(alarmManager, never()).setExact(anyInt(), anyLong(), any(), any(), any())
     }
 }
