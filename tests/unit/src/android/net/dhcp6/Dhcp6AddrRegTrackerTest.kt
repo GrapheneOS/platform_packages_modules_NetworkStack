@@ -22,6 +22,7 @@ import android.net.LinkAddress
 import android.net.LinkProperties
 import android.os.Handler
 import android.os.HandlerThread
+import android.system.OsConstants.RT_SCOPE_UNIVERSE
 import androidx.test.filters.SmallTest
 import androidx.test.runner.AndroidJUnit4
 import com.android.net.module.util.InterfaceParams
@@ -141,6 +142,15 @@ class Dhcp6AddrRegTrackerTest {
         )
     }
 
+    private fun createGua(addr: String, prefix: Int, deprecation: Long, expiry: Long): LinkAddress {
+        val inetAddr = InetAddress.getByName(addr)
+        return LinkAddress(inetAddr, prefix, 0 /*flags*/, RT_SCOPE_UNIVERSE, deprecation, expiry)
+    }
+
+    private fun LinkAddress.copyWithNewLifetime(deprecation: Long, expiry: Long): LinkAddress {
+        return LinkAddress(address, prefixLength, flags, scope, deprecation, expiry)
+    }
+
     @Test
     fun testNoPacketSentBeforeStart() {
         verify(packetDispatcher, never()).transmitPacket(any(), any())
@@ -237,5 +247,115 @@ class Dhcp6AddrRegTrackerTest {
         // Verify that the last alarm is cancelled and no further alarms are scheduled.
         verify(alarmManager).cancel(eq(alarm.listener))
         verify(alarmManager, never()).setExact(anyInt(), anyLong(), any(), any(), any())
+    }
+
+    @Test
+    fun testUpdateRegisteredAddress() {
+        val ifaceParams = InterfaceParams.getByName(IFNAME)
+        var la = createGua("2001:db8:1234::42", 64, 100_000 /*deprecationMs*/, 200_000 /*expiryMs*/)
+        var lp = LinkProperties().apply {
+            addLinkAddress(la)
+        }
+        handler.postAndWait { tracker.start(ifaceParams, lp) }
+        val messageHandler = expectMessageHandler()
+
+        // Confirm address registration
+        val inform = expectAddrRegInformPacket(la.address)
+        val alarm = expectAlarmSet() // retry alarm
+
+        val reply = buildAddrRegReply(inform)
+        messageHandler.handleMessage(reply, inform.mIaAddress)
+        handler.waitForIdle(TIMEOUT_MS)
+
+        // Alarm was cancelled upon reception of the reply.
+        verify(alarmManager).cancel(eq(alarm.listener))
+        verify(alarmManager, never()).setExact(anyInt(), anyLong(), any(), any(), any())
+
+        // At this point we know that la is meant to be refreshed no later than 80%*200s = 160s
+        // ([144, 176] when accounting for the desync multiplier) iff the address is updated. Note
+        // that realtimeMs starts at 0.
+
+        // Make some time pass
+        realtimeMs += 50_000
+
+        // Refresh the address. This *schedules* the event for min(nowMs + AddrRegRefreshInterval,
+        // NextAddrRegRefreshTime). AddrRegRefreshInterval is 80% of the valid lifetime.
+        // NextAddrRegRefreshTime is the time originally noted above (160s).
+        lp.removeLinkAddress(la)
+        lp.addLinkAddress(la.copyWithNewLifetime(150_000 /*deprecationMs*/, 250_000 /*expiryMs*/))
+        handler.postAndWait { tracker.setLinkProperties(lp) }
+        expectAlarmSet().advanceClockAndFire()
+        expectAddrRegInformPacket(la.address)
+        // Update should happen between [144, 176] (i.e. 160 += 10%).
+        assertTrue(realtimeMs >= 144_000, "Actual value $realtimeMs")
+        assertTrue(realtimeMs <= 176_000, "Actual value $realtimeMs")
+
+        // Ensure that retry mechanism works here as well.
+        expectAlarmSet().advanceClockAndFire()
+        expectAddrRegInformPacket(la.address)
+    }
+
+    @Test
+    fun testUpdateRegisteredAddress_withInsignificantChange() {
+        val ifaceParams = InterfaceParams.getByName(IFNAME)
+        var la = createGua("2001:db8:1234::42", 64, 100_000 /*deprecationMs*/, 200_000 /*expiryMs*/)
+        var lp = LinkProperties().apply {
+            addLinkAddress(la)
+        }
+        handler.postAndWait { tracker.start(ifaceParams, lp) }
+        val messageHandler = expectMessageHandler()
+
+        // Confirm address registration
+        val inform = expectAddrRegInformPacket(la.address)
+        val reply = buildAddrRegReply(inform)
+        messageHandler.handleMessage(reply, inform.mIaAddress)
+        handler.waitForIdle(TIMEOUT_MS)
+
+        clearInvocations(alarmManager)
+
+        // Sending the same LinkProperties does not result in any changes.
+        handler.postAndWait { tracker.setLinkProperties(lp) }
+        verify(alarmManager, never()).setExact(anyInt(), anyLong(), any(), any(), any())
+
+        // Sending a slightly updated address does not result in any changes (+-3s are deemed
+        // insignificant).
+        lp.removeLinkAddress(la)
+        lp.addLinkAddress(la.copyWithNewLifetime(102_000 /*deprecationMs*/, 202_000 /*expiryMs*/))
+        handler.postAndWait { tracker.setLinkProperties(lp) }
+        verify(alarmManager, never()).setExact(anyInt(), anyLong(), any(), any(), any())
+    }
+
+    // TODO: try to deduplicate these tests a bit.
+    @Test
+    fun testUpdateRegisteredAddress_reduceLifetime() {
+        val ifaceParams = InterfaceParams.getByName(IFNAME)
+        var la = createGua("2001:db8:1234::42", 64, 100_000 /*deprecationMs*/, 200_000 /*expiryMs*/)
+        var lp = LinkProperties().apply {
+            addLinkAddress(la)
+        }
+        handler.postAndWait { tracker.start(ifaceParams, lp) }
+        val messageHandler = expectMessageHandler()
+
+        // Confirm address registration
+        val inform = expectAddrRegInformPacket(la.address)
+        val reply = buildAddrRegReply(inform)
+        messageHandler.handleMessage(reply, inform.mIaAddress)
+        handler.waitForIdle(TIMEOUT_MS)
+
+        clearInvocations(alarmManager)
+
+        lp.removeLinkAddress(la)
+        lp.addLinkAddress(la.copyWithNewLifetime(0 /*deprecationMs*/, 10_000 /*expiryMs*/))
+
+        // Sending the same LinkProperties does not result in any changes.
+        handler.postAndWait { tracker.setLinkProperties(lp) }
+        expectAlarmSet().advanceClockAndFire()
+        expectAddrRegInformPacket(la.address)
+
+        // Reducing the lifetime beyond NextAddrRegRefreshTime causes the packet to be sent sooner.
+        // In this case, in 8 (= 10*80%) +-10% seconds. (Note that in this test, realtimeMs was not
+        // increased before receiving the shorter lifetime packet.)
+        assertTrue(realtimeMs >= 7_200, "Actual value $realtimeMs")
+        assertTrue(realtimeMs <= 8_800, "Actual value $realtimeMs")
     }
 }
