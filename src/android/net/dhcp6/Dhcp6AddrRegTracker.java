@@ -450,6 +450,10 @@ public class Dhcp6AddrRegTracker {
      * - The maximum retransmission count is reached.
      */
     private void scheduleNextTimer() {
+        // Cancel active alarm timer, if any. AlarmManager#cancel() is safe to use on unscheduled
+        // alarm (though it does log a warning).
+        mAlarmManager.cancel(mAddressRegistrationAlarm);
+
         long nextEvent = Long.MAX_VALUE;
         for (AddressTracker tracker : mTrackedAddresses.values()) {
             if (!tracker.mIsScheduled) continue;
