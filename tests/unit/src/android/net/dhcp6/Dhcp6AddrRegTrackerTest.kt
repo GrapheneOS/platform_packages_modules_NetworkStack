@@ -27,21 +27,27 @@ import androidx.test.runner.AndroidJUnit4
 import com.android.net.module.util.InterfaceParams
 import com.android.net.module.util.dhcp6.Dhcp6AddrRegInformPacket
 import com.android.net.module.util.dhcp6.Dhcp6Packet
+import com.android.testutils.postAndWait
 import com.android.testutils.waitForIdle
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.ArgumentCaptor
 import org.mockito.Mockito
 import org.mockito.Mockito.any
+import org.mockito.Mockito.anyInt
+import org.mockito.Mockito.anyLong
+import org.mockito.Mockito.clearInvocations
 import org.mockito.Mockito.doReturn
 import org.mockito.Mockito.eq
 import org.mockito.Mockito.never
+import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
 
 const val IFNAME = "lo"
@@ -60,7 +66,14 @@ class Dhcp6AddrRegTrackerTest {
 
     private val handlerThread = HandlerThread("Dhcp6AddrRegDispatcher thread").apply { start() }
     private val handler = Handler(handlerThread.looper)
-    private val tracker = Dhcp6AddrRegTracker(context, handler, IFNAME, packetDispatcher)
+
+    private var realtimeMs = 0L
+    private val deps = object : Dhcp6AddrRegTracker.Dependencies() {
+        override fun elapsedRealtime(): Long {
+            return realtimeMs
+        }
+    }
+    private val tracker = Dhcp6AddrRegTracker(context, handler, IFNAME, packetDispatcher, deps)
 
     @After
     fun tearDown() {
@@ -69,9 +82,37 @@ class Dhcp6AddrRegTrackerTest {
         handlerThread.join()
     }
 
+    /** Convenience class to hold captured Alarm information */
+    private inner class Alarm(
+        val scheduledMs: Long,
+        val listener: AlarmManager.OnAlarmListener
+    ) {
+        fun advanceClockAndFire() {
+            realtimeMs = scheduledMs
+            handler.postAndWait { listener.onAlarm() }
+        }
+    }
+
+    private fun expectAlarmSet(): Alarm {
+        // Note: if addr reg tracker starts setting multiple alarms, the tag can be used to
+        // distinguish them.
+        val time = ArgumentCaptor.forClass(Long::class.java)
+        val cb = ArgumentCaptor.forClass(AlarmManager.OnAlarmListener::class.java)
+        verify(alarmManager).setExact(anyInt(), time.capture(), any(), cb.capture(), any())
+
+        // Allow reusing this function for multiple invocations of setExact().
+        clearInvocations(alarmManager)
+        return Alarm(time.value, cb.value)
+    }
+
+    /**
+     * Expect an ADDR-REG-INFORM packet. Warning: this helper clears calling invocations on
+     * packetDispatcher.
+     */
     private fun expectAddrRegInformPacket(addr: InetAddress): Dhcp6AddrRegInformPacket {
         val packetCaptor = ArgumentCaptor.forClass(ByteBuffer::class.java)
         verify(packetDispatcher).transmitPacket(packetCaptor.capture(), eq(addr as Inet6Address))
+        clearInvocations(packetDispatcher)
 
         val bb = packetCaptor.value
         val packet = Dhcp6Packet.decode(bb.array(), bb.limit())
@@ -91,7 +132,7 @@ class Dhcp6AddrRegTrackerTest {
         val lp = LinkProperties().apply {
             addLinkAddress(LinkAddress(addr, 64))
         }
-        tracker.start(ifaceParams, lp)
+        handler.postAndWait { tracker.start(ifaceParams, lp) }
 
         val addrRegInform = expectAddrRegInformPacket(addr)
         assertEquals(addr as Inet6Address, addrRegInform.mIaAddress)
@@ -101,12 +142,12 @@ class Dhcp6AddrRegTrackerTest {
     fun testSetLinkProperties() {
         val ifaceParams = InterfaceParams.getByName(IFNAME)
         val lp = LinkProperties()
-        tracker.start(ifaceParams, lp)
+        handler.postAndWait { tracker.start(ifaceParams, lp) }
         verify(packetDispatcher, never()).transmitPacket(any(), any())
 
         val addr = InetAddress.getByName("2001:db8:42::42")
         lp.addLinkAddress(LinkAddress(addr, 64))
-        tracker.setLinkProperties(lp)
+        handler.postAndWait { tracker.setLinkProperties(lp) }
 
         val addrRegInform = expectAddrRegInformPacket(addr)
         assertEquals(addr as Inet6Address, addrRegInform.mIaAddress)
@@ -117,5 +158,33 @@ class Dhcp6AddrRegTrackerTest {
         // populated.
         assertEquals(0, addrRegInform.mPreferred)
         assertEquals(0, addrRegInform.mValid)
+    }
+
+    @Test
+    fun testRetry_noResponse() {
+        val ifaceParams = InterfaceParams.getByName(IFNAME)
+        val lp = LinkProperties()
+        handler.postAndWait { tracker.start(ifaceParams, lp) }
+
+        val addr = InetAddress.getByName("2001:db8:12::34")
+        lp.addLinkAddress(LinkAddress(addr, 64))
+        handler.postAndWait { tracker.setLinkProperties(lp) }
+
+        val addrRegInform = expectAddrRegInformPacket(addr)
+        assertEquals(addr as Inet6Address, addrRegInform.mIaAddress)
+
+        // The code will retry 3 times.
+        for (i in 0 until 3) {
+            expectAlarmSet().advanceClockAndFire()
+            val addrRegInform = expectAddrRegInformPacket(addr)
+            assertEquals(addr as Inet6Address, addrRegInform.mIaAddress)
+        }
+
+        // Retries take between ~[5.8, 8.2]s
+        assertTrue(realtimeMs > 5_000, "Actual value $realtimeMs")
+        assertTrue(realtimeMs < 9_000, "Actual value $realtimeMs")
+
+        // Verify that no further alarms are scheduled.
+        verify(alarmManager, never()).setExact(anyInt(), anyLong(), any(), any(), any())
     }
 }
