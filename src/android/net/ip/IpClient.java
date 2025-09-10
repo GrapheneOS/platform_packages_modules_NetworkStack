@@ -33,6 +33,7 @@ import static android.net.ip.IpClient.IpClientCommands.CMD_ADDRESSES_CLEARED;
 import static android.net.ip.IpClient.IpClientCommands.CMD_ADD_KEEPALIVE_PACKET_FILTER_TO_APF;
 import static android.net.ip.IpClient.IpClientCommands.CMD_COMPLETE_PRECONNECTION;
 import static android.net.ip.IpClient.IpClientCommands.CMD_CONFIRM;
+import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_ADDR_REG_START;
 import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_REBIND;
 import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_START;
 import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_STOP;
@@ -638,6 +639,7 @@ public class IpClient extends StateMachine {
         static final int CMD_DHCP6_PD_START = 24;
         static final int CMD_DHCP6_PD_STOP = 25;
         static final int CMD_DHCP6_PD_REBIND = 26;
+        static final int CMD_DHCP6_ADDR_REG_START = 27;
         // Internal commands to use instead of trying to call transitionTo() inside
         // a given State's enter() method. Calling transitionTo() from enter/exit
         // encounters a Log.wtf() that can cause trouble on eng builds.
@@ -1333,6 +1335,11 @@ public class IpClient extends StateMachine {
                     @Override
                     public void rebindDhcp6() {
                         sendMessage(CMD_DHCP6_PD_REBIND);
+                    }
+
+                    @Override
+                    public void startDhcp6AddrReg() {
+                        sendMessage(CMD_DHCP6_ADDR_REG_START);
                     }
                 },
                 config, mLog, mDependencies
@@ -4065,6 +4072,10 @@ public class IpClient extends StateMachine {
 
                 case CMD_DHCP6_PD_REBIND:
                     mDhcp6Client.sendMessage(Dhcp6Client.CMD_REBIND_DHCP6);
+                    break;
+
+                case CMD_DHCP6_ADDR_REG_START:
+                    // TODO: start the Dhcp6AddrRegTracker.
                     break;
 
                 case Dhcp6Client.CMD_DHCP6_RESULT:
