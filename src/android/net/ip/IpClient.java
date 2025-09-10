@@ -1213,7 +1213,7 @@ public class IpClient extends StateMachine {
         // Dhcp6Client will use control message syscalls to receive DHCPv6 messages with ancillary
         // data, making the code safer to roll out along with mainline beta program.
         mDhcp6AddressRegistrationEnabled =
-                mDependencies.isDhcp6AddressRegistrationEnabled() && SdkLevel.isAtLeastS();
+                mDependencies.isDhcp6AddressRegistrationEnabled();
         mDhcp6PacketDispatcher = new Dhcp6PacketDispatcher(getHandler(), ifName,
                 mDhcp6AddressRegistrationEnabled /* useControlMessageApi */);
 
@@ -1487,22 +1487,11 @@ public class IpClient extends StateMachine {
 
     @VisibleForTesting
     static MacAddress getInitialBssid(final Layer2Information layer2Info,
-            final ScanResultInfo scanResultInfo, boolean isAtLeastS) {
+            final ScanResultInfo scanResultInfo) {
         MacAddress bssid = null;
         // http://b/185202634
         // ScanResultInfo is not populated in some situations.
-        // On S and above, prefer getting the BSSID from the Layer2Info.
-        // On R and below, get the BSSID from the ScanResultInfo and fall back to
-        // getting it from the Layer2Info. This ensures no regressions if any R
-        // devices pass in a null or meaningless BSSID in the Layer2Info.
-        if (!isAtLeastS && scanResultInfo != null) {
-            try {
-                bssid = MacAddress.fromString(scanResultInfo.getBssid());
-            } catch (IllegalArgumentException e) {
-                Log.wtf(TAG, "Invalid BSSID: " + scanResultInfo.getBssid()
-                        + " in provisioning configuration", e);
-            }
-        }
+        // S+ prefers getting the BSSID from the Layer2Info.
         if (bssid == null && layer2Info != null) {
             bssid = layer2Info.mBssid;
         }
@@ -2908,11 +2897,7 @@ public class IpClient extends StateMachine {
         if (info.bssid == null || mCurrentBssid == null) {
             final String msg = "bssid in the parcelable: " + info.bssid + " or "
                     + "current tracked bssid: " + mCurrentBssid + " is null";
-            if (ShimUtils.isAtLeastS()) {
-                Log.wtf(mTag, msg);
-            } else {
-                Log.w(mTag, msg);
-            }
+            Log.wtf(mTag, msg);
             return;
         }
 
@@ -2968,15 +2953,8 @@ public class IpClient extends StateMachine {
         // RAM. If the RAM size is too small, we should reserve that region for program use.
         if (apfCaps.apfVersionSupported >= 3 && apfCaps.maximumApfProgramSize < 1024) {
             apfConfig.apfVersionSupported = 2;
-        } else if (SdkLevel.isAtLeastS()) {
-            apfConfig.apfVersionSupported = apfCaps.apfVersionSupported;
         } else {
-            // In Android R, ApfCapabilities#hasDataAccess() can be modified by OEMs. The
-            // ApfFilter logic uses ApfCapabilities.apfVersionSupported to determine whether
-            // data region access is supported. Therefore, we need to recalculate
-            // ApfCapabilities.apfVersionSupported based on the return value of
-            // ApfCapabilities#hasDataAccess().
-            apfConfig.apfVersionSupported = apfCaps.hasDataAccess() ? 3 : 2;
+            apfConfig.apfVersionSupported = apfCaps.apfVersionSupported;
         }
         apfConfig.apfRamSize = apfCaps.maximumApfProgramSize;
         if (!SdkLevel.isAtLeastV() && apfConfig.apfVersionSupported <= 4) {
@@ -2985,14 +2963,9 @@ public class IpClient extends StateMachine {
         apfConfig.multicastFilter = mMulticastFiltering;
         // Get the Configuration for ApfFilter from Context
         // Resource settings were moved from ApfCapabilities APIs to NetworkStack resources in S
-        if (ShimUtils.isAtLeastS()) {
-            final Resources res = mContext.getResources();
-            apfConfig.ieee802_3Filter = res.getBoolean(R.bool.config_apfDrop802_3Frames);
-            apfConfig.ethTypeBlackList = res.getIntArray(R.array.config_apfEthTypeDenyList);
-        } else {
-            apfConfig.ieee802_3Filter = ApfCapabilities.getApfDrop8023Frames();
-            apfConfig.ethTypeBlackList = ApfCapabilities.getApfEtherTypeBlackList();
-        }
+        final Resources res = mContext.getResources();
+        apfConfig.ieee802_3Filter = res.getBoolean(R.bool.config_apfDrop802_3Frames);
+        apfConfig.ethTypeBlackList = res.getIntArray(R.array.config_apfEthTypeDenyList);
 
         // The RDNSS option is not processed by the kernel, so lifetime filtering
         // can occur independent of kernel support for accept_ra_min_lft.
@@ -3061,8 +3034,7 @@ public class IpClient extends StateMachine {
     }
 
     private void handleProvisioningConfiguration(@NonNull final ProvisioningConfiguration config) {
-        mCurrentBssid = getInitialBssid(config.mLayer2Info, config.mScanResultInfo,
-                ShimUtils.isAtLeastS());
+        mCurrentBssid = getInitialBssid(config.mLayer2Info, config.mScanResultInfo);
         mCurrentApfCapabilities = config.mApfCapabilities;
         mCreatorUid = config.mCreatorUid;
         if (config.mLayer2Info != null) {

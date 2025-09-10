@@ -966,7 +966,7 @@ public class IpClientTest {
                 any(), any(), configCaptor.capture(), any(), any(), any());
         final ApfConfiguration actual = configCaptor.getValue();
         assertNotNull(actual);
-        assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, actual.apfVersionSupported);
+        assertEquals(4, actual.apfVersionSupported);
         assertEquals(4096, actual.apfRamSize);
 
         verifyShutdown(ipc);
@@ -1050,7 +1050,7 @@ public class IpClientTest {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
                 true /* isApfSupported */);
-        assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, config.apfVersionSupported);
+        assertEquals(4, config.apfVersionSupported);
         assertEquals(4096, config.apfRamSize);
         clearInvocations(mDependencies);
         ipc.dump(mFd, mWriter, null /* args */);
@@ -1062,7 +1062,7 @@ public class IpClientTest {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
                 true /* isApfSupported */);
-        assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, config.apfVersionSupported);
+        assertEquals(4, config.apfVersionSupported);
         assertEquals(4096, config.apfRamSize);
         clearInvocations(mDependencies);
 
@@ -1080,7 +1080,7 @@ public class IpClientTest {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
                 true /* isApfSupported */);
-        assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, config.apfVersionSupported);
+        assertEquals(4, config.apfVersionSupported);
         assertEquals(4096, config.apfRamSize);
         clearInvocations(mDependencies);
 
@@ -1096,7 +1096,7 @@ public class IpClientTest {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
                 true /* isApfSupported */);
-        assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, config.apfVersionSupported);
+        assertEquals(4, config.apfVersionSupported);
         assertEquals(4096, config.apfRamSize);
         clearInvocations(mDependencies);
 
@@ -1126,7 +1126,7 @@ public class IpClientTest {
         verify(mDependencies, timeout(TEST_TIMEOUT_MS)).maybeCreateApfFilter(
                 any(), any(), configCaptor.capture(), any(), any(), any());
         ApfConfiguration apfConfig = configCaptor.getValue();
-        assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, apfConfig.apfVersionSupported);
+        assertEquals(4, apfConfig.apfVersionSupported);
         assertEquals(4096, apfConfig.apfRamSize);
 
         clearInvocations(mDependencies);
@@ -1142,7 +1142,7 @@ public class IpClientTest {
         verify(mDependencies, timeout(TEST_TIMEOUT_MS)).maybeCreateApfFilter(
                 any(), any(), configCaptor.capture(), any(), any(), any());
         apfConfig = configCaptor.getValue();
-        assertEquals(SdkLevel.isAtLeastS() ? 4 : 3, apfConfig.apfVersionSupported);
+        assertEquals(4, apfConfig.apfVersionSupported);
         assertEquals(2048, apfConfig.apfRamSize);
     }
 
@@ -1259,110 +1259,42 @@ public class IpClientTest {
     }
 
     @Test
-    public void testGetInitialBssidOnSOrAbove() throws Exception {
+    public void testGetInitialBssid() throws Exception {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         final Layer2Information layer2Info = new Layer2Information(TEST_L2KEY, TEST_CLUSTER,
                 MacAddress.fromString(TEST_BSSID));
         final ScanResultInfo scanResultInfo = makeScanResultInfo(TEST_SSID, TEST_BSSID2);
-        final MacAddress bssid = ipc.getInitialBssid(layer2Info, scanResultInfo,
-                true /* isAtLeastS */);
+        final MacAddress bssid = ipc.getInitialBssid(layer2Info, scanResultInfo);
         assertEquals(bssid, MacAddress.fromString(TEST_BSSID));
         ipc.shutdown();
     }
 
     @Test
-    public void testGetInitialBssidOnSOrAbove_NullScanReqsultInfo() throws Exception {
+    public void testGetInitialBssid_NullScanReqsultInfo() throws Exception {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         final Layer2Information layer2Info = new Layer2Information(TEST_L2KEY, TEST_CLUSTER,
                 MacAddress.fromString(TEST_BSSID));
-        final MacAddress bssid = ipc.getInitialBssid(layer2Info, null /* ScanResultInfo */,
-                true /* isAtLeastS */);
+        final MacAddress bssid = ipc.getInitialBssid(layer2Info, null /* ScanResultInfo */);
         assertEquals(bssid, MacAddress.fromString(TEST_BSSID));
         ipc.shutdown();
     }
 
     @Test
-    public void testGetInitialBssidOnSOrAbove_NullBssid() throws Exception {
+    public void testGetInitialBssid_NullBssid() throws Exception {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         final Layer2Information layer2Info = new Layer2Information(TEST_L2KEY, TEST_CLUSTER,
                 null /* bssid */);
         final ScanResultInfo scanResultInfo = makeScanResultInfo(TEST_SSID, TEST_BSSID);
-        final MacAddress bssid = ipc.getInitialBssid(layer2Info, scanResultInfo,
-                true /* isAtLeastS */);
+        final MacAddress bssid = ipc.getInitialBssid(layer2Info, scanResultInfo);
         assertNull(bssid);
         ipc.shutdown();
     }
 
     @Test
-    public void testGetInitialBssidOnSOrAbove_NullLayer2Info() throws Exception {
+    public void testGetInitialBssid_NullLayer2Info() throws Exception {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         final ScanResultInfo scanResultInfo = makeScanResultInfo(TEST_SSID, TEST_BSSID);
-        final MacAddress bssid = ipc.getInitialBssid(null /* layer2Info */, scanResultInfo,
-                true /* isAtLeastS */);
-        assertNull(bssid);
-        ipc.shutdown();
-    }
-
-    @Test
-    public void testGetInitialBssidBeforeS() throws Exception {
-        final IpClient ipc = makeIpClient(TEST_IFNAME);
-        final Layer2Information layer2Info = new Layer2Information(TEST_L2KEY, TEST_CLUSTER,
-                MacAddress.fromString(TEST_BSSID2));
-        final ScanResultInfo scanResultInfo = makeScanResultInfo(TEST_SSID, TEST_BSSID);
-        final MacAddress bssid = ipc.getInitialBssid(layer2Info, scanResultInfo,
-                false /* isAtLeastS */);
-        assertEquals(bssid, MacAddress.fromString(TEST_BSSID));
-        ipc.shutdown();
-    }
-
-    @Test
-    public void testGetInitialBssidBeforeS_NullLayer2Info() throws Exception {
-        final IpClient ipc = makeIpClient(TEST_IFNAME);
-        final ScanResultInfo scanResultInfo = makeScanResultInfo(TEST_SSID, TEST_BSSID);
-        final MacAddress bssid = ipc.getInitialBssid(null /* layer2Info */, scanResultInfo,
-                false /* isAtLeastS */);
-        assertEquals(bssid, MacAddress.fromString(TEST_BSSID));
-        ipc.shutdown();
-    }
-
-    @Test
-    public void testGetInitialBssidBeforeS_BrokenInitialBssid() throws Exception {
-        final IpClient ipc = makeIpClient(TEST_IFNAME);
-        final ScanResultInfo scanResultInfo = makeScanResultInfo(TEST_SSID, "00:11:22:33:44:");
-        final MacAddress bssid = ipc.getInitialBssid(null /* layer2Info */, scanResultInfo,
-                false /* isAtLeastS */);
-        assertNull(bssid);
-        ipc.shutdown();
-    }
-
-    @Test
-    public void testGetInitialBssidBeforeS_BrokenInitialBssidFallback() throws Exception {
-        final IpClient ipc = makeIpClient(TEST_IFNAME);
-        final Layer2Information layer2Info = new Layer2Information(TEST_L2KEY, TEST_CLUSTER,
-                MacAddress.fromString(TEST_BSSID));
-        final ScanResultInfo scanResultInfo = makeScanResultInfo(TEST_SSID, "00:11:22:33:44:");
-        final MacAddress bssid = ipc.getInitialBssid(layer2Info, scanResultInfo,
-                false /* isAtLeastS */);
-        assertEquals(bssid, MacAddress.fromString(TEST_BSSID));
-        ipc.shutdown();
-    }
-
-    @Test
-    public void testGetInitialBssidBeforeS_NullScanResultInfoFallback() throws Exception {
-        final IpClient ipc = makeIpClient(TEST_IFNAME);
-        final Layer2Information layer2Info = new Layer2Information(TEST_L2KEY, TEST_CLUSTER,
-                MacAddress.fromString(TEST_BSSID));
-        final MacAddress bssid = ipc.getInitialBssid(layer2Info, null /* scanResultInfo */,
-                false /* isAtLeastS */);
-        assertEquals(bssid, MacAddress.fromString(TEST_BSSID));
-        ipc.shutdown();
-    }
-
-    @Test
-    public void testGetInitialBssidBeforeS_NullScanResultInfoAndLayer2Info() throws Exception {
-        final IpClient ipc = makeIpClient(TEST_IFNAME);
-        final MacAddress bssid = ipc.getInitialBssid(null /* layer2Info */,
-                null /* scanResultInfo */, false /* isAtLeastS */);
+        final MacAddress bssid = ipc.getInitialBssid(null /* layer2Info */, scanResultInfo);
         assertNull(bssid);
         ipc.shutdown();
     }
