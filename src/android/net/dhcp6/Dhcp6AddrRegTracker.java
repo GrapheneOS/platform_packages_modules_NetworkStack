@@ -329,6 +329,7 @@ public class Dhcp6AddrRegTracker {
     public void stop() {
         HandlerUtils.ensureRunningOnHandlerThread(mHandler);
 
+        mIsStarted = false;
         mDhcp6PacketDispatcher.unregisterHandler(mDhcp6MessageHandler);
         mAlarmManager.cancel(mAddressRegistrationAlarm);
         mTrackedAddresses.clear();

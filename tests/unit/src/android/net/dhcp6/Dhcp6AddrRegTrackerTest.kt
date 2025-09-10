@@ -363,4 +363,19 @@ class Dhcp6AddrRegTrackerTest {
         assertTrue(realtimeMs >= 7_200, "Actual value $realtimeMs")
         assertTrue(realtimeMs <= 8_800, "Actual value $realtimeMs")
     }
+
+    @Test
+    fun testStop() {
+        val ifaceParams = InterfaceParams.getByName(IFNAME)
+        val lp = LinkProperties()
+        handler.postAndWait { tracker.start(ifaceParams, lp) }
+        handler.postAndWait { tracker.stop() }
+
+        val addr = InetAddress.getByName("2001:db8:42::42")
+        lp.addLinkAddress(LinkAddress(addr, 64))
+        handler.postAndWait { tracker.setLinkProperties(lp) }
+
+        verify(packetDispatcher, never()).transmitPacket(any(), any())
+        verify(alarmManager, never()).setExact(anyInt(), anyLong(), any(), any(), any())
+    }
 }
