@@ -74,6 +74,7 @@ import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV4_UNICAST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_HOPOPTS
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP
 import android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NON_ICMP
+import android.net.apf.ApfCounterTracker.Counter.PASSED_LOW_POWER_STANDBY_MAGIC_PACKET
 import android.net.apf.ApfCounterTracker.Counter.PASSED_MDNS
 import android.net.apf.ApfCounterTracker.Counter.PASSED_NON_IP_UNICAST
 import android.net.apf.ApfCounterTracker.Counter.PASSED_RA
@@ -126,6 +127,8 @@ import java.io.FileDescriptor
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlin.random.Random
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -176,6 +179,11 @@ class ApfFilterTest {
                 ApfJniUtils.APF_INTERPRETER_VERSION_NEXT
             )
         }
+    }
+
+    private fun ByteArray.glitch(index: Int): ByteArray {
+        this[index] = (this[index].toInt() xor 1).toByte()
+        return this
     }
 
     @get:Rule
@@ -542,6 +550,370 @@ class ApfFilterTest {
         }
         handlerThread.waitForIdle(TIMEOUT_MS)
         return apfFilter
+    }
+
+    private fun getMagicPacketFilter(): ApfFilter {
+        val apfConfig = getDefaultConfig()
+        apfConfig.acceptMagicPackets = true
+        return getApfFilter(apfConfig)
+    }
+
+    private fun generateEthernetHeader(
+        dstMac: ByteArray,
+        srcMac: ByteArray,
+        etherType: Int
+    ): ByteArray {
+        return dstMac + srcMac +
+                ByteBuffer.allocate(Short.SIZE_BYTES)
+                        .putShort(etherType.toShort())
+                        .order(ByteOrder.BIG_ENDIAN)
+                        .array()
+    }
+
+    private fun generateMagicPayload(
+        tgtMac: ByteArray
+    ): ByteArray {
+        var bytes = byteArrayOf()
+        repeat (6) {
+            bytes += 0xFF.toByte()
+        }
+        repeat (16) {
+            bytes += tgtMac
+        }
+        return bytes
+    }
+
+    @Test
+    fun testWoLMagicPacket() {
+        if (!SdkLevel.isAtLeastV())
+            return
+
+        val apfFilter = getMagicPacketFilter();
+        val program = ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
+        val srcMac = byteArrayOf(0, 1, 2, 3, 4, 5)
+
+        // Canonical WoL magic packet
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            generateEthernetHeader(apfFilter.mHardwareAddress, srcMac, 0x0842)
+                    + generateMagicPayload(apfFilter.mHardwareAddress),
+            PASSED_LOW_POWER_STANDBY_MAGIC_PACKET
+        )
+
+        // Ethernet destination MAC ignored
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            generateEthernetHeader(byteArrayOf(0, 0, 0, 0, 0, 0), srcMac, 0x0842)
+                    + generateMagicPayload(apfFilter.mHardwareAddress),
+            PASSED_LOW_POWER_STANDBY_MAGIC_PACKET
+        )
+
+        // Extra payload bytes ignored
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            generateEthernetHeader(apfFilter.mHardwareAddress, srcMac, 0x0842)
+                    + generateMagicPayload(apfFilter.mHardwareAddress)
+                    + byteArrayOf(1, 2, 3, 4, 5, 6),
+            PASSED_LOW_POWER_STANDBY_MAGIC_PACKET
+        )
+
+        // Wrong ethertype
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            generateEthernetHeader(apfFilter.mHardwareAddress, srcMac, 0x8137)
+                    + generateMagicPayload(apfFilter.mHardwareAddress),
+            DROPPED_ETHERTYPE_NOT_ALLOWED
+        )
+
+       // Wrong target MAC
+       ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            generateEthernetHeader(apfFilter.mHardwareAddress, srcMac, 0x0842)
+                    + generateMagicPayload(srcMac),
+            DROPPED_ETHERTYPE_NOT_ALLOWED
+        )
+
+        // Wrong payload position
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            generateEthernetHeader(apfFilter.mHardwareAddress, srcMac, 0x0842)
+                    + 0xFF.toByte()
+                    + generateMagicPayload(apfFilter.mHardwareAddress),
+            DROPPED_ETHERTYPE_NOT_ALLOWED
+        )
+
+        // Wrong sync bytes
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            generateEthernetHeader(apfFilter.mHardwareAddress, srcMac, 0x0842)
+                    + generateMagicPayload(apfFilter.mHardwareAddress).glitch(0),
+            DROPPED_ETHERTYPE_NOT_ALLOWED
+        )
+
+        // Wrong target MAC bytes
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            generateEthernetHeader(apfFilter.mHardwareAddress, srcMac, 0x0842)
+                    + generateMagicPayload(apfFilter.mHardwareAddress).glitch((17 * 6) - 1),
+            DROPPED_ETHERTYPE_NOT_ALLOWED
+        )
+    }
+
+    @Test
+    fun testUdpMagicPacket() {
+        if (!SdkLevel.isAtLeastV())
+            return
+
+        val apfFilter = getMagicPacketFilter();
+        val program = ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
+
+        // Using scapy to generate a magic packet using IPv4 UDP port 9:
+        /*
+            eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+            ip = IP(src="192.168.1.1")
+            udp = UDP(sport=54321, dport=9)
+            sync_bytes = bytes.fromhex("FF:FF:FF:FF:FF:FF".replace(":", ""))
+            tgt_bytes = bytes.fromhex("02:03:04:05:06:07".replace(":", ""))
+            payload = Raw(load=(sync_bytes + tgt_bytes * 16))
+            p = eth/ip/udp/payload
+        */
+        var pkt = """
+            02030405060700010203040508004500008200010000401139c0c0a801017f000001
+            d4310009006e293cffffffffffff0203040506070203040506070203040506070203
+            04050607020304050607020304050607020304050607020304050607020304050607
+            02030405060702030405060702030405060702030405060702030405060702030405
+            0607020304050607
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(pkt),
+            PASSED_LOW_POWER_STANDBY_MAGIC_PACKET
+        )
+
+        // Using scapy to generate a magic packet using IPv4 UDP port 7:
+        /*
+            eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+            ip = IP(src="192.168.1.1")
+            udp = UDP(sport=54321, dport=7)
+            sync_bytes = bytes.fromhex("FF:FF:FF:FF:FF:FF".replace(":", ""))
+            tgt_bytes = bytes.fromhex("02:03:04:05:06:07".replace(":", ""))
+            payload = Raw(load=(sync_bytes + tgt_bytes * 16))
+            p = eth/ip/udp/payload
+        */
+        pkt = """
+            02030405060700010203040508004500008200010000401139c0c0a801017f000001
+            d4310007006e293effffffffffff0203040506070203040506070203040506070203
+            04050607020304050607020304050607020304050607020304050607020304050607
+            02030405060702030405060702030405060702030405060702030405060702030405
+            0607020304050607
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(pkt),
+            PASSED_LOW_POWER_STANDBY_MAGIC_PACKET
+        )
+
+        // Using scapy to generate a magic packet using IPv4 UDP port 0:
+        /*
+            eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+            ip = IP(src="192.168.1.1")
+            udp = UDP(sport=54321, dport=0)
+            sync_bytes = bytes.fromhex("FF:FF:FF:FF:FF:FF".replace(":", ""))
+            tgt_bytes = bytes.fromhex("02:03:04:05:06:07".replace(":", ""))
+            payload = Raw(load=(sync_bytes + tgt_bytes * 16))
+            p = eth/ip/udp/payload
+        */
+        pkt = """
+            02030405060700010203040508004500008200010000401139c0c0a801017f000001
+            d4310000006e2945ffffffffffff0203040506070203040506070203040506070203
+            04050607020304050607020304050607020304050607020304050607020304050607
+            02030405060702030405060702030405060702030405060702030405060702030405
+            0607020304050607
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(pkt),
+            PASSED_LOW_POWER_STANDBY_MAGIC_PACKET
+        )
+
+        // Using scapy to generate a magic packet with wrong protocol:
+        /*
+            eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+            ipv6 = IPv6(src="2001:db8::10", dst="2001:db8::20")
+            udp = UDP(sport=54321, dport=9)
+            sync_bytes = bytes.fromhex("FF:FF:FF:FF:FF:FF".replace(":", ""))
+            tgt_bytes = bytes.fromhex("02:03:04:05:06:07".replace(":", ""))
+            payload = Raw(load=(sync_bytes + tgt_bytes * 16))
+            p = eth/ipv6/udp/payload
+        */
+        pkt = """
+            02030405060700010203040586dd60000000006e114020010db80000000000000000
+            0000001020010db8000000000000000000000020d4310009006e0e45ffffffffffff
+            02030405060702030405060702030405060702030405060702030405060702030405
+            06070203040506070203040506070203040506070203040506070203040506070203
+            04050607020304050607020304050607020304050607020304050607
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(pkt),
+            PASSED_IPV6_NON_ICMP
+        )
+
+        // Using scapy to generate a magic packet with wrong fragmentation:
+        /*
+            eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+            ip = IP(src="192.168.1.1", flags=1, frag=10)
+            udp = UDP(sport=54321, dport=9)
+            sync_bytes = bytes.fromhex("FF:FF:FF:FF:FF:FF".replace(":", ""))
+            tgt_bytes = bytes.fromhex("02:03:04:05:06:07".replace(":", ""))
+            payload = Raw(load=(sync_bytes + tgt_bytes * 16))
+            p = eth/ip/udp/payload
+        */
+        pkt = """
+            0203040506070001020304050800450000820001200a401119b6c0a801017f000001
+            d4310009006e293cffffffffffff0203040506070203040506070203040506070203
+            04050607020304050607020304050607020304050607020304050607020304050607
+            02030405060702030405060702030405060702030405060702030405060702030405
+            0607020304050607
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(pkt),
+            PASSED_IPV4
+        )
+
+        // Using scapy to generate a magic packet with wrong port:
+        /*
+            eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+            ip = IP(src="192.168.1.1")
+            udp = UDP(sport=54321, dport=37)
+            sync_bytes = bytes.fromhex("FF:FF:FF:FF:FF:FF".replace(":", ""))
+            tgt_bytes = bytes.fromhex("02:03:04:05:06:07".replace(":", ""))
+            payload = Raw(load=(sync_bytes + tgt_bytes * 16))
+            p = eth/ip/udp/payload
+        */
+        pkt = """
+            02030405060700010203040508004500008200010000401139c0c0a801017f000001
+            d4310025006e2920ffffffffffff0203040506070203040506070203040506070203
+            04050607020304050607020304050607020304050607020304050607020304050607
+            02030405060702030405060702030405060702030405060702030405060702030405
+            0607020304050607
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(pkt),
+            PASSED_IPV4
+        )
+
+        // Using scapy to generate a magic packet with wrong starting offset:
+        /*
+            eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+            ip = IP(src="192.168.1.1")
+            udp = UDP(sport=54321, dport=9)
+            sync_bytes = bytes.fromhex("FF:FF:FF:FF:FF:FF".replace(":", ""))
+            tgt_bytes = bytes.fromhex("02:03:04:05:06:07".replace(":", ""))
+            payload = Raw(load=(b'\0' + sync_bytes + tgt_bytes * 16))
+            p = eth/ip/udp/payload
+        */
+        pkt = """
+            02030405060700010203040508004500008300010000401139bfc0a801017f000001
+            d4310025006ff94d00ffffffffffff02030405060702030405060702030405060702
+            03040506070203040506070203040506070203040506070203040506070203040506
+            07020304050607020304050607020304050607020304050607020304050607020304
+            050607020304050607
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(pkt),
+            PASSED_IPV4
+        )
+
+        // Using scapy to generate a magic packet with wrong sync bytes:
+        /*
+            eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+            ip = IP(src="192.168.1.1")
+            udp = UDP(sport=54321, dport=9)
+            sync_bytes = bytes.fromhex("FF:FF:FF:FF:FF:FF".replace(":", ""))
+            tgt_bytes = bytes.fromhex("02:03:04:05:06:07".replace(":", ""))
+            payload = Raw(load=(b'\x7f' * 6 + tgt_bytes * 16))
+            p = eth/ip/udp/payload
+        */
+        pkt = """
+            02030405060700010203040508004500008200010000401139c0c0a801017f000001
+            d4310009006eaabd7f7f7f7f7f7f0203040506070203040506070203040506070203
+            04050607020304050607020304050607020304050607020304050607020304050607
+            02030405060702030405060702030405060702030405060702030405060702030405
+            0607020304050607
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(pkt),
+            PASSED_IPV4
+        )
+
+        // Using scapy to generate a magic packet with wrong final target address:
+        /*
+            eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+            ip = IP(src="192.168.1.1")
+            udp = UDP(sport=54321, dport=9)
+            sync_bytes = bytes.fromhex("FF:FF:FF:FF:FF:FF".replace(":", ""))
+            tgt_bytes = bytes.fromhex("02:03:04:05:06:07".replace(":", ""))
+            payload = Raw(load=(sync_bytes + tgt_bytes * 15 + tgt_bytes[:-1] + b'\xff'))
+            p = eth/ip/udp/payload
+        */
+        pkt = """
+            02030405060700010203040508004500008200010000401139c0c0a801017f000001
+            d4310009006e2844ffffffffffff0203040506070203040506070203040506070203
+            04050607020304050607020304050607020304050607020304050607020304050607
+            02030405060702030405060702030405060702030405060702030405060702030405
+            06070203040506ff
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(pkt),
+            PASSED_IPV4
+        )
+
+        // Using scapy to generate a magic packet with wrong target address:
+        /*
+            eth = Ether(src="00:01:02:03:04:05", dst="02:03:04:05:06:07")
+            ip = IP(src="192.168.1.1")
+            udp = UDP(sport=54321, dport=9)
+            sync_bytes = bytes.fromhex("FF:FF:FF:FF:FF:FF".replace(":", ""))
+            tgt_bytes = bytes.fromhex("02:03:04:05:06:08".replace(":", ""))
+            payload = Raw(load=(sync_bytes + tgt_bytes * 16))
+            p = eth/ip/udp/payload
+        */
+        pkt = """
+            02030405060700010203040508004500008200010000401139c0c0a801017f000001
+            d4310009006e292cffffffffffff0203040506080203040506080203040506080203
+            04050608020304050608020304050608020304050608020304050608020304050608
+            02030405060802030405060802030405060802030405060802030405060802030405
+            0608020304050608
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(pkt),
+            PASSED_IPV4
+        )
     }
 
     private fun getIgmpApfFilter(): ApfFilter {

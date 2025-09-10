@@ -187,6 +187,7 @@ import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_HOPOPTS;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NON_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_UNICAST_NON_ICMP;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_LOW_POWER_STANDBY_MAGIC_PACKET;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_MDNS;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_NON_IP_UNICAST;
 import static android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS;
@@ -219,6 +220,7 @@ import static com.android.net.module.util.NetworkStackConstants.ETHER_BROADCAST;
 import static com.android.net.module.util.NetworkStackConstants.ETHER_DST_ADDR_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.ETHER_HEADER_LEN;
 import static com.android.net.module.util.NetworkStackConstants.ETHER_SRC_ADDR_OFFSET;
+import static com.android.net.module.util.NetworkStackConstants.ETHER_TYPE_WAKE_ON_LAN;
 import static com.android.net.module.util.NetworkStackConstants.ICMP_HEADER_LEN;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_ECHO_REQUEST_TYPE;
 import static com.android.net.module.util.NetworkStackConstants.ICMPV6_NA_HEADER_LEN;
@@ -348,6 +350,7 @@ public class ApfFilter {
         public boolean handleMldOffload;
         public boolean handleIpv4PingOffload;
         public boolean handleIpv6PingOffload;
+        public boolean acceptMagicPackets;
         public boolean skipMdnsRecordWithoutPriority;
     }
 
@@ -418,6 +421,7 @@ public class ApfFilter {
     private final boolean mHandleMldOffload;
     private final boolean mHandleIpv4PingOffload;
     private final boolean mHandleIpv6PingOffload;
+    private final boolean mAcceptMagicPackets;
     private final boolean mSkipMdnsRecordWithoutPriority;
 
     private final NetworkQuirkMetrics mNetworkQuirkMetrics;
@@ -568,6 +572,7 @@ public class ApfFilter {
         mHandleMldOffload = config.handleMldOffload;
         mHandleIpv4PingOffload = config.handleIpv4PingOffload;
         mHandleIpv6PingOffload = config.handleIpv6PingOffload;
+        mAcceptMagicPackets = config.acceptMagicPackets;
         mSkipMdnsRecordWithoutPriority = config.skipMdnsRecordWithoutPriority;
         mDependencies = dependencies;
         mNetworkQuirkMetrics = networkQuirkMetrics;
@@ -866,7 +871,6 @@ public class ApfFilter {
      * Counts of total and filtered Router Advertisements (RAs).</li>
      * The number of active mDNS offload rules.</li>
      *
-     *
      * @return A formatted {@link String} describing the current APF configuration.
      * Example: { mcast: DROP, doze: TRUE, offloads: [ ARP, ND, ], total RAs: 5 }
      */
@@ -976,7 +980,7 @@ public class ApfFilter {
     }
 
     /**
-     *  Class to keep track of a section in a packet.
+     * Class to keep track of a section in a packet.
      */
     private static class PacketSection {
         public enum Type {
@@ -1823,8 +1827,8 @@ public class ApfFilter {
     private final SparseArray<KeepalivePacket> mKeepalivePackets = new SparseArray<>();
 
     // We don't want to filter an RA for it's whole lifetime as it'll be expired by the time we ever
-    // see a refresh.  Using half the lifetime might be a good idea except for the fact that
-    // packets may be dropped, so let's use 6.
+    // see a refresh. Using half the lifetime might be a good idea except for the fact that packets
+    // may be dropped, so let's use 6.
     private static final int FRACTION_OF_LIFETIME_TO_FILTER = 6;
 
     // When did we last install a filter program? In seconds since Unix Epoch.
@@ -1851,6 +1855,103 @@ public class ApfFilter {
     private int mMaxProgramSize = 0;
     // The maximum number of distinct RAs
     private int mMaxDistinctRas = 0;
+
+    /**
+     * Generate filter code to accept "magic packets" which are specially formatted packets
+     * expected to wake up the host (e.g. Android TV).
+     *
+     * If the packet is a magic packet (most common formats accepted, see below for details),
+     * execution of this code ends in the PASS_LABEL; otherwise, it always falls off the end.
+     *
+     * This filter code uses both registers.
+     *
+     * Preconditions:
+     *  - R0 contains ethertype
+     *
+     * A "magic packet" is an ethernet frame containing, anywhere within its payload, a 102-byte
+     * "magic payload" consisting of:
+     *  - One copy of 6 bytes of 0xFF ("sync bytes"), followed by
+     *  - Sixteen copies of the 6-byte target MAC address.
+     *
+     * Commonly, magic packets are sent as UDP on port 0 (reserved), 7 (echo), or 9 (discard), or
+     * directly using the Wake-on-LAN ethertype (0x0842).
+     *
+     * This function only accepts the following subset of magic packets:
+     *  - Ethertype 0x0842 with the magic payload starting at offset 14 (i.e. start of ethernet
+     *    frame payload), or
+     *  - IPv4 UDP on port 0, 7, or 9 with the magic payload starting at offset 42 (i.e. start of
+     *    UDP datagram data section).
+     *
+     * This function does not (currently) accept IPv6 magic packets.
+     *
+     * Here is an example magic packet with the following details:
+     *  - Target address: AA:BB:CC:DD:EE:FF
+     *  - Source address: 00:11:22:33:44:55
+     *  - EtherType: 0x0842
+     *
+     * ```
+     * +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+     * |AA BB CC DD EE FF|00 11 22 33 44 55|08 42|FF FF FF FF FF FF|AA BB CC DD EE FF|AA BB CC DD
+     * +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+     *  EE FF|AA BB CC DD EE FF|AA BB CC DD EE FF|AA BB CC DD EE FF|AA BB CC DD EE FF|AA BB CC DD
+     * +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+     *  EE FF|AA BB CC DD EE FF|AA BB CC DD EE FF|AA BB CC DD EE FF|AA BB CC DD EE FF|AA BB CC DD
+     * +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+     *  EE FF|AA BB CC DD EE FF|AA BB CC DD EE FF|AA BB CC DD EE FF|AA BB CC DD EE FF|
+     * +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+     * ```
+     */
+    private void generateAcceptMagicPacketFilter(ApfV6GeneratorBase<?> gen)
+            throws IllegalInstructionException {
+        final short skipFilter = gen.getUniqueLabel();
+        final short matchMagicPayload = gen.getUniqueLabel();
+        final short matchHardwareAddress = gen.getUniqueLabel();
+
+        final int MAGIC_PAYLOAD_LEN = (1 + 16) * ETHER_ADDR_LEN;
+
+        // Assuming the magic payload starts at the beginning of the ethernet frame data, load R1
+        // with an offset value that corresponds to the first byte immediately following the magic
+        // payload bytes.
+        gen.addLoadImmediate(R1, ETH_HEADER_LEN + MAGIC_PAYLOAD_LEN);
+
+        // Check if the packet ethertype is Wake-on-LAN.
+        gen.addJumpIfR0Equals(ETHER_TYPE_WAKE_ON_LAN, matchMagicPayload);
+
+        // Check if the packet ethertype is IPv4, with protocol UDP and port 0/7/9.
+        // NOTE: This assumes the packet length is sufficient; if not true, an exception will result
+        //       in PASS.
+        // NOTE: This assumes the IPv4 header has no options; if not true, the most likely outcome
+        //       is that the port check fails and filtering continues with the next filter; if the
+        //       port check succeeds, the magic payload check will likely fail and filtering will
+        //       continue with the next filter.
+        gen.addJumpIfR0NotEquals(ETH_P_IP, skipFilter)
+                .addJumpIfNotUnfragmentedIPv4Protocol(IPPROTO_UDP, skipFilter)
+                .addLoad16intoR0(IPV4_UDP_DESTINATION_PORT_NO_OPTIONS_OFFSET)
+                .addJumpIfNoneOf(R0, Set.of(0L, 7L, 9L), skipFilter);
+
+        // Assuming the magic payload starts at the beginning of an IPv4 UDP (no options) datagram
+        // data section, load R1 with an offset value that corresponds to the first byte immediately
+        // following the magic payload bytes.
+        gen.addLoadImmediate(R1, IPV4_UDP_PAYLOAD_NO_OPTIONS_OFFSET + MAGIC_PAYLOAD_LEN);
+
+        // R1 has an offset value that corresponds to the first byte immediately following potential
+        // magic payload bytes; check if the bytes preceding the offset are actually magic payload
+        // bytes.
+        gen.defineLabel(matchMagicPayload)
+                .addLoadFromMemory(R0, MemorySlot.PACKET_SIZE)             // load R0 with size
+                .addJumpIfR0LessThanR1(skipFilter)                         // check size vs. offset
+                .addMoveR1IntoR0()                                         // load R0 with offset
+                .addSub(MAGIC_PAYLOAD_LEN)                                 // adjust offset to start
+                .addJumpIfBytesAtR0NotEqual(ETHER_BROADCAST, skipFilter)   // match sync bytes
+                .addAdd(ETHER_ADDR_LEN)                                    // adjust offset forward
+                .defineLabel(matchHardwareAddress)
+                .addJumpIfBytesAtR0NotEqual(mHardwareAddress, skipFilter)  // match target bytes
+                .addAdd(ETHER_ADDR_LEN)                                    // adjust offset forward
+                .addJumpIfR0NotEqualsR1(matchHardwareAddress)              // check offset vs. end
+                .addCountAndPass(PASSED_LOW_POWER_STANDBY_MAGIC_PACKET);
+
+        gen.defineLabel(skipFilter);
+    }
 
     /**
      * Generate filter code to process ARP packets. Execution of this code ends in either the
@@ -3716,6 +3817,11 @@ public class ApfFilter {
 
         gen.addLoad16intoR0(ETH_ETHERTYPE_OFFSET);
         if (SdkLevel.isAtLeastV()) {
+            if (enableAcceptMagicPacketFilter()) {
+                generateAcceptMagicPacketFilter((ApfV6GeneratorBase<?>) gen);
+                gen.addLoad16intoR0(ETH_ETHERTYPE_OFFSET);  // reload after clobber
+            }
+
             // Pass unicast TDLS packet but drop non-unicast TDLS packet.
             short skipTDLScheck = gen.getUniqueLabel();
             gen.addJumpIfR0NotEquals(0x890DL, skipTDLScheck)
@@ -3728,7 +3834,7 @@ public class ApfFilter {
             gen.addCountAndDropIfR0IsNoneOf(
                     Set.of(0x0800L, 0x0806L, 0x86DDL, 0x888EL, 0x88B4L),
                     DROPPED_ETHERTYPE_NOT_ALLOWED);
-        } else  {
+        } else {
             if (mDrop802_3Frames) {
                 // drop 802.3 frames (ethtype < 0x0600)
                 gen.addCountAndDropIfR0LessThan(ETH_TYPE_MIN, DROPPED_802_3_FRAME);
@@ -4207,10 +4313,11 @@ public class ApfFilter {
         return ipv4Address;
     }
 
-    /** Retrieve the pair of IPv6 Inet6Address set, otherwise return pair with two empty set.
-     *  The first element is a set containing tentative IPv6 addresses,
-     *  the second element is a set containing non-tentative IPv6 addresses
-     *  */
+    /**
+     * Retrieves the pair of IPv6 Inet6Address set, otherwise return pair with two empty set.
+     * The first element is a set containing tentative IPv6 addresses,
+     * the second element is a set containing non-tentative IPv6 addresses
+     */
     private static Pair<Set<Inet6Address>, Set<Inet6Address>>
             retrieveIPv6LinkAddress(LinkProperties lp) {
         final Set<Inet6Address> tentativeAddrs = new ArraySet<>();
@@ -4369,6 +4476,11 @@ public class ApfFilter {
     private boolean enableMldOffload() {
         return enableMldReportsMonitor() && mIPv6LinkLocalAddress != null
                 && !mIPv6McastAddrsExcludeAllHost.isEmpty();
+    }
+
+    @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
+    public boolean enableAcceptMagicPacketFilter() {
+        return SdkLevel.isAtLeastV() && mAcceptMagicPackets && useApfV6Generator();
     }
 
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
