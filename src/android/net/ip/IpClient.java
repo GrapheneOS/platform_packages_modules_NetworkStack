@@ -3020,10 +3020,12 @@ public class IpClient extends StateMachine {
         // manage RAM usage, we skip offloading records without proper priority settings.
         apfConfig.skipMdnsRecordWithoutPriority = mIsTvDevice;
         apfConfig.handleIgmpOffload = mApfHandleIgmpOffload;
-        // TODO: Turn on MLD offload on devices with 2048 ~ 2999 bytes of APF RAM.
+        // If APF RAM size is less than 3000 bytes, then there might not be enough RAM for
+        // enabling MLD offload.
         apfConfig.handleMldOffload = mApfHandleMldOffload && apfConfig.apfRamSize >= 3000;
         apfConfig.handleIpv4PingOffload = mApfHandleIpv4PingOffload;
-        // TODO: Turn on Ping6 offload on devices with 2048 ~ 2999 bytes of APF RAM.
+        // If APF RAM size is less than 3000 bytes, then there might not be enough RAM for
+        // enabling Ping6 offload.
         apfConfig.handleIpv6PingOffload = mApfHandleIpv6PingOffload && apfConfig.apfRamSize >= 3000;
         apfConfig.minMetricsSessionDurationMs = mApfCounterPollingIntervalMs;
         apfConfig.hasClatInterface = mHasSeenClatInterface;

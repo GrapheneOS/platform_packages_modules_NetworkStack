@@ -19,6 +19,7 @@ package android.net.dhcp6;
 import static android.system.OsConstants.RT_SCOPE_UNIVERSE;
 
 import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.app.AlarmManager;
 import android.content.Context;
 import android.net.LinkAddress;
@@ -28,8 +29,9 @@ import android.os.SystemClock;
 import android.util.ArrayMap;
 import android.util.Log;
 
-import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 
+import com.android.net.module.util.HandlerUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.LinkPropertiesUtils.CompareOrUpdateResult;
 import com.android.net.module.util.dhcp6.Dhcp6AddrRegInformPacket;
@@ -107,8 +109,19 @@ public class Dhcp6AddrRegTracker {
     private byte[] mClientDuid;
     private boolean mIsStarted = false;
 
+    private final Dependencies mDeps;
+
     // A random value uniformly distributed between 0.9 and 1.1 (see RFC9686 section 4.6.1).
     private static final double sAddrRegDesyncMultiplier = (new Random()).nextDouble() * 0.2 + 0.9;
+
+    /** Class used to inject dependencies for tests. */
+    @VisibleForTesting
+    public static class Dependencies {
+        /** See {@link SystemClock#elapsedRealtime()} */
+        public long elapsedRealtime() {
+            return SystemClock.elapsedRealtime();
+        }
+    }
 
     private static class Link6Address extends LinkAddress {
         Link6Address(LinkAddress la) {
@@ -272,12 +285,19 @@ public class Dhcp6AddrRegTracker {
     private class AddressRegistrationAlarmListener implements AlarmManager.OnAlarmListener {
         @Override
         public void onAlarm() {
-            dispatchRegistration(SystemClock.elapsedRealtime());
+            HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+            dispatchRegistration(mDeps.elapsedRealtime());
         }
     }
 
     public Dhcp6AddrRegTracker(Context context, Handler handler, String ifName,
             Dhcp6PacketDispatcher dispatcher) {
+        this(context, handler, ifName, dispatcher, new Dependencies());
+    }
+
+    @VisibleForTesting
+    public Dhcp6AddrRegTracker(Context context, Handler handler, String ifName,
+            Dhcp6PacketDispatcher dispatcher, Dependencies deps) {
         mHandler = handler;
         mAlarmManager = context.getSystemService(AlarmManager.class);
         mInterfaceName = ifName;
@@ -285,12 +305,15 @@ public class Dhcp6AddrRegTracker {
         mDhcp6PacketDispatcher = dispatcher;
         mDhcp6MessageHandler = (packet, dst) -> mHandler.post(() -> onReceiveReply(packet, dst));
         mAddressRegistrationAlarm = new AddressRegistrationAlarmListener();
+        mDeps = deps;
     }
 
     /**
      * Start the SLAAC address registration tracker.
      */
     public void start(InterfaceParams params, LinkProperties lp) {
+        HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+
         mIsStarted = true;
         mClientDuid = Dhcp6Packet.createClientDuid(params.macAddr);
         mDhcp6PacketDispatcher.registerHandler(
@@ -304,6 +327,8 @@ public class Dhcp6AddrRegTracker {
      * Stop the SLAAC address registration tracker.
      */
     public void stop() {
+        HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+
         mDhcp6PacketDispatcher.unregisterHandler(mDhcp6MessageHandler);
         mAlarmManager.cancel(mAddressRegistrationAlarm);
         mTrackedAddresses.clear();
@@ -333,12 +358,14 @@ public class Dhcp6AddrRegTracker {
      * Updates the LinkProperties and checks whether the link addresses have changed.
      */
     public void setLinkProperties(LinkProperties newLp) {
+        HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+
         // Ignore all LinkProperties updates until address registration starts (as soon as an RA
         // with an M or O flag is received). When the tracker is started, start() directly
         // initializes the LinkProperties.
         if (!mIsStarted) return;
 
-        final long nowMs = SystemClock.elapsedRealtime();
+        final long nowMs = mDeps.elapsedRealtime();
 
         // Collect the LinkAddresses from all AddressTracker objects and compare them against
         // the new LinkProperties. Note that incompatible addresses, such as IPv4 or link-local
@@ -423,6 +450,10 @@ public class Dhcp6AddrRegTracker {
      * - The maximum retransmission count is reached.
      */
     private void scheduleNextTimer() {
+        // Cancel active alarm timer, if any. AlarmManager#cancel() is safe to use on unscheduled
+        // alarm (though it does log a warning).
+        mAlarmManager.cancel(mAddressRegistrationAlarm);
+
         long nextEvent = Long.MAX_VALUE;
         for (AddressTracker tracker : mTrackedAddresses.values()) {
             if (!tracker.mIsScheduled) continue;
@@ -453,6 +484,8 @@ public class Dhcp6AddrRegTracker {
     }
 
     private void onReceiveReply(@NonNull Dhcp6Packet packet, @Nullable Inet6Address dst) {
+        HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+
         if (DBG) Log.d(TAG, "Received packet: " + packet);
         if (!(packet instanceof Dhcp6AddrRegReplyPacket)) return;
         if (!Arrays.equals(mClientDuid, packet.getClientDuid())) return;
@@ -482,7 +515,7 @@ public class Dhcp6AddrRegTracker {
             return;
         }
 
-        final long nowMs = SystemClock.elapsedRealtime();
+        final long nowMs = mDeps.elapsedRealtime();
         tracker.markRegistrationSuccess(nowMs);
         dispatchRegistration(nowMs);
     }
