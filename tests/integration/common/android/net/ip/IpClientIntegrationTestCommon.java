@@ -163,6 +163,7 @@ import android.net.dhcp.DhcpDiscoverPacket;
 import android.net.dhcp.DhcpPacket;
 import android.net.dhcp.DhcpPacket.ParseException;
 import android.net.dhcp.DhcpRequestPacket;
+import android.net.dhcp6.Dhcp6AddrRegTracker;
 import android.net.dhcp6.Dhcp6Client;
 import android.net.dhcp6.Dhcp6PacketDispatcher;
 import android.net.ipmemorystore.NetworkAttributes;
@@ -381,6 +382,7 @@ public abstract class IpClientIntegrationTestCommon {
     @Mock private IpReachabilityMonitorMetrics mIpReachabilityMonitorMetrics;
     @Mock private DevicePolicyManager mDevicePolicyManager;
     @Mock private PackageManager mPackageManager;
+    @Mock private Dhcp6AddrRegTracker mDhcp6AddrRegTracker;
     @Spy private INetd mNetd;
 
     protected IpClient mIpc;
@@ -663,6 +665,12 @@ public abstract class IpClientIntegrationTestCommon {
         @Override
         public NetworkQuirkMetrics getNetworkQuirkMetrics() {
             return new NetworkQuirkMetrics(mNetworkQuirkMetricsDeps);
+        }
+
+        @Override
+        public Dhcp6AddrRegTracker makeDhcp6AddrRegTracker(Context context, Handler handler,
+                String ifName, Dhcp6PacketDispatcher dispatcher) {
+            return mDhcp6AddrRegTracker;
         }
     }
 

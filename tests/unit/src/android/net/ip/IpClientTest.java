@@ -87,6 +87,7 @@ import android.net.RouteInfo;
 import android.net.apf.ApfCapabilities;
 import android.net.apf.ApfFilter;
 import android.net.apf.ApfFilter.ApfConfiguration;
+import android.net.dhcp6.Dhcp6AddrRegTracker;
 import android.net.dhcp6.Dhcp6Client;
 import android.net.ip.IpClientLinkObserver.IpClientNetlinkMonitor;
 import android.net.ip.IpClientLinkObserver.IpClientNetlinkMonitor.INetlinkMessageProcessor;
@@ -211,6 +212,7 @@ public class IpClientTest {
     @Mock private ApfFilter mApfFilter;
     @Mock private Dhcp6Client mDhcp6Client;
     @Mock private NetworkQuirkMetrics mQuirkMetrics;
+    @Mock private Dhcp6AddrRegTracker mDhcp6AddrRegTracker;
 
     private InterfaceParams mIfParams;
     private INetlinkMessageProcessor mNetlinkMessageProcessor;
@@ -239,6 +241,8 @@ public class IpClientTest {
         when(mDependencies.makeDhcp6Client(any(), any(), any(), any(), any()))
                 .thenReturn(mDhcp6Client);
         when(mDependencies.getNetworkQuirkMetrics()).thenReturn(mQuirkMetrics);
+        when(mDependencies.makeDhcp6AddrRegTracker(any(), any(), any(), any()))
+                .thenReturn(mDhcp6AddrRegTracker);
         doReturn(mPackageManager).when(mContext).getPackageManager();
         doReturn(true).when(mDependencies).isFeatureNotChickenedOut(mContext, APF_ENABLE);
 
