@@ -1277,7 +1277,15 @@ public class IpClient extends StateMachine {
         mReplaceNetdWithNetlinkEnabled = mDependencies.isFeatureEnabled(mContext,
                 IPCLIENT_REPLACE_NETD_WITH_NETLINK_VERSION);
         IpClientLinkObserver.Configuration config = new IpClientLinkObserver.Configuration(
-                mAcceptRaMinLft, mPopulateLinkAddressLifetime, mDhcp6PdPreferredFlagEnabled);
+                mAcceptRaMinLft,
+                // Note that the address registration feature relies on IpClientLinkObserver
+                // populating the lifetime for IPv6 addresses. This means that
+                // mDhcp6AddressRegistrationEnabled effectively controls a subset of
+                // mPopulateLinkAddressLifetime. This *should* be handled just fine by the rest
+                // of the code. IPv4 addresses will continue to use LIFETIME_UNKNOWN (-1) until
+                // the full feature is enabled.
+                mPopulateLinkAddressLifetime || mDhcp6AddressRegistrationEnabled,
+                mDhcp6PdPreferredFlagEnabled);
 
         mLinkObserver = new IpClientLinkObserver(
                 mContext, getHandler(),
