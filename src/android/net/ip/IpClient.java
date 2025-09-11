@@ -1128,13 +1128,6 @@ public class IpClient extends StateMachine {
         }
 
         /**
-         * Read the mainline beta flag `dhcpv6_address_registration`.
-         */
-        public boolean isDhcp6AddressRegistrationEnabled() {
-            return com.android.networkstack.mainline.beta.Flags.dhcpv6AddressRegistration();
-        }
-
-        /**
          * Get a Dhcp6AddrRegTracker instance.
          */
         public Dhcp6AddrRegTracker makeDhcp6AddrRegTracker(Context context, Handler handler,
@@ -1224,7 +1217,7 @@ public class IpClient extends StateMachine {
         // affect any behavior until the address registration feature is enabled. When that happens,
         // Dhcp6Client will use control message syscalls to receive DHCPv6 messages with ancillary
         // data, making the code safer to roll out along with mainline beta program.
-        mDhcp6AddressRegistrationEnabled = mDependencies.isDhcp6AddressRegistrationEnabled();
+        mDhcp6AddressRegistrationEnabled = Flags.dhcpv6AddressRegistration();
         mDhcp6PacketDispatcher = new Dhcp6PacketDispatcher(getHandler(), ifName,
                 mDhcp6AddressRegistrationEnabled /* useControlMessageApi */);
         mDhcp6AddrRegTracker = mDependencies.makeDhcp6AddrRegTracker(
