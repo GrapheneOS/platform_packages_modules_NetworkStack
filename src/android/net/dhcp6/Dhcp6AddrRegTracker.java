@@ -102,6 +102,7 @@ public class Dhcp6AddrRegTracker {
     private final Map<Inet6Address, AddressTracker> mTrackedAddresses = new ArrayMap<>();
     private final AlarmManager mAlarmManager;
     private final AlarmManager.OnAlarmListener mAddressRegistrationAlarm;
+    private final SupportTimeoutAlarm mSupportTimeoutAlarm = new SupportTimeoutAlarm();
     private final String mInterfaceName;
 
     // Guaranteed non-null after start() is called.
@@ -122,6 +123,59 @@ public class Dhcp6AddrRegTracker {
             return SystemClock.elapsedRealtime();
         }
     }
+
+    // TODO: use RealtimeScheduler for this alarm to prevent needlessly waking the
+    // device when it fires.
+    @VisibleForTesting
+    public class SupportTimeoutAlarm implements AlarmManager.OnAlarmListener {
+        // With MRC = 3, all packets are sent in under 10s.
+        private static final long SUPPORT_TIMEOUT_MS = 15_000;
+
+        private boolean mIsScheduled = false;
+        private boolean mEverScheduled = false;
+
+        // If this alarm fires, it indicates that no reply packets were received. This most likely
+        // indicates that the network does not support address registration. Disable the mechanism.
+        // Note that rfc9686 says that the client MUST determine whether the server supports address
+        // registration before registering any addresses.
+        // Since no addresses are registered by sending ADDR-REG-INFORM packets if the network does
+        // not support address registration, this implementation derives support from the presence
+        // of ADDR-REG-REPLYs within 15s of sending the first ADDR-REG-INFORM packet.
+        @Override
+        public void onAlarm() {
+            HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+
+            // It is possible that a reply was just processed.
+            if (!mIsScheduled) return;
+            stop();
+        }
+
+        /** Schedule the alarm timer on the first call, else do nothing until reset(). */
+        public void scheduleOnce() {
+            if (mEverScheduled) return;
+
+            mIsScheduled = true;
+            mEverScheduled = true;
+            final String tag = TAG + "." + mInterfaceName + ".SUPPORT_TIMEOUT";
+            mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, SUPPORT_TIMEOUT_MS,
+                    tag, this, mHandler);
+        }
+
+        /** Cancels the alarm iff it is currently scheduled. */
+        public void cancel() {
+            if (!mIsScheduled) return;
+
+            mIsScheduled = false;
+            mAlarmManager.cancel(this);
+        }
+
+        /** Reset to initial state. */
+        public void reset() {
+            cancel();
+            mEverScheduled = false;
+        }
+    }
+
 
     private static class Link6Address extends LinkAddress {
         Link6Address(LinkAddress la) {
@@ -282,7 +336,8 @@ public class Dhcp6AddrRegTracker {
         }
     }
 
-    private class AddressRegistrationAlarmListener implements AlarmManager.OnAlarmListener {
+    @VisibleForTesting
+    public class AddressRegistrationAlarmListener implements AlarmManager.OnAlarmListener {
         @Override
         public void onAlarm() {
             HandlerUtils.ensureRunningOnHandlerThread(mHandler);
@@ -329,8 +384,10 @@ public class Dhcp6AddrRegTracker {
     public void stop() {
         HandlerUtils.ensureRunningOnHandlerThread(mHandler);
 
+        mIsStarted = false;
         mDhcp6PacketDispatcher.unregisterHandler(mDhcp6MessageHandler);
         mAlarmManager.cancel(mAddressRegistrationAlarm);
+        mSupportTimeoutAlarm.reset();
         mTrackedAddresses.clear();
     }
 
@@ -474,6 +531,10 @@ public class Dhcp6AddrRegTracker {
         for (AddressTracker tracker : mTrackedAddresses.values()) {
             if (!tracker.isExpired(nowMs)) continue;
 
+            // If no packet is received within 15s of the first packet, address registration is
+            // stopped.
+            mSupportTimeoutAlarm.scheduleOnce();
+
             // DHCPv6 ADDR-REG-INFORM message MUST be sent from the address being registered
             // per RFC9686 section 4.2.
             final Dhcp6AddrRegInformPacket packet = tracker.getAddrRegInformPacket(nowMs);
@@ -514,6 +575,9 @@ public class Dhcp6AddrRegTracker {
             Log.e(TAG, "transId doesn't match");
             return;
         }
+
+        // Safe to call multiple times.
+        mSupportTimeoutAlarm.cancel();
 
         final long nowMs = mDeps.elapsedRealtime();
         tracker.markRegistrationSuccess(nowMs);

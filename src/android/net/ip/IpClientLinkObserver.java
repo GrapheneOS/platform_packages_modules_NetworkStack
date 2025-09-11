@@ -156,6 +156,13 @@ public class IpClientLinkObserver {
          * received delegated prefix(es) from one or more servers.
          */
         void rebindDhcp6();
+
+        /**
+         * Start the self-generated IPv6 addresses registration process if M or O bit is
+         * set in the RA.
+         * TODO: parse the M or O bit from the RTM_NEWLINK message.
+         */
+        void startDhcp6AddrReg();
     }
 
     /** Configuration parameters for IpClientLinkObserver. */

@@ -33,6 +33,7 @@ import static android.net.ip.IpClient.IpClientCommands.CMD_ADDRESSES_CLEARED;
 import static android.net.ip.IpClient.IpClientCommands.CMD_ADD_KEEPALIVE_PACKET_FILTER_TO_APF;
 import static android.net.ip.IpClient.IpClientCommands.CMD_COMPLETE_PRECONNECTION;
 import static android.net.ip.IpClient.IpClientCommands.CMD_CONFIRM;
+import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_ADDR_REG_START;
 import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_REBIND;
 import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_START;
 import static android.net.ip.IpClient.IpClientCommands.CMD_DHCP6_PD_STOP;
@@ -133,6 +134,7 @@ import android.net.apf.ApfCounterTracker;
 import android.net.apf.ApfFilter;
 import android.net.dhcp.DhcpClient;
 import android.net.dhcp.DhcpPacket;
+import android.net.dhcp6.Dhcp6AddrRegTracker;
 import android.net.dhcp6.Dhcp6Client;
 import android.net.dhcp6.Dhcp6PacketDispatcher;
 import android.net.ipmemorystore.OnNetworkEventCountRetrievedListener;
@@ -638,6 +640,7 @@ public class IpClient extends StateMachine {
         static final int CMD_DHCP6_PD_START = 24;
         static final int CMD_DHCP6_PD_STOP = 25;
         static final int CMD_DHCP6_PD_REBIND = 26;
+        static final int CMD_DHCP6_ADDR_REG_START = 27;
         // Internal commands to use instead of trying to call transitionTo() inside
         // a given State's enter() method. Calling transitionTo() from enter/exit
         // encounters a Log.wtf() that can cause trouble on eng builds.
@@ -846,6 +849,7 @@ public class IpClient extends StateMachine {
     @Nullable
     private final DevicePolicyManager mDevicePolicyManager;
     private final Dhcp6PacketDispatcher mDhcp6PacketDispatcher;
+    private final Dhcp6AddrRegTracker mDhcp6AddrRegTracker;
 
     // Ignore any nonzero RA section with lifetime below this value.
     private final int mAcceptRaMinLft;
@@ -902,6 +906,7 @@ public class IpClient extends StateMachine {
     private byte[] mApfRam = new byte[0];
     private WakeupMessage mIpv6AutoconfTimeoutAlarm = null;
     private boolean mIgnoreNudFailure;
+
     /**
      * An array of NUD failure event counts retrieved from the memory store  since the timestamps
      * in the past, and is always initialized to null in StoppedState. Currently supported array
@@ -1129,6 +1134,14 @@ public class IpClient extends StateMachine {
         public boolean isDhcp6AddressRegistrationEnabled() {
             return com.android.networkstack.mainline.beta.Flags.dhcpv6AddressRegistration();
         }
+
+        /**
+         * Get a Dhcp6AddrRegTracker instance.
+         */
+        public Dhcp6AddrRegTracker makeDhcp6AddrRegTracker(Context context, Handler handler,
+                String ifName, Dhcp6PacketDispatcher dispatcher) {
+            return new Dhcp6AddrRegTracker(context, handler, ifName, dispatcher);
+        }
     }
 
     public IpClient(Context context, String ifName, IIpClientCallbacks callback,
@@ -1213,9 +1226,11 @@ public class IpClient extends StateMachine {
         // Dhcp6Client will use control message syscalls to receive DHCPv6 messages with ancillary
         // data, making the code safer to roll out along with mainline beta program.
         mDhcp6AddressRegistrationEnabled =
-                mDependencies.isDhcp6AddressRegistrationEnabled() && SdkLevel.isAtLeastS();
+                mDependencies.isDhcp6AddressRegistrationEnabled();
         mDhcp6PacketDispatcher = new Dhcp6PacketDispatcher(getHandler(), ifName,
                 mDhcp6AddressRegistrationEnabled /* useControlMessageApi */);
+        mDhcp6AddrRegTracker = mDependencies.makeDhcp6AddrRegTracker(
+                mContext, getHandler(), mInterfaceName, mDhcp6PacketDispatcher);
 
         mAcceptRaMinLft = mDependencies.getDeviceConfigPropertyInt(CONFIG_ACCEPT_RA_MIN_LFT,
                 DEFAULT_ACCEPT_RA_MIN_LFT);
@@ -1268,7 +1283,7 @@ public class IpClient extends StateMachine {
                 CONFIG_NUD_FAILURE_COUNT_WEEKLY_THRESHOLD,
                 DEFAULT_NUD_FAILURE_COUNT_WEEKLY_THRESHOLD);
         mDhcp6PdPreferredFlagEnabled = mDependencies.isFeatureNotChickenedOut(mContext,
-                    IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION);
+                IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION);
         mReplaceNetdWithNetlinkEnabled = mDependencies.isFeatureEnabled(mContext,
                 IPCLIENT_REPLACE_NETD_WITH_NETLINK_VERSION);
         IpClientLinkObserver.Configuration config = new IpClientLinkObserver.Configuration(
@@ -1333,6 +1348,11 @@ public class IpClient extends StateMachine {
                     @Override
                     public void rebindDhcp6() {
                         sendMessage(CMD_DHCP6_PD_REBIND);
+                    }
+
+                    @Override
+                    public void startDhcp6AddrReg() {
+                        sendMessage(CMD_DHCP6_ADDR_REG_START);
                     }
                 },
                 config, mLog, mDependencies
@@ -1487,22 +1507,11 @@ public class IpClient extends StateMachine {
 
     @VisibleForTesting
     static MacAddress getInitialBssid(final Layer2Information layer2Info,
-            final ScanResultInfo scanResultInfo, boolean isAtLeastS) {
+            final ScanResultInfo scanResultInfo) {
         MacAddress bssid = null;
         // http://b/185202634
         // ScanResultInfo is not populated in some situations.
-        // On S and above, prefer getting the BSSID from the Layer2Info.
-        // On R and below, get the BSSID from the ScanResultInfo and fall back to
-        // getting it from the Layer2Info. This ensures no regressions if any R
-        // devices pass in a null or meaningless BSSID in the Layer2Info.
-        if (!isAtLeastS && scanResultInfo != null) {
-            try {
-                bssid = MacAddress.fromString(scanResultInfo.getBssid());
-            } catch (IllegalArgumentException e) {
-                Log.wtf(TAG, "Invalid BSSID: " + scanResultInfo.getBssid()
-                        + " in provisioning configuration", e);
-            }
-        }
+        // S+ prefers getting the BSSID from the Layer2Info.
         if (bssid == null && layer2Info != null) {
             bssid = layer2Info.mBssid;
         }
@@ -2485,6 +2494,12 @@ public class IpClient extends StateMachine {
             mApfFilter.setLinkProperties(newLp);
         }
 
+        // Notify the Dhcp6AddrRegTracker the latest LinkProperties. Objects.equals doesn't compare
+        // the LinkAddress lifetime.
+        if (mDhcp6AddressRegistrationEnabled) {
+            mDhcp6AddrRegTracker.setLinkProperties(newLp);
+        }
+
         if (Objects.equals(newLp, mLinkProperties)) {
             return true;
         }
@@ -2908,11 +2923,7 @@ public class IpClient extends StateMachine {
         if (info.bssid == null || mCurrentBssid == null) {
             final String msg = "bssid in the parcelable: " + info.bssid + " or "
                     + "current tracked bssid: " + mCurrentBssid + " is null";
-            if (ShimUtils.isAtLeastS()) {
-                Log.wtf(mTag, msg);
-            } else {
-                Log.w(mTag, msg);
-            }
+            Log.wtf(mTag, msg);
             return;
         }
 
@@ -2968,15 +2979,8 @@ public class IpClient extends StateMachine {
         // RAM. If the RAM size is too small, we should reserve that region for program use.
         if (apfCaps.apfVersionSupported >= 3 && apfCaps.maximumApfProgramSize < 1024) {
             apfConfig.apfVersionSupported = 2;
-        } else if (SdkLevel.isAtLeastS()) {
-            apfConfig.apfVersionSupported = apfCaps.apfVersionSupported;
         } else {
-            // In Android R, ApfCapabilities#hasDataAccess() can be modified by OEMs. The
-            // ApfFilter logic uses ApfCapabilities.apfVersionSupported to determine whether
-            // data region access is supported. Therefore, we need to recalculate
-            // ApfCapabilities.apfVersionSupported based on the return value of
-            // ApfCapabilities#hasDataAccess().
-            apfConfig.apfVersionSupported = apfCaps.hasDataAccess() ? 3 : 2;
+            apfConfig.apfVersionSupported = apfCaps.apfVersionSupported;
         }
         apfConfig.apfRamSize = apfCaps.maximumApfProgramSize;
         if (!SdkLevel.isAtLeastV() && apfConfig.apfVersionSupported <= 4) {
@@ -2985,14 +2989,9 @@ public class IpClient extends StateMachine {
         apfConfig.multicastFilter = mMulticastFiltering;
         // Get the Configuration for ApfFilter from Context
         // Resource settings were moved from ApfCapabilities APIs to NetworkStack resources in S
-        if (ShimUtils.isAtLeastS()) {
-            final Resources res = mContext.getResources();
-            apfConfig.ieee802_3Filter = res.getBoolean(R.bool.config_apfDrop802_3Frames);
-            apfConfig.ethTypeBlackList = res.getIntArray(R.array.config_apfEthTypeDenyList);
-        } else {
-            apfConfig.ieee802_3Filter = ApfCapabilities.getApfDrop8023Frames();
-            apfConfig.ethTypeBlackList = ApfCapabilities.getApfEtherTypeBlackList();
-        }
+        final Resources res = mContext.getResources();
+        apfConfig.ieee802_3Filter = res.getBoolean(R.bool.config_apfDrop802_3Frames);
+        apfConfig.ethTypeBlackList = res.getIntArray(R.array.config_apfEthTypeDenyList);
 
         // The RDNSS option is not processed by the kernel, so lifetime filtering
         // can occur independent of kernel support for accept_ra_min_lft.
@@ -3061,8 +3060,7 @@ public class IpClient extends StateMachine {
     }
 
     private void handleProvisioningConfiguration(@NonNull final ProvisioningConfiguration config) {
-        mCurrentBssid = getInitialBssid(config.mLayer2Info, config.mScanResultInfo,
-                ShimUtils.isAtLeastS());
+        mCurrentBssid = getInitialBssid(config.mLayer2Info, config.mScanResultInfo);
         mCurrentApfCapabilities = config.mApfCapabilities;
         mCreatorUid = config.mCreatorUid;
         if (config.mLayer2Info != null) {
@@ -3686,6 +3684,10 @@ public class IpClient extends StateMachine {
                 mApfFilter = null;
             }
 
+            if (mDhcp6AddressRegistrationEnabled) {
+                mDhcp6AddrRegTracker.stop();
+            }
+
             mDhcp6PacketDispatcher.stop();
             resetLinkProperties();
 
@@ -4065,6 +4067,12 @@ public class IpClient extends StateMachine {
 
                 case CMD_DHCP6_PD_REBIND:
                     mDhcp6Client.sendMessage(Dhcp6Client.CMD_REBIND_DHCP6);
+                    break;
+
+                case CMD_DHCP6_ADDR_REG_START:
+                    if (mDhcp6AddressRegistrationEnabled) {
+                        mDhcp6AddrRegTracker.start(mInterfaceParams, mLinkProperties);
+                    }
                     break;
 
                 case Dhcp6Client.CMD_DHCP6_RESULT:
