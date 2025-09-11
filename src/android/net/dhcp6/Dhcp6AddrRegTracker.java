@@ -109,6 +109,8 @@ public class Dhcp6AddrRegTracker {
     @Nullable
     private byte[] mClientDuid;
     private boolean mIsStarted = false;
+    /** mIsForceStopped is set to true when the SupportTimeoutAlarm fires. */
+    private boolean mIsForceStopped = false;
 
     private final Dependencies mDeps;
 
@@ -146,8 +148,12 @@ public class Dhcp6AddrRegTracker {
             HandlerUtils.ensureRunningOnHandlerThread(mHandler);
 
             // It is possible that a reply was just processed.
+            // TODO: this might need a specific instance check, because Dhcp6AddrRegTracker is final
+            // inside IpClient, meaning that onAlarm could be called across IpClient restarts. To
+            // fix this, forceStop() can explicitly set mSupportTimeoutAlarm to null, and a new
+            // instance can be created inside dispatchRegistration().
             if (!mIsScheduled) return;
-            stop();
+            forceStop();
         }
 
         /** Schedule the alarm timer on the first call, else do nothing until reset(). */
@@ -366,7 +372,10 @@ public class Dhcp6AddrRegTracker {
     /** Start the SLAAC address registration tracker. Noop if already started. */
     public void start(InterfaceParams params, LinkProperties lp) {
         HandlerUtils.ensureRunningOnHandlerThread(mHandler);
-        if (mIsStarted) return;
+        // If the tracker was force stopped, it indicates that the network does not support address
+        // registration. Do not restart the mechanism until it was reset, which usually happens when
+        // IpClient exits RunningState.
+        if (mIsStarted || mIsForceStopped) return;
 
         mIsStarted = true;
         mClientDuid = Dhcp6Packet.createClientDuid(params.macAddr);
@@ -377,16 +386,24 @@ public class Dhcp6AddrRegTracker {
         setLinkProperties(lp);
     }
 
-    /** Stop the SLAAC address registration tracker. Noop if already stopped. */
-    public void stop() {
+    /** Stop address registration and ignore all future calls to start() until reset() is called. */
+    private void forceStop() {
         HandlerUtils.ensureRunningOnHandlerThread(mHandler);
         if (!mIsStarted) return;
 
+        mIsForceStopped = true;
         mIsStarted = false;
         mDhcp6PacketDispatcher.unregisterHandler(mDhcp6MessageHandler);
         mAlarmManager.cancel(mAddressRegistrationAlarm);
         mSupportTimeoutAlarm.reset();
         mTrackedAddresses.clear();
+    }
+
+    /** Stops the address registration tracker and "primes" for restart. */
+    public void reset() {
+        // forceStop() is a noop if the addr reg tracker is already stopped.
+        forceStop();
+        mIsForceStopped = false;
     }
 
     // Note that Android does not consider deprecated addresses to determine

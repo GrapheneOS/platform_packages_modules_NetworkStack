@@ -3683,7 +3683,7 @@ public class IpClient extends StateMachine {
             }
 
             if (mDhcp6AddressRegistrationEnabled) {
-                mDhcp6AddrRegTracker.stop();
+                mDhcp6AddrRegTracker.reset();
             }
 
             mDhcp6PacketDispatcher.stop();
