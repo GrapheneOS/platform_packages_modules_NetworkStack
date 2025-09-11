@@ -229,13 +229,6 @@ public class NetworkStackUtils {
             "networkmonitor_async_privdns_resolution";
 
     /**
-     * Experiment flag to populate the IP link address lifetime such as deprecationTime and
-     * expirationtTime.
-     */
-    public static final String IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION =
-            "ipclient_populate_link_address_lifetime_version";
-
-    /**
      * Experiment flag to support parsing PIO P flag(DHCPv6-PD preferred).
      */
     public static final String IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION =

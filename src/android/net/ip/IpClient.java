@@ -100,7 +100,6 @@ import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_PING6_O
 import static com.android.networkstack.util.NetworkStackUtils.APF_POLLING_COUNTERS_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION;
-import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_REPLACE_NETD_WITH_NETLINK_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.createInet6AddressFromEui64;
@@ -199,6 +198,7 @@ import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.networkstack.apishim.SocketUtilsShimImpl;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
 import com.android.networkstack.apishim.common.ShimUtils;
+import com.android.networkstack.mainline.beta.Flags;
 import com.android.networkstack.metrics.IpProvisioningMetrics;
 import com.android.networkstack.metrics.NetworkQuirkMetrics;
 import com.android.networkstack.metrics.NetworkStackStatsLog;
@@ -1225,8 +1225,7 @@ public class IpClient extends StateMachine {
         // affect any behavior until the address registration feature is enabled. When that happens,
         // Dhcp6Client will use control message syscalls to receive DHCPv6 messages with ancillary
         // data, making the code safer to roll out along with mainline beta program.
-        mDhcp6AddressRegistrationEnabled =
-                mDependencies.isDhcp6AddressRegistrationEnabled();
+        mDhcp6AddressRegistrationEnabled = mDependencies.isDhcp6AddressRegistrationEnabled();
         mDhcp6PacketDispatcher = new Dhcp6PacketDispatcher(getHandler(), ifName,
                 mDhcp6AddressRegistrationEnabled /* useControlMessageApi */);
         mDhcp6AddrRegTracker = mDependencies.makeDhcp6AddrRegTracker(
@@ -1272,8 +1271,7 @@ public class IpClient extends StateMachine {
                     && (SdkLevel.isAtLeastB()
                         || mDependencies.isFeatureEnabled(context, APF_HANDLE_PING6_OFFLOAD_VERSION)
                 );
-        mPopulateLinkAddressLifetime = mDependencies.isFeatureEnabled(context,
-                IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION);
+        mPopulateLinkAddressLifetime = Flags.ipclientPopulateLinkAddressLifetime();
         mIgnoreNudFailureEnabled = mDependencies.isFeatureEnabled(mContext,
                 IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION);
         mNudFailureCountDailyThreshold = mDependencies.getDeviceConfigPropertyInt(

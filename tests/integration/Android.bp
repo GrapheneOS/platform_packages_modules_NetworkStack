@@ -47,6 +47,7 @@ java_defaults {
     static_libs: [
         "androidx.annotation_annotation",
         "androidx.test.rules",
+        "flag-junit",
         "mockito-target-extended-minus-junit4",
         "net-tests-utils",
         "net-utils-networkstack",

@@ -16,6 +16,7 @@
 
 package android.net.ip;
 
+import static android.Manifest.permission.READ_DEVICE_CONFIG;
 import static android.net.apf.BaseApfGenerator.APF_VERSION_6;
 import static android.net.ip.IpClientLinkObserver.CONFIG_SOCKET_RECV_BUFSIZE;
 import static android.net.ip.IpClientLinkObserver.SOCKET_RECV_BUFSIZE;
@@ -39,6 +40,7 @@ import static com.android.net.module.util.netlink.NetlinkConstants.RTN_UNICAST;
 import static com.android.net.module.util.netlink.StructNlMsgHdr.NLM_F_ACK;
 import static com.android.net.module.util.netlink.StructNlMsgHdr.NLM_F_REQUEST;
 import static com.android.networkstack.util.NetworkStackUtils.APF_ENABLE;
+import static com.android.testutils.TestPermissionUtil.runAsShell;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -258,8 +260,10 @@ public class IpClientTest {
 
     private IpClient makeIpClient(String ifname) throws Exception {
         setTestInterfaceParams(ifname);
-        final IpClient ipc =
-                new IpClient(mContext, ifname, mCb, mNetworkStackServiceManager, mDependencies);
+
+        final IpClient ipc = runAsShell(READ_DEVICE_CONFIG, () -> {
+            return new IpClient(mContext, ifname, mCb, mNetworkStackServiceManager, mDependencies);
+        });
         verify(mNetd, timeout(TEST_TIMEOUT_MS).times(1)).interfaceSetEnableIPv6(ifname, false);
         verify(mNetd, timeout(TEST_TIMEOUT_MS).times(1)).interfaceClearAddrs(ifname);
         final ArgumentCaptor<INetlinkMessageProcessor> processorCaptor =
@@ -401,8 +405,10 @@ public class IpClientTest {
     public void testNullInterfaceNameMostDefinitelyThrows() throws Exception {
         setTestInterfaceParams(null);
         try {
-            final IpClient ipc = new IpClient(mContext, null, mCb, mNetworkStackServiceManager,
+            final IpClient ipc = runAsShell(READ_DEVICE_CONFIG, () -> {
+                return new IpClient(mContext, null, mCb, mNetworkStackServiceManager,
                     mDependencies);
+            });
             ipc.shutdown();
             fail();
         } catch (NullPointerException npe) {
@@ -415,8 +421,10 @@ public class IpClientTest {
         final String ifname = "lo";
         setTestInterfaceParams(ifname);
         try {
-            final IpClient ipc = new IpClient(mContext, ifname, null, mNetworkStackServiceManager,
+            final IpClient ipc = runAsShell(READ_DEVICE_CONFIG, () -> {
+                return new IpClient(mContext, ifname, null, mNetworkStackServiceManager,
                     mDependencies);
+            });
             ipc.shutdown();
             fail();
         } catch (NullPointerException npe) {
@@ -427,8 +435,10 @@ public class IpClientTest {
     @Test
     public void testInvalidInterfaceDoesNotThrow() throws Exception {
         setTestInterfaceParams(TEST_IFNAME);
-        final IpClient ipc = new IpClient(mContext, TEST_IFNAME, mCb, mNetworkStackServiceManager,
-                mDependencies);
+        final IpClient ipc = runAsShell(READ_DEVICE_CONFIG, () -> {
+            return new IpClient(mContext, TEST_IFNAME, mCb, mNetworkStackServiceManager,
+            mDependencies);
+        });
         verifyNoMoreInteractions(mIpMemoryStore);
         ipc.shutdown();
     }
@@ -436,8 +446,10 @@ public class IpClientTest {
     @Test
     public void testInterfaceNotFoundFailsImmediately() throws Exception {
         setTestInterfaceParams(null);
-        final IpClient ipc = new IpClient(mContext, TEST_IFNAME, mCb, mNetworkStackServiceManager,
-                mDependencies);
+        final IpClient ipc = runAsShell(READ_DEVICE_CONFIG, () -> {
+            return new IpClient(mContext, TEST_IFNAME, mCb, mNetworkStackServiceManager,
+            mDependencies);
+        });
         ipc.startProvisioning(new ProvisioningConfiguration());
         verify(mCb, timeout(TEST_TIMEOUT_MS).times(1)).onProvisioningFailure(any());
         verify(mIpMemoryStore, never()).storeNetworkAttributes(any(), any(), any());
