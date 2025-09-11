@@ -363,11 +363,10 @@ public class Dhcp6AddrRegTracker {
         mDeps = deps;
     }
 
-    /**
-     * Start the SLAAC address registration tracker.
-     */
+    /** Start the SLAAC address registration tracker. Noop if already started. */
     public void start(InterfaceParams params, LinkProperties lp) {
         HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+        if (mIsStarted) return;
 
         mIsStarted = true;
         mClientDuid = Dhcp6Packet.createClientDuid(params.macAddr);
@@ -378,11 +377,10 @@ public class Dhcp6AddrRegTracker {
         setLinkProperties(lp);
     }
 
-    /**
-     * Stop the SLAAC address registration tracker.
-     */
+    /** Stop the SLAAC address registration tracker. Noop if already stopped. */
     public void stop() {
         HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+        if (!mIsStarted) return;
 
         mIsStarted = false;
         mDhcp6PacketDispatcher.unregisterHandler(mDhcp6MessageHandler);
