@@ -30,11 +30,15 @@ import android.net.ipmemorystore.OnNetworkEventCountRetrievedListener
 import android.net.ipmemorystore.Status
 import android.net.networkstack.TestNetworkStackServiceClient
 import android.os.Process
+import android.platform.test.flag.junit.AnnotationsRetriever
+import android.platform.test.flag.junit.DeviceFlagsValueProvider
+import android.platform.test.flag.junit.IFlagsValueProvider
 import android.provider.DeviceConfig
 import android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY
 import android.util.ArrayMap
 import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
+import com.android.testutils.runAsShell
 import java.lang.System.currentTimeMillis
 import java.lang.UnsupportedOperationException
 import java.util.concurrent.CompletableFuture
@@ -48,7 +52,12 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 import org.junit.After
 import org.junit.AfterClass
+import org.junit.Assume.assumeTrue
 import org.junit.BeforeClass
+import org.junit.Rule
+import org.junit.rules.TestRule
+import org.junit.runner.Description
+import org.junit.runners.model.Statement
 import org.mockito.ArgumentCaptor
 import org.mockito.Mockito.timeout
 import org.mockito.Mockito.verify
@@ -142,6 +151,37 @@ class IpClientRootTest : IpClientIntegrationTestCommon() {
             }
         }
     }
+
+    // TestRule based on android.platform.test.flag.junit.CheckFlagsRule, but instead of using
+    // RequiresFlagsEnabled / RequiresFlagsDisabled annotations, this looks at EnableFlags /
+    // DisableFlags instead and skips the test accordingly.
+    class CheckFlagsRule(private val flagsValueProvider: IFlagsValueProvider) : TestRule {
+        override fun apply(base: Statement, description: Description): Statement {
+            return object : Statement() {
+                override fun evaluate() {
+                    val flagAnnotations = AnnotationsRetriever.getFlagAnnotations(description)
+                    flagsValueProvider.setUp()
+                    try {
+                        val expectedFlagValues = flagAnnotations.mSetFlagValues
+                        for ((flag, expectedVal) in expectedFlagValues) {
+                            val actualVal = runAsShell(READ_DEVICE_CONFIG) {
+                                flagsValueProvider.getBoolean(flag)
+                            }
+                            assumeTrue(
+                                "$flag value ($actualVal) is not expected ($expectedVal)",
+                                actualVal == expectedVal
+                            )
+                        }
+                    } finally {
+                        flagsValueProvider.tearDownBeforeTest()
+                    }
+                    base.evaluate()
+                }
+            }
+        }
+    }
+
+    @get:Rule val checkFlagsRule = CheckFlagsRule(DeviceFlagsValueProvider())
 
     /**
      * Wrapper class for IIpClientCallbacks.

@@ -187,7 +187,6 @@ import android.os.PowerManager;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.platform.test.annotations.EnableFlags;
-import android.platform.test.flag.junit.SetFlagsRule;
 import android.provider.Settings;
 import android.stats.connectivity.NudEventType;
 import android.system.ErrnoException;
@@ -335,8 +334,6 @@ public abstract class IpClientIntegrationTestCommon {
     public final DevSdkIgnoreRule mIgnoreRule = new DevSdkIgnoreRule();
     @Rule
     public final TestName mTestNameRule = new TestName();
-    @Rule
-    public final SetFlagsRule mSetFlagsRule = new SetFlagsRule();
 
     /**
      * Indicates that a test requires signature permissions to run.
@@ -5379,9 +5376,6 @@ public abstract class IpClientIntegrationTestCommon {
     @Test
     @EnableFlags(Flags.FLAG_IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME)
     public void testDhcp6Pd() throws Exception {
-        // TODO: figure out a way to enable this in root test.
-        assumeTrue(useNetworkStackSignature());
-
         final IpPrefix prefix = new IpPrefix("2001:db8:1::/64");
         prepareDhcp6PdTest();
         handleDhcp6Packets(prefix, true /* shouldReplyRapidCommit */);
@@ -6170,9 +6164,6 @@ public abstract class IpClientIntegrationTestCommon {
     @Test
     @EnableFlags(Flags.FLAG_IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME)
     public void testPopulateLinkAddressLifetime() throws Exception {
-        // TODO: figure out a way to enable this in root test.
-        assumeTrue(useNetworkStackSignature());
-
         final LinkProperties lp = doDualStackProvisioning();
         final long now = SystemClock.elapsedRealtime();
         long when = 0;
@@ -6195,9 +6186,6 @@ public abstract class IpClientIntegrationTestCommon {
     @Test
     @EnableFlags(Flags.FLAG_IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME)
     public void testPopulateLinkAddressLifetime_infiniteLeaseDuration() throws Exception {
-        // TODO: figure out a way to enable this in root test.
-        assumeTrue(useNetworkStackSignature());
-
         final ProvisioningConfiguration cfg = new ProvisioningConfiguration.Builder()
                 .withoutIPv6()
                 .build();
@@ -6222,9 +6210,6 @@ public abstract class IpClientIntegrationTestCommon {
     @Test
     @EnableFlags(Flags.FLAG_IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME)
     public void testPopulateLinkAddressLifetime_minimalLeaseDuration() throws Exception {
-        // TODO: figure out a way to enable this in root test.
-        assumeTrue(useNetworkStackSignature());
-
         final ProvisioningConfiguration cfg = new ProvisioningConfiguration.Builder()
                 .withoutIPv6()
                 .build();
@@ -6252,9 +6237,6 @@ public abstract class IpClientIntegrationTestCommon {
     @Test
     @EnableFlags(Flags.FLAG_IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME)
     public void testPopulateLinkAddressLifetime_onDhcpRenew() throws Exception {
-        // TODO: figure out a way to enable this in root test.
-        assumeTrue(useNetworkStackSignature());
-
         final ProvisioningConfiguration cfg = new ProvisioningConfiguration.Builder()
                 .withoutIPv6()
                 .build();
