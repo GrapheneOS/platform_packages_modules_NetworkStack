@@ -169,12 +169,14 @@ public class IpClientLinkObserver {
     public static class Configuration {
         public final int minRdnssLifetime;
         public final boolean populateLinkAddressLifetime;
+        public final boolean dhcp6AddressRegistrationEnabled;
         public final boolean isDhcp6PdPreferredFlagEnabled;
 
         public Configuration(int minRdnssLifetime, boolean populateLinkAddressLifetime,
-                boolean isDhcp6PdPreferredFlagEnabled) {
+                boolean dhcp6AddressRegistrationEnabled, boolean isDhcp6PdPreferredFlagEnabled) {
             this.minRdnssLifetime = minRdnssLifetime;
             this.populateLinkAddressLifetime = populateLinkAddressLifetime;
+            this.dhcp6AddressRegistrationEnabled = dhcp6AddressRegistrationEnabled;
             this.isDhcp6PdPreferredFlagEnabled = isDhcp6PdPreferredFlagEnabled;
         }
     }

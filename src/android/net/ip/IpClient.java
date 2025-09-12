@@ -1285,6 +1285,7 @@ public class IpClient extends StateMachine {
                 // of the code. IPv4 addresses will continue to use LIFETIME_UNKNOWN (-1) until
                 // the full feature is enabled.
                 mPopulateLinkAddressLifetime || mDhcp6AddressRegistrationEnabled,
+                mDhcp6AddressRegistrationEnabled,
                 mDhcp6PdPreferredFlagEnabled);
 
         mLinkObserver = new IpClientLinkObserver(
