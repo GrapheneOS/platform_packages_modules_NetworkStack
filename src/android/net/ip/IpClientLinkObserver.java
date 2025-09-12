@@ -611,7 +611,7 @@ public class IpClientLinkObserver {
                 // multiple times even if address registration was disabled due to lack of
                 // network support.
                 final int inet6Flags = msg.getInet6Flags();
-                if ((inet6Flags & (IF_RA_MANAGED | IF_RA_OTHERCONF)) != 0) {
+                if (state && (inet6Flags & (IF_RA_MANAGED | IF_RA_OTHERCONF)) != 0) {
                     mCallback.startDhcp6AddrReg();
                 }
                 break;
