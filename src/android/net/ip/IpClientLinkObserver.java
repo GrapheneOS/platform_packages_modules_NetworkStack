@@ -240,7 +240,7 @@ public class IpClientLinkObserver {
         mDependencies = deps;
         mNetlinkMonitor = deps.makeIpClientNetlinkMonitor(h, log, mTag,
                 getSocketReceiveBufferSize(),
-                config.isDhcp6PdPreferredFlagEnabled,
+                config,
                 (nlMsg, whenMs) -> processNetlinkMessage(nlMsg, whenMs));
         mShim = NetworkInformationShimImpl.newInstance();
         mExpirePref64Alarm = new IpClientObserverAlarmListener();
@@ -435,9 +435,9 @@ public class IpClientLinkObserver {
                         | NetlinkConstants.RTMGRP_IPV6_ROUTE;
 
         IpClientNetlinkMonitor(Handler h, SharedLog log, String tag, int sockRcvbufSize,
-                boolean isDhcp6PdPreferredFlagEnabled, INetlinkMessageProcessor p) {
+                IpClientLinkObserver.Configuration config, INetlinkMessageProcessor p) {
             super(h, log, tag, OsConstants.NETLINK_ROUTE,
-                    isDhcp6PdPreferredFlagEnabled
+                    config.isDhcp6PdPreferredFlagEnabled
                             ? NETLINK_MONITOR_BIND_GROUPS | NetlinkConstants.RTMGRP_IPV6_PREFIX
                             : NETLINK_MONITOR_BIND_GROUPS,
                     sockRcvbufSize);

@@ -1078,10 +1078,9 @@ public class IpClient extends StateMachine {
          * Create an IpClientNetlinkMonitor instance.
          */
         public IpClientNetlinkMonitor makeIpClientNetlinkMonitor(Handler h, SharedLog log,
-                String tag, int sockRcvbufSize, boolean isDhcp6PdPreferredFlagEnabled,
+                String tag, int sockRcvbufSize, IpClientLinkObserver.Configuration config,
                 INetlinkMessageProcessor p) {
-            return new IpClientNetlinkMonitor(h, log, tag, sockRcvbufSize,
-                    isDhcp6PdPreferredFlagEnabled, p);
+            return new IpClientNetlinkMonitor(h, log, tag, sockRcvbufSize, config, p);
         }
 
         /**

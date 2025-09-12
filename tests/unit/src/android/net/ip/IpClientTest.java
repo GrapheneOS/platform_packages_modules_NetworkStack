@@ -108,7 +108,6 @@ import android.system.OsConstants;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
-import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.netlink.NduseroptMessage;
 import com.android.net.module.util.netlink.RtNetlinkAddressMessage;
@@ -238,7 +237,7 @@ public class IpClientTest {
         when(mDependencies.getDeviceConfigPropertyInt(eq(CONFIG_SOCKET_RECV_BUFSIZE), anyInt()))
                 .thenReturn(SOCKET_RECV_BUFSIZE);
         when(mDependencies.makeIpClientNetlinkMonitor(
-                any(), any(), any(), anyInt(), anyBoolean(), any())).thenReturn(mNetlinkMonitor);
+                any(), any(), any(), anyInt(), any(), any())).thenReturn(mNetlinkMonitor);
         when(mNetlinkMonitor.start()).thenReturn(true);
         when(mDependencies.makeDhcp6Client(any(), any(), any(), any(), any()))
                 .thenReturn(mDhcp6Client);
@@ -269,7 +268,7 @@ public class IpClientTest {
         final ArgumentCaptor<INetlinkMessageProcessor> processorCaptor =
                 ArgumentCaptor.forClass(INetlinkMessageProcessor.class);
         verify(mDependencies).makeIpClientNetlinkMonitor(any(), any(), any(), anyInt(),
-                anyBoolean(), processorCaptor.capture());
+                any(), processorCaptor.capture());
         mNetlinkMessageProcessor = processorCaptor.getValue();
         reset(mNetd);
         // Verify IpClient doesn't call onLinkPropertiesChange() when it starts.
