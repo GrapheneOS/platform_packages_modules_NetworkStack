@@ -330,6 +330,12 @@ public abstract class IpClientIntegrationTestCommon {
     private static final byte TEST_PIO_FLAGS_P_UNSET = (byte) 0xC0; // L=1,A=1,R=0,P=0
     private static final byte TEST_PIO_FLAGS_P_SET = (byte) 0xD0;   // L=1,A=1,R=0,P=1
 
+    // Note that this test contains @EnableFlags annotations but no SetFlagsRule. This is because
+    // this test is run with both an in-process (IpClientSignatureTest) and
+    // out-of-process (IpClientRootTest) IpClient instance. Only the in-process test is able to
+    // properly set the flags, so the SetFlagsRule is part of the IpClientSignatureTest subclass.
+    // The IpClientRootTest uses a custom rule that optionally skips tests based on the @EnableFlags
+    // values without actually enabling them (similar to the existing CheckFlagsRule).
     @Rule
     public final DevSdkIgnoreRule mIgnoreRule = new DevSdkIgnoreRule();
     @Rule
