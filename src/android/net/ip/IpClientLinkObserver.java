@@ -179,6 +179,14 @@ public class IpClientLinkObserver {
             this.dhcp6AddressRegistrationEnabled = dhcp6AddressRegistrationEnabled;
             this.isDhcp6PdPreferredFlagEnabled = isDhcp6PdPreferredFlagEnabled;
         }
+
+        /** Returns RTMGRP_* groups enabled by flags */
+        public int getFlaggedBindGroups() {
+            int groups = 0;
+            if (isDhcp6PdPreferredFlagEnabled) groups |= NetlinkConstants.RTMGRP_IPV6_PREFIX;
+            if (dhcp6AddressRegistrationEnabled) groups |= NetlinkConstants.RTMGRP_IPV6_IFINFO;
+            return groups;
+        }
     }
 
     private final Context mContext;
@@ -437,9 +445,7 @@ public class IpClientLinkObserver {
         IpClientNetlinkMonitor(Handler h, SharedLog log, String tag, int sockRcvbufSize,
                 IpClientLinkObserver.Configuration config, INetlinkMessageProcessor p) {
             super(h, log, tag, OsConstants.NETLINK_ROUTE,
-                    config.isDhcp6PdPreferredFlagEnabled
-                            ? NETLINK_MONITOR_BIND_GROUPS | NetlinkConstants.RTMGRP_IPV6_PREFIX
-                            : NETLINK_MONITOR_BIND_GROUPS,
+                    config.getFlaggedBindGroups() | NETLINK_MONITOR_BIND_GROUPS,
                     sockRcvbufSize);
             mHandler = h;
             mNetlinkMessageProcessor = p;
