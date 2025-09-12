@@ -3656,6 +3656,11 @@ public class IpClient extends StateMachine {
                 enqueueJumpToStoppingState(DisconnectCode.DC_ERROR_STARTING_IPREACHABILITYMONITOR);
                 return;
             }
+
+            // TODO: start the Dhcp6AddrRegTracker until M or O flag is detected.
+            if (mDhcp6AddressRegistrationEnabled) {
+                mDhcp6AddrRegTracker.start(mInterfaceParams, mLinkProperties);
+            }
         }
 
         @Override
@@ -4068,9 +4073,9 @@ public class IpClient extends StateMachine {
                     break;
 
                 case CMD_DHCP6_ADDR_REG_START:
-                    if (mDhcp6AddressRegistrationEnabled) {
-                        mDhcp6AddrRegTracker.start(mInterfaceParams, mLinkProperties);
-                    }
+                    // TODO: fix M / O bit detection and start address registration tracker here.
+                    // This has not been working reliably across different kernels.
+                    Log.i(mTag, "M or O bit detected");
                     break;
 
                 case Dhcp6Client.CMD_DHCP6_RESULT:
