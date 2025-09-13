@@ -20,8 +20,10 @@ import android.net.ipmemorystore.NetworkAttributes
 import android.net.ipmemorystore.OnNetworkAttributesRetrievedListener
 import android.net.ipmemorystore.Status
 import android.net.ipmemorystore.Status.SUCCESS
+import android.platform.test.flag.junit.SetFlagsRule
 import android.util.ArrayMap
 import android.util.Pair
+import org.junit.Rule
 import org.mockito.ArgumentCaptor
 import org.mockito.Mockito.any
 import org.mockito.Mockito.doAnswer
@@ -37,6 +39,8 @@ class IpClientSignatureTest : IpClientIntegrationTestCommon() {
     companion object {
         private val TAG = IpClientSignatureTest::class.java.simpleName
     }
+
+    @get:Rule val setFlagsRule = SetFlagsRule()
 
     private val DEFAULT_NUD_SOLICIT_NUM_POST_ROAM = 5
     private val DEFAULT_NUD_SOLICIT_NUM_STEADY_STATE = 10

@@ -160,7 +160,6 @@ public class IpClientLinkObserver {
         /**
          * Start the self-generated IPv6 addresses registration process if M or O bit is
          * set in the RA.
-         * TODO: parse the M or O bit from the RTM_NEWLINK message.
          */
         void startDhcp6AddrReg();
     }
@@ -169,13 +168,23 @@ public class IpClientLinkObserver {
     public static class Configuration {
         public final int minRdnssLifetime;
         public final boolean populateLinkAddressLifetime;
+        public final boolean dhcp6AddressRegistrationEnabled;
         public final boolean isDhcp6PdPreferredFlagEnabled;
 
         public Configuration(int minRdnssLifetime, boolean populateLinkAddressLifetime,
-                boolean isDhcp6PdPreferredFlagEnabled) {
+                boolean dhcp6AddressRegistrationEnabled, boolean isDhcp6PdPreferredFlagEnabled) {
             this.minRdnssLifetime = minRdnssLifetime;
             this.populateLinkAddressLifetime = populateLinkAddressLifetime;
+            this.dhcp6AddressRegistrationEnabled = dhcp6AddressRegistrationEnabled;
             this.isDhcp6PdPreferredFlagEnabled = isDhcp6PdPreferredFlagEnabled;
+        }
+
+        /** Returns RTMGRP_* groups enabled by flags */
+        public int getFlaggedBindGroups() {
+            int groups = 0;
+            if (isDhcp6PdPreferredFlagEnabled) groups |= NetlinkConstants.RTMGRP_IPV6_PREFIX;
+            if (dhcp6AddressRegistrationEnabled) groups |= NetlinkConstants.RTMGRP_IPV6_IFINFO;
+            return groups;
         }
     }
 
@@ -221,6 +230,10 @@ public class IpClientLinkObserver {
     @VisibleForTesting
     static final int SOCKET_RECV_BUFSIZE = 4 * 1024 * 1024;
 
+    /* inet6_dev.if_flags */
+    private static final int IF_RA_MANAGED = 0x40;
+    private static final int IF_RA_OTHERCONF = 0x80;
+
     public IpClientLinkObserver(Context context, Handler h, String iface, Callback callback,
             Configuration config, SharedLog log, IpClient.Dependencies deps) {
         mContext = context;
@@ -238,7 +251,7 @@ public class IpClientLinkObserver {
         mDependencies = deps;
         mNetlinkMonitor = deps.makeIpClientNetlinkMonitor(h, log, mTag,
                 getSocketReceiveBufferSize(),
-                config.isDhcp6PdPreferredFlagEnabled,
+                config,
                 (nlMsg, whenMs) -> processNetlinkMessage(nlMsg, whenMs));
         mShim = NetworkInformationShimImpl.newInstance();
         mExpirePref64Alarm = new IpClientObserverAlarmListener();
@@ -433,11 +446,9 @@ public class IpClientLinkObserver {
                         | NetlinkConstants.RTMGRP_IPV6_ROUTE;
 
         IpClientNetlinkMonitor(Handler h, SharedLog log, String tag, int sockRcvbufSize,
-                boolean isDhcp6PdPreferredFlagEnabled, INetlinkMessageProcessor p) {
+                IpClientLinkObserver.Configuration config, INetlinkMessageProcessor p) {
             super(h, log, tag, OsConstants.NETLINK_ROUTE,
-                    isDhcp6PdPreferredFlagEnabled
-                            ? NETLINK_MONITOR_BIND_GROUPS | NetlinkConstants.RTMGRP_IPV6_PREFIX
-                            : NETLINK_MONITOR_BIND_GROUPS,
+                    config.getFlaggedBindGroups() | NETLINK_MONITOR_BIND_GROUPS,
                     sockRcvbufSize);
             mHandler = h;
             mNetlinkMessageProcessor = p;
@@ -594,6 +605,15 @@ public class IpClientLinkObserver {
                 maybeLog("interfaceLinkStateChanged", "ifindex " + mIfindex
                         + (state ? " up" : " down"));
                 updateInterfaceLinkStateChanged(state);
+
+                // Note that IPv6 is started in RunningState, so any relevant flags cannot be
+                // received then. Additionally, it is safe to call startDhcp6AddrReg()
+                // multiple times even if address registration was disabled due to lack of
+                // network support.
+                final int inet6Flags = msg.getInet6Flags();
+                if (state && (inet6Flags & (IF_RA_MANAGED | IF_RA_OTHERCONF)) != 0) {
+                    mCallback.startDhcp6AddrReg();
+                }
                 break;
 
             case NetlinkConstants.RTM_DELLINK:

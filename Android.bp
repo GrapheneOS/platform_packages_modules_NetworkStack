@@ -34,7 +34,10 @@ java_defaults {
 // to keep tests always running against the same target sdk version with NetworkStack.
 java_defaults {
     name: "NetworkStackReleaseTargetSdk",
-    min_sdk_version: "30",
+    min_sdk_version: select(release_flag("RELEASE_DEPRECATE_MAINLINE_R_SUPPORT"), {
+        true: "31",
+        default: "30",
+    }),
     target_sdk_version: "36",
 }
 
@@ -66,7 +69,10 @@ java_defaults {
         "com.android.tethering",
         "//apex_available:platform",
     ],
-    min_sdk_version: "30",
+    min_sdk_version: select(release_flag("RELEASE_DEPRECATE_MAINLINE_R_SUPPORT"), {
+        true: "31",
+        default: "30",
+    }),
 }
 
 // Common shim code. This includes the shim interface definitions themselves, and things like

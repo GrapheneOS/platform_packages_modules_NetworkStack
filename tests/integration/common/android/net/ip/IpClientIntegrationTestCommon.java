@@ -86,7 +86,6 @@ import static com.android.net.module.util.NetworkStackConstants.NEIGHBOR_ADVERTI
 import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_AUTONOMOUS;
 import static com.android.net.module.util.NetworkStackConstants.PIO_FLAG_ON_LINK;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION;
-import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION;
@@ -187,6 +186,7 @@ import android.os.ParcelFileDescriptor;
 import android.os.PowerManager;
 import android.os.RemoteException;
 import android.os.SystemClock;
+import android.platform.test.annotations.EnableFlags;
 import android.provider.Settings;
 import android.stats.connectivity.NudEventType;
 import android.system.ErrnoException;
@@ -227,6 +227,7 @@ import com.android.net.module.util.structs.RdnssOption;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.ipmemorystore.IpMemoryStoreService;
+import com.android.networkstack.mainline.beta.Flags;
 import com.android.networkstack.metrics.IpProvisioningMetrics;
 import com.android.networkstack.metrics.IpReachabilityMonitorMetrics;
 import com.android.networkstack.metrics.NetworkQuirkMetrics;
@@ -329,6 +330,12 @@ public abstract class IpClientIntegrationTestCommon {
     private static final byte TEST_PIO_FLAGS_P_UNSET = (byte) 0xC0; // L=1,A=1,R=0,P=0
     private static final byte TEST_PIO_FLAGS_P_SET = (byte) 0xD0;   // L=1,A=1,R=0,P=1
 
+    // Note that this test contains @EnableFlags annotations but no SetFlagsRule. This is because
+    // this test is run with both an in-process (IpClientSignatureTest) and
+    // out-of-process (IpClientRootTest) IpClient instance. Only the in-process test is able to
+    // properly set the flags, so the SetFlagsRule is part of the IpClientSignatureTest subclass.
+    // The IpClientRootTest uses a custom rule that optionally skips tests based on the @EnableFlags
+    // values without actually enabling them (similar to the existing CheckFlagsRule).
     @Rule
     public final DevSdkIgnoreRule mIgnoreRule = new DevSdkIgnoreRule();
     @Rule
@@ -5373,7 +5380,7 @@ public abstract class IpClientIntegrationTestCommon {
 
     @ConnectivityDiagnosticsCollector.CollectTcpdumpOnFailure
     @Test
-    @Flag(name =  IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION, enabled = true)
+    @EnableFlags(Flags.FLAG_IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME)
     public void testDhcp6Pd() throws Exception {
         final IpPrefix prefix = new IpPrefix("2001:db8:1::/64");
         prepareDhcp6PdTest();
@@ -6161,7 +6168,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @Flag(name = IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION, enabled = true)
+    @EnableFlags(Flags.FLAG_IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME)
     public void testPopulateLinkAddressLifetime() throws Exception {
         final LinkProperties lp = doDualStackProvisioning();
         final long now = SystemClock.elapsedRealtime();
@@ -6183,7 +6190,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @Flag(name = IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION, enabled = true)
+    @EnableFlags(Flags.FLAG_IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME)
     public void testPopulateLinkAddressLifetime_infiniteLeaseDuration() throws Exception {
         final ProvisioningConfiguration cfg = new ProvisioningConfiguration.Builder()
                 .withoutIPv6()
@@ -6207,7 +6214,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @Flag(name = IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION, enabled = true)
+    @EnableFlags(Flags.FLAG_IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME)
     public void testPopulateLinkAddressLifetime_minimalLeaseDuration() throws Exception {
         final ProvisioningConfiguration cfg = new ProvisioningConfiguration.Builder()
                 .withoutIPv6()
@@ -6234,7 +6241,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     @Test
-    @Flag(name = IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION, enabled = true)
+    @EnableFlags(Flags.FLAG_IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME)
     public void testPopulateLinkAddressLifetime_onDhcpRenew() throws Exception {
         final ProvisioningConfiguration cfg = new ProvisioningConfiguration.Builder()
                 .withoutIPv6()

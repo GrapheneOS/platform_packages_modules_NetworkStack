@@ -376,11 +376,11 @@ class Dhcp6AddrRegTrackerTest {
     }
 
     @Test
-    fun testStop() {
+    fun testReset() {
         val ifaceParams = InterfaceParams.getByName(IFNAME)
         val lp = LinkProperties()
         handler.postAndWait { tracker.start(ifaceParams, lp) }
-        handler.postAndWait { tracker.stop() }
+        handler.postAndWait { tracker.reset() }
 
         val addr = InetAddress.getByName("2001:db8:42::42")
         lp.addLinkAddress(LinkAddress(addr, 64))
@@ -397,6 +397,46 @@ class Dhcp6AddrRegTrackerTest {
             any(AddressRegistrationAlarmListener::class.java),
             any()
         )
+    }
+
+    @Test
+    fun testSupportTimeout_noRestartWithoutReset() {
+        val ifaceParams = InterfaceParams.getByName(IFNAME)
+        val addr = InetAddress.getByName("2001:db8::1")
+        val lp = LinkProperties().apply {
+            addLinkAddress(LinkAddress(addr, 64))
+        }
+        handler.postAndWait { tracker.start(ifaceParams, lp) }
+
+        val inOrder = inOrder(alarmManager, packetDispatcher)
+        val alarm = expectAlarmSet<SupportTimeoutAlarm>(inOrder)
+        // The alarm is set before the initial ADDR-REG-INFORM is sent.
+        expectAddrRegInformPacket(inOrder, addr)
+        alarm.advanceClockAndFire()
+
+        // The next call to start should be a noop because the SupportTimeoutAlarm has fired.
+        lp.addLinkAddress(LinkAddress(InetAddress.getByName("2001:db8::42"), 64))
+        handler.postAndWait { tracker.start(ifaceParams, lp) }
+        inOrder.verify(packetDispatcher, never()).transmitPacket(any(), any())
+    }
+
+    @Test
+    fun testSupportTimeout_restartWithReset() {
+        val ifaceParams = InterfaceParams.getByName(IFNAME)
+        val addr = InetAddress.getByName("2001:db8::1")
+        val lp = LinkProperties().apply {
+            addLinkAddress(LinkAddress(addr, 64))
+        }
+
+        handler.postAndWait { tracker.start(ifaceParams, lp) }
+
+        // Trigger the SupportTimeoutAlarm and subsequently reset()
+        val inOrder = inOrder(alarmManager, packetDispatcher)
+        expectAlarmSet<SupportTimeoutAlarm>(inOrder).advanceClockAndFire()
+        handler.postAndWait { tracker.reset() }
+
+        handler.postAndWait { tracker.start(ifaceParams, lp) }
+        expectAddrRegInformPacket(inOrder, addr)
     }
 
     @Test

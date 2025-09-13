@@ -100,7 +100,6 @@ import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_PING6_O
 import static com.android.networkstack.util.NetworkStackUtils.APF_POLLING_COUNTERS_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION;
-import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IPCLIENT_REPLACE_NETD_WITH_NETLINK_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.createInet6AddressFromEui64;
@@ -198,7 +197,7 @@ import com.android.networkstack.R;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.networkstack.apishim.SocketUtilsShimImpl;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
-import com.android.networkstack.apishim.common.ShimUtils;
+import com.android.networkstack.mainline.beta.Flags;
 import com.android.networkstack.metrics.IpProvisioningMetrics;
 import com.android.networkstack.metrics.NetworkQuirkMetrics;
 import com.android.networkstack.metrics.NetworkStackStatsLog;
@@ -1079,10 +1078,9 @@ public class IpClient extends StateMachine {
          * Create an IpClientNetlinkMonitor instance.
          */
         public IpClientNetlinkMonitor makeIpClientNetlinkMonitor(Handler h, SharedLog log,
-                String tag, int sockRcvbufSize, boolean isDhcp6PdPreferredFlagEnabled,
+                String tag, int sockRcvbufSize, IpClientLinkObserver.Configuration config,
                 INetlinkMessageProcessor p) {
-            return new IpClientNetlinkMonitor(h, log, tag, sockRcvbufSize,
-                    isDhcp6PdPreferredFlagEnabled, p);
+            return new IpClientNetlinkMonitor(h, log, tag, sockRcvbufSize, config, p);
         }
 
         /**
@@ -1126,13 +1124,6 @@ public class IpClient extends StateMachine {
                 log.e("[Non-HAL API] Failed to read packet filter RAM", e);
                 return false;
             }
-        }
-
-        /**
-         * Read the mainline beta flag `dhcpv6_address_registration`.
-         */
-        public boolean isDhcp6AddressRegistrationEnabled() {
-            return com.android.networkstack.mainline.beta.Flags.dhcpv6AddressRegistration();
         }
 
         /**
@@ -1225,8 +1216,7 @@ public class IpClient extends StateMachine {
         // affect any behavior until the address registration feature is enabled. When that happens,
         // Dhcp6Client will use control message syscalls to receive DHCPv6 messages with ancillary
         // data, making the code safer to roll out along with mainline beta program.
-        mDhcp6AddressRegistrationEnabled =
-                mDependencies.isDhcp6AddressRegistrationEnabled();
+        mDhcp6AddressRegistrationEnabled = Flags.dhcpv6AddressRegistration();
         mDhcp6PacketDispatcher = new Dhcp6PacketDispatcher(getHandler(), ifName,
                 mDhcp6AddressRegistrationEnabled /* useControlMessageApi */);
         mDhcp6AddrRegTracker = mDependencies.makeDhcp6AddrRegTracker(
@@ -1272,8 +1262,7 @@ public class IpClient extends StateMachine {
                     && (SdkLevel.isAtLeastB()
                         || mDependencies.isFeatureEnabled(context, APF_HANDLE_PING6_OFFLOAD_VERSION)
                 );
-        mPopulateLinkAddressLifetime = mDependencies.isFeatureEnabled(context,
-                IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION);
+        mPopulateLinkAddressLifetime = Flags.ipclientPopulateLinkAddressLifetime();
         mIgnoreNudFailureEnabled = mDependencies.isFeatureEnabled(mContext,
                 IP_REACHABILITY_IGNORE_NUD_FAILURE_VERSION);
         mNudFailureCountDailyThreshold = mDependencies.getDeviceConfigPropertyInt(
@@ -1287,7 +1276,16 @@ public class IpClient extends StateMachine {
         mReplaceNetdWithNetlinkEnabled = mDependencies.isFeatureEnabled(mContext,
                 IPCLIENT_REPLACE_NETD_WITH_NETLINK_VERSION);
         IpClientLinkObserver.Configuration config = new IpClientLinkObserver.Configuration(
-                mAcceptRaMinLft, mPopulateLinkAddressLifetime, mDhcp6PdPreferredFlagEnabled);
+                mAcceptRaMinLft,
+                // Note that the address registration feature relies on IpClientLinkObserver
+                // populating the lifetime for IPv6 addresses. This means that
+                // mDhcp6AddressRegistrationEnabled effectively controls a subset of
+                // mPopulateLinkAddressLifetime. This *should* be handled just fine by the rest
+                // of the code. IPv4 addresses will continue to use LIFETIME_UNKNOWN (-1) until
+                // the full feature is enabled.
+                mPopulateLinkAddressLifetime || mDhcp6AddressRegistrationEnabled,
+                mDhcp6AddressRegistrationEnabled,
+                mDhcp6PdPreferredFlagEnabled);
 
         mLinkObserver = new IpClientLinkObserver(
                 mContext, getHandler(),
@@ -3028,6 +3026,7 @@ public class IpClient extends StateMachine {
         apfConfig.handleIpv6PingOffload = mApfHandleIpv6PingOffload && apfConfig.apfRamSize >= 3000;
         apfConfig.minMetricsSessionDurationMs = mApfCounterPollingIntervalMs;
         apfConfig.hasClatInterface = mHasSeenClatInterface;
+        apfConfig.acceptMagicPackets = mIsTvDevice;
         // Report APF version and RAM size upon creation. only reporting the metrics when
         // IpClient stops is problematic for devices like TVs that remain connected to Wi-Fi all
         // days.
@@ -3658,6 +3657,11 @@ public class IpClient extends StateMachine {
                 enqueueJumpToStoppingState(DisconnectCode.DC_ERROR_STARTING_IPREACHABILITYMONITOR);
                 return;
             }
+
+            // TODO: start the Dhcp6AddrRegTracker until M or O flag is detected.
+            if (mDhcp6AddressRegistrationEnabled) {
+                mDhcp6AddrRegTracker.start(mInterfaceParams, mLinkProperties);
+            }
         }
 
         @Override
@@ -3685,7 +3689,7 @@ public class IpClient extends StateMachine {
             }
 
             if (mDhcp6AddressRegistrationEnabled) {
-                mDhcp6AddrRegTracker.stop();
+                mDhcp6AddrRegTracker.reset();
             }
 
             mDhcp6PacketDispatcher.stop();
@@ -4070,9 +4074,9 @@ public class IpClient extends StateMachine {
                     break;
 
                 case CMD_DHCP6_ADDR_REG_START:
-                    if (mDhcp6AddressRegistrationEnabled) {
-                        mDhcp6AddrRegTracker.start(mInterfaceParams, mLinkProperties);
-                    }
+                    // TODO: fix M / O bit detection and start address registration tracker here.
+                    // This has not been working reliably across different kernels.
+                    Log.i(mTag, "M or O bit detected");
                     break;
 
                 case Dhcp6Client.CMD_DHCP6_RESULT:
