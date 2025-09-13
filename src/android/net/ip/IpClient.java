@@ -3026,6 +3026,7 @@ public class IpClient extends StateMachine {
         apfConfig.handleIpv6PingOffload = mApfHandleIpv6PingOffload && apfConfig.apfRamSize >= 3000;
         apfConfig.minMetricsSessionDurationMs = mApfCounterPollingIntervalMs;
         apfConfig.hasClatInterface = mHasSeenClatInterface;
+        apfConfig.acceptMagicPackets = mIsTvDevice;
         // Report APF version and RAM size upon creation. only reporting the metrics when
         // IpClient stops is problematic for devices like TVs that remain connected to Wi-Fi all
         // days.
