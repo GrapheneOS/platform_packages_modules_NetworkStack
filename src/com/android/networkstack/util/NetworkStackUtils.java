@@ -235,12 +235,6 @@ public class NetworkStackUtils {
             "ipclient_dhcpv6_pd_preferred_flag_version";
 
     /**
-     * Experiment flag to support the self-generated IPv6 address registration using DHCPv6.
-     */
-    public static final String IPCLIENT_DHCPV6_ADDR_REGISTER_VERSION =
-            "ipclient_dhcpv6_addr_register_version";
-
-    /**
      * Experiment flag to replace INetd usage with netlink in IpClient.
      */
     public static final String IPCLIENT_REPLACE_NETD_WITH_NETLINK_VERSION =
