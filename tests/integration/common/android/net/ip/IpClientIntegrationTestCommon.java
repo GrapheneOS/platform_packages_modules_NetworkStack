@@ -239,6 +239,7 @@ import com.android.testutils.CompatUtil;
 import com.android.testutils.ConnectivityDiagnosticsCollector;
 import com.android.testutils.DevSdkIgnoreRule;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
+import com.android.testutils.DevSdkIgnoreRunner;
 import com.android.testutils.HandlerUtils;
 import com.android.testutils.PollPacketReader;
 import com.android.testutils.TestableNetworkAgent;
@@ -252,6 +253,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
+import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
@@ -295,6 +297,8 @@ import java.util.function.Predicate;
  * Tests in this class can either be run with signature permissions, or with root access.
  */
 @SmallTest
+@RunWith(DevSdkIgnoreRunner.class)
+@IgnoreUpTo(Build.VERSION_CODES.R)
 public abstract class IpClientIntegrationTestCommon {
     private static final String TAG = IpClientIntegrationTestCommon.class.getSimpleName();
     private static final int DATA_BUFFER_LEN = 4096;
