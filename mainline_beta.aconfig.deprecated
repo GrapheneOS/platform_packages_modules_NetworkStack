@@ -1,6 +1,10 @@
 package: "com.android.networkstack.mainline.beta"
 container: "NetworkStack"
 
+# Do not add new flags to this file.
+# For platform flag, use frameworks/base/core/java/android/net/flags.aconfig
+# For module flag, use packages/modules/NetworkStack/flags.aconfig
+
 flag {
     name: "dhcpv6_address_registration"
     namespace: "com_android_networkstack"
@@ -14,3 +18,7 @@ flag {
     description: "Populates the valid and preferred lifetimes for addresses in LinkProperties"
     bug: "129660498"
 }
+
+# Do not add new flags to this file.
+# For platform flag, use frameworks/base/core/java/android/net/flags.aconfig
+# For module flag, use packages/modules/NetworkStack/flags.aconfig
