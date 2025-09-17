@@ -4100,12 +4100,6 @@ public abstract class IpClientIntegrationTestCommon {
         return ns;
     }
 
-    // Override this function with disabled experiment flag by default, in order not to
-    // affect those tests which are just related to basic IpReachabilityMonitor infra.
-    private void prepareIpReachabilityMonitorTest() throws Exception {
-        prepareIpReachabilityMonitorTest(false /* isMulticastResolicitEnabled */);
-    }
-
     private void assertNotifyNeighborLost(Inet6Address targetIp, NudEventType eventType)
             throws Exception {
         // For root test suite, rely on the IIpClient aidl interface version constant defined in
@@ -4206,8 +4200,7 @@ public abstract class IpClientIntegrationTestCommon {
      * 29 fe80::bf8e:de37:69d7:2b29   ff02::1:ff00:1   ICMPv6   92    Neighbor Solicitation for fe80::1 from 0a:c9:06:70:77:b3
      * 31 fe80::bf8e:de37:69d7:2b29   ff02::1:ff00:1   ICMPv6   92    Neighbor Solicitation for fe80::1 from 0a:c9:06:70:77:b3
      */
-    private void prepareIpReachabilityMonitorTest(boolean isMulticastResolicitEnabled)
-            throws Exception {
+    private void prepareIpReachabilityMonitorTest() throws Exception {
         mNetworkAgentThread =
                 new HandlerThread(IpClientIntegrationTestCommon.class.getSimpleName());
         mNetworkAgentThread.start();
@@ -4220,8 +4213,6 @@ public abstract class IpClientIntegrationTestCommon {
                 .withDisplayName(TEST_DEFAULT_SSID)
                 .withoutIPv4()
                 .build();
-        setFeatureEnabled(NetworkStackUtils.IP_REACHABILITY_MCAST_RESOLICIT_VERSION,
-                isMulticastResolicitEnabled);
         startIpClientProvisioning(config);
         verify(mCb, timeout(TEST_TIMEOUT_MS)).setFallbackMulticastFilter(true);
 
@@ -4256,21 +4247,9 @@ public abstract class IpClientIntegrationTestCommon {
         forceLayer2Roaming();
     }
 
-    private void runIpReachabilityMonitorProbeFailedTest() throws Exception {
-        prepareIpReachabilityMonitorTest();
-
-        final int expectedNudSolicitNum = readNudSolicitNumPostRoamingFromResource();
-        final List<NeighborSolicitation> nsList =
-                waitForMultipleNeighborSolicitations(expectedNudSolicitNum);
-        for (NeighborSolicitation ns : nsList) {
-            assertUnicastNeighborSolicitation(ns, ROUTER_MAC /* dstMac */,
-                    ROUTER_LINK_LOCAL /* dstIp */, ROUTER_LINK_LOCAL /* targetIp */);
-        }
-    }
-
     @Test
     public void testIpReachabilityMonitor_probeFailed() throws Exception {
-        runIpReachabilityMonitorProbeFailedTest();
+        runIpReachabilityMonitorMcastResolicitProbeFailedTest();
         assertNotifyNeighborLost(ROUTER_LINK_LOCAL /* targetIp */,
                 NudEventType.NUD_POST_ROAMING_FAILED_CRITICAL);
     }
@@ -4279,7 +4258,7 @@ public abstract class IpClientIntegrationTestCommon {
     public void testIpReachabilityMonitor_probeFailed_legacyCallback() throws Exception {
         when(mCb.getInterfaceVersion()).thenReturn(12 /* assign an older interface aidl version */);
 
-        runIpReachabilityMonitorProbeFailedTest();
+        runIpReachabilityMonitorMcastResolicitProbeFailedTest();
         verify(mCb, timeout(TEST_TIMEOUT_MS)).onReachabilityLost(any());
         verify(mCb, never()).onReachabilityFailure(any());
     }
@@ -4301,7 +4280,7 @@ public abstract class IpClientIntegrationTestCommon {
     }
 
     private void runIpReachabilityMonitorMcastResolicitProbeFailedTest() throws Exception {
-        prepareIpReachabilityMonitorTest(true /* isMulticastResolicitEnabled */);
+        prepareIpReachabilityMonitorTest();
 
         final int expectedNudSolicitNum = readNudSolicitNumPostRoamingFromResource();
         int expectedSize = expectedNudSolicitNum + NUD_MCAST_RESOLICIT_NUM;
@@ -4336,7 +4315,7 @@ public abstract class IpClientIntegrationTestCommon {
     @Test
     public void testIpReachabilityMonitor_mcastResolicitProbeReachableWithSameLinkLayerAddress()
             throws Exception {
-        prepareIpReachabilityMonitorTest(true /* isMulticastResolicitEnabled */);
+        prepareIpReachabilityMonitorTest();
 
         final NeighborSolicitation ns = waitForUnicastNeighborSolicitation(ROUTER_MAC /* dstMac */,
                 ROUTER_LINK_LOCAL /* dstIp */, ROUTER_LINK_LOCAL /* targetIp */);
@@ -4353,7 +4332,7 @@ public abstract class IpClientIntegrationTestCommon {
     @Test
     public void testIpReachabilityMonitor_mcastResolicitProbeReachableWithDiffLinkLayerAddress()
             throws Exception {
-        prepareIpReachabilityMonitorTest(true /* isMulticastResolicitEnabled */);
+        prepareIpReachabilityMonitorTest();
 
         final NeighborSolicitation ns = waitForUnicastNeighborSolicitation(ROUTER_MAC /* dstMac */,
                 ROUTER_LINK_LOCAL /* dstIp */, ROUTER_LINK_LOCAL /* targetIp */);
@@ -6381,7 +6360,7 @@ public abstract class IpClientIntegrationTestCommon {
         final long expiry = when + ONE_WEEK_IN_MS;
         storeNudFailureEvents(when, expiry, 10, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM);
 
-        runIpReachabilityMonitorProbeFailedTest();
+        runIpReachabilityMonitorMcastResolicitProbeFailedTest();
         assertNeverNotifyNeighborLost();
     }
 
@@ -6393,7 +6372,7 @@ public abstract class IpClientIntegrationTestCommon {
         final long expiry = when + ONE_WEEK_IN_MS;
         storeNudFailureEvents(when, expiry, 19, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM);
 
-        runIpReachabilityMonitorProbeFailedTest();
+        runIpReachabilityMonitorMcastResolicitProbeFailedTest();
         assertNotifyNeighborLost(ROUTER_LINK_LOCAL /* targetIp */,
                 NudEventType.NUD_POST_ROAMING_FAILED_CRITICAL);
     }
@@ -6407,7 +6386,7 @@ public abstract class IpClientIntegrationTestCommon {
         final long expiry = when + ONE_WEEK_IN_MS;
         storeNudFailureEvents(when, expiry, 9, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM);
 
-        runIpReachabilityMonitorProbeFailedTest();
+        runIpReachabilityMonitorMcastResolicitProbeFailedTest();
         assertNotifyNeighborLost(ROUTER_LINK_LOCAL /* targetIp */,
                 NudEventType.NUD_POST_ROAMING_FAILED_CRITICAL);
     }
@@ -6425,7 +6404,7 @@ public abstract class IpClientIntegrationTestCommon {
         expiry = when + ONE_WEEK_IN_MS;
         storeNudFailureEvents(when, expiry, 9, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM);
 
-        runIpReachabilityMonitorProbeFailedTest();
+        runIpReachabilityMonitorMcastResolicitProbeFailedTest();
         assertNeverNotifyNeighborLost();
     }
 
@@ -6442,7 +6421,7 @@ public abstract class IpClientIntegrationTestCommon {
         expiry = when + ONE_WEEK_IN_MS;
         storeNudFailureEvents(when, expiry, 9, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM);
 
-        runIpReachabilityMonitorProbeFailedTest();
+        runIpReachabilityMonitorMcastResolicitProbeFailedTest();
         assertNotifyNeighborLost(ROUTER_LINK_LOCAL /* targetIp */,
                 NudEventType.NUD_POST_ROAMING_FAILED_CRITICAL);
     }
@@ -6459,7 +6438,7 @@ public abstract class IpClientIntegrationTestCommon {
         expiry = when + ONE_WEEK_IN_MS;
         storeNudFailureEvents(when, expiry, 9, IIpMemoryStore.NETWORK_EVENT_NUD_FAILURE_ROAM);
 
-        runIpReachabilityMonitorProbeFailedTest();
+        runIpReachabilityMonitorMcastResolicitProbeFailedTest();
         assertNotifyNeighborLost(ROUTER_LINK_LOCAL /* targetIp */,
                 NudEventType.NUD_POST_ROAMING_FAILED_CRITICAL);
     }
