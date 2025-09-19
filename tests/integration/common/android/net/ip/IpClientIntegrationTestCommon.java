@@ -5128,16 +5128,10 @@ public abstract class IpClientIntegrationTestCommon {
                 true /* shouldIncludeSlla */);
         doIpv6OnlyProvisioning(null /* inOrder */, ra);
 
-        final ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);
-        verify(mCb, timeout(PACKET_TIMEOUT_MS)).onProvisioningFailure(captor.capture());
-        final LinkProperties lp = captor.getValue();
-        assertNotNull(lp);
-        assertFalse(lp.hasGlobalIpv6Address());
-        assertEquals(1, lp.getLinkAddresses().size()); // only IPv6 Link-local address
-        // because the DNS server is on-link, if off-link, due to the loss of IPv6 address, off-link
-        // DNS dest will be removed from LP as well.
-        assertTrue(lp.hasIpv6DnsServer());
-        assertTrue(lp.hasIpv6DefaultRoute());
+        // Eventually all global IPv6 addresses should be removed from the LinkProperties.
+        verify(mCb, timeout(PACKET_TIMEOUT_MS)).onLinkPropertiesChange(argThat(
+                x -> !x.hasGlobalIpv6Address()
+                        && x.getLinkAddresses().size() == 1)); // only IPv6 link local
     }
 
     @Test @SignatureRequiredTest(reason = "requires mNetd to delete IPv6 GUAs")
