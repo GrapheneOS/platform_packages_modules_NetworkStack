@@ -229,6 +229,12 @@ public class NetworkStackUtils {
             "networkmonitor_async_privdns_resolution";
 
     /**
+     * Feature flag to always use the CAPPORT data when doing fallback to cellular.
+     */
+    public static final String NETWORKMONITOR_USE_CAPPORT_DATA_IN_FALLBACK =
+            "networkmonitor_use_capport_data_in_fallback";
+
+    /**
      * Experiment flag to support parsing PIO P flag(DHCPv6-PD preferred).
      */
     public static final String IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION =
