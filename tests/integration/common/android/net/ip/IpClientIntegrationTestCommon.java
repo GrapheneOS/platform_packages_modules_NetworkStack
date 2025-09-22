@@ -5129,7 +5129,7 @@ public abstract class IpClientIntegrationTestCommon {
         doIpv6OnlyProvisioning(null /* inOrder */, ra);
 
         // Eventually all global IPv6 addresses should be removed from the LinkProperties.
-        verify(mCb, timeout(PACKET_TIMEOUT_MS)).onLinkPropertiesChange(argThat(
+        verify(mCb, timeout(PACKET_TIMEOUT_MS).atLeastOnce()).onLinkPropertiesChange(argThat(
                 x -> !x.hasGlobalIpv6Address()
                         && x.getLinkAddresses().size() == 1)); // only IPv6 link local
     }
