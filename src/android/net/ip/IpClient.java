@@ -189,6 +189,7 @@ import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.LinkPropertiesUtils;
 import com.android.net.module.util.SharedLog;
 import com.android.net.module.util.SocketUtils;
+import com.android.net.module.util.TerribleErrorLog;
 import com.android.net.module.util.arp.ArpPacket;
 import com.android.net.module.util.ip.InterfaceController;
 import com.android.net.module.util.netlink.NetlinkUtils;
@@ -3358,6 +3359,11 @@ public class IpClient extends StateMachine {
             if (readyToProceed()) {
                 deferMessage(obtainMessage(CMD_ADDRESSES_CLEARED));
             } else {
+                TerribleErrorLog.logTerribleError(
+                        NetworkStackStatsLog::write,
+                        "There should not be any IP address left in LinkProperties now",
+                        NetworkStackStatsLog.CORE_NETWORKING_TERRIBLE_ERROR_OCCURRED,
+                        NetworkStackStatsLog.CORE_NETWORKING_TERRIBLE_ERROR_OCCURRED__ERROR_TYPE__TYPE_IP_ADDRESS_LEFT_IN_LINKPROPERTIES);
                 // Clear all IPv4 and IPv6 before proceeding to RunningState.
                 // Clean up any leftover state from an abnormal exit from
                 // tethering or during an IpClient restart.
