@@ -209,6 +209,7 @@ import com.android.net.module.util.PacketBuilder;
 import com.android.net.module.util.SharedLog;
 import com.android.net.module.util.Struct;
 import com.android.net.module.util.arp.ArpPacket;
+import com.android.net.module.util.dhcp6.Dhcp6AddrRegInformPacket;
 import com.android.net.module.util.dhcp6.Dhcp6Packet;
 import com.android.net.module.util.dhcp6.Dhcp6Packet.PrefixDelegation;
 import com.android.net.module.util.dhcp6.Dhcp6RebindPacket;
@@ -5313,6 +5314,10 @@ public abstract class IpClientIntegrationTestCommon {
             } else if (packet instanceof Dhcp6RequestPacket) {
                 mPacketReader.sendResponse(buildDhcp6Reply(packet, iapd.array(), mClientMac,
                           (Inet6Address) mClientIpAddress, false /* rapidCommit */));
+            } else if (packet instanceof Dhcp6AddrRegInformPacket) {
+                // Ignore the ADDR_REG_INFORM message, continue to wait the next Solicit or Request
+                // message.
+                continue;
             } else {
                 fail("invalid DHCPv6 Packet");
             }
