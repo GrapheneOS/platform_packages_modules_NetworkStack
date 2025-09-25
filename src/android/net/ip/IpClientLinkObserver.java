@@ -230,10 +230,6 @@ public class IpClientLinkObserver {
     @VisibleForTesting
     static final int SOCKET_RECV_BUFSIZE = 4 * 1024 * 1024;
 
-    /* inet6_dev.if_flags */
-    private static final int IF_RA_MANAGED = 0x40;
-    private static final int IF_RA_OTHERCONF = 0x80;
-
     public IpClientLinkObserver(Context context, Handler h, String iface, Callback callback,
             Configuration config, SharedLog log, IpClient.Dependencies deps) {
         mContext = context;
@@ -605,15 +601,6 @@ public class IpClientLinkObserver {
                 maybeLog("interfaceLinkStateChanged", "ifindex " + mIfindex
                         + (state ? " up" : " down"));
                 updateInterfaceLinkStateChanged(state);
-
-                // Note that IPv6 is started in RunningState, so any relevant flags cannot be
-                // received then. Additionally, it is safe to call startDhcp6AddrReg()
-                // multiple times even if address registration was disabled due to lack of
-                // network support.
-                final int inet6Flags = msg.getInet6Flags();
-                if (state && (inet6Flags & (IF_RA_MANAGED | IF_RA_OTHERCONF)) != 0) {
-                    mCallback.startDhcp6AddrReg();
-                }
                 break;
 
             case NetlinkConstants.RTM_DELLINK:
