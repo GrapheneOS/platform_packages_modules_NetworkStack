@@ -31,8 +31,6 @@
 #include <stdlib.h>
 #include <sys/system_properties.h>
 
-#include <string>
-
 #include <nativehelper/JNIHelp.h>
 #include <netjniutils/netjniutils.h>
 
