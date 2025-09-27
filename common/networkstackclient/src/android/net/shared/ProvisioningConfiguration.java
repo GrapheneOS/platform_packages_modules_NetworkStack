@@ -302,6 +302,15 @@ public class ProvisioningConfiguration {
         }
 
         /**
+         * Specify the transport type for this network.
+         * See {@link android.net.NetworkCapabilities} for TRANSPORT_* constants.
+         */
+        public Builder withTransportType(int transportType) {
+            mConfig.mTransportType = transportType;
+            return this;
+        }
+
+        /**
          * Build the configuration using previously specified parameters.
          */
         public ProvisioningConfiguration build() {
@@ -514,6 +523,7 @@ public class ProvisioningConfiguration {
     public int mIPv6ProvisioningMode = PROV_IPV6_SLAAC;
     public int mCreatorUid;
     public int mHostnameSetting = HOSTNAME_SETTING_UNSET;
+    public int mTransportType = -1;
 
     public ProvisioningConfiguration() {} // used by Builder
 
@@ -539,6 +549,7 @@ public class ProvisioningConfiguration {
         mIPv4ProvisioningMode = other.mIPv4ProvisioningMode;
         mIPv6ProvisioningMode = other.mIPv6ProvisioningMode;
         mHostnameSetting = other.mHostnameSetting;
+        mTransportType = other.mTransportType;
     }
 
     /**
@@ -569,6 +580,7 @@ public class ProvisioningConfiguration {
         p.layer2Info = (mLayer2Info == null) ? null : mLayer2Info.toStableParcelable();
         p.options = (mDhcpOptions == null) ? null : new ArrayList<>(mDhcpOptions);
         p.hostnameSetting = mHostnameSetting;
+        p.transportType = mTransportType;
         return p;
     }
 
@@ -610,6 +622,7 @@ public class ProvisioningConfiguration {
             config.mIPv6ProvisioningMode = p.ipv6ProvisioningMode;
         }
         config.mHostnameSetting = p.hostnameSetting;
+        config.mTransportType = p.transportType;
         return config;
     }
 
@@ -665,6 +678,7 @@ public class ProvisioningConfiguration {
                 .add("mIPv4ProvisioningMode: " + ipv4ProvisioningMode)
                 .add("mIPv6ProvisioningMode: " + ipv6ProvisioningMode)
                 .add("mHostnameSetting: " + mHostnameSetting)
+                .add("mTransport: " + mTransportType)
                 .toString();
     }
 
@@ -712,7 +726,8 @@ public class ProvisioningConfiguration {
                 && mIPv4ProvisioningMode == other.mIPv4ProvisioningMode
                 && mIPv6ProvisioningMode == other.mIPv6ProvisioningMode
                 && mCreatorUid == other.mCreatorUid
-                && mHostnameSetting == other.mHostnameSetting;
+                && mHostnameSetting == other.mHostnameSetting
+                && mTransportType == other.mTransportType;
     }
 
     public boolean isValid() {

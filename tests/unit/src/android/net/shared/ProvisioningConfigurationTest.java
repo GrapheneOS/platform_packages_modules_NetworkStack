@@ -117,6 +117,7 @@ public class ProvisioningConfigurationTest {
         config.mUniqueEui64AddressesOnly = false;
         config.mCreatorUid = 10136;
         config.mHostnameSetting = HOSTNAME_SETTING_SEND;
+        config.mTransportType = 1;
         return config;
     }
 
@@ -149,6 +150,7 @@ public class ProvisioningConfigurationTest {
         p.options = makeCustomizedDhcpOptions((byte) 60, new String("android-dhcp-11").getBytes());
         p.creatorUid = 10136;
         p.hostnameSetting = HOSTNAME_SETTING_SEND;
+        p.transportType = 1;
         return p;
     }
 
@@ -156,7 +158,7 @@ public class ProvisioningConfigurationTest {
     public void setUp() {
         mConfig = makeTestProvisioningConfiguration();
         // Any added field must be included in equals() to be tested properly
-        assertFieldCountEquals(19, ProvisioningConfiguration.class);
+        assertFieldCountEquals(20, ProvisioningConfiguration.class);
     }
 
     @Test
@@ -240,6 +242,12 @@ public class ProvisioningConfigurationTest {
         doParcelUnparcelTest();
     }
 
+    @Test
+    public void testParcelUnparcel_TransportType() {
+        mConfig.mTransportType = 123;
+        doParcelUnparcelTest();
+    }
+
     private void doParcelUnparcelTest() {
         final ProvisioningConfiguration unparceled =
                 fromStableParcelable(mConfig.toStableParcelable(), 12 /* interface version */);
@@ -291,7 +299,8 @@ public class ProvisioningConfigurationTest {
         assertNotEqualsAfterChange(c -> c.mCreatorUid = 10138);
         assertNotEqualsAfterChange(c -> c.mHostnameSetting = HOSTNAME_SETTING_UNSET);
         assertNotEqualsAfterChange(c -> c.mHostnameSetting = HOSTNAME_SETTING_DO_NOT_SEND);
-        assertFieldCountEquals(19, ProvisioningConfiguration.class);
+        assertNotEqualsAfterChange(c -> c.mTransportType = 2);
+        assertFieldCountEquals(20, ProvisioningConfiguration.class);
     }
 
     private void assertNotEqualsAfterChange(Consumer<ProvisioningConfiguration> mutator) {
