@@ -52,4 +52,5 @@ parcelable ProvisioningConfigurationParcelable {
     boolean uniqueEui64AddressesOnly;
     int creatorUid;
     int hostnameSetting;
+    int transportType;
 }
