@@ -162,6 +162,7 @@ import android.stats.connectivity.NudEventType;
 import android.stats.connectivity.TransportType;
 import android.system.ErrnoException;
 import android.system.Os;
+import android.system.OsConstants;
 import android.text.TextUtils;
 import android.text.format.DateUtils;
 import android.util.LocalLog;
@@ -1097,7 +1098,10 @@ public class IpClient extends StateMachine {
                 final int size = (int) (caps >> 32);
                 return new ApfCapabilities(version, size, ARPHRD_ETHER);
             } catch (ErrnoException e) {
-                log.e("[Non-HAL API] Cannot get APF capabilities: ", e);
+                // Do not log an error if the native API is not implemented.
+                if (e.errno != OsConstants.ENOSYS) {
+                    log.e("[Non-HAL API] Cannot get APF capabilities: ", e);
+                }
                 return null;
             }
         }
