@@ -607,9 +607,9 @@ public class IpClientLinkObserver {
                 updateInterfaceLinkStateChanged(state);
 
                 // Note that IPv6 is started in RunningState, so any relevant flags cannot be
-                // received then. Additionally, it is safe to call startDhcp6AddrReg()
+                // received until then. Additionally, it is safe to call startDhcp6AddrReg()
                 // multiple times even if address registration was disabled due to lack of
-                // network support.
+                // network support, so there is no need to track any additional state here.
                 final int inet6Flags = msg.getInet6Flags();
                 if (state && (inet6Flags & (IF_RA_MANAGED | IF_RA_OTHERCONF)) != 0) {
                     mCallback.startDhcp6AddrReg();
