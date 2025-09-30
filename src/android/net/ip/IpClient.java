@@ -63,6 +63,7 @@ import static android.net.ip.IpClientLinkObserver.IpClientNetlinkMonitor;
 import static android.net.ip.IpClientLinkObserver.IpClientNetlinkMonitor.INetlinkMessageProcessor;
 import static android.net.ip.IpReachabilityMonitor.INVALID_REACHABILITY_LOSS_TYPE;
 import static android.net.ip.IpReachabilityMonitor.nudEventTypeToInt;
+import static android.net.ip.IpReachabilityMonitor.nudEventTypeToNetworkEvent;
 import static android.net.util.SocketUtils.makePacketSocketAddress;
 import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static android.stats.connectivity.NetworkQuirkEvent.QE_DHCP6_HEURISTIC_TRIGGERED;
@@ -2775,12 +2776,16 @@ public class IpClient extends StateMachine {
                 >= mNudFailureCountDailyThreshold;
     }
 
+    private static boolean shouldSuppressNudFailure(int event) {
+        return event == NETWORK_EVENT_NUD_FAILURE_ORGANIC;
+    }
+
     private void maybeStoreNudFailureToDatabase(final NudEventType type) {
         if (!mIgnoreNudFailureEnabled) return;
-        final int event = IpReachabilityMonitor.nudEventTypeToNetworkEvent(type);
+        final int event = nudEventTypeToNetworkEvent(type);
         // So far only NUD failure events due to organic kernel check are stored, which can be
         // expanded to other causes later if necessary.
-        if (event != NETWORK_EVENT_NUD_FAILURE_ORGANIC) return;
+        if (!shouldSuppressNudFailure(event)) return;
         if (shouldStopWritingNudFailureEventToDatabase()) return;
 
         final long now = System.currentTimeMillis();
@@ -2812,8 +2817,8 @@ public class IpClient extends StateMachine {
                         public void notifyLost(String logMsg, NudEventType type) {
                             maybeStoreNudFailureToDatabase(type);
                             // Ignore only organic NUD failures if too many on a broken network.
-                            if (mIgnoreNudFailure
-                                    && type == NudEventType.NUD_ORGANIC_FAILED_CRITICAL) {
+                            final int event = nudEventTypeToNetworkEvent(type);
+                            if (mIgnoreNudFailure && shouldSuppressNudFailure(event)) {
                                 mIpProvisioningMetrics.incrementIgnoredNudFailureCount();
                                 return;
                             }
