@@ -186,6 +186,13 @@ public class IpClientLinkObserver {
             if (dhcp6AddressRegistrationEnabled) groups |= NetlinkConstants.RTMGRP_IPV6_IFINFO;
             return groups;
         }
+
+        /** When RTMGRP_IPV6_INFO bind group is enabled, the kernel sends messages with AF_INET6. */
+        public boolean isSupportedIfinfoAddressFamily(short family) {
+            if (family == AF_UNSPEC) return true;
+            if (dhcp6AddressRegistrationEnabled && family == AF_INET6) return true;
+            return false;
+        }
     }
 
     private final Context mContext;
@@ -193,6 +200,8 @@ public class IpClientLinkObserver {
     private final Callback mCallback;
     private final LinkProperties mLinkProperties;
     private boolean mInterfaceLinkState;
+    /** Tracks IFLA_INET6_FLAGS. Default to 0, i.e. no flags set. */
+    private int mInet6Flags = 0;
     private DnsServerRepository mDnsServerRepository;
     private final AlarmManager mAlarmManager;
     private final Configuration mConfig;
@@ -586,6 +595,25 @@ public class IpClientLinkObserver {
         }
     }
 
+    private void processInet6Flags(boolean isLinkUp, int flags) {
+        // Check whether flags are set.
+        // TODO: consider exposing RtNetlinkLinkMessage.NO_INET6_FLAGS.
+        if (flags == -1) return;
+
+        // Check whether flags changed.
+        if (mInet6Flags == flags) return;
+        mInet6Flags = flags;
+
+        // If interface is up and M or O bit are set, start AddrReg.
+        if (!isLinkUp) return;
+        if ((flags & (IF_RA_MANAGED | IF_RA_OTHERCONF)) == 0) return;
+
+        // Note that it is safe to call startDhcp6AddrReg() multiple times, so this code does not
+        // need to check whether the M or O bits have changed or whether AddrReg had already been
+        // triggered before.
+        mCallback.startDhcp6AddrReg();
+    }
+
     private void processRtNetlinkLinkMessage(RtNetlinkLinkMessage msg) {
         // Check if receiving netlink link state update for clat interface.
         final String ifname = msg.getInterfaceName();
@@ -596,24 +624,20 @@ public class IpClientLinkObserver {
             return;
         }
 
-        if (ifinfoMsg.family != AF_UNSPEC || ifinfoMsg.index != mIfindex) return;
+        if (ifinfoMsg.index != mIfindex) return;
         if ((ifinfoMsg.flags & IFF_LOOPBACK) != 0) return;
+
+        // When RTMGRP_IPV6_INFO is enabled, the kernel sends RTM_NEWLINK messages with AF_INET6 in
+        // addition to AF_UNSPEC.
+        if (!mConfig.isSupportedIfinfoAddressFamily(ifinfoMsg.family)) return;
 
         switch (nlMsgType) {
             case NetlinkConstants.RTM_NEWLINK:
-                final boolean state = (ifinfoMsg.flags & IFF_LOWER_UP) != 0;
+                final boolean isLinkUp = (ifinfoMsg.flags & IFF_LOWER_UP) != 0;
                 maybeLog("interfaceLinkStateChanged", "ifindex " + mIfindex
-                        + (state ? " up" : " down"));
-                updateInterfaceLinkStateChanged(state);
-
-                // Note that IPv6 is started in RunningState, so any relevant flags cannot be
-                // received until then. Additionally, it is safe to call startDhcp6AddrReg()
-                // multiple times even if address registration was disabled due to lack of
-                // network support, so there is no need to track any additional state here.
-                final int inet6Flags = msg.getInet6Flags();
-                if (state && (inet6Flags & (IF_RA_MANAGED | IF_RA_OTHERCONF)) != 0) {
-                    mCallback.startDhcp6AddrReg();
-                }
+                        + (isLinkUp ? " up" : " down"));
+                updateInterfaceLinkStateChanged(isLinkUp);
+                processInet6Flags(isLinkUp, msg.getInet6Flags());
                 break;
 
             case NetlinkConstants.RTM_DELLINK:
