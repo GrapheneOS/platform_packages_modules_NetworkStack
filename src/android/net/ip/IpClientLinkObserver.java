@@ -300,10 +300,6 @@ public class IpClientLinkObserver {
         return size;
     }
 
-    private void updateInterfaceLinkStateChanged(boolean state) {
-        setInterfaceLinkStateLocked(state);
-    }
-
     private void updateInterfaceDnsServerInfo(long lifetime, final String[] addresses) {
         final boolean changed = mDnsServerRepository.addServers(lifetime, addresses);
         final boolean linkState;
@@ -383,10 +379,6 @@ public class IpClientLinkObserver {
 
     private boolean getInterfaceLinkStateLocked() {
         return mInterfaceLinkState;
-    }
-
-    private void setInterfaceLinkStateLocked(boolean state) {
-        mInterfaceLinkState = state;
     }
 
     /** Notifies this object of new interface parameters. */
@@ -622,7 +614,7 @@ public class IpClientLinkObserver {
                 final boolean isLinkUp = (ifinfoMsg.flags & IFF_LOWER_UP) != 0;
                 maybeLog("interfaceLinkStateChanged", "ifindex " + mIfindex
                         + (isLinkUp ? " up" : " down"));
-                updateInterfaceLinkStateChanged(isLinkUp);
+                mInterfaceLinkState = isLinkUp;
                 processInet6Flags(isLinkUp, msg.getInet6Flags());
                 break;
 
