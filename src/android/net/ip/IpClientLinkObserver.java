@@ -306,8 +306,7 @@ public class IpClientLinkObserver {
         if (changed) {
             maybeLog("interfaceDnsServerInfo", Arrays.toString(addresses));
             mDnsServerRepository.setDnsServersOn(mLinkProperties);
-            linkState = getInterfaceLinkStateLocked();
-            mCallback.update(linkState);
+            mCallback.update(mInterfaceLinkState);
         }
     }
 
@@ -319,9 +318,8 @@ public class IpClientLinkObserver {
         } else {
             changed = mLinkProperties.removeLinkAddress(address);
         }
-        linkState = getInterfaceLinkStateLocked();
         if (changed) {
-            mCallback.update(linkState);
+            mCallback.update(mInterfaceLinkState);
             if (!add && address.isIpv6()) {
                 final Inet6Address addr = (Inet6Address) address.getAddress();
                 mCallback.onIpv6AddressRemoved(addr);
@@ -338,9 +336,8 @@ public class IpClientLinkObserver {
         } else {
             changed = mLinkProperties.removeRoute(route);
         }
-        linkState = getInterfaceLinkStateLocked();
         if (changed) {
-            mCallback.update(linkState);
+            mCallback.update(mInterfaceLinkState);
         }
         return changed;
     }
@@ -352,8 +349,7 @@ public class IpClientLinkObserver {
         // code that parses them will not be able to resolve the ifindex to an interface name.
         final boolean linkState;
         clearLinkProperties();
-        linkState = getInterfaceLinkStateLocked();
-        mCallback.update(linkState);
+        mCallback.update(mInterfaceLinkState);
     }
 
     /**
@@ -375,10 +371,6 @@ public class IpClientLinkObserver {
         mAlarmManager.cancel(mExpireDhcp6PdPreferredPrefixAlarm);
         mLinkProperties.clear();
         mLinkProperties.setInterfaceName(mInterfaceName);
-    }
-
-    private boolean getInterfaceLinkStateLocked() {
-        return mInterfaceLinkState;
     }
 
     /** Notifies this object of new interface parameters. */
@@ -521,7 +513,7 @@ public class IpClientLinkObserver {
             cancelPref64Alarm();
         }
 
-        mCallback.update(getInterfaceLinkStateLocked());
+        mCallback.update(mInterfaceLinkState);
     }
 
     private void processPref64Option(StructNdOptPref64 opt, final long now) {
