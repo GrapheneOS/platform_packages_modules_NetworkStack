@@ -20,7 +20,7 @@ import android.app.AlarmManager
 import android.content.Context
 import android.net.LinkAddress
 import android.net.LinkProperties
-import android.net.dhcp6.Dhcp6AddrRegTracker.AddressRegistrationAlarmListener
+import android.net.dhcp6.Dhcp6AddrRegTracker.AddressRegistrationAlarm
 import android.net.dhcp6.Dhcp6AddrRegTracker.SupportTimeoutAlarm
 import android.os.Handler
 import android.os.HandlerThread
@@ -216,7 +216,7 @@ class Dhcp6AddrRegTrackerTest {
 
         // The code will retry 3 times.
         for (i in 0 until 3) {
-            expectAlarmSet<AddressRegistrationAlarmListener>(inOrder).advanceClockAndFire()
+            expectAlarmSet<AddressRegistrationAlarm>(inOrder).advanceClockAndFire()
             expectAddrRegInformPacket(inOrder, addr)
         }
 
@@ -225,7 +225,7 @@ class Dhcp6AddrRegTrackerTest {
         assertTrue(realtimeMs < 9_000, "Actual value $realtimeMs")
 
         // Verify that no further alarms are scheduled.
-        verifyNeverScheduled<AddressRegistrationAlarmListener>(inOrder)
+        verifyNeverScheduled<AddressRegistrationAlarm>(inOrder)
     }
 
     @Test
@@ -242,9 +242,9 @@ class Dhcp6AddrRegTrackerTest {
         // Retry once
         val inOrder = inOrder(alarmManager, packetDispatcher)
         expectAddrRegInformPacket(inOrder, addr)
-        expectAlarmSet<AddressRegistrationAlarmListener>(inOrder).advanceClockAndFire()
+        expectAlarmSet<AddressRegistrationAlarm>(inOrder).advanceClockAndFire()
         val inform = expectAddrRegInformPacket(inOrder, addr)
-        val alarm = expectAlarmSet<AddressRegistrationAlarmListener>(inOrder)
+        val alarm = expectAlarmSet<AddressRegistrationAlarm>(inOrder)
 
         // Send back response
         val reply = buildAddrRegReply(inform)
@@ -269,7 +269,7 @@ class Dhcp6AddrRegTrackerTest {
         // Confirm address registration
         val inOrder = inOrder(alarmManager, packetDispatcher)
         val inform = expectAddrRegInformPacket(inOrder, la.address)
-        val alarm = expectAlarmSet<AddressRegistrationAlarmListener>(inOrder) // retry alarm
+        val alarm = expectAlarmSet<AddressRegistrationAlarm>(inOrder) // retry alarm
 
         val reply = buildAddrRegReply(inform)
         messageHandler.handleMessage(reply, inform.mIaAddress)
@@ -292,14 +292,14 @@ class Dhcp6AddrRegTrackerTest {
         lp.removeLinkAddress(la)
         lp.addLinkAddress(la.copyWithNewLifetime(150_000 /*deprecationMs*/, 250_000 /*expiryMs*/))
         handler.postAndWait { tracker.setLinkProperties(lp) }
-        expectAlarmSet<AddressRegistrationAlarmListener>(inOrder).advanceClockAndFire()
+        expectAlarmSet<AddressRegistrationAlarm>(inOrder).advanceClockAndFire()
         expectAddrRegInformPacket(inOrder, la.address)
         // Update should happen between [144, 176] (i.e. 160 += 10%).
         assertTrue(realtimeMs >= 144_000, "Actual value $realtimeMs")
         assertTrue(realtimeMs <= 176_000, "Actual value $realtimeMs")
 
         // Ensure that retry mechanism works here as well.
-        expectAlarmSet<AddressRegistrationAlarmListener>(inOrder).advanceClockAndFire()
+        expectAlarmSet<AddressRegistrationAlarm>(inOrder).advanceClockAndFire()
         expectAddrRegInformPacket(inOrder, la.address)
     }
 
@@ -316,7 +316,7 @@ class Dhcp6AddrRegTrackerTest {
         // Confirm address registration
         val inOrder = inOrder(alarmManager, packetDispatcher)
         val inform = expectAddrRegInformPacket(inOrder, la.address)
-        val alarm = expectAlarmSet<AddressRegistrationAlarmListener>(inOrder)
+        val alarm = expectAlarmSet<AddressRegistrationAlarm>(inOrder)
 
         val reply = buildAddrRegReply(inform)
         messageHandler.handleMessage(reply, inform.mIaAddress)
@@ -351,7 +351,7 @@ class Dhcp6AddrRegTrackerTest {
         // Confirm address registration
         val inOrder = inOrder(alarmManager, packetDispatcher)
         val inform = expectAddrRegInformPacket(inOrder, la.address)
-        val alarm = expectAlarmSet<AddressRegistrationAlarmListener>(inOrder)
+        val alarm = expectAlarmSet<AddressRegistrationAlarm>(inOrder)
 
         val reply = buildAddrRegReply(inform)
         messageHandler.handleMessage(reply, inform.mIaAddress)
@@ -365,7 +365,7 @@ class Dhcp6AddrRegTrackerTest {
 
         // Significantly reduced lifetime will result in a new alarm set.
         handler.postAndWait { tracker.setLinkProperties(lp) }
-        expectAlarmSet<AddressRegistrationAlarmListener>(inOrder).advanceClockAndFire()
+        expectAlarmSet<AddressRegistrationAlarm>(inOrder).advanceClockAndFire()
         expectAddrRegInformPacket(inOrder, la.address)
 
         // Reducing the lifetime beyond NextAddrRegRefreshTime causes the packet to be sent sooner.
@@ -394,7 +394,7 @@ class Dhcp6AddrRegTrackerTest {
             anyInt(),
             anyLong(),
             any(),
-            any(AddressRegistrationAlarmListener::class.java),
+            any(AddressRegistrationAlarm::class.java),
             any()
         )
     }
@@ -474,7 +474,12 @@ class Dhcp6AddrRegTrackerTest {
         lp.addLinkAddress(LinkAddress(addr, 64))
         handler.postAndWait { tracker.setLinkProperties(lp) }
 
-        expectAlarmSet<SupportTimeoutAlarm>(inOrder)
+        // Can't use expectAlarmSet because Mockito can't requires a times() parameter for
+        // back-to-back calls to the same function.
+        val cb = ArgumentCaptor.forClass(AlarmManager.OnAlarmListener::class.java)
+        inOrder.verify(alarmManager, times(2))
+                .setExact(anyInt(), anyLong(), any(), cb.capture(), any())
+        assertIs<SupportTimeoutAlarm>(cb.allValues.first())
     }
 
     @Test
