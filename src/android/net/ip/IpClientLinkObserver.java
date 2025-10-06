@@ -94,15 +94,9 @@ import java.util.concurrent.TimeUnit;
  * callbacks than strictly necessary (some of which may be no-ops), but will not
  * be out of sync once all callbacks have been processed.
  *
- * Threading model:
+ * Threading model: This class is not thread-safe, i.e. all accesses occur on the IpClient handler.
  *
- * - The owner of this class is expected to create it, register it, and call
- *   getLinkProperties or clearLinkProperties on its thread.
- * - All accesses to mLinkProperties must be synchronized(this). All the other
- *   member variables are immutable once the object is constructed.
- *
- * TODO: Now that all the methods are called on the handler thread, remove synchronization and
- *       pass the LinkProperties to the update() callback.
+ * TODO: pass the LinkProperties directly to the update() callback.
  *
  * @hide
  */
@@ -306,36 +300,26 @@ public class IpClientLinkObserver {
         return size;
     }
 
-    private synchronized void updateInterfaceLinkStateChanged(boolean state) {
-        setInterfaceLinkStateLocked(state);
-    }
-
     private void updateInterfaceDnsServerInfo(long lifetime, final String[] addresses) {
         final boolean changed = mDnsServerRepository.addServers(lifetime, addresses);
         final boolean linkState;
         if (changed) {
             maybeLog("interfaceDnsServerInfo", Arrays.toString(addresses));
-            synchronized (this) {
-                mDnsServerRepository.setDnsServersOn(mLinkProperties);
-                linkState = getInterfaceLinkStateLocked();
-            }
-            mCallback.update(linkState);
+            mDnsServerRepository.setDnsServersOn(mLinkProperties);
+            mCallback.update(mInterfaceLinkState);
         }
     }
 
     private boolean updateInterfaceAddress(@NonNull final LinkAddress address, boolean add) {
         final boolean changed;
         final boolean linkState;
-        synchronized (this) {
-            if (add) {
-                changed = mLinkProperties.addLinkAddress(address);
-            } else {
-                changed = mLinkProperties.removeLinkAddress(address);
-            }
-            linkState = getInterfaceLinkStateLocked();
+        if (add) {
+            changed = mLinkProperties.addLinkAddress(address);
+        } else {
+            changed = mLinkProperties.removeLinkAddress(address);
         }
         if (changed) {
-            mCallback.update(linkState);
+            mCallback.update(mInterfaceLinkState);
             if (!add && address.isIpv6()) {
                 final Inet6Address addr = (Inet6Address) address.getAddress();
                 mCallback.onIpv6AddressRemoved(addr);
@@ -347,16 +331,13 @@ public class IpClientLinkObserver {
     private boolean updateInterfaceRoute(final RouteInfo route, boolean add) {
         final boolean changed;
         final boolean linkState;
-        synchronized (this) {
-            if (add) {
-                changed = mLinkProperties.addRoute(route);
-            } else {
-                changed = mLinkProperties.removeRoute(route);
-            }
-            linkState = getInterfaceLinkStateLocked();
+        if (add) {
+            changed = mLinkProperties.addRoute(route);
+        } else {
+            changed = mLinkProperties.removeRoute(route);
         }
         if (changed) {
-            mCallback.update(linkState);
+            mCallback.update(mInterfaceLinkState);
         }
         return changed;
     }
@@ -367,24 +348,21 @@ public class IpClientLinkObserver {
         // interface-specific messages (e.g., RTM_DELADDR) will not reach us, because the netd
         // code that parses them will not be able to resolve the ifindex to an interface name.
         final boolean linkState;
-        synchronized (this) {
-            clearLinkProperties();
-            linkState = getInterfaceLinkStateLocked();
-        }
-        mCallback.update(linkState);
+        clearLinkProperties();
+        mCallback.update(mInterfaceLinkState);
     }
 
     /**
      * Returns a copy of this object's LinkProperties.
      */
-    public synchronized LinkProperties getLinkProperties() {
+    public LinkProperties getLinkProperties() {
         return new LinkProperties(mLinkProperties);
     }
 
     /**
      * Reset this object's LinkProperties.
      */
-    public synchronized void clearLinkProperties() {
+    public void clearLinkProperties() {
         // Clear the repository before clearing mLinkProperties. That way, if a clear() happens
         // while interfaceDnsServerInfo() is being called, we'll end up with no DNS servers in
         // mLinkProperties, as desired.
@@ -393,14 +371,6 @@ public class IpClientLinkObserver {
         mAlarmManager.cancel(mExpireDhcp6PdPreferredPrefixAlarm);
         mLinkProperties.clear();
         mLinkProperties.setInterfaceName(mInterfaceName);
-    }
-
-    private boolean getInterfaceLinkStateLocked() {
-        return mInterfaceLinkState;
-    }
-
-    private void setInterfaceLinkStateLocked(boolean state) {
-        mInterfaceLinkState = state;
     }
 
     /** Notifies this object of new interface parameters. */
@@ -513,7 +483,7 @@ public class IpClientLinkObserver {
      * @param expiry The time (as determined by SystemClock.elapsedRealtime) when the option
      *               expires.
      */
-    private synchronized void updatePref64(IpPrefix prefix, final long now,
+    private void updatePref64(IpPrefix prefix, final long now,
             final long expiry) {
         final IpPrefix currentPrefix = mShim.getNat64Prefix(mLinkProperties);
 
@@ -543,7 +513,7 @@ public class IpClientLinkObserver {
             cancelPref64Alarm();
         }
 
-        mCallback.update(getInterfaceLinkStateLocked());
+        mCallback.update(mInterfaceLinkState);
     }
 
     private void processPref64Option(StructNdOptPref64 opt, final long now) {
@@ -636,7 +606,7 @@ public class IpClientLinkObserver {
                 final boolean isLinkUp = (ifinfoMsg.flags & IFF_LOWER_UP) != 0;
                 maybeLog("interfaceLinkStateChanged", "ifindex " + mIfindex
                         + (isLinkUp ? " up" : " down"));
-                updateInterfaceLinkStateChanged(isLinkUp);
+                mInterfaceLinkState = isLinkUp;
                 processInet6Flags(isLinkUp, msg.getInet6Flags());
                 break;
 
@@ -843,11 +813,6 @@ public class IpClientLinkObserver {
      *
      * TODO: Currently servers are only expired when a new DNS update is received.
      * Update them using timers, or possibly on every notification received by NetlinkTracker.
-     *
-     * Threading model: run by NetlinkTracker. Methods are synchronized(this) just in case netlink
-     * notifications are sent by multiple threads. If future threads use alarms to expire, those
-     * alarms must also be synchronized(this).
-     *
      */
     private static class DnsServerRepository {
 
@@ -888,7 +853,7 @@ public class IpClientLinkObserver {
         }
 
         /** Sets the DNS servers of the provided LinkProperties object to the current servers. */
-        public synchronized void setDnsServersOn(LinkProperties lp) {
+        public void setDnsServersOn(LinkProperties lp) {
             lp.setDnsServers(mCurrentServers);
         }
 
@@ -897,7 +862,7 @@ public class IpClientLinkObserver {
          * @param lifetime the time in seconds that the DNS servers are valid.
          * @param addresses the string representations of the IP addresses of DNS servers to use.
          */
-        public synchronized boolean addServers(long lifetime, String[] addresses) {
+        public boolean addServers(long lifetime, String[] addresses) {
             // If the servers are below the minimum lifetime, don't change anything.
             if (lifetime != 0 && lifetime < mMinLifetime) return false;
 
@@ -935,7 +900,7 @@ public class IpClientLinkObserver {
             return updateCurrentServers();
         }
 
-        private synchronized boolean updateExistingEntry(InetAddress address, long expiry) {
+        private boolean updateExistingEntry(InetAddress address, long expiry) {
             DnsServerEntry existing = mIndex.get(address);
             if (existing != null) {
                 existing.expiry = expiry;
@@ -944,7 +909,7 @@ public class IpClientLinkObserver {
             return false;
         }
 
-        private synchronized boolean updateCurrentServers() {
+        private boolean updateCurrentServers() {
             long now = System.currentTimeMillis();
             boolean changed = false;
 
