@@ -813,7 +813,7 @@ public class NetworkMonitor extends StateMachine {
 
     /**
      * Send a notification to NetworkMonitor indicating that the network is now connected.
-     * @Deprecated use notifyNetworkConnectedParcel. This method is called on S-.
+     * @deprecated use notifyNetworkConnectedParcel. This method is called on S-.
      */
     public void notifyNetworkConnected(LinkProperties lp, NetworkCapabilities nc) {
         final NetworkMonitorParameters params = new NetworkMonitorParameters();

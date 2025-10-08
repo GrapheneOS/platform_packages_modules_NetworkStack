@@ -421,7 +421,7 @@ class DhcpLeaseRepository {
      *
      * @param clientId Client identifier option if specified, or {@link #CLIENTID_UNSPEC}
      * @param hwAddr client's mac address
-     * @param Addr IPv4 address to be declined
+     * @param addr IPv4 address to be declined
      * @return true if a lease matching parameters was removed from committed repository.
      */
     public boolean markAndReleaseDeclinedLease(@Nullable byte[] clientId,

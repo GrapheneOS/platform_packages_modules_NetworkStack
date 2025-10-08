@@ -104,7 +104,7 @@ public class TcpSocketTracker {
      *
      *    Key: The idiag_cookie value of the socket. See struct inet_diag_sockid in
      *         &lt;linux_src&gt;/include/uapi/linux/inet_diag.h
-     *  Value: See {@Code SocketInfo}
+     *  Value: See {@code SocketInfo}
      */
     private final LongSparseArray<SocketInfo> mSocketInfos = new LongSparseArray<>();
     // Number of packets sent since the last received packet
@@ -120,7 +120,7 @@ public class TcpSocketTracker {
      * Request to send to kernel to request tcp info.
      *
      *   Key: Ip family type.
-     * Value: Bytes array represent the {@Code inetDiagReqV2}.
+     * Value: Bytes array represent the {@code inetDiagReqV2}.
      */
     private final SparseArray<byte[]> mSockDiagMsg = new SparseArray<>();
     private final Dependencies mDependencies;
@@ -248,7 +248,7 @@ public class TcpSocketTracker {
      * Request to send a SockDiag Netlink request. Receive and parse the returned message. This
      * function is not thread-safe and should only be called from only one thread.
      *
-     * @Return if this polling request is sent to kernel and executes successfully or not.
+     * @return if this polling request is sent to kernel and executes successfully or not.
      */
     public boolean pollSocketsInfo() {
         // Traffic will be restricted in doze mode. TCP info may not reflect the correct network
@@ -475,7 +475,7 @@ public class TcpSocketTracker {
         return ret;
     }
 
-    /** Calculate the change between the {@param current} and {@param previous}. */
+    /** Calculate the change between the {@code current} and {@code previous}. */
     @Nullable
     private TcpStat calculateLatestPacketsStat(@NonNull final SocketInfo current,
             @Nullable final SocketInfo previous) {
@@ -689,7 +689,7 @@ public class TcpSocketTracker {
 
         /**
          * Send composed message request to kernel.
-         * @param fd see {@Code FileDescriptor}
+         * @param fd see {@code FileDescriptor}
          * @param msg the byte array represent the request message to write to kernel.
          *
          * Throw ErrnoException or InterruptedIOException if the exception is thrown.
