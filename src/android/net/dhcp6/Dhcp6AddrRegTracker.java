@@ -163,8 +163,9 @@ public class Dhcp6AddrRegTracker {
             mIsScheduled = true;
             mEverScheduled = true;
             final String tag = TAG + "." + mInterfaceName + ".SUPPORT_TIMEOUT";
-            mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, SUPPORT_TIMEOUT_MS,
-                    tag, this, mHandler);
+            final long timeMs = mDeps.elapsedRealtime() + SUPPORT_TIMEOUT_MS;
+            mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, timeMs, tag, this,
+                    mHandler);
         }
 
         /** Cancels the alarm iff it is currently scheduled. */
