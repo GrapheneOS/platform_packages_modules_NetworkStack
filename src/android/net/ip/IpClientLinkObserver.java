@@ -302,7 +302,6 @@ public class IpClientLinkObserver {
 
     private void updateInterfaceDnsServerInfo(long lifetime, final String[] addresses) {
         final boolean changed = mDnsServerRepository.addServers(lifetime, addresses);
-        final boolean linkState;
         if (changed) {
             maybeLog("interfaceDnsServerInfo", Arrays.toString(addresses));
             mDnsServerRepository.setDnsServersOn(mLinkProperties);
@@ -312,7 +311,6 @@ public class IpClientLinkObserver {
 
     private boolean updateInterfaceAddress(@NonNull final LinkAddress address, boolean add) {
         final boolean changed;
-        final boolean linkState;
         if (add) {
             changed = mLinkProperties.addLinkAddress(address);
         } else {
@@ -330,7 +328,6 @@ public class IpClientLinkObserver {
 
     private boolean updateInterfaceRoute(final RouteInfo route, boolean add) {
         final boolean changed;
-        final boolean linkState;
         if (add) {
             changed = mLinkProperties.addRoute(route);
         } else {
@@ -347,7 +344,6 @@ public class IpClientLinkObserver {
         // now empty. Note that from the moment that the interface is removed, any further
         // interface-specific messages (e.g., RTM_DELADDR) will not reach us, because the netd
         // code that parses them will not be able to resolve the ifindex to an interface name.
-        final boolean linkState;
         clearLinkProperties();
         mCallback.update(mInterfaceLinkState);
     }
