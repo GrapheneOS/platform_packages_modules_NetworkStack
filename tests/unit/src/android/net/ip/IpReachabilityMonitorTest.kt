@@ -60,7 +60,6 @@ import com.android.net.module.util.netlink.StructNdMsg.NUD_REACHABLE
 import com.android.net.module.util.netlink.StructNdMsg.NUD_STALE
 import com.android.networkstack.metrics.IpReachabilityMonitorMetrics
 import com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_IGNORE_ORGANIC_NUD_FAILURE_VERSION
-import com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_MCAST_RESOLICIT_VERSION
 import com.android.networkstack.util.NetworkStackUtils.IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION
 import com.android.testutils.makeNewNeighMessage
 import com.android.testutils.waitForIdle
@@ -1031,7 +1030,6 @@ class IpReachabilityMonitorTest {
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_MCAST_RESOLICIT_VERSION, true)
     @Flag(name = IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION, enabled = true)
     fun testNudProbeFailedMetrics_defaultIPv6GatewayMacAddrChangedAfterRoaming() {
         prepareNeighborReachableButMacAddrChangedTest(
@@ -1044,7 +1042,6 @@ class IpReachabilityMonitorTest {
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_MCAST_RESOLICIT_VERSION, true)
     @Flag(name = IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION, enabled = true)
     fun testNudProbeFailedMetrics_defaultIPv4GatewayMacAddrChangedAfterRoaming() {
         prepareNeighborReachableButMacAddrChangedTest(
@@ -1058,7 +1055,6 @@ class IpReachabilityMonitorTest {
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_MCAST_RESOLICIT_VERSION, true)
     @Flag(name = IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION, enabled = true)
     fun testNudProbeFailedMetrics_defaultIPv6GatewayMacAddrChangedAfterConfirm() {
         prepareNeighborReachableButMacAddrChangedTest(
@@ -1072,7 +1068,6 @@ class IpReachabilityMonitorTest {
     }
 
     @Test
-    @Flag(name = IP_REACHABILITY_MCAST_RESOLICIT_VERSION, true)
     @Flag(name = IP_REACHABILITY_ROUTER_MAC_CHANGE_FAILURE_ONLY_AFTER_ROAM_VERSION, enabled = true)
     fun testNudProbeFailedMetrics_defaultIPv6GatewayMacAddrChangedAfterOrganic() {
         prepareNeighborReachableButMacAddrChangedTest(
