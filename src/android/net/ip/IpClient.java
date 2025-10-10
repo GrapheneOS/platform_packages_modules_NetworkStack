@@ -130,6 +130,7 @@ import android.net.RouteInfo;
 import android.net.TcpKeepalivePacketDataParcelable;
 import android.net.Uri;
 import android.net.apf.ApfCapabilities;
+import android.net.apf.ApfController;
 import android.net.apf.ApfCounterTracker;
 import android.net.apf.ApfFilter;
 import android.net.dhcp.DhcpClient;
@@ -163,7 +164,6 @@ import android.stats.connectivity.NudEventType;
 import android.stats.connectivity.TransportType;
 import android.system.ErrnoException;
 import android.system.Os;
-import android.system.OsConstants;
 import android.text.TextUtils;
 import android.text.format.DateUtils;
 import android.util.LocalLog;
@@ -1091,45 +1091,21 @@ public class IpClient extends StateMachine {
          */
         @Nullable
         public ApfCapabilities getApfCapabilities(String ifName, SharedLog log) {
-            try {
-                final long caps = NetworkStackUtils.getApfCapabilities(ifName);
-                if (caps < 0) return null;
-                // The lower 32 bits is the APF version, the upper 32 bit is the RAM size.
-                final int version = (int) caps;
-                final int size = (int) (caps >> 32);
-                return new ApfCapabilities(version, size, ARPHRD_ETHER);
-            } catch (ErrnoException e) {
-                // Do not log an error if the native API is not implemented.
-                if (e.errno != OsConstants.ENOSYS) {
-                    log.e("[Non-HAL API] Cannot get APF capabilities: ", e);
-                }
-                return null;
-            }
+            return ApfController.getApfCapabilities(ifName, log);
         }
 
         /**
          * Install a packet filter on the specified interface through Non-HAL API.
          */
         public boolean installPacketFilter(String ifName, byte[] filter, SharedLog log) {
-            try {
-                NetworkStackUtils.installPacketFilter(ifName, filter);
-                return true;
-            } catch (ErrnoException e) {
-                log.e("[Non-HAL API] Failed to install packet filter", e);
-                return false;
-            }
+            return ApfController.installPacketFilter(ifName, filter, log);
         }
 
         /**
          * Read the packet filter RAM from the specified interface through Non-HAL API.
          */
         public boolean readPacketFilterRam(String ifName, byte[] output, SharedLog log) {
-            try {
-                return NetworkStackUtils.readPacketFilterRam(ifName, output);
-            } catch (ErrnoException e) {
-                log.e("[Non-HAL API] Failed to read packet filter RAM", e);
-                return false;
-            }
+            return ApfController.readPacketFilterRam(ifName, output, log);
         }
 
         /**
