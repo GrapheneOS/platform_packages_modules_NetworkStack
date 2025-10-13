@@ -101,7 +101,7 @@ public class Dhcp6AddrRegTracker {
     private final Dhcp6PacketDispatcher.MessageHandler mDhcp6MessageHandler;
     private final Map<Inet6Address, AddressTracker> mTrackedAddresses = new ArrayMap<>();
     private final AlarmManager mAlarmManager;
-    private final AlarmManager.OnAlarmListener mAddressRegistrationAlarm;
+    private final AddressRegistrationAlarm mAddressRegistrationAlarm = new AddressRegistrationAlarm();
     private final SupportTimeoutAlarm mSupportTimeoutAlarm = new SupportTimeoutAlarm();
     private final String mInterfaceName;
 
@@ -344,11 +344,29 @@ public class Dhcp6AddrRegTracker {
     }
 
     @VisibleForTesting
-    public class AddressRegistrationAlarmListener implements AlarmManager.OnAlarmListener {
+    public class AddressRegistrationAlarm implements AlarmManager.OnAlarmListener {
+        private boolean mIsScheduled = false;
+
         @Override
         public void onAlarm() {
             HandlerUtils.ensureRunningOnHandlerThread(mHandler);
             dispatchRegistration(mDeps.elapsedRealtime());
+        }
+
+        // Note that repeated calls to schedule overwrite the previous alarm time.
+        public void schedule(long realtimeMs) {
+            mIsScheduled = true;
+
+            final String tag = TAG + "." + mInterfaceName + ".KICK";
+            mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, realtimeMs, tag, this,
+                    mHandler);
+        }
+
+        public void cancel() {
+            if (!mIsScheduled) return;
+            mIsScheduled = false;
+
+            mAlarmManager.cancel(this);
         }
     }
 
@@ -366,7 +384,6 @@ public class Dhcp6AddrRegTracker {
         mRandom = new Random();
         mDhcp6PacketDispatcher = dispatcher;
         mDhcp6MessageHandler = (packet, dst) -> mHandler.post(() -> onReceiveReply(packet, dst));
-        mAddressRegistrationAlarm = new AddressRegistrationAlarmListener();
         mDeps = deps;
     }
 
@@ -395,7 +412,7 @@ public class Dhcp6AddrRegTracker {
         mIsForceStopped = true;
         mIsStarted = false;
         mDhcp6PacketDispatcher.unregisterHandler(mDhcp6MessageHandler);
-        mAlarmManager.cancel(mAddressRegistrationAlarm);
+        mAddressRegistrationAlarm.cancel();
         mSupportTimeoutAlarm.reset();
         mTrackedAddresses.clear();
     }
@@ -523,9 +540,8 @@ public class Dhcp6AddrRegTracker {
      * - The maximum retransmission count is reached.
      */
     private void scheduleNextTimer() {
-        // Cancel active alarm timer, if any. AlarmManager#cancel() is safe to use on unscheduled
-        // alarm (though it does log a warning).
-        mAlarmManager.cancel(mAddressRegistrationAlarm);
+        // Cancel active alarm timer, if any.
+        mAddressRegistrationAlarm.cancel();
 
         long nextEvent = Long.MAX_VALUE;
         for (AddressTracker tracker : mTrackedAddresses.values()) {
@@ -534,9 +550,7 @@ public class Dhcp6AddrRegTracker {
         }
         if (nextEvent == Long.MAX_VALUE) return;
 
-        final String tag = TAG + "." + mInterfaceName + ".KICK";
-        mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, nextEvent, tag,
-                mAddressRegistrationAlarm, mHandler);
+        mAddressRegistrationAlarm.schedule(nextEvent);
     }
 
     /**
