@@ -3516,13 +3516,8 @@ public class ApfFilter {
             throws IllegalInstructionException {
         final short skipPort7V4Filter = gen.getUniqueLabel();
 
-        // Check it's TCP.
-        gen.addLoad8intoR0(IPV4_PROTOCOL_OFFSET);
-        gen.addJumpIfR0NotEquals(IPPROTO_TCP, skipPort7V4Filter);
-
-        // Check it's not a fragment or is the initial fragment.
-        gen.addLoad16intoR0(IPV4_FRAGMENT_OFFSET_OFFSET);
-        gen.addJumpIfR0AnyBitsSet(IPV4_FRAGMENT_OFFSET_MASK, skipPort7V4Filter);
+        // Check it's TCP and not a fragment (or is the initial fragment).
+        gen.addJumpIfNotUnfragmentedIPv4Protocol(IPPROTO_TCP, skipPort7V4Filter);
 
         // Check it's destination port 7.
         gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
