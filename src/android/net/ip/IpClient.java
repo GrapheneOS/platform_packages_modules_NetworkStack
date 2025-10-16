@@ -2664,7 +2664,6 @@ public class IpClient extends StateMachine {
         mCallback.onProvisioningFailure(mLinkProperties);
     }
 
-    @SuppressLint("NewApi") // TODO: b/193460475 remove once fixed
     private boolean startIPv4() {
         // If we have a StaticIpConfiguration attempt to apply it and
         // handle the result accordingly.
@@ -3452,7 +3451,7 @@ public class IpClient extends StateMachine {
                 mProvisioningTimeoutAlarm.schedule(alarmTime);
             }
 
-            // There is no need to temporarlily lower the DTIM multiplier in IPv6 link-local
+            // There is no need to temporarily lower the DTIM multiplier in IPv6 link-local
             // only mode or when IPv6 is disabled.
             if (mConfiguration.mIPv6ProvisioningMode == PROV_IPV6_SLAAC) {
                 // Send a delay message to wait for IP provisioning to complete eventually and
@@ -4114,7 +4113,7 @@ public class IpClient extends StateMachine {
 
                 case CMD_UPDATE_APF_DATA_SNAPSHOT:
                     if (mApfFilter != null) {
-                        // We prevents calls to readPacketFilterRam() when  mApfFilter is null.
+                        // We prevents calls to readPacketFilterRam() when mApfFilter is null.
                         // This is correct because any data read would be discarded when
                         // processing the EVENT_READ_PACKET_FILTER_COMPLETE event if no
                         // ApfFilter exists.
