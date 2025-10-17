@@ -282,7 +282,6 @@ import com.android.net.module.util.ConnectivityUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.PacketReader;
 import com.android.net.module.util.ProcfsParsingUtils;
-import com.android.net.module.util.netlink.NetlinkUtils;
 import com.android.networkstack.metrics.ApfSessionInfoMetrics;
 import com.android.networkstack.metrics.IpClientRaInfoMetrics;
 import com.android.networkstack.metrics.NetworkQuirkMetrics;
@@ -814,13 +813,14 @@ public class ApfFilter {
         }
 
         /**
-         * Loads the existing interface MTU for the specific interface from netlink.
+         * Loads the existing interface MTU for the specific interface from the file
+         * /sys/class/net/{ifname}/mtu.
          *
          * If the file does not exist or the interface is not found,
          * the function returns 1500 as default interface MTU.
          */
         public int getInterfaceMtu(@NonNull String ifname) {
-            return NetlinkUtils.getInterfaceMtu(ifname);
+            return ProcfsParsingUtils.getInterfaceMtu(ifname);
         }
     }
 
