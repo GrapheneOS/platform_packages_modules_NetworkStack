@@ -272,8 +272,8 @@ public class IpReachabilityMonitor {
         Preconditions.checkNotNull(mNetd);
         Preconditions.checkArgument(!TextUtils.isEmpty(mInterfaceParams.name));
 
-        // In case the overylaid parameters specify an invalid configuration, set the parameters
-        // to the hardcoded defaults first, then set them to the values used in the steady state.
+        // In case the overlaid parameters specify an invalid configuration, set the parameters to
+        // the hardcoded defaults first, then set them to the values used in the steady state.
         try {
             setNeighborParameters(MIN_NUD_SOLICIT_NUM, MIN_NUD_SOLICIT_INTERVAL_MS,
                     NUD_MCAST_RESOLICIT_NUM);
