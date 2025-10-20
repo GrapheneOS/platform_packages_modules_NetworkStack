@@ -847,7 +847,7 @@ public class NetworkStackService extends Service {
 
         /**
          * Send a notification to NetworkMonitor indicating that the network is now connected.
-         * @Deprecated use notifyNetworkConnectedParcel, which also passes the NetworkAgentConfig.
+         * @deprecated use notifyNetworkConnectedParcel, which also passes the NetworkAgentConfig.
          */
         @Override
         public void notifyNetworkConnected(LinkProperties lp, NetworkCapabilities nc) {

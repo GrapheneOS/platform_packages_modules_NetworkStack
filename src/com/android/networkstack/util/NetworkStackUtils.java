@@ -157,11 +157,6 @@ public class NetworkStackUtils {
             new String [] {"https://www.google.com/generate_204"};
 
     /**
-     * Minimum module version at which to enable the DHCP Rapid Commit option.
-     */
-    public static final String DHCP_RAPID_COMMIT_VERSION = "dhcp_rapid_commit_version";
-
-    /**
      * Minimum module version at which to enable the IP address conflict detection feature.
      */
     public static final String DHCP_IP_CONFLICT_DETECT_VERSION = "dhcp_ip_conflict_detect_version";
@@ -190,13 +185,6 @@ public class NetworkStackUtils {
      * @see DeviceConfigUtils#isFeatureEnabled(Context, String, String, boolean)
      */
     public static final String VALIDATION_METRICS_VERSION = "validation_metrics_version";
-
-    /**
-     * Experiment flag to enable "mcast_resolicit" neighbor parameter in IpReachabilityMonitor,
-     * set it to 3 by default.
-     */
-    public static final String IP_REACHABILITY_MCAST_RESOLICIT_VERSION =
-            "ip_reachability_mcast_resolicit_version";
 
     /**
      * Experiment flag to treat router MAC address changes as a failure only on roam.
@@ -229,23 +217,16 @@ public class NetworkStackUtils {
             "networkmonitor_async_privdns_resolution";
 
     /**
-     * Experiment flag to populate the IP link address lifetime such as deprecationTime and
-     * expirationtTime.
+     * Feature flag to always use the CAPPORT data when doing fallback to cellular.
      */
-    public static final String IPCLIENT_POPULATE_LINK_ADDRESS_LIFETIME_VERSION =
-            "ipclient_populate_link_address_lifetime_version";
+    public static final String NETWORKMONITOR_USE_CAPPORT_DATA_IN_FALLBACK =
+            "networkmonitor_use_capport_data_in_fallback";
 
     /**
      * Experiment flag to support parsing PIO P flag(DHCPv6-PD preferred).
      */
     public static final String IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION =
             "ipclient_dhcpv6_pd_preferred_flag_version";
-
-    /**
-     * Experiment flag to support the self-generated IPv6 address registration using DHCPv6.
-     */
-    public static final String IPCLIENT_DHCPV6_ADDR_REGISTER_VERSION =
-            "ipclient_dhcpv6_addr_register_version";
 
     /**
      * Experiment flag to replace INetd usage with netlink in IpClient.

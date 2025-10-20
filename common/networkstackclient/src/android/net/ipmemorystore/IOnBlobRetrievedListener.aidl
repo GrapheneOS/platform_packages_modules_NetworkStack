@@ -19,7 +19,7 @@ package android.net.ipmemorystore;
 import android.net.ipmemorystore.Blob;
 import android.net.ipmemorystore.StatusParcelable;
 
-/** {@hide} */
+/** @hide */
 oneway interface IOnBlobRetrievedListener {
     /**
      * Private data was retrieved for the L2 key and name specified.

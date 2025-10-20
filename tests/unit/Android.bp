@@ -61,7 +61,10 @@ android_test {
     name: "NetworkStackNextTests",
     platform_apis: true,
     target_sdk_version: "current",
-    min_sdk_version: "30",
+    min_sdk_version: select(release_flag("RELEASE_DEPRECATE_MAINLINE_R_SUPPORT"), {
+        true: "31",
+        default: "30",
+    }),
     srcs: [], // TODO: tests that only apply to the current, non-stable API can be added here
     test_suites: ["general-tests"],
     defaults: [
@@ -79,7 +82,10 @@ android_test {
 // configuration needed by the tests is in the NetworkStackTestsDefaults rule.
 android_library {
     name: "NetworkStackTestsLib",
-    min_sdk_version: "30",
+    min_sdk_version: select(release_flag("RELEASE_DEPRECATE_MAINLINE_R_SUPPORT"), {
+        true: "31",
+        default: "30",
+    }),
     defaults: ["NetworkStackTestsDefaults"],
     static_libs: ["NetworkStackApiStableLib"],
     lint: {
@@ -96,7 +102,10 @@ android_library {
 android_test {
     name: "NetworkStackTests",
     platform_apis: true,
-    min_sdk_version: "30",
+    min_sdk_version: select(release_flag("RELEASE_DEPRECATE_MAINLINE_R_SUPPORT"), {
+        true: "31",
+        default: "30",
+    }),
     test_suites: [
         "general-tests",
         "mts",

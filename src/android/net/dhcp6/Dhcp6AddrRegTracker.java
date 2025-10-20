@@ -19,6 +19,7 @@ package android.net.dhcp6;
 import static android.system.OsConstants.RT_SCOPE_UNIVERSE;
 
 import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.app.AlarmManager;
 import android.content.Context;
 import android.net.LinkAddress;
@@ -28,8 +29,9 @@ import android.os.SystemClock;
 import android.util.ArrayMap;
 import android.util.Log;
 
-import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 
+import com.android.net.module.util.HandlerUtils;
 import com.android.net.module.util.InterfaceParams;
 import com.android.net.module.util.LinkPropertiesUtils.CompareOrUpdateResult;
 import com.android.net.module.util.dhcp6.Dhcp6AddrRegInformPacket;
@@ -42,6 +44,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.stream.Collectors;
 
 /**
  * Track the self-generated IPv6 addresses registration process via DHCPv6 message (RFC9686).
@@ -98,12 +101,88 @@ public class Dhcp6AddrRegTracker {
     private final Dhcp6PacketDispatcher.MessageHandler mDhcp6MessageHandler;
     private final Map<Inet6Address, AddressTracker> mTrackedAddresses = new ArrayMap<>();
     private final AlarmManager mAlarmManager;
-    private final AlarmManager.OnAlarmListener mAddressRegistrationAlarm;
+    private final AddressRegistrationAlarm mAddressRegistrationAlarm = new AddressRegistrationAlarm();
+    private final SupportTimeoutAlarm mSupportTimeoutAlarm = new SupportTimeoutAlarm();
     private final String mInterfaceName;
-    private final byte[] mClientDuid;
+
+    // Guaranteed non-null after start() is called.
+    @Nullable
+    private byte[] mClientDuid;
+    private boolean mIsStarted = false;
+    /** mIsForceStopped is set to true when the SupportTimeoutAlarm fires. */
+    private boolean mIsForceStopped = false;
+
+    private final Dependencies mDeps;
 
     // A random value uniformly distributed between 0.9 and 1.1 (see RFC9686 section 4.6.1).
     private static final double sAddrRegDesyncMultiplier = (new Random()).nextDouble() * 0.2 + 0.9;
+
+    /** Class used to inject dependencies for tests. */
+    @VisibleForTesting
+    public static class Dependencies {
+        /** See {@link SystemClock#elapsedRealtime()} */
+        public long elapsedRealtime() {
+            return SystemClock.elapsedRealtime();
+        }
+    }
+
+    // TODO: use RealtimeScheduler for this alarm to prevent needlessly waking the
+    // device when it fires.
+    @VisibleForTesting
+    public class SupportTimeoutAlarm implements AlarmManager.OnAlarmListener {
+        // With MRC = 3, all packets are sent in under 10s.
+        private static final long SUPPORT_TIMEOUT_MS = 15_000;
+
+        private boolean mIsScheduled = false;
+        private boolean mEverScheduled = false;
+
+        // If this alarm fires, it indicates that no reply packets were received. This most likely
+        // indicates that the network does not support address registration. Disable the mechanism.
+        // Note that rfc9686 says that the client MUST determine whether the server supports address
+        // registration before registering any addresses.
+        // Since no addresses are registered by sending ADDR-REG-INFORM packets if the network does
+        // not support address registration, this implementation derives support from the presence
+        // of ADDR-REG-REPLYs within 15s of sending the first ADDR-REG-INFORM packet.
+        @Override
+        public void onAlarm() {
+            HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+
+            // It is possible that a reply was just processed.
+            // TODO: this might need a specific instance check, because Dhcp6AddrRegTracker is final
+            // inside IpClient, meaning that onAlarm could be called across IpClient restarts. To
+            // fix this, forceStop() can explicitly set mSupportTimeoutAlarm to null, and a new
+            // instance can be created inside dispatchRegistration().
+            if (!mIsScheduled) return;
+            forceStop();
+        }
+
+        /** Schedule the alarm timer on the first call, else do nothing until reset(). */
+        public void scheduleOnce() {
+            if (mEverScheduled) return;
+
+            mIsScheduled = true;
+            mEverScheduled = true;
+            final String tag = TAG + "." + mInterfaceName + ".SUPPORT_TIMEOUT";
+            final long timeMs = mDeps.elapsedRealtime() + SUPPORT_TIMEOUT_MS;
+            mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, timeMs, tag, this,
+                    mHandler);
+        }
+
+        /** Cancels the alarm iff it is currently scheduled. */
+        public void cancel() {
+            if (!mIsScheduled) return;
+
+            mIsScheduled = false;
+            mAlarmManager.cancel(this);
+        }
+
+        /** Reset to initial state. */
+        public void reset() {
+            cancel();
+            mEverScheduled = false;
+        }
+    }
+
 
     private static class Link6Address extends LinkAddress {
         Link6Address(LinkAddress la) {
@@ -264,43 +343,85 @@ public class Dhcp6AddrRegTracker {
         }
     }
 
-    private class AddressRegistrationAlarmListener implements AlarmManager.OnAlarmListener {
+    @VisibleForTesting
+    public class AddressRegistrationAlarm implements AlarmManager.OnAlarmListener {
+        private boolean mIsScheduled = false;
+
         @Override
         public void onAlarm() {
-            dispatchRegistration(SystemClock.elapsedRealtime());
+            HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+            dispatchRegistration(mDeps.elapsedRealtime());
+        }
+
+        // Note that repeated calls to schedule overwrite the previous alarm time.
+        public void schedule(long realtimeMs) {
+            mIsScheduled = true;
+
+            final String tag = TAG + "." + mInterfaceName + ".KICK";
+            mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, realtimeMs, tag, this,
+                    mHandler);
+        }
+
+        public void cancel() {
+            if (!mIsScheduled) return;
+            mIsScheduled = false;
+
+            mAlarmManager.cancel(this);
         }
     }
 
     public Dhcp6AddrRegTracker(Context context, Handler handler, String ifName,
             Dhcp6PacketDispatcher dispatcher) {
+        this(context, handler, ifName, dispatcher, new Dependencies());
+    }
+
+    @VisibleForTesting
+    public Dhcp6AddrRegTracker(Context context, Handler handler, String ifName,
+            Dhcp6PacketDispatcher dispatcher, Dependencies deps) {
         mHandler = handler;
         mAlarmManager = context.getSystemService(AlarmManager.class);
         mInterfaceName = ifName;
         mRandom = new Random();
-        final InterfaceParams params = InterfaceParams.getByName(ifName);
-        mClientDuid = Dhcp6Packet.createClientDuid(params.macAddr);
         mDhcp6PacketDispatcher = dispatcher;
         mDhcp6MessageHandler = (packet, dst) -> mHandler.post(() -> onReceiveReply(packet, dst));
-        mAddressRegistrationAlarm = new AddressRegistrationAlarmListener();
+        mDeps = deps;
     }
 
-    /**
-     * Start the SLAAC address registration tracker.
-     */
-    public void start() {
+    /** Start the SLAAC address registration tracker. Noop if already started. */
+    public void start(InterfaceParams params, LinkProperties lp) {
+        HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+        // If the tracker was force stopped, it indicates that the network does not support address
+        // registration. Do not restart the mechanism until it was reset, which usually happens when
+        // IpClient exits RunningState.
+        if (mIsStarted || mIsForceStopped) return;
+
+        mIsStarted = true;
+        mClientDuid = Dhcp6Packet.createClientDuid(params.macAddr);
         mDhcp6PacketDispatcher.registerHandler(
                 mDhcp6MessageHandler,
                 Dhcp6Packet.DHCP6_MESSAGE_TYPE_ADDR_REG_REPLY
         );
+        setLinkProperties(lp);
     }
 
-    /**
-     * Stop the SLAAC address registration tracker.
-     */
-    public void stop() {
+    /** Stop address registration and ignore all future calls to start() until reset() is called. */
+    private void forceStop() {
+        HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+        if (!mIsStarted) return;
+
+        mIsForceStopped = true;
+        mIsStarted = false;
         mDhcp6PacketDispatcher.unregisterHandler(mDhcp6MessageHandler);
-        mAlarmManager.cancel(mAddressRegistrationAlarm);
+        mAddressRegistrationAlarm.cancel();
+        mSupportTimeoutAlarm.reset();
         mTrackedAddresses.clear();
+    }
+
+    /** Stops the address registration tracker and "primes" for restart. */
+    public void reset() {
+        // forceStop() is a noop if the addr reg tracker is already stopped.
+        forceStop();
+        mIsForceStopped = false;
     }
 
     // Note that Android does not consider deprecated addresses to determine
@@ -327,7 +448,14 @@ public class Dhcp6AddrRegTracker {
      * Updates the LinkProperties and checks whether the link addresses have changed.
      */
     public void setLinkProperties(LinkProperties newLp) {
-        final long nowMs = SystemClock.elapsedRealtime();
+        HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+
+        // Ignore all LinkProperties updates until address registration starts (as soon as an RA
+        // with an M or O flag is received). When the tracker is started, start() directly
+        // initializes the LinkProperties.
+        if (!mIsStarted) return;
+
+        final long nowMs = mDeps.elapsedRealtime();
 
         // Collect the LinkAddresses from all AddressTracker objects and compare them against
         // the new LinkProperties. Note that incompatible addresses, such as IPv4 or link-local
@@ -335,12 +463,12 @@ public class Dhcp6AddrRegTracker {
         // isRegistrableAddress().
         final List<Link6Address> trackedLink6Addresses = mTrackedAddresses.values().stream()
                 .map(AddressTracker::getAddress)
-                .toList();
+                .collect(Collectors.toList());
 
         final List<Link6Address> newLink6Addresses = newLp.getLinkAddresses().stream()
                 .filter(la -> isRegistrableAddress(la))
                 .map(la -> new Link6Address(la))
-                .toList();
+                .collect(Collectors.toList());
 
         final CompareOrUpdateResult<InetAddress, Link6Address> addressDiff =
                 new CompareOrUpdateResult<>(
@@ -412,6 +540,9 @@ public class Dhcp6AddrRegTracker {
      * - The maximum retransmission count is reached.
      */
     private void scheduleNextTimer() {
+        // Cancel active alarm timer, if any.
+        mAddressRegistrationAlarm.cancel();
+
         long nextEvent = Long.MAX_VALUE;
         for (AddressTracker tracker : mTrackedAddresses.values()) {
             if (!tracker.mIsScheduled) continue;
@@ -419,9 +550,7 @@ public class Dhcp6AddrRegTracker {
         }
         if (nextEvent == Long.MAX_VALUE) return;
 
-        final String tag = TAG + "." + mInterfaceName + ".KICK";
-        mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, nextEvent, tag,
-                mAddressRegistrationAlarm, mHandler);
+        mAddressRegistrationAlarm.schedule(nextEvent);
     }
 
     /**
@@ -431,6 +560,10 @@ public class Dhcp6AddrRegTracker {
     private void dispatchRegistration(long nowMs) {
         for (AddressTracker tracker : mTrackedAddresses.values()) {
             if (!tracker.isExpired(nowMs)) continue;
+
+            // If no packet is received within 15s of the first packet, address registration is
+            // stopped.
+            mSupportTimeoutAlarm.scheduleOnce();
 
             // DHCPv6 ADDR-REG-INFORM message MUST be sent from the address being registered
             // per RFC9686 section 4.2.
@@ -442,6 +575,8 @@ public class Dhcp6AddrRegTracker {
     }
 
     private void onReceiveReply(@NonNull Dhcp6Packet packet, @Nullable Inet6Address dst) {
+        HandlerUtils.ensureRunningOnHandlerThread(mHandler);
+
         if (DBG) Log.d(TAG, "Received packet: " + packet);
         if (!(packet instanceof Dhcp6AddrRegReplyPacket)) return;
         if (!Arrays.equals(mClientDuid, packet.getClientDuid())) return;
@@ -471,7 +606,10 @@ public class Dhcp6AddrRegTracker {
             return;
         }
 
-        final long nowMs = SystemClock.elapsedRealtime();
+        // Safe to call multiple times.
+        mSupportTimeoutAlarm.cancel();
+
+        final long nowMs = mDeps.elapsedRealtime();
         tracker.markRegistrationSuccess(nowMs);
         dispatchRegistration(nowMs);
     }

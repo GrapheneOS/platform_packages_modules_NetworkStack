@@ -163,7 +163,7 @@ public final class DataStallDetectionStats {
     }
 
     /**
-     * Utility to create an instance of {@Link DataStallDetectionStats}
+     * Utility to create an instance of {@link DataStallDetectionStats}
      *
      * @hide
      */
@@ -296,7 +296,7 @@ public final class DataStallDetectionStats {
         }
 
         /**
-         * Create a new {@Link DataStallDetectionStats}.
+         * Create a new {@link DataStallDetectionStats}.
          */
         public DataStallDetectionStats build() {
             return new DataStallDetectionStats(mCellularInfo, mWifiInfo,

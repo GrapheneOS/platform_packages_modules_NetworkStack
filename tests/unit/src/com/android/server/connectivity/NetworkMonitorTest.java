@@ -71,6 +71,7 @@ import static com.android.networkstack.util.NetworkStackUtils.DEFAULT_CAPTIVE_PO
 import static com.android.networkstack.util.NetworkStackUtils.DNS_DDR_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.DNS_PROBE_PRIVATE_IP_NO_INTERNET_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.NETWORKMONITOR_ASYNC_PRIVDNS_RESOLUTION;
+import static com.android.networkstack.util.NetworkStackUtils.NETWORKMONITOR_USE_CAPPORT_DATA_IN_FALLBACK;
 import static com.android.networkstack.util.NetworkStackUtils.REEVALUATE_WHEN_RESUME;
 import static com.android.server.connectivity.DdrTracker.FLAG_TRY_ALL_SERVERS;
 import static com.android.server.connectivity.FakeDns.QUERY_FLAGS_NONE;
@@ -440,6 +441,7 @@ public class NetworkMonitorTest {
         doReturn(0).when(mRandom).nextInt();
 
         doReturn(mNetd).when(mTstDependencies).getNetd();
+        doNothing().when(mTst).init(any(), any(), any());
         // DNS probe timeout should not be defined more than half of HANDLER_TIMEOUT_MS. Otherwise,
         // it will fail the test because of timeout expired for querying AAAA and A sequentially.
         doReturn(200).when(mResources)
@@ -1238,6 +1240,92 @@ public class NetworkMonitorTest {
         setStatus(mHttpConnection, 204);
         setPortal302(mFallbackConnection);
         runPortalNetworkTest();
+    }
+
+    @Test
+    public void testIsCaptivePortal_FallbackProbeFailedWithCapportData() throws Exception {
+        assumeTrue(CaptivePortalDataShimImpl.isSupported());
+        doReturn(true).when(mDependencies).isFeatureNotChickenedOut(any(),
+                eq(NETWORKMONITOR_USE_CAPPORT_DATA_IN_FALLBACK));
+
+        // 1. Capport API probe succeeds with captive: false, but provides data.
+        final long bytesRemaining = 12345L;
+        setApiContent(mCapportApiConnection, "{'captive': false,"
+                + "'user-portal-url': '" + TEST_LOGIN_URL + "',"
+                + "'bytes-remaining': " + bytesRemaining + "}");
+
+        // 2. HTTPS probe fails.
+        setSslException(mHttpsConnection);
+
+        // 3. HTTP probe succeeds with 204, so we go to fallback.
+        setStatus(mHttpConnection, 204);
+
+        // 4. Fallback probe detects a portal.
+        setPortal302(mFallbackConnection);
+
+        // Run the test on a network with a captive portal API URL.
+        runNetworkTest(TEST_AGENT_CONFIG, makeCapportLPs(), CELL_METERED_CAPABILITIES,
+                VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */, TEST_LOGIN_URL);
+
+        // Verify that the capport API was queried.
+        verify(mCapportApiConnection).getResponseCode();
+        // Verify that the fallback probe was used.
+        verify(mFallbackConnection).getResponseCode();
+
+        // Verify that the captive portal data from the API probe was reported.
+        final ArgumentCaptor<CaptivePortalData> capportDataCaptor =
+                ArgumentCaptor.forClass(CaptivePortalData.class);
+        verify(mCallbacks).notifyCaptivePortalDataChanged(capportDataCaptor.capture());
+        final CaptivePortalData p = capportDataCaptor.getValue();
+        assertFalse(p.isCaptive());
+        assertEquals(Uri.parse(TEST_LOGIN_URL), p.getUserPortalUrl());
+        assertEquals(bytesRemaining, p.getByteLimit());
+    }
+
+    @Test
+    public void testMultiParallelProbes_HttpPortalWithCapportData() throws Exception {
+        assumeTrue(CaptivePortalDataShimImpl.isSupported());
+        doReturn(true).when(mDependencies)
+                .isFeatureNotChickenedOut(any(),
+                eq(NETWORKMONITOR_USE_CAPPORT_DATA_IN_FALLBACK));
+
+        // Use multiple probe URLs to trigger the multi-probe code path.
+        setupResourceForMultipleProbes();
+
+        // 1. Capport API probe succeeds with captive: false, but provides data.
+        final long bytesRemaining = 54321L;
+        setApiContent(mCapportApiConnection, "{'captive': false,"
+                + "'user-portal-url': '" + TEST_LOGIN_URL + "',"
+                + "'bytes-remaining': " + bytesRemaining + "}");
+
+        // 2. All parallel HTTPS probes fail.
+        setSslException(mOtherHttpsConnection1);
+        setSslException(mOtherHttpsConnection2);
+
+        // 3. One of the parallel HTTP probes detects a portal.
+        setPortal302(mOtherHttpConnection1);
+        setStatus(mOtherHttpConnection2, 204); // The other can succeed without portal.
+
+        // Run the test on a network with a captive portal API URL.
+        runNetworkTest(TEST_AGENT_CONFIG, makeCapportLPs(), CELL_METERED_CAPABILITIES,
+                VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */, TEST_LOGIN_URL);
+
+        // Verify that the capport API was queried.
+        verify(mCapportApiConnection).getResponseCode();
+        // Verify that the parallel HTTP probes were used.
+        verify(mOtherHttpConnection1).getResponseCode();
+        verify(mOtherHttpConnection2, atMost(1)).getResponseCode();
+        // Verify that the main single HTTP probe was not used.
+        verify(mHttpConnection, never()).getResponseCode();
+
+        // Verify that the captive portal data from the API probe was reported.
+        final ArgumentCaptor<CaptivePortalData> capportDataCaptor =
+                ArgumentCaptor.forClass(CaptivePortalData.class);
+        verify(mCallbacks).notifyCaptivePortalDataChanged(capportDataCaptor.capture());
+        final CaptivePortalData p = capportDataCaptor.getValue();
+        assertFalse(p.isCaptive());
+        assertEquals(Uri.parse(TEST_LOGIN_URL), p.getUserPortalUrl());
+        assertEquals(bytesRemaining, p.getByteLimit());
     }
 
     @Test
@@ -2712,12 +2800,30 @@ public class NetworkMonitorTest {
     }
 
     @Test
+    public void testTcpSocketTracker_init() throws Exception {
+        setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
+        final WrappedNetworkMonitor wnm = makeCellMeteredNetworkMonitor();
+        // makeCellMeteredNetworkMonitor() creates the NM first and then assign
+        // new NetworkCapabilities, so notifyNMCreated() will start with a empty NC
+        // then update CELL_METERED_CAPABILITIES in the follow up call.
+        final InOrder inOrder = inOrder(mTst);
+        inOrder.verify(mTst).init(
+                eq(wnm.getHandler()),
+                eq(new LinkProperties()),
+                eq(new NetworkCapabilities(null)));
+        inOrder.verify(mTst).setNetworkCapabilities(eq(CELL_METERED_CAPABILITIES));
+    }
+
+    @Test
     public void testDataStall_setOpportunisticMode() {
         setDataStallEvaluationType(DATA_STALL_EVALUATION_TYPE_TCP);
         WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
         InOrder inOrder = inOrder(mTst);
-        // Initialized with default value.
-        inOrder.verify(mTst).setOpportunisticMode(false);
+        // Initialized.
+        inOrder.verify(mTst).init(
+                eq(wnm.getHandler()),
+                eq(new LinkProperties()),
+                eq(new NetworkCapabilities(null)));
 
         // Strict mode.
         wnm.notifyPrivateDnsSettingsChanged(new PrivateDnsConfig("dns.google", new InetAddress[0]));

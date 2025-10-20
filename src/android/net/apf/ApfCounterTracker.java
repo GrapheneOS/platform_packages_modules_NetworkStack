@@ -56,7 +56,51 @@ public class ApfCounterTracker {
         FILTER_AGE_16384THS,
         APF_VERSION,
         APF_PROGRAM_ID,
-        // The counter sequence should keep the same as ApfSessionInfoMetrics.java
+        // The following counters should be maintained in alphabetical order.
+        // Additionally, be sure to also update ApfSessionInfoMetrics.java and any other code
+        // that has a list of these counters (code search a distinctive one to find them all).
+        DROPPED_802_3_FRAME,  // see also MIN_DROP_COUNTER below
+        DROPPED_ARP_NON_IPV4,
+        DROPPED_ARP_OTHER_HOST,
+        DROPPED_ARP_REPLY_SPA_NO_HOST,
+        DROPPED_ARP_REQUEST_REPLIED,
+        DROPPED_ARP_UNKNOWN,
+        DROPPED_ARP_V6_ONLY,
+        DROPPED_ETH_BROADCAST,
+        DROPPED_ETHER_OUR_SRC_MAC,
+        DROPPED_ETHERTYPE_NOT_ALLOWED,
+        DROPPED_GARP_REPLY,
+        DROPPED_IGMP_INVALID,
+        DROPPED_IGMP_REPORT,
+        DROPPED_IGMP_V2_GENERAL_QUERY_REPLIED,
+        DROPPED_IGMP_V3_GENERAL_QUERY_REPLIED,
+        DROPPED_IPV4_BROADCAST_ADDR,
+        DROPPED_IPV4_BROADCAST_NET,
+        DROPPED_IPV4_ICMP_INVALID,
+        DROPPED_IPV4_KEEPALIVE_ACK,
+        DROPPED_IPV4_L2_BROADCAST,
+        DROPPED_IPV4_MULTICAST,
+        DROPPED_IPV4_NATT_KEEPALIVE,
+        DROPPED_IPV4_NON_DHCP4,
+        DROPPED_IPV4_PING_REQUEST_REPLIED,
+        DROPPED_IPV4_TCP_PORT7_UNICAST,
+        DROPPED_IPV6_ICMP6_ECHO_REQUEST_INVALID,
+        DROPPED_IPV6_ICMP6_ECHO_REQUEST_REPLIED,
+        DROPPED_IPV6_MLD_INVALID,
+        DROPPED_IPV6_MLD_REPORT,
+        DROPPED_IPV6_MLD_V1_GENERAL_QUERY_REPLIED,
+        DROPPED_IPV6_MLD_V2_GENERAL_QUERY_REPLIED,
+        DROPPED_IPV6_MULTICAST_NA,
+        DROPPED_IPV6_NON_ICMP_MULTICAST,
+        DROPPED_IPV6_NS_INVALID,
+        DROPPED_IPV6_NS_OTHER_HOST,
+        DROPPED_IPV6_NS_REPLIED_NON_DAD,
+        DROPPED_IPV6_ROUTER_SOLICITATION,
+        DROPPED_LOW_POWER_STANDBY,
+        DROPPED_MDNS,
+        DROPPED_MDNS_REPLIED,
+        DROPPED_NON_UNICAST_TDLS,
+        DROPPED_RA,  // see also MAX_DROP_COUNTER below
         PASSED_ARP_BROADCAST_REPLY,  // see also MIN_PASS_COUNTER below.
         PASSED_ARP_REQUEST,
         PASSED_ARP_UNICAST_REPLY,
@@ -71,50 +115,14 @@ public class ApfCounterTracker {
         PASSED_IPV6_NON_ICMP,
         PASSED_IPV6_UNICAST_NON_ICMP,
         PASSED_LOW_POWER_STANDBY_MAGIC_PACKET,
-        PASSED_NON_IP_UNICAST,
+        PASSED_LOW_POWER_STANDBY_PORT_ALLOWED,
         PASSED_MDNS,
-        PASSED_RA,  // see also MAX_PASS_COUNTER below
-        DROPPED_ETH_BROADCAST,  // see also MIN_DROP_COUNTER below
-        DROPPED_ETHER_OUR_SRC_MAC,
-        DROPPED_RA,
-        DROPPED_IPV4_L2_BROADCAST,
-        DROPPED_IPV4_BROADCAST_ADDR,
-        DROPPED_IPV4_BROADCAST_NET,
-        DROPPED_IPV4_ICMP_INVALID,
-        DROPPED_IPV4_MULTICAST,
-        DROPPED_IPV4_NON_DHCP4,
-        DROPPED_IPV4_PING_REQUEST_REPLIED,
-        DROPPED_IPV6_ICMP6_ECHO_REQUEST_INVALID,
-        DROPPED_IPV6_ICMP6_ECHO_REQUEST_REPLIED,
-        DROPPED_IPV6_ROUTER_SOLICITATION,
-        DROPPED_IPV6_MLD_INVALID,
-        DROPPED_IPV6_MLD_REPORT,
-        DROPPED_IPV6_MLD_V1_GENERAL_QUERY_REPLIED,
-        DROPPED_IPV6_MLD_V2_GENERAL_QUERY_REPLIED,
-        DROPPED_IPV6_MULTICAST_NA,
-        DROPPED_IPV6_NON_ICMP_MULTICAST,
-        DROPPED_IPV6_NS_INVALID,
-        DROPPED_IPV6_NS_OTHER_HOST,
-        DROPPED_IPV6_NS_REPLIED_NON_DAD,
-        DROPPED_802_3_FRAME,
-        DROPPED_ETHERTYPE_NOT_ALLOWED,
-        DROPPED_IPV4_KEEPALIVE_ACK,
-        DROPPED_IPV4_NATT_KEEPALIVE,
-        DROPPED_MDNS,
-        DROPPED_MDNS_REPLIED,
-        DROPPED_NON_UNICAST_TDLS,
-        DROPPED_IPV4_TCP_PORT7_UNICAST,
-        DROPPED_ARP_NON_IPV4,
-        DROPPED_ARP_OTHER_HOST,
-        DROPPED_ARP_REPLY_SPA_NO_HOST,
-        DROPPED_ARP_REQUEST_REPLIED,
-        DROPPED_ARP_UNKNOWN,
-        DROPPED_ARP_V6_ONLY,
-        DROPPED_IGMP_V2_GENERAL_QUERY_REPLIED,
-        DROPPED_IGMP_V3_GENERAL_QUERY_REPLIED,
-        DROPPED_IGMP_INVALID,
-        DROPPED_IGMP_REPORT,
-        DROPPED_GARP_REPLY;  // see also MAX_DROP_COUNTER below
+        PASSED_NON_IP_UNICAST,
+        PASSED_RA;  // see also MAX_PASS_COUNTER below
+
+        // Cached count of the number of valid Counter enum values, excluding
+        // RESERVED_OOB. This avoids redundant and costly values() queries.
+        public static final int NUM_VALID_COUNTERS = values().length - 1;
 
         /**
          * Returns the negative byte offset from the end of the APF data segment for
@@ -136,7 +144,7 @@ public class ApfCounterTracker {
          * Returns the total size of the data segment in bytes.
          */
         public static int totalSize() {
-            return (Counter.class.getEnumConstants().length - 1) * 4;
+            return NUM_VALID_COUNTERS * 4;
         }
 
         /**
@@ -144,7 +152,7 @@ public class ApfCounterTracker {
          */
         @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
         public static Counter getCounterEnumFromOffset(int offset) {
-            for (Counter cnt : Counter.class.getEnumConstants()) {
+            for (Counter cnt : Counter.values()) {
                 if (cnt.offset() == offset) {
                     return cnt;
                 }
@@ -179,8 +187,8 @@ public class ApfCounterTracker {
         }
     }
 
-    public static final Counter MIN_DROP_COUNTER = Counter.DROPPED_ETH_BROADCAST;
-    public static final Counter MAX_DROP_COUNTER = Counter.DROPPED_GARP_REPLY;
+    public static final Counter MIN_DROP_COUNTER = Counter.DROPPED_802_3_FRAME;
+    public static final Counter MAX_DROP_COUNTER = Counter.DROPPED_RA;
     public static final Counter MIN_PASS_COUNTER = Counter.PASSED_ARP_BROADCAST_REPLY;
     public static final Counter MAX_PASS_COUNTER = Counter.PASSED_RA;
 
@@ -191,7 +199,7 @@ public class ApfCounterTracker {
     private final Map<Counter, Long> mCounters = new ArrayMap<>();
 
     public ApfCounterTracker() {
-        Counter[] counters = Counter.class.getEnumConstants();
+        Counter[] counters = Counter.values();
         mCounterList = Arrays.asList(counters).subList(1, counters.length);
     }
 
@@ -272,7 +280,7 @@ public class ApfCounterTracker {
             int numProgramUpdates,
             int apfVersionSupported) throws ArrayIndexOutOfBoundsException {
         List<Pair<Counter, String>> counterList = new ArrayList<>();
-        Counter[] counters = Counter.class.getEnumConstants();
+        Counter[] counters = Counter.values();
         long counterFilterAgeSeconds =
                 getCounterValue(data, FILTER_AGE_SECONDS);
         long counterApfProgramId =

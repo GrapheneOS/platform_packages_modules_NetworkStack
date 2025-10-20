@@ -18,7 +18,7 @@ package android.net;
 
 import android.net.IIpMemoryStore;
 
-/** {@hide} */
+/** @hide */
 oneway interface IIpMemoryStoreCallbacks {
     void onIpMemoryStoreFetched(in IIpMemoryStore ipMemoryStore);
 }

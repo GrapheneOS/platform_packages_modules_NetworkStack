@@ -34,7 +34,10 @@ java_defaults {
 // to keep tests always running against the same target sdk version with NetworkStack.
 java_defaults {
     name: "NetworkStackReleaseTargetSdk",
-    min_sdk_version: "30",
+    min_sdk_version: select(release_flag("RELEASE_DEPRECATE_MAINLINE_R_SUPPORT"), {
+        true: "31",
+        default: "30",
+    }),
     target_sdk_version: "36",
 }
 
@@ -47,6 +50,7 @@ java_defaults {
         "framework-connectivity.stubs.module_lib",
         "framework-connectivity-t.stubs.module_lib",
         "framework-statsd.stubs.module_lib",
+        "framework-telecom.stubs.module_lib",
         "framework-tethering.stubs.module_lib",
         "framework-wifi.stubs.module_lib",
     ],
@@ -66,7 +70,10 @@ java_defaults {
         "com.android.tethering",
         "//apex_available:platform",
     ],
-    min_sdk_version: "30",
+    min_sdk_version: select(release_flag("RELEASE_DEPRECATE_MAINLINE_R_SUPPORT"), {
+        true: "31",
+        default: "30",
+    }),
 }
 
 // Common shim code. This includes the shim interface definitions themselves, and things like
@@ -279,7 +286,7 @@ java_defaults {
     ],
     static_libs: [
         "androidx.annotation_annotation",
-        "com.android.networkstack.mainline.beta.flags-aconfig-java",
+        "com.android.networkstack.mainline.beta.flags-aconfig-java-deprecated",
         "modules-utils-build_system",
         "modules-utils-expresslog",
         "modules-utils-preconditions",
@@ -507,19 +514,6 @@ cc_library_shared {
     static_libs: [
         "libnetjniutils",
     ],
-
-    // We cannot use plain "libc++" here to link libc++ dynamically because it results in:
-    //   java.lang.UnsatisfiedLinkError: dlopen failed: library "libc++_shared.so" not found
-    // even if "libc++" is added into jni_libs below. Adding "libc++_shared" into jni_libs doesn't
-    // build because soong complains of:
-    //   module NetworkStack missing dependencies: libc++_shared
-    //
-    // So, link libc++ statically. This means that we also need to ensure that all the C++ libraries
-    // we depend on do not dynamically link libc++. This is currently the case, because liblog is
-    // C-only and libnativehelper_compat_libc also uses stl: "c++_static".
-    //
-    // TODO: find a better solution for this in R.
-    stl: "c++_static",
     cflags: [
         "-Wall",
         "-Werror",
@@ -545,7 +539,6 @@ cc_library_shared {
     static_libs: [
         "libcommonconnectivityjni",
     ],
-    stl: "libc++_static",
     cflags: [
         "-Wall",
         "-Werror",
@@ -618,15 +611,15 @@ java_library_static {
 }
 
 aconfig_declarations {
-    name: "networkstack.mainline.beta.flags",
+    name: "networkstack.mainline.beta.flags.deprecated",
     package: "com.android.networkstack.mainline.beta",
     container: "NetworkStack",
-    srcs: ["mainline_beta.aconfig"],
+    srcs: ["mainline_beta.aconfig.deprecated"],
 }
 
 java_aconfig_library {
-    name: "com.android.networkstack.mainline.beta.flags-aconfig-java",
-    aconfig_declarations: "networkstack.mainline.beta.flags",
+    name: "com.android.networkstack.mainline.beta.flags-aconfig-java-deprecated",
+    aconfig_declarations: "networkstack.mainline.beta.flags.deprecated",
     defaults: ["framework-minus-apex-aconfig-java-defaults"],
     min_sdk_version: "30",
 }

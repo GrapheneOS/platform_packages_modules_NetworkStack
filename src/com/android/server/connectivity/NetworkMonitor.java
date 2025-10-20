@@ -229,7 +229,7 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 /**
- * {@hide}
+ * @hide
  */
 public class NetworkMonitor extends StateMachine {
     private static final String TAG = NetworkMonitor.class.getSimpleName();
@@ -593,6 +593,7 @@ public class NetworkMonitor extends StateMachine {
     private final boolean mMetricsEnabled;
     private final boolean mReevaluateWhenResumeEnabled;
     private final boolean mAsyncPrivdnsResolutionEnabled;
+    private final boolean mUseCapportDataInFallBackEnabled;
 
     @NonNull
     private final NetworkInformationShim mInfoShim = NetworkInformationShimImpl.newInstance();
@@ -712,6 +713,8 @@ public class NetworkMonitor extends StateMachine {
                 context, NetworkStackUtils.REEVALUATE_WHEN_RESUME);
         mAsyncPrivdnsResolutionEnabled = deps.isFeatureEnabled(context,
                 NetworkStackUtils.NETWORKMONITOR_ASYNC_PRIVDNS_RESOLUTION);
+        mUseCapportDataInFallBackEnabled = deps.isFeatureNotChickenedOut(context,
+                NetworkStackUtils.NETWORKMONITOR_USE_CAPPORT_DATA_IN_FALLBACK);
         mDdrEnabled = mAsyncPrivdnsResolutionEnabled
                 && deps.isFeatureEnabled(context, NetworkStackUtils.DNS_DDR_VERSION)
                 && deps.isFeatureSupported(mContext, FEATURE_DDR_IN_CONNECTIVITY)
@@ -810,7 +813,7 @@ public class NetworkMonitor extends StateMachine {
 
     /**
      * Send a notification to NetworkMonitor indicating that the network is now connected.
-     * @Deprecated use notifyNetworkConnectedParcel. This method is called on S-.
+     * @deprecated use notifyNetworkConnectedParcel. This method is called on S-.
      */
     public void notifyNetworkConnected(LinkProperties lp, NetworkCapabilities nc) {
         final NetworkMonitorParameters params = new NetworkMonitorParameters();
@@ -1042,9 +1045,7 @@ public class NetworkMonitor extends StateMachine {
             final TcpSocketTracker tst = getTcpSocketTracker();
             if (tst != null) {
                 // Initialization.
-                tst.setOpportunisticMode(false);
-                tst.setLinkProperties(mLinkProperties);
-                tst.setNetworkCapabilities(mNetworkCapabilities);
+                tst.init(getHandler(), mLinkProperties, mNetworkCapabilities);
             }
             Log.d(TAG, "Starting on network " + mNetwork
                     + " with capport HTTPS URL " + Arrays.toString(mCaptivePortalHttpsUrls)
@@ -3530,7 +3531,7 @@ public class NetworkMonitor extends StateMachine {
     @Nullable
     private CaptivePortalProbeResult evaluateCapportResult(
             List<CaptivePortalProbeResult> probes, int numHttps, boolean hasCapport) {
-        CaptivePortalProbeResult capportResult = null;
+        CapportApiProbeResult capportResult = null;
         CaptivePortalProbeResult httpPortalResult = null;
         int httpSuccesses = 0;
         int httpsSuccesses = 0;
@@ -3538,7 +3539,7 @@ public class NetworkMonitor extends StateMachine {
 
         for (CaptivePortalProbeResult probe : probes) {
             if (probe instanceof CapportApiProbeResult) {
-                capportResult = probe;
+                capportResult = (CapportApiProbeResult) probe;
             } else if (probe.isConcludedFromHttps()) {
                 if (probe.isSuccessful()) httpsSuccesses++;
                 else httpsFailures++;
@@ -3566,7 +3567,14 @@ public class NetworkMonitor extends StateMachine {
         // Capport API saying it's a portal is authoritative.
         if (capportResult != null && capportResult.isPortal()) return capportResult;
         // Any HTTP probes saying probe portal is conclusive.
-        if (httpPortalResult != null) return httpPortalResult;
+        if (httpPortalResult != null) {
+            if (mUseCapportDataInFallBackEnabled && capportResult != null) {
+                final CaptivePortalDataShim capportData = capportResult.getCaptivePortalData();
+                return new CapportApiProbeResult(httpPortalResult, capportData);
+            } else {
+                return httpPortalResult;
+            }
+        }
         // Any HTTPS probes works then the network validates.
         if (httpsSuccesses > 0) {
             return CaptivePortalProbeResult.success(1 << ValidationProbeEvent.PROBE_HTTPS);
@@ -3612,6 +3620,9 @@ public class NetworkMonitor extends StateMachine {
             httpsProbe.start();
             httpProbe.start();
             latch.await(PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            if (capportApiUrl != null && mUseCapportDataInFallBackEnabled) {
+                httpProbe.join();
+            }
         } catch (InterruptedException e) {
             validationLog("Error: probes wait interrupted!");
             return CaptivePortalProbeResult.failed(CaptivePortalProbeResult.PROBE_UNKNOWN);
@@ -3647,10 +3658,19 @@ public class NetworkMonitor extends StateMachine {
         CaptivePortalProbeResult fallbackProbeResult = null;
         if (fallback != null) {
             fallbackProbeResult = sendHttpProbe(fallback, PROBE_FALLBACK, probeSpec);
-            reportHttpProbeResult(NETWORK_VALIDATION_PROBE_FALLBACK, fallbackProbeResult);
             if (fallbackProbeResult.isPortal()) {
+                if (mUseCapportDataInFallBackEnabled
+                        && httpResult instanceof CapportApiProbeResult) {
+                    final CaptivePortalDataShim capportData =
+                            ((CapportApiProbeResult) httpResult).getCaptivePortalData();
+                    maybeReportCaptivePortalData(capportData);
+                    fallbackProbeResult = new CapportApiProbeResult(fallbackProbeResult,
+                            capportData);
+                }
+                reportHttpProbeResult(NETWORK_VALIDATION_PROBE_FALLBACK, fallbackProbeResult);
                 return fallbackProbeResult;
             }
+            reportHttpProbeResult(NETWORK_VALIDATION_PROBE_FALLBACK, fallbackProbeResult);
         }
         // Otherwise wait until http and https probes completes and use their results.
         try {

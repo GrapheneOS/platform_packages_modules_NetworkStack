@@ -291,7 +291,7 @@ public final class RelevanceUtils {
      * As opposed to bumpExpiryDuration, this function takes the old timestamp and returns the
      * new timestamp.
      *
-     * {@see bumpExpiryDuration}, and keep in mind that the bump depends on when this is called,
+     * {@link bumpExpiryDuration}, and keep in mind that the bump depends on when this is called,
      * because the relevance decays exponentially, therefore bumping up a high relevance (for a
      * date far in the future) is less potent than bumping up a low relevance (for a date in
      * a close future).

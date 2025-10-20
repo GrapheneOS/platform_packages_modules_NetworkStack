@@ -18,7 +18,7 @@ package android.net.ipmemorystore;
 
 import android.net.ipmemorystore.StatusParcelable;
 
-/** {@hide} */
+/** @hide */
 oneway interface IOnL2KeyResponseListener {
     /**
      * The operation completed with the specified L2 key.

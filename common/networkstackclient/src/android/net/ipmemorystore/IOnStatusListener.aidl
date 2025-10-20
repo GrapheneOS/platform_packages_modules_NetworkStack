@@ -18,7 +18,7 @@ package android.net.ipmemorystore;
 
 import android.net.ipmemorystore.StatusParcelable;
 
-/** {@hide} */
+/** @hide */
 oneway interface IOnStatusListener {
     /**
      * The operation has completed with the specified status.
