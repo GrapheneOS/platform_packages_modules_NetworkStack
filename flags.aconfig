@@ -1,2 +1,9 @@
 package: "com.android.networkstack.flags"
 container: "NetworkStack"
+
+flag {
+    name: "ipclient_ignore_low_ra_lifetime"
+    namespace: "com_android_networkstack"
+    description: "Support ignoring low RA lifetime in IpClient"
+    bug: "384584845"
+}

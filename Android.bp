@@ -287,6 +287,7 @@ java_defaults {
     static_libs: [
         "androidx.annotation_annotation",
         "com.android.networkstack.mainline.beta.flags-aconfig-java-deprecated",
+        "com.android.networkstack.flags-aconfig-java",
         "modules-utils-build_system",
         "modules-utils-expresslog",
         "modules-utils-preconditions",
@@ -626,6 +627,20 @@ aconfig_declarations {
 java_aconfig_library {
     name: "com.android.networkstack.mainline.beta.flags-aconfig-java-deprecated",
     aconfig_declarations: "networkstack.mainline.beta.flags.deprecated",
+    defaults: ["framework-minus-apex-aconfig-java-defaults"],
+    min_sdk_version: "30",
+}
+
+aconfig_declarations {
+    name: "networkstack.flags-aconfig",
+    package: "com.android.networkstack.flags",
+    container: "NetworkStack",
+    srcs: ["flags.aconfig"],
+}
+
+java_aconfig_library {
+    name: "com.android.networkstack.flags-aconfig-java",
+    aconfig_declarations: "networkstack.flags-aconfig",
     defaults: ["framework-minus-apex-aconfig-java-defaults"],
     min_sdk_version: "30",
 }
