@@ -207,12 +207,20 @@ class ApfFilterTest {
     @GuardedBy("mApfFilterCreated")
     private val mApfFilterCreated = ArrayList<ApfFilter>()
     private val loInterfaceParams = InterfaceParams.getByName("lo")
-    private val ifParams =
+    private val loIfParams =
         InterfaceParams(
             "lo",
             loInterfaceParams.index,
             MacAddress.fromBytes(byteArrayOf(2, 3, 4, 5, 6, 7)),
             loInterfaceParams.defaultMtu
+        )
+    private val loIfParamsWithSmallMtu =
+        InterfaceParams(
+            "lo",
+            loInterfaceParams.index,
+            true,
+            MacAddress.fromBytes(byteArrayOf(2, 3, 4, 5, 6, 7)),
+            10
         )
     private val hostIpv4Address = byteArrayOf(10, 0, 0, 1)
     private val senderIpv4Address = byteArrayOf(10, 0, 0, 2)
@@ -468,8 +476,6 @@ class ApfFilterTest {
         // mock nd traffic class from /proc/sys/net/ipv6/conf/{ifname}/ndisc_tclass
         doReturn(0).`when`(dependencies).getNdTrafficClass(any())
 
-        // mock interface mtu from /sys/class/net/{ifname}/mtu
-        doReturn(1500).`when`(dependencies).getInterfaceMtu(any())
         doAnswer { invocation: InvocationOnMock ->
             synchronized(mApfFilterCreated) {
                 mApfFilterCreated.add(invocation.getArgument(0))
@@ -534,7 +540,8 @@ class ApfFilterTest {
     }
 
     private fun getApfFilter(
-            apfCfg: ApfFilter.ApfConfiguration = getDefaultConfig(apfInterpreterVersion)
+            apfCfg: ApfFilter.ApfConfiguration = getDefaultConfig(apfInterpreterVersion),
+            ifParams: InterfaceParams = loIfParams
     ): ApfFilter {
         lateinit var apfFilter: ApfFilter
         handler.post {
@@ -916,7 +923,7 @@ class ApfFilterTest {
         )
     }
 
-    private fun getIgmpApfFilter(): ApfFilter {
+    private fun getIgmpApfFilter(ifParams: InterfaceParams = loIfParams): ApfFilter {
         val mcastAddrs = listOf(
             InetAddress.getByName("224.0.0.1") as Inet4Address,
             InetAddress.getByName("239.0.0.1") as Inet4Address,
@@ -928,7 +935,7 @@ class ApfFilterTest {
 
         // mock IPv4 multicast address from /proc/net/igmp
         doReturn(mcastAddrs).`when`(dependencies).getIPv4MulticastAddresses(any())
-        val apfFilter = getApfFilter(apfConfig)
+        val apfFilter = getApfFilter(apfConfig, ifParams)
         val linkAddress = LinkAddress(InetAddress.getByAddress(hostIpv4Address), 24)
         val lp = LinkProperties()
         lp.addLinkAddress(linkAddress)
@@ -1629,8 +1636,7 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testIgmpV2GeneralQueryPassedWithGeneratedPacketOverMtu() {
-        doReturn(10).`when`(dependencies).getInterfaceMtu(any())
-        val apfFilter = getIgmpApfFilter()
+        val apfFilter = getIgmpApfFilter(loIfParamsWithSmallMtu)
         val program = ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 3)
         // Using scapy to generate IGMPv2 general query packet without router alert option:
         //   ether = Ether(src='00:11:22:33:44:55', dst='01:00:5e:00:00:01')
@@ -1868,8 +1874,7 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testIgmpV3GeneralQueryPassedWithGeneratedPacketOverMtu() {
-        doReturn(10).`when`(dependencies).getInterfaceMtu(any())
-        val apfFilter = getIgmpApfFilter()
+        val apfFilter = getIgmpApfFilter(loIfParamsWithSmallMtu)
         val program = ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 3)
         // Using scapy to generate IGMPv3 general query packet without router alert option:
         //   ether = Ether(src='00:11:22:33:44:55', dst='01:00:5e:00:00:01')
@@ -1936,7 +1941,7 @@ class ApfFilterTest {
         )
     }
 
-    private fun getMldApfFilter(): ApfFilter {
+    private fun getMldApfFilter(ifParams: InterfaceParams = loIfParams): ApfFilter {
         val mcastAddrs = listOf(
             InetAddress.getByName("ff12::1:1111:1111") as Inet6Address,
             InetAddress.getByName("ff12::1:2222:2222") as Inet6Address,
@@ -1947,7 +1952,7 @@ class ApfFilterTest {
 
         // mock IPv6 multicast address from /proc/net/igmp6
         doReturn(mcastAddrs).`when`(dependencies).getIPv6MulticastAddresses(any())
-        val apfFilter = getApfFilter(apfConfig)
+        val apfFilter = getApfFilter(apfConfig, ifParams)
         val ipv6LinkAddress = LinkAddress(hostLinkLocalIpv6Address, 64)
         val lp = LinkProperties()
         lp.addLinkAddress(ipv6LinkAddress)
@@ -2267,8 +2272,7 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testMldV1GeneralQueryPassedWithGeneratedPacketOverMtu() {
-        doReturn(10).`when`(dependencies).getInterfaceMtu(any())
-        val apfFilter = getMldApfFilter()
+        val apfFilter = getMldApfFilter(loIfParamsWithSmallMtu)
         val program = ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 3)
         // Using scapy to generate MLDv1 general query
         //  ether = Ether(src='00:11:22:33:44:55', dst='33:33:00:00:00:01')
@@ -2379,8 +2383,7 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testMldV2GeneralQueryPassedWithGeneratedPacketOverMtu() {
-        doReturn(10).`when`(dependencies).getInterfaceMtu(any())
-        val apfFilter = getMldApfFilter()
+        val apfFilter = getMldApfFilter(loIfParamsWithSmallMtu)
         val program = ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 3)
         // Using scapy to generate MLDv2 general query
         //  ether = Ether(src='00:11:22:33:44:55', dst='33:33:00:00:00:01')
@@ -3978,7 +3981,7 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testIpv6EchoRequestReplied() {
-        doReturn(64).`when`(dependencies).getIpv6DefaultHopLimit(ifParams.name)
+        doReturn(64).`when`(dependencies).getIpv6DefaultHopLimit(loIfParams.name)
         val (apfFilter, program) = getApfWithIpv6PingOffloadEnabled()
         // Using scapy to generate IPv6 echo request packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="02:03:04:05:06:07")
@@ -4033,7 +4036,7 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testIpv6EchoRequestRepliedInDozeMode() {
-        doReturn(64).`when`(dependencies).getIpv6DefaultHopLimit(ifParams.name)
+        doReturn(64).`when`(dependencies).getIpv6DefaultHopLimit(loIfParams.name)
         val (apfFilter, program) = getApfWithIpv6PingOffloadEnabled(inDozeMode = true)
         // Using scapy to generate IPv6 echo request packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="02:03:04:05:06:07")
@@ -4344,11 +4347,11 @@ class ApfFilterTest {
     fun testOffloadServiceInfoUpdateTriggersProgramInstall() {
         val apfConfig = getDefaultConfig()
         apfConfig.handleMdnsOffload = true
-        val apfFilter = getApfFilter(apfConfig)
+        val apfFilter = getApfFilter(apfConfig, loIfParams)
         ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
         val captor = ArgumentCaptor.forClass(OffloadEngine::class.java)
         verify(nsdManager).registerOffloadEngine(
-            eq(ifParams.name),
+            eq(loIfParams.name),
             anyLong(),
             anyLong(),
             any(),
@@ -4370,11 +4373,11 @@ class ApfFilterTest {
     fun testCorruptedOffloadServiceInfoUpdateNotTriggerNewProgramInstall() {
         val apfConfig = getDefaultConfig()
         apfConfig.handleMdnsOffload = true
-        val apfFilter = getApfFilter(apfConfig)
+        val apfFilter = getApfFilter(apfConfig, loIfParams)
         ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
         val captor = ArgumentCaptor.forClass(OffloadEngine::class.java)
         verify(nsdManager).registerOffloadEngine(
-            eq(ifParams.name),
+            eq(loIfParams.name),
             anyLong(),
             anyLong(),
             any(),
@@ -4410,7 +4413,8 @@ class ApfFilterTest {
             manySubtypeOffloadInfo
         ),
         removedOffloadInfos: List<FromU<OffloadServiceInfo>> = listOf(),
-        raReaderSocket: FileDescriptor = raReadSocket
+        raReaderSocket: FileDescriptor = raReadSocket,
+        ifParams: InterfaceParams = loIfParams
     ): Pair<ApfFilter, ByteArray> {
         val localNsdManager = mock(NsdManager::class.java)
         doReturn(localNsdManager).`when`(context).getSystemService(NsdManager::class.java)
@@ -4421,7 +4425,7 @@ class ApfFilterTest {
         if (mcFilter) {
             apfConfig.multicastFilter = true
         }
-        val apfFilter = getApfFilter(apfConfig)
+        val apfFilter = getApfFilter(apfConfig, ifParams)
         ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
         val captor = ArgumentCaptor.forClass(OffloadEngine::class.java)
         verify(localNsdManager).registerOffloadEngine(
@@ -4828,8 +4832,8 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testIPv4MdnsQueryPassedWithGeneratedPacketOverMtu() {
-        doReturn(10).`when`(dependencies).getInterfaceMtu(any())
-        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(mcFilter = false)
+        val (apfFilter, program) =
+            getApfWithMdnsOffloadEnabled(mcFilter = false, ifParams = loIfParamsWithSmallMtu)
         // Using scapy to generate packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
         // ip = IP(src="10.0.0.3", dst="224.0.0.251")
@@ -5366,8 +5370,8 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testIPv6MdnsQueryPassedWithGeneratedPacketOverMtu() {
-        doReturn(10).`when`(dependencies).getInterfaceMtu(any())
-        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(mcFilter = false)
+        val (apfFilter, program) =
+            getApfWithMdnsOffloadEnabled(mcFilter = false, ifParams = loIfParamsWithSmallMtu)
         // Using scapy to generate packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:FB")
         // ip = IPv6(src="fe80::1", dst="ff02::fb")
@@ -6215,7 +6219,7 @@ class ApfFilterTest {
             apfConfig.handleIpv4PingOffload = true
             apfConfig.handleIpv6PingOffload = true
             apfConfig.handleMdnsOffload = true
-            val apfFilter = getApfFilter(apfConfig)
+            val apfFilter = getApfFilter(apfConfig, loIfParams)
             ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
 
             val srcAddr = byteArrayOf(10, 0, 0, 5)
@@ -6232,7 +6236,7 @@ class ApfFilterTest {
 
             val captor = ArgumentCaptor.forClass(OffloadEngine::class.java)
             verify(localNsdManager).registerOffloadEngine(
-                eq(ifParams.name),
+                eq(loIfParams.name),
                 anyLong(),
                 anyLong(),
                 any(),
