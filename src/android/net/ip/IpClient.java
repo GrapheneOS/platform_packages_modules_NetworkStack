@@ -107,7 +107,6 @@ import static com.android.networkstack.util.NetworkStackUtils.createInet6Address
 import static com.android.networkstack.util.NetworkStackUtils.macAddressToEui64;
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
-import android.annotation.SuppressLint;
 import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.content.Context;
@@ -1255,7 +1254,7 @@ public class IpClient extends StateMachine {
                 DEFAULT_NUD_FAILURE_COUNT_WEEKLY_THRESHOLD);
         mDhcp6PdPreferredFlagEnabled = mDependencies.isFeatureNotChickenedOut(mContext,
                 IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION);
-        mReplaceNetdWithNetlinkEnabled = mDependencies.isFeatureEnabled(mContext,
+        mReplaceNetdWithNetlinkEnabled = mDependencies.isFeatureNotChickenedOut(mContext,
                 IPCLIENT_REPLACE_NETD_WITH_NETLINK_VERSION);
         IpClientLinkObserver.Configuration config = new IpClientLinkObserver.Configuration(
                 mAcceptRaMinLft,
