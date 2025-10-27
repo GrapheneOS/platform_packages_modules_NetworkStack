@@ -107,7 +107,6 @@ import static com.android.networkstack.util.NetworkStackUtils.createInet6Address
 import static com.android.networkstack.util.NetworkStackUtils.macAddressToEui64;
 import static com.android.server.util.PermissionUtil.enforceNetworkStackCallingPermission;
 
-import android.annotation.SuppressLint;
 import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.content.Context;
@@ -1255,7 +1254,7 @@ public class IpClient extends StateMachine {
                 DEFAULT_NUD_FAILURE_COUNT_WEEKLY_THRESHOLD);
         mDhcp6PdPreferredFlagEnabled = mDependencies.isFeatureNotChickenedOut(mContext,
                 IPCLIENT_DHCPV6_PD_PREFERRED_FLAG_VERSION);
-        mReplaceNetdWithNetlinkEnabled = mDependencies.isFeatureEnabled(mContext,
+        mReplaceNetdWithNetlinkEnabled = mDependencies.isFeatureNotChickenedOut(mContext,
                 IPCLIENT_REPLACE_NETD_WITH_NETLINK_VERSION);
         IpClientLinkObserver.Configuration config = new IpClientLinkObserver.Configuration(
                 mAcceptRaMinLft,
@@ -2664,7 +2663,6 @@ public class IpClient extends StateMachine {
         mCallback.onProvisioningFailure(mLinkProperties);
     }
 
-    @SuppressLint("NewApi") // TODO: b/193460475 remove once fixed
     private boolean startIPv4() {
         // If we have a StaticIpConfiguration attempt to apply it and
         // handle the result accordingly.
@@ -3452,7 +3450,7 @@ public class IpClient extends StateMachine {
                 mProvisioningTimeoutAlarm.schedule(alarmTime);
             }
 
-            // There is no need to temporarlily lower the DTIM multiplier in IPv6 link-local
+            // There is no need to temporarily lower the DTIM multiplier in IPv6 link-local
             // only mode or when IPv6 is disabled.
             if (mConfiguration.mIPv6ProvisioningMode == PROV_IPV6_SLAAC) {
                 // Send a delay message to wait for IP provisioning to complete eventually and
@@ -4114,7 +4112,7 @@ public class IpClient extends StateMachine {
 
                 case CMD_UPDATE_APF_DATA_SNAPSHOT:
                     if (mApfFilter != null) {
-                        // We prevents calls to readPacketFilterRam() when  mApfFilter is null.
+                        // We prevents calls to readPacketFilterRam() when mApfFilter is null.
                         // This is correct because any data read would be discarded when
                         // processing the EVENT_READ_PACKET_FILTER_COMPLETE event if no
                         // ApfFilter exists.
