@@ -950,14 +950,18 @@ public abstract class BaseApfGenerator {
         SLOT_4(4),
         SLOT_5(5),
         SLOT_6(6),
-        SLOT_7(7),
 
         /**
          * First memory slot containing prefilled (ie. non-zero) values.
          * Can be used in range comparisons to determine if memory slot index
          * is within prefilled slots.
          */
-        FIRST_PREFILLED(8),
+        FIRST_PREFILLED(7),
+
+        /**
+         * Slot #7 is used for indicating the internal state to the running program.
+         */
+        INTERNAL_STATE(7),
 
         /**
          * Slot #8 is used for the APFv6+ version.
