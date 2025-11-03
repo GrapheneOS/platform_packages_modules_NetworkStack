@@ -487,9 +487,6 @@ public class ApfFilter {
     // The subnet prefix length of our IPv4 network. Only valid if mIPv4Address is not null.
     private int mIPv4PrefixLength;
 
-    // Tracks the value of /sys/class/net/{ifname}/mtu
-    private int mInterfaceMtu;
-
     // Our IPv6 non-tentative addresses
     private Set<Inet6Address> mIPv6NonTentativeAddresses = new ArraySet<>();
 
@@ -810,17 +807,6 @@ public class ApfFilter {
          */
         public List<Inet6Address> getIPv6MulticastAddresses(@NonNull String ifname) {
             return ProcfsParsingUtils.getIpv6MulticastAddresses(ifname);
-        }
-
-        /**
-         * Loads the existing interface MTU for the specific interface from the file
-         * /sys/class/net/{ifname}/mtu.
-         *
-         * If the file does not exist or the interface is not found,
-         * the function returns 1500 as default interface MTU.
-         */
-        public int getInterfaceMtu(@NonNull String ifname) {
-            return ProcfsParsingUtils.getInterfaceMtu(ifname);
         }
     }
 
@@ -3025,7 +3011,7 @@ public class ApfFilter {
                 + IPV4_IGMP_MIN_SIZE
                 + (mIPv4McastAddrsExcludeAllHost.size() * IPV4_IGMP_GROUP_RECORD_SIZE);
         final int packetSize = ETHER_HEADER_LEN + ipv4TotalLen;
-        if (packetSize > mInterfaceMtu) {
+        if (packetSize > mInterfaceParams.defaultMtu) {
             gen.addCountAndPass(PASSED_DUE_TO_REPLY_OVER_MTU);
             return;
         }
@@ -3083,7 +3069,7 @@ public class ApfFilter {
         final int ipv4TotalLen =
                 IPV4_HEADER_MIN_LEN + IPV4_ROUTER_ALERT_OPTION_LEN + IPV4_IGMP_MIN_SIZE;
         final int packetSize = ETHER_HEADER_LEN + ipv4TotalLen;
-        if (packetSize > mInterfaceMtu) {
+        if (packetSize > mInterfaceParams.defaultMtu) {
             gen.addCountAndPass(PASSED_DUE_TO_REPLY_OVER_MTU);
             return;
         }
@@ -3316,7 +3302,7 @@ public class ApfFilter {
                 + IPV6_HEADER_LEN
                 + IPV6_MLD_HOPOPTS.length
                 + IPV6_MLD_V1_MESSAGE_SIZE;
-        if (packetSize > mInterfaceMtu) {
+        if (packetSize > mInterfaceParams.defaultMtu) {
             gen.addCountAndPass(PASSED_DUE_TO_REPLY_OVER_MTU);
             return;
         }
@@ -3367,7 +3353,7 @@ public class ApfFilter {
                 + IPV6_MLD_MESSAGE_MIN_SIZE
                 + (mcastAddrsNum * IPV6_MLD_V2_MULTICAST_ADDRESS_RECORD_SIZE);
         final int packetSize = ETHER_HEADER_LEN + IPV6_HEADER_LEN + ipv6PayloadLength;
-        if (packetSize > mInterfaceMtu) {
+        if (packetSize > mInterfaceParams.defaultMtu) {
             gen.addCountAndPass(PASSED_DUE_TO_REPLY_OVER_MTU);
             return;
         }
@@ -3665,8 +3651,7 @@ public class ApfFilter {
                     final int udpLength = UDP_HEADER_LEN + rule.mOffloadPayload.length;
                     final int ipv4TotalLength = IPV4_HEADER_MIN_LEN + udpLength;
                     final int pktLength = ETH_HEADER_LEN + ipv4TotalLength;
-
-                    if (pktLength > mInterfaceMtu) {
+                    if (pktLength > mInterfaceParams.defaultMtu) {
                         gen.addCountAndPass(PASSED_DUE_TO_REPLY_OVER_MTU);
                     } else {
                         gen.addAllocate(pktLength)
@@ -3692,7 +3677,7 @@ public class ApfFilter {
                 if (enableMdns6) {
                     final int udpLength = UDP_HEADER_LEN + rule.mOffloadPayload.length;
                     final int pktLength = ETH_HEADER_LEN + IPV6_HEADER_LEN + udpLength;
-                    if (pktLength > mInterfaceMtu) {
+                    if (pktLength > mInterfaceParams.defaultMtu) {
                         gen.addCountAndPass(PASSED_DUE_TO_REPLY_OVER_MTU);
                     } else {
                         gen.addAllocate(pktLength)
@@ -3995,8 +3980,6 @@ public class ApfFilter {
         // Increase the counter before we generate the program.
         // This keeps the APF_PROGRAM_ID counter in sync with the program.
         mNumProgramUpdates++;
-
-        mInterfaceMtu = mDependencies.getInterfaceMtu(mInterfaceParams.name);
         try {
             // Step 1: Determine how many RA filters/mDNS offloads we can fit in the program.
             ApfV4GeneratorBase<?> gen = createApfGenerator();
