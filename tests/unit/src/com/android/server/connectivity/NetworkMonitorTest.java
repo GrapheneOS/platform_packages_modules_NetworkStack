@@ -443,6 +443,8 @@ public class NetworkMonitorTest {
         doReturn(200).when(mDependencies).getDeviceConfigPropertyInt(
                 eq(NAMESPACE_CONNECTIVITY), eq(CONFIG_ASYNC_PRIVDNS_PROBE_TIMEOUT_MS), anyInt());
 
+        doReturn(false).when(mDependencies).networkMonitorRedactVenueInfoUrl();
+
         doAnswer((invocation) -> {
             URL url = invocation.getArgument(0);
             switch(url.toString()) {
@@ -1401,6 +1403,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testIsCaptivePortal_CapportApiIsPortalWithValidPortalUrl() throws Exception {
+        doReturn(true).when(mDependencies).networkMonitorRedactVenueInfoUrl();
         setSslException(mHttpsConnection);
         final long bytesRemaining = 10_000L;
         final long secondsRemaining = 500L;
@@ -1423,7 +1426,7 @@ public class NetworkMonitorTest {
         final CaptivePortalData p = capportDataCaptor.getValue();
         assertTrue(p.isCaptive());
         assertEquals(Uri.parse(TEST_LOGIN_URL), p.getUserPortalUrl());
-        assertEquals(Uri.parse(TEST_VENUE_INFO_URL), p.getVenueInfoUrl());
+        assertNull(p.getVenueInfoUrl());
         assertEquals(bytesRemaining, p.getByteLimit());
         final long expectedExpiry = currentTimeMillis() + secondsRemaining * 1000;
         // Actual expiry will be slightly lower as some time as passed
@@ -3999,7 +4002,95 @@ public class NetworkMonitorTest {
     }
 
     @Test
+    public void testVenueInfoUrlRedacted_FallbackProbe_ClosedPortal() throws Exception {
+        doReturn(true).when(mDependencies).networkMonitorRedactVenueInfoUrl();
+        doReturn(true).when(mDependencies).isFeatureNotChickenedOut(any(),
+                eq(NETWORKMONITOR_USE_CAPPORT_DATA_IN_FALLBACK));
+        setApiContent(mCapportApiConnection, "{'captive': false,"
+                + "'user-portal-url': '" + TEST_LOGIN_URL + "',"
+                + "'venue-info-url': '" + TEST_VENUE_INFO_URL + "'}");
+
+
+        setStatus(mHttpConnection, 204);
+        setSslException(mHttpsConnection);
+        setPortal302(mFallbackConnection);
+
+        runNetworkTest(TEST_AGENT_CONFIG, makeCapportLPs(), CELL_METERED_CAPABILITIES,
+                VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */, TEST_LOGIN_URL);
+
+        verify(mCapportApiConnection).getResponseCode();
+        verify(mFallbackConnection).getResponseCode();
+
+        // Verify that the captive portal data from the API probe was reported.
+        final ArgumentCaptor<CaptivePortalData> capportDataCaptor =
+                ArgumentCaptor.forClass(CaptivePortalData.class);
+        verify(mCallbacks).notifyCaptivePortalDataChanged(capportDataCaptor.capture());
+        final CaptivePortalData p = capportDataCaptor.getValue();
+        assertFalse(p.isCaptive());
+        assertEquals(Uri.parse(TEST_LOGIN_URL), p.getUserPortalUrl());
+        assertNull(p.getVenueInfoUrl());
+    }
+
+    @Test
+    public void testVenueInfoUrlRedacted_HttpProbe_ClosedPortal() throws Exception {
+        doReturn(true).when(mDependencies).networkMonitorRedactVenueInfoUrl();
+        doReturn(true).when(mDependencies).isFeatureNotChickenedOut(any(),
+                eq(NETWORKMONITOR_USE_CAPPORT_DATA_IN_FALLBACK));
+        setApiContent(mCapportApiConnection, "{'captive': false,"
+                + "'user-portal-url': '" + TEST_LOGIN_URL + "',"
+                + "'venue-info-url': '" + TEST_VENUE_INFO_URL + "'}");
+
+        setPortal302(mHttpConnection);
+
+        runNetworkTest(TEST_AGENT_CONFIG, makeCapportLPs(), CELL_METERED_CAPABILITIES,
+                VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */, TEST_LOGIN_URL);
+
+        verify(mCapportApiConnection).getResponseCode();
+
+        // Verify that the captive portal data from the API probe was reported.
+        final ArgumentCaptor<CaptivePortalData> capportDataCaptor =
+                ArgumentCaptor.forClass(CaptivePortalData.class);
+        verify(mCallbacks).notifyCaptivePortalDataChanged(capportDataCaptor.capture());
+        final CaptivePortalData p = capportDataCaptor.getValue();
+        assertFalse(p.isCaptive());
+        assertEquals(Uri.parse(TEST_LOGIN_URL), p.getUserPortalUrl());
+        assertNull(p.getVenueInfoUrl());
+    }
+
+    @Test
+    public void testVenueInfoUrlRedacted_MultiParallelProbe_ClosedPortal() throws Exception {
+        doReturn(true).when(mDependencies).networkMonitorRedactVenueInfoUrl();
+        doReturn(true).when(mDependencies)
+                .isFeatureNotChickenedOut(any(),
+                        eq(NETWORKMONITOR_USE_CAPPORT_DATA_IN_FALLBACK));
+
+        setupResourceForMultipleProbes();
+        setApiContent(mCapportApiConnection, "{'captive': false,"
+                + "'user-portal-url': '" + TEST_LOGIN_URL + "',"
+                + "'venue-info-url': '" + TEST_VENUE_INFO_URL + "'}");
+
+        setSslException(mOtherHttpsConnection1);
+        setSslException(mOtherHttpsConnection2);
+
+        setPortal302(mOtherHttpConnection1);
+        setStatus(mOtherHttpConnection2, 204); // The other can succeed without portal.
+
+        runNetworkTest(TEST_AGENT_CONFIG, makeCapportLPs(), CELL_METERED_CAPABILITIES,
+                VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */, TEST_LOGIN_URL);
+
+        // Verify that the captive portal data from the API probe was reported.
+        final ArgumentCaptor<CaptivePortalData> capportDataCaptor =
+                ArgumentCaptor.forClass(CaptivePortalData.class);
+        verify(mCallbacks).notifyCaptivePortalDataChanged(capportDataCaptor.capture());
+        final CaptivePortalData p = capportDataCaptor.getValue();
+        assertFalse(p.isCaptive());
+        assertEquals(Uri.parse(TEST_LOGIN_URL), p.getUserPortalUrl());
+        assertNull(p.getVenueInfoUrl());
+    }
+
+    @Test
     public void testCapportDataReported_MultiParallelProbe_Succeed() throws Exception {
+        doReturn(true).when(mDependencies).networkMonitorRedactVenueInfoUrl();
         doReturn(true).when(mDependencies)
                 .isFeatureNotChickenedOut(any(),
                         eq(NETWORKMONITOR_USE_CAPPORT_DATA_IN_FALLBACK));
@@ -4032,6 +4123,7 @@ public class NetworkMonitorTest {
 
     @Test
     public void testCapportDataReported_MultiParallelProbe_Partial() throws Exception {
+        doReturn(true).when(mDependencies).networkMonitorRedactVenueInfoUrl();
         doReturn(true).when(mDependencies)
                 .isFeatureNotChickenedOut(any(),
                         eq(NETWORKMONITOR_USE_CAPPORT_DATA_IN_FALLBACK));

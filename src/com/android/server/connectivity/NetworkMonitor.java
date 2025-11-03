@@ -177,6 +177,7 @@ import com.android.networkstack.R;
 import com.android.networkstack.apishim.NetworkAgentConfigShimImpl;
 import com.android.networkstack.apishim.common.NetworkAgentConfigShim;
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
+import com.android.networkstack.flags.Flags;
 import com.android.networkstack.metrics.DataStallDetectionStats;
 import com.android.networkstack.metrics.DataStallStatsUtils;
 import com.android.networkstack.metrics.NetworkStackStatsLog;
@@ -596,6 +597,7 @@ public class NetworkMonitor extends StateMachine {
     private final boolean mReevaluateWhenResumeEnabled;
     private final boolean mAsyncPrivdnsResolutionEnabled;
     private final boolean mUseCapportDataInFallBackEnabled;
+    private final boolean mRedactVenueInfoUrl;
 
     // The validation metrics are accessed by individual probe threads, and by the StateMachine
     // thread. All accesses must be synchronized to make sure the StateMachine thread can see
@@ -778,6 +780,8 @@ public class NetworkMonitor extends StateMachine {
                 getHandler()::post,
                 result -> notifyPrivateDnsConfigResolved(result),  // Run inline on handler.
                 mValidationLogs);
+
+        mRedactVenueInfoUrl = mDependencies.networkMonitorRedactVenueInfoUrl();
     }
 
     /**
@@ -3620,7 +3624,9 @@ public class NetworkMonitor extends StateMachine {
 
     private void reportProbeResult(@NonNull CaptivePortalProbeResult res) {
         if (res instanceof CapportApiProbeResult) {
-            maybeReportCaptivePortalData(((CapportApiProbeResult) res).getCaptivePortalData());
+            CaptivePortalData capportData =
+                    ((CapportApiProbeResult) res).getCaptivePortalData();
+            maybeReportCaptivePortalData(capportData, res.isPortal());
         }
 
         // This is not a if-else case since partial connectivity will concluded from both HTTP and
@@ -3664,12 +3670,12 @@ public class NetworkMonitor extends StateMachine {
 
         // Look for a conclusive probe result first.
         if (isConclusiveResult(httpResult, capportApiUrl)) {
-            reportProbeResult(httpProbe.result());
+            reportProbeResult(httpResult);
             return httpResult;
         }
 
         if (isConclusiveResult(httpsResult, capportApiUrl)) {
-            reportProbeResult(httpsProbe.result());
+            reportProbeResult(httpsResult);
             return httpsResult;
         }
         // Consider a DNS response with a private IP address on the HTTP probe as an indication that
@@ -3694,7 +3700,7 @@ public class NetworkMonitor extends StateMachine {
                         && httpResult instanceof CapportApiProbeResult) {
                     final CaptivePortalData capportData =
                             ((CapportApiProbeResult) httpResult).getCaptivePortalData();
-                    maybeReportCaptivePortalData(capportData);
+                    maybeReportCaptivePortalData(capportData, true);
                     fallbackProbeResult = new CapportApiProbeResult(fallbackProbeResult,
                             capportData);
                 }
@@ -3864,6 +3870,13 @@ public class NetworkMonitor extends StateMachine {
 
         boolean isFeatureSupported(@NonNull Context context, long feature) {
             return DeviceConfigUtils.isFeatureSupported(context, feature);
+        }
+
+        /**
+         * Check whether to redact venue info URL in captive portal data.
+         */
+        public boolean networkMonitorRedactVenueInfoUrl() {
+            return Flags.networkMonitorRedactVenueInfoUrl();
         }
 
         /**
@@ -4245,13 +4258,18 @@ public class NetworkMonitor extends StateMachine {
         mEvaluationState.noteProbeResult(probeResult, succeeded);
     }
 
-    private void maybeReportCaptivePortalData(@Nullable CaptivePortalData data) {
+    private void maybeReportCaptivePortalData(@Nullable CaptivePortalData data,
+            boolean isPortalEvaluationResult) {
         // Do not clear data even if it is null: access points should not stop serving the API, so
         // if the API disappears this is treated as a temporary failure, and previous data should
         // remain valid.
         if (data == null) return;
+        CaptivePortalData redactedData = data;
+        if (isPortalEvaluationResult && mRedactVenueInfoUrl) {
+            redactedData = CaptivePortalDataUtils.redactVenueInfoUrl(data);
+        }
         try {
-            mCallback.notifyCaptivePortalDataChanged(data);
+            mCallback.notifyCaptivePortalDataChanged(redactedData);
         } catch (RemoteException | RuntimeException e) {
             // TODO: stop catching RuntimeException once all mainline devices use the tethering APEX
             Log.e(TAG, "Error notifying ConnectivityService of new capport data", e);
