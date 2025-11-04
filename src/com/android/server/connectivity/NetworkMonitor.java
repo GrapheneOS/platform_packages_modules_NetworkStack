@@ -104,6 +104,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.net.CaptivePortalData;
 import android.net.ConnectivityManager;
 import android.net.DataStallReportParcelable;
 import android.net.DnsResolver;
@@ -170,11 +171,9 @@ import com.android.net.module.util.NetworkStackConstants;
 import com.android.net.module.util.SharedLog;
 import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
-import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.apishim.NetworkAgentConfigShimImpl;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
 import com.android.networkstack.apishim.api29.ConstantsShim;
-import com.android.networkstack.apishim.common.CaptivePortalDataShim;
 import com.android.networkstack.apishim.common.NetworkAgentConfigShim;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
 import com.android.networkstack.apishim.common.ShimUtils;
@@ -183,6 +182,7 @@ import com.android.networkstack.metrics.DataStallDetectionStats;
 import com.android.networkstack.metrics.DataStallStatsUtils;
 import com.android.networkstack.metrics.NetworkValidationMetrics;
 import com.android.networkstack.netlink.TcpSocketTracker;
+import com.android.networkstack.util.CaptivePortalDataUtils;
 import com.android.networkstack.util.DnsUtils;
 import com.android.networkstack.util.NetworkStackUtils;
 import com.android.server.NetworkStackService.NetworkStackServiceManager;
@@ -999,7 +999,7 @@ public class NetworkMonitor extends StateMachine {
     }
 
     private void recordProbeEventMetrics(ProbeType type, long latencyMicros, ProbeResult result,
-            CaptivePortalDataShim capportData) {
+            CaptivePortalData capportData) {
         if (!mMetricsEnabled) return;
         try {
             synchronized (mNetworkValidationMetrics) {
@@ -1527,7 +1527,7 @@ public class NetworkMonitor extends StateMachine {
             // Check if the network is captive with Terms & Conditions page. The first network
             // evaluation for captive networks with T&Cs returns early but NetworkMonitor will then
             // keep checking for connectivity to determine when the T&Cs are cleared.
-            if (isTermsAndConditionsCaptive(mInfoShim.getCaptivePortalData(mLinkProperties))
+            if (isTermsAndConditionsCaptive(mLinkProperties.getCaptivePortalData())
                     && mValidations == 0) {
                 mLastPortalProbeResult = new CaptivePortalProbeResult(
                         CaptivePortalProbeResult.PORTAL_CODE,
@@ -2188,7 +2188,7 @@ public class NetworkMonitor extends StateMachine {
                         // state (even if no Private DNS validation required).
                         transitionTo(mEvaluatingPrivateDnsState);
                     } else if (isTermsAndConditionsCaptive(
-                            mInfoShim.getCaptivePortalData(mLinkProperties))) {
+                            mLinkProperties.getCaptivePortalData())) {
                         mLastPortalProbeResult = new CaptivePortalProbeResult(
                                 CaptivePortalProbeResult.PORTAL_CODE,
                                 mLinkProperties.getCaptivePortalData().getUserPortalUrl()
@@ -3347,7 +3347,7 @@ public class NetworkMonitor extends StateMachine {
             super(properties, proxy, url, captivePortalApiUrl);
         }
 
-        private CaptivePortalDataShim sendCapportApiProbe() {
+        private CaptivePortalData sendCapportApiProbe() {
             // TODO: consider adding metrics counters for each case returning null in this method
             // (cases where the API is not implemented properly).
             validationLog("Fetching captive portal data from " + mCaptivePortalApiUrl);
@@ -3388,7 +3388,7 @@ public class NetworkMonitor extends StateMachine {
 
             try {
                 final JSONObject info = new JSONObject(apiContent);
-                final CaptivePortalDataShim capportData = CaptivePortalDataShimImpl.fromJson(info,
+                final CaptivePortalData capportData = CaptivePortalDataUtils.fromJson(info,
                         getOptInToCustomTabs(mContext));
                 if (capportData.isCaptive() && capportData.getUserPortalUrl() == null) {
                     validationLog("Missing user-portal-url from capport response");
@@ -3406,10 +3406,10 @@ public class NetworkMonitor extends StateMachine {
             }
         }
 
-        private CaptivePortalDataShim tryCapportApiProbe() {
+        private CaptivePortalData tryCapportApiProbe() {
             if (mCaptivePortalApiUrl == null) return null;
             final Stopwatch capportApiWatch = new Stopwatch().start();
-            final CaptivePortalDataShim capportData = sendCapportApiProbe();
+            final CaptivePortalData capportData = sendCapportApiProbe();
             recordProbeEventMetrics(ProbeType.PT_CAPPORT_API, capportApiWatch.stop(),
                     capportData == null ? ProbeResult.PR_FAILURE : ProbeResult.PR_SUCCESS,
                     capportData);
@@ -3418,7 +3418,7 @@ public class NetworkMonitor extends StateMachine {
 
         @Override
         protected CaptivePortalProbeResult sendProbe() {
-            final CaptivePortalDataShim capportData = tryCapportApiProbe();
+            final CaptivePortalData capportData = tryCapportApiProbe();
             if (capportData != null && capportData.isCaptive()) {
                 final String loginUrlString = capportData.getUserPortalUrl().toString();
                 // Starting from R (where CaptivePortalData was introduced), the captive portal app
@@ -3569,7 +3569,7 @@ public class NetworkMonitor extends StateMachine {
         // Any HTTP probes saying probe portal is conclusive.
         if (httpPortalResult != null) {
             if (mUseCapportDataInFallBackEnabled && capportResult != null) {
-                final CaptivePortalDataShim capportData = capportResult.getCaptivePortalData();
+                final CaptivePortalData capportData = capportResult.getCaptivePortalData();
                 return new CapportApiProbeResult(httpPortalResult, capportData);
             } else {
                 return httpPortalResult;
@@ -3661,7 +3661,7 @@ public class NetworkMonitor extends StateMachine {
             if (fallbackProbeResult.isPortal()) {
                 if (mUseCapportDataInFallBackEnabled
                         && httpResult instanceof CapportApiProbeResult) {
-                    final CaptivePortalDataShim capportData =
+                    final CaptivePortalData capportData =
                             ((CapportApiProbeResult) httpResult).getCaptivePortalData();
                     maybeReportCaptivePortalData(capportData);
                     fallbackProbeResult = new CapportApiProbeResult(fallbackProbeResult,
@@ -4214,13 +4214,13 @@ public class NetworkMonitor extends StateMachine {
         mEvaluationState.noteProbeResult(probeResult, succeeded);
     }
 
-    private void maybeReportCaptivePortalData(@Nullable CaptivePortalDataShim data) {
+    private void maybeReportCaptivePortalData(@Nullable CaptivePortalData data) {
         // Do not clear data even if it is null: access points should not stop serving the API, so
         // if the API disappears this is treated as a temporary failure, and previous data should
         // remain valid.
         if (data == null) return;
         try {
-            data.notifyChanged(mCallback);
+            mCallback.notifyCaptivePortalDataChanged(data);
         } catch (RemoteException | RuntimeException e) {
             // TODO: stop catching RuntimeException once all mainline devices use the tethering APEX
             Log.e(TAG, "Error notifying ConnectivityService of new capport data", e);
@@ -4265,7 +4265,7 @@ public class NetworkMonitor extends StateMachine {
      * Check if the network is captive with terms and conditions page
      * @return true if network is captive with T&C page, false otherwise
      */
-    private boolean isTermsAndConditionsCaptive(CaptivePortalDataShim captivePortalDataShim) {
+    private boolean isTermsAndConditionsCaptive(CaptivePortalData captivePortalDataShim) {
         return captivePortalDataShim != null
                 && captivePortalDataShim.getUserPortalUrl() != null
                 && !TextUtils.isEmpty(captivePortalDataShim.getUserPortalUrl().toString())

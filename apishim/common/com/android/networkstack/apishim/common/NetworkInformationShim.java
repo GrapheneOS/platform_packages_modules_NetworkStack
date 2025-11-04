@@ -45,12 +45,6 @@ public interface NetworkInformationShim {
     void setCaptivePortalApiUrl(@NonNull LinkProperties lp, @Nullable Uri url);
 
     /**
-     * @see LinkProperties#getCaptivePortalData()
-     */
-    @Nullable
-    CaptivePortalDataShim getCaptivePortalData(@Nullable LinkProperties lp);
-
-    /**
      * @see LinkProperties#getNat64Prefix()
      */
     @Nullable
@@ -77,14 +71,6 @@ public interface NetworkInformationShim {
      * @see LinkProperties#setDhcpServerAddress()
      */
     void setDhcpServerAddress(@NonNull LinkProperties lp, @NonNull Inet4Address serverAddress);
-
-    /**
-     * Set captive portal data in {@link LinkProperties}
-     * @param lp Link properties object to be updated
-     * @param captivePortalData Captive portal data to be used
-     */
-    void setCaptivePortalData(@NonNull LinkProperties lp,
-            @Nullable CaptivePortalDataShim captivePortalData);
 
     /**
      * Get the name of the given capability that carriers use.

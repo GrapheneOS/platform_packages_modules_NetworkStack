@@ -26,7 +26,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
-import com.android.networkstack.apishim.common.CaptivePortalDataShim;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
 
 import java.net.Inet4Address;
@@ -65,12 +64,6 @@ public class NetworkInformationShimImpl implements NetworkInformationShim {
 
     @Nullable
     @Override
-    public CaptivePortalDataShim getCaptivePortalData(@Nullable LinkProperties lp) {
-        return null;
-    }
-
-    @Nullable
-    @Override
     public IpPrefix getNat64Prefix(@NonNull LinkProperties lp) {
         // Not supported on this API level
         return null;
@@ -97,16 +90,6 @@ public class NetworkInformationShimImpl implements NetworkInformationShim {
     @Override
     public void setDhcpServerAddress(@NonNull LinkProperties lp,
             @NonNull Inet4Address serverAddress) {
-        // Not supported on this API level: no-op
-    }
-
-    /**
-     * Set captive portal data in {@link LinkProperties}
-     * @param lp Link properties object to be updated
-     * @param captivePortalData Captive portal data to be used
-     */
-    public void setCaptivePortalData(@NonNull LinkProperties lp,
-            @Nullable CaptivePortalDataShim captivePortalData) {
         // Not supported on this API level: no-op
     }
 }

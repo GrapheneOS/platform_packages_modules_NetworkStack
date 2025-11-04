@@ -23,13 +23,11 @@ import android.net.LinkProperties;
 import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Build;
-import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
-import com.android.networkstack.apishim.common.CaptivePortalDataShim;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
 
 import java.net.Inet4Address;
@@ -69,13 +67,6 @@ public class NetworkInformationShimImpl extends
 
     @Nullable
     @Override
-    public CaptivePortalDataShim getCaptivePortalData(@Nullable LinkProperties lp) {
-        if (lp == null || lp.getCaptivePortalData() == null) return null;
-        return new CaptivePortalDataShimImpl(lp.getCaptivePortalData());
-    }
-
-    @Nullable
-    @Override
     public IpPrefix getNat64Prefix(@NonNull LinkProperties lp) {
         return lp.getNat64Prefix();
     }
@@ -102,21 +93,5 @@ public class NetworkInformationShimImpl extends
     public void setDhcpServerAddress(@NonNull LinkProperties lp,
             @NonNull Inet4Address serverAddress) {
         lp.setDhcpServerAddress(serverAddress);
-    }
-
-    @Override
-    public void setCaptivePortalData(@NonNull LinkProperties lp,
-            @Nullable CaptivePortalDataShim captivePortalData) {
-        if (lp == null) {
-            return;
-        }
-        if (!(captivePortalData instanceof CaptivePortalDataShimImpl)) {
-            // The caller passed in a subclass that is not a CaptivePortalDataShimImpl.
-            // This is a programming error, but don't crash with ClassCastException.
-            Log.wtf(TAG, "Expected CaptivePortalDataShimImpl, but got "
-                    + captivePortalData.getClass().getName());
-            return;
-        }
-        lp.setCaptivePortalData(((CaptivePortalDataShimImpl) captivePortalData).getData());
     }
 }

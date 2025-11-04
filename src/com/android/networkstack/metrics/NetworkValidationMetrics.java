@@ -26,6 +26,7 @@ import static android.net.NetworkCapabilities.TRANSPORT_WIFI_AWARE;
 
 import static java.lang.System.currentTimeMillis;
 
+import android.net.CaptivePortalData;
 import android.net.INetworkMonitor;
 import android.net.NetworkCapabilities;
 import android.net.captiveportal.CaptivePortalProbeResult;
@@ -40,7 +41,6 @@ import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
 import com.android.net.module.util.ConnectivityUtils;
-import com.android.networkstack.apishim.common.CaptivePortalDataShim;
 
 /**
  * Class to record the network validation into statsd.
@@ -188,7 +188,7 @@ public class NetworkValidationMetrics {
      * Add a network probe event to the metrics builder.
      */
     public void addProbeEvent(final ProbeType type, final long durationUs, final ProbeResult result,
-            @Nullable final CaptivePortalDataShim capportData) {
+            @Nullable final CaptivePortalData capportData) {
         // When the number of ProbeEvents of mProbeEventsBuilder exceeds
         // MAX_PROBE_EVENTS_COUNT, stop adding ProbeEvent.
         // TODO: consider recording the total number of probes in a separate field to know how

@@ -50,7 +50,6 @@ import com.android.networkstack.NetworkStackNotifier.CHANNEL_CONNECTED
 import com.android.networkstack.NetworkStackNotifier.CHANNEL_VENUE_INFO
 import com.android.networkstack.NetworkStackNotifier.CONNECTED_NOTIFICATION_TIMEOUT_MS
 import com.android.networkstack.NetworkStackNotifier.Dependencies
-import com.android.networkstack.apishim.NetworkInformationShimImpl
 import kotlin.reflect.KClass
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -120,14 +119,12 @@ class NetworkStackNotifierTest {
                     .setCaptive(false)
                     .setVenueInfoUrl(Uri.parse(TEST_VENUE_INFO_URL))
                     .build()
-            val networkShim = NetworkInformationShimImpl.newInstance()
-            val captivePortalDataShim = networkShim.getCaptivePortalData(this)
+            val captivePortalData = getCaptivePortalData()
 
-            if (captivePortalDataShim != null) {
-                networkShim.setCaptivePortalData(
-                    this,
-                    captivePortalDataShim
-                        .withVenueFriendlyName(TEST_NETWORK_FRIENDLY_NAME)
+            if (captivePortalData != null) {
+                setCaptivePortalData(
+                    CaptivePortalData.Builder(captivePortalData)
+                        .setVenueFriendlyName(TEST_NETWORK_FRIENDLY_NAME).build()
                 )
             }
         }
