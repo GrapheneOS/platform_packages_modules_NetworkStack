@@ -309,7 +309,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -2965,7 +2964,7 @@ public class ApfFilter {
                     gen.addCountAndPassIfR0IsOneOf(mLowPowerStandbyPortsTcpRemote,
                             PASSED_LOW_POWER_STANDBY_PORT_ALLOWED);
                 }
-                gen.addLoad8intoR0(IPV6_NEXT_HEADER_OFFSET);
+                gen.addCountAndDrop(DROPPED_LOW_POWER_STANDBY);
                 gen.defineLabel(skipTcp);
             }
 
@@ -2983,7 +2982,6 @@ public class ApfFilter {
                     gen.addCountAndPassIfR0IsOneOf(mLowPowerStandbyPortsUdpRemote,
                             PASSED_LOW_POWER_STANDBY_PORT_ALLOWED);
                 }
-                gen.addLoad8intoR0(IPV6_NEXT_HEADER_OFFSET);
                 gen.defineLabel(skipUdp);
             }
 
