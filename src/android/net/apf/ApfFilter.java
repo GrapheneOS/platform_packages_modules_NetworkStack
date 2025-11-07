@@ -122,7 +122,7 @@ import static android.net.apf.ApfConstants.IPV6_TCP_DESTINATION_PORT_OFFSET;
 import static android.net.apf.ApfConstants.IPV6_TCP_SOURCE_PORT_OFFSET;
 import static android.net.apf.ApfConstants.IPV6_UDP_DESTINATION_CHECKSUM_OFFSET;
 import static android.net.apf.ApfConstants.IPV6_UDP_DESTINATION_PORT_OFFSET;
-import static android.net.apf.ApfConstants.IPv6_UDP_PAYLOAD_OFFSET;
+import static android.net.apf.ApfConstants.IPV6_UDP_PAYLOAD_OFFSET;
 import static android.net.apf.ApfConstants.IPV6_UDP_SOURCE_PORT_OFFSET;
 import static android.net.apf.ApfConstants.IPV6_UNSPECIFIED_ADDRESS;
 import static android.net.apf.ApfConstants.LOW_POWER_STANDBY_MAX_PORTS_PER_TYPE;
@@ -2727,7 +2727,7 @@ public class ApfFilter {
         gen.addLoad16intoR0(IPV6_DNS_QDCOUNT_OFFSET)
                 // Set the UDP payload offset in R1 before potentially jumping to the payload
                 // check logic.
-                .addLoadImmediate(R1, IPv6_UDP_PAYLOAD_OFFSET)
+                .addLoadImmediate(R1, IPV6_UDP_PAYLOAD_OFFSET)
                 .addJumpIfR0NotEquals(0, labelCheckMdnsQueryPayload);
 
         // TODO: check the reply payload.

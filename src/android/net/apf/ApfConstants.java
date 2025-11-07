@@ -253,7 +253,7 @@ public final class ApfConstants {
             ETH_HEADER_LEN + IPV6_HEADER_LEN + 2;
     public static final int IPV6_UDP_DESTINATION_CHECKSUM_OFFSET =
             ETH_HEADER_LEN + IPV6_HEADER_LEN + 6;
-    public static final int IPv6_UDP_PAYLOAD_OFFSET =
+    public static final int IPV6_UDP_PAYLOAD_OFFSET =
             ETH_HEADER_LEN + IPV6_HEADER_LEN + UDP_HEADER_LEN;
 
     public static final int IPV6_TCP_SOURCE_PORT_OFFSET =
