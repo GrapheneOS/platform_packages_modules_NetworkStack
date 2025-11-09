@@ -2382,59 +2382,10 @@ public class ApfFilter {
         // If any NAT-T keepalive filter matches, drop
         generateV4NattKeepaliveFilters(gen);
 
-        // If TCP unicast on port 7, drop
-        generateV4TcpPort7Filter(gen);
+        generateV4TcpUdpPortFilter(gen);
 
         if (enableIpv4PingOffload()) {
             generateUnicastIpv4PingOffload((ApfV6GeneratorBase<?>) gen);
-        }
-
-        if (enableHandleLowPowerStandbyPortsFilter()) {
-            // TODO: The generated program code should only filter if the device is in low power
-            // standby. Currently, the interpreter does not support indicating this state to the
-            // running program; therefore, if the feature is enabled, the generated program code
-            // always filters, regardless of low power standby state. When the interpreter supports
-            // indicating this state, the generated code will have to properly check it here.
-
-            if (!mLowPowerStandbyPortsTcpLocal.isEmpty()
-                    || !mLowPowerStandbyPortsTcpRemote.isEmpty()) {
-                final short skipTcp = gen.getUniqueLabel();
-                gen.addJumpIfNotUnfragmentedIPv4Protocol(IPPROTO_TCP, skipTcp);
-                if (!mLowPowerStandbyPortsTcpLocal.isEmpty()) {
-                    gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-                    gen.addLoad16R1IndexedIntoR0(TCP_UDP_DESTINATION_PORT_OFFSET);
-                    gen.addCountAndPassIfR0IsOneOf(mLowPowerStandbyPortsTcpLocal,
-                            PASSED_LOW_POWER_STANDBY_PORT_ALLOWED);
-                }
-                if (!mLowPowerStandbyPortsTcpRemote.isEmpty()) {
-                    gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-                    gen.addLoad16R1IndexedIntoR0(TCP_UDP_SOURCE_PORT_OFFSET);
-                    gen.addCountAndPassIfR0IsOneOf(mLowPowerStandbyPortsTcpRemote,
-                            PASSED_LOW_POWER_STANDBY_PORT_ALLOWED);
-                }
-                gen.defineLabel(skipTcp);
-            }
-
-            if (!mLowPowerStandbyPortsUdpLocal.isEmpty()
-                    || !mLowPowerStandbyPortsUdpRemote.isEmpty()) {
-                final short skipUdp = gen.getUniqueLabel();
-                gen.addJumpIfNotUnfragmentedIPv4Protocol(IPPROTO_UDP, skipUdp);
-                if (!mLowPowerStandbyPortsUdpLocal.isEmpty()) {
-                    gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-                    gen.addLoad16R1IndexedIntoR0(TCP_UDP_DESTINATION_PORT_OFFSET);
-                    gen.addCountAndPassIfR0IsOneOf(mLowPowerStandbyPortsUdpLocal,
-                            PASSED_LOW_POWER_STANDBY_PORT_ALLOWED);
-                }
-                if (!mLowPowerStandbyPortsUdpRemote.isEmpty()) {
-                    gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
-                    gen.addLoad16R1IndexedIntoR0(TCP_UDP_SOURCE_PORT_OFFSET);
-                    gen.addCountAndPassIfR0IsOneOf(mLowPowerStandbyPortsUdpRemote,
-                            PASSED_LOW_POWER_STANDBY_PORT_ALLOWED);
-                }
-                gen.defineLabel(skipUdp);
-            }
-
-            gen.addCountAndDrop(DROPPED_LOW_POWER_STANDBY);
         }
 
         if (mMulticastFilter) {
@@ -3633,12 +3584,12 @@ public class ApfFilter {
     }
 
     /**
-     * Generate filter code to drop IPv4 TCP packets on port 7.
+     * Generate filter code to drop IPv4 TCP/UDP packet by using port based rule.
      * <p>
      * On entry, we know it is IPv4 ethertype, but don't know anything else.
      * R0/R1 have nothing useful in them, and can be clobbered.
      */
-    private void generateV4TcpPort7Filter(ApfV4GeneratorBase<?> gen)
+    private void generateV4TcpUdpPortFilter(ApfV4GeneratorBase<?> gen)
             throws IllegalInstructionException {
         final short skipPort7V4Filter = gen.getUniqueLabel();
 
@@ -3655,6 +3606,54 @@ public class ApfFilter {
 
         // Skip label.
         gen.defineLabel(skipPort7V4Filter);
+
+        if (enableHandleLowPowerStandbyPortsFilter()) {
+            // TODO: The generated program code should only filter if the device is in low power
+            // standby. Currently, the interpreter does not support indicating this state to the
+            // running program; therefore, if the feature is enabled, the generated program code
+            // always filters, regardless of low power standby state. When the interpreter supports
+            // indicating this state, the generated code will have to properly check it here.
+
+            if (!mLowPowerStandbyPortsTcpLocal.isEmpty()
+                    || !mLowPowerStandbyPortsTcpRemote.isEmpty()) {
+                final short skipTcp = gen.getUniqueLabel();
+                gen.addJumpIfNotUnfragmentedIPv4Protocol(IPPROTO_TCP, skipTcp);
+                if (!mLowPowerStandbyPortsTcpLocal.isEmpty()) {
+                    gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
+                    gen.addLoad16R1IndexedIntoR0(TCP_UDP_DESTINATION_PORT_OFFSET);
+                    gen.addCountAndPassIfR0IsOneOf(mLowPowerStandbyPortsTcpLocal,
+                            PASSED_LOW_POWER_STANDBY_PORT_ALLOWED);
+                }
+                if (!mLowPowerStandbyPortsTcpRemote.isEmpty()) {
+                    gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
+                    gen.addLoad16R1IndexedIntoR0(TCP_UDP_SOURCE_PORT_OFFSET);
+                    gen.addCountAndPassIfR0IsOneOf(mLowPowerStandbyPortsTcpRemote,
+                            PASSED_LOW_POWER_STANDBY_PORT_ALLOWED);
+                }
+                gen.defineLabel(skipTcp);
+            }
+
+            if (!mLowPowerStandbyPortsUdpLocal.isEmpty()
+                    || !mLowPowerStandbyPortsUdpRemote.isEmpty()) {
+                final short skipUdp = gen.getUniqueLabel();
+                gen.addJumpIfNotUnfragmentedIPv4Protocol(IPPROTO_UDP, skipUdp);
+                if (!mLowPowerStandbyPortsUdpLocal.isEmpty()) {
+                    gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
+                    gen.addLoad16R1IndexedIntoR0(TCP_UDP_DESTINATION_PORT_OFFSET);
+                    gen.addCountAndPassIfR0IsOneOf(mLowPowerStandbyPortsUdpLocal,
+                            PASSED_LOW_POWER_STANDBY_PORT_ALLOWED);
+                }
+                if (!mLowPowerStandbyPortsUdpRemote.isEmpty()) {
+                    gen.addLoadFromMemory(R1, MemorySlot.IPV4_HEADER_SIZE);
+                    gen.addLoad16R1IndexedIntoR0(TCP_UDP_SOURCE_PORT_OFFSET);
+                    gen.addCountAndPassIfR0IsOneOf(mLowPowerStandbyPortsUdpRemote,
+                            PASSED_LOW_POWER_STANDBY_PORT_ALLOWED);
+                }
+                gen.defineLabel(skipUdp);
+            }
+
+            gen.addCountAndDrop(DROPPED_LOW_POWER_STANDBY);
+        }
     }
 
     private void generateV6KeepaliveFilters(ApfV4GeneratorBase<?> gen)
