@@ -46,7 +46,10 @@
     <!-- Signature permission defined in NetworkStackStub -->
     <uses-permission android:name="android.permission.MAINLINE_NETWORK_STACK" />
     <!-- Crash while reading deviceownerName security exception  -->
-    <uses-permission android:name="android.permission.MANAGE_USERS"/>
+    <uses-permission android:name="android.permission.MANAGE_USERS" />
+    <!-- PowerManager.getActiveLowPowerStandbyPorts (for TV form factor) -->
+    <!-- TODO: b/19138533 - enable permission when ready -->
+    <!-- uses-permission android:name="android.permission.MANAGE_LOW_POWER_STANDBY" / -->
     <!-- ends here -->
 
     <application

@@ -88,7 +88,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.junit.Assume.assumeFalse;
 import static org.junit.Assume.assumeTrue;
 import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -169,15 +168,10 @@ import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.SharedLog;
 import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
-import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.apishim.ConstantsShim;
 import com.android.networkstack.apishim.NetworkAgentConfigShimImpl;
-import com.android.networkstack.apishim.NetworkInformationShimImpl;
-import com.android.networkstack.apishim.common.CaptivePortalDataShim;
 import com.android.networkstack.apishim.common.NetworkAgentConfigShim;
-import com.android.networkstack.apishim.common.NetworkInformationShim;
 import com.android.networkstack.apishim.common.ShimUtils;
-import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 import com.android.networkstack.metrics.DataStallDetectionStats;
 import com.android.networkstack.metrics.DataStallStatsUtils;
 import com.android.networkstack.netlink.TcpSocketTracker;
@@ -1244,7 +1238,6 @@ public class NetworkMonitorTest {
 
     @Test
     public void testIsCaptivePortal_FallbackProbeFailedWithCapportData() throws Exception {
-        assumeTrue(CaptivePortalDataShimImpl.isSupported());
         doReturn(true).when(mDependencies).isFeatureNotChickenedOut(any(),
                 eq(NETWORKMONITOR_USE_CAPPORT_DATA_IN_FALLBACK));
 
@@ -1284,7 +1277,6 @@ public class NetworkMonitorTest {
 
     @Test
     public void testMultiParallelProbes_HttpPortalWithCapportData() throws Exception {
-        assumeTrue(CaptivePortalDataShimImpl.isSupported());
         doReturn(true).when(mDependencies)
                 .isFeatureNotChickenedOut(any(),
                 eq(NETWORKMONITOR_USE_CAPPORT_DATA_IN_FALLBACK));
@@ -1393,7 +1385,6 @@ public class NetworkMonitorTest {
 
     @Test
     public void testIsCaptivePortal_CapportApiIsPortalWithNullPortalUrl() throws Exception {
-        assumeTrue(CaptivePortalDataShimImpl.isSupported());
         setSslException(mHttpsConnection);
         final long bytesRemaining = 10_000L;
         final long secondsRemaining = 500L;
@@ -1415,7 +1406,6 @@ public class NetworkMonitorTest {
 
     @Test
     public void testIsCaptivePortal_CapportApiIsPortalWithValidPortalUrl() throws Exception {
-        assumeTrue(CaptivePortalDataShimImpl.isSupported());
         setSslException(mHttpsConnection);
         final long bytesRemaining = 10_000L;
         final long secondsRemaining = 500L;
@@ -1448,7 +1438,6 @@ public class NetworkMonitorTest {
 
     @Test
     public void testIsCaptivePortal_CapportApiRevalidation() throws Exception {
-        assumeTrue(CaptivePortalDataShimImpl.isSupported());
         setValidProbes();
         final NetworkMonitor nm = runValidatedNetworkTest();
 
@@ -1469,8 +1458,6 @@ public class NetworkMonitorTest {
 
     @Test
     public void testIsCaptivePortal_NoRevalidationBeforeNetworkConnected() throws Exception {
-        assumeTrue(CaptivePortalDataShimImpl.isSupported());
-
         final NetworkMonitor nm = makeCellMeteredNetworkMonitor();
 
         final LinkProperties lp = makeCapportLPs();
@@ -1495,7 +1482,6 @@ public class NetworkMonitorTest {
 
     @Test
     public void testIsCaptivePortal_CapportApiNotPortalNotValidated() throws Exception {
-        assumeTrue(CaptivePortalDataShimImpl.isSupported());
         setSslException(mHttpsConnection);
         setStatus(mHttpConnection, 500);
         setApiContent(mCapportApiConnection, "{'captive': false,"
@@ -1511,7 +1497,6 @@ public class NetworkMonitorTest {
 
     @Test
     public void testIsCaptivePortal_CapportApiNotPortalPartial() throws Exception {
-        assumeTrue(CaptivePortalDataShimImpl.isSupported());
         setSslException(mHttpsConnection);
         setStatus(mHttpConnection, 204);
         setApiContent(mCapportApiConnection, "{'captive': false,"
@@ -1529,7 +1514,6 @@ public class NetworkMonitorTest {
 
     @Test
     public void testIsCaptivePortal_CapportApiNotPortalValidated() throws Exception {
-        assumeTrue(CaptivePortalDataShimImpl.isSupported());
         setStatus(mHttpsConnection, 204);
         setStatus(mHttpConnection, 204);
         setApiContent(mCapportApiConnection, "{'captive': false,"
@@ -1548,7 +1532,6 @@ public class NetworkMonitorTest {
 
     @Test
     public void testIsCaptivePortal_CapportApiInvalidContent() throws Exception {
-        assumeTrue(CaptivePortalDataShimImpl.isSupported());
         setSslException(mHttpsConnection);
         setPortal302(mHttpConnection);
         setApiContent(mCapportApiConnection, "{SomeInvalidText");
@@ -1561,7 +1544,6 @@ public class NetworkMonitorTest {
     }
 
     private void runCapportApiInvalidUrlTest(String url) throws Exception {
-        assumeTrue(CaptivePortalDataShimImpl.isSupported());
         setSslException(mHttpsConnection);
         setPortal302(mHttpConnection);
         final LinkProperties lp = new LinkProperties(TEST_LINK_PROPERTIES);
@@ -1628,22 +1610,6 @@ public class NetworkMonitorTest {
                 .setUnderlyingNetworks(underlyingNetworks).build();
         nm.notifyNetworkCapabilitiesChanged(newNc);
         HandlerUtils.waitForIdle(nm.getHandler(), HANDLER_TIMEOUT_MS);
-    }
-
-    @Test
-    public void testIsCaptivePortal_CapportApiNotSupported() throws Exception {
-        // Test that on a R+ device, if NetworkStack was compiled without CaptivePortalData support
-        // (built against Q), NetworkMonitor behaves as expected.
-        assumeFalse(CaptivePortalDataShimImpl.isSupported());
-        setSslException(mHttpsConnection);
-        setPortal302(mHttpConnection);
-        setApiContent(mCapportApiConnection, "{'captive': false,"
-                + "'venue-info-url': '" + TEST_VENUE_INFO_URL + "'}");
-        runNetworkTest(TEST_AGENT_CONFIG, makeCapportLPs(), CELL_METERED_CAPABILITIES,
-                VALIDATION_RESULT_PORTAL, 0 /* probesSucceeded */, TEST_LOGIN_URL);
-
-        verify(mCallbacks, never()).notifyCaptivePortalDataChanged(any());
-        verify(mHttpConnection).getResponseCode();
     }
 
     @Test
@@ -3572,28 +3538,18 @@ public class NetworkMonitorTest {
 
     @Test
     public void testIsCaptivePortal_FromExternalSource() throws Exception {
-        assumeTrue(CaptivePortalDataShimImpl.isSupported());
         assumeTrue(ShimUtils.isAtLeastS());
         final NetworkMonitor monitor = makeMonitor(WIFI_NOT_METERED_CAPABILITIES);
 
-        NetworkInformationShim networkShim = NetworkInformationShimImpl.newInstance();
-        CaptivePortalDataShim captivePortalData = new CaptivePortalDataShimImpl(
-                new CaptivePortalData.Builder().setCaptive(true).build());
         final LinkProperties linkProperties = new LinkProperties(TEST_LINK_PROPERTIES);
-        networkShim.setCaptivePortalData(linkProperties, captivePortalData);
-        CaptivePortalDataShim captivePortalDataShim =
-                networkShim.getCaptivePortalData(linkProperties);
-
-        try {
-            // Set up T&C captive portal info from Passpoint
-            captivePortalData = captivePortalDataShim.withPasspointInfo(TEST_FRIENDLY_NAME,
-                    Uri.parse(TEST_VENUE_INFO_URL), Uri.parse(TEST_LOGIN_URL));
-        } catch (UnsupportedApiLevelException e) {
-            // Minimum API level for this test is 31
-            return;
-        }
-
-        networkShim.setCaptivePortalData(linkProperties, captivePortalData);
+        linkProperties.setCaptivePortalData(new CaptivePortalData.Builder()
+                .setCaptive(true)
+                .setVenueFriendlyName(TEST_FRIENDLY_NAME)
+                .setVenueInfoUrl(Uri.parse(TEST_VENUE_INFO_URL),
+                        ConstantsShim.CAPTIVE_PORTAL_DATA_SOURCE_PASSPOINT)
+                .setUserPortalUrl(Uri.parse(TEST_LOGIN_URL),
+                        ConstantsShim.CAPTIVE_PORTAL_DATA_SOURCE_PASSPOINT)
+                .build());
         monitor.notifyLinkPropertiesChanged(linkProperties);
         final NetworkCapabilities networkCapabilities =
                 new NetworkCapabilities(WIFI_NOT_METERED_CAPABILITIES);

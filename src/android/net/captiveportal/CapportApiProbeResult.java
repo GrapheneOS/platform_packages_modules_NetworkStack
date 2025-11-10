@@ -15,10 +15,10 @@
  */
 package android.net.captiveportal;
 
+import android.net.CaptivePortalData;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-
-import com.android.networkstack.apishim.common.CaptivePortalDataShim;
 
 /**
  * Captive portal probe detection result including capport API detection result.
@@ -27,22 +27,22 @@ import com.android.networkstack.apishim.common.CaptivePortalDataShim;
 public class CapportApiProbeResult extends CaptivePortalProbeResult {
     // CaptivePortalData may be null if the capport API does not send any valid reply.
     @Nullable
-    private final CaptivePortalDataShim mCapportData;
+    private final CaptivePortalData mCapportData;
 
     public CapportApiProbeResult(@NonNull CaptivePortalProbeResult result,
-            @Nullable CaptivePortalDataShim capportData) {
+            @Nullable CaptivePortalData capportData) {
         this(result.mHttpResponseCode, result.redirectUrl, result.detectUrl, capportData,
                 result.probeType);
     }
 
     public CapportApiProbeResult(int httpResponseCode, @Nullable String redirectUrl,
-            @Nullable String detectUrl, @Nullable CaptivePortalDataShim capportData,
+            @Nullable String detectUrl, @Nullable CaptivePortalData capportData,
             int probeType) {
         super(httpResponseCode, redirectUrl, detectUrl, probeType);
         mCapportData = capportData;
     }
 
-    public CaptivePortalDataShim getCaptivePortalData() {
+    public CaptivePortalData getCaptivePortalData() {
         return mCapportData;
     }
 }

@@ -226,7 +226,6 @@ import com.android.net.module.util.structs.LlaOption;
 import com.android.net.module.util.structs.PrefixInformationOption;
 import com.android.net.module.util.structs.RdnssOption;
 import com.android.networkstack.R;
-import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
 import com.android.networkstack.ipmemorystore.IpMemoryStoreService;
 import com.android.networkstack.mainline.beta.Flags;
 import com.android.networkstack.metrics.IpProvisioningMetrics;
@@ -2875,22 +2874,16 @@ public abstract class IpClientIntegrationTestCommon {
 
     @Test
     public void testDhcpClientCaptivePortalApiEnabled() throws Exception {
-        // Only run the test on platforms / builds where the API is enabled
-        assumeTrue(CaptivePortalDataShimImpl.isSupported());
         runDhcpClientCaptivePortalApiTest(true /* featureEnabled */, true /* serverSendsOption */);
     }
 
     @Test
     public void testDhcpClientCaptivePortalApiEnabled_NoUrl() throws Exception {
-        // Only run the test on platforms / builds where the API is enabled
-        assumeTrue(CaptivePortalDataShimImpl.isSupported());
         runDhcpClientCaptivePortalApiTest(true /* featureEnabled */, false /* serverSendsOption */);
     }
 
     @Test
     public void testDhcpClientCaptivePortalApiEnabled_ParcelSensitiveFields() throws Exception {
-        // Only run the test on platforms / builds where the API is enabled
-        assumeTrue(CaptivePortalDataShimImpl.isSupported());
         LinkProperties lp = runDhcpClientCaptivePortalApiTest(true /* featureEnabled */,
                 true /* serverSendsOption */);
 
@@ -2909,13 +2902,6 @@ public abstract class IpClientIntegrationTestCommon {
         // CaptivePortalApiUrl should be null after parceling round trip.
         final LinkProperties unparceled = parcelingRoundTrip(lp);
         assertNull(unparceled.getCaptivePortalApiUrl());
-    }
-
-    @Test
-    public void testDhcpClientCaptivePortalApiDisabled() throws Exception {
-        // Only run the test on platforms / builds where the API is disabled
-        assumeFalse(CaptivePortalDataShimImpl.isSupported());
-        runDhcpClientCaptivePortalApiTest(false /* featureEnabled */, true /* serverSendsOption */);
     }
 
     private ScanResultInfo makeScanResultInfo(final int id, final String ssid,

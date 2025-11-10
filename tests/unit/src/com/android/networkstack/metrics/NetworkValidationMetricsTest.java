@@ -23,10 +23,10 @@ import static android.net.NetworkCapabilities.TRANSPORT_VPN;
 import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
 
 import static junit.framework.Assert.assertEquals;
-import static junit.framework.Assert.assertFalse;
 
 import static org.junit.Assert.assertTrue;
 
+import android.net.CaptivePortalData;
 import android.net.INetworkMonitor;
 import android.net.NetworkCapabilities;
 import android.net.captiveportal.CaptivePortalProbeResult;
@@ -39,8 +39,7 @@ import android.stats.connectivity.ValidationResult;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
-import com.android.networkstack.apishim.CaptivePortalDataShimImpl;
-import com.android.networkstack.apishim.common.CaptivePortalDataShim;
+import com.android.networkstack.util.CaptivePortalDataUtils;
 
 import org.json.JSONObject;
 import org.junit.Test;
@@ -168,8 +167,8 @@ public class NetworkValidationMetricsTest {
         metrics.startCollection(WIFI_CAPABILITIES);
 
         final JSONObject info = new JSONObject(apiContent);
-        final CaptivePortalDataShim captivePortalData = CaptivePortalDataShimImpl.isSupported()
-                ? CaptivePortalDataShimImpl.fromJson(info, s -> false) : null;
+        final CaptivePortalData captivePortalData = CaptivePortalDataUtils.fromJson(info,
+                s -> false);
 
         // 1. PT_CAPPORT_API probe w CapportApiData info
         metrics.addProbeEvent(ProbeType.PT_CAPPORT_API, 1234, ProbeResult.PR_SUCCESS,
@@ -205,16 +204,12 @@ public class NetworkValidationMetricsTest {
         assertEquals(ProbeType.PT_CAPPORT_API, probeEvent.getProbeType());
         assertEquals(1234, probeEvent.getLatencyMicros());
         assertEquals(ProbeResult.PR_SUCCESS, probeEvent.getProbeResult());
-        if (CaptivePortalDataShimImpl.isSupported()) {
-            assertTrue(probeEvent.hasCapportApiData());
-            // Set secondsRemaining to 3000 and check that getRemainingTtlSecs is within 10 seconds
-            final CapportApiData capportData = probeEvent.getCapportApiData();
-            assertTrue(capportData.getRemainingTtlSecs() <= secondsRemaining);
-            assertTrue(capportData.getRemainingTtlSecs() + TTL_TOLERANCE_SECS > secondsRemaining);
-            assertEquals(captivePortalData.getByteLimit() / 1000, capportData.getRemainingBytes());
-        } else {
-            assertFalse(probeEvent.hasCapportApiData());
-        }
+        assertTrue(probeEvent.hasCapportApiData());
+        // Set secondsRemaining to 3000 and check that getRemainingTtlSecs is within 10 seconds
+        final CapportApiData capportData = probeEvent.getCapportApiData();
+        assertTrue(capportData.getRemainingTtlSecs() <= secondsRemaining);
+        assertTrue(capportData.getRemainingTtlSecs() + TTL_TOLERANCE_SECS > secondsRemaining);
+        assertEquals(captivePortalData.getByteLimit() / 1000, capportData.getRemainingBytes());
 
         // Verify the 2nd probe: ProbeType = PT_CAPPORT_API, Latency_us = 1234,
         //                       ProbeResult = PR_SUCCESS, CapportApiData = null

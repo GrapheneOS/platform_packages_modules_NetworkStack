@@ -237,6 +237,7 @@ public final class ApfConstants {
     public static final int DHCP_CLIENT_PORT = 68;
 
     public static final int DNS_HEADER_LEN = 12;
+
     public static final int IPV4_UDP_DESTINATION_PORT_NO_OPTIONS_OFFSET =
             ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + 2;
     public static final int IPV4_UDP_DESTINATION_CHECKSUM_NO_OPTIONS_OFFSET =
@@ -245,12 +246,21 @@ public final class ApfConstants {
             ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + UDP_HEADER_LEN;
     public static final int IPV4_DNS_QDCOUNT_NO_OPTIONS_OFFSET =
             ETH_HEADER_LEN + IPV4_HEADER_MIN_LEN + UDP_HEADER_LEN + 4;
+
+    public static final int IPV6_UDP_SOURCE_PORT_OFFSET =
+            ETH_HEADER_LEN + IPV6_HEADER_LEN + 0;
     public static final int IPV6_UDP_DESTINATION_PORT_OFFSET =
             ETH_HEADER_LEN + IPV6_HEADER_LEN + 2;
     public static final int IPV6_UDP_DESTINATION_CHECKSUM_OFFSET =
             ETH_HEADER_LEN + IPV6_HEADER_LEN + 6;
-    public static final int IPv6_UDP_PAYLOAD_OFFSET =
+    public static final int IPV6_UDP_PAYLOAD_OFFSET =
             ETH_HEADER_LEN + IPV6_HEADER_LEN + UDP_HEADER_LEN;
+
+    public static final int IPV6_TCP_SOURCE_PORT_OFFSET =
+            ETH_HEADER_LEN + IPV6_HEADER_LEN + 0;
+    public static final int IPV6_TCP_DESTINATION_PORT_OFFSET =
+            ETH_HEADER_LEN + IPV6_HEADER_LEN + 2;
+
     public static final int IPV6_DNS_QDCOUNT_OFFSET =
             ETH_HEADER_LEN + IPV6_HEADER_LEN + UDP_HEADER_LEN + 4;
 
@@ -304,4 +314,10 @@ public final class ApfConstants {
      */
     public static final byte[] FIXED_ARP_REPLY_HEADER =
             new byte[]{0x08, 0x06, 0x00, 0x01, 0x08, 0x00, 0x06, 0x04, 0x00, 0x02};
+
+    /**
+     * The low power standby filter will limit ports of a particular type (e.g. TCP local, TCP
+     * remote, UDP local, UDP remote) to this number.
+     */
+    public static final int LOW_POWER_STANDBY_MAX_PORTS_PER_TYPE = 4;
 }

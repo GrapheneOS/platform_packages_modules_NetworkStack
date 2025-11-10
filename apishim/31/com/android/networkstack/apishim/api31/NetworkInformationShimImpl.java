@@ -18,14 +18,12 @@ package com.android.networkstack.apishim.api31;
 
 import static com.android.modules.utils.build.SdkLevel.isAtLeastS;
 
-import android.net.LinkProperties;
 import android.net.NetworkCapabilities;
 import android.os.Build;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
-import com.android.networkstack.apishim.common.CaptivePortalDataShim;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
 
 /**
@@ -45,13 +43,6 @@ public class NetworkInformationShimImpl
             return com.android.networkstack.apishim.api30.NetworkInformationShimImpl.newInstance();
         }
         return new NetworkInformationShimImpl();
-    }
-
-    @Nullable
-    @Override
-    public CaptivePortalDataShim getCaptivePortalData(@Nullable LinkProperties lp) {
-        if (lp == null || lp.getCaptivePortalData() == null) return null;
-        return new CaptivePortalDataShimImpl(lp.getCaptivePortalData());
     }
 
     @Nullable
