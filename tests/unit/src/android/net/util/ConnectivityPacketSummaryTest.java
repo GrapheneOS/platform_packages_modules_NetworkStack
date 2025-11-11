@@ -416,4 +416,17 @@ public class ConnectivityPacketSummaryTest {
 
         assertTrue(getSummary(packet).startsWith(expectedPrefix));
     }
+
+    @Test
+    public void testParseIPv6PacketWithTrailingByte() {
+        final String packet = "333300000001AEBCB5D6710486DD60090E0000483AFFFE8000000000000018DD"
+                + "546C52ECC0A9FF02000000000000000000000000000186000E0B00020000000000000000000003"
+                + "0440C0000007080000070800000000FDDA4D9CFFBBAF4F00000000000000001802400000000708"
+                + "FD86DCCA90BF00000101AEBCB5D67104A213689AB34677BF114E42F14C549B7D839EF86D9404D8"
+                + "9369848BF50649BBFF";
+        final String expectedStr = "RX ae:bc:b5:d6:71:04 > 33:33:00:00:00:01 ipv6"
+                + " fe80::18dd:546c:52ec:c0a9 > ff02::1 icmp6 ra slla ae:bc:b5:d6:71:04"
+                + " [number of trailing bytes]: 32";
+        assertEquals(expectedStr, getSummary(packet));
+    }
 }
