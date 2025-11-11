@@ -1273,6 +1273,11 @@ public class ApfFilter {
                 throw new InvalidRaException("Not an ICMP6 router advertisement");
             }
 
+            final int ipv6PayloadLength = getUint16(mPacket, IPV6_PAYLOAD_LEN_OFFSET);
+            final int totalPacketLength = ETH_HEADER_LEN + IPV6_HEADER_LEN + ipv6PayloadLength;
+            // If packet has trailing bytes, ignore them.
+            mPacket.limit(Math.min(totalPacketLength, mPacket.limit()));
+
             // Ignore destination MAC address.
             addIgnoreSection(6 /* Size of MAC address */);
 
