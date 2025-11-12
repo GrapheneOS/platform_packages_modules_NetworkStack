@@ -48,6 +48,7 @@ import static com.android.net.module.util.NetworkStackConstants.IPV4_FLAGS_OFFSE
 import static com.android.net.module.util.NetworkStackConstants.IPV4_FRAGMENT_MASK;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_HEADER_MIN_LEN;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_IHL_MASK;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_LENGTH_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_PROTOCOL_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_SRC_ADDR_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_LEN;
@@ -206,6 +207,13 @@ public class ConnectivityPacketSummary {
             sj.add("runt:").add(asString(mPacket.remaining()));
             return;
         }
+        final int ipv4TotalLen = mPacket.getShort(startOfIpLayer + IPV4_LENGTH_OFFSET) & 0xffff;
+        final int remainBytes = mPacket.remaining();
+        final boolean hasTrailingBytes = remainBytes > ipv4TotalLen;
+        if (hasTrailingBytes) {
+            // Trim off any trailing bytes beyond the IPv4 total length.
+            mPacket.limit(mPacket.position() + ipv4TotalLen);
+        }
         final int startOfTransportLayer = startOfIpLayer + ipv4HeaderLength;
 
         mPacket.position(startOfIpLayer + IPV4_FLAGS_OFFSET);
@@ -231,6 +239,9 @@ public class ConnectivityPacketSummary {
         } else {
             sj.add("proto").add(asString(protocol));
             if (isFragment) sj.add("fragment");
+        }
+        if (hasTrailingBytes) {
+            sj.add("[number of trailing bytes]:").add(asString(remainBytes - ipv4TotalLen));
         }
     }
 
@@ -395,7 +406,7 @@ public class ConnectivityPacketSummary {
     private void parseDHCPv4(StringJoiner sj) {
         final DhcpPacket dhcpPacket;
         try {
-            dhcpPacket = DhcpPacket.decodeFullPacket(mBytes, mLength, DhcpPacket.ENCAP_L2);
+            dhcpPacket = DhcpPacket.decodeFullPacket(mBytes, mPacket.limit(), DhcpPacket.ENCAP_L2);
             sj.add(dhcpPacket.toString());
         } catch (DhcpPacket.ParseException e) {
             sj.add("parse error: " + e);
