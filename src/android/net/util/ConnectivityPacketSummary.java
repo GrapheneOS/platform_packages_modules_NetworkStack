@@ -52,6 +52,7 @@ import static com.android.net.module.util.NetworkStackConstants.IPV4_PROTOCOL_OF
 import static com.android.net.module.util.NetworkStackConstants.IPV4_SRC_ADDR_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_LEN;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_HEADER_LEN;
+import static com.android.net.module.util.NetworkStackConstants.IPV6_LEN_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_PROTOCOL_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_SRC_ADDR_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.UDP_HEADER_LEN;
@@ -238,9 +239,15 @@ public class ConnectivityPacketSummary {
             sj.add("runt:").add(asString(mPacket.remaining()));
             return;
         }
-
         final int startOfIpLayer = mPacket.position();
-
+        final int ipv6PayloadLen = mPacket.getShort(startOfIpLayer + IPV6_LEN_OFFSET) & 0xffff;
+        final int ipv6TotalLen = IPV6_HEADER_LEN + ipv6PayloadLen;
+        final int remainBytes = mPacket.remaining();
+        final boolean hasTrailingBytes = remainBytes > ipv6TotalLen;
+        if (hasTrailingBytes) {
+            // Trim off any trailing bytes beyond the IPv6 payload length.
+            mPacket.limit(mPacket.position() + ipv6TotalLen);
+        }
         mPacket.position(startOfIpLayer + IPV6_PROTOCOL_OFFSET);
         final int protocol = asUint(mPacket.get());
 
@@ -256,6 +263,9 @@ public class ConnectivityPacketSummary {
             parseICMPv6(sj);
         } else {
             sj.add("proto").add(asString(protocol));
+        }
+        if (hasTrailingBytes) {
+            sj.add("[number of trailing bytes]:").add(asString(remainBytes - ipv6TotalLen));
         }
     }
 
