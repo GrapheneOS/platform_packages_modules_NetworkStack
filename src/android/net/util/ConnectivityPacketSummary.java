@@ -57,6 +57,7 @@ import static com.android.net.module.util.NetworkStackConstants.IPV6_LEN_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_PROTOCOL_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_SRC_ADDR_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.UDP_HEADER_LEN;
+import static com.android.net.module.util.NetworkStackConstants.UDP_LENGTH_OFFSET;
 
 import android.net.MacAddress;
 import android.net.dhcp.DhcpPacket;
@@ -392,6 +393,13 @@ public class ConnectivityPacketSummary {
         }
 
         final int previous = mPacket.position();
+        final int udpTotalLen = mPacket.getShort(previous + UDP_LENGTH_OFFSET) & 0xffff;
+        final int remainBytes = mPacket.remaining();
+        final boolean hasTrailingBytes = remainBytes > udpTotalLen;
+        if (hasTrailingBytes) {
+            // Trim off any trailing bytes beyond the UDP payload.
+            mPacket.limit(mPacket.position() + udpTotalLen);
+        }
         final int srcPort = asUint(mPacket.getShort());
         final int dstPort = asUint(mPacket.getShort());
         sj.add(asString(srcPort)).add(">").add(asString(dstPort));
@@ -400,6 +408,10 @@ public class ConnectivityPacketSummary {
         if (srcPort == DHCP4_CLIENT_PORT || dstPort == DHCP4_CLIENT_PORT) {
             sj.add("dhcp4");
             parseDHCPv4(sj);
+        }
+        if (hasTrailingBytes) {
+            sj.add("[number of trailing bytes beyond udp payload]:").add(
+                    asString(remainBytes - udpTotalLen));
         }
     }
 
