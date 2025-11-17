@@ -48,13 +48,16 @@ import static com.android.net.module.util.NetworkStackConstants.IPV4_FLAGS_OFFSE
 import static com.android.net.module.util.NetworkStackConstants.IPV4_FRAGMENT_MASK;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_HEADER_MIN_LEN;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_IHL_MASK;
+import static com.android.net.module.util.NetworkStackConstants.IPV4_LENGTH_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_PROTOCOL_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.IPV4_SRC_ADDR_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_LEN;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_HEADER_LEN;
+import static com.android.net.module.util.NetworkStackConstants.IPV6_LEN_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_PROTOCOL_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_SRC_ADDR_OFFSET;
 import static com.android.net.module.util.NetworkStackConstants.UDP_HEADER_LEN;
+import static com.android.net.module.util.NetworkStackConstants.UDP_LENGTH_OFFSET;
 
 import android.net.MacAddress;
 import android.net.dhcp.DhcpPacket;
@@ -205,6 +208,13 @@ public class ConnectivityPacketSummary {
             sj.add("runt:").add(asString(mPacket.remaining()));
             return;
         }
+        final int ipv4TotalLen = mPacket.getShort(startOfIpLayer + IPV4_LENGTH_OFFSET) & 0xffff;
+        final int remainBytes = mPacket.remaining();
+        final boolean hasTrailingBytes = remainBytes > ipv4TotalLen;
+        if (hasTrailingBytes) {
+            // Trim off any trailing bytes beyond the IPv4 total length.
+            mPacket.limit(mPacket.position() + ipv4TotalLen);
+        }
         final int startOfTransportLayer = startOfIpLayer + ipv4HeaderLength;
 
         mPacket.position(startOfIpLayer + IPV4_FLAGS_OFFSET);
@@ -231,6 +241,9 @@ public class ConnectivityPacketSummary {
             sj.add("proto").add(asString(protocol));
             if (isFragment) sj.add("fragment");
         }
+        if (hasTrailingBytes) {
+            sj.add("[number of trailing bytes]:").add(asString(remainBytes - ipv4TotalLen));
+        }
     }
 
     private void parseIPv6(StringJoiner sj) {
@@ -238,9 +251,15 @@ public class ConnectivityPacketSummary {
             sj.add("runt:").add(asString(mPacket.remaining()));
             return;
         }
-
         final int startOfIpLayer = mPacket.position();
-
+        final int ipv6PayloadLen = mPacket.getShort(startOfIpLayer + IPV6_LEN_OFFSET) & 0xffff;
+        final int ipv6TotalLen = IPV6_HEADER_LEN + ipv6PayloadLen;
+        final int remainBytes = mPacket.remaining();
+        final boolean hasTrailingBytes = remainBytes > ipv6TotalLen;
+        if (hasTrailingBytes) {
+            // Trim off any trailing bytes beyond the IPv6 payload length.
+            mPacket.limit(mPacket.position() + ipv6TotalLen);
+        }
         mPacket.position(startOfIpLayer + IPV6_PROTOCOL_OFFSET);
         final int protocol = asUint(mPacket.get());
 
@@ -256,6 +275,9 @@ public class ConnectivityPacketSummary {
             parseICMPv6(sj);
         } else {
             sj.add("proto").add(asString(protocol));
+        }
+        if (hasTrailingBytes) {
+            sj.add("[number of trailing bytes]:").add(asString(remainBytes - ipv6TotalLen));
         }
     }
 
@@ -371,6 +393,13 @@ public class ConnectivityPacketSummary {
         }
 
         final int previous = mPacket.position();
+        final int udpTotalLen = mPacket.getShort(previous + UDP_LENGTH_OFFSET) & 0xffff;
+        final int remainBytes = mPacket.remaining();
+        final boolean hasTrailingBytes = remainBytes > udpTotalLen;
+        if (hasTrailingBytes) {
+            // Trim off any trailing bytes beyond the UDP payload.
+            mPacket.limit(mPacket.position() + udpTotalLen);
+        }
         final int srcPort = asUint(mPacket.getShort());
         final int dstPort = asUint(mPacket.getShort());
         sj.add(asString(srcPort)).add(">").add(asString(dstPort));
@@ -380,12 +409,16 @@ public class ConnectivityPacketSummary {
             sj.add("dhcp4");
             parseDHCPv4(sj);
         }
+        if (hasTrailingBytes) {
+            sj.add("[number of trailing bytes beyond udp payload]:").add(
+                    asString(remainBytes - udpTotalLen));
+        }
     }
 
     private void parseDHCPv4(StringJoiner sj) {
         final DhcpPacket dhcpPacket;
         try {
-            dhcpPacket = DhcpPacket.decodeFullPacket(mBytes, mLength, DhcpPacket.ENCAP_L2);
+            dhcpPacket = DhcpPacket.decodeFullPacket(mBytes, mPacket.limit(), DhcpPacket.ENCAP_L2);
             sj.add(dhcpPacket.toString());
         } catch (DhcpPacket.ParseException e) {
             sj.add("parse error: " + e);

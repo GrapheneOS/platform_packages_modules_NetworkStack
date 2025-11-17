@@ -416,4 +416,117 @@ public class ConnectivityPacketSummaryTest {
 
         assertTrue(getSummary(packet).startsWith(expectedPrefix));
     }
+
+    @Test
+    public void testParseIPv6PacketWithTrailingByte() {
+        final String packet = "333300000001AEBCB5D6710486DD60090E0000483AFFFE8000000000000018DD"
+                + "546C52ECC0A9FF02000000000000000000000000000186000E0B00020000000000000000000003"
+                + "0440C0000007080000070800000000FDDA4D9CFFBBAF4F00000000000000001802400000000708"
+                + "FD86DCCA90BF00000101AEBCB5D67104A213689AB34677BF114E42F14C549B7D839EF86D9404D8"
+                + "9369848BF50649BBFF";
+        final String expectedStr = "RX ae:bc:b5:d6:71:04 > 33:33:00:00:00:01 ipv6"
+                + " fe80::18dd:546c:52ec:c0a9 > ff02::1 icmp6 ra slla ae:bc:b5:d6:71:04"
+                + " [number of trailing bytes]: 32";
+        assertEquals(expectedStr, getSummary(packet));
+    }
+
+    @Test
+    public void testParseIPv4PacketWithTrailingByte() {
+        final String packet =
+                // Ethernet
+                "807ABF6F48F3 288A1CA8DFC1 0800"
+                        // IPv4
+                        + "4500013D4D3B0000401188BC"
+                        + "64706FFD"
+                        + "64706ADB"
+                        // UDP
+                        + "0043 0044"
+                        + "0129 341C"
+                        // DHCPv4
+                        + "02 01 06 01"
+                        + "79F7ACA4"
+                        + "0001 0000"
+                        + "00000000"
+                        + "64706ADB"
+                        + "00000000"
+                        + "00000000"
+                        + "807ABF6F48F300000000000000000000"
+                        + "0000000000000000000000000000000000000000000000000000000000000000"
+                        + "0000000000000000000000000000000000000000000000000000000000000000"
+                        + "0000000000000000000000000000000000000000000000000000000000000000"
+                        + "0000000000000000000000000000000000000000000000000000000000000000"
+                        + "0000000000000000000000000000000000000000000000000000000000000000"
+                        + "0000000000000000000000000000000000000000000000000000000000000000"
+                        + "63 82 53 63"
+                        + "35 01 05"
+                        + "36 04 AC188A0B"
+                        + "33 04 00000708"
+                        + "01 04 FFFFF000"
+                        + "03 04 64706FFE"
+                        + "06 08 08080808"
+                        + "      08080404"
+                        + "FF0001076165313A363636FF"
+                        + "AA";
+
+        final String expectedStr =
+                "RX 28:8a:1c:a8:df:c1 > 80:7a:bf:6f:48:f3 ipv4"
+                        + " 100.112.111.253 > 100.112.106.219 udp"
+                        + " 67 > 68 dhcp4"
+                        + " 80:7a:bf:6f:48:f3 ACK"
+                        + ": your new IP /100.112.106.219, netmask /255.255.240.0, gateways"
+                        + " [/100.112.111.254] DNS servers: /8.8.8.8 /8.8.4.4 ,"
+                        + " lease time 1800, domain null"
+                        + " [number of trailing bytes]: 1";
+        assertEquals(expectedStr, getSummary(packet));
+    }
+
+    @Test
+    public void testParseIPv4UdpPacketWithTrailingByte() {
+        final String packet =
+                // Ethernet
+                "807ABF6F48F3 288A1CA8DFC1 0800"
+                        // IPv4 (totally 138 bytes including trailing byte)
+                        + "4500013E4D3B0000401188BC"
+                        + "64706FFD"
+                        + "64706ADB"
+                        // UDP
+                        + "0043 0044"
+                        + "0129 341C"
+                        // DHCPv4
+                        + "02 01 06 01"
+                        + "79F7ACA4"
+                        + "0001 0000"
+                        + "00000000"
+                        + "64706ADB"
+                        + "00000000"
+                        + "00000000"
+                        + "807ABF6F48F300000000000000000000"
+                        + "0000000000000000000000000000000000000000000000000000000000000000"
+                        + "0000000000000000000000000000000000000000000000000000000000000000"
+                        + "0000000000000000000000000000000000000000000000000000000000000000"
+                        + "0000000000000000000000000000000000000000000000000000000000000000"
+                        + "0000000000000000000000000000000000000000000000000000000000000000"
+                        + "0000000000000000000000000000000000000000000000000000000000000000"
+                        + "63 82 53 63"
+                        + "35 01 05"
+                        + "36 04 AC188A0B"
+                        + "33 04 00000708"
+                        + "01 04 FFFFF000"
+                        + "03 04 64706FFE"
+                        + "06 08 08080808"
+                        + "      08080404"
+                        + "FF0001076165313A363636FF"
+                        + "AA";
+
+        final String expectedStr =
+                "RX 28:8a:1c:a8:df:c1 > 80:7a:bf:6f:48:f3 ipv4"
+                        + " 100.112.111.253 > 100.112.106.219 udp"
+                        + " 67 > 68 dhcp4"
+                        + " 80:7a:bf:6f:48:f3 ACK"
+                        + ": your new IP /100.112.106.219, netmask /255.255.240.0, gateways"
+                        + " [/100.112.111.254] DNS servers: /8.8.8.8 /8.8.4.4 ,"
+                        + " lease time 1800, domain null"
+                        + " [number of trailing bytes beyond udp payload]: 1";
+        assertEquals(expectedStr, getSummary(packet));
+    }
 }

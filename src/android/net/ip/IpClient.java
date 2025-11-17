@@ -1211,8 +1211,8 @@ public class IpClient extends StateMachine {
         mEnableApfPollingCounters = mDependencies.isFeatureEnabled(context,
                 APF_POLLING_COUNTERS_VERSION);
         mIsAcceptRaMinLftEnabled =
-                SdkLevel.isAtLeastV() || mDependencies.isFeatureEnabled(context,
-                        IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION);
+                SdkLevel.isAtLeastV()
+                        || com.android.networkstack.flags.Flags.ipclientIgnoreLowRaLifetime();
         mEnableApf = mDependencies.isFeatureNotChickenedOut(mContext, APF_ENABLE);
         mApfHandleArpOffload = mDependencies.isFeatureNotChickenedOut(
                 mContext, APF_HANDLE_ARP_OFFLOAD);
