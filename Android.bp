@@ -512,7 +512,7 @@ cc_library_shared {
     header_libs: [
         "bpf_headers",
     ],
-    sdk_version: "30",
+    sdk_version: "current",
     min_sdk_version: "30",
     shared_libs: [
         "liblog",
