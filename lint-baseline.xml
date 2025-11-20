@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<issues format="6" by="lint 8.4.0-alpha08" type="baseline" client="" dependencies="true" name="" variant="all" version="8.4.0-alpha08">
-
+<issues
+    format="6"
+    by="lint 8.4.0-alpha08"
+    type="baseline"
+    client=""
+    dependencies="true"
+    name=""
+    variant="all"
+    version="8.4.0-alpha08">
     <issue
         id="NewApi"
         message="Call requires API level 36 (current min is 31): `android.os.Handler#removeEqualMessages`"
@@ -21,6 +28,39 @@
             file="packages/modules/NetworkStack/src/android/net/util/RawPacketTracker.java"
             line="187"
             column="18"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 34 (current min is 31): `android.os.PowerManager.LowPowerStandbyPortDescription#getPortMatcher`"
+        errorLine1="            if (port.getProtocol() == protocol &amp;&amp; port.getPortMatcher() == matcher) {"
+        errorLine2="                                                       ~~~~~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/android/net/apf/ApfFilter.java"
+            line="4412"
+            column="56"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 34 (current min is 31): `android.os.PowerManager.LowPowerStandbyPortDescription#getProtocol`"
+        errorLine1="            if (port.getProtocol() == protocol &amp;&amp; port.getPortMatcher() == matcher) {"
+        errorLine2="                     ~~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/android/net/apf/ApfFilter.java"
+            line="4412"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 34 (current min is 31): `android.os.PowerManager.LowPowerStandbyPortDescription#getPortNumber`"
+        errorLine1="                matchingPorts.add(Long.valueOf(port.getPortNumber()));"
+        errorLine2="                                                    ~~~~~~~~~~~~~">
+        <location
+            file="packages/modules/NetworkStack/src/android/net/apf/ApfFilter.java"
+            line="4413"
+            column="53"/>
     </issue>
 
 </issues>
