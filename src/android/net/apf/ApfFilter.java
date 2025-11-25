@@ -441,6 +441,7 @@ public class ApfFilter {
     private final MulticastReportMonitor mMulticastReportMonitor;
     private final ApfMdnsOffloadEngine mApfMdnsOffloadEngine;
     private final List<MdnsOffloadRule> mOffloadRules = new ArrayList<>();
+    private final List<MdnsOffloadRule> mFilterRules = new ArrayList<>();
     // The number of mDNS rules requiring APF to transmit a reply and drop the query packet. A
     // value of -1 means all mDNS query packets should be passed; no mDNS query packets will trigger
     // the transmit and reply logic.
@@ -648,7 +649,9 @@ public class ApfFilter {
                     mNsdManager,
                     allRules -> {
                         mOffloadRules.clear();
-                        mOffloadRules.addAll(allRules);
+                        mOffloadRules.addAll(allRules.offloadRules);
+                        mFilterRules.clear();
+                        mFilterRules.addAll(allRules.filterRules);
                         installNewProgram();
                     },
                     mSkipMdnsRecordWithoutPriority

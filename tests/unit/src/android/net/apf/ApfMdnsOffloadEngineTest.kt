@@ -124,17 +124,17 @@ class ApfMdnsOffloadEngineTest {
             OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
         )
         visibleOnHandlerThread(handler) { apfOffloadEngine.onOffloadServiceUpdated(info1) }
-        verify(callback).onOffloadRulesUpdated(eq(extractReplyRule(listOf(info1)).offloadRules))
+        verify(callback).onOffloadRulesUpdated(eq(extractReplyRule(listOf(info1))))
         visibleOnHandlerThread(handler) { apfOffloadEngine.onOffloadServiceUpdated(info2) }
         verify(
             callback
-        ).onOffloadRulesUpdated(eq(extractReplyRule(listOf(info1, info2)).offloadRules))
+        ).onOffloadRulesUpdated(eq(extractReplyRule(listOf(info1, info2))))
         visibleOnHandlerThread(handler) { apfOffloadEngine.onOffloadServiceUpdated(updatedInfo1) }
         verify(callback).onOffloadRulesUpdated(
-            eq(extractReplyRule(listOf(info2, updatedInfo1)).offloadRules)
+            eq(extractReplyRule(listOf(info2, updatedInfo1)))
         )
         visibleOnHandlerThread(handler) { apfOffloadEngine.onOffloadServiceRemoved(updatedInfo1) }
-        verify(callback).onOffloadRulesUpdated(eq(extractReplyRule(listOf(info2)).offloadRules))
+        verify(callback).onOffloadRulesUpdated(eq(extractReplyRule(listOf(info2))))
 
         visibleOnHandlerThread(handler) { apfOffloadEngine.unregisterOffloadEngine() }
         verify(nsdManager).unregisterOffloadEngine(eq(apfOffloadEngine))
@@ -180,14 +180,14 @@ class ApfMdnsOffloadEngineTest {
                 infoWithoutPriority
             )
         }
-        verify(callback).onOffloadRulesUpdated(eq(extractReplyRule(listOf()).offloadRules))
+        verify(callback).onOffloadRulesUpdated(eq(extractReplyRule(listOf())))
         visibleOnHandlerThread(handler) {
             apfOffloadEngine.onOffloadServiceUpdated(
                 infoWithPriority
             )
         }
         verify(callback).onOffloadRulesUpdated(
-            eq(extractReplyRule(listOf(infoWithPriority)).offloadRules)
+            eq(extractReplyRule(listOf(infoWithPriority)))
         )
     }
 
