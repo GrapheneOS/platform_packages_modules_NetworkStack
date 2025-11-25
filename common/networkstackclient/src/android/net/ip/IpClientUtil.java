@@ -77,7 +77,7 @@ public class IpClientUtil {
      * @see {@link ModuleNetworkStackClient#makeIpClient(String, IIpClientCallbacks)}
      */
     public static void makeIpClient(Context context, String ifName, IpClientCallbacks callback) {
-        ModuleNetworkStackClient.getInstance(context)
+        ModuleNetworkStackClient.getInstance()
                 .makeIpClient(ifName, new IpClientCallbacksProxy(callback));
     }
 

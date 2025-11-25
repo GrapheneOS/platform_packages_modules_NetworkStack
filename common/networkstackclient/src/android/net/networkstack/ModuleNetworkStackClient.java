@@ -19,7 +19,6 @@ package android.net.networkstack;
 import static android.os.Build.VERSION.SDK_INT;
 
 import android.annotation.NonNull;
-import android.content.Context;
 import android.net.INetworkStackConnector;
 import android.net.NetworkStack;
 import android.os.Build;
@@ -43,10 +42,9 @@ public class ModuleNetworkStackClient extends NetworkStackClientBase {
 
     /**
      * Get an instance of the ModuleNetworkStackClient.
-     * @param packageContext Context to use to obtain the network stack connector.
      */
     @NonNull
-    public static ModuleNetworkStackClient getInstance(Context packageContext) {
+    public static ModuleNetworkStackClient getInstance() {
         return getInstance(new Dependencies());
     }
 
