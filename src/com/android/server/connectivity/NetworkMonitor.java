@@ -3510,6 +3510,10 @@ public class NetworkMonitor extends StateMachine {
                 final CaptivePortalProbeResult res = evaluateCapportResult(
                         completedProbes, httpsUrls.length, capportApiUrl != null /* hasCapport */);
                 if (res != null) {
+                    // TODO: In the parallel path, only the final result is reported and individual
+                    //  HTTP probe results are not reported. This differs from the behavior in
+                    //  sendHttpAndHttpsParallelWithFallbackProbes. Need to consolidate the
+                    //  behavior.
                     reportProbeResult(res);
                     return res;
                 }
@@ -3567,9 +3571,10 @@ public class NetworkMonitor extends StateMachine {
         // Capport API saying it's a portal is authoritative.
         if (capportResult != null && capportResult.isPortal()) return capportResult;
         // Any HTTP probes saying probe portal is conclusive.
+        final CaptivePortalData capportData =
+                capportResult != null ? capportResult.getCaptivePortalData() : null;
         if (httpPortalResult != null) {
             if (mUseCapportDataInFallBackEnabled && capportResult != null) {
-                final CaptivePortalData capportData = capportResult.getCaptivePortalData();
                 return new CapportApiProbeResult(httpPortalResult, capportData);
             } else {
                 return httpPortalResult;
@@ -3577,11 +3582,21 @@ public class NetworkMonitor extends StateMachine {
         }
         // Any HTTPS probes works then the network validates.
         if (httpsSuccesses > 0) {
-            return CaptivePortalProbeResult.success(1 << ValidationProbeEvent.PROBE_HTTPS);
+            if (mUseCapportDataInFallBackEnabled && capportData != null) {
+                return new CapportApiProbeResult(
+                        CaptivePortalProbeResult.success(1 << ValidationProbeEvent.PROBE_HTTPS),
+                        capportData);
+            } else {
+                return CaptivePortalProbeResult.success(1 << ValidationProbeEvent.PROBE_HTTPS);
+            }
         }
         // All HTTPS failed and at least one HTTP succeeded, then it's partial.
         if (httpsFailures == numHttps && httpSuccesses > 0) {
-            return CaptivePortalProbeResult.PARTIAL;
+            if (mUseCapportDataInFallBackEnabled && capportData != null) {
+                return new CapportApiProbeResult(CaptivePortalProbeResult.PARTIAL, capportData);
+            } else {
+                return CaptivePortalProbeResult.PARTIAL;
+            }
         }
         // Otherwise, the result is unknown yet.
         return null;
