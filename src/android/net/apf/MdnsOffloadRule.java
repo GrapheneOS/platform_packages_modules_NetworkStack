@@ -101,6 +101,10 @@ public class MdnsOffloadRule {
             mQtypes = qtypes;
         }
 
+        public Matcher(byte[] qnames) {
+            this(qnames, null);
+        }
+
         @Override
         public boolean equals(Object o) {
             if (!(o instanceof Matcher matcher)) return false;

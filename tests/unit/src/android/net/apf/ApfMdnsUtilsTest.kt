@@ -48,9 +48,11 @@ class ApfMdnsUtilsTest {
 
     private val testServiceName1 = "NsdChat"
     private val testServiceName2 = "NsdCall"
-    private val testServiceType = "_http._tcp"
+    private val testHttpServiceType = "_http._tcp"
+    private val testSshServiceType = "_ssh._tcp"
     private val testSubType = "tsub"
-    private val testHostName = "Android.local"
+    private val testAndroidHostName = "Android.local"
+    private val testLaptopHostName = "Laptop.local"
     private val testRawPacket1 = byteArrayOf(1, 2, 3, 4, 5)
     private val testRawPacket2 = byteArrayOf(6, 7, 8, 9)
     private val encodedFullServiceName1 = intArrayOf(
@@ -65,8 +67,13 @@ class ApfMdnsUtilsTest {
             4, '_'.code, 'T'.code, 'C'.code, 'P'.code,
             5, 'L'.code, 'O'.code, 'C'.code, 'A'.code, 'L'.code,
             0, 0).map { it.toByte() }.toByteArray()
-    private val encodedServiceType = intArrayOf(
+    private val encodedHttpServiceType = intArrayOf(
             5, '_'.code, 'H'.code, 'T'.code, 'T'.code, 'P'.code,
+            4, '_'.code, 'T'.code, 'C'.code, 'P'.code,
+            5, 'L'.code, 'O'.code, 'C'.code, 'A'.code, 'L'.code,
+            0, 0).map { it.toByte() }.toByteArray()
+    private val encodedSshServiceType = intArrayOf(
+            4, '_'.code, 'S'.code, 'S'.code, 'H'.code,
             4, '_'.code, 'T'.code, 'C'.code, 'P'.code,
             5, 'L'.code, 'O'.code, 'C'.code, 'A'.code, 'L'.code,
             0, 0).map { it.toByte() }.toByteArray()
@@ -77,15 +84,26 @@ class ApfMdnsUtilsTest {
             4, '_'.code, 'T'.code, 'C'.code, 'P'.code,
             5, 'L'.code, 'O'.code, 'C'.code, 'A'.code, 'L'.code,
             0, 0).map { it.toByte() }.toByteArray()
-    private val encodedServiceTypeWithWildCard = intArrayOf(
+    private val encodedHttpServiceTypeWithWildCard = intArrayOf(
             0xff,
             4, '_'.code, 'S'.code, 'U'.code, 'B'.code,
             5, '_'.code, 'H'.code, 'T'.code, 'T'.code, 'P'.code,
             4, '_'.code, 'T'.code, 'C'.code, 'P'.code,
             5, 'L'.code, 'O'.code, 'C'.code, 'A'.code, 'L'.code,
             0, 0).map { it.toByte() }.toByteArray()
-    private val encodedTestHostName = intArrayOf(
+    private val encodedSshServiceTypeWithWildCard = intArrayOf(
+            0xff,
+            4, '_'.code, 'S'.code, 'U'.code, 'B'.code,
+            4, '_'.code, 'S'.code, 'S'.code, 'H'.code,
+            4, '_'.code, 'T'.code, 'C'.code, 'P'.code,
+            5, 'L'.code, 'O'.code, 'C'.code, 'A'.code, 'L'.code,
+            0, 0).map { it.toByte() }.toByteArray()
+    private val encodedTestAndroidHostName = intArrayOf(
             7, 'A'.code, 'N'.code, 'D'.code, 'R'.code, 'O'.code, 'I'.code, 'D'.code,
+            5, 'L'.code, 'O'.code, 'C'.code, 'A'.code, 'L'.code,
+            0, 0).map { it.toByte() }.toByteArray()
+    private val encodedTestLaptopHostName = intArrayOf(
+            6, 'L'.code, 'A'.code, 'P'.code, 'T'.code, 'O'.code, 'P'.code,
             5, 'L'.code, 'O'.code, 'C'.code, 'A'.code, 'L'.code,
             0, 0).map { it.toByte() }.toByteArray()
 
@@ -94,9 +112,9 @@ class ApfMdnsUtilsTest {
         val info1 = createOffloadServiceInfo(10)
         val info2 = createOffloadServiceInfo(
                 Integer.MAX_VALUE,
-                testServiceName2,
-                listOf("a", "b", "c", "d"),
-                testRawPacket2
+                serviceName = testServiceName2,
+                subTypes = listOf("a", "b", "c", "d"),
+                rawPacket1 = testRawPacket2
         )
         val rules = extractReplyRule(listOf(info2, info1)).offloadRules
         val expectedResult = listOf(
@@ -104,7 +122,7 @@ class ApfMdnsUtilsTest {
                         "${info1.key.serviceName}.${info1.key.serviceType}",
                         listOf(
                                 MdnsOffloadRule.Matcher(
-                                    encodedServiceType,
+                                    encodedHttpServiceType,
                                     intArrayOf(TYPE_PTR)
                                 ),
                                 MdnsOffloadRule.Matcher(
@@ -116,7 +134,7 @@ class ApfMdnsUtilsTest {
                                     intArrayOf(TYPE_SRV, TYPE_TXT)
                                 ),
                                 MdnsOffloadRule.Matcher(
-                                    encodedTestHostName,
+                                    encodedTestAndroidHostName,
                                     intArrayOf(TYPE_A, TYPE_AAAA)
                                 ),
 
@@ -127,7 +145,7 @@ class ApfMdnsUtilsTest {
                         "${info2.key.serviceName}.${info2.key.serviceType}",
                         listOf(
                                 MdnsOffloadRule.Matcher(
-                                    encodedServiceTypeWithWildCard,
+                                    encodedHttpServiceTypeWithWildCard,
                                     intArrayOf(TYPE_PTR)
                                 ),
                                 MdnsOffloadRule.Matcher(
@@ -143,6 +161,127 @@ class ApfMdnsUtilsTest {
     }
 
     @Test
+    fun testExtractFilterReplyRule_extractRules() {
+        // For advertise and resolve service with non-empty hostName
+        val info1 = createOffloadServiceInfo(
+                priority = 10,
+                serviceName = testServiceName2,
+                serviceType = testHttpServiceType,
+                subTypes = listOf(),
+                hostName = testAndroidHostName,
+                offloadType = OffloadEngine.OFFLOAD_TYPE_FILTER_REPLIES.toLong(),
+                rawPacket1 = null
+        )
+
+        // For advertise and resolve service with empty hostName
+        val info2 = createOffloadServiceInfo(
+                priority = 10,
+                serviceName = testServiceName1,
+                serviceType = testHttpServiceType,
+                subTypes = listOf(),
+                hostName = "",
+                offloadType = OffloadEngine.OFFLOAD_TYPE_FILTER_REPLIES.toLong(),
+                rawPacket1 = null
+        )
+
+        // For discover service with subtype containing only empty string ""
+        val info3 = createOffloadServiceInfo(
+                priority = 10,
+                serviceName = "",
+                serviceType = testHttpServiceType,
+                subTypes = listOf(""),
+                hostName = testAndroidHostName,
+                offloadType = OffloadEngine.OFFLOAD_TYPE_FILTER_REPLIES.toLong(),
+                rawPacket1 = null
+        )
+
+        // For discover service with subtypes containing empty string ""
+        val info4 = createOffloadServiceInfo(
+                priority = 10,
+                serviceName = "",
+                serviceType = testSshServiceType,
+                subTypes = listOf("", testSubType),
+                hostName = testAndroidHostName,
+                offloadType = OffloadEngine.OFFLOAD_TYPE_FILTER_REPLIES.toLong(),
+                rawPacket1 = null
+        )
+
+        // For discover service with non-empty subTypes
+        val info5 = createOffloadServiceInfo(
+                priority = 10,
+                serviceName = "",
+                serviceType = testHttpServiceType,
+                hostName = testLaptopHostName,
+                offloadType = OffloadEngine.OFFLOAD_TYPE_FILTER_REPLIES.toLong(),
+                rawPacket1 = null
+        )
+
+        // For different offloadType
+        val infoIgnoredType = createOffloadServiceInfo(
+                priority = 10,
+                serviceName = "IgnoredType",
+                serviceType = "_ignored._tcp",
+                hostName = "Test.local",
+                offloadType = OffloadEngine.OFFLOAD_TYPE_REPLY.toLong(),
+                rawPacket1 = null
+        )
+
+        val rules = extractReplyRule(
+            listOf(
+                info1,
+                info2,
+                info3,
+                info4,
+                info5,
+                infoIgnoredType
+            )
+        ).filterRules
+
+        val expectedResult = listOf(
+                MdnsOffloadRule(
+                        "${info1.key.serviceName}.${info1.key.serviceType}",
+                        listOf(
+                                MdnsOffloadRule.Matcher(encodedFullServiceName2),
+                                MdnsOffloadRule.Matcher(encodedTestAndroidHostName)
+                        ),
+                        null /* replyPayload */
+                ),
+                MdnsOffloadRule(
+                        "${info2.key.serviceName}.${info2.key.serviceType}",
+                        listOf(
+                                MdnsOffloadRule.Matcher(encodedFullServiceName1)
+                        ),
+                        null /* replyPayload */
+                ),
+                MdnsOffloadRule(
+                        "${info3.key.serviceName}.${info3.key.serviceType}",
+                        listOf(
+                                MdnsOffloadRule.Matcher(encodedHttpServiceType)
+                        ),
+                        null /* replyPayload */
+                ),
+                MdnsOffloadRule(
+                        "${info4.key.serviceName}.${info4.key.serviceType}",
+                        listOf(
+                                MdnsOffloadRule.Matcher(encodedSshServiceType),
+                                MdnsOffloadRule.Matcher(encodedSshServiceTypeWithWildCard)
+                        ),
+                        null /* replyPayload */
+                ),
+                MdnsOffloadRule(
+                        "${info5.key.serviceName}.${info5.key.serviceType}",
+                        listOf(
+                                MdnsOffloadRule.Matcher(encodedHttpServiceTypeWithWildCard),
+                                MdnsOffloadRule.Matcher(encodedTestLaptopHostName)
+                        ),
+                        null /* replyPayload */
+                )
+        )
+
+        assertContentEquals(expectedResult, rules)
+    }
+
+    @Test
     fun testExtractOffloadReplyRule_longLabelThrowsException() {
         val info = createOffloadServiceInfo(10, "a".repeat(256))
         assertFailsWith<IOException> { extractReplyRule(listOf(info)).offloadRules }
@@ -151,14 +290,17 @@ class ApfMdnsUtilsTest {
     private fun createOffloadServiceInfo(
             priority: Int,
             serviceName: String = testServiceName1,
+            serviceType: String = testHttpServiceType,
             subTypes: List<String> = listOf(testSubType),
-            rawPacket1: ByteArray = testRawPacket1
+            hostName: String = testAndroidHostName,
+            rawPacket1: ByteArray? = testRawPacket1,
+            offloadType: Long = OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
     ): OffloadServiceInfo = OffloadServiceInfo(
-            Key(serviceName, testServiceType),
+            Key(serviceName, serviceType),
             subTypes,
-            testHostName,
+            hostName,
             rawPacket1,
             priority,
-            OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
+            offloadType
         )
 }
