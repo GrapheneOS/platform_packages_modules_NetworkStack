@@ -142,9 +142,10 @@ public class TcpInfo {
             throw new IllegalArgumentException("Length " + infolen + " is less than required.");
         }
         final int start = bytes.position();
+        // TODO: all three of these fields are 'u32' but being read here as 's32'
         mSegsIn = bytes.getInt(start + SEGS_IN_OFFSET);
         mSegsOut = bytes.getInt(start + SEGS_OUT_OFFSET);
-        mTotalRetrans = bytes.get(start + TOTAL_RETRANS_OFFSET);
+        mTotalRetrans = bytes.getInt(start + TOTAL_RETRANS_OFFSET);
         // tcp_info structure grows over time as new fields are added. Jump to the end of the
         // structure, as unknown fields might remain at the end of the structure if the tcp_info
         // struct was expanded.
