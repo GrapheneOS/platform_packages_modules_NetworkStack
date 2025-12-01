@@ -54,6 +54,7 @@ import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_INVALID;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_OTHER_HOST;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_REPLIED_NON_DAD;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ROUTER_SOLICITATION;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_LOW_POWER_STANDBY;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_MDNS;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_MDNS_REPLIED;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_NON_UNICAST_TDLS;
@@ -73,6 +74,7 @@ import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_NON_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_IPV6_UNICAST_NON_ICMP;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_LOW_POWER_STANDBY_MAGIC_PACKET;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_LOW_POWER_STANDBY_PORT_ALLOWED;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_NON_IP_UNICAST;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_RA;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_TRANSMIT_FAILURE;
@@ -116,6 +118,7 @@ import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_NS_INVALID;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_NS_OTHER_HOST;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_NS_REPLIED_NON_DAD;
 import static android.stats.connectivity.CounterName.CN_DROPPED_IPV6_ROUTER_SOLICITATION;
+import static android.stats.connectivity.CounterName.CN_DROPPED_LOW_POWER_STANDBY;
 import static android.stats.connectivity.CounterName.CN_DROPPED_MDNS;
 import static android.stats.connectivity.CounterName.CN_DROPPED_MDNS_REPLIED;
 import static android.stats.connectivity.CounterName.CN_DROPPED_NON_UNICAST_TDLS;
@@ -134,6 +137,7 @@ import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_ICMP;
 import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_NON_ICMP;
 import static android.stats.connectivity.CounterName.CN_PASSED_IPV6_UNICAST_NON_ICMP;
 import static android.stats.connectivity.CounterName.CN_PASSED_LOW_POWER_STANDBY_MAGIC_PACKET;
+import static android.stats.connectivity.CounterName.CN_PASSED_LOW_POWER_STANDBY_PORT_ALLOWED;
 import static android.stats.connectivity.CounterName.CN_PASSED_NON_IP_UNICAST;
 import static android.stats.connectivity.CounterName.CN_PASSED_OUR_SRC_MAC;
 import static android.stats.connectivity.CounterName.CN_PASSED_RA;
@@ -208,6 +212,7 @@ public class ApfSessionInfoMetrics {
                 Map.entry(DROPPED_IPV6_NS_OTHER_HOST, CN_DROPPED_IPV6_NS_OTHER_HOST),
                 Map.entry(DROPPED_IPV6_NS_REPLIED_NON_DAD, CN_DROPPED_IPV6_NS_REPLIED_NON_DAD),
                 Map.entry(DROPPED_IPV6_ROUTER_SOLICITATION, CN_DROPPED_IPV6_ROUTER_SOLICITATION),
+                Map.entry(DROPPED_LOW_POWER_STANDBY, CN_DROPPED_LOW_POWER_STANDBY),
                 Map.entry(DROPPED_MDNS, CN_DROPPED_MDNS),
                 Map.entry(DROPPED_MDNS_REPLIED, CN_DROPPED_MDNS_REPLIED),
                 Map.entry(DROPPED_NON_UNICAST_TDLS, CN_DROPPED_NON_UNICAST_TDLS),
@@ -227,6 +232,8 @@ public class ApfSessionInfoMetrics {
                 Map.entry(PASSED_IPV6_UNICAST_NON_ICMP, CN_PASSED_IPV6_UNICAST_NON_ICMP),
                 Map.entry(PASSED_LOW_POWER_STANDBY_MAGIC_PACKET,
                         CN_PASSED_LOW_POWER_STANDBY_MAGIC_PACKET),
+                Map.entry(PASSED_LOW_POWER_STANDBY_PORT_ALLOWED,
+                        CN_PASSED_LOW_POWER_STANDBY_PORT_ALLOWED),
                 Map.entry(PASSED_NON_IP_UNICAST, CN_PASSED_NON_IP_UNICAST),
                 Map.entry(PASSED_RA, CN_PASSED_RA),
                 Map.entry(PASSED_TRANSMIT_FAILURE, CN_PASSED_TRANSMIT_FAILURE)

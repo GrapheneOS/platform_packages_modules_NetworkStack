@@ -19,7 +19,6 @@ package android.net.networkstack;
 import static android.os.Build.VERSION.SDK_INT;
 
 import android.annotation.NonNull;
-import android.content.Context;
 import android.net.INetworkStackConnector;
 import android.net.NetworkStack;
 import android.os.Build;
@@ -33,17 +32,28 @@ import com.android.internal.annotations.VisibleForTesting;
  */
 public class ModuleNetworkStackClient extends NetworkStackClientBase {
     private static final String TAG = ModuleNetworkStackClient.class.getSimpleName();
-
-    private ModuleNetworkStackClient() {}
-
     private static ModuleNetworkStackClient sInstance;
+
+    private final Dependencies mDeps;
+
+    private ModuleNetworkStackClient(Dependencies deps) {
+        mDeps = deps;
+    }
 
     /**
      * Get an instance of the ModuleNetworkStackClient.
-     * @param packageContext Context to use to obtain the network stack connector.
      */
     @NonNull
-    public static synchronized ModuleNetworkStackClient getInstance(Context packageContext) {
+    public static ModuleNetworkStackClient getInstance() {
+        return getInstance(new Dependencies());
+    }
+
+    /**
+     * Get an instance of the ModuleNetworkStackClient. Only for tests.
+     */
+    @VisibleForTesting
+    @NonNull
+    public static synchronized ModuleNetworkStackClient getInstance(Dependencies deps) {
         if (SDK_INT < Build.VERSION_CODES.R) {
             // The NetworkStack connector is not available through NetworkStack before R
             throw new UnsupportedOperationException(
@@ -51,7 +61,7 @@ public class ModuleNetworkStackClient extends NetworkStackClientBase {
         }
 
         if (sInstance == null) {
-            sInstance = new ModuleNetworkStackClient();
+            sInstance = new ModuleNetworkStackClient(deps);
             sInstance.startPolling();
         }
         return sInstance;
@@ -62,10 +72,27 @@ public class ModuleNetworkStackClient extends NetworkStackClientBase {
         sInstance = null;
     }
 
+    @VisibleForTesting
+    public static class Dependencies {
+        public IBinder getNetworkStack() {
+            return NetworkStack.getService();
+        }
+    }
+
+    private IBinder getAliveNetworkStack() {
+        final IBinder networkStack = mDeps.getNetworkStack();
+        // If system server restarted, NetworkStack.getService() might temporarily return a stale
+        // (i.e. dead) version of NetworkStack.
+        if (networkStack != null && networkStack.isBinderAlive()) {
+            return networkStack;
+        }
+        return null;
+    }
+
     private void startPolling() {
         // If the service is already registered (as it will be most of the time), do not poll and
         // fulfill requests immediately.
-        final IBinder nss = NetworkStack.getService();
+        final IBinder nss = getAliveNetworkStack();
         if (nss != null) {
             // Calling onNetworkStackConnected here means that pending oneway Binder calls to the
             // NetworkStack get sent from the current thread and not a worker thread; this is fine
@@ -84,7 +111,7 @@ public class ModuleNetworkStackClient extends NetworkStackClientBase {
         public void run() {
             // Block until the NetworkStack connector is registered in ServiceManager.
             IBinder nss;
-            while ((nss = NetworkStack.getService()) == null) {
+            while ((nss = getAliveNetworkStack()) == null) {
                 try {
                     Thread.sleep(200);
                 } catch (InterruptedException e) {

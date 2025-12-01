@@ -3980,4 +3980,68 @@ public class NetworkMonitorTest {
             assertEquals(isPortal ? 2 : 1, mRegisteredReceivers.size());
         }
     }
+
+    @Test
+    public void testCapportDataReported_MultiParallelProbe_Succeed() throws Exception {
+        doReturn(true).when(mDependencies)
+                .isFeatureNotChickenedOut(any(),
+                        eq(NETWORKMONITOR_USE_CAPPORT_DATA_IN_FALLBACK));
+
+        setupResourceForMultipleProbes();
+        setApiContent(mCapportApiConnection, "{'captive': false,"
+                + "'user-portal-url': '" + TEST_LOGIN_URL + "',"
+                + "'venue-info-url': '" + TEST_VENUE_INFO_URL + "'}");
+
+        setStatus(mOtherHttpsConnection1, 204);
+        setStatus(mOtherHttpsConnection2, 204);
+
+        setStatus(mOtherHttpConnection1, 204);
+        setStatus(mOtherHttpConnection2, 204); // The other can succeed without portal.
+
+        runNetworkTest(TEST_AGENT_CONFIG, makeCapportLPs(), CELL_METERED_CAPABILITIES,
+                NETWORK_VALIDATION_RESULT_VALID,
+                NETWORK_VALIDATION_PROBE_HTTPS | NETWORK_VALIDATION_PROBE_DNS,
+                null);
+
+        // Verify that the captive portal data from the API probe was reported.
+        final ArgumentCaptor<CaptivePortalData> capportDataCaptor =
+                ArgumentCaptor.forClass(CaptivePortalData.class);
+        verify(mCallbacks).notifyCaptivePortalDataChanged(capportDataCaptor.capture());
+        final CaptivePortalData p = capportDataCaptor.getValue();
+        assertFalse(p.isCaptive());
+        assertEquals(Uri.parse(TEST_LOGIN_URL), p.getUserPortalUrl());
+        assertEquals(Uri.parse(TEST_VENUE_INFO_URL), p.getVenueInfoUrl());
+    }
+
+    @Test
+    public void testCapportDataReported_MultiParallelProbe_Partial() throws Exception {
+        doReturn(true).when(mDependencies)
+                .isFeatureNotChickenedOut(any(),
+                        eq(NETWORKMONITOR_USE_CAPPORT_DATA_IN_FALLBACK));
+
+        setupResourceForMultipleProbes();
+        setApiContent(mCapportApiConnection, "{'captive': false,"
+                + "'user-portal-url': '" + TEST_LOGIN_URL + "',"
+                + "'venue-info-url': '" + TEST_VENUE_INFO_URL + "'}");
+
+        setSslException(mOtherHttpsConnection1);
+        setSslException(mOtherHttpsConnection2);
+
+        setStatus(mOtherHttpConnection1, 204);
+        setStatus(mOtherHttpConnection2, 204); // The other can succeed without portal.
+
+        runNetworkTest(TEST_AGENT_CONFIG, makeCapportLPs(), CELL_METERED_CAPABILITIES,
+                NETWORK_VALIDATION_RESULT_PARTIAL,
+                0,
+                null);
+
+        // Verify that the captive portal data from the API probe was reported.
+        final ArgumentCaptor<CaptivePortalData> capportDataCaptor =
+                ArgumentCaptor.forClass(CaptivePortalData.class);
+        verify(mCallbacks).notifyCaptivePortalDataChanged(capportDataCaptor.capture());
+        final CaptivePortalData p = capportDataCaptor.getValue();
+        assertFalse(p.isCaptive());
+        assertEquals(Uri.parse(TEST_LOGIN_URL), p.getUserPortalUrl());
+        assertEquals(Uri.parse(TEST_VENUE_INFO_URL), p.getVenueInfoUrl());
+    }
 }

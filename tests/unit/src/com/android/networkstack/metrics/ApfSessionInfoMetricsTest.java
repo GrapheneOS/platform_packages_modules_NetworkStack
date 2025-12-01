@@ -17,17 +17,21 @@
 package com.android.networkstack.metrics;
 
 import static android.net.apf.ApfCounterTracker.Counter.CORRUPT_DNS_PACKET;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_LOW_POWER_STANDBY;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_NON_UNICAST_TDLS;
 import static android.net.apf.ApfCounterTracker.Counter.EXCEPTIONS;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_ALLOCATE_FAILURE;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_LOW_POWER_STANDBY_MAGIC_PACKET;
+import static android.net.apf.ApfCounterTracker.Counter.PASSED_LOW_POWER_STANDBY_PORT_ALLOWED;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_RA;
 import static android.net.apf.ApfCounterTracker.Counter.PASSED_TRANSMIT_FAILURE;
 import static android.stats.connectivity.CounterName.CN_CORRUPT_DNS_PACKET;
+import static android.stats.connectivity.CounterName.CN_DROPPED_LOW_POWER_STANDBY;
 import static android.stats.connectivity.CounterName.CN_DROPPED_NON_UNICAST_TDLS;
 import static android.stats.connectivity.CounterName.CN_EXCEPTIONS;
 import static android.stats.connectivity.CounterName.CN_PASSED_ALLOCATE_FAILURE;
 import static android.stats.connectivity.CounterName.CN_PASSED_LOW_POWER_STANDBY_MAGIC_PACKET;
+import static android.stats.connectivity.CounterName.CN_PASSED_LOW_POWER_STANDBY_PORT_ALLOWED;
 import static android.stats.connectivity.CounterName.CN_PASSED_RA;
 import static android.stats.connectivity.CounterName.CN_PASSED_TRANSMIT_FAILURE;
 
@@ -199,5 +203,8 @@ public class ApfSessionInfoMetricsTest {
         verifyCounterName(DROPPED_NON_UNICAST_TDLS, CN_DROPPED_NON_UNICAST_TDLS);
         verifyCounterName(PASSED_LOW_POWER_STANDBY_MAGIC_PACKET,
                 CN_PASSED_LOW_POWER_STANDBY_MAGIC_PACKET);
+        verifyCounterName(PASSED_LOW_POWER_STANDBY_PORT_ALLOWED,
+                CN_PASSED_LOW_POWER_STANDBY_PORT_ALLOWED);
+        verifyCounterName(DROPPED_LOW_POWER_STANDBY, CN_DROPPED_LOW_POWER_STANDBY);
     }
 }

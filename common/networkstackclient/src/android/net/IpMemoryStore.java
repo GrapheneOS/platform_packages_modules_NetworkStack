@@ -87,7 +87,7 @@ public class IpMemoryStore extends IpMemoryStoreClient {
 
     @VisibleForTesting
     protected ModuleNetworkStackClient getModuleNetworkStackClient(Context context) {
-        return ModuleNetworkStackClient.getInstance(context);
+        return ModuleNetworkStackClient.getInstance();
     }
 
     /** Gets an instance of the memory store */

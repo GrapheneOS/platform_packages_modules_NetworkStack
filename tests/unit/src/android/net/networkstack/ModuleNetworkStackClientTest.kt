@@ -16,29 +16,24 @@
 
 package android.net.networkstack
 
-import android.content.Context
 import android.net.IIpMemoryStoreCallbacks
 import android.net.INetworkMonitorCallbacks
 import android.net.INetworkStackConnector
 import android.net.Network
-import android.net.NetworkStack
 import android.net.dhcp.DhcpServingParamsParcel
 import android.net.dhcp.IDhcpServerCallbacks
 import android.net.ip.IIpClientCallbacks
-import android.os.Build
 import android.os.IBinder
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
-import com.android.dx.mockito.inline.extended.ExtendedMockito.doReturn
-import com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession
-import com.android.testutils.DevSdkIgnoreRule
 import org.junit.After
 import org.junit.Before
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mock
+import org.mockito.Mockito.doAnswer
+import org.mockito.Mockito.doReturn
 import org.mockito.Mockito.never
 import org.mockito.Mockito.timeout
 import org.mockito.Mockito.verify
@@ -49,92 +44,120 @@ import org.mockito.MockitoAnnotations
 class ModuleNetworkStackClientTest {
     private val TEST_IFNAME = "testiface"
     private val TEST_NETWORK = Network(43)
-    private val TEST_TIMEOUT_MS = 500L
-
-    // ModuleNetworkStackClient is only available after Q
-    @Rule @JvmField
-    val mIgnoreRule = DevSdkIgnoreRule(ignoreClassUpTo = Build.VERSION_CODES.Q)
+    private val TEST_TIMEOUT_MS = 2_000L
 
     @Mock
-    private lateinit var mContext: Context
+    private lateinit var deps: ModuleNetworkStackClient.Dependencies
     @Mock
-    private lateinit var mConnectorBinder: IBinder
+    private lateinit var connectorBinder: IBinder
     @Mock
-    private lateinit var mConnector: INetworkStackConnector
+    private lateinit var connector: INetworkStackConnector
     @Mock
-    private lateinit var mIpClientCb: IIpClientCallbacks
+    private lateinit var ipClientCb: IIpClientCallbacks
     @Mock
-    private lateinit var mDhcpServerCb: IDhcpServerCallbacks
+    private lateinit var dhcpServerCb: IDhcpServerCallbacks
     @Mock
-    private lateinit var mNetworkMonitorCb: INetworkMonitorCallbacks
+    private lateinit var networkMonitorCb: INetworkMonitorCallbacks
     @Mock
-    private lateinit var mIpMemoryStoreCb: IIpMemoryStoreCallbacks
+    private lateinit var ipMemoryStoreCb: IIpMemoryStoreCallbacks
+
+    private var testRegisteredNetworkStack: IBinder? = null
 
     @Before
     fun setUp() {
         MockitoAnnotations.initMocks(this)
+        doAnswer { testRegisteredNetworkStack }.`when`(deps).networkStack
         // Use DESCRIPTOR and not class name, as the descriptor is the original class name before
         // jarjar, and is always what is used to query the interface.
-        doReturn(mConnector).`when`(mConnectorBinder).queryLocalInterface(
-                INetworkStackConnector.DESCRIPTOR)
+        doReturn(connector).`when`(connectorBinder).queryLocalInterface(
+                INetworkStackConnector.DESCRIPTOR
+        )
+        doReturn(true).`when`(connectorBinder).isBinderAlive()
     }
 
     @After
     fun tearDown() {
         ModuleNetworkStackClient.resetInstanceForTest()
-        NetworkStack.setServiceForTest(null)
+    }
+
+    fun testIpClientServiceAvailableImmediately() {
+        testRegisteredNetworkStack = connectorBinder
+        ModuleNetworkStackClient.getInstance(deps).makeIpClient(TEST_IFNAME, ipClientCb)
+        verify(connector).makeIpClient(TEST_IFNAME, ipClientCb)
     }
 
     @Test
-    fun testIpClientServiceAvailableImmediately() {
-        NetworkStack.setServiceForTest(mConnectorBinder)
-        ModuleNetworkStackClient.getInstance(mContext).makeIpClient(TEST_IFNAME, mIpClientCb)
-        verify(mConnector).makeIpClient(TEST_IFNAME, mIpClientCb)
+    fun testIpClientServiceAvailableImmediately_binderNotAlive() {
+        // Binder is not alive, so the client should start polling.
+        doReturn(false).`when`(connectorBinder).isBinderAlive
+        testRegisteredNetworkStack = connectorBinder
+        ModuleNetworkStackClient.getInstance(deps).makeIpClient(TEST_IFNAME, ipClientCb)
+
+        verify(deps, timeout(TEST_TIMEOUT_MS).atLeast(2)).networkStack
+        verify(connector, never()).makeIpClient(any(), any())
+
+        // Binder becomes alive, polling should succeed.
+        doReturn(true).`when`(connectorBinder).isBinderAlive
+        verify(connector, timeout(TEST_TIMEOUT_MS)).makeIpClient(TEST_IFNAME, ipClientCb)
     }
 
     @Test
     fun testIpClientServiceAvailableAfterPolling() {
-        // Force NetworkStack.getService() to return null: this cannot be done with
-        // setServiceForTest, as passing null just restores default behavior.
-        val session = mockitoSession().spyStatic(NetworkStack::class.java).startMocking()
-        try {
-            doReturn(null).`when` { NetworkStack.getService() }
-            ModuleNetworkStackClient.getInstance(mContext).makeIpClient(TEST_IFNAME, mIpClientCb)
+        ModuleNetworkStackClient.getInstance(deps).makeIpClient(TEST_IFNAME, ipClientCb)
 
-            Thread.sleep(TEST_TIMEOUT_MS)
-            verify(mConnector, never()).makeIpClient(any(), any())
-            NetworkStack.setServiceForTest(mConnectorBinder)
-        } finally {
-            // Restore behavior of NetworkStack to return what was set in setServiceForTest
-            session.finishMocking()
-        }
+        verify(deps, timeout(TEST_TIMEOUT_MS).atLeast(2)).networkStack
+        verify(connector, never()).makeIpClient(any(), any())
+        testRegisteredNetworkStack = connectorBinder
 
-        // Use a longer timeout as polling can cause larger delays
-        verify(mConnector, timeout(TEST_TIMEOUT_MS * 4)).makeIpClient(TEST_IFNAME, mIpClientCb)
+        verify(connector, timeout(TEST_TIMEOUT_MS)).makeIpClient(TEST_IFNAME, ipClientCb)
+    }
+
+    @Test
+    fun testIpClientServiceAvailableAfterPolling_binderNotAlive() {
+        ModuleNetworkStackClient.getInstance(deps).makeIpClient(TEST_IFNAME, ipClientCb)
+
+        verify(deps, timeout(TEST_TIMEOUT_MS).atLeast(2)).networkStack
+        verify(connector, never()).makeIpClient(any(), any())
+
+        // Service becomes available, but binder is not alive.
+        doReturn(false).`when`(connectorBinder).isBinderAlive
+        testRegisteredNetworkStack = connectorBinder
+        verify(deps, timeout(TEST_TIMEOUT_MS).atLeast(4)).networkStack
+        verify(connector, never()).makeIpClient(any(), any())
+
+        // Binder becomes alive, polling should succeed.
+        doReturn(true).`when`(connectorBinder).isBinderAlive
+        verify(connector, timeout(TEST_TIMEOUT_MS)).makeIpClient(TEST_IFNAME, ipClientCb)
     }
 
     @Test
     fun testDhcpServerAvailableImmediately() {
-        NetworkStack.setServiceForTest(mConnectorBinder)
+        testRegisteredNetworkStack = connectorBinder
         val testParams = DhcpServingParamsParcel()
-        ModuleNetworkStackClient.getInstance(mContext).makeDhcpServer(TEST_IFNAME, testParams,
-                mDhcpServerCb)
-        verify(mConnector).makeDhcpServer(TEST_IFNAME, testParams, mDhcpServerCb)
+        ModuleNetworkStackClient.getInstance(deps).makeDhcpServer(
+            TEST_IFNAME,
+            testParams,
+                dhcpServerCb
+        )
+        verify(connector).makeDhcpServer(TEST_IFNAME, testParams, dhcpServerCb)
     }
 
     @Test
     fun testNetworkMonitorAvailableImmediately() {
-        NetworkStack.setServiceForTest(mConnectorBinder)
+        testRegisteredNetworkStack = connectorBinder
         val testName = "NetworkMonitorName"
-        ModuleNetworkStackClient.getInstance(mContext).makeNetworkMonitor(TEST_NETWORK, testName,
-                mNetworkMonitorCb)
-        verify(mConnector).makeNetworkMonitor(TEST_NETWORK, testName, mNetworkMonitorCb)
+        ModuleNetworkStackClient.getInstance(deps).makeNetworkMonitor(
+            TEST_NETWORK,
+            testName,
+                networkMonitorCb
+        )
+        verify(connector).makeNetworkMonitor(TEST_NETWORK, testName, networkMonitorCb)
     }
 
     @Test
     fun testIpMemoryStoreAvailableImmediately() {
-        NetworkStack.setServiceForTest(mConnectorBinder)
-        ModuleNetworkStackClient.getInstance(mContext).fetchIpMemoryStore(mIpMemoryStoreCb)
-        verify(mConnector).fetchIpMemoryStore(mIpMemoryStoreCb)
+        testRegisteredNetworkStack = connectorBinder
+        ModuleNetworkStackClient.getInstance(deps).fetchIpMemoryStore(ipMemoryStoreCb)
+        verify(connector).fetchIpMemoryStore(ipMemoryStoreCb)
     }
 }
