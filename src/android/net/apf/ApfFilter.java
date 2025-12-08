@@ -287,6 +287,7 @@ import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.CollectionUtils;
 import com.android.net.module.util.ConnectivityUtils;
 import com.android.net.module.util.InterfaceParams;
+import com.android.net.module.util.LinkPropertiesUtils;
 import com.android.net.module.util.PacketReader;
 import com.android.net.module.util.ProcfsParsingUtils;
 import com.android.networkstack.metrics.ApfSessionInfoMetrics;
@@ -450,6 +451,10 @@ public class ApfFilter {
     private final ArraySet<Long> mLowPowerStandbyPortsTcpRemote = new ArraySet<>();
     private final ArraySet<Long> mLowPowerStandbyPortsUdpLocal = new ArraySet<>();
     private final ArraySet<Long> mLowPowerStandbyPortsUdpRemote = new ArraySet<>();
+    // This is the interface MTU, NOT the IPv6 MTU or per-route MTU.
+    // TODO: We should also watch the IPv6 MTU from netlink as it may be lower. Per-route MTU is
+    //  maybe less critical since APF usually handles small, link-local packets.
+    private int mInterfaceMtu;
 
     private int mOverEstimatedProgramSize = 0;
 
@@ -573,6 +578,7 @@ public class ApfFilter {
         mMaximumApfProgramSize = Math.max(0, maximumApfProgramSize);
         mApfController = apfController;
         mInterfaceParams = ifParams;
+        mInterfaceMtu = mInterfaceParams.defaultMtu;
         mMulticastFilter = config.multicastFilter;
         mDrop802_3Frames = config.ieee802_3Filter;
         mMinRdnssLifetimeSec = config.minRdnssLifetimeSec;
@@ -3107,7 +3113,7 @@ public class ApfFilter {
                 + IPV4_IGMP_MIN_SIZE
                 + (mIPv4McastAddrsExcludeAllHost.size() * IPV4_IGMP_GROUP_RECORD_SIZE);
         final int packetSize = ETHER_HEADER_LEN + ipv4TotalLen;
-        if (packetSize > mInterfaceParams.defaultMtu) {
+        if (packetSize > mInterfaceMtu) {
             gen.addCountAndPass(PASSED_DUE_TO_REPLY_OVER_MTU);
             return;
         }
@@ -3165,7 +3171,7 @@ public class ApfFilter {
         final int ipv4TotalLen =
                 IPV4_HEADER_MIN_LEN + IPV4_ROUTER_ALERT_OPTION_LEN + IPV4_IGMP_MIN_SIZE;
         final int packetSize = ETHER_HEADER_LEN + ipv4TotalLen;
-        if (packetSize > mInterfaceParams.defaultMtu) {
+        if (packetSize > mInterfaceMtu) {
             gen.addCountAndPass(PASSED_DUE_TO_REPLY_OVER_MTU);
             return;
         }
@@ -3398,7 +3404,7 @@ public class ApfFilter {
                 + IPV6_HEADER_LEN
                 + IPV6_MLD_HOPOPTS.length
                 + IPV6_MLD_V1_MESSAGE_SIZE;
-        if (packetSize > mInterfaceParams.defaultMtu) {
+        if (packetSize > mInterfaceMtu) {
             gen.addCountAndPass(PASSED_DUE_TO_REPLY_OVER_MTU);
             return;
         }
@@ -3449,7 +3455,7 @@ public class ApfFilter {
                 + IPV6_MLD_MESSAGE_MIN_SIZE
                 + (mcastAddrsNum * IPV6_MLD_V2_MULTICAST_ADDRESS_RECORD_SIZE);
         final int packetSize = ETHER_HEADER_LEN + IPV6_HEADER_LEN + ipv6PayloadLength;
-        if (packetSize > mInterfaceParams.defaultMtu) {
+        if (packetSize > mInterfaceMtu) {
             gen.addCountAndPass(PASSED_DUE_TO_REPLY_OVER_MTU);
             return;
         }
@@ -3796,7 +3802,7 @@ public class ApfFilter {
                     final int udpLength = UDP_HEADER_LEN + rule.mOffloadPayload.length;
                     final int ipv4TotalLength = IPV4_HEADER_MIN_LEN + udpLength;
                     final int pktLength = ETH_HEADER_LEN + ipv4TotalLength;
-                    if (pktLength > mInterfaceParams.defaultMtu) {
+                    if (pktLength > mInterfaceMtu) {
                         gen.addCountAndPass(PASSED_DUE_TO_REPLY_OVER_MTU);
                     } else {
                         gen.addAllocate(pktLength)
@@ -3822,7 +3828,7 @@ public class ApfFilter {
                 if (enableMdns6) {
                     final int udpLength = UDP_HEADER_LEN + rule.mOffloadPayload.length;
                     final int pktLength = ETH_HEADER_LEN + IPV6_HEADER_LEN + udpLength;
-                    if (pktLength > mInterfaceParams.defaultMtu) {
+                    if (pktLength > mInterfaceMtu) {
                         gen.addCountAndPass(PASSED_DUE_TO_REPLY_OVER_MTU);
                     } else {
                         gen.addAllocate(pktLength)
@@ -4546,13 +4552,19 @@ public class ApfFilter {
         final int prefix = (ipv4Address != null) ? ipv4Address.getPrefixLength() : 0;
         final Pair<Set<Inet6Address>, Set<Inet6Address>>
                 ipv6Addresses = retrieveIPv6LinkAddress(lp);
-
+        final int newMtu = lp.getMtu();
+        final boolean isValidMtu = LinkPropertiesUtils.isValidMtu(newMtu,
+                lp.hasGlobalIpv6Address());
         if ((prefix == mIPv4PrefixLength)
                 && Arrays.equals(addr, mIPv4Address)
                 && ipv6Addresses.first.equals(mIPv6TentativeAddresses)
                 && ipv6Addresses.second.equals(mIPv6NonTentativeAddresses)
+                && (!isValidMtu || newMtu == mInterfaceMtu)
         ) {
             return;
+        }
+        if (isValidMtu) {
+            mInterfaceMtu = newMtu;
         }
         mIPv4Address = addr;
         mIPv4PrefixLength = prefix;
