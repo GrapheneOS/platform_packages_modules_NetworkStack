@@ -57,6 +57,7 @@ import static android.provider.DeviceConfig.NAMESPACE_CONNECTIVITY;
 import static com.android.net.module.util.DnsPacket.TYPE_SVCB;
 import static com.android.net.module.util.FeatureVersions.FEATURE_DDR_IN_CONNECTIVITY;
 import static com.android.net.module.util.FeatureVersions.FEATURE_DDR_IN_DNSRESOLVER;
+import static com.android.net.module.util.NetworkStackConstants.TEST_CAPTIVE_PORTAL_FALLBACK_URL;
 import static com.android.net.module.util.NetworkStackConstants.TEST_CAPTIVE_PORTAL_HTTPS_URL;
 import static com.android.net.module.util.NetworkStackConstants.TEST_CAPTIVE_PORTAL_HTTP_URL;
 import static com.android.net.module.util.NetworkStackConstants.TEST_URL_EXPIRATION_TIME;
@@ -1712,6 +1713,21 @@ public class NetworkMonitorTest {
     }
 
     @Test
+    public void testIsCaptivePortal_OverriddenFallbackUrlPortal() throws Exception {
+        setDeviceConfig(TEST_URL_EXPIRATION_TIME,
+                String.valueOf(currentTimeMillis() + TimeUnit.MINUTES.toMillis(9)));
+        setDeviceConfig(TEST_CAPTIVE_PORTAL_FALLBACK_URL, TEST_OVERRIDE_URL);
+        setStatus(mHttpsConnection, 500);
+        setStatus(mHttpConnection, 500);
+        setPortal302(mTestOverriddenUrlConnection);
+
+        runPortalNetworkTest();
+        verify(mFallbackConnection, never()).getResponseCode();
+        verify(mOtherFallbackConnection, never()).getResponseCode();
+        verify(mTestOverriddenUrlConnection).getResponseCode();
+    }
+
+    @Test
     public void testIsCaptivePortal_InvalidHttpOverrideUrl() throws Exception {
         setDeviceConfig(TEST_URL_EXPIRATION_TIME,
                 String.valueOf(currentTimeMillis() + TimeUnit.MINUTES.toMillis(9)));
@@ -1735,6 +1751,20 @@ public class NetworkMonitorTest {
         runValidatedNetworkTest();
         verify(mTestOverriddenUrlConnection, never()).getResponseCode();
         verify(mHttpsConnection).getResponseCode();
+    }
+
+    @Test
+    public void testIsCaptivePortal_InvalidFallbackUrl() throws Exception {
+        setDeviceConfig(TEST_URL_EXPIRATION_TIME,
+                String.valueOf(currentTimeMillis() + TimeUnit.MINUTES.toMillis(9)));
+        setDeviceConfig(TEST_CAPTIVE_PORTAL_FALLBACK_URL, TEST_INVALID_OVERRIDE_URL);
+        setStatus(mHttpsConnection, 500);
+        setStatus(mHttpConnection, 500);
+        setPortal302(mFallbackConnection);
+
+        runPortalNetworkTest();
+        verify(mTestOverriddenUrlConnection, never()).getResponseCode();
+        verify(mFallbackConnection).getResponseCode();
     }
 
     @Test
