@@ -61,18 +61,21 @@ public class ApfMdnsOffloadEngine implements OffloadEngine {
     private final NsdManager mNsdManager;
     @NonNull
     private final Callback mCallback;
+    @NonNull
+    private final int mOffloadType;
     private final boolean mSkipMdnsRecordWithoutPriority;
 
     /**
      * Constructor for ApfOffloadEngine.
      */
     public ApfMdnsOffloadEngine(@NonNull String interfaceName, @NonNull Handler handler,
-            @NonNull NsdManager nsdManager, @NonNull Callback callback,
+            @NonNull NsdManager nsdManager, @NonNull Callback callback, @NonNull int offloadType,
             boolean skipMdnsRecordWithoutPriority) {
         mInterfaceName = interfaceName;
         mHandler = handler;
         mNsdManager = nsdManager;
         mCallback = callback;
+        mOffloadType = offloadType;
         mSkipMdnsRecordWithoutPriority = skipMdnsRecordWithoutPriority;
     }
 
@@ -112,7 +115,7 @@ public class ApfMdnsOffloadEngine implements OffloadEngine {
      * Registers the offload engine with the NsdManager.
      */
     public void registerOffloadEngine() {
-        mNsdManager.registerOffloadEngine(mInterfaceName, OFFLOAD_TYPE_REPLY,
+        mNsdManager.registerOffloadEngine(mInterfaceName, mOffloadType,
                 OFFLOAD_CAPABILITY_BYPASS_MULTICAST_LOCK, mHandler::post, this);
     }
 

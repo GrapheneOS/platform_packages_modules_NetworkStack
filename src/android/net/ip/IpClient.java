@@ -867,6 +867,7 @@ public class IpClient extends StateMachine {
     private final boolean mApfHandleArpOffload;
     private final boolean mApfHandleNdOffload;
     private final boolean mApfHandleMdnsOffload;
+    private final boolean mApfHandleMdnsReplyFilter;
     private final boolean mApfHandleIgmpOffload;
     private final boolean mApfHandleMldOffload;
     private final boolean mApfHandleIpv4PingOffload;
@@ -1221,6 +1222,9 @@ public class IpClient extends StateMachine {
         mApfHandleMdnsOffload =
                 SdkLevel.isAtLeastB() && (mIsTvDevice
                         || com.android.networkstack.flags.Flags.apfHandleMdnsAdvertisingOffload());
+        mApfHandleMdnsReplyFilter =
+                SdkLevel.isAtLeastB()
+                    && com.android.networkstack.flags.Flags.apfHandleMdnsReplyFilter();
         mApfHandleIgmpOffload =
                 mDependencies.isFeatureNotChickenedOut(mContext, APF_HANDLE_IGMP_OFFLOAD)
                     && (SdkLevel.isAtLeastB()
@@ -2991,6 +2995,7 @@ public class IpClient extends StateMachine {
         apfConfig.handleArpOffload = mApfHandleArpOffload;
         apfConfig.handleNdOffload = mApfHandleNdOffload;
         apfConfig.handleMdnsOffload = mApfHandleMdnsOffload;
+        apfConfig.handleMdnsReplyFilter = mApfHandleMdnsReplyFilter;
         // In Android 16 for Android TV, the mDNS offload fail-open mechanism is not functional
         // due to the need to coexist with Wake on LAN filters. Specifically, during CPU
         // suspend, APF is used for offload, and the Wake on LAN filter exclusively decides if a
