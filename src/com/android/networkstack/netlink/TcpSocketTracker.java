@@ -33,7 +33,7 @@ import static com.android.net.module.util.netlink.NetlinkConstants.NLMSG_DONE;
 import static com.android.net.module.util.netlink.NetlinkConstants.SOCKDIAG_MSG_HEADER_SIZE;
 import static com.android.net.module.util.netlink.NetlinkConstants.SOCK_DIAG_BY_FAMILY;
 import static com.android.net.module.util.netlink.NetlinkUtils.DEFAULT_RECV_BUFSIZE;
-import static com.android.net.module.util.netlink.NetlinkUtils.IO_TIMEOUT_MS;
+import static com.android.net.module.util.netlink.NetlinkUtils.getIoTimeoutMs;
 import static com.android.networkstack.util.NetworkStackUtils.IGNORE_TCP_INFO_FOR_BLOCKED_UIDS;
 import static com.android.networkstack.util.NetworkStackUtils.SKIP_TCP_POLL_IN_LIGHT_DOZE;
 
@@ -712,7 +712,7 @@ public class TcpSocketTracker {
             final FileDescriptor fd = NetlinkUtils.createNetLinkInetDiagSocket();
             NetlinkUtils.connectToKernel(fd);
             Os.setsockoptTimeval(fd, SOL_SOCKET, SO_SNDTIMEO,
-                    StructTimeval.fromMillis(IO_TIMEOUT_MS));
+                    StructTimeval.fromMillis(getIoTimeoutMs()));
             return fd;
         }
 
@@ -746,7 +746,7 @@ public class TcpSocketTracker {
          */
         public ByteBuffer recvMessage(@NonNull final FileDescriptor fd)
                 throws ErrnoException, InterruptedIOException {
-            return NetlinkUtils.recvMessage(fd, DEFAULT_RECV_BUFSIZE, IO_TIMEOUT_MS);
+            return NetlinkUtils.recvMessage(fd, DEFAULT_RECV_BUFSIZE, getIoTimeoutMs());
         }
 
         public Context getContext() {
