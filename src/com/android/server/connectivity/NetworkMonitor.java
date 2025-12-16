@@ -67,6 +67,7 @@ import static com.android.net.module.util.ConnectivityUtils.isIPv6ULA;
 import static com.android.net.module.util.DeviceConfigUtils.getResBooleanConfig;
 import static com.android.net.module.util.FeatureVersions.FEATURE_DDR_IN_CONNECTIVITY;
 import static com.android.net.module.util.FeatureVersions.FEATURE_DDR_IN_DNSRESOLVER;
+import static com.android.net.module.util.NetworkStackConstants.TEST_CAPTIVE_PORTAL_FALLBACK_URL;
 import static com.android.net.module.util.NetworkStackConstants.TEST_CAPTIVE_PORTAL_HTTPS_URL;
 import static com.android.net.module.util.NetworkStackConstants.TEST_CAPTIVE_PORTAL_HTTP_URL;
 import static com.android.net.module.util.NetworkStackConstants.TEST_URL_EXPIRATION_TIME;
@@ -493,6 +494,8 @@ public class NetworkMonitor extends StateMachine {
     @Nullable
     private final URL mTestCaptivePortalHttpUrl;
     @Nullable
+    private final URL mTestCaptivePortalFallbackUrl;
+    @Nullable
     private final CaptivePortalProbeSpec[] mCaptivePortalFallbackSpecs;
 
     // The probing URLs may be updated after constructor if system notifies configuration changed.
@@ -705,6 +708,8 @@ public class NetworkMonitor extends StateMachine {
         mTestCaptivePortalHttpsUrl =
                 getTestUrl(TEST_CAPTIVE_PORTAL_HTTPS_URL, validationLogs, deps);
         mTestCaptivePortalHttpUrl = getTestUrl(TEST_CAPTIVE_PORTAL_HTTP_URL, validationLogs, deps);
+        mTestCaptivePortalFallbackUrl = getTestUrl(TEST_CAPTIVE_PORTAL_FALLBACK_URL, validationLogs,
+                deps);
         mIsCaptivePortalCheckEnabled = getIsCaptivePortalCheckEnabled(context, deps);
         mPrivateIpNoInternetEnabled = getIsPrivateIpNoInternetEnabled();
         mMetricsEnabled = deps.isFeatureNotChickenedOut(context,
@@ -2705,6 +2710,9 @@ public class NetworkMonitor extends StateMachine {
 
     @VisibleForTesting
     URL[] makeCaptivePortalFallbackUrls(@NonNull Context context) {
+        if (mTestCaptivePortalFallbackUrl != null) {
+            return new URL[] { mTestCaptivePortalFallbackUrl };
+        }
         try {
             final String firstUrl = mDependencies.getSetting(mContext, CAPTIVE_PORTAL_FALLBACK_URL,
                     null);
@@ -2722,6 +2730,9 @@ public class NetworkMonitor extends StateMachine {
     }
 
     private CaptivePortalProbeSpec[] makeCaptivePortalFallbackProbeSpecs(@NonNull Context context) {
+        if (mTestCaptivePortalFallbackUrl != null) {
+            return new CaptivePortalProbeSpec[0];
+        }
         try {
             final String settingsValue = mDependencies.getDeviceConfigProperty(
                     NAMESPACE_CONNECTIVITY, CAPTIVE_PORTAL_FALLBACK_PROBE_SPECS, null);
