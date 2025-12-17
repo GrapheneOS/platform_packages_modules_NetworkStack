@@ -204,13 +204,6 @@ public class NetworkStackUtils {
     public static final String APF_POLLING_COUNTERS_VERSION = "apf_polling_counters_version";
 
     /**
-     * Experiment flag to enable the feature of ignoring any individual RA section with lifetime
-     * below accept_ra_min_lft sysctl.
-     */
-    public static final String IPCLIENT_IGNORE_LOW_RA_LIFETIME_VERSION =
-            "ipclient_ignore_low_ra_lifetime_version";
-
-    /**
      * Feature flag to send private DNS resolution queries and probes on a background thread.
      */
     public static final String NETWORKMONITOR_ASYNC_PRIVDNS_RESOLUTION =
