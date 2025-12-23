@@ -101,8 +101,8 @@ public class ApfMdnsOffloadEngine implements OffloadEngine {
                                 && offloadServiceInfo.getPriority() == Integer.MAX_VALUE;
                         return !shouldSkip;
                     });
-            List<MdnsOffloadRule> offloadRules = ApfMdnsUtils.extractOffloadReplyRule(
-                    filteredOffloadServiceInfo);
+            List<MdnsOffloadRule> offloadRules = ApfMdnsUtils.extractReplyRule(
+                    filteredOffloadServiceInfo).offloadRules;
             mCallback.onOffloadRulesUpdated(offloadRules);
         } catch (IOException e) {
             Log.e(TAG, "Failed to extract offload reply rule", e);
