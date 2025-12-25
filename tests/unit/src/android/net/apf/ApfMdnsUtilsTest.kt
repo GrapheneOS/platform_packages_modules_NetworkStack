@@ -15,7 +15,7 @@
  */
 package android.net.apf
 
-import android.net.apf.ApfMdnsUtils.extractOffloadReplyRule
+import android.net.apf.ApfMdnsUtils.extractReplyRule
 import android.net.nsd.OffloadEngine
 import android.net.nsd.OffloadServiceInfo
 import android.net.nsd.OffloadServiceInfo.Key
@@ -98,12 +98,15 @@ class ApfMdnsUtilsTest {
                 listOf("a", "b", "c", "d"),
                 testRawPacket2
         )
-        val rules = extractOffloadReplyRule(listOf(info2, info1))
+        val rules = extractReplyRule(listOf(info2, info1)).offloadRules
         val expectedResult = listOf(
                 MdnsOffloadRule(
                         "${info1.key.serviceName}.${info1.key.serviceType}",
                         listOf(
-                                MdnsOffloadRule.Matcher(encodedServiceType, intArrayOf(TYPE_PTR)),
+                                MdnsOffloadRule.Matcher(
+                                    encodedServiceType,
+                                    intArrayOf(TYPE_PTR)
+                                ),
                                 MdnsOffloadRule.Matcher(
                                     encodedServiceTypeWithSub1,
                                     intArrayOf(TYPE_PTR)
@@ -142,7 +145,7 @@ class ApfMdnsUtilsTest {
     @Test
     fun testExtractOffloadReplyRule_longLabelThrowsException() {
         val info = createOffloadServiceInfo(10, "a".repeat(256))
-        assertFailsWith<IOException> { extractOffloadReplyRule(listOf(info)) }
+        assertFailsWith<IOException> { extractReplyRule(listOf(info)).offloadRules }
     }
 
     private fun createOffloadServiceInfo(

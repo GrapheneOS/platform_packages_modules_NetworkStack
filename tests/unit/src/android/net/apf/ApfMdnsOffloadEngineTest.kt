@@ -16,7 +16,7 @@
 package android.net.apf
 
 import android.net.apf.ApfMdnsOffloadEngine.Callback
-import android.net.apf.ApfMdnsUtils.extractOffloadReplyRule
+import android.net.apf.ApfMdnsUtils.extractReplyRule
 import android.net.nsd.NsdManager
 import android.net.nsd.OffloadEngine
 import android.net.nsd.OffloadServiceInfo
@@ -124,15 +124,17 @@ class ApfMdnsOffloadEngineTest {
             OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
         )
         visibleOnHandlerThread(handler) { apfOffloadEngine.onOffloadServiceUpdated(info1) }
-        verify(callback).onOffloadRulesUpdated(eq(extractOffloadReplyRule(listOf(info1))))
+        verify(callback).onOffloadRulesUpdated(eq(extractReplyRule(listOf(info1)).offloadRules))
         visibleOnHandlerThread(handler) { apfOffloadEngine.onOffloadServiceUpdated(info2) }
-        verify(callback).onOffloadRulesUpdated(eq(extractOffloadReplyRule(listOf(info1, info2))))
+        verify(
+            callback
+        ).onOffloadRulesUpdated(eq(extractReplyRule(listOf(info1, info2)).offloadRules))
         visibleOnHandlerThread(handler) { apfOffloadEngine.onOffloadServiceUpdated(updatedInfo1) }
         verify(callback).onOffloadRulesUpdated(
-            eq(extractOffloadReplyRule(listOf(info2, updatedInfo1)))
+            eq(extractReplyRule(listOf(info2, updatedInfo1)).offloadRules)
         )
         visibleOnHandlerThread(handler) { apfOffloadEngine.onOffloadServiceRemoved(updatedInfo1) }
-        verify(callback).onOffloadRulesUpdated(eq(extractOffloadReplyRule(listOf(info2))))
+        verify(callback).onOffloadRulesUpdated(eq(extractReplyRule(listOf(info2)).offloadRules))
 
         visibleOnHandlerThread(handler) { apfOffloadEngine.unregisterOffloadEngine() }
         verify(nsdManager).unregisterOffloadEngine(eq(apfOffloadEngine))
@@ -178,14 +180,14 @@ class ApfMdnsOffloadEngineTest {
                 infoWithoutPriority
             )
         }
-        verify(callback).onOffloadRulesUpdated(eq(extractOffloadReplyRule(listOf())))
+        verify(callback).onOffloadRulesUpdated(eq(extractReplyRule(listOf()).offloadRules))
         visibleOnHandlerThread(handler) {
             apfOffloadEngine.onOffloadServiceUpdated(
                 infoWithPriority
             )
         }
         verify(callback).onOffloadRulesUpdated(
-            eq(extractOffloadReplyRule(listOf(infoWithPriority)))
+            eq(extractReplyRule(listOf(infoWithPriority)).offloadRules)
         )
     }
 
