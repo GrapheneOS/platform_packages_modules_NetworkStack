@@ -48,8 +48,7 @@
     <!-- Crash while reading deviceownerName security exception  -->
     <uses-permission android:name="android.permission.MANAGE_USERS" />
     <!-- PowerManager.getActiveLowPowerStandbyPorts (for TV form factor) -->
-    <!-- TODO: b/19138533 - enable permission when ready -->
-    <!-- uses-permission android:name="android.permission.MANAGE_LOW_POWER_STANDBY" / -->
+    <uses-permission android:name="android.permission.MANAGE_LOW_POWER_STANDBY" />
     <!-- ends here -->
 
     <application
