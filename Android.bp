@@ -467,6 +467,11 @@ android_library {
     manifest: "AndroidManifest.xml",
 }
 
+filegroup {
+    name: "privapp_whitelist_com.android.networkstack",
+    srcs: ["com.android.networkstack.xml"],
+}
+
 // NetworkStack build targeting the current API release, for testing on in-development SDK
 android_app {
     name: "NetworkStackNext",
@@ -478,9 +483,7 @@ android_app {
     static_libs: ["NetworkStackNextManifestBase"],
     certificate: "networkstack",
     manifest: "AndroidManifest_Next.xml",
-    required: [
-        "privapp_whitelist_com.android.networkstack",
-    ],
+    privapp_allowlist: ":privapp_whitelist_com.android.networkstack",
     updatable: true,
 }
 
@@ -494,9 +497,7 @@ android_app {
     static_libs: ["NetworkStackApiStableLib"],
     certificate: "networkstack",
     manifest: "AndroidManifest.xml",
-    required: [
-        "privapp_whitelist_com.android.networkstack",
-    ],
+    privapp_allowlist: ":privapp_whitelist_com.android.networkstack",
     updatable: true,
     licenses: [
         "Android-Apache-2.0",
@@ -596,9 +597,7 @@ android_app {
     static_libs: ["NetworkStackApiStableLib"],
     certificate: "networkstack",
     manifest: ":NetworkStackTestAndroidManifest",
-    required: [
-        "privapp_whitelist_com.android.networkstack",
-    ],
+    privapp_allowlist: ":privapp_whitelist_com.android.networkstack",
 }
 
 // When adding or modifying protos, the jarjar rules and possibly proguard rules need
