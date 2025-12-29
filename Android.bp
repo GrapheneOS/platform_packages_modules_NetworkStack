@@ -20,16 +20,6 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-// TODO: remove this default and replace with ConnectivityNextEnableDefaults. This will need to be
-// done separately in each branch due to merge conflicts.
-// Defaults to enable/disable java targets that depend on
-// NetworkStackNext, which uses development APIs. "enabled" may
-// have a different value depending on the branch.
-java_defaults {
-    name: "NetworkStackNextEnableDefaults",
-    enabled: true,
-}
-
 // Common defaults for NetworkStack integration tests, root tests and coverage tests
 // to keep tests always running against the same target sdk version with NetworkStack.
 java_defaults {
@@ -455,36 +445,9 @@ java_defaults {
     },
 }
 
-// Pre-merge the AndroidManifest for NetworkStackNext, so that its manifest can be merged on top
-android_library {
-    name: "NetworkStackNextManifestBase",
-    defaults: [
-        "NetworkStackAppDefaults",
-        "NetworkStackReleaseApiLevel",
-        "ConnectivityNextEnableDefaults",
-    ],
-    static_libs: ["NetworkStackApiCurrentLib"],
-    manifest: "AndroidManifest.xml",
-}
-
 filegroup {
     name: "privapp_whitelist_com.android.networkstack",
     srcs: ["com.android.networkstack.xml"],
-}
-
-// NetworkStack build targeting the current API release, for testing on in-development SDK
-android_app {
-    name: "NetworkStackNext",
-    defaults: [
-        "NetworkStackAppDefaults",
-        "NetworkStackReleaseApiLevel",
-        "ConnectivityNextEnableDefaults",
-    ],
-    static_libs: ["NetworkStackNextManifestBase"],
-    certificate: "networkstack",
-    manifest: "AndroidManifest_Next.xml",
-    privapp_allowlist: ":privapp_whitelist_com.android.networkstack",
-    updatable: true,
 }
 
 // Updatable network stack for finalized API
@@ -575,7 +538,6 @@ genrule {
     out: ["com/android/networkstack/metrics/NetworkStackStatsLog.java"],
 }
 
-version_code_networkstack_next = "300000000"
 version_code_networkstack_test = "999999999"
 
 genrule {
