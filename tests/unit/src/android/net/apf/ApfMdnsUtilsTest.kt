@@ -32,6 +32,8 @@ import com.android.testutils.DevSdkIgnoreRunner
 import java.io.IOException
 import kotlin.test.assertContentEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -106,6 +108,13 @@ class ApfMdnsUtilsTest {
             6, 'L'.code, 'A'.code, 'P'.code, 'T'.code, 'O'.code, 'P'.code,
             5, 'L'.code, 'O'.code, 'C'.code, 'A'.code, 'L'.code,
             0, 0).map { it.toByte() }.toByteArray()
+
+    private fun isMdnsRulesAndHashCodeEqual(
+            rules1: ApfMdnsUtils.MdnsRules,
+            rules2: ApfMdnsUtils.MdnsRules
+    ): Boolean {
+        return (rules1 == rules2) && (rules1.hashCode() == rules2.hashCode())
+    }
 
     @Test
     fun testExtractOffloadReplyRule_extractRules() {
@@ -285,6 +294,76 @@ class ApfMdnsUtilsTest {
     fun testExtractOffloadReplyRule_longLabelThrowsException() {
         val info = createOffloadServiceInfo(10, "a".repeat(256))
         assertFailsWith<IOException> { extractReplyRule(listOf(info)).offloadRules }
+    }
+
+    @Test
+    fun testMdnsRulesEquals() {
+        val rule1 = MdnsOffloadRule(
+                "",
+                listOf(
+                    MdnsOffloadRule.Matcher(encodedFullServiceName1),
+                    MdnsOffloadRule.Matcher(encodedTestAndroidHostName)
+                ),
+                null
+            )
+
+        val rule2 = MdnsOffloadRule(
+            "",
+            listOf(
+                MdnsOffloadRule.Matcher(encodedFullServiceName2),
+                MdnsOffloadRule.Matcher(encodedTestAndroidHostName)
+            ),
+            null
+        )
+
+        val rule3 = MdnsOffloadRule(
+            "",
+            listOf(
+                MdnsOffloadRule.Matcher(encodedFullServiceName2),
+                MdnsOffloadRule.Matcher(encodedTestAndroidHostName)
+            ),
+            testRawPacket1
+        )
+
+        assertTrue(isMdnsRulesAndHashCodeEqual(
+                ApfMdnsUtils.MdnsRules(listOf(rule1), listOf(rule2)),
+                ApfMdnsUtils.MdnsRules(listOf(rule1), listOf(rule2))
+        ))
+
+        assertFalse(isMdnsRulesAndHashCodeEqual(
+            ApfMdnsUtils.MdnsRules(listOf(rule1), listOf(rule2)),
+            ApfMdnsUtils.MdnsRules(listOf(rule2), listOf(rule1))
+        ))
+
+        assertTrue(isMdnsRulesAndHashCodeEqual(
+            ApfMdnsUtils.MdnsRules(listOf(rule1, rule2), listOf(rule3)),
+            ApfMdnsUtils.MdnsRules(listOf(rule1, rule2), listOf(rule3))
+        ))
+
+        assertFalse(isMdnsRulesAndHashCodeEqual(
+            ApfMdnsUtils.MdnsRules(listOf(rule1, rule2), listOf(rule3)),
+            ApfMdnsUtils.MdnsRules(listOf(rule2, rule1), listOf(rule3))
+        ))
+
+        assertTrue(isMdnsRulesAndHashCodeEqual(
+            ApfMdnsUtils.MdnsRules(null, listOf(rule1)),
+            ApfMdnsUtils.MdnsRules(null, listOf(rule1)),
+        ))
+
+        assertFalse(isMdnsRulesAndHashCodeEqual(
+            ApfMdnsUtils.MdnsRules(null, listOf(rule1)),
+            ApfMdnsUtils.MdnsRules(listOf(rule2), listOf(rule1)),
+        ))
+
+        assertTrue(isMdnsRulesAndHashCodeEqual(
+            ApfMdnsUtils.MdnsRules(listOf(rule1), null),
+            ApfMdnsUtils.MdnsRules(listOf(rule1), null)
+        ))
+
+        assertFalse(isMdnsRulesAndHashCodeEqual(
+            ApfMdnsUtils.MdnsRules(listOf(rule1), null),
+            ApfMdnsUtils.MdnsRules(listOf(rule2), listOf(rule2))
+        ))
     }
 
     private fun createOffloadServiceInfo(
