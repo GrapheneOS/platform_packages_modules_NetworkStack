@@ -37,6 +37,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
@@ -73,6 +74,49 @@ public class ApfMdnsUtils {
         return (info.getOffloadType() & offloadType) != 0;
     }
 
+    private static byte[] getEncodedWildcardSubtypeService(@NonNull String[] serviceTypeLabels)
+            throws IOException {
+        final String[] serviceTypeSuffix = CollectionUtils.prependArray(String.class,
+            serviceTypeLabels, "_sub");
+        final ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        // byte = 0xff is used as a wildcard.
+        buf.write(-1);
+        return encodeQname(buf, serviceTypeSuffix);
+    }
+
+    /**
+     * Determines if an mDNS request is a discovery request based on the service name.
+     *
+     * In mDNS, a request with an empty service name is used to discover available services
+     * rather than targeting a specific service instance. In contrast, service registration and
+     * service resolution requests will always include a non-empty service name.
+     *
+     * @param serviceName The service name from the mDNS request.
+     * @return {@code true} if the {@code serviceName} is empty, which is a discovery request.
+     */
+    private static boolean isDiscoveryRequest(@NonNull String serviceName) {
+        return serviceName.isEmpty();
+    }
+
+    /**
+     * Determines if the provided list contains any valid subtype.
+     *
+     * A list is considered to NOT have a valid subtype if it is either completely empty
+     * or if it contains exactly one element that is an empty string. Any other list
+     * composition implies that a subtype exists.
+     *
+     * @param subtypes The list of potential subtype strings.
+     * @return {@code true} if the list contains elements and is not equal to [" "],
+     *         {@code false} otherwise.
+     */
+    private static boolean isSubTypeExist(@NonNull List<String> subtypes) {
+        if (subtypes.isEmpty()) {
+            return false;
+        }
+
+        return !subtypes.equals(Arrays.asList(""));
+    }
+
     private static void processOffloadRules(
             @NonNull List<MdnsOffloadRule> rules,
             @NonNull Set<MdnsOffloadRule.Matcher> allMatchers,
@@ -98,12 +142,8 @@ public class ApfMdnsUtils {
         if (tooManySubtypes) {
             // If (QTYPE == PTR) and (QNAME == wildcard + _sub + mServiceType),
             // then fail open.
-            final String[] serviceTypeSuffix = CollectionUtils.prependArray(String.class,
-                serviceTypeLabels, "_sub");
-            final ByteArrayOutputStream buf = new ByteArrayOutputStream();
-            // byte = 0xff is used as a wildcard.
-            buf.write(-1);
-            final byte[] encodedFullServiceType = encodeQname(buf, serviceTypeSuffix);
+            final byte[] encodedFullServiceType =
+                    getEncodedWildcardSubtypeService(serviceTypeLabels);
             final MdnsOffloadRule.Matcher subtypePtrMatcher = new MdnsOffloadRule.Matcher(
                     encodedFullServiceType, new int[] { TYPE_PTR });
             addMatcherIfNotExist(allMatchers, matcherGroup, subtypePtrMatcher);
@@ -143,16 +183,113 @@ public class ApfMdnsUtils {
     }
 
     /**
+     * Processes a single {@link OffloadServiceInfo} to generate mDNS filter rules and matchers.
+     *
+     * This method creates {@link MdnsOffloadRule.Matcher} instances based on the type of mDNS
+     * request represented by the {@code info}:
+     *  - Discovery Requests: (Empty service name) Matches PTR records for the service type
+     *       and, if subtypes are present, for wildcard subtype queries.
+     *  - Advertise/Resolve Requests: (Non-empty service name) Matches SRV/TXT records
+     *       based on the full service instance name (serviceName.serviceType).
+     *  - Hostname Resolution: If a hostname is provided in {@code info}, matches A/AAAA
+     *       records for the hostname.
+     *
+     * Note on QTYPE Matching: The generated matchers only consider the QNAME. QTYPE is not
+     * used for filtering in the underlying APF (Android Packet Filter) layer. This is because
+     * the APF instruction {@code ApfV6GeneratorBase#addJumpIfPktAtR0ContainDnsA} matches DNS
+     * records in the answer section based solely on the name, regardless of the question type or
+     * the record type (SRV, TXT, A, AAAA, PTR).
+     *
+     * @param rules The list to add the generated {@link MdnsOffloadRule} to.
+     * @param allMatchers A set to keep track of all unique matchers created to avoid duplicates.
+     * @param info The {@link OffloadServiceInfo} containing the details of the service to filter.
+     * @throws IOException if encoding the QNAME fails.
+     */
+    private static void processFilterRules(
+            @NonNull List<MdnsOffloadRule> rules,
+            @NonNull Set<MdnsOffloadRule.Matcher> allMatchers,
+            @NonNull OffloadServiceInfo info)  throws IOException  {
+        final String serviceType = info.getKey().getServiceType();
+        final String serviceName = info.getKey().getServiceName();
+        List<MdnsOffloadRule.Matcher> matcherGroup = new ArrayList<>();
+        final String[] serviceTypeLabels = CollectionUtils.appendArray(String.class,
+            serviceType.split("\\.", 0), "local");
+
+        if (!isDiscoveryRequest(serviceName)) {
+            // For advertise request, the OffloadServiceInfo should be structured as follows:
+            // - Non-empty: mServiceName, mServiceType
+            // - Might be null or empty: mSubTypes, mHostName
+            // We need to match baseType for conflict detection.
+            // If (QTYPE == SRV) and (QNAME == mService + mServiceType), then pass.
+            // For resolve request, the OffloadServiceInfo should be structured as follows:
+            // - Non-empty: mServiceName, mServiceType
+            // - Might be empty: mHostName
+            // - Empty: mSubTypes
+            // If (QTYPE == SRV or TXT) and (QNAME == mService + mServiceType), then pass.
+            final String[] fullQualifiedName = CollectionUtils.prependArray(String.class,
+                serviceTypeLabels, serviceName);
+            addMatcherIfNotExist(allMatchers, matcherGroup,
+                    new MdnsOffloadRule.Matcher(encodeQname(fullQualifiedName))
+            );
+        } else {
+            // For discover request, the OffloadServiceInfo should be structured as follows:
+            // - Non-empty: mServiceType
+            // - Might be empty: mSubTypes
+            // - Empty: mServiceName, mHostName
+            final List<String> subTypes = info.getSubtypes();
+            // For updates to match PTR record with baseType
+            // if QNAME matches mServiceType exactly.
+            // If (QTYPE == PTR) and (QNAME == mServiceType), then pass.
+            final byte[] encodedServiceType = encodeQname(serviceTypeLabels);
+            MdnsOffloadRule.Matcher serviceTypeMatcher =
+                    new MdnsOffloadRule.Matcher(encodedServiceType);
+            addMatcherIfNotExist(allMatchers, matcherGroup, serviceTypeMatcher);
+            if (isSubTypeExist(subTypes)) {
+                // If multiple subtypes are present in OffloadServiceInfo, match PTR records
+                // with QNAMEs formatted as: <subtype>._sub.<mServiceType>, where <subtype>
+                // is one of the specified subtypes.
+                // If (QTYPE == PTR) and (QNAME == wildcard + ._sub + mServiceType), then pass.
+                final byte[] encodedFullServiceType =
+                    getEncodedWildcardSubtypeService(serviceTypeLabels);
+                final MdnsOffloadRule.Matcher subtypePtrMatcher =
+                        new MdnsOffloadRule.Matcher(encodedFullServiceType);
+                addMatcherIfNotExist(allMatchers, matcherGroup, subtypePtrMatcher);
+            }
+        }
+
+        final String hostName = info.getHostname();
+        if (!hostName.isEmpty()) {
+            // For resolve request, the OffloadServiceInfo should be structured as follows:
+            // - Non-empty: mServiceName, mServiceType
+            // - Might be empty: mHostName
+            // - Empty: mSubTypes
+            // If (QTYPE == A or AAAA) and (QNAME == mHostName), then pass.
+            final String[] hostNameLabels = hostName.split("\\.", 0);
+            final byte[] encodedHostName = encodeQname(hostNameLabels);
+            addMatcherIfNotExist(allMatchers, matcherGroup,
+                    new MdnsOffloadRule.Matcher(encodedHostName)
+            );
+        }
+
+        if (!matcherGroup.isEmpty()) {
+            rules.add(new MdnsOffloadRule(
+                    serviceName + "." + serviceType,
+                    matcherGroup, null /* replyPayload */)
+            );
+        }
+    }
+
+    /**
      * Extracts and categorizes mDNS offload rules from a list of OffloadServiceInfo objects.
      *
      * This method processes each OffloadServiceInfo to generate two types of rules:
-     *   - Rules reply to packet: Used to directly respond to mDNS queries matching specific
-     *     criteria (e.g., service type, name, subtypes). Generated from infos with type
+     *   - Rules to reply to mDNS query packet: Used to directly respond to mDNS queries matching
+     *     specific criteria (e.g., service type, name, subtypes). Generated from infos with type
      *     OFFLOAD_TYPE_REPLY and returned The rules are returned in priority order
-     *     (most important first). If there are too many rules, APF could decide only
-     *     offload the rules with the higher priority.
-     *   - Rules for filtering reply: Used to allow certain mDNS queries to pass through.
-     *     Generated from infos with type OFFLOAD_TYPE_FILTER_REPLIES.
+     *     (most important first).
+     *   - Rules for filtering mDNS replies: Used to allow certain mDNS replies to pass through.
+     *     Generated from infos with type OFFLOAD_TYPE_FILTER_REPLIES. The rules in this category
+     *     do not have priority.
      *
      * @param offloadServiceInfos A list of {@link OffloadServiceInfo} to process.
      * @return A {@link MdnsRules} contains two types of rules.
@@ -172,15 +309,14 @@ public class ApfMdnsUtils {
         final List<MdnsOffloadRule> offloadRules = new ArrayList<>();
         final List<MdnsOffloadRule> filterRules = new ArrayList<>();
         final Set<MdnsOffloadRule.Matcher> allOffloadMatchers = new ArraySet<>();
+        final Set<MdnsOffloadRule.Matcher> allFilterMatchers = new ArraySet<>();
         for (OffloadServiceInfo info : sortedOffloadServiceInfos) {
             if (isOffloadTypeMatched(info, OFFLOAD_TYPE_REPLY)) {
                 processOffloadRules(offloadRules, allOffloadMatchers, info);
             } else if (isOffloadTypeMatched(info, OFFLOAD_TYPE_FILTER_REPLIES)) {
-                // TODO: implement processFilterRules
-                // processFilterRules(filterRules, allFilterMatchers, info);
+                processFilterRules(filterRules, allFilterMatchers, info);
             }
         }
-
         return new MdnsRules(offloadRules, filterRules);
     }
 
