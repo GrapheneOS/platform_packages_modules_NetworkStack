@@ -101,7 +101,7 @@ public class ApfMdnsOffloadEngine implements OffloadEngine {
                         return !shouldSkip;
                     });
             mCallback.onOffloadRulesUpdated(
-                    ApfMdnsUtils.extractReplyRule(filteredOffloadServiceInfo)
+                    ApfMdnsUtils.extractRules(filteredOffloadServiceInfo)
             );
         } catch (IOException e) {
             Log.e(TAG, "Failed to extract offload reply rule", e);

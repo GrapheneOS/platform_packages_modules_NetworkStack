@@ -15,7 +15,7 @@
  */
 package android.net.apf
 
-import android.net.apf.ApfMdnsUtils.extractReplyRule
+import android.net.apf.ApfMdnsUtils.extractRules
 import android.net.nsd.OffloadEngine
 import android.net.nsd.OffloadServiceInfo
 import android.net.nsd.OffloadServiceInfo.Key
@@ -117,7 +117,7 @@ class ApfMdnsUtilsTest {
     }
 
     @Test
-    fun testExtractOffloadReplyRule_extractRules() {
+    fun testExtractOffloadRules_extractRules() {
         val info1 = createOffloadServiceInfo(10)
         val info2 = createOffloadServiceInfo(
                 Integer.MAX_VALUE,
@@ -125,7 +125,7 @@ class ApfMdnsUtilsTest {
                 subTypes = listOf("a", "b", "c", "d"),
                 rawPacket1 = testRawPacket2
         )
-        val rules = extractReplyRule(listOf(info2, info1)).offloadRules
+        val rules = extractRules(listOf(info2, info1)).offloadRules
         val expectedResult = listOf(
                 MdnsOffloadRule(
                         "${info1.key.serviceName}.${info1.key.serviceType}",
@@ -170,7 +170,7 @@ class ApfMdnsUtilsTest {
     }
 
     @Test
-    fun testExtractFilterReplyRule_extractRules() {
+    fun testExtractFilterRules_extractRules() {
         // For advertise and resolve service with non-empty hostName
         val info1 = createOffloadServiceInfo(
                 priority = 10,
@@ -235,7 +235,7 @@ class ApfMdnsUtilsTest {
                 rawPacket1 = null
         )
 
-        val rules = extractReplyRule(
+        val rules = extractRules(
             listOf(
                 info1,
                 info2,
@@ -291,9 +291,9 @@ class ApfMdnsUtilsTest {
     }
 
     @Test
-    fun testExtractOffloadReplyRule_longLabelThrowsException() {
+    fun testExtractOffloadRules_longLabelThrowsException() {
         val info = createOffloadServiceInfo(10, "a".repeat(256))
-        assertFailsWith<IOException> { extractReplyRule(listOf(info)).offloadRules }
+        assertFailsWith<IOException> { extractRules(listOf(info)).offloadRules }
     }
 
     @Test

@@ -316,7 +316,7 @@ public class ApfMdnsUtils {
      */
     @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
     @NonNull
-    public static MdnsRules extractReplyRule(
+    public static MdnsRules extractRules(
             @NonNull List<OffloadServiceInfo> offloadServiceInfos) throws IOException {
         final List<OffloadServiceInfo> sortedOffloadServiceInfos =
                 new ArrayList<>(offloadServiceInfos);
