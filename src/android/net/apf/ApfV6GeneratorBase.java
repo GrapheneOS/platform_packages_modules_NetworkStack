@@ -25,6 +25,8 @@ import android.annotation.NonNull;
 import com.android.net.module.util.HexDump;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -502,6 +504,110 @@ public abstract class ApfV6GeneratorBase<Type extends ApfV6GeneratorBase<Type>> 
         validateNames(names);
         return append(new Instruction(ExtendedOpcodes.JDNSAMATCHSAFE, Rbit1).setTargetLabel(
                 tgt).setBytesImm(names));
+    }
+
+    /**
+     * Validates and deduplicates a list of DNS QNAMEs.
+     *
+     * Each byte array in the input {@code namesList} is expected to represent a single
+     * DNS QNAME encoded as a null-terminated list containing one element. This format
+     * includes two trailing null bytes: one for the QNAME itself, and a second
+     * to terminate the single-element list.
+     *
+     * This function processes each byte array by removing the second null byte
+     * (the list terminator). The returned list contains the unique QNAMEs,
+     * where each byte array is a null-terminated QNAME without the additional list terminator null.
+     *
+     * @param namesList A list of byte arrays, each representing a single QNAME in the
+     *                  double null-terminated format.
+     * @return A list of unique byte arrays, where each array is a null-terminated QNAME
+     *         (i.e., with the list terminator removed).
+     * @throws IllegalArgumentException if namesList is null or empty.
+     */
+    private static List<byte[]> validateDeduplicateNamesList(
+        List<byte[]> namesList) {
+        if (namesList == null || namesList.size() == 0) {
+            throw new IllegalArgumentException("namesList must not be null or empty.");
+        }
+        for (byte[] names : namesList) {
+            validateNames(names);
+        }
+        final List<byte[]> deduplicatedList = new ArrayList<>();
+        for (byte[] currentNames: namesList) {
+            // currentNames is a DNS QNAME in a single-element, null-terminated list.
+            // This format adds two trailing nulls: one for the QNAME, one for the list.
+            // To prepare for combining multiple QNAMEs into a single list structure
+            // (e.g., in addJumpIfPktAtR0ContainDnsAHelper), we remove the list terminator
+            // (the second null) from each individual QNAME array.
+            //
+            // Example:
+            // QNAME "A" in list format -> [0x01, 'A', 0x00, 0x00] (QNAME null, List null)
+            // QNAME "B" in list format -> [0x01, 'B', 0x00, 0x00] (QNAME null, List null)
+            //
+            // To combine "A" and "B" into one list:
+            // Concatenate and add one final list null:
+            //    [0x01, 'A', 0x00, 0x01, 'B', 0x00, 0x00]
+            //
+            // Functions like addJumpIfPktAtR0ContainDnsA expect the double null,
+            // as they handle single QNAMEs already in the list format.
+            byte[] trimmedNames = Arrays.copyOf(currentNames, currentNames.length - 1);
+            boolean foundDuplicate = false;
+            for (byte[] existingNames: deduplicatedList) {
+                if (Arrays.equals(trimmedNames, existingNames)) {
+                    foundDuplicate = true;
+                    break;
+                }
+            }
+            if (!foundDuplicate) {
+                deduplicatedList.add(trimmedNames);
+            }
+        }
+        return deduplicatedList;
+    }
+
+    private Type addJumpIfPktAtR0ContainDnsAHelper(@NonNull List<byte[]> namesList, short tgt,
+            boolean jumpOnMatch) {
+        final List<byte[]> deduplicatedList =
+                validateDeduplicateNamesList(namesList);
+        int totalBytesSize = 0;
+        for (byte[] names: deduplicatedList) {
+            totalBytesSize += names.length;
+        }
+        totalBytesSize += 1; // include the null terminated list
+
+        final ByteBuffer buffer = ByteBuffer.allocate(totalBytesSize);
+        for (byte[] array : deduplicatedList) {
+            buffer.put(array);
+        }
+        buffer.put((byte) 0x00); // null terminated list
+        final Rbit rbit = jumpOnMatch ? Rbit1 : Rbit0;
+        final byte[] combinedBytes = buffer.array();
+        return append(new Instruction(ExtendedOpcodes.JDNSAMATCH, rbit)
+                .setTargetLabel(tgt)
+                .setBytesImm(combinedBytes));
+    }
+
+    /**
+     * Add an instruction to the end of the program to jump to {@code tgt} if the UDP
+     * payload's DNS answers/authority/additional records contain any of the NAMEs
+     * specified in {@code namesList}. Examines the payload starting at the offset in R0.
+     * R = 1 means check for "contain".
+     * Drops packets if packets are corrupted.
+     */
+    public final Type addJumpIfPktAtR0ContainAnyOfDnsA(@NonNull List<byte[]> namesList, short tgt) {
+        return addJumpIfPktAtR0ContainDnsAHelper(namesList, tgt, true /* jumpOnMatch */);
+    }
+
+    /**
+     * Add an instruction to the end of the program to jump to {@code tgt} if the UDP
+     * payload's DNS answers/authority/additional records contain none of the NAMEs
+     * specified in {@code namesList}. Examines the payload starting at the offset in R0.
+     * R = 0 means check for "does not contain".
+     * Drops packets if packets are corrupted.
+     */
+    public final Type addJumpIfPktAtR0ContainNoneOfDnsA(
+            @NonNull List<byte[]> namesList, short tgt) {
+        return addJumpIfPktAtR0ContainDnsAHelper(namesList, tgt, false /* jumpOnMatch */);
     }
 
     /**

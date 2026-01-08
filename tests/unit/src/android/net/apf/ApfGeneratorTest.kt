@@ -221,6 +221,26 @@ class ApfGeneratorTest {
                 ApfV4Generator.DROP_LABEL
         ) }
         assertFailsWith<IllegalArgumentException> {
+            gen.addJumpIfPktAtR0ContainAnyOfDnsA(listOf(), PASS_LABEL)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            gen.addJumpIfPktAtR0ContainAnyOfDnsA(listOf(ByteArray(2048) { 1 }), PASS_LABEL)
+        }
+        assertFailsWith<IllegalArgumentException> { gen.addJumpIfPktAtR0ContainAnyOfDnsA(
+            listOf(byteArrayOf(1, 'A'.code.toByte(), 1, 'B'.code.toByte())),
+            ApfV4Generator.PASS_LABEL
+        ) }
+        assertFailsWith<IllegalArgumentException> {
+            gen.addJumpIfPktAtR0ContainNoneOfDnsA(listOf(), PASS_LABEL)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            gen.addJumpIfPktAtR0ContainNoneOfDnsA(listOf(ByteArray(2048) { 1 }), PASS_LABEL)
+        }
+        assertFailsWith<IllegalArgumentException> { gen.addJumpIfPktAtR0ContainNoneOfDnsA(
+            listOf(byteArrayOf(1, 'A'.code.toByte(), 1, 'B'.code.toByte())),
+            ApfV4Generator.PASS_LABEL
+        ) }
+        assertFailsWith<IllegalArgumentException> {
             gen.addJumpIfBytesAtR0Equal(ByteArray(2048) { 1 }, DROP_LABEL)
         }
         assertFailsWith<IllegalArgumentException> {
@@ -773,6 +793,100 @@ class ApfGeneratorTest {
                 "0: jbseq       r0, (2), DROP, { 0102, 0304 }[2]",
                 "9: jbsne       r0, (2), DROP, { 0102, 0304 }[2]",
                 "18: jbsne       r0, (2), DROP, 0101"
+        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+
+        val dnsABytes = listOf(
+            intArrayOf(
+                0x01, 'A'.code,
+                0x03, 'C'.code, 'O'.code, 'M'.code,
+                0x00, 0x00
+            ).map { it.toByte() }.toByteArray(),
+            intArrayOf(
+                0x01, 'B'.code,
+                0x03, 'N'.code, 'E'.code, 'T'.code,
+                0x00, 0x00
+            ).map { it.toByte() }.toByteArray()
+        )
+        val combinedDnsABytes = intArrayOf(
+            0x01, 'A'.code,
+            0x03, 'C'.code, 'O'.code, 'M'.code,
+            0x00,
+            0x01, 'B'.code,
+            0x03, 'N'.code, 'E'.code, 'T'.code,
+            0x00, 0x00
+        ).map { it.toByte() }.toByteArray()
+
+        gen = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
+        gen.addJumpIfPktAtR0ContainAnyOfDnsA(dnsABytes, DROP_LABEL)
+        program = gen.generate().skipDataAndDebug()
+        assertContentEquals(
+            byteArrayOf(
+                encodeInstruction(21, 1, 1),
+                44, 1,
+            ) + combinedDnsABytes,
+            program
+        )
+        assertContentEquals(listOf(
+                "0: jdnsaeq     r0, DROP, (1)A(3)COM(0)(1)B(3)NET(0)(0)",
+        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+
+        gen = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
+        gen.addJumpIfPktAtR0ContainNoneOfDnsA(dnsABytes, DROP_LABEL)
+        program = gen.generate().skipDataAndDebug()
+        assertContentEquals(
+            byteArrayOf(
+                encodeInstruction(21, 1, 0),
+                44, 1,
+            ) + combinedDnsABytes,
+            program
+        )
+        assertContentEquals(listOf(
+                "0: jdnsane     r0, DROP, (1)A(3)COM(0)(1)B(3)NET(0)(0)",
+        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+
+        val dnsADupBytes = listOf(
+            intArrayOf(
+                0x01, 'A'.code,
+                0x03, 'C'.code, 'O'.code, 'M'.code,
+                0x00, 0x00
+            ).map { it.toByte() }.toByteArray(),
+            intArrayOf(
+                0x01, 'B'.code,
+                0x03, 'N'.code, 'E'.code, 'T'.code,
+                0x00, 0x00
+            ).map { it.toByte() }.toByteArray(),
+            intArrayOf(
+                0x01, 'A'.code,
+                0x03, 'C'.code, 'O'.code, 'M'.code,
+                0x00, 0x00
+            ).map { it.toByte() }.toByteArray()
+        )
+        gen = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
+        gen.addJumpIfPktAtR0ContainAnyOfDnsA(dnsADupBytes, DROP_LABEL)
+        program = gen.generate().skipDataAndDebug()
+        assertContentEquals(
+            byteArrayOf(
+                encodeInstruction(21, 1, 1),
+                44, 1,
+            ) + combinedDnsABytes,
+            program
+        )
+        assertContentEquals(listOf(
+                "0: jdnsaeq     r0, DROP, (1)A(3)COM(0)(1)B(3)NET(0)(0)",
+        ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
+
+        gen = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
+        gen.addJumpIfPktAtR0ContainNoneOfDnsA(dnsADupBytes, DROP_LABEL)
+        program = gen.generate().skipDataAndDebug()
+        assertContentEquals(
+            byteArrayOf(
+                encodeInstruction(21, 1, 0),
+                44, 1,
+            ) + combinedDnsABytes,
+            program
+        )
+        assertContentEquals(listOf(
+                "0: jdnsane     r0, DROP, (1)A(3)COM(0)(1)B(3)NET(0)(0)",
         ), ApfJniUtils.disassembleApf(program).map{ it.trim() })
     }
 
@@ -1921,6 +2035,31 @@ class ApfGeneratorTest {
             CORRUPT_DNS_PACKET,
             result = PASS
         )
+
+        val needlesListMatch = listOf(
+            intArrayOf(
+                0x01, 'A'.code,
+                0x00, 0x00
+            ).map { it.toByte() }.toByteArray(),
+            intArrayOf(
+                0x01, 'B'.code,
+                0x05, 'L'.code, 'O'.code, 'C'.code, 'A'.code, 'L'.code,
+                0x00, 0x00
+            ).map { it.toByte() }.toByteArray()
+        )
+        program = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
+                .addLoadImmediate(R0, 0)
+                .addJumpIfPktAtR0ContainAnyOfDnsA(needlesListMatch, DROP_LABEL)
+                .addPass()
+                .generate()
+        ApfTestHelpers.assertDrop(apfInterpreterVersion, program, udpPayload)
+
+        program = ApfV6Generator(apfInterpreterVersion, ramSize, clampSize)
+                .addLoadImmediate(R0, 0)
+                .addJumpIfPktAtR0ContainNoneOfDnsA(needlesListMatch, DROP_LABEL)
+                .addPass()
+                .generate()
+        ApfTestHelpers.assertPass(apfInterpreterVersion, program, udpPayload)
     }
 
     @Test
