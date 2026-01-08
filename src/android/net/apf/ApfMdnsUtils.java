@@ -329,10 +329,14 @@ public class ApfMdnsUtils {
         final List<MdnsOffloadRule> filterRules = new ArrayList<>();
         final Set<MdnsOffloadRule.Matcher> allOffloadMatchers = new ArraySet<>();
         final Set<MdnsOffloadRule.Matcher> allFilterMatchers = new ArraySet<>();
+        // For a service being advertised in the probing stage, both OFFLOAD_TYPE_REPLY and
+        // OFFLOAD_TYPE_FILTER_REPLIES offload types can be enabled at the same time.
         for (OffloadServiceInfo info : sortedOffloadServiceInfos) {
             if (isOffloadTypeMatched(info, OFFLOAD_TYPE_REPLY)) {
                 processOffloadRules(offloadRules, allOffloadMatchers, info);
-            } else if (isOffloadTypeMatched(info, OFFLOAD_TYPE_FILTER_REPLIES)) {
+            }
+
+            if (isOffloadTypeMatched(info, OFFLOAD_TYPE_FILTER_REPLIES)) {
                 processFilterRules(filterRules, allFilterMatchers, info);
             }
         }

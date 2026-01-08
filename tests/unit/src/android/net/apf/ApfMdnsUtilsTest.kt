@@ -297,6 +297,56 @@ class ApfMdnsUtilsTest {
     }
 
     @Test
+    fun testExtractOffloadAndFilterRules() {
+        val info = createOffloadServiceInfo(
+            priority = 10,
+            offloadType =
+                (OffloadEngine.OFFLOAD_TYPE_REPLY or OffloadEngine.OFFLOAD_TYPE_FILTER_REPLIES)
+                    .toLong()
+        )
+
+        val expectedOffloadRules = listOf(
+            MdnsOffloadRule(
+                "${info.key.serviceName}.${info.key.serviceType}",
+                listOf(
+                    MdnsOffloadRule.Matcher(
+                        encodedHttpServiceType,
+                        intArrayOf(TYPE_PTR)
+                    ),
+                    MdnsOffloadRule.Matcher(
+                        encodedServiceTypeWithSub1,
+                        intArrayOf(TYPE_PTR)
+                    ),
+                    MdnsOffloadRule.Matcher(
+                        encodedFullServiceName1,
+                        intArrayOf(TYPE_SRV, TYPE_TXT)
+                    ),
+                    MdnsOffloadRule.Matcher(
+                        encodedTestAndroidHostName,
+                        intArrayOf(TYPE_A, TYPE_AAAA)
+                    ),
+                ),
+                testRawPacket1,
+            ),
+        )
+        val expectedFilterRules = listOf(
+            MdnsOffloadRule(
+                "${info.key.serviceName}.${info.key.serviceType}",
+                listOf(
+                    MdnsOffloadRule.Matcher(encodedFullServiceName1),
+                    MdnsOffloadRule.Matcher(encodedTestAndroidHostName),
+                ),
+                null,
+            )
+        )
+
+        assertTrue(isMdnsRulesAndHashCodeEqual(
+            ApfMdnsUtils.MdnsRules(expectedOffloadRules, expectedFilterRules),
+            extractRules(listOf(info))
+        ))
+    }
+
+    @Test
     fun testMdnsRulesEquals() {
         val rule1 = MdnsOffloadRule(
                 "",
