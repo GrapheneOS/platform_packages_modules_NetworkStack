@@ -46,10 +46,9 @@ public class ApfMdnsOffloadEngine implements OffloadEngine {
          * Called when the offload rules are updated.
          * <p>
          * This method is called on the handler thread.
-         *
-         * @param allRules The updated list of MDNS offload rules.
+         * @param allRules The updated MDNS rules.
          */
-        void onOffloadRulesUpdated(@NonNull List<MdnsOffloadRule> allRules);
+        void onOffloadRulesUpdated(@NonNull ApfMdnsUtils.MdnsRules allRules);
     }
 
     @NonNull
@@ -101,9 +100,9 @@ public class ApfMdnsOffloadEngine implements OffloadEngine {
                                 && offloadServiceInfo.getPriority() == Integer.MAX_VALUE;
                         return !shouldSkip;
                     });
-            List<MdnsOffloadRule> offloadRules = ApfMdnsUtils.extractReplyRule(
-                    filteredOffloadServiceInfo).offloadRules;
-            mCallback.onOffloadRulesUpdated(offloadRules);
+            mCallback.onOffloadRulesUpdated(
+                    ApfMdnsUtils.extractReplyRule(filteredOffloadServiceInfo)
+            );
         } catch (IOException e) {
             Log.e(TAG, "Failed to extract offload reply rule", e);
         }
