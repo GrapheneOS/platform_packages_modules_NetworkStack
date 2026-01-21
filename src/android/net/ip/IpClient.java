@@ -90,7 +90,6 @@ import static com.android.networkstack.util.NetworkStackUtils.APF_ENABLE;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_ARP_OFFLOAD;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_IGMP_OFFLOAD;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_IGMP_OFFLOAD_VERSION;
-import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_MDNS_ADVERTISING_OFFLOAD_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_MLD_OFFLOAD;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_MLD_OFFLOAD_VERSION;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_ND_OFFLOAD;
@@ -1220,8 +1219,8 @@ public class IpClient extends StateMachine {
         // TODO: turn on APF mDNS offload on handhelds.
         mIsTvDevice = context.getPackageManager().hasSystemFeature(FEATURE_LEANBACK);
         mApfHandleMdnsOffload =
-                SdkLevel.isAtLeastB() && (mIsTvDevice || mDependencies.isFeatureEnabled(context,
-                        APF_HANDLE_MDNS_ADVERTISING_OFFLOAD_VERSION));
+                SdkLevel.isAtLeastB() && (mIsTvDevice
+                        || com.android.networkstack.flags.Flags.apfHandleMdnsAdvertisingOffload());
         mApfHandleIgmpOffload =
                 mDependencies.isFeatureNotChickenedOut(mContext, APF_HANDLE_IGMP_OFFLOAD)
                     && (SdkLevel.isAtLeastB()
