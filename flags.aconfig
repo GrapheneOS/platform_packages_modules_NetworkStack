@@ -12,5 +12,5 @@ flag {
     name: "apf_handle_mdns_advertising_offload"
     namespace: "com_android_networkstack"
     description: "Enable APF mDNS advertising offload"
-    bug: "384584845"
+    bug: "477470809"
 }
