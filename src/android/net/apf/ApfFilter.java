@@ -454,6 +454,10 @@ public class ApfFilter {
     // value of -1 means all mDNS query packets should be passed; no mDNS query packets will trigger
     // the transmit and reply logic.
     private int mNumOfMdnsRuleToOffload = -1;
+    // Whether to ignore the mDNS reply filter. If the estimated program size of the mDNS reply
+    // filter exceeds the remaining APF RAM, this is set to true to fail-open and pass all mDNS
+    // reply packets.
+    private boolean mMdnsReplyFilterFailOpen = true;
 
     private ApfLowPowerStandbyPortsSubscriber mLowPowerStandbyPortsSubscriber;
     private final ArraySet<Long> mLowPowerStandbyPortsTcpLocal = new ArraySet<>();
@@ -492,9 +496,12 @@ public class ApfFilter {
         return powerManager.isDeviceLightIdleMode();
     }
 
-    // TODO: fail-open if the RAM is not enough for reply filter
     private boolean isIgnoreMdnsReplyFilter() {
         if (!mMulticastFilter) {
+            return true;
+        }
+
+        if (mMdnsReplyFilterFailOpen) {
             return true;
         }
 
@@ -2232,16 +2239,13 @@ public class ApfFilter {
      * @param gen the APF generator to generate the filter code
      * @param labelCheckMdnsReplyFilter the label to jump to for checking the mDNS reply filter
      */
-    // TODO: deal with the case where the RAM is not enough
-    //      1. If there's enough RAM then just to filter reply based on the rule.
-    //      2. fail-open to pass all reply packets where the RAM is not enough.
     private void generateMdnsReplyFilter(
             final ApfV6GeneratorBase<?> gen,
             short labelCheckMdnsReplyFilter) throws IllegalInstructionException {
 
         gen.defineLabel(labelCheckMdnsReplyFilter);
         // fail-open to pass all reply packets where the RAM is not enough
-        if (isIgnoreMdnsReplyFilter()) {
+        if (!mMulticastFilter || mMdnsReplyFilterFailOpen) {
             gen.addCountAndPass(PASSED_MDNS);
             return;
         }
@@ -4198,6 +4202,20 @@ public class ApfFilter {
         return mOverEstimatedProgramSize;
     }
 
+    private int estimateMdnsReplyFilterSize(boolean failOpen) throws IllegalInstructionException {
+        final ApfV6GeneratorBase<?> gen = (ApfV6GeneratorBase<?>) createApfGenerator();
+        final int before = gen.programLengthOverEstimate();
+        final short label = gen.getUniqueLabel();
+        final boolean oldFailOpen = mMdnsReplyFilterFailOpen;
+        mMdnsReplyFilterFailOpen = failOpen;
+        try {
+            generateMdnsReplyFilter(gen, label);
+        } finally {
+            mMdnsReplyFilterFailOpen = oldFailOpen;
+        }
+        return gen.programLengthOverEstimate() - before;
+    }
+
     private int calcMdnsOffloadProgramSizeOverEstimate(int numOfMdnsRuleToOffload)
             throws IllegalInstructionException {
         ApfV6GeneratorBase<?> gen = (ApfV6GeneratorBase<?>) createApfGenerator();
@@ -4336,13 +4354,19 @@ public class ApfFilter {
             // requirement. These devices are usually on home networks with very chatty mDNS
             // traffic.
             if (enableMdns4Offload() || enableMdns6Offload()) {
+                int reservedMdnsReplyFilterFailOpenSize = 0;
+                if (enableMdns4Filter() || enableMdns6Filter()) {
+                    reservedMdnsReplyFilterFailOpenSize =
+                        estimateMdnsReplyFilterSize(true /* failOpen */);
+                }
                 final int remainSize = mMaximumApfProgramSize - programLengthOverEstimate;
                 mNumOfMdnsRuleToOffload = mOffloadRules.size();
                 int mDnsProgramLengthOverEstimate = 0;
                 for (; mNumOfMdnsRuleToOffload >= -1; --mNumOfMdnsRuleToOffload) {
                     mDnsProgramLengthOverEstimate = calcMdnsOffloadProgramSizeOverEstimate(
                             mNumOfMdnsRuleToOffload);
-                    if (mDnsProgramLengthOverEstimate <= remainSize) {
+                    if ((mDnsProgramLengthOverEstimate + reservedMdnsReplyFilterFailOpenSize)
+                            <= remainSize) {
                         break;
                     }
                 }
@@ -4360,12 +4384,31 @@ public class ApfFilter {
                             + " (clear memory, reason: unable to fail-open for mDNS)");
                     return;
                 }
-
                 programLengthOverEstimate += mDnsProgramLengthOverEstimate;
             } else {
                 mNumOfMdnsRuleToOffload = -1;
             }
 
+            // We prioritize mDNS offload rules over mDNS reply filtering.
+            // The estimation follows a conservative "fail-open" strategy:
+            // we always reserve enough space for a minimal fail-open reply filter when calculating
+            // offload rule capacity.
+            // We first attempt to generate instructions for all reply filter rules;
+            // if the required space exceeds the remaining APF RAM, we fall back to the fail-open
+            // logic to ensure mDNS functionality is never broken, even under memory pressure.
+            if (enableMdns4Filter() || enableMdns6Filter()) {
+                final int fullFilterSize = estimateMdnsReplyFilterSize(false /* failOpen */);
+                if ((programLengthOverEstimate + fullFilterSize) <= mMaximumApfProgramSize) {
+                    mMdnsReplyFilterFailOpen = false;
+                    programLengthOverEstimate += fullFilterSize;
+                } else {
+                    mMdnsReplyFilterFailOpen = true;
+                    programLengthOverEstimate += estimateMdnsReplyFilterSize(true /* failOpen */);
+                    Log.i(TAG, "Program exceeds maximum size, skipping mDNS reply filter");
+                }
+            } else {
+                mMdnsReplyFilterFailOpen = true;
+            }
 
             for (Ra ra : mRas) {
                 // skip filter if it has expired.
