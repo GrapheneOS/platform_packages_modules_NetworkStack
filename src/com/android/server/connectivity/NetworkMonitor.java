@@ -75,6 +75,8 @@ import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DN
 import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_TCP_METRICS;
 import static com.android.networkstack.apishim.ConstantsShim.RECEIVER_NOT_EXPORTED;
 import static com.android.networkstack.apishim.ConstantsShim.TRANSPORT_TEST;
+import static com.android.networkstack.metrics.NetworkStackStatsLog.CORE_NETWORKING_CRITICAL_COUNTS_EVENT_OCCURRED;
+import static com.android.networkstack.metrics.NetworkStackStatsLog.CORE_NETWORKING_CRITICAL_COUNTS_EVENT_OCCURRED__EVENT_TYPE__CRITICAL_COUNTS_EVENT_TYPE_CAPTIVE_APP_NOT_FOUND;
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
 import static com.android.networkstack.util.DnsUtils.TYPE_ADDRCONFIG;
 import static com.android.networkstack.util.NetworkStackUtils.CAPTIVE_PORTAL_FALLBACK_PROBE_SPECS;
@@ -181,6 +183,7 @@ import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 import com.android.networkstack.metrics.DataStallDetectionStats;
 import com.android.networkstack.metrics.DataStallStatsUtils;
+import com.android.networkstack.metrics.NetworkStackStatsLog;
 import com.android.networkstack.metrics.NetworkValidationMetrics;
 import com.android.networkstack.netlink.TcpSocketTracker;
 import com.android.networkstack.util.CaptivePortalDataUtils;
@@ -637,6 +640,16 @@ public class NetworkMonitor extends StateMachine {
                     new Intent(ConnectivityManager.ACTION_CAPTIVE_PORTAL_SIGN_IN);
             final PackageManager packageManager = context.getPackageManager();
             final ComponentName handler = signInIntent.resolveActivity(packageManager);
+            if (handler == null) {
+                NetworkStackStatsLog.write_non_chained(
+                        CORE_NETWORKING_CRITICAL_COUNTS_EVENT_OCCURRED,
+                        Process.myUid(),
+                        null,
+                        CORE_NETWORKING_CRITICAL_COUNTS_EVENT_OCCURRED__EVENT_TYPE__CRITICAL_COUNTS_EVENT_TYPE_CAPTIVE_APP_NOT_FOUND,
+                        1);
+                Log.e(TAG, "No handler activity for captive portal sign in");
+                return false;
+            }
             final PackageInfo captivePortalInfo;
             try {
                 captivePortalInfo = packageManager.getPackageInfo(handler.getPackageName(),
