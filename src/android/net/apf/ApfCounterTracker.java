@@ -99,6 +99,7 @@ public class ApfCounterTracker {
         DROPPED_LOW_POWER_STANDBY,
         DROPPED_MDNS,
         DROPPED_MDNS_REPLIED,
+        DROPPED_MDNS_REPLY_FILTERED,
         DROPPED_NON_UNICAST_TDLS,
         DROPPED_RA,  // see also MAX_DROP_COUNTER below
         PASSED_ARP_BROADCAST_REPLY,  // see also MIN_PASS_COUNTER below.

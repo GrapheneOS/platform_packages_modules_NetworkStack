@@ -14,3 +14,10 @@ flag {
     description: "Enable APF mDNS advertising offload"
     bug: "477470809"
 }
+
+flag {
+    name: "apf_handle_mdns_reply_filter"
+    namespace: "com_android_networkstack"
+    description: "Support APF mDNS reply filter"
+    bug: "451885799"
+}
