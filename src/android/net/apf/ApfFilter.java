@@ -175,6 +175,7 @@ import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_REPLIED_
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_ROUTER_SOLICITATION;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_LOW_POWER_STANDBY;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_MDNS;
+import static android.net.apf.ApfCounterTracker.Counter.DROPPED_MDNS_REPLY_FILTERED;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_NON_UNICAST_TDLS;
 import static android.net.apf.ApfCounterTracker.Counter.DROPPED_RA;
 import static android.net.apf.ApfCounterTracker.Counter.FILTER_AGE_16384THS;
@@ -200,6 +201,8 @@ import static android.net.apf.ApfCounterTracker.Counter.TOTAL_PACKETS;
 import static android.net.apf.BaseApfGenerator.MemorySlot;
 import static android.net.apf.BaseApfGenerator.Register.R0;
 import static android.net.apf.BaseApfGenerator.Register.R1;
+import static android.net.nsd.OffloadEngine.OFFLOAD_TYPE_FILTER_REPLIES;
+import static android.net.nsd.OffloadEngine.OFFLOAD_TYPE_REPLY;
 import static android.net.util.SocketUtils.makePacketSocketAddress;
 import static android.os.PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED;
 import static android.os.PowerManager.ACTION_DEVICE_LIGHT_IDLE_MODE_CHANGED;
@@ -355,6 +358,7 @@ public class ApfFilter {
         public boolean handleArpOffload;
         public boolean handleNdOffload;
         public boolean handleMdnsOffload;
+        public boolean handleMdnsReplyFilter;
         public boolean handleIgmpOffload;
         public boolean handleMldOffload;
         public boolean handleIpv4PingOffload;
@@ -426,6 +430,7 @@ public class ApfFilter {
     private final boolean mHandleArpOffload;
     private final boolean mHandleNdOffload;
     private final boolean mHandleMdnsOffload;
+    private final boolean mHandleMdnsReplyFilter;
     private final boolean mHandleIgmpOffload;
     private final boolean mHandleMldOffload;
     private final boolean mHandleIpv4PingOffload;
@@ -559,6 +564,27 @@ public class ApfFilter {
         }
     }
 
+    private void maybeUpdateMdnsRules(ApfMdnsUtils.MdnsRules allRules) {
+        if (mHandleMdnsOffload) {
+            mOffloadRules.clear();
+            mOffloadRules.addAll(allRules.offloadRules);
+        }
+
+        if (mHandleMdnsReplyFilter) {
+            mFilterRules.clear();
+            mFilterRules.addAll(allRules.filterRules);
+        }
+
+        if (mHandleMdnsOffload || mHandleMdnsReplyFilter) {
+            installNewProgram();
+        }
+    }
+
+    private int getOffloadType() {
+        return (mHandleMdnsOffload ? OFFLOAD_TYPE_REPLY : 0)
+            | (mHandleMdnsReplyFilter ? OFFLOAD_TYPE_FILTER_REPLIES : 0);
+    }
+
     @VisibleForTesting
     public ApfFilter(Handler handler, Context context, ApfConfiguration config,
             InterfaceParams ifParams, IApfController apfController,
@@ -587,6 +613,7 @@ public class ApfFilter {
         mHandleArpOffload = config.handleArpOffload;
         mHandleNdOffload = config.handleNdOffload;
         mHandleMdnsOffload = config.handleMdnsOffload;
+        mHandleMdnsReplyFilter = config.handleMdnsReplyFilter;
         mHandleIgmpOffload = config.handleIgmpOffload;
         mHandleMldOffload = config.handleMldOffload;
         mHandleIpv4PingOffload = config.handleIpv4PingOffload;
@@ -647,13 +674,8 @@ public class ApfFilter {
         if (enableOffloadEngineRegistration()) {
             mApfMdnsOffloadEngine = new ApfMdnsOffloadEngine(mInterfaceParams.name, mHandler,
                     mNsdManager,
-                    allRules -> {
-                        mOffloadRules.clear();
-                        mOffloadRules.addAll(allRules.offloadRules);
-                        mFilterRules.clear();
-                        mFilterRules.addAll(allRules.filterRules);
-                        installNewProgram();
-                    },
+                    this::maybeUpdateMdnsRules,
+                    getOffloadType(),
                     mSkipMdnsRecordWithoutPriority
                     );
             mApfMdnsOffloadEngine.registerOffloadEngine();
@@ -2164,6 +2186,52 @@ public class ApfFilter {
     }
 
     /**
+     * Generates filter code to handle mDNS reply packets.
+     * <p>
+     * The only way to enter the mDNS reply filter check logic is by jumping to the
+     * labelCheckMdnsReplyFilter label.
+     * On entry, the packet is known to be an IPv4/IPv6 mDNS reply packet, and register R1
+     * is set to the offset of the beginning of the UDP payload (the DNS header).
+     *
+     * @param gen the APF generator to generate the filter code
+     * @param labelCheckMdnsReplyFilter the label to jump to for checking the mDNS reply filter
+     */
+    // TODO: deal with the case where the RAM is not enough
+    //      1. If there's enough RAM then just to filter reply based on the rule.
+    //      2. fail-open to pass all reply packets where the RAM is not enough.
+    private void generateMdnsReplyFilter(
+            final ApfV6GeneratorBase<?> gen,
+            short labelCheckMdnsReplyFilter) throws IllegalInstructionException {
+
+        gen.defineLabel(labelCheckMdnsReplyFilter);
+        if (!mMulticastFilter) {
+            gen.addCountAndPass(PASSED_MDNS);
+            return;
+        }
+
+        final short ruleMatch = gen.getUniqueLabel();
+        // Set R0 to the offset of the beginning of the UDP payload (the DNS header)
+        gen.addSwap();
+
+        final List<byte[]> bytesList = new ArrayList<>();
+        for (final MdnsOffloadRule rule : mFilterRules) {
+            for (final MdnsOffloadRule.Matcher matcher : rule.mMatchers) {
+                bytesList.add(matcher.mQnames);
+            }
+        }
+        try {
+            gen.addJumpIfPktAtR0ContainAnyOfDnsA(bytesList, ruleMatch);
+        } catch (IllegalArgumentException e) {
+            Log.e(TAG, "Failed to generate mDNS reply filter for " + mFilterRules, e);
+            gen.addCountAndPass(PASSED_MDNS);
+            return;
+        }
+        gen.addCountAndDrop(DROPPED_MDNS_REPLY_FILTERED)
+                .defineLabel(ruleMatch)
+                .addCountAndPass(PASSED_MDNS);
+    }
+
+    /**
      * Generates filter code to handle IPv4 mDNS packets.
      * <p>
      * On entry, this filter knows it is processing an IPv4 packet. It will then process all IPv4
@@ -2171,9 +2239,11 @@ public class ApfFilter {
      *
      * @param gen the APF generator to generate the filter code
      * @param labelCheckMdnsQueryPayload the label to jump to for checking the mDNS query payload
+     * @param labelCheckMdnsReplyFilter the label to jump to for checking the mDNS reply filter
      */
     private void generateIPv4MdnsFilter(ApfV6GeneratorBase<?> gen,
-            short labelCheckMdnsQueryPayload)
+            short labelCheckMdnsQueryPayload,
+            short labelCheckMdnsReplyFilter)
             throws IllegalInstructionException {
         final short skipMdnsFilter = gen.getUniqueLabel();
 
@@ -2222,10 +2292,24 @@ public class ApfFilter {
         gen.addLoad16intoR0(IPV4_DNS_QDCOUNT_NO_OPTIONS_OFFSET)
                 // Set the UDP payload offset in R1 before potentially jumping to the payload
                 // check logic.
-                .addLoadImmediate(R1, IPV4_UDP_PAYLOAD_NO_OPTIONS_OFFSET)
-                .addJumpIfR0NotEquals(0, labelCheckMdnsQueryPayload);
+                .addLoadImmediate(R1, IPV4_UDP_PAYLOAD_NO_OPTIONS_OFFSET);
 
-        // TODO: check the reply payload.
+        // if it is query packet (qdcount > 0):
+        //   apply query offloading logic.
+        // else if it is reply packet (qdcount = 0):
+        //   apply reply filtering logic.
+        if (enableMdns4Offload()) {
+            // Handle mDNS query offloading.
+            gen.addJumpIfR0NotEquals(0, labelCheckMdnsQueryPayload);
+        }
+
+        if (enableMdns4Filter()) {
+            // Handle mDNS reply filtering.
+            gen.addJumpIfR0Equals(0, labelCheckMdnsReplyFilter);
+        }
+
+        // If mDNS offload/filter is not enabled, packets are dropped if multicast lock is not held
+        // (mMulticastFilter is true), otherwise passed for upper layer applications.
         if (mMulticastFilter) {
             gen.addCountAndDrop(DROPPED_MDNS);
         } else {
@@ -2243,9 +2327,12 @@ public class ApfFilter {
      *
      * @param gen the APF generator to generate the filter code
      * @param labelCheckMdnsQueryPayload the label to jump to for checking the mDNS query payload
+     * @param labelCheckMdnsReplyFilter the label to jump to for checking the mDNS reply filter
      */
-    private void generateIPv4Filter(ApfV4GeneratorBase<?> gen, short labelCheckMdnsQueryPayload)
-            throws IllegalInstructionException {
+    private void generateIPv4Filter(
+            ApfV4GeneratorBase<?> gen,
+            short labelCheckMdnsQueryPayload,
+            short labelCheckMdnsReplyFilter) throws IllegalInstructionException {
         // Here's a basic summary of what the IPv4 filter program does:
         //
         // if the network is IPv6 only network:
@@ -2271,7 +2358,10 @@ public class ApfFilter {
         //       pass
         //   else:
         //     if filtering multicast (i.e. multicast lock not held):
-        //       drop
+        //       if the reply matches one of the offload rules:
+        //         pass
+        //       else
+        //         drop
         //     else
         //       pass
         //
@@ -2345,8 +2435,12 @@ public class ApfFilter {
             return;
         }
 
-        if (enableMdns4Offload()) {
-            generateIPv4MdnsFilter((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload);
+        if (enableMdns4Filter() || enableMdns4Offload()) {
+            generateIPv4MdnsFilter(
+                    (ApfV6GeneratorBase<?>) gen,
+                    labelCheckMdnsQueryPayload,
+                    labelCheckMdnsReplyFilter
+            );
         }
 
         if (enableIgmpOffload()) {
@@ -2645,9 +2739,11 @@ public class ApfFilter {
      *
      * @param gen the APF generator to generate the filter code
      * @param labelCheckMdnsQueryPayload the label to jump to for checking the mDNS query payload
+     * @param labelCheckMdnsReplyFilter the label to jump to for checking the mDNS reply filter
      */
     private void generateIPv6MdnsFilter(ApfV6GeneratorBase<?> gen,
-            short labelCheckMdnsQueryPayload) throws IllegalInstructionException {
+            short labelCheckMdnsQueryPayload,
+            short labelCheckMdnsReplyFilter) throws IllegalInstructionException {
         final short skipMdnsFilter = gen.getUniqueLabel();
 
         // If the packet is too short to be a valid IPv6 mDNS packet, the filter is skipped.
@@ -2691,10 +2787,24 @@ public class ApfFilter {
         gen.addLoad16intoR0(IPV6_DNS_QDCOUNT_OFFSET)
                 // Set the UDP payload offset in R1 before potentially jumping to the payload
                 // check logic.
-                .addLoadImmediate(R1, IPV6_UDP_PAYLOAD_OFFSET)
-                .addJumpIfR0NotEquals(0, labelCheckMdnsQueryPayload);
+                .addLoadImmediate(R1, IPV6_UDP_PAYLOAD_OFFSET);
 
-        // TODO: check the reply payload.
+        // if it is query packet (qdcount > 0):
+        //   apply query offloading logic.
+        // else if it is reply packet (qdcount = 0):
+        //   apply reply filtering logic.
+        if (enableMdns6Offload()) {
+            // Handle mDNS query offloading.
+            gen.addJumpIfR0NotEquals(0, labelCheckMdnsQueryPayload);
+        }
+
+        if (enableMdns6Filter()) {
+            // Handle mDNS reply filtering.
+            gen.addJumpIfR0Equals(0, labelCheckMdnsReplyFilter);
+        }
+
+        // If mDNS offload/filter is not enabled, packets are dropped if multicast lock is not held
+        // (mMulticastFilter is true), otherwise passed for upper layer applications.
         if (mMulticastFilter) {
             gen.addCountAndDrop(DROPPED_MDNS);
         } else {
@@ -2785,9 +2895,12 @@ public class ApfFilter {
      *
      * @param gen the APF generator to generate the filter code
      * @param labelCheckMdnsQueryPayload the label to jump to for checking the mDNS query payload
+     * @param labelCheckMdnsReplyFilter the label to jump to for checking the mDNS reply filter
      */
-    private void generateIPv6Filter(ApfV4GeneratorBase<?> gen, short labelCheckMdnsQueryPayload)
-            throws IllegalInstructionException {
+    private void generateIPv6Filter(
+            ApfV4GeneratorBase<?> gen,
+            short labelCheckMdnsQueryPayload,
+            short labelCheckMdnsReplyFilter) throws IllegalInstructionException {
         // Here's a basic summary of what the IPv6 filter program does:
         //
         // if there is a HOPOPTS option present (e.g. MLD query)
@@ -2827,7 +2940,10 @@ public class ApfFilter {
         //       pass
         //   else:
         //     if filtering multicast (i.e. multicast lock not held):
-        //       drop
+        //       if the reply matches one of the offload rules:
+        //         pass
+        //       else
+        //         drop
         //     else
         //       pass
         //
@@ -2898,8 +3014,12 @@ public class ApfFilter {
             gen.addCountAndPassIfR0Equals(IPPROTO_HOPOPTS, PASSED_IPV6_HOPOPTS);
         }
 
-        if (enableMdns6Offload()) {
-            generateIPv6MdnsFilter((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload);
+        if (enableMdns6Filter() || enableMdns6Offload()) {
+            generateIPv6MdnsFilter(
+                    (ApfV6GeneratorBase<?>) gen,
+                    labelCheckMdnsQueryPayload,
+                    labelCheckMdnsReplyFilter
+            );
             gen.addLoad8intoR0(IPV6_NEXT_HEADER_OFFSET);
         }
 
@@ -3887,9 +4007,12 @@ public class ApfFilter {
      * </ul>
      * @param gen the APF generator to generate the filter code
      * @param labelCheckMdnsQueryPayload the label to jump to for checking the mDNS query payload
+     * @param labelCheckMdnsReplyFilter the label to jump to for checking the mDNS reply filter
      */
-    private void emitPrologue(@NonNull ApfV4GeneratorBase<?> gen, short labelCheckMdnsQueryPayload)
-            throws IllegalInstructionException {
+    private void emitPrologue(
+            @NonNull ApfV4GeneratorBase<?> gen,
+            short labelCheckMdnsQueryPayload,
+            short labelCheckMdnsReplyFilter) throws IllegalInstructionException {
         if (hasDataAccess(mApfVersionSupported)) {
             if (gen instanceof ApfV4Generator) {
                 // Increment TOTAL_PACKETS.
@@ -3994,7 +4117,7 @@ public class ApfFilter {
         // Add IPv4 filters:
         short skipIPv4FiltersLabel = gen.getUniqueLabel();
         gen.addJumpIfR0NotEquals(ETH_P_IP, skipIPv4FiltersLabel);
-        generateIPv4Filter(gen, labelCheckMdnsQueryPayload);
+        generateIPv4Filter(gen, labelCheckMdnsQueryPayload, labelCheckMdnsReplyFilter);
         gen.defineLabel(skipIPv4FiltersLabel);
 
         // Check for IPv6:
@@ -4011,7 +4134,7 @@ public class ApfFilter {
 
         // Add IPv6 filters:
         gen.defineLabel(ipv6FilterLabel);
-        generateIPv6Filter(gen, labelCheckMdnsQueryPayload);
+        generateIPv6Filter(gen, labelCheckMdnsQueryPayload, labelCheckMdnsReplyFilter);
     }
 
     private void installPacketFilter(byte[] program, String logInfo) {
@@ -4141,8 +4264,9 @@ public class ApfFilter {
                 preloadData((ApfV61GeneratorBase<?>) gen);
             }
             short labelCheckMdnsQueryPayload = gen.getUniqueLabel();
+            short labelCheckMdnsReplyFilter = gen.getUniqueLabel();
 
-            emitPrologue(gen, labelCheckMdnsQueryPayload);
+            emitPrologue(gen, labelCheckMdnsQueryPayload, labelCheckMdnsReplyFilter);
 
             int programLengthOverEstimate = gen.programLengthOverEstimate();
 
@@ -4225,6 +4349,10 @@ public class ApfFilter {
             if (enableMdns4Offload() || enableMdns6Offload()) {
                 generateMdnsQueryOffload((ApfV6GeneratorBase<?>) gen, labelCheckMdnsQueryPayload,
                         mNumOfMdnsRuleToOffload);
+            }
+
+            if (enableMdns4Filter() || enableMdns6Filter()) {
+                generateMdnsReplyFilter((ApfV6GeneratorBase<?>) gen, labelCheckMdnsReplyFilter);
             }
 
             mNumFilteredRas = rasToFilter.size();
@@ -4642,7 +4770,7 @@ public class ApfFilter {
 
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
     private boolean enableOffloadEngineRegistration() {
-        return mHandleMdnsOffload && useApfV6Generator();
+        return (mHandleMdnsOffload || mHandleMdnsReplyFilter) && useApfV6Generator();
     }
 
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
@@ -4660,6 +4788,18 @@ public class ApfFilter {
     private boolean enableMdns6Offload() {
         return enableOffloadEngineRegistration() && mIPv6LinkLocalAddress != null
                 && !mOffloadRules.isEmpty();
+    }
+
+    @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
+    private boolean enableMdns4Filter() {
+        return enableOffloadEngineRegistration() && mIPv4Address != null
+            && !mFilterRules.isEmpty();
+    }
+
+    @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
+    private boolean enableMdns6Filter() {
+        return enableOffloadEngineRegistration() && mIPv6LinkLocalAddress != null
+            && !mFilterRules.isEmpty();
     }
 
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)

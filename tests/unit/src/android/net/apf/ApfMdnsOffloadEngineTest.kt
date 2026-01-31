@@ -19,6 +19,8 @@ import android.net.apf.ApfMdnsOffloadEngine.Callback
 import android.net.apf.ApfMdnsUtils.extractRules
 import android.net.nsd.NsdManager
 import android.net.nsd.OffloadEngine
+import android.net.nsd.OffloadEngine.OFFLOAD_TYPE_FILTER_REPLIES
+import android.net.nsd.OffloadEngine.OFFLOAD_TYPE_REPLY
 import android.net.nsd.OffloadServiceInfo
 import android.os.Build
 import android.os.Handler
@@ -65,6 +67,7 @@ class ApfMdnsOffloadEngineTest {
 
     private val interfaceName = "test_interface"
 
+    private val offloadType = OFFLOAD_TYPE_REPLY or OFFLOAD_TYPE_FILTER_REPLIES
     @Mock
     private lateinit var nsdManager: NsdManager
 
@@ -89,6 +92,7 @@ class ApfMdnsOffloadEngineTest {
                 handler,
                 nsdManager,
                 callback,
+                offloadType,
                 false /* skipMdnsRecordWithoutPriority */
             )
         apfOffloadEngine.registerOffloadEngine()
@@ -149,6 +153,7 @@ class ApfMdnsOffloadEngineTest {
                 handler,
                 nsdManager,
                 callback,
+                offloadType,
                 true /* skipMdnsRecordWithoutPriority */
             )
         apfOffloadEngine.registerOffloadEngine()
@@ -200,6 +205,7 @@ class ApfMdnsOffloadEngineTest {
                 handler,
                 nsdManager,
                 callback,
+                offloadType,
                 false /* skipMdnsRecordWithoutPriority */
             )
         apfOffloadEngine.registerOffloadEngine()

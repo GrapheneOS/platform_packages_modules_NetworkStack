@@ -61,6 +61,7 @@ import android.net.apf.ApfCounterTracker.Counter.DROPPED_IPV6_NS_REPLIED_NON_DAD
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_LOW_POWER_STANDBY
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_MDNS
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_MDNS_REPLIED
+import android.net.apf.ApfCounterTracker.Counter.DROPPED_MDNS_REPLY_FILTERED
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_NON_UNICAST_TDLS
 import android.net.apf.ApfCounterTracker.Counter.DROPPED_RA
 import android.net.apf.ApfCounterTracker.Counter.PASSED_ARP_BROADCAST_REPLY
@@ -457,6 +458,48 @@ class ApfFilterTest {
                 OffloadEngine.OFFLOAD_TYPE_REPLY.toLong()
             )
 
+        )
+    }
+
+    private val discoveryRequestOffloadInfo by lazy {
+        FromU(
+            OffloadServiceInfo(
+                OffloadServiceInfo.Key("", "_myproto._tcp"),
+                listOf("subtype"),
+                "myhost.local",
+                null,
+                1 /* priority */,
+                OffloadEngine.OFFLOAD_TYPE_FILTER_REPLIES.toLong()
+            )
+        )
+    }
+
+    private val advertiseRequestOffloadInfo by lazy {
+        FromU(
+            OffloadServiceInfo(
+                OffloadServiceInfo.Key("android", "_testproto._tcp"),
+                listOf("subType1", "subType2"),
+                "testhost.local",
+                null,
+                1 /* priority */,
+                OffloadEngine.OFFLOAD_TYPE_FILTER_REPLIES.toLong()
+            )
+        )
+    }
+
+    private val filterReplyOffloadInfos: List<FromU<OffloadServiceInfo>> by lazy {
+        listOf(
+            advertiseRequestOffloadInfo,
+            discoveryRequestOffloadInfo
+        )
+    }
+
+    private val offloadQueryOffloadInfos: List<FromU<OffloadServiceInfo>> by lazy {
+        listOf(
+            castOffloadInfo,
+            tvRemoteOffloadInfo,
+            manySubtypeOffloadInfo,
+            manySubtypeOffloadInfo
         )
     }
     private val counterTotalSize = ApfCounterTracker.Counter.totalSize()
@@ -5754,28 +5797,25 @@ class ApfFilterTest {
         verify(apfController, never()).installPacketFilter(any(), any())
     }
 
-    private fun getApfWithMdnsOffloadEnabled(
+    private fun getApfWithMdnsConfig(
         apfRam: Int = 4096,
+        mdnsOffload: Boolean = false,
+        mdnsReplyFilter: Boolean = false,
         mcFilter: Boolean = true,
         v6Only: Boolean = false,
-        addedOffloadInfos: List<FromU<OffloadServiceInfo>> = listOf(
-            castOffloadInfo,
-            tvRemoteOffloadInfo,
-            manySubtypeOffloadInfo,
-            manySubtypeOffloadInfo
-        ),
+        addedOffloadInfos: List<FromU<OffloadServiceInfo>> = offloadQueryOffloadInfos,
         removedOffloadInfos: List<FromU<OffloadServiceInfo>> = listOf(),
         raReaderSocket: FileDescriptor = raReadSocket,
-        ifParams: InterfaceParams = loIfParams
+        ifParams: InterfaceParams = loIfParams,
     ): Pair<ApfFilter, ByteArray> {
         val localNsdManager = mock(NsdManager::class.java)
         doReturn(localNsdManager).`when`(context).getSystemService(NsdManager::class.java)
         doReturn(raReaderSocket).`when`(dependencies).createPacketReaderSocket(anyInt())
-        val apfConfig = getDefaultConfig()
-        apfConfig.apfRamSize = apfRam
-        apfConfig.handleMdnsOffload = true
-        if (mcFilter) {
-            apfConfig.multicastFilter = true
+        val apfConfig = getDefaultConfig().apply {
+            apfRamSize = apfRam
+            if (mcFilter) multicastFilter = true
+            if (mdnsOffload) handleMdnsOffload = true
+            if (mdnsReplyFilter) handleMdnsReplyFilter = true
         }
         val apfFilter = getApfFilter(apfConfig, ifParams)
         ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
@@ -5788,16 +5828,20 @@ class ApfFilterTest {
             captor.capture()
         )
         val offloadEngine = captor.value
-        val lp = LinkProperties()
-        if (v6Only) {
-            apfFilter.updateClatInterfaceState(true)
-            ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
-        } else {
-            val ipv4LinkAddress = LinkAddress(InetAddress.getByAddress(hostIpv4Address), 24)
-            lp.addLinkAddress(ipv4LinkAddress)
+        val lp = LinkProperties().apply {
+            if (v6Only) {
+                apfFilter.updateClatInterfaceState(true)
+                ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
+            } else {
+                addLinkAddress(
+                    LinkAddress(
+                        InetAddress.getByAddress(hostIpv4Address),
+                        24
+                    )
+                )
+            }
+            addLinkAddress(LinkAddress(hostLinkLocalIpv6Address, 64))
         }
-        val ipv6LinkAddress = LinkAddress(hostLinkLocalIpv6Address, 64)
-        lp.addLinkAddress(ipv6LinkAddress)
         apfFilter.setLinkProperties(lp)
         var program = ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
 
@@ -5807,7 +5851,7 @@ class ApfFilterTest {
             }
             program = ApfTestHelpers.consumeInstalledProgram(
                 apfController,
-                installCnt = addedOffloadInfos.size
+                addedOffloadInfos.size
             )
         }
         if (removedOffloadInfos.isNotEmpty()) {
@@ -5816,7 +5860,7 @@ class ApfFilterTest {
             }
             program = ApfTestHelpers.consumeInstalledProgram(
                 apfController,
-                installCnt = removedOffloadInfos.size
+                removedOffloadInfos.size
             )
         }
         return Pair(apfFilter, program)
@@ -5825,7 +5869,7 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testIPv4MdnsQueryReplied() {
-        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(mcFilter = false)
+        val (apfFilter, program) = getApfWithMdnsConfig(mcFilter = false, mdnsOffload = true)
         // Using scapy to generate packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
         // ip = IP(src="10.0.0.3", dst="224.0.0.251")
@@ -6185,7 +6229,11 @@ class ApfFilterTest {
     @Test
     fun testIPv4MdnsQueryPassedWithGeneratedPacketOverMtu() {
         val (apfFilter, program) =
-            getApfWithMdnsOffloadEnabled(mcFilter = false, ifParams = loIfParamsWithSmallMtu)
+            getApfWithMdnsConfig(
+                mcFilter = false,
+                mdnsOffload = true,
+                ifParams = loIfParamsWithSmallMtu
+            )
         // Using scapy to generate packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
         // ip = IP(src="10.0.0.3", dst="224.0.0.251")
@@ -6282,7 +6330,8 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testIPv4MdnsQueryDropped() {
-        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(
+        val (apfFilter, program) = getApfWithMdnsConfig(
+            mdnsOffload = true,
             removedOffloadInfos = listOf(tvRemoteOffloadInfo)
         )
         // Using scapy to generate packet:
@@ -6327,7 +6376,7 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testIPv4MdnsQueryWithOptionPassed() {
-        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(mcFilter = false)
+        val (apfFilter, program) = getApfWithMdnsConfig(mcFilter = false, mdnsOffload = true)
         // Using scapy to generate packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
         // ip = IP(src="10.0.0.3", dst="224.0.0.251", options=IPOption(b'\x94\x04\x00\x00'))
@@ -6351,7 +6400,11 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testIPv4MdnsQueryDroppedOnV6OnlyNetwork() {
-        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(mcFilter = false, v6Only = true)
+        val (apfFilter, program) = getApfWithMdnsConfig(
+            mcFilter = false,
+            mdnsOffload = true,
+            v6Only = true
+        )
         // Using scapy to generate packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
         // ip = IP(src="10.0.0.3", dst="224.0.0.251")
@@ -6375,7 +6428,7 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testIPv4MdnsReplyPassed() {
-        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(mcFilter = false)
+        val (apfFilter, program) = getApfWithMdnsConfig(mcFilter = false, mdnsOffload = true)
         // Using scapy to generate packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
         // ip = IP(src="10.0.0.3", dst="224.0.0.251")
@@ -6400,8 +6453,40 @@ class ApfFilterTest {
 
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
+    fun testIPv4MdnsPacketContainsBothQueryAndAnswerWithOffloadAndFilterReplyEnabled() {
+        val (apfFilter, program) = getApfWithMdnsConfig(
+            mcFilter = false,
+            mdnsOffload = true,
+            mdnsReplyFilter = true,
+            addedOffloadInfos = offloadQueryOffloadInfos + filterReplyOffloadInfos
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="_googlecast._tcp.local", qtype="PTR"),
+        //           an=DNSRR(rrname="_googlecast._tcp.local", type="PTR", rdata="test._googlecast._tcp.local"))
+        // pkt = eth/ip/udp/dns
+        val castIPv4MdnsPtrQueryAndAnswer = """
+            01005e0000fb0102030405060800450000830001000040118f6b0a000003e00000fb14e914e9006f6cc0
+            0000010000010001000000000b5f676f6f676c6563617374045f746370056c6f63616c00000c00010b5f
+            676f6f676c6563617374045f746370056c6f63616c00000c000100000000001d04746573740b5f676f6f
+            676c6563617374045f746370056c6f63616c00
+        """.replace("\\s+".toRegex(), "").trim()
+
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(castIPv4MdnsPtrQueryAndAnswer),
+            DROPPED_MDNS_REPLIED
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
     fun testIPv6MdnsQueryReplied() {
-        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(mcFilter = false)
+        val (apfFilter, program) = getApfWithMdnsConfig(mcFilter = false, mdnsOffload = true)
         // Using scapy to generate packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:FB")
         // ip = IPv6(src="fe80::1", dst="ff02::fb")
@@ -6723,7 +6808,11 @@ class ApfFilterTest {
     @Test
     fun testIPv6MdnsQueryPassedWithGeneratedPacketOverMtu() {
         val (apfFilter, program) =
-            getApfWithMdnsOffloadEnabled(mcFilter = false, ifParams = loIfParamsWithSmallMtu)
+            getApfWithMdnsConfig(
+                mcFilter = false,
+                mdnsOffload = true,
+                ifParams = loIfParamsWithSmallMtu
+            )
         // Using scapy to generate packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:FB")
         // ip = IPv6(src="fe80::1", dst="ff02::fb")
@@ -6794,7 +6883,8 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testIPv6MdnsQueryDropped() {
-        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(
+        val (apfFilter, program) = getApfWithMdnsConfig(
+            mdnsOffload = true,
             removedOffloadInfos = listOf(tvRemoteOffloadInfo)
         )
         // Using scapy to generate packet:
@@ -6841,7 +6931,7 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testIPv6MdnsReplyPassed() {
-        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(mcFilter = false)
+        val (apfFilter, program) = getApfWithMdnsConfig(mcFilter = false, mdnsOffload = true)
         // Using scapy to generate packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:FB")
         // ip = IPv6(src="fe80::1", dst="ff02::fb")
@@ -6863,10 +6953,418 @@ class ApfFilterTest {
             PASSED_MDNS
         )
     }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testIPv6MdnsPacketContainsBothQueryAndAnswerWithOffloadAndFilterReplyEnabled() {
+        val (apfFilter, program) = getApfWithMdnsConfig(
+            mcFilter = false,
+            mdnsOffload = true,
+            mdnsReplyFilter = true,
+            addedOffloadInfos = offloadQueryOffloadInfos + filterReplyOffloadInfos
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:FB")
+        // ip = IPv6(src="fe80::1", dst="ff02::fb")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="_googlecast._tcp.local", qtype="PTR"),
+        //           an=DNSRR(rrname="_googlecast._tcp.local", type="PTR", rdata="test._googlecast._tcp.local"))
+        // pkt = eth/ip/udp/dns
+        val castIPv6MdnsPtrQueryAndAnswer = """
+            3333000000fb01020304050686dd60000000006f1140fe8000000000000000
+            00000000000001ff0200000000000000000000000000fb14e914e9006f593f
+            0000010000010001000000000b5f676f6f676c6563617374045f746370056c
+            6f63616c00000c00010b5f676f6f676c6563617374045f746370056c6f6361
+            6c00000c000100000000001d04746573740b5f676f6f676c6563617374045f
+            746370056c6f63616c00
+        """.replace("\\s+".toRegex(), "").trim()
+
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(castIPv6MdnsPtrQueryAndAnswer),
+            DROPPED_MDNS_REPLIED
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testIPv4MdnsReplyFilter() {
+        assumeTrue(apfInterpreterVersion >= BaseApfGenerator.APF_VERSION_6)
+        val (apfFilter, program) = getApfWithMdnsConfig(
+            mdnsReplyFilter = true,
+            addedOffloadInfos = filterReplyOffloadInfos
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(rd=0, qr=1, aa=1, qd=[], ancount=1, an=[
+        //    DNSRR(rrname='android._testproto._tcp.local', type='PTR', rdata='android._testproto._tcp.local')
+        // ])
+        // pkt = eth/ip/udp/dns
+        val matchingAdvertiseIPv4Pkt = """
+            01005e0000fb0102030405060800450000700001000040118f7e0a000003e00000fb14e914e900
+            5c305a00008400000000010000000007616e64726f69640a5f7465737470726f746f045f746370
+            056c6f63616c00000c000100000000001f07616e64726f69640a5f7465737470726f746f045f74
+            6370056c6f63616c00
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(matchingAdvertiseIPv4Pkt),
+            PASSED_MDNS
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(rd=0, qr=1, aa=1, qd=[], ancount=1, an=[
+        //    DNSRR(rrname='_myproto._tcp.local', type='PTR', rdata='test._myproto._tcp.local')
+        // ])
+        // pkt = eth/ip/udp/dns
+        val matchingDiscoveryBaseTypeIPv4Pkt = """
+            01005e0000fb0102030405060800450000610001000040118f8d0a000003e00000fb14e914e900
+            4d9bdb000084000000000100000000085f6d7970726f746f045f746370056c6f63616c00000c00
+            0100000000001a0474657374085f6d7970726f746f045f746370056c6f63616c00
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(matchingDiscoveryBaseTypeIPv4Pkt),
+            PASSED_MDNS
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(rd=0, qr=1, aa=1, qd=[], ancount=1, an=[
+        //    DNSRR(rrname='_subtype._sub._myproto._tcp.local', type='PTR', rdata='test._subtype._sub._myproto._tcp.local')
+        // ])
+        // pkt = eth/ip/udp/dns
+        val matchingDiscoverySubTypeIPv4Pkt = """
+            01005e0000fb01020304050608004500007b0001000040118f730a000003e00000fb14e914e90067
+            812b0000840000000001000000000773756274797065045f737562085f6d7970726f746f045f7463
+            70056c6f63616c00000c000100000000002704746573740773756274797065045f737562085f6d79
+            70726f746f045f746370056c6f63616c00
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(matchingDiscoverySubTypeIPv4Pkt),
+            PASSED_MDNS
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(rd=0, qr=1, aa=1, qd=[], ancount=1, an=[
+        //    DNSRR(rrname='myhost.local', type='A', rdata='10.0.0.3')
+        // ])
+        // pkt = eth/ip/udp/dns
+        val matchingDiscoveryHostNameIPv4Pkt = """
+            01005e0000fb0102030405060800450000440001000040118faa0a000003e00000fb14e914e90030bd
+            93000084000000000100000000066d79686f7374056c6f63616c00000100010000000000040a000003
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(matchingDiscoveryHostNameIPv4Pkt),
+            PASSED_MDNS
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(rd=0, qr=1, aa=1, qd=[], ancount=1, an=[
+        //    DNSRR(rrname='_different._tcp.local', type='PTR', rdata='test._different._tcp.local')
+        // ])
+        // pkt = eth/ip/udp/dns
+        val nonMatchingIPv4Pkt = """
+            01005e0000fb0102030405060800450000650001000040118f890a000003e00000fb14e914e90051f
+            b320000840000000001000000000a5f646966666572656e74045f746370056c6f63616c00000c0001
+            00000000001c04746573740a5f646966666572656e74045f746370056c6f63616c00
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(nonMatchingIPv4Pkt),
+            DROPPED_MDNS_REPLY_FILTERED
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="_myproto._tcp.local", qtype="PTR"),
+        //           an=DNSRR(rrname="_myproto._tcp.local", type="PTR", rdata="test._myproto._tcp.local"))
+        // pkt = eth/ip/udp/dns
+        val mdnsIPv4PtrQueryAndAnswer = """
+            01005e0000fb01020304050608004500007a0001000040118f740a000003e00000fb14e914e90066d
+            7a0000001000001000100000000085f6d7970726f746f045f746370056c6f63616c00000c0001085f
+            6d7970726f746f045f746370056c6f63616c00000c000100000000001a0474657374085f6d7970726
+            f746f045f746370056c6f63616c00
+        """.replace("\\s+".toRegex(), "").trim()
+
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(mdnsIPv4PtrQueryAndAnswer),
+            DROPPED_MDNS
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testIPv4MdnsReplyFilterWithMcFilterDisabled() {
+        assumeTrue(apfInterpreterVersion >= BaseApfGenerator.APF_VERSION_6)
+        val (apfFilter, program) = getApfWithMdnsConfig(
+            mcFilter = false,
+            mdnsReplyFilter = true,
+            addedOffloadInfos = filterReplyOffloadInfos
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(rd=0, qr=1, aa=1, qd=[], ancount=1, an=[
+        //    DNSRR(rrname='_different._tcp.local', type='PTR', rdata='test._different._tcp.local')
+        // ])
+        // pkt = eth/ip/udp/dns
+        val nonMatchingIPv4Pkt = """
+            01005e0000fb0102030405060800450000650001000040118f890a000003e00000fb14e914e90051f
+            b320000840000000001000000000a5f646966666572656e74045f746370056c6f63616c00000c0001
+            00000000001c04746573740a5f646966666572656e74045f746370056c6f63616c00
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(nonMatchingIPv4Pkt),
+            PASSED_MDNS
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
+        // ip = IP(src="10.0.0.3", dst="224.0.0.251")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="_myproto._tcp.local", qtype="PTR"),
+        //           an=DNSRR(rrname="_myproto._tcp.local", type="PTR", rdata="test._myproto._tcp.local"))
+        // pkt = eth/ip/udp/dns
+        val mdnsIPv4PtrQueryAndAnswer = """
+            01005e0000fb01020304050608004500007a0001000040118f740a000003e00000fb14e914e90066d
+            7a0000001000001000100000000085f6d7970726f746f045f746370056c6f63616c00000c0001085f
+            6d7970726f746f045f746370056c6f63616c00000c000100000000001a0474657374085f6d7970726
+            f746f045f746370056c6f63616c00
+        """.replace("\\s+".toRegex(), "").trim()
+
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(mdnsIPv4PtrQueryAndAnswer),
+            PASSED_MDNS
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testIPv6MdnsReplyFilter() {
+        assumeTrue(apfInterpreterVersion >= BaseApfGenerator.APF_VERSION_6)
+        val (apfFilter, program) = getApfWithMdnsConfig(
+            mdnsReplyFilter = true,
+            addedOffloadInfos = filterReplyOffloadInfos
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:fb")
+        // ip = IPv6(src="fe80::1", dst="ff02::fb")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(rd=0, qr=1, aa=1, qd=[], ancount=1, an=[
+        //    DNSRR(rrname='android._testproto._tcp.local', type='PTR', rdata='android._testproto._tcp.local')
+        // ])
+        // pkt = eth/ip/udp/dns
+        val matchingAdvertiseIPv6Pkt = """
+            3333000000fb01020304050686dd60000000005c1140fe800000000000000000000000000001ff0
+            200000000000000000000000000fb14e914e9005c1cd900008400000000010000000007616e6472
+            6f69640a5f7465737470726f746f045f746370056c6f63616c00000c000100000000001f07616e6
+            4726f69640a5f7465737470726f746f045f746370056c6f63616c00
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(matchingAdvertiseIPv6Pkt),
+            PASSED_MDNS
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:fb")
+        // ip = IPv6(src="fe80::1", dst="ff02::fb")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(rd=0, qr=1, aa=1, qd=[], ancount=1, an=[
+        //    DNSRR(rrname='_myproto._tcp.local', type='PTR', rdata='test._myproto._tcp.local')
+        // ])
+        // pkt = eth/ip/udp/dns
+        val matchingDiscoveryBaseTypeIPv6Pkt = """
+            3333000000fb01020304050686dd60000000004d1140fe800000000000000000000000000001ff0
+            200000000000000000000000000fb14e914e9004d885a000084000000000100000000085f6d7970
+            726f746f045f746370056c6f63616c00000c000100000000001a0474657374085f6d7970726f746
+            f045f746370056c6f63616c00
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(matchingDiscoveryBaseTypeIPv6Pkt),
+            PASSED_MDNS
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:fb")
+        // ip = IPv6(src="fe80::1", dst="ff02::fb")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(rd=0, qr=1, aa=1, qd=[], ancount=1, an=[
+        //    DNSRR(rrname='_subtype._sub._myproto._tcp.local', type='PTR', rdata='test._subtype._sub._myproto._tcp.local')
+        // ])
+        // pkt = eth/ip/udp/dns
+        val matchingDiscoverySubTypeIPv6Pkt = """
+            3333000000fb01020304050686dd6000000000691140fe800000000000000000000000000001ff0
+            200000000000000000000000000fb14e914e9006956fb000084000000000100000000085f737562
+            74797065045f737562085f6d7970726f746f045f746370056c6f63616c00000c000100000000002
+            80474657374085f73756274797065045f737562085f6d7970726f746f045f746370056c6f63616c
+            00
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(matchingDiscoverySubTypeIPv6Pkt),
+            PASSED_MDNS
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:fb")
+        // ip = IPv6(src="fe80::1", dst="ff02::fb")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(rd=0, qr=1, aa=1, qd=[], ancount=1, an=[
+        //    DNSRR(rrname='myhost.local', type='A', rdata='10.0.0.3')
+        // ])
+        // pkt = eth/ip/udp/dns
+        val matchingDiscoveryHostNameIPv6Pkt = """
+            3333000000fb01020304050686dd6000000000301140fe800000000000000000000000000001ff020
+            0000000000000000000000000fb14e914e90030aa12000084000000000100000000066d79686f7374
+            056c6f63616c00000100010000000000040a000003
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(matchingDiscoveryHostNameIPv6Pkt),
+            PASSED_MDNS
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:fb")
+        // ip = IPv6(src="fe80::1", dst="ff02::fb")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(rd=0, qr=1, aa=1, qd=[], ancount=1, an=[
+        //    DNSRR(rrname='_different._tcp.local', type='PTR', rdata='test._different._tcp.local')
+        // ])
+        // pkt = eth/ip/udp/dns
+        val notMatchingIPv6Pkt = """
+            3333000000fb01020304050686dd6000000000511140fe800000000000000000000000000001ff0200
+            000000000000000000000000fb14e914e90051e7b10000840000000001000000000a5f646966666572
+            656e74045f746370056c6f63616c00000c000100000000001c04746573740a5f646966666572656e74
+            045f746370056c6f63616c00
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(notMatchingIPv6Pkt),
+            DROPPED_MDNS_REPLY_FILTERED
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:FB")
+        // ip = IPv6(src="fe80::1", dst="ff02::fb")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="_myproto._tcp.local", qtype="PTR"),
+        //           an=DNSRR(rrname="_myproto._tcp.local", type="PTR", rdata="test._myproto._tcp.local"))
+        // pkt = eth/ip/udp/dns
+        val mdnsIPv6PtrQueryAndAnswer = """
+            3333000000fb01020304050686dd6000000000661140fe800000000000000000000000000001ff0200
+            000000000000000000000000fb14e914e90066c41f000001000001000100000000085f6d7970726f74
+            6f045f746370056c6f63616c00000c0001085f6d7970726f746f045f746370056c6f63616c00000c00
+            0100000000001a0474657374085f6d7970726f746f045f746370056c6f63616c00
+        """.replace("\\s+".toRegex(), "").trim()
+
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(mdnsIPv6PtrQueryAndAnswer),
+            DROPPED_MDNS
+        )
+    }
+
+    @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @Test
+    fun testIPv6MdnsReplyFilterWithMcFilterDisabled() {
+        assumeTrue(apfInterpreterVersion >= BaseApfGenerator.APF_VERSION_6)
+        val (apfFilter, program) = getApfWithMdnsConfig(
+            mcFilter = false,
+            mdnsReplyFilter = true,
+            addedOffloadInfos = filterReplyOffloadInfos
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:fb")
+        // ip = IPv6(src="fe80::1", dst="ff02::fb")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(rd=0, qr=1, aa=1, qd=[], ancount=1, an=[
+        //    DNSRR(rrname='_different._tcp.local', type='PTR', rdata='test._different._tcp.local')
+        // ])
+        // pkt = eth/ip/udp/dns
+        val notMatchingIPv6Pkt = """
+            3333000000fb01020304050686dd6000000000511140fe800000000000000000000000000001ff0200
+            000000000000000000000000fb14e914e90051e7b10000840000000001000000000a5f646966666572
+            656e74045f746370056c6f63616c00000c000100000000001c04746573740a5f646966666572656e74
+            045f746370056c6f63616c00
+        """.replace("\\s+".toRegex(), "").trim()
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(notMatchingIPv6Pkt),
+            PASSED_MDNS
+        )
+
+        // Using scapy to generate packet:
+        // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:FB")
+        // ip = IPv6(src="fe80::1", dst="ff02::fb")
+        // udp = UDP(dport=5353, sport=5353)
+        // dns = DNS(qd=DNSQR(qname="_myproto._tcp.local", qtype="PTR"),
+        //           an=DNSRR(rrname="_myproto._tcp.local", type="PTR", rdata="test._myproto._tcp.local"))
+        // pkt = eth/ip/udp/dns
+        val mdnsIPv6PtrQueryAndAnswer = """
+            3333000000fb01020304050686dd6000000000661140fe800000000000000000000000000001ff0200
+            000000000000000000000000fb14e914e90066c41f000001000001000100000000085f6d7970726f74
+            6f045f746370056c6f63616c00000c0001085f6d7970726f746f045f746370056c6f63616c00000c00
+            0100000000001a0474657374085f6d7970726f746f045f746370056c6f63616c00
+        """.replace("\\s+".toRegex(), "").trim()
+
+        ApfTestHelpers.verifyProgramRun(
+            apfFilter.mApfVersionSupported,
+            program,
+            HexDump.hexStringToByteArray(mdnsIPv6PtrQueryAndAnswer),
+            PASSED_MDNS
+        )
+    }
+
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testRaFilterWorksWhenMdnsOffloadEnabled() {
-        var (apfFilter, program) = getApfWithMdnsOffloadEnabled()
+        var (apfFilter, program) = getApfWithMdnsConfig(mdnsOffload = true)
         // ###[ Ethernet ]###
         //  dst       = 33:33:00:00:00:01
         //  src       = f4:34:f0:64:52:fe
@@ -6944,7 +7442,7 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testMdnsOffloadFailOpenForTooManySubtype() {
-        val (apfFilter, program) = getApfWithMdnsOffloadEnabled()
+        val (apfFilter, program) = getApfWithMdnsConfig(mdnsOffload = true)
         // Using scapy to generate packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
         // ip = IP(src="10.0.0.3", dst="224.0.0.251")
@@ -6985,8 +7483,9 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testMdnsOffloadRulePrioritizedOverRaFilter() {
-        val (apfFilterForEstimation, _) = getApfWithMdnsOffloadEnabled(
+        val (apfFilterForEstimation, _) = getApfWithMdnsConfig(
             apfRam = 4096,
+            mdnsOffload = true,
             addedOffloadInfos = listOf(
                 castOffloadInfo,
                 tvRemoteOffloadInfo,
@@ -6997,8 +7496,9 @@ class ApfFilterTest {
 
         val apfRam = apfFilterForEstimation.overEstimatedProgramSize + counterTotalSize
 
-        val (apfFilter, _) = getApfWithMdnsOffloadEnabled(
+        val (apfFilter, _) = getApfWithMdnsConfig(
             apfRam = apfRam,
+            mdnsOffload = true,
             addedOffloadInfos = listOf(
                 castOffloadInfo,
                 tvRemoteOffloadInfo,
@@ -7084,8 +7584,9 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testMdnsOffloadRulePrioritizationAllRulesOffloaded() {
-        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(
+        val (apfFilter, program) = getApfWithMdnsConfig(
             apfRam = 4096,
+            mdnsOffload = true,
             addedOffloadInfos = listOf(
                 castOffloadInfo,
                 tvRemoteOffloadInfo,
@@ -7154,8 +7655,9 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testMdnsOffloadRulePrioritizationSomeRulesFailOpened() {
-        val (apfFilterForEstimation, _) = getApfWithMdnsOffloadEnabled(
+        val (apfFilterForEstimation, _) = getApfWithMdnsConfig(
             apfRam = 4096,
+            mdnsOffload = true,
             addedOffloadInfos = listOf(
                 castOffloadInfo,
                 tvRemoteOffloadInfo,
@@ -7165,8 +7667,9 @@ class ApfFilterTest {
 
         val apfRam = apfFilterForEstimation.overEstimatedProgramSize + counterTotalSize - 1
 
-        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(
+        val (apfFilter, program) = getApfWithMdnsConfig(
             apfRam = apfRam,
+            mdnsOffload = true,
             addedOffloadInfos = listOf(
                 castOffloadInfo,
                 tvRemoteOffloadInfo,
@@ -7235,14 +7738,16 @@ class ApfFilterTest {
     @IgnoreUpTo(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Test
     fun testMdnsOffloadRulePrioritizationAllRulesFailOpened() {
-        val (apfFilterForEstimation, _) = getApfWithMdnsOffloadEnabled(
+        val (apfFilterForEstimation, _) = getApfWithMdnsConfig(
             apfRam = 4096,
+            mdnsOffload = true,
             addedOffloadInfos = listOf(passthroughCastOffloadInfo),
         )
 
         val apfRam = apfFilterForEstimation.overEstimatedProgramSize + counterTotalSize
-        val (apfFilter, program) = getApfWithMdnsOffloadEnabled(
+        val (apfFilter, program) = getApfWithMdnsConfig(
             apfRam = apfRam,
+            mdnsOffload = true,
             addedOffloadInfos = listOf(
                 castOffloadInfo,
                 tvRemoteOffloadInfo,
