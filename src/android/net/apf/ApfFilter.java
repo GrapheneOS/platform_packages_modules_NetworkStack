@@ -491,6 +491,15 @@ public class ApfFilter {
         return powerManager.isDeviceLightIdleMode();
     }
 
+    // TODO: fail-open if the RAM is not enough for reply filter
+    private boolean isIgnoreMdnsReplyFilter() {
+        if (!mMulticastFilter) {
+            return true;
+        }
+
+        return false;
+    }
+
     // Detects doze mode state transitions.
     private final BroadcastReceiver mDeviceIdleReceiver = new BroadcastReceiver() {
         @Override
@@ -928,6 +937,15 @@ public class ApfFilter {
         sb.append("low power standby filter: ");
         sb.append(enableHandleLowPowerStandbyPortsFilter() ? "ENABLED" : "DISABLED");
         sb.append(", ");
+        sb.append("mDNS reply filter: ");
+        sb.append("[ ");
+        if (enableMdns4Filter()) {
+            sb.append("Mdns4, ");
+        }
+        if (enableMdns6Filter()) {
+            sb.append("Mdns6, ");
+        }
+        sb.append("], ");
         sb.append("offloads: ");
         sb.append("[ ");
         if (enableArpOffload()) {
@@ -954,14 +972,20 @@ public class ApfFilter {
         if (enableMdns6Offload()) {
             sb.append("Mdns6, ");
         }
-        sb.append("] ");
+        sb.append("], ");
         sb.append("total RAs: ");
         sb.append(mRas.size());
-        sb.append(" filtered RAs: ");
+        sb.append(", ");
+        sb.append("filtered RAs: ");
         sb.append(mNumFilteredRas);
-        sb.append(" mDNSs: ");
+        sb.append(", ");
+        sb.append("mDNS query offload rules: ");
         sb.append(mOffloadRules.size());
-        sb.append(" low power standby ports: ");
+        sb.append(", ");
+        sb.append("mDNS reply filter rules: ");
+        sb.append(mFilterRules.size());
+        sb.append(", ");
+        sb.append("low power standby ports: ");
         sb.append(mLowPowerStandbyPortsTcpLocal.size() + mLowPowerStandbyPortsTcpRemote.size()
                 + mLowPowerStandbyPortsUdpLocal.size() + mLowPowerStandbyPortsUdpRemote.size());
         sb.append(" }");
@@ -2206,7 +2230,8 @@ public class ApfFilter {
             short labelCheckMdnsReplyFilter) throws IllegalInstructionException {
 
         gen.defineLabel(labelCheckMdnsReplyFilter);
-        if (!mMulticastFilter) {
+        // fail-open to pass all reply packets where the RAM is not enough
+        if (isIgnoreMdnsReplyFilter()) {
             gen.addCountAndPass(PASSED_MDNS);
             return;
         }
@@ -5001,7 +5026,7 @@ public class ApfFilter {
                 mLastInstalledProgram.length, filterAgeSeconds,
                 mLastInstalledProgramMinLifetime));
         pw.println();
-        pw.println("Mdns filters:");
+        pw.println("Mdns query filters:");
         pw.increaseIndent();
         if (mNumOfMdnsRuleToOffload == -1) {
             pw.println("pass all mDNS packet");
@@ -5015,6 +5040,17 @@ public class ApfFilter {
                             rule.mFullServiceName,
                             rule.mOffloadPayload == null ? 0 : rule.mOffloadPayload.length));
                 }
+            }
+        }
+        pw.decreaseIndent();
+        pw.println();
+        pw.println("Mdns reply allowed:");
+        pw.increaseIndent();
+        if (isIgnoreMdnsReplyFilter()) {
+            pw.println("pass all mDNS reply packets");
+        } else {
+            for (MdnsOffloadRule rule: mFilterRules) {
+                pw.println(String.format("allowed service: %s", rule.mFullServiceName));
             }
         }
         pw.decreaseIndent();
