@@ -4865,7 +4865,8 @@ public class ApfFilter {
             final TcpKeepalivePacketDataParcelable sentKeepalivePacket) {
         log("Adding keepalive ack(" + slot + ")");
         if (null != mKeepalivePackets.get(slot)) {
-            throw new IllegalArgumentException("Keepalive slot " + slot + " is occupied");
+            log("Keepalive slot " + slot + " is occupied");
+            return;
         }
         final int ipVersion = sentKeepalivePacket.srcAddress.length == 4 ? 4 : 6;
         mKeepalivePackets.put(slot, (ipVersion == 4)
@@ -4885,7 +4886,8 @@ public class ApfFilter {
             final NattKeepalivePacketDataParcelable sentKeepalivePacket) {
         log("Adding NAT-T keepalive packet(" + slot + ")");
         if (null != mKeepalivePackets.get(slot)) {
-            throw new IllegalArgumentException("NAT-T Keepalive slot " + slot + " is occupied");
+            log("NAT-T Keepalive slot " + slot + " is occupied");
+            return;
         }
 
         // TODO : update ApfFilter to support dropping v6 keepalives
