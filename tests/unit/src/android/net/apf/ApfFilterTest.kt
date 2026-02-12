@@ -3985,6 +3985,8 @@ class ApfFilterTest {
         val apfFilter = getApfFilter(apfConfig)
         ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
         apfFilter.addTcpKeepalivePacketFilter(1, parcel)
+        // adding the same filter again should not cause crash
+        apfFilter.addTcpKeepalivePacketFilter(1, parcel)
         var program = ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
 
         // Drop IPv4 keepalive ack
@@ -4094,6 +4096,8 @@ class ApfFilterTest {
         apfConfig.ieee802_3Filter = true
         val apfFilter = getApfFilter(apfConfig)
         ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
+        apfFilter.addNattKeepalivePacketFilter(1, parcel)
+        // adding the same filter again should not cause crash
         apfFilter.addNattKeepalivePacketFilter(1, parcel)
         val program = ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
 
