@@ -123,7 +123,7 @@ static void network_stack_utils_attachDhcpFilter(JNIEnv *env, jclass clazz, jobj
 }
 
 // fd is a "socket(AF_PACKET, SOCK_RAW, ETH_P_ALL)"
-static void network_stack_units_attachEgressMulticastReportFilter(
+static void network_stack_utils_attachEgressMulticastReportFilter(
         JNIEnv *env, jclass clazz, jobject javaFd) {
     static sock_filter filter_code[] = {
         // Check if skb->pkt_type is PACKET_OUTGOING
@@ -320,7 +320,7 @@ static const JNINativeMethod gNetworkStackUtilsMethods[] = {
     {"attachRaFilter", "(Ljava/io/FileDescriptor;)V",
      (void *)network_stack_utils_attachRaFilter},
     {"attachEgressMulticastReportFilter", "(Ljava/io/FileDescriptor;)V",
-     (void *)network_stack_units_attachEgressMulticastReportFilter},
+     (void *)network_stack_utils_attachEgressMulticastReportFilter},
     {"attachControlPacketFilter", "(Ljava/io/FileDescriptor;)V",
      (void *)network_stack_utils_attachControlPacketFilter},
     {"getApfCapabilities", "(Ljava/lang/String;)J",
