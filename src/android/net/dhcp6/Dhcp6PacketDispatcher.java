@@ -41,7 +41,6 @@ import android.util.SparseArray;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.FdEventsReader;
 import com.android.net.module.util.Struct;
 import com.android.net.module.util.dhcp6.Dhcp6Packet;
@@ -151,9 +150,7 @@ public class Dhcp6PacketDispatcher extends FdEventsReader<Dhcp6PacketDispatcher.
         FileDescriptor socket = null;
         try {
             socket = Os.socket(AF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP);
-            if (SdkLevel.isAtLeastS()) {
-                Os.setsockoptInt(socket, IPPROTO_IPV6, IPV6_RECVPKTINFO, 1);
-            }
+            Os.setsockoptInt(socket, IPPROTO_IPV6, IPV6_RECVPKTINFO, 1);
             SocketUtils.bindSocketToInterface(socket, mInterfaceName);
             Os.bind(socket, IPV6_ADDR_ANY, DHCP6_CLIENT_PORT);
         } catch (SocketException | ErrnoException e) {

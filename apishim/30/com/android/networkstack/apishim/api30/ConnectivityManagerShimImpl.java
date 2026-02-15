@@ -16,8 +16,6 @@
 
 package com.android.networkstack.apishim.api30;
 
-import static com.android.modules.utils.build.SdkLevel.isAtLeastR;
-
 import android.content.Context;
 import android.net.ConnectivityManager.NetworkCallback;
 import android.net.NetworkRequest;
@@ -45,10 +43,6 @@ public class ConnectivityManagerShimImpl
      */
     @RequiresApi(Build.VERSION_CODES.Q)
     public static ConnectivityManagerShim newInstance(Context context) {
-        if (!isAtLeastR()) {
-            return com.android.networkstack.apishim.api29.ConnectivityManagerShimImpl
-                    .newInstance(context);
-        }
         return new ConnectivityManagerShimImpl(context);
     }
 

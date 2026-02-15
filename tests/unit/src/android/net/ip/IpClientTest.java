@@ -125,7 +125,6 @@ import com.android.networkstack.ipmemorystore.IpMemoryStoreService;
 import com.android.networkstack.metrics.NetworkQuirkMetrics;
 import com.android.server.NetworkStackService;
 import com.android.testutils.DevSdkIgnoreRule;
-import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
 import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
 import com.android.testutils.HandlerUtils;
 
@@ -915,22 +914,7 @@ public class IpClientTest {
         return isApfSupported ? configCaptor.getValue() : null;
     }
 
-    @Test @IgnoreAfter(Build.VERSION_CODES.R)
-    public void testApfConfiguration_R() throws Exception {
-        final IpClient ipc = makeIpClient(TEST_IFNAME);
-        final ApfConfiguration config = verifyApfFilterCreatedOnStart(ipc,
-                true /* isApfSupported */);
-
-        assertEquals(ApfCapabilities.getApfDrop8023Frames(), config.ieee802_3Filter);
-        assertArrayEquals(ApfCapabilities.getApfEtherTypeBlackList(), config.ethTypeBlackList);
-
-        verify(mResources, never()).getBoolean(R.bool.config_apfDrop802_3Frames);
-        verify(mResources, never()).getIntArray(R.array.config_apfEthTypeDenyList);
-
-        verifyShutdown(ipc);
-    }
-
-    @Test @IgnoreUpTo(Build.VERSION_CODES.R)
+    @Test
     public void testApfConfiguration() throws Exception {
         doReturn(true).when(mResources).getBoolean(R.bool.config_apfDrop802_3Frames);
         final int[] ethTypeDenyList = new int[] { 0x88A2, 0x88A4 };
@@ -947,7 +931,7 @@ public class IpClientTest {
         verifyShutdown(ipc);
     }
 
-    @Test @IgnoreUpTo(Build.VERSION_CODES.R)
+    @Test
     public void testApfConfiguration_NoApfDrop8023Frames() throws Exception {
         doReturn(false).when(mResources).getBoolean(R.bool.config_apfDrop802_3Frames);
         final int[] ethTypeDenyList = new int[] { 0x88A3, 0x88A5 };
@@ -1029,7 +1013,6 @@ public class IpClientTest {
     }
 
     @Test
-    @IgnoreUpTo(Build.VERSION_CODES.R)
     public void testApfFilterUseNonHalApi() throws Exception {
         final IpClient ipc = makeIpClient(TEST_IFNAME);
         ProvisioningConfiguration.Builder config = new ProvisioningConfiguration.Builder()

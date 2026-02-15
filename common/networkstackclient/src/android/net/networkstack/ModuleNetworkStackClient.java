@@ -16,12 +16,9 @@
 
 package android.net.networkstack;
 
-import static android.os.Build.VERSION.SDK_INT;
-
 import android.annotation.NonNull;
 import android.net.INetworkStackConnector;
 import android.net.NetworkStack;
-import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
 
@@ -54,12 +51,6 @@ public class ModuleNetworkStackClient extends NetworkStackClientBase {
     @VisibleForTesting
     @NonNull
     public static synchronized ModuleNetworkStackClient getInstance(Dependencies deps) {
-        if (SDK_INT < Build.VERSION_CODES.R) {
-            // The NetworkStack connector is not available through NetworkStack before R
-            throw new UnsupportedOperationException(
-                    "ModuleNetworkStackClient is not supported on API " + SDK_INT);
-        }
-
         if (sInstance == null) {
             sInstance = new ModuleNetworkStackClient(deps);
             sInstance.startPolling();
