@@ -26,6 +26,6 @@ java_library {
         "androidx.annotation_annotation",
     ],
     sdk_version: "system_current",
-    // this is part of updatable modules(NetworkStack) which targets 30(R)
-    min_sdk_version: "30",
+    // this is part of updatable modules(NetworkStack) which targets 31(S)
+    min_sdk_version: "31",
 }
