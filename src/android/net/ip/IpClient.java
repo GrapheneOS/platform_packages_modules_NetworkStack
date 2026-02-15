@@ -194,8 +194,6 @@ import com.android.net.module.util.ip.InterfaceController;
 import com.android.net.module.util.netlink.NetlinkUtils;
 import com.android.net.module.util.structs.IaPrefixOption;
 import com.android.networkstack.R;
-import com.android.networkstack.apishim.NetworkInformationShimImpl;
-import com.android.networkstack.apishim.common.NetworkInformationShim;
 import com.android.networkstack.mainline.beta.Flags;
 import com.android.networkstack.metrics.IpProvisioningMetrics;
 import com.android.networkstack.metrics.NetworkQuirkMetrics;
@@ -267,7 +265,6 @@ public class IpClient extends StateMachine {
     // This map holds Apf logs.
     private static final ConcurrentHashMap<String, SharedLog> sApfLogs = new ConcurrentHashMap<>();
     private final NetworkStackIpMemoryStore mIpMemoryStore;
-    private final NetworkInformationShim mShim = NetworkInformationShimImpl.newInstance();
     private final IpProvisioningMetrics mIpProvisioningMetrics = new IpProvisioningMetrics();
     private final NetworkQuirkMetrics mNetworkQuirkMetrics;
 
@@ -334,20 +331,16 @@ public class IpClient extends StateMachine {
         private final SharedLog mLog;
         @NonNull
         private final SharedLog mApfLog;
-        @NonNull
-        private final NetworkInformationShim mShim;
 
         private final boolean mApfDebug;
         private final Random mRandom = new Random();
 
         @VisibleForTesting
         protected IpClientCallbacksWrapper(IIpClientCallbacks callback, @NonNull SharedLog log,
-                @NonNull SharedLog apfLog, @NonNull NetworkInformationShim shim,
-                boolean apfDebug) {
+                @NonNull SharedLog apfLog, boolean apfDebug) {
             mCallback = callback;
             mLog = log;
             mApfLog = apfLog;
-            mShim = shim;
             mApfDebug = apfDebug;
         }
 
@@ -410,7 +403,7 @@ public class IpClient extends StateMachine {
                         NetworkStackStatsLog.CORE_NETWORKING_TERRIBLE_ERROR_OCCURRED__ERROR_TYPE__TYPE_UNKNOWN);
             }
             try {
-                mCallback.onProvisioningSuccess(mShim.makeSensitiveFieldsParcelingCopy(newLp));
+                mCallback.onProvisioningSuccess(new LinkProperties(newLp, true));
             } catch (RemoteException e) {
                 log("Failed to call onProvisioningSuccess", e);
             }
@@ -422,7 +415,7 @@ public class IpClient extends StateMachine {
         public void onProvisioningFailure(LinkProperties newLp) {
             log("onProvisioningFailure({" + newLp + "})");
             try {
-                mCallback.onProvisioningFailure(mShim.makeSensitiveFieldsParcelingCopy(newLp));
+                mCallback.onProvisioningFailure(new LinkProperties(newLp, true));
             } catch (RemoteException e) {
                 log("Failed to call onProvisioningFailure", e);
             }
@@ -434,7 +427,7 @@ public class IpClient extends StateMachine {
         public void onLinkPropertiesChange(LinkProperties newLp) {
             log("onLinkPropertiesChange({" + newLp + "})");
             try {
-                mCallback.onLinkPropertiesChange(mShim.makeSensitiveFieldsParcelingCopy(newLp));
+                mCallback.onLinkPropertiesChange(new LinkProperties(newLp, true));
             } catch (RemoteException e) {
                 log("Failed to call onLinkPropertiesChange", e);
             }
@@ -1146,7 +1139,7 @@ public class IpClient extends StateMachine {
         mApfLog = sApfLogs.get(mInterfaceName);
         mApfDebug = Log.isLoggable(ApfFilter.class.getSimpleName(), Log.DEBUG);
         mMsgStateLogger = new MessageHandlingLogger();
-        mCallback = new IpClientCallbacksWrapper(callback, mLog, mApfLog, mShim, mApfDebug);
+        mCallback = new IpClientCallbacksWrapper(callback, mLog, mApfLog, mApfDebug);
         mIpClientApfController = new ApfFilter.IApfController() {
             @Override
             public boolean installPacketFilter(byte[] filter, String filterConfig) {
@@ -2167,7 +2160,7 @@ public class IpClient extends StateMachine {
             newLp.addRoute(route);
         }
         addAllReachableDnsServers(newLp, netlinkLinkProperties.getDnsServers());
-        mShim.setNat64Prefix(newLp, mShim.getNat64Prefix(netlinkLinkProperties));
+        newLp.setNat64Prefix(netlinkLinkProperties.getNat64Prefix());
 
         // Check if any link address update from netlink.
         final CompareResult<LinkAddress> results =
@@ -2217,15 +2210,14 @@ public class IpClient extends StateMachine {
             }
 
             if (mDhcpResults.serverAddress != null) {
-                mShim.setDhcpServerAddress(newLp, mDhcpResults.serverAddress);
+                newLp.setDhcpServerAddress(mDhcpResults.serverAddress);
             }
 
             final String capportUrl = mDhcpResults.captivePortalApiUrl;
             // Uri.parse does no syntax check; do a simple check to eliminate garbage.
             // If the URL is still incorrect data fetching will fail later, which is fine.
             if (isParseableUrl(capportUrl)) {
-                NetworkInformationShimImpl.newInstance()
-                        .setCaptivePortalApiUrl(newLp, Uri.parse(capportUrl));
+                newLp.setCaptivePortalApiUrl(Uri.parse(capportUrl));
             }
             // TODO: also look at the IPv6 RA (netlink) for captive portal URL
         }
