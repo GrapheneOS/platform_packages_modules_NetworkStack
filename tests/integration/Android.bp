@@ -68,10 +68,7 @@ android_library {
         "signature/**/*.java",
         "signature/**/*.kt",
     ],
-    min_sdk_version: select(release_flag("RELEASE_DEPRECATE_MAINLINE_R_SUPPORT"), {
-        true: "31",
-        default: "30",
-    }),
+    min_sdk_version: "31",
     static_libs: [
         "NetworkStackApiStableLib",
     ],

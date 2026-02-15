@@ -25,7 +25,6 @@ import static android.system.OsConstants.SOCK_STREAM;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assume.assumeTrue;
 
 import android.app.Instrumentation;
 import android.content.Context;
@@ -36,8 +35,6 @@ import android.system.Os;
 import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
-
-import com.android.networkstack.apishim.common.ShimUtils;
 
 import org.junit.Before;
 import org.junit.Test;

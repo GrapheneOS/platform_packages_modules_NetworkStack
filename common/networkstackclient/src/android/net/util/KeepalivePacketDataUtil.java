@@ -23,7 +23,6 @@ import android.net.NattKeepalivePacketData;
 import android.net.NattKeepalivePacketDataParcelable;
 import android.net.TcpKeepalivePacketData;
 import android.net.TcpKeepalivePacketDataParcelable;
-import android.os.Build;
 import android.util.Log;
 
 import java.net.InetAddress;
@@ -101,10 +100,8 @@ public final class KeepalivePacketDataUtil {
             @Nullable KeepalivePacketData data) {
         if (data == null) return null;
 
-        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.R) {
-            Log.wtf(TAG, "parseTcpKeepalivePacketData should not be used after R, use "
-                    + "TcpKeepalivePacketData instead.");
-        }
+        Log.wtf(TAG, "parseTcpKeepalivePacketData should not be used after R, use "
+                + "TcpKeepalivePacketData instead.");
 
         // Reconstruct TcpKeepalivePacketData from the packet contained in KeepalivePacketData
         final ByteBuffer buffer = ByteBuffer.wrap(data.getPacket());

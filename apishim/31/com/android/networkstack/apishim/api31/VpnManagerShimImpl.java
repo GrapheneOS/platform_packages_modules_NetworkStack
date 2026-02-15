@@ -16,8 +16,6 @@
 
 package com.android.networkstack.apishim.api31;
 
-import static com.android.modules.utils.build.SdkLevel.isAtLeastS;
-
 import android.content.Context;
 import android.os.Build;
 
@@ -40,9 +38,6 @@ public class VpnManagerShimImpl extends com.android.networkstack.apishim.api30.V
      */
     @RequiresApi(Build.VERSION_CODES.Q)
     public static VpnManagerShim newInstance(Context context) throws UnsupportedApiLevelException {
-        if (!isAtLeastS()) {
-            return com.android.networkstack.apishim.api30.VpnManagerShimImpl.newInstance(context);
-        }
         return new VpnManagerShimImpl(context);
     }
 }

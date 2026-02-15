@@ -16,8 +16,6 @@
 
 package com.android.networkstack.apishim.api30;
 
-import static com.android.modules.utils.build.SdkLevel.isAtLeastR;
-
 import android.net.util.SocketUtils;
 import android.os.Build;
 
@@ -41,9 +39,6 @@ public class SocketUtilsShimImpl
      */
     @RequiresApi(Build.VERSION_CODES.Q)
     public static SocketUtilsShim newInstance() {
-        if (!isAtLeastR()) {
-            return com.android.networkstack.apishim.api29.SocketUtilsShimImpl.newInstance();
-        }
         return new SocketUtilsShimImpl();
     }
 

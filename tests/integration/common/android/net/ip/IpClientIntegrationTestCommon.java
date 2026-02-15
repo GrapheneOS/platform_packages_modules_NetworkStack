@@ -298,7 +298,6 @@ import java.util.function.Predicate;
  */
 @SmallTest
 @RunWith(DevSdkIgnoreRunner.class)
-@IgnoreUpTo(Build.VERSION_CODES.R)
 public abstract class IpClientIntegrationTestCommon {
     private static final String TAG = IpClientIntegrationTestCommon.class.getSimpleName();
     private static final int DATA_BUFFER_LEN = 4096;
@@ -1892,7 +1891,7 @@ public abstract class IpClientIntegrationTestCommon {
         assertTrue(packet instanceof DhcpDiscoverPacket);
     }
 
-    @Test @IgnoreUpTo(Build.VERSION_CODES.Q)
+    @Test
     public void testDhcpServerInLinkProperties() throws Exception {
         performDhcpHandshake();
         ArgumentCaptor<LinkProperties> captor = ArgumentCaptor.forClass(LinkProperties.class);

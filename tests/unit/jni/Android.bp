@@ -41,7 +41,7 @@ cc_defaults {
         "libapfdisassembler",
         "libpcap",
     ],
-    sdk_version: "30",
+    sdk_version: "31",
     stl: "c++_static",
 }
 

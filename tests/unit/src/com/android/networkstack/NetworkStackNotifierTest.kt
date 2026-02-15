@@ -45,7 +45,6 @@ import android.testing.TestableLooper.RunWithLooper
 import androidx.test.filters.SmallTest
 import androidx.test.platform.app.InstrumentationRegistry
 import com.android.dx.mockito.inline.extended.ExtendedMockito.verify
-import com.android.modules.utils.build.SdkLevel.isAtLeastS
 import com.android.networkstack.NetworkStackNotifier.CHANNEL_CONNECTED
 import com.android.networkstack.NetworkStackNotifier.CHANNEL_VENUE_INFO
 import com.android.networkstack.NetworkStackNotifier.CONNECTED_NOTIFICATION_TIMEOUT_MS
@@ -53,7 +52,6 @@ import com.android.networkstack.NetworkStackNotifier.Dependencies
 import kotlin.reflect.KClass
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -366,7 +364,6 @@ class NetworkStackNotifierTest {
     @Test
     fun testConnectedVenueInfoWithFriendlyNameNotification() {
         // Venue info (CaptivePortalData) with friendly name is not available for API <= R
-        assumeTrue(isAtLeastS())
         mNotifier.notifyCaptivePortalValidationPending(TEST_NETWORK)
         onLinkPropertiesChanged(mTestCapportVenueUrlWithFriendlyNameLp)
         onDefaultNetworkAvailable(TEST_NETWORK)

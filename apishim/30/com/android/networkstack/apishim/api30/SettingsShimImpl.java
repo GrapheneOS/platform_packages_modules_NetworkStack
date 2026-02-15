@@ -16,8 +16,6 @@
 
 package com.android.networkstack.apishim.api30;
 
-import static com.android.modules.utils.build.SdkLevel.isAtLeastR;
-
 import android.content.Context;
 import android.os.Build;
 import android.provider.Settings;
@@ -40,9 +38,6 @@ public class SettingsShimImpl extends com.android.networkstack.apishim.api29.Set
      */
     @RequiresApi(Build.VERSION_CODES.Q)
     public static SettingsShim newInstance() {
-        if (!isAtLeastR()) {
-            return com.android.networkstack.apishim.api29.SettingsShimImpl.newInstance();
-        }
         return new SettingsShimImpl();
     }
 

@@ -16,8 +16,6 @@
 
 package com.android.networkstack.apishim.api30;
 
-import static com.android.modules.utils.build.SdkLevel.isAtLeastR;
-
 import android.os.Build;
 
 import androidx.annotation.RequiresApi;
@@ -39,10 +37,6 @@ public class NetworkRequestShimImpl
      */
     @RequiresApi(Build.VERSION_CODES.Q)
     public static NetworkRequestShim newInstance() {
-        if (!isAtLeastR()) {
-            return com.android.networkstack.apishim.api29.NetworkRequestShimImpl
-                    .newInstance();
-        }
         return new NetworkRequestShimImpl();
     }
 }

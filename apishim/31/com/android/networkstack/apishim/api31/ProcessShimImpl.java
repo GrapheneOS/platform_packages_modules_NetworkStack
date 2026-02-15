@@ -19,7 +19,6 @@ import android.os.Build;
 
 import androidx.annotation.RequiresApi;
 
-import com.android.modules.utils.build.SdkLevel;
 import com.android.networkstack.apishim.common.ProcessShim;
 
 /** Implementation of {@link ProcessShim} for API 31. */
@@ -29,10 +28,6 @@ public class ProcessShimImpl implements ProcessShim {
     /** Get a new instance of {@link ProcessShim}. */
     @RequiresApi(Build.VERSION_CODES.Q)
     public static ProcessShim newInstance() {
-        if (!SdkLevel.isAtLeastS()) {
-            return com.android.networkstack.apishim.api29.ProcessShimImpl.newInstance();
-        } else {
-            return new ProcessShimImpl();
-        }
+        return new ProcessShimImpl();
     }
 }

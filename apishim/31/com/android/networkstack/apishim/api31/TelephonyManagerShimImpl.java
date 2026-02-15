@@ -16,8 +16,6 @@
 
 package com.android.networkstack.apishim.api31;
 
-import static com.android.modules.utils.build.SdkLevel.isAtLeastS;
-
 import android.os.Build;
 import android.telephony.TelephonyManager;
 
@@ -38,9 +36,6 @@ public class TelephonyManagerShimImpl
     /** Get a new instance of {@link TelephonyManagerShim}. */
     @RequiresApi(Build.VERSION_CODES.Q)
     public static TelephonyManagerShim newInstance(TelephonyManager tm) {
-        if (!isAtLeastS()) {
-            return com.android.networkstack.apishim.api29.TelephonyManagerShimImpl.newInstance(tm);
-        }
         return new TelephonyManagerShimImpl(tm);
     }
 }

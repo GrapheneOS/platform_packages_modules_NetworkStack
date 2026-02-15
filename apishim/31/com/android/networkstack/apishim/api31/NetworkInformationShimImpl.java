@@ -16,8 +16,6 @@
 
 package com.android.networkstack.apishim.api31;
 
-import static com.android.modules.utils.build.SdkLevel.isAtLeastS;
-
 import android.net.NetworkCapabilities;
 import android.os.Build;
 
@@ -39,9 +37,6 @@ public class NetworkInformationShimImpl
      */
     @RequiresApi(Build.VERSION_CODES.Q)
     public static NetworkInformationShim newInstance() {
-        if (!isAtLeastS()) {
-            return com.android.networkstack.apishim.api30.NetworkInformationShimImpl.newInstance();
-        }
         return new NetworkInformationShimImpl();
     }
 

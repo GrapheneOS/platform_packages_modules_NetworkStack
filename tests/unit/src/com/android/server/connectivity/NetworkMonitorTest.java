@@ -172,7 +172,6 @@ import com.android.networkstack.R;
 import com.android.networkstack.apishim.ConstantsShim;
 import com.android.networkstack.apishim.NetworkAgentConfigShimImpl;
 import com.android.networkstack.apishim.common.NetworkAgentConfigShim;
-import com.android.networkstack.apishim.common.ShimUtils;
 import com.android.networkstack.metrics.DataStallDetectionStats;
 import com.android.networkstack.metrics.DataStallStatsUtils;
 import com.android.networkstack.netlink.TcpSocketTracker;
@@ -1171,12 +1170,7 @@ public class NetworkMonitorTest {
         verify(mCallbacks, timeout(HANDLER_TIMEOUT_MS)).showProvisioningNotification(any(), any());
     }
 
-    @Test @IgnoreAfter(Build.VERSION_CODES.R)
-    public void testIsCaptivePortal_HttpProbeIs200Portal_R() throws Exception {
-        doCaptivePortal200ResponseTest(null);
-    }
-
-    @Test @IgnoreUpTo(Build.VERSION_CODES.R)
+    @Test
     public void testIsCaptivePortal_HttpProbeIs200Portal() throws Exception {
         doCaptivePortal200ResponseTest(TEST_HTTP_URL);
     }
@@ -2025,9 +2019,7 @@ public class NetworkMonitorTest {
                 .addCapability(NET_CAPABILITY_INTERNET)
                 .removeCapability(NET_CAPABILITY_TRUSTED)
                 .addTransportType(TRANSPORT_CELLULAR);
-        if (ShimUtils.isAtLeastS()) {
-            nc.addCapability(NET_CAPABILITY_NOT_VCN_MANAGED);
-        }
+        nc.addCapability(NET_CAPABILITY_NOT_VCN_MANAGED);
         doValidationSkippedTest(nc,
                 NETWORK_VALIDATION_RESULT_VALID | NETWORK_VALIDATION_RESULT_SKIPPED);
     }
@@ -2039,9 +2031,7 @@ public class NetworkMonitorTest {
                 .addCapability(NET_CAPABILITY_INTERNET)
                 .removeCapability(NET_CAPABILITY_NOT_RESTRICTED)
                 .addTransportType(TRANSPORT_CELLULAR);
-        if (ShimUtils.isAtLeastS()) {
-            nc.addCapability(NET_CAPABILITY_NOT_VCN_MANAGED);
-        }
+        nc.addCapability(NET_CAPABILITY_NOT_VCN_MANAGED);
         doValidationSkippedTest(nc,
                 NETWORK_VALIDATION_RESULT_VALID | NETWORK_VALIDATION_RESULT_SKIPPED);
     }
@@ -2060,7 +2050,6 @@ public class NetworkMonitorTest {
 
     @Test
     public void testVcnUnderlyingNetwork() throws Exception {
-        assumeTrue(ShimUtils.isAtLeastS());
         setStatus(mHttpsConnection, 204);
         setStatus(mHttpConnection, 204);
 
@@ -2075,7 +2064,6 @@ public class NetworkMonitorTest {
 
     @Test
     public void testVcnUnderlyingNetworkBadNetwork() throws Exception {
-        assumeTrue(ShimUtils.isAtLeastS());
         setSslException(mHttpsConnection);
         setStatus(mHttpConnection, 500);
         setStatus(mFallbackConnection, 404);
@@ -3568,7 +3556,6 @@ public class NetworkMonitorTest {
 
     @Test
     public void testIsCaptivePortal_FromExternalSource() throws Exception {
-        assumeTrue(ShimUtils.isAtLeastS());
         final NetworkMonitor monitor = makeMonitor(WIFI_NOT_METERED_CAPABILITIES);
 
         final LinkProperties linkProperties = new LinkProperties(TEST_LINK_PROPERTIES);
