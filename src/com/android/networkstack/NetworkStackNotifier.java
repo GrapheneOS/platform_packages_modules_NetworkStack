@@ -43,9 +43,6 @@ import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 import androidx.annotation.VisibleForTesting;
 
-import com.android.networkstack.apishim.NetworkInformationShimImpl;
-import com.android.networkstack.apishim.common.NetworkInformationShim;
-
 import java.util.Hashtable;
 import java.util.function.Consumer;
 
@@ -62,8 +59,6 @@ public class NetworkStackNotifier {
     private final Hashtable<Network, TrackedNetworkStatus> mNetworkStatus = new Hashtable<>();
     @Nullable
     private Network mDefaultNetwork;
-    @NonNull
-    private final NetworkInformationShim mInfoShim = NetworkInformationShimImpl.newInstance();
 
     /**
      * The TrackedNetworkStatus object is a data class that keeps track of the relevant state of the
@@ -182,7 +177,8 @@ public class NetworkStackNotifier {
     }
 
     private String getSsid(@NonNull TrackedNetworkStatus status) {
-        return mInfoShim.getSsid(status.mNetworkCapabilities);
+        if (status.mNetworkCapabilities == null) return null;
+        return status.mNetworkCapabilities.getSsid();
     }
 
     private void updateNetworkStatus(@NonNull Network network,

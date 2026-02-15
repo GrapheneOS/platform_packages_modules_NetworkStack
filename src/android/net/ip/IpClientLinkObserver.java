@@ -66,8 +66,6 @@ import com.android.net.module.util.netlink.StructIfinfoMsg;
 import com.android.net.module.util.netlink.StructNdOptPref64;
 import com.android.net.module.util.netlink.StructNdOptRdnss;
 import com.android.net.module.util.netlink.StructPrefixMsg;
-import com.android.networkstack.apishim.NetworkInformationShimImpl;
-import com.android.networkstack.apishim.common.NetworkInformationShim;
 
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -203,7 +201,6 @@ public class IpClientLinkObserver {
     private final IpClient.Dependencies mDependencies;
     private final String mClatInterfaceName;
     private final IpClientNetlinkMonitor mNetlinkMonitor;
-    private final NetworkInformationShim mShim;
     private final AlarmManager.OnAlarmListener mExpirePref64Alarm;
     // Map of prefix in PIO with P flag and its preferred lifetime expiry in milliseconds since boot
     private final Map<IpPrefix, Long> mDhcp6PdPreferredPrefixes = new ArrayMap<>();
@@ -256,7 +253,6 @@ public class IpClientLinkObserver {
                 getSocketReceiveBufferSize(),
                 config,
                 (nlMsg, whenMs) -> processNetlinkMessage(nlMsg, whenMs));
-        mShim = NetworkInformationShimImpl.newInstance();
         mExpirePref64Alarm = new IpClientObserverAlarmListener();
         mExpireDhcp6PdPreferredPrefixAlarm = new Dhcp6PdPreferredPrefixAlarmListener();
         mHandler.post(() -> {
@@ -450,7 +446,7 @@ public class IpClientLinkObserver {
             // lifetime in the RA is zero this code will correctly do nothing, but if the lifetime
             // is nonzero then the prefix will be added and immediately removed by this code.
             if (mNat64PrefixExpiry == 0) return;
-            updatePref64(mShim.getNat64Prefix(mLinkProperties), mNat64PrefixExpiry,
+            updatePref64(mLinkProperties.getNat64Prefix(), mNat64PrefixExpiry,
                     mNat64PrefixExpiry);
         }
     }
@@ -481,7 +477,7 @@ public class IpClientLinkObserver {
      */
     private void updatePref64(IpPrefix prefix, final long now,
             final long expiry) {
-        final IpPrefix currentPrefix = mShim.getNat64Prefix(mLinkProperties);
+        final IpPrefix currentPrefix = mLinkProperties.getNat64Prefix();
 
         // If the prefix matches the current prefix, refresh its lifetime.
         if (prefix.equals(currentPrefix)) {
@@ -501,11 +497,11 @@ public class IpClientLinkObserver {
         // The current prefix has expired. Either replace it with the new one or delete it.
         if (expiry > now) {
             // If expiry > now, then prefix != currentPrefix (due to the return statement above)
-            mShim.setNat64Prefix(mLinkProperties, prefix);
+            mLinkProperties.setNat64Prefix(prefix);
             mNat64PrefixExpiry = expiry;
             schedulePref64Alarm();
         } else {
-            mShim.setNat64Prefix(mLinkProperties, null);
+            mLinkProperties.setNat64Prefix(null);
             cancelPref64Alarm();
         }
 
