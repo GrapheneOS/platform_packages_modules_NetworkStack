@@ -61,10 +61,7 @@ java_defaults {
 // configuration needed by the tests is in the NetworkStackTestsDefaults rule.
 android_library {
     name: "NetworkStackTestsLib",
-    min_sdk_version: select(release_flag("RELEASE_DEPRECATE_MAINLINE_R_SUPPORT"), {
-        true: "31",
-        default: "30",
-    }),
+    min_sdk_version: "31",
     defaults: ["NetworkStackTestsDefaults"],
     static_libs: ["NetworkStackApiStableLib"],
     lint: {
@@ -81,10 +78,7 @@ android_library {
 android_test {
     name: "NetworkStackTests",
     platform_apis: true,
-    min_sdk_version: select(release_flag("RELEASE_DEPRECATE_MAINLINE_R_SUPPORT"), {
-        true: "31",
-        default: "30",
-    }),
+    min_sdk_version: "31",
     test_suites: [
         "general-tests",
         "mts",
