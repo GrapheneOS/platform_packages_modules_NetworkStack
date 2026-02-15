@@ -195,7 +195,6 @@ import com.android.net.module.util.netlink.NetlinkUtils;
 import com.android.net.module.util.structs.IaPrefixOption;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.NetworkInformationShimImpl;
-import com.android.networkstack.apishim.SocketUtilsShimImpl;
 import com.android.networkstack.apishim.common.NetworkInformationShim;
 import com.android.networkstack.mainline.beta.Flags;
 import com.android.networkstack.metrics.IpProvisioningMetrics;
@@ -2326,7 +2325,7 @@ public class IpClient extends StateMachine {
         final ByteBuffer packet = NeighborAdvertisement.build(mInterfaceParams.macAddr, dstMac,
                 srcIp, dstIp, flags, targetIp);
         final SocketAddress sockAddress =
-                SocketUtilsShimImpl.newInstance().makePacketSocketAddress(ETH_P_IPV6,
+                makePacketSocketAddress(ETH_P_IPV6,
                         mInterfaceParams.index, dstMac.toByteArray());
 
         transmitPacket(packet, sockAddress, "Failed to send Gratuitous Neighbor Advertisement");
@@ -2350,7 +2349,7 @@ public class IpClient extends StateMachine {
         final ByteBuffer packet = NeighborSolicitation.build(mInterfaceParams.macAddr, dstMac,
                 srcIp, dstIp, targetIp);
         final SocketAddress sockAddress =
-                SocketUtilsShimImpl.newInstance().makePacketSocketAddress(ETH_P_IPV6,
+                makePacketSocketAddress(ETH_P_IPV6,
                         mInterfaceParams.index, dstMac.toByteArray());
 
         if (DBG) {

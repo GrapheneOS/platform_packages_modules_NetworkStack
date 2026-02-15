@@ -105,7 +105,6 @@ import com.android.net.module.util.NetworkStackConstants;
 import com.android.net.module.util.PacketReader;
 import com.android.net.module.util.arp.ArpPacket;
 import com.android.networkstack.R;
-import com.android.networkstack.apishim.SocketUtilsShimImpl;
 import com.android.networkstack.metrics.IpProvisioningMetrics;
 import com.android.networkstack.util.NetworkStackUtils;
 
@@ -635,7 +634,7 @@ public class DhcpClient extends StateMachine {
         }
 
         mHwAddr = mIface.macAddr.toByteArray();
-        mInterfaceBroadcastAddr = SocketUtilsShimImpl.newInstance().makePacketSocketAddress(
+        mInterfaceBroadcastAddr = makePacketSocketAddress(
                 ETH_P_IP, mIface.index, DhcpPacket.ETHER_BROADCAST);
         return true;
     }
