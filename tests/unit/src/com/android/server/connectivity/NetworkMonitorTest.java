@@ -170,8 +170,6 @@ import com.android.net.module.util.SharedLog;
 import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
 import com.android.networkstack.apishim.ConstantsShim;
-import com.android.networkstack.apishim.NetworkAgentConfigShimImpl;
-import com.android.networkstack.apishim.common.NetworkAgentConfigShim;
 import com.android.networkstack.metrics.DataStallDetectionStats;
 import com.android.networkstack.metrics.DataStallStatsUtils;
 import com.android.networkstack.netlink.TcpSocketTracker;
@@ -323,8 +321,8 @@ public class NetworkMonitorTest {
     private static final int TEST_MIN_VALID_STALL_DNS_TIME_THRESHOLD_MS = 5000;
     private static final int STALL_EXPECTED_LAST_PROBE_TIME_MS =
             TEST_MIN_STALL_EVALUATE_INTERVAL_MS + HANDLER_TIMEOUT_MS;
-    private static final NetworkAgentConfigShim TEST_AGENT_CONFIG =
-            NetworkAgentConfigShimImpl.newInstance(null);
+    private static final NetworkAgentConfig TEST_AGENT_CONFIG =
+            new NetworkAgentConfig.Builder().build();
     private static final LinkProperties TEST_LINK_PROPERTIES = new LinkProperties();
     // Each thread that runs isCaptivePortal could generate 2 more probing threads.
     private static final int THREAD_QUIT_MAX_RETRY_COUNT = 3;
@@ -1581,8 +1579,8 @@ public class NetworkMonitorTest {
                 .build();
         setStatus(mHttpsConnection, 204);
         setStatus(mHttpConnection, 204);
-        final NetworkAgentConfigShim config = NetworkAgentConfigShimImpl.newInstance(
-                new NetworkAgentConfig.Builder().setVpnRequiresValidation(true).build());
+        final NetworkAgentConfig config = new NetworkAgentConfig.Builder()
+                .setVpnRequiresValidation(true).build();
         final NetworkMonitor nm = runNetworkTest(config, TEST_LINK_PROPERTIES, nc,
                 NETWORK_VALIDATION_RESULT_VALID,
                 NETWORK_VALIDATION_PROBE_DNS | NETWORK_VALIDATION_PROBE_HTTPS, null);
@@ -3790,7 +3788,7 @@ public class NetworkMonitorTest {
                 testResult, probesSucceeded, redirectUrl);
     }
 
-    private NetworkMonitor runNetworkTest(NetworkAgentConfigShim config,
+    private NetworkMonitor runNetworkTest(NetworkAgentConfig config,
             LinkProperties lp, NetworkCapabilities nc,
             int testResult, int probesSucceeded, String redirectUrl) throws Exception {
         final NetworkMonitor monitor = makeMonitor(nc);
@@ -3870,7 +3868,7 @@ public class NetworkMonitorTest {
         }
     }
 
-    private void notifyNetworkConnected(NetworkMonitor nm, NetworkAgentConfigShim config,
+    private void notifyNetworkConnected(NetworkMonitor nm, NetworkAgentConfig config,
             LinkProperties lp, NetworkCapabilities nc) throws Exception {
         if (SdkLevel.isAtLeastT()) {
             nm.notifyNetworkConnectedParcel(makeParams(config, lp, nc));
@@ -3889,11 +3887,11 @@ public class NetworkMonitorTest {
         notifyNetworkConnected(nm, TEST_LINK_PROPERTIES, nc);
     }
 
-    private NetworkMonitorParameters makeParams(@NonNull final NetworkAgentConfigShim config,
+    private NetworkMonitorParameters makeParams(@NonNull final NetworkAgentConfig config,
             @NonNull final LinkProperties prop, @NonNull final NetworkCapabilities caps)
             throws Exception {
         final NetworkMonitorParameters params = new NetworkMonitorParameters();
-        config.writeToNetworkMonitorParams(params);
+        params.networkAgentConfig = config;
         params.linkProperties = prop;
         params.networkCapabilities = caps;
         return params;

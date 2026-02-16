@@ -114,6 +114,7 @@ import android.net.DnsResolver;
 import android.net.INetworkMonitorCallbacks;
 import android.net.LinkProperties;
 import android.net.Network;
+import android.net.NetworkAgentConfig;
 import android.net.NetworkCapabilities;
 import android.net.NetworkTestResultParcelable;
 import android.net.ProxyInfo;
@@ -174,8 +175,6 @@ import com.android.net.module.util.NetworkStackConstants;
 import com.android.net.module.util.SharedLog;
 import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
-import com.android.networkstack.apishim.NetworkAgentConfigShimImpl;
-import com.android.networkstack.apishim.common.NetworkAgentConfigShim;
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 import com.android.networkstack.flags.Flags;
 import com.android.networkstack.metrics.DataStallDetectionStats;
@@ -515,7 +514,7 @@ public class NetworkMonitor extends StateMachine {
     private final AtomicInteger mNextEvaluatingBandwidthThreadId = new AtomicInteger(1);
 
     @NonNull
-    private NetworkAgentConfigShim mNetworkAgentConfig;
+    private NetworkAgentConfig mNetworkAgentConfig;
     @NonNull
     private NetworkCapabilities mNetworkCapabilities;
     @NonNull
@@ -768,7 +767,7 @@ public class NetworkMonitor extends StateMachine {
         // even before notifyNetworkConnected.
         mLinkProperties = new LinkProperties();
         mNetworkCapabilities = new NetworkCapabilities(null);
-        mNetworkAgentConfig = NetworkAgentConfigShimImpl.newInstance(null);
+        mNetworkAgentConfig = new NetworkAgentConfig.Builder().build();
 
         // For DdrTracker that can safely update SVCB lookup results itself when the lookup
         // completes. The callback is called inline from onAnswer, which is already posted to
@@ -847,7 +846,8 @@ public class NetworkMonitor extends StateMachine {
 
     private void updateConnectedNetworkAttributes(Message connectedMsg) {
         final NetworkMonitorParameters params = (NetworkMonitorParameters) connectedMsg.obj;
-        mNetworkAgentConfig = NetworkAgentConfigShimImpl.newInstance(params.networkAgentConfig);
+        mNetworkAgentConfig = params.networkAgentConfig != null
+                ? params.networkAgentConfig : new NetworkAgentConfig.Builder().build();
         mLinkProperties = params.linkProperties;
         mNetworkCapabilities = params.networkCapabilities;
         suppressNotificationIfNetworkRestricted();
@@ -910,8 +910,10 @@ public class NetworkMonitor extends StateMachine {
     private boolean isValidationRequired() {
         final boolean dunValidationRequired = isAtLeastU()
                 || mContext.getResources().getBoolean(R.bool.config_validate_dun_networks);
+        final boolean vpnValidationRequired = SdkLevel.isAtLeastT()
+                && mNetworkAgentConfig.isVpnValidationRequired();
         return NetworkMonitorUtils.isValidationRequired(dunValidationRequired,
-                mNetworkAgentConfig.isVpnValidationRequired(), mNetworkCapabilities);
+                vpnValidationRequired, mNetworkCapabilities);
     }
 
     private boolean isDataStallDetectionRequired() {
