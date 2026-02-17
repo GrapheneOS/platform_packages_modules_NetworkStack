@@ -76,8 +76,6 @@ import com.android.net.module.util.netlink.NetlinkUtils;
 import com.android.net.module.util.netlink.StructInetDiagMsg;
 import com.android.net.module.util.netlink.StructNlAttr;
 import com.android.net.module.util.netlink.StructNlMsgHdr;
-import com.android.networkstack.apishim.NetworkShimImpl;
-import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 
 import java.io.FileDescriptor;
 import java.io.InterruptedIOException;
@@ -269,10 +267,8 @@ public class TcpSocketTracker {
     @Nullable
     private MarkMaskParcel getNetworkMarkMask() {
         try {
-            final int netId = NetworkShimImpl.newInstance(mNetwork).getNetId();
+            final int netId = mNetwork.getNetId();
             return mNetd.getFwmarkForNetwork(netId);
-        } catch (UnsupportedApiLevelException e) {
-            logd("Get netId is not available in this API level.");
         } catch (RemoteException e) {
             loge("Error getting fwmark for network, ", e);
         }

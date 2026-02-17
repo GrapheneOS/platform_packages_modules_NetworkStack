@@ -20,6 +20,7 @@ import android.net.Uri;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 
@@ -81,4 +82,18 @@ public class CaptivePortalDataUtils {
                 .setExpiryTime(expiryTimeMs)
                 .build();
     }
+
+    /**
+     * Redact the venue info URL from the captive portal data if necessary.
+     */
+    @Nullable
+    public static CaptivePortalData redactVenueInfoUrl(CaptivePortalData capportData) {
+        if (capportData == null) {
+            return null;
+        }
+        return new CaptivePortalData.Builder(capportData)
+                .setVenueInfoUrl(null)
+                .build();
+    }
+
 }
