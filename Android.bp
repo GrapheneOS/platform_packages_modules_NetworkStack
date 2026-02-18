@@ -43,220 +43,6 @@ java_defaults {
     ],
 }
 
-// Libraries for the API shims
-java_defaults {
-    name: "NetworkStackShimsDefaults",
-    libs: [
-        "androidx.annotation_annotation",
-        "networkstack-aidl-latest",
-    ],
-    static_libs: [
-        "modules-utils-build_system",
-    ],
-    apex_available: [
-        "com.android.tethering",
-        "//apex_available:platform",
-    ],
-    min_sdk_version: "31",
-}
-
-// Common shim code. This includes the shim interface definitions themselves, and things like
-// ShimUtils and UnsupportedApiLevelException. Compiles against system_current because ShimUtils
-// needs access to all Build.VERSION_CODES.*, which by definition are only in the newest SDK.
-// TODO: consider moving ShimUtils into a library (or removing it in favour of SdkLevel) and compile
-// this target against the lowest-supported SDK (currently 31).
-java_library {
-    name: "NetworkStackShimsCommon",
-    defaults: ["NetworkStackShimsDefaults"],
-    srcs: ["apishim/common/**/*.java"],
-    sdk_version: "system_current",
-    visibility: ["//visibility:private"],
-}
-
-// Each level of the shims (29, 30, ...) is its own java_library compiled against the corresponding
-// system_X SDK. this ensures that each shim can only use SDK classes that exist in its SDK level.
-java_library {
-    name: "NetworkStackApi29Shims",
-    defaults: ["NetworkStackShimsDefaults"],
-    srcs: ["apishim/29/**/*.java"],
-    libs: [
-        "NetworkStackShimsCommon",
-    ],
-    sdk_version: "system_29",
-    visibility: ["//visibility:private"],
-}
-
-java_library {
-    name: "NetworkStackApi30Shims",
-    defaults: ["NetworkStackShimsDefaults"],
-    srcs: [
-        "apishim/30/**/*.java",
-    ],
-    libs: [
-        "NetworkStackShimsCommon",
-        "NetworkStackApi29Shims",
-    ],
-    sdk_version: "system_30",
-    visibility: ["//visibility:private"],
-    lint: {
-        strict_updatability_linting: true,
-
-    },
-}
-
-java_library {
-    name: "NetworkStackApi31Shims",
-    defaults: ["NetworkStackShimsDefaults"],
-    srcs: [
-        "apishim/31/**/*.java",
-    ],
-    static_libs: [
-        // Libs building against module API can only be linked against when building against
-        // module API (so NetworkStackApi30Shims or NetworkStackApi29Shims can't use it, since they
-        // use system_30 and system_29 respectively).
-        "net-utils-framework-common",
-    ],
-    libs: [
-        "NetworkStackShimsCommon",
-        "NetworkStackApi29Shims",
-        "NetworkStackApi30Shims",
-        "framework-connectivity.stubs.module_lib",
-        "sdk_module-lib_31_framework-wifi",
-    ],
-    sdk_version: "module_31",
-    visibility: ["//visibility:private"],
-}
-
-java_library {
-    name: "NetworkStackApi33Shims",
-    defaults: ["NetworkStackShimsDefaults"],
-    srcs: [
-        "apishim/33/**/*.java",
-    ],
-    libs: [
-        "NetworkStackShimsCommon",
-        "NetworkStackApi29Shims",
-        "NetworkStackApi30Shims",
-        "NetworkStackApi31Shims",
-        "sdk_module-lib_33_framework-bluetooth",
-        "framework-connectivity-post-jarjar",
-        "framework-connectivity-t.stubs.module_lib",
-        "framework-tethering.impl",
-        "sdk_module-lib_33_framework-wifi",
-    ],
-    sdk_version: "module_33",
-    visibility: ["//visibility:private"],
-}
-
-java_library {
-    name: "NetworkStackApi34Shims",
-    defaults: ["NetworkStackShimsDefaults"],
-    srcs: [
-        "apishim/34/**/*.java",
-    ],
-    libs: [
-        "NetworkStackShimsCommon",
-        "NetworkStackApi29Shims",
-        "NetworkStackApi30Shims",
-        "NetworkStackApi31Shims",
-        "NetworkStackApi33Shims",
-        "sdk_module-lib_34_framework-bluetooth",
-        "framework-connectivity-post-jarjar",
-        "framework-connectivity-t.stubs.module_lib",
-        "framework-tethering.impl",
-        "sdk_module-lib_34_framework-wifi",
-    ],
-    sdk_version: "module_34",
-    visibility: ["//visibility:private"],
-}
-
-// Shims for APIs being added to the current development version of Android. These APIs are not
-// stable and have no defined version number. These could be called 10000, but they use the next
-// integer so if the next SDK release happens to use that integer, we don't need to rename them.
-// Jarjar rules are generated based on the stable shims, which do not contain this library. As a
-// result, no static_lib that needs jarjar should be used here. In general, static_libs should not
-// be used in this library at all; instead they can be in one of the earlier, shim libraries which
-// are part of the stable shims and scanned when generating jarjar rules.
-java_library {
-    name: "NetworkStackApi35Shims",
-    defaults: [
-        "NetworkStackShimsDefaults",
-        "ConnectivityNextEnableDefaults",
-    ],
-    srcs: [
-        "apishim/35/**/*.java",
-    ],
-    libs: [
-        "NetworkStackShimsCommon",
-        "NetworkStackApi29Shims",
-        "NetworkStackApi30Shims",
-        "NetworkStackApi31Shims",
-        "NetworkStackApi33Shims",
-        "NetworkStackApi34Shims",
-        "framework-bluetooth.stubs.module_lib",
-        "framework-connectivity-post-jarjar",
-        "framework-connectivity-t.stubs.module_lib",
-        "framework-tethering.impl",
-        "framework-wifi.stubs.module_lib",
-        "android.net.ipsec.ike.stubs.module_lib",
-    ],
-    sdk_version: "module_current",
-    visibility: ["//visibility:private"],
-}
-
-// API current uses the API current shims directly.
-// The current (in-progress) shims are in the com.android.networkstack.apishim package and are
-// called directly by the networkstack code.
-java_library {
-    name: "NetworkStackApiCurrentShims",
-    defaults: [
-        "NetworkStackShimsDefaults",
-        "NetworkStackReleaseApiLevel",
-        "ConnectivityNextEnableDefaults",
-    ],
-    static_libs: [
-        "NetworkStackShimsCommon",
-        "NetworkStackApi29Shims",
-        "NetworkStackApi30Shims",
-        "NetworkStackApi31Shims",
-        "NetworkStackApi33Shims",
-        "NetworkStackApi34Shims",
-        "NetworkStackApi35Shims",
-    ],
-    visibility: [
-        "//packages/modules/Connectivity/Tethering",
-        "//packages/modules/Connectivity/service",
-        "//packages/modules/Connectivity/service-t",
-        "//packages/modules/Connectivity/tests:__subpackages__",
-    ],
-}
-
-// API stable uses jarjar to rename the latest stable apishim package from
-// com.android.networkstack.apishim.apiXX to com.android.networkstack.apishim, which is called by
-// the networkstack code.
-java_library {
-    name: "NetworkStackApiStableShims",
-    defaults: [
-        "NetworkStackShimsDefaults",
-        "NetworkStackReleaseApiLevel",
-    ],
-    static_libs: [
-        "NetworkStackShimsCommon",
-        "NetworkStackApi29Shims",
-        "NetworkStackApi30Shims",
-        "NetworkStackApi31Shims",
-        "NetworkStackApi33Shims",
-        "NetworkStackApi34Shims",
-    ],
-    jarjar_rules: "apishim/jarjar-rules-compat.txt",
-    visibility: [
-        "//packages/modules/Connectivity/Tethering",
-        "//packages/modules/Connectivity/service",
-        "//packages/modules/Connectivity/service-t",
-        "//packages/modules/Connectivity/tests:__subpackages__",
-    ],
-}
-
 // Common defaults for android libraries containing network stack code
 java_defaults {
     name: "NetworkStackAndroidLibraryDefaults",
@@ -304,9 +90,6 @@ android_library {
         "src/**/*.java",
         ":statslog-networkstack-java-gen-current",
     ],
-    static_libs: [
-        "NetworkStackApiCurrentShims",
-    ],
     manifest: "AndroidManifestBase.xml",
     visibility: [
         "//frameworks/base/tests/net/integration",
@@ -328,9 +111,6 @@ android_library {
     srcs: [
         "src/**/*.java",
         ":statslog-networkstack-java-gen-stable",
-    ],
-    static_libs: [
-        "NetworkStackApiStableShims",
     ],
     manifest: "AndroidManifestBase.xml",
     visibility: [
@@ -396,9 +176,7 @@ java_library {
 java_genrule {
     name: "NetworkStackJarJarRules",
     tool_files: [
-        // com.android.networkstack.apishim is already in the target package that is not jarjared,
-        // so it does not matter whether ApiStable or ApiCurrent is used to generate the jarjar
-        // rules. Use ApiStable to be based on most stable release configuration and be buildable
+        // Use ApiStable to be based on most stable release configuration and be buildable
         // in all branches.
         ":NetworkStackApiStableLib{.jar}",
         "jarjar-excludes.txt",

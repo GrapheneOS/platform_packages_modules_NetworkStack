@@ -175,7 +175,6 @@ import com.android.net.module.util.NetworkStackConstants;
 import com.android.net.module.util.SharedLog;
 import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
-import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
 import com.android.networkstack.flags.Flags;
 import com.android.networkstack.metrics.DataStallDetectionStats;
 import com.android.networkstack.metrics.DataStallStatsUtils;
@@ -3419,11 +3418,6 @@ public class NetworkMonitor extends StateMachine {
                 return capportData;
             } catch (JSONException e) {
                 validationLog("Could not parse capport API JSON: " + e.getMessage());
-                return null;
-            } catch (UnsupportedApiLevelException e) {
-                // This should never happen because LinkProperties would not have a capport URL
-                // before R.
-                validationLog("Platform API too low to support capport API");
                 return null;
             }
         }
