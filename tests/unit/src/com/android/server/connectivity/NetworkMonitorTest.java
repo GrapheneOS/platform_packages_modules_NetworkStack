@@ -19,6 +19,8 @@ package com.android.server.connectivity;
 import static android.content.Intent.ACTION_CONFIGURATION_CHANGED;
 import static android.net.CaptivePortal.APP_RETURN_DISMISSED;
 import static android.net.CaptivePortal.APP_RETURN_WANTED_AS_IS;
+import static android.net.ConnectivityDiagnosticsManager.DataStallReport.DETECTION_METHOD_DNS_EVENTS;
+import static android.net.ConnectivityDiagnosticsManager.DataStallReport.DETECTION_METHOD_TCP_METRICS;
 import static android.net.ConnectivitySettingsManager.PRIVATE_DNS_MODE_OPPORTUNISTIC;
 import static android.net.ConnectivitySettingsManager.PRIVATE_DNS_MODE_PROVIDER_HOSTNAME;
 import static android.net.DnsResolver.TYPE_A;
@@ -89,7 +91,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.junit.Assume.assumeTrue;
 import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -169,7 +170,6 @@ import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.SharedLog;
 import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
-import com.android.networkstack.apishim.ConstantsShim;
 import com.android.networkstack.metrics.DataStallDetectionStats;
 import com.android.networkstack.metrics.DataStallStatsUtils;
 import com.android.networkstack.netlink.TcpSocketTracker;
@@ -1570,8 +1570,6 @@ public class NetworkMonitorTest {
 
     @Test @IgnoreUpTo(S_V2)
     public void testVpnReevaluationWhenUnderlyingNetworkChange() throws Exception {
-        // Skip this test if the test is built against SDK < T
-        assumeTrue(ConstantsShim.VERSION > S_V2);
         // Start a VPN network
         final NetworkCapabilities nc = new NetworkCapabilities.Builder()
                 .addTransportType(NetworkCapabilities.TRANSPORT_VPN)
@@ -3564,9 +3562,9 @@ public class NetworkMonitorTest {
                 .setCaptive(true)
                 .setVenueFriendlyName(TEST_FRIENDLY_NAME)
                 .setVenueInfoUrl(Uri.parse(TEST_VENUE_INFO_URL),
-                        ConstantsShim.CAPTIVE_PORTAL_DATA_SOURCE_PASSPOINT)
+                        CaptivePortalData.CAPTIVE_PORTAL_DATA_SOURCE_PASSPOINT)
                 .setUserPortalUrl(Uri.parse(TEST_LOGIN_URL),
-                        ConstantsShim.CAPTIVE_PORTAL_DATA_SOURCE_PASSPOINT)
+                        CaptivePortalData.CAPTIVE_PORTAL_DATA_SOURCE_PASSPOINT)
                 .build());
         monitor.notifyLinkPropertiesChanged(linkProperties);
         final NetworkCapabilities networkCapabilities =
@@ -3955,18 +3953,18 @@ public class NetworkMonitorTest {
 
     private DataStallReportParcelable matchDnsAndTcpDataStallParcelable(final int timeoutCount) {
         return argThat(p ->
-                (p.detectionMethod & ConstantsShim.DETECTION_METHOD_DNS_EVENTS) != 0
-                && (p.detectionMethod & ConstantsShim.DETECTION_METHOD_TCP_METRICS) != 0
+                (p.detectionMethod & DETECTION_METHOD_DNS_EVENTS) != 0
+                && (p.detectionMethod & DETECTION_METHOD_TCP_METRICS) != 0
                 && p.dnsConsecutiveTimeouts == timeoutCount);
     }
 
     private DataStallReportParcelable matchDnsDataStallParcelable(final int timeoutCount) {
-        return argThat(p -> (p.detectionMethod & ConstantsShim.DETECTION_METHOD_DNS_EVENTS) != 0
+        return argThat(p -> (p.detectionMethod & DETECTION_METHOD_DNS_EVENTS) != 0
                 && p.dnsConsecutiveTimeouts == timeoutCount);
     }
 
     private DataStallReportParcelable matchTcpDataStallParcelable() {
-        return argThat(p -> (p.detectionMethod & ConstantsShim.DETECTION_METHOD_TCP_METRICS) != 0);
+        return argThat(p -> (p.detectionMethod & DETECTION_METHOD_TCP_METRICS) != 0);
     }
 
     private PrivateDnsConfigParcel matchPrivateDnsConfigParcelWithDohOnly(String dohName,

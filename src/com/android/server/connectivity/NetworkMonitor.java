@@ -16,10 +16,13 @@
 
 package com.android.server.connectivity;
 
+import static android.content.Context.RECEIVER_NOT_EXPORTED;
 import static android.content.Intent.ACTION_CONFIGURATION_CHANGED;
 import static android.net.CaptivePortal.APP_RETURN_DISMISSED;
 import static android.net.CaptivePortal.APP_RETURN_UNWANTED;
 import static android.net.CaptivePortal.APP_RETURN_WANTED_AS_IS;
+import static android.net.ConnectivityDiagnosticsManager.DataStallReport.DETECTION_METHOD_DNS_EVENTS;
+import static android.net.ConnectivityDiagnosticsManager.DataStallReport.DETECTION_METHOD_TCP_METRICS;
 import static android.net.ConnectivityManager.EXTRA_CAPTIVE_PORTAL_PROBE_SPEC;
 import static android.net.ConnectivityManager.EXTRA_CAPTIVE_PORTAL_URL;
 import static android.net.DnsResolver.FLAG_EMPTY;
@@ -40,6 +43,7 @@ import static android.net.INetworkMonitor.NETWORK_VALIDATION_RESULT_VALID;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_SUSPENDED;
+import static android.net.NetworkCapabilities.TRANSPORT_TEST;
 import static android.net.captiveportal.CaptivePortalProbeSpec.parseCaptivePortalProbeSpecs;
 import static android.net.metrics.ValidationProbeEvent.DNS_FAILURE;
 import static android.net.metrics.ValidationProbeEvent.DNS_SUCCESS;
@@ -71,10 +75,6 @@ import static com.android.net.module.util.NetworkStackConstants.TEST_CAPTIVE_POR
 import static com.android.net.module.util.NetworkStackConstants.TEST_CAPTIVE_PORTAL_HTTPS_URL;
 import static com.android.net.module.util.NetworkStackConstants.TEST_CAPTIVE_PORTAL_HTTP_URL;
 import static com.android.net.module.util.NetworkStackConstants.TEST_URL_EXPIRATION_TIME;
-import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_DNS_EVENTS;
-import static com.android.networkstack.apishim.ConstantsShim.DETECTION_METHOD_TCP_METRICS;
-import static com.android.networkstack.apishim.ConstantsShim.RECEIVER_NOT_EXPORTED;
-import static com.android.networkstack.apishim.ConstantsShim.TRANSPORT_TEST;
 import static com.android.networkstack.metrics.NetworkStackStatsLog.CORE_NETWORKING_CRITICAL_COUNTS_EVENT_OCCURRED;
 import static com.android.networkstack.metrics.NetworkStackStatsLog.CORE_NETWORKING_CRITICAL_COUNTS_EVENT_OCCURRED__EVENT_TYPE__CRITICAL_COUNTS_EVENT_TYPE_CAPTIVE_APP_NOT_FOUND;
 import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
