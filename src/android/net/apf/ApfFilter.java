@@ -256,6 +256,7 @@ import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_NODE_L
 import android.annotation.ChecksSdkIntAtLeast;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.RequiresApi;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -269,6 +270,7 @@ import android.net.apf.ApfCounterTracker.Counter;
 import android.net.apf.BaseApfGenerator.IllegalInstructionException;
 import android.net.ip.MulticastReportMonitor;
 import android.net.nsd.NsdManager;
+import android.os.Build;
 import android.os.Handler;
 import android.os.PowerManager;
 import android.os.PowerManager.LowPowerStandbyPortDescription;
@@ -4482,6 +4484,7 @@ public class ApfFilter {
      * Sets the low power standby port exemptions, and installs a new APF program if the current APF
      * program should be updated.
      */
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private void setLowPowerStandbyPorts(@NonNull List<LowPowerStandbyPortDescription> ports) {
         if (mIsApfShutdown) return;
 
@@ -4542,6 +4545,7 @@ public class ApfFilter {
             installNewProgram();
     }
 
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private static ArraySet<Long> matchLowPowerStandbyPorts(
             @NonNull List<LowPowerStandbyPortDescription> ports, int protocol, int matcher) {
         final ArraySet<Long> matchingPorts = new ArraySet<>();
