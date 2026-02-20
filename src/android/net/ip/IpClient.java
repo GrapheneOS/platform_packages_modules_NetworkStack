@@ -84,8 +84,6 @@ import static com.android.net.module.util.NetworkStackConstants.ETHER_BROADCAST;
 import static com.android.net.module.util.NetworkStackConstants.IPV6_ADDR_ALL_ROUTERS_MULTICAST;
 import static com.android.net.module.util.NetworkStackConstants.RFC7421_PREFIX_LENGTH;
 import static com.android.net.module.util.NetworkStackConstants.VENDOR_SPECIFIC_IE_ID;
-import static com.android.networkstack.apishim.ConstantsShim.IFA_F_MANAGETEMPADDR;
-import static com.android.networkstack.apishim.ConstantsShim.IFA_F_NOPREFIXROUTE;
 import static com.android.networkstack.util.NetworkStackUtils.APF_ENABLE;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_ARP_OFFLOAD;
 import static com.android.networkstack.util.NetworkStackUtils.APF_HANDLE_IGMP_OFFLOAD;
@@ -668,6 +666,9 @@ public class IpClient extends StateMachine {
 
     // IpClient shares a handler with DhcpClient: commands must not overlap
     public static final int DHCPCLIENT_CMD_BASE = 1000;
+
+    public static final int IFA_F_MANAGETEMPADDR = 0x100;
+    public static final int IFA_F_NOPREFIXROUTE = 0x200;
 
     // IpClient shares a handler with Dhcp6Client: commands must not overlap
     public static final int DHCP6CLIENT_CMD_BASE = 2000;

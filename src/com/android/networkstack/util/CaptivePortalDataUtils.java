@@ -22,8 +22,6 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.android.networkstack.apishim.common.UnsupportedApiLevelException;
-
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -57,7 +55,7 @@ public class CaptivePortalDataUtils {
     @NonNull
     public static CaptivePortalData fromJson(JSONObject obj,
             Predicate<String> evaluateCustomTabOptIn)
-            throws JSONException, UnsupportedApiLevelException {
+            throws JSONException {
         final long refreshTimeMs = System.currentTimeMillis();
         final long secondsRemaining = getLongOrDefault(obj, "seconds-remaining", -1L);
         final long millisRemaining = secondsRemaining <= Long.MAX_VALUE / 1000

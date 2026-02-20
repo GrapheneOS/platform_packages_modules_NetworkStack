@@ -70,11 +70,13 @@ import com.android.internal.util.IndentingPrintWriter;
 import com.android.modules.utils.BasicShellCommandHandler;
 import com.android.net.module.util.DeviceConfigUtils;
 import com.android.net.module.util.HandlerUtils;
+import com.android.net.module.util.ModuleFlagProvider;
 import com.android.net.module.util.SharedLog;
 import com.android.networkstack.NetworkStackNotifier;
 import com.android.networkstack.R;
 import com.android.networkstack.ipmemorystore.IpMemoryStoreService;
 import com.android.server.connectivity.NetworkMonitor;
+import com.android.server.util.NetworkStackModuleFlagProvider;
 import com.android.server.util.PermissionUtil;
 
 import java.io.FileDescriptor;
@@ -104,6 +106,7 @@ public class NetworkStackService extends Service {
     private static final String TAG = NetworkStackService.class.getSimpleName();
     private static NetworkStackConnector sConnector;
     private static final RawPacketTracker sRawPacketTracker = new RawPacketTracker();
+    private static boolean sFlagProviderSet = false;
 
     /**
      * Create a binder connector for the system server to communicate with the network stack.
@@ -113,6 +116,17 @@ public class NetworkStackService extends Service {
             sConnector = new NetworkStackConnector(context);
         }
         return sConnector;
+    }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        // In test code like IpClientRootTest, onCreate may be called multiple times. In
+        // production code, the onCreate will only be called once.
+        if (!sFlagProviderSet) {
+            ModuleFlagProvider.setFlagProvider(new NetworkStackModuleFlagProvider());
+            sFlagProviderSet = true;
+        }
     }
 
     @NonNull
