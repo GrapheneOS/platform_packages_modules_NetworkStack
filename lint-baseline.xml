@@ -8,26 +8,4 @@
     name=""
     variant="all"
     version="8.4.0-alpha08">
-    <issue
-        id="NewApi"
-        message="Call requires API level 36 (current min is 31): `android.os.Handler#removeEqualMessages`"
-        errorLine1="        mHandler.removeEqualMessages(CMD_STOP_CAPTURE, ifaceName);"
-        errorLine2="                 ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="packages/modules/NetworkStack/src/android/net/util/RawPacketTracker.java"
-            line="162"
-            column="18"/>
-    </issue>
-
-    <issue
-        id="NewApi"
-        message="Call requires API level 36 (current min is 31): `android.os.Handler#removeEqualMessages`"
-        errorLine1="        mHandler.removeEqualMessages(CMD_STOP_CAPTURE, ifaceName);"
-        errorLine2="                 ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="packages/modules/NetworkStack/src/android/net/util/RawPacketTracker.java"
-            line="187"
-            column="18"/>
-    </issue>
-
 </issues>
