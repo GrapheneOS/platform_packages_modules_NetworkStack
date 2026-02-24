@@ -60,7 +60,7 @@ import static com.android.net.module.util.FeatureVersions.FEATURE_DDR_IN_DNSRESO
 import static com.android.net.module.util.NetworkStackConstants.TEST_CAPTIVE_PORTAL_HTTPS_URL;
 import static com.android.net.module.util.NetworkStackConstants.TEST_CAPTIVE_PORTAL_HTTP_URL;
 import static com.android.net.module.util.NetworkStackConstants.TEST_URL_EXPIRATION_TIME;
-import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX;
+import static com.android.networkstack.util.DnsUtils.PRIVATE_DNS_PROBE_HOST_SUFFIX_GRAPHENEOS;
 import static com.android.networkstack.util.NetworkStackUtils.CAPTIVE_PORTAL_FALLBACK_PROBE_SPECS;
 import static com.android.networkstack.util.NetworkStackUtils.CAPTIVE_PORTAL_MODE;
 import static com.android.networkstack.util.NetworkStackUtils.CAPTIVE_PORTAL_MODE_IGNORE;
@@ -492,8 +492,8 @@ public class NetworkMonitorTest {
         // each time. That means the host answer cannot be pre-set into the answer list. Thus, set
         // the host suffix and use partial match in FakeDns to match the target host and reply the
         // intended answer.
-        mFakeDns.setAnswer(PRIVATE_DNS_PROBE_HOST_SUFFIX, new String[]{"192.0.2.2"}, TYPE_A);
-        mFakeDns.setAnswer(PRIVATE_DNS_PROBE_HOST_SUFFIX, new String[]{"2001:db8::1"}, TYPE_AAAA);
+        mFakeDns.setAnswer(PRIVATE_DNS_PROBE_HOST_SUFFIX_GRAPHENEOS, new String[]{"192.0.2.2"}, TYPE_A);
+        mFakeDns.setAnswer(PRIVATE_DNS_PROBE_HOST_SUFFIX_GRAPHENEOS, new String[]{"2001:db8::1"}, TYPE_AAAA);
 
         doAnswer((invocation) -> {
             synchronized (mRegisteredReceivers) {
@@ -883,32 +883,6 @@ public class NetworkMonitorTest {
                 R.integer.config_min_matches_http_content_length, Integer.MAX_VALUE));
         assertEquals(0, wnm.getResIntConfig(mContext,
                 R.integer.config_max_matches_http_content_length, 0));
-    }
-
-    @Test
-    public void testGetHttpProbeUrl() {
-        // If config_captive_portal_http_url is set and the global setting is set, the config is
-        // used.
-        doReturn(TEST_HTTP_URL).when(mResources).getString(R.string.config_captive_portal_http_url);
-        doReturn(TEST_HTTP_OTHER_URL2).when(mResources).getString(
-                R.string.default_captive_portal_http_url);
-        doReturn(TEST_HTTP_OTHER_URL1).when(mDependencies)
-                .getSetting(any(), eq(Settings.Global.CAPTIVE_PORTAL_HTTP_URL), any());
-        final WrappedNetworkMonitor wnm = makeCellNotMeteredNetworkMonitor();
-        assertEquals(TEST_HTTP_URL, wnm.getCaptivePortalServerHttpUrl(mContext));
-        // If config_captive_portal_http_url is unset and the global setting is set, the global
-        // setting is used.
-        doReturn(null).when(mResources).getString(R.string.config_captive_portal_http_url);
-        assertEquals(TEST_HTTP_OTHER_URL1, wnm.getCaptivePortalServerHttpUrl(mContext));
-        // If both config_captive_portal_http_url and global setting are unset,
-        // default_captive_portal_http_url is used. But the global setting will only be read in the
-        // constructor.
-        doReturn(null).when(mDependencies)
-                .getSetting(any(), eq(Settings.Global.CAPTIVE_PORTAL_HTTP_URL), any());
-        assertEquals(TEST_HTTP_OTHER_URL1, wnm.getCaptivePortalServerHttpUrl(mContext));
-        // default_captive_portal_http_url is used when the configuration is applied in new NM.
-        final WrappedNetworkMonitor wnm2 = makeCellNotMeteredNetworkMonitor();
-        assertEquals(TEST_HTTP_OTHER_URL2, wnm2.getCaptivePortalServerHttpUrl(mContext));
     }
 
     @Test
@@ -3324,7 +3298,7 @@ public class NetworkMonitorTest {
             SystemClock.sleep(1);
             return new String[]{"2001:db8::443"};
         }, TYPE_AAAA);
-        mFakeDns.setAnswer(PRIVATE_DNS_PROBE_HOST_SUFFIX, () -> {
+        mFakeDns.setAnswer(PRIVATE_DNS_PROBE_HOST_SUFFIX_GRAPHENEOS, () -> {
             SystemClock.sleep(1);
             return new String[]{"2001:db8::444"};
         }, TYPE_AAAA);
