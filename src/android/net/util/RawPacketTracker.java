@@ -129,7 +129,7 @@ public class RawPacketTracker {
      *
      * <p>Initiates a packet capture session if one is not already running for the given interface.
      * A capture timeout is set to automatically stop the capture after {@code maxCaptureTimeMs}
-     * milliseconds. If a previous stop capture event was scheduled, it is canceled.</p>
+     * milliseconds.</p>
      *
      * @param ifaceName      The name of the network interface to capture packets on.
      * @param maxCaptureTimeMs The maximum capture duration in milliseconds.
@@ -158,9 +158,6 @@ public class RawPacketTracker {
         mTrackerMap.putIfAbsent(ifaceName, tracker);
         tracker.setCapture(true);
 
-        // remove scheduled stop events if it already in the queue
-        mHandler.removeEqualMessages(CMD_STOP_CAPTURE, ifaceName);
-
         // capture up to configured capture time and stop capturing
         final Message stopMsg = mHandler.obtainMessage(CMD_STOP_CAPTURE, ifaceName);
         mHandler.sendMessageDelayed(stopMsg, maxCaptureTimeMs);
@@ -182,9 +179,13 @@ public class RawPacketTracker {
             throw new RuntimeException(ifaceName + " is already stopped");
         }
 
-        final Message msg = mHandler.obtainMessage(CMD_STOP_CAPTURE, ifaceName);
+        // Use the key stored in the map as the message token. removeMessages uses == (not
+        // .equals()) for token comparison, and the caller's ifaceName may be a different String
+        // instance than the one stored as the map key (which was set during startCapture).
+        final String mapKey = mTrackerMap.keyAt(mTrackerMap.indexOfKey(ifaceName));
         // remove scheduled stop events if it already in the queue
-        mHandler.removeEqualMessages(CMD_STOP_CAPTURE, ifaceName);
+        mHandler.removeMessages(CMD_STOP_CAPTURE, mapKey);
+        final Message msg = mHandler.obtainMessage(CMD_STOP_CAPTURE, mapKey);
         mHandler.sendMessage(msg);
     }
 
