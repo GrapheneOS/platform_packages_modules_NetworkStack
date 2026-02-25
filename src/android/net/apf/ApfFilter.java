@@ -4809,26 +4809,34 @@ public class ApfFilter {
 
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
     private boolean enableMdns4Offload() {
-        return enableOffloadEngineRegistration() && mIPv4Address != null
+        return enableOffloadEngineRegistration()
+                && mHandleMdnsOffload
+                && mIPv4Address != null
                 && !mOffloadRules.isEmpty();
     }
 
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
     private boolean enableMdns6Offload() {
-        return enableOffloadEngineRegistration() && mIPv6LinkLocalAddress != null
+        return enableOffloadEngineRegistration()
+                && mHandleMdnsOffload
+                && mIPv6LinkLocalAddress != null
                 && !mOffloadRules.isEmpty();
     }
 
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
     private boolean enableMdns4Filter() {
-        return enableOffloadEngineRegistration() && mIPv4Address != null
-            && !mFilterRules.isEmpty();
+        return enableOffloadEngineRegistration()
+                && mHandleMdnsReplyFilter
+                && mIPv4Address != null
+                && !mFilterRules.isEmpty();
     }
 
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
     private boolean enableMdns6Filter() {
-        return enableOffloadEngineRegistration() && mIPv6LinkLocalAddress != null
-            && !mFilterRules.isEmpty();
+        return enableOffloadEngineRegistration()
+                && mHandleMdnsReplyFilter
+                && mIPv6LinkLocalAddress != null
+                && !mFilterRules.isEmpty();
     }
 
     @ChecksSdkIntAtLeast(api = 35 /* Build.VERSION_CODES.VanillaIceCream */)
