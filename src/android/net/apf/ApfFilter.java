@@ -446,7 +446,8 @@ public class ApfFilter {
     private final ApfSessionInfoMetrics mApfSessionInfoMetrics;
     private final NsdManager mNsdManager;
     private final MulticastReportMonitor mMulticastReportMonitor;
-    private final ApfMdnsOffloadEngine mApfMdnsOffloadEngine;
+    private final ApfMdnsOffloadEngine mApfMdnsReplyOffloadEngine;
+    private final ApfMdnsOffloadEngine mApfMdnsFilterOffloadEngine;
     private final List<MdnsOffloadRule> mOffloadRules = new ArrayList<>();
     private final List<MdnsOffloadRule> mFilterRules = new ArrayList<>();
     // The number of mDNS rules requiring APF to transmit a reply and drop the query packet. A
@@ -566,25 +567,16 @@ public class ApfFilter {
         }
     }
 
-    private void maybeUpdateMdnsRules(ApfMdnsUtils.MdnsRules allRules) {
-        if (mHandleMdnsOffload) {
-            mOffloadRules.clear();
-            mOffloadRules.addAll(allRules.offloadRules);
-        }
-
-        if (mHandleMdnsReplyFilter) {
-            mFilterRules.clear();
-            mFilterRules.addAll(allRules.filterRules);
-        }
-
-        if (mHandleMdnsOffload || mHandleMdnsReplyFilter) {
-            installNewProgram();
-        }
+    private void updateMdnsOffloadRules(ApfMdnsUtils.MdnsRules allRules) {
+        mOffloadRules.clear();
+        mOffloadRules.addAll(allRules.offloadRules);
+        installNewProgram();
     }
 
-    private int getOffloadType() {
-        return (mHandleMdnsOffload ? OFFLOAD_TYPE_REPLY : 0)
-            | (mHandleMdnsReplyFilter ? OFFLOAD_TYPE_FILTER_REPLIES : 0);
+    private void updateMdnsFilterRules(ApfMdnsUtils.MdnsRules allRules) {
+        mFilterRules.clear();
+        mFilterRules.addAll(allRules.filterRules);
+        installNewProgram();
     }
 
     @VisibleForTesting
@@ -674,15 +666,33 @@ public class ApfFilter {
 
         mNsdManager = context.getSystemService(NsdManager.class);
         if (enableOffloadEngineRegistration()) {
-            mApfMdnsOffloadEngine = new ApfMdnsOffloadEngine(mInterfaceParams.name, mHandler,
-                    mNsdManager,
-                    this::maybeUpdateMdnsRules,
-                    getOffloadType(),
-                    mSkipMdnsRecordWithoutPriority
-                    );
-            mApfMdnsOffloadEngine.registerOffloadEngine();
+            if (mHandleMdnsOffload) {
+                mApfMdnsReplyOffloadEngine = new ApfMdnsOffloadEngine(mInterfaceParams.name,
+                        mHandler,
+                        mNsdManager,
+                        this::updateMdnsOffloadRules,
+                        OFFLOAD_TYPE_REPLY,
+                        mSkipMdnsRecordWithoutPriority
+                );
+                mApfMdnsReplyOffloadEngine.registerOffloadEngine();
+            } else {
+                mApfMdnsReplyOffloadEngine = null;
+            }
+            if (mHandleMdnsReplyFilter) {
+                mApfMdnsFilterOffloadEngine = new ApfMdnsOffloadEngine(mInterfaceParams.name,
+                        mHandler,
+                        mNsdManager,
+                        this::updateMdnsFilterRules,
+                        OFFLOAD_TYPE_FILTER_REPLIES,
+                        mSkipMdnsRecordWithoutPriority
+                );
+                mApfMdnsFilterOffloadEngine.registerOffloadEngine();
+            } else {
+                mApfMdnsFilterOffloadEngine = null;
+            }
         } else {
-            mApfMdnsOffloadEngine = null;
+            mApfMdnsReplyOffloadEngine = null;
+            mApfMdnsFilterOffloadEngine = null;
         }
 
         mIPv4MulticastAddresses.addAll(
@@ -4617,8 +4627,13 @@ public class ApfFilter {
             mLowPowerStandbyPortsSubscriber.unsubscribe();
         }
         mIsApfShutdown = true;
-        if (SdkLevel.isAtLeastV() && mApfMdnsOffloadEngine != null) {
-            mApfMdnsOffloadEngine.unregisterOffloadEngine();
+        if (SdkLevel.isAtLeastV()) {
+            if (mApfMdnsReplyOffloadEngine != null) {
+                mApfMdnsReplyOffloadEngine.unregisterOffloadEngine();
+            }
+            if (mApfMdnsFilterOffloadEngine != null) {
+                mApfMdnsFilterOffloadEngine.unregisterOffloadEngine();
+            }
         }
 
         if (mMulticastReportMonitor != null) {
