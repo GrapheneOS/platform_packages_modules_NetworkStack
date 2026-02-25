@@ -220,7 +220,6 @@ java_defaults {
 filegroup {
     name: "privapp_whitelist_com.android.networkstack",
     srcs: ["com.android.networkstack.xml"],
-    visibility: ["//visibility:public"],
 }
 
 // Updatable network stack for finalized API
