@@ -86,6 +86,8 @@ import android.net.apf.ApfTestHelpers.Companion.TIMEOUT_MS
 import android.net.apf.BaseApfGenerator.APF_VERSION_3
 import android.net.nsd.NsdManager
 import android.net.nsd.OffloadEngine
+import android.net.nsd.OffloadEngine.OFFLOAD_TYPE_FILTER_REPLIES
+import android.net.nsd.OffloadEngine.OFFLOAD_TYPE_REPLY
 import android.net.nsd.OffloadServiceInfo
 import android.os.Build
 import android.os.Handler
@@ -5801,14 +5803,47 @@ class ApfFilterTest {
         verify(apfController, never()).installPacketFilter(any(), any())
     }
 
+    private fun captureOffloadEngineAndDriveUpdates(
+        nsdManager: NsdManager,
+        ifName: String,
+        offloadType: Int,
+        addedInfos: List<FromU<OffloadServiceInfo>>,
+        removedInfos: List<FromU<OffloadServiceInfo>> = listOf(),
+    ): ByteArray? {
+        val captor = ArgumentCaptor.forClass(OffloadEngine::class.java)
+        verify(nsdManager).registerOffloadEngine(
+            eq(ifName),
+            eq(offloadType.toLong()),
+            anyLong(),
+            any(),
+            captor.capture()
+        )
+        val engine = captor.value
+        var program: ByteArray? = null
+        if (addedInfos.isNotEmpty()) {
+            visibleOnHandlerThread(handler) {
+                addedInfos.forEach { engine.onOffloadServiceUpdated(it.value) }
+            }
+            program = ApfTestHelpers.consumeInstalledProgram(apfController, addedInfos.size)
+        }
+        if (removedInfos.isNotEmpty()) {
+            visibleOnHandlerThread(handler) {
+                removedInfos.forEach { engine.onOffloadServiceRemoved(it.value) }
+            }
+            program = ApfTestHelpers.consumeInstalledProgram(apfController, removedInfos.size)
+        }
+        return program
+    }
+
     private fun getApfWithMdnsConfig(
         apfRam: Int = 4096,
         mdnsOffload: Boolean = false,
         mdnsReplyFilter: Boolean = false,
         mcFilter: Boolean = true,
         v6Only: Boolean = false,
-        addedOffloadInfos: List<FromU<OffloadServiceInfo>> = offloadQueryOffloadInfos,
-        removedOffloadInfos: List<FromU<OffloadServiceInfo>> = listOf(),
+        addedReplyOffloadInfos: List<FromU<OffloadServiceInfo>> = offloadQueryOffloadInfos,
+        removedReplyOffloadInfos: List<FromU<OffloadServiceInfo>> = listOf(),
+        addedFilterReplyOffloadInfos: List<FromU<OffloadServiceInfo>> = listOf(),
         raReaderSocket: FileDescriptor = raReadSocket,
         ifParams: InterfaceParams = loIfParams,
     ): Pair<ApfFilter, ByteArray> {
@@ -5823,15 +5858,6 @@ class ApfFilterTest {
         }
         val apfFilter = getApfFilter(apfConfig, ifParams)
         ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 2)
-        val captor = ArgumentCaptor.forClass(OffloadEngine::class.java)
-        verify(localNsdManager).registerOffloadEngine(
-            eq(ifParams.name),
-            anyLong(),
-            anyLong(),
-            any(),
-            captor.capture()
-        )
-        val offloadEngine = captor.value
         val lp = LinkProperties().apply {
             if (v6Only) {
                 apfFilter.updateClatInterfaceState(true)
@@ -5848,24 +5874,22 @@ class ApfFilterTest {
         }
         apfFilter.setLinkProperties(lp)
         var program = ApfTestHelpers.consumeInstalledProgram(apfController, installCnt = 1)
-
-        if (addedOffloadInfos.isNotEmpty()) {
-            visibleOnHandlerThread(handler) {
-                addedOffloadInfos.forEach { offloadEngine.onOffloadServiceUpdated(it.value) }
-            }
-            program = ApfTestHelpers.consumeInstalledProgram(
-                apfController,
-                addedOffloadInfos.size
-            )
+        if (mdnsOffload) {
+            captureOffloadEngineAndDriveUpdates(
+                localNsdManager,
+                ifParams.name,
+                OFFLOAD_TYPE_REPLY,
+                addedReplyOffloadInfos,
+                removedReplyOffloadInfos,
+            )?.let { program = it }
         }
-        if (removedOffloadInfos.isNotEmpty()) {
-            visibleOnHandlerThread(handler) {
-                removedOffloadInfos.forEach { offloadEngine.onOffloadServiceRemoved(it.value) }
-            }
-            program = ApfTestHelpers.consumeInstalledProgram(
-                apfController,
-                removedOffloadInfos.size
-            )
+        if (mdnsReplyFilter) {
+            captureOffloadEngineAndDriveUpdates(
+                localNsdManager,
+                ifParams.name,
+                OFFLOAD_TYPE_FILTER_REPLIES,
+                addedFilterReplyOffloadInfos,
+            )?.let { program = it }
         }
         return Pair(apfFilter, program)
     }
@@ -6336,7 +6360,7 @@ class ApfFilterTest {
     fun testIPv4MdnsQueryDropped() {
         val (apfFilter, program) = getApfWithMdnsConfig(
             mdnsOffload = true,
-            removedOffloadInfos = listOf(tvRemoteOffloadInfo)
+            removedReplyOffloadInfos = listOf(tvRemoteOffloadInfo)
         )
         // Using scapy to generate packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="01:00:5e:00:00:fb")
@@ -6462,7 +6486,8 @@ class ApfFilterTest {
             mcFilter = false,
             mdnsOffload = true,
             mdnsReplyFilter = true,
-            addedOffloadInfos = offloadQueryOffloadInfos + filterReplyOffloadInfos
+            addedReplyOffloadInfos = offloadQueryOffloadInfos,
+            addedFilterReplyOffloadInfos = filterReplyOffloadInfos
         )
 
         // Using scapy to generate packet:
@@ -6889,7 +6914,7 @@ class ApfFilterTest {
     fun testIPv6MdnsQueryDropped() {
         val (apfFilter, program) = getApfWithMdnsConfig(
             mdnsOffload = true,
-            removedOffloadInfos = listOf(tvRemoteOffloadInfo)
+            removedReplyOffloadInfos = listOf(tvRemoteOffloadInfo)
         )
         // Using scapy to generate packet:
         // eth = Ether(src="01:02:03:04:05:06", dst="33:33:00:00:00:FB")
@@ -6965,7 +6990,8 @@ class ApfFilterTest {
             mcFilter = false,
             mdnsOffload = true,
             mdnsReplyFilter = true,
-            addedOffloadInfos = offloadQueryOffloadInfos + filterReplyOffloadInfos
+            addedReplyOffloadInfos = offloadQueryOffloadInfos,
+            addedFilterReplyOffloadInfos = filterReplyOffloadInfos,
         )
 
         // Using scapy to generate packet:
@@ -6998,7 +7024,7 @@ class ApfFilterTest {
         assumeTrue(apfInterpreterVersion >= BaseApfGenerator.APF_VERSION_6)
         val (apfFilter, program) = getApfWithMdnsConfig(
             mdnsReplyFilter = true,
-            addedOffloadInfos = filterReplyOffloadInfos
+            addedFilterReplyOffloadInfos = filterReplyOffloadInfos
         )
 
         // Using scapy to generate packet:
@@ -7131,7 +7157,7 @@ class ApfFilterTest {
         val (apfFilter, program) = getApfWithMdnsConfig(
             mcFilter = false,
             mdnsReplyFilter = true,
-            addedOffloadInfos = filterReplyOffloadInfos
+            addedFilterReplyOffloadInfos = filterReplyOffloadInfos
         )
 
         // Using scapy to generate packet:
@@ -7182,7 +7208,7 @@ class ApfFilterTest {
         assumeTrue(apfInterpreterVersion >= BaseApfGenerator.APF_VERSION_6)
         val (apfFilter, program) = getApfWithMdnsConfig(
             mdnsReplyFilter = true,
-            addedOffloadInfos = filterReplyOffloadInfos
+            addedFilterReplyOffloadInfos = filterReplyOffloadInfos
         )
 
         // Using scapy to generate packet:
@@ -7319,7 +7345,7 @@ class ApfFilterTest {
         val (apfFilter, program) = getApfWithMdnsConfig(
             mcFilter = false,
             mdnsReplyFilter = true,
-            addedOffloadInfos = filterReplyOffloadInfos
+            addedFilterReplyOffloadInfos = filterReplyOffloadInfos
         )
 
         // Using scapy to generate packet:
@@ -7490,7 +7516,7 @@ class ApfFilterTest {
         val (apfFilterForEstimation, _) = getApfWithMdnsConfig(
             apfRam = 4096,
             mdnsOffload = true,
-            addedOffloadInfos = listOf(
+            addedReplyOffloadInfos = listOf(
                 castOffloadInfo,
                 tvRemoteOffloadInfo,
                 manySubtypeOffloadInfo
@@ -7503,7 +7529,7 @@ class ApfFilterTest {
         val (apfFilter, _) = getApfWithMdnsConfig(
             apfRam = apfRam,
             mdnsOffload = true,
-            addedOffloadInfos = listOf(
+            addedReplyOffloadInfos = listOf(
                 castOffloadInfo,
                 tvRemoteOffloadInfo,
                 manySubtypeOffloadInfo
@@ -7591,7 +7617,7 @@ class ApfFilterTest {
         val (apfFilter, program) = getApfWithMdnsConfig(
             apfRam = 4096,
             mdnsOffload = true,
-            addedOffloadInfos = listOf(
+            addedReplyOffloadInfos = listOf(
                 castOffloadInfo,
                 tvRemoteOffloadInfo,
                 manySubtypeOffloadInfo
@@ -7662,7 +7688,7 @@ class ApfFilterTest {
         val (apfFilterForEstimation, _) = getApfWithMdnsConfig(
             apfRam = 4096,
             mdnsOffload = true,
-            addedOffloadInfos = listOf(
+            addedReplyOffloadInfos = listOf(
                 castOffloadInfo,
                 tvRemoteOffloadInfo,
                 manySubtypeOffloadInfo
@@ -7674,7 +7700,7 @@ class ApfFilterTest {
         val (apfFilter, program) = getApfWithMdnsConfig(
             apfRam = apfRam,
             mdnsOffload = true,
-            addedOffloadInfos = listOf(
+            addedReplyOffloadInfos = listOf(
                 castOffloadInfo,
                 tvRemoteOffloadInfo,
                 manySubtypeOffloadInfo
@@ -7745,14 +7771,14 @@ class ApfFilterTest {
         val (apfFilterForEstimation, _) = getApfWithMdnsConfig(
             apfRam = 4096,
             mdnsOffload = true,
-            addedOffloadInfos = listOf(passthroughCastOffloadInfo),
+            addedReplyOffloadInfos = listOf(passthroughCastOffloadInfo),
         )
 
         val apfRam = apfFilterForEstimation.overEstimatedProgramSize + counterTotalSize
         val (apfFilter, program) = getApfWithMdnsConfig(
             apfRam = apfRam,
             mdnsOffload = true,
-            addedOffloadInfos = listOf(
+            addedReplyOffloadInfos = listOf(
                 castOffloadInfo,
                 tvRemoteOffloadInfo,
                 manySubtypeOffloadInfo
