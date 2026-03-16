@@ -143,6 +143,7 @@ import android.net.metrics.NetworkEvent;
 import android.net.metrics.ValidationProbeEvent;
 import android.net.networkstack.aidl.NetworkMonitorParameters;
 import android.net.shared.PrivateDnsConfig;
+import android.net.util.DataStallUtils;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
@@ -440,6 +441,7 @@ public class NetworkMonitorTest {
                 .getInteger(eq(R.integer.config_captive_portal_dns_probe_timeout));
         doReturn(200).when(mDependencies).getDeviceConfigPropertyInt(
                 eq(NAMESPACE_CONNECTIVITY), eq(CONFIG_ASYNC_PRIVDNS_PROBE_TIMEOUT_MS), anyInt());
+        setTcpPollingInterval(DataStallUtils.DEFAULT_TCP_POLLING_INTERVAL_MS);
 
         doReturn(false).when(mDependencies).networkMonitorRedactVenueInfoUrl();
 
