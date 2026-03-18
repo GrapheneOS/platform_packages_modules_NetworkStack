@@ -2686,6 +2686,9 @@ public class NetworkMonitor extends StateMachine {
             case ConnChecksSetting.VAL_GRAPHENEOS:
                 resId = R.string.default_captive_portal_https_url_grapheneos;
                 break;
+            case ConnChecksSetting.VAL_APPLE:
+                resId = R.string.default_captive_portal_https_url_apple;
+                break;
             case ConnChecksSetting.VAL_STANDARD:
                 resId = R.string.default_captive_portal_https_url;
                 break;
@@ -2700,6 +2703,9 @@ public class NetworkMonitor extends StateMachine {
         switch (ConnChecksSetting.get()) {
             case ConnChecksSetting.VAL_GRAPHENEOS:
                 resId = R.string.default_captive_portal_http_url_grapheneos;
+                break;
+            case ConnChecksSetting.VAL_APPLE:
+                resId = R.string.default_captive_portal_http_url_apple;
                 break;
             case ConnChecksSetting.VAL_STANDARD:
                 resId = R.string.default_captive_portal_http_url;
