@@ -14,6 +14,7 @@
          this resource. It will break if the enforcement of overlayable starts.
          -->
     <string name="default_captive_portal_http_url_grapheneos" translatable="false">http://connectivitycheck.grapheneos.network/generate_204</string>
+    <string name="default_captive_portal_http_url_apple" translatable="false">http://captive.apple.com</string>
     <string name="default_captive_portal_http_url" translatable="false">http://connectivitycheck.gstatic.com/generate_204</string>
     <!-- HTTPS URL for network validation, to use for confirming internet connectivity. -->
     <!-- default_captive_portal_https_url is not configured as overlayable so
@@ -23,6 +24,7 @@
          this resource. It will break if the enforcement of overlayable starts.
          -->
     <string name="default_captive_portal_https_url_grapheneos" translatable="false">https://connectivitycheck.grapheneos.network/generate_204</string>
+    <string name="default_captive_portal_https_url_apple" translatable="false">https://captive.apple.com</string>
     <string name="default_captive_portal_https_url" translatable="false">https://www.google.com/generate_204</string>
 
     <!-- List of fallback URLs to use for detecting captive portals. -->
