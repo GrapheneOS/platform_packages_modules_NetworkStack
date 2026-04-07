@@ -16,9 +16,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
           package="com.android.server.networkstack.roottests">
 
-    <!-- Used by requesting a network and sending packet on that network. -->
+    <!-- Used by requesting a network and sending packets, including to local addresses. -->
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
     <application android:debuggable="true">
         <uses-library android:name="android.test.runner" />
